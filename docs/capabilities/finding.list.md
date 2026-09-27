@@ -54,9 +54,10 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 
 | Kind | Level and subject | Counterfactual |
 |---|---|---|
+| `spin_loops` | agent, or the operator when the run names no agent | nothing: each turn that only repeated a call made 20 or more times in a row counts at its own priced cost |
+| `repeated_shell_commands` | tool `Bash` | nothing: each turn that only re-ran shell commands with an identical earlier result counts at its own priced cost |
+| `duplicate_tool_calls` | agent, or the operator when the run names no agent | nothing: each turn that only repeated calls with an identical earlier result counts at its own priced cost |
 | `cache_writes_never_read` | operator (`prn_…`), or the agent when the run names no operator | the written prefix sent uncached |
-| `repeated_shell_commands` | tool `Bash` | the earlier identical result, already in the run |
-| `duplicate_tool_calls` | agent | the earlier identical result of a read-only tool, already in the run |
 | `unpaged_results` | tool | the same result capped at 4,000 tokens |
 
-ADR-062's detector table has the detection rule, the rollup and frame fields each kind reads, and the §12.8 rows that wait on a recorder.
+A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-206 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.

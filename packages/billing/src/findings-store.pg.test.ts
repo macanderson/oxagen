@@ -1,7 +1,8 @@
 // writeFindings and listWorkspacesForFindings against a real Postgres: a pass
 // replaces the workspace's open findings and keeps a proven finding's public
-// id, a decision that commits while a pass is writing stays decided, and a
-// workspace whose runs stopped is still visited until its open findings go. Runs wherever DATABASE_URL points at
+// id, a decision that commits while a pass is writing stays decided, a
+// workspace whose runs stopped is still visited until its open findings go,
+// and the headline counts a frame two findings claim once (ADR-206). Runs wherever DATABASE_URL points at
 // a migrated database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit` and carries DATABASE_URL in turbo's globalEnv;
 // a local run without one is skipped, not red. Every row it writes is removed
@@ -9,9 +10,14 @@
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { findingFingerprint, type FindingDraft } from "./findings";
+import {
+  findingFingerprint,
+  type FindingClaim,
+  type FindingDraft,
+} from "./findings";
 import {
   listWorkspacesForFindings,
+  readUnproductiveSpend,
   runFindingsPass,
   writeFindings,
 } from "./findings-store";
@@ -167,6 +173,7 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
         readRuns: async () => [],
         readRootSessions: async () => new Map(),
         readToolCalls: async () => [],
+        readFrames: async () => new Map(),
         readDecisions: async () => new Map(),
         write: writeFindings,
       });
@@ -186,6 +193,92 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
     } finally {
       await withSystemDb((tx) =>
         tx.delete(findings).where(eq(findings.workspaceId, idle.workspaceId)),
+      );
+    }
+  });
+
+  it("stores each finding's claims and counts a frame two findings claim once, under the first detector", async () => {
+    const own = {
+      orgId: crypto.randomUUID(),
+      workspaceId: crypto.randomUUID(),
+    };
+    const RUN_A = "tse_0000000000000000000001";
+    const RUN_B = "tse_0000000000000000000002";
+    const frameAt = new Date("2026-09-10T10:00:00.500Z");
+    const claim = (
+      detector: FindingClaim["detector"],
+      runId: string,
+      frameKey: string,
+      operatorKey: string | null,
+      costMicros: bigint,
+    ): FindingClaim => ({
+      detector,
+      runId,
+      frameKey,
+      frameAt,
+      operatorKey,
+      costMicros,
+    });
+    const spin = (claims: FindingClaim[]): FindingDraft => ({
+      ...draft("claims"),
+      kind: "spin_loops",
+      level: "agent",
+      fingerprint: findingFingerprint("spin_loops", "agent", "claims"),
+      claims,
+    });
+    const recurring: FindingDraft = {
+      ...draft("claims"),
+      kind: "recurring_runs",
+      level: "agent",
+      fingerprint: findingFingerprint("recurring_runs", "agent", "claims"),
+      claims: [
+        claim(7, RUN_A, "2026-09-10T10:00:00.500000Z#1", "prn_a", 30_000n),
+        claim(7, RUN_B, "2026-09-10T10:00:00.500000Z#0", null, 5_000n),
+      ],
+    };
+    const window = { start: windowStart, end: windowEnd };
+    const read = () =>
+      withSystemDb((tx) => readUnproductiveSpend(tx, own, window));
+    try {
+      await writeFindings(own, windowEnd, none, [
+        spin([
+          claim(1, RUN_A, "2026-09-10T10:00:00.500000Z#0", "prn_a", 20_000n),
+          claim(1, RUN_A, "2026-09-10T10:00:00.500000Z#1", "prn_a", 30_000n),
+        ]),
+        recurring,
+      ]);
+      expect(await read()).toEqual({
+        totalMicros: 55_000n,
+        operators: [
+          { operatorKey: "prn_a", micros: 50_000n },
+          { operatorKey: null, micros: 5_000n },
+        ],
+      });
+
+      // A pass that rewrites the loop finding replaces its claims, and one
+      // that no longer proves the recurring finding deletes it with its own.
+      await writeFindings(own, windowEnd, none, [
+        spin([
+          claim(1, RUN_A, "2026-09-10T10:00:00.500000Z#0", "prn_a", 20_000n),
+        ]),
+      ]);
+      expect(await read()).toEqual({
+        totalMicros: 20_000n,
+        operators: [{ operatorKey: "prn_a", micros: 20_000n }],
+      });
+
+      // A claim outside the window does not count.
+      expect(
+        await withSystemDb((tx) =>
+          readUnproductiveSpend(tx, own, {
+            start: windowStart,
+            end: frameAt,
+          }),
+        ),
+      ).toEqual({ totalMicros: 0n, operators: [] });
+    } finally {
+      await withSystemDb((tx) =>
+        tx.delete(findings).where(eq(findings.workspaceId, own.workspaceId)),
       );
     }
   });

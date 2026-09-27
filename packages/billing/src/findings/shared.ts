@@ -1,24 +1,18 @@
 /**
- * findings.ts — the PURE findings detectors (Mission Control spec §12.8;
- * ADR-062). No I/O: ./findings-store.ts reads the run rows and the tool-call
- * frames and writes `cost.findings`, and this module is what the tests
- * exercise.
+ * shared.ts — the types, limits, and arithmetic every findings detector uses
+ * (Mission Control spec §12.8; ADR-062, ADR-206). No I/O: ../findings-store.ts
+ * reads the run rows, the tool-call frames, and the model-call frames, and
+ * writes `cost.findings` and `cost.finding_claims`.
  *
  * A finding is a specific, costed problem over the runs it cites. Its saving
- * is measured minus counterfactual over those runs, at the price each run
- * paid: the measured side is what the frames cost, the counterfactual side is
- * the same work re-priced at the alternative the finding names (a result the
- * run already held, a paged result, a prefix that was never cached). The
- * price of an input token is the run's own: the input the rollup priced for
- * it, divided by the input tokens it carried. A call whose run has no such
- * price, or whose result tokens were not recorded, is cited but not covered;
- * confidence is the share of cited calls the counterfactual covers, and a
- * group whose coverage is under half is not written.
- *
- * Every call contributes to at most one finding. A repeat inside a run is a
- * repeated shell command (Bash) or a duplicate tool call (a read-only tool);
- * any other call whose result is above the unpaged threshold is an unpaged
- * result.
+ * is measured minus counterfactual over those runs. A detector that prices a
+ * part of a request (a result, a cache write) re-prices tokens at the run's
+ * own input price. A detector that prices a whole request (a spin loop, a
+ * turn of repeats) takes the request's own priced cost, and claims its frame
+ * so the headline counts it once (ADR-206). A call or request with no price
+ * is cited but not covered. Confidence is the share of cited items the
+ * counterfactual covers, and a group whose coverage is under half is not
+ * written.
  */
 import type {
   CostBasis,
@@ -32,8 +26,8 @@ import {
   priceInputTokens,
   runInputPrice,
   type RunTotalsRecord,
-} from "./cost-rollup";
-import { RepeatedCalls, repeatKindOf, SHELL_TOOL } from "./step-grade";
+} from "../cost-rollup";
+import type { RunView } from "./requests";
 
 /** The most cited frames a finding stores per run; the contract's own cap (#4001). */
 export { FINDING_FRAMES_PER_RUN };
@@ -52,6 +46,12 @@ const HIGH_CONFIDENCE_COVERAGE = 0.9;
 const MIN_COVERAGE = 0.5;
 /** Findings kept per kind, largest saving first. */
 export const FINDINGS_PER_KIND = 10;
+/**
+ * Open findings one pass keeps, largest saving first: `list_findings` answers
+ * at most 50 (`FINDINGS_LIST_MAX`), so every open finding fits one answer
+ * however many kinds the detectors write.
+ */
+export const FINDINGS_MAX = 50;
 /** Runs itemised in a finding's evidence, largest saving first. */
 export const EVIDENCE_RUNS = 10;
 
@@ -77,8 +77,47 @@ export interface ToolCallObservation {
   sessionUuid: string | null;
 }
 
+/**
+ * One model call of a run, priced once by the rollup's rule (ADR-206). A
+ * request finding counts this frame's whole cost.
+ */
+export interface PricedRequestFrame {
+  /**
+   * The frame's key within its run: `at` exactly as the store printed it,
+   * then `#` and the frame's position among the run's frames at that same
+   * instant. A Date would drop the store's sub-millisecond digits.
+   */
+  key: string;
+  at: Date;
+  /** The frame's priced cost in micros; null when no price covers it. */
+  costMicros: bigint | null;
+  /** Every token the frame carried, of every class. */
+  tokens: number;
+  /** Null when no price covers the frame. */
+  basis: CostBasis | null;
+}
+
+/**
+ * The detectors whose findings add to the unproductive spend headline, in
+ * the order they claim a frame (ADR-206, counting rule 1): 1 spin loops,
+ * 7 recurring runs, 8 spend with no outcome.
+ */
+export type CountingDetector = 1 | 7 | 8;
+
+/** One model-call frame a whole-request finding claims (ADR-206). */
+export interface FindingClaim {
+  detector: CountingDetector;
+  /** The run's public id. */
+  runId: string;
+  frameKey: string;
+  frameAt: Date;
+  /** The operator whose run it is (`prn_…`); null when the run names none. */
+  operatorKey: string | null;
+  costMicros: bigint;
+}
+
 /** One cited call, by its frame: `sessionUuid` is absent on the run's own chain. */
-interface FindingCitedFrame {
+export interface FindingCitedFrame {
   seq: string;
   sessionUuid?: string;
 }
@@ -96,6 +135,7 @@ interface FindingRunEvidence {
 
 /** The arithmetic behind a saving, as `cost.findings.cited_frames` stores it. */
 export interface FindingEvidence {
+  /** The cited items: calls, runs, or model requests, as the kind counts them. */
   calls: number;
   coveredCalls: number;
   measuredTokens: number;
@@ -108,9 +148,9 @@ export interface FindingEvidence {
   /**
    * The cited calls by run public id, for every run the tool-call detectors
    * cited (#4001): seqs ascending, at most `FINDING_FRAMES_PER_RUN`, with
-   * `total` counting every cited call. Absent on `cache_writes_never_read`,
-   * which cites whole runs, and on a row written before this was stored; a
-   * reader then answers `frames: null`.
+   * `total` counting every cited call. Absent on a finding that cites whole
+   * runs, and on a row written before this was stored; a reader then answers
+   * `frames: null`.
    */
   frames?: Record<string, { seqs: FindingCitedFrame[]; total: number }>;
 }
@@ -130,6 +170,8 @@ export interface FindingDraft {
   fix: string;
   citedRuns: string[];
   evidence: FindingEvidence;
+  /** The frames a whole-request finding claims; absent on every other finding. */
+  claims?: FindingClaim[];
 }
 
 export interface DetectInput {
@@ -140,6 +182,12 @@ export interface DetectInput {
   toolCalls: readonly ToolCallObservation[];
   /** Per fingerprint, the latest time a person applied or dismissed it; only runs that started later count. */
   decidedSince: ReadonlyMap<string, Date>;
+  /**
+   * The priced model-call frames of the runs the store read them for, by run
+   * public id, in time order. A run absent here has its request findings
+   * cited but not covered.
+   */
+  frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
 }
 
 export function findingFingerprint(
@@ -150,8 +198,15 @@ export function findingFingerprint(
   return `${kind}|${level}|${subject}`;
 }
 
+/** A finding's grouping key. */
+export interface FindingKey {
+  kind: FindingKind;
+  level: FindingLevel;
+  subject: string;
+}
+
 /** A call's frame: its position on the chain it was recorded on. */
-interface CallFrame {
+export interface CallFrame {
   seq: number;
   /** Null on the run's own chain. */
   sessionUuid: string | null;
@@ -168,7 +223,7 @@ interface RunAcc {
   frames: CallFrame[];
 }
 
-interface Group {
+export interface Group {
   kind: FindingKind;
   level: FindingLevel;
   subject: string;
@@ -177,33 +232,47 @@ interface Group {
   covered: number;
   basis: CostBasis | null;
   runs: Map<string, RunAcc>;
+  /** Whether the finding pins the calls it cites; false for a finding over whole runs. */
+  citesCalls: boolean;
+  claims: FindingClaim[];
 }
 
-/** A call's measured and counterfactual sides; null micros when the counterfactual does not cover it. */
-interface Measure {
+/** An item's measured and counterfactual sides; null micros when the counterfactual does not cover it. */
+export interface Measure {
   measuredTokens: number;
   counterfactualTokens: number;
   micros: { measured: bigint; counterfactual: bigint } | null;
+  /** The basis of the measured side; the run's own basis when absent. */
+  basis?: CostBasis | null;
 }
 
-class Groups {
+/** The frame a whole-request item claims when the counterfactual covers it. */
+export interface ClaimOf {
+  detector: CountingDetector;
+  frame: PricedRequestFrame;
+}
+
+export class Groups {
   private readonly groups = new Map<string, Group>();
 
   constructor(private readonly decidedSince: ReadonlyMap<string, Date>) {}
 
-  /** Whether a run may be cited under a fingerprint. */
-  admits(fingerprint: string, run: RunTotalsRecord): boolean {
-    const since = this.decidedSince.get(fingerprint);
+  /** Whether a run may be cited under a key. */
+  admits(key: FindingKey, run: RunTotalsRecord): boolean {
+    const since = this.decidedSince.get(
+      findingFingerprint(key.kind, key.level, key.subject),
+    );
     return since === undefined || run.startedAt.getTime() > since.getTime();
   }
 
   add(
-    key: { kind: FindingKind; level: FindingLevel; subject: string },
+    key: FindingKey,
     windowStart: Date,
     run: RunTotalsRecord,
     measure: Measure,
-    /** The cited call's frame; null when the finding cites the run as a whole. */
-    frame: CallFrame | null,
+    /** The cited calls' frames; null when the finding cites the run as a whole. */
+    frames: readonly CallFrame[] | null,
+    claim: ClaimOf | null = null,
   ): void {
     const fingerprint = findingFingerprint(key.kind, key.level, key.subject);
     let group = this.groups.get(fingerprint);
@@ -221,6 +290,8 @@ class Groups {
         covered: 0,
         basis: null,
         runs: new Map(),
+        citesCalls: frames !== null,
+        claims: [],
       };
       this.groups.set(fingerprint, group);
     }
@@ -241,14 +312,24 @@ class Groups {
     acc.calls += 1;
     // Every cited call is pinned, covered or not: the Run page draws the
     // call the finding names, whatever the counterfactual could price.
-    if (frame !== null) acc.frames.push(frame);
-    if (measure.micros === null || run.costBasis === null) return;
+    if (frames !== null) acc.frames.push(...frames);
+    const basis = measure.basis === undefined ? run.costBasis : measure.basis;
+    if (measure.micros === null || basis === null) return;
     group.covered += 1;
-    group.basis = foldBasis(group.basis, run.costBasis);
+    group.basis = foldBasis(group.basis, basis);
     acc.measuredTokens += measure.measuredTokens;
     acc.counterfactualTokens += measure.counterfactualTokens;
     acc.measuredMicros += measure.micros.measured;
     acc.counterfactualMicros += measure.micros.counterfactual;
+    if (claim !== null && claim.frame.costMicros !== null)
+      group.claims.push({
+        detector: claim.detector,
+        runId: run.runId,
+        frameKey: claim.frame.key,
+        frameAt: claim.frame.at,
+        operatorKey: run.operatorKey,
+        costMicros: claim.frame.costMicros,
+      });
   }
 
   values(): IterableIterator<Group> {
@@ -256,61 +337,8 @@ class Groups {
   }
 }
 
-// ── Detectors ─────────────────────────────────────────────────────────────────
-
-/**
- * Cache writes never read (spec §12.8): a run that wrote prompt-cache tokens
- * and read none back. The counterfactual is the same prefix sent uncached, so
- * the saving is the write premium: the write cost minus the written tokens at
- * the run's input price. Cited at the run's operator, or at its agent when it
- * names no operator.
- */
-function detectCacheWritesNeverRead(input: DetectInput, groups: Groups): void {
-  for (const run of input.runs) {
-    const wrote = run.tokens.cache_write_5m + run.tokens.cache_write_1h;
-    if (wrote === 0 || run.tokens.cache_read > 0) continue;
-    const key =
-      run.operatorKey !== null
-        ? {
-            kind: "cache_writes_never_read" as const,
-            level: "operator" as const,
-            subject: run.operatorKey,
-          }
-        : run.agentKey !== null
-          ? {
-              kind: "cache_writes_never_read" as const,
-              level: "agent" as const,
-              subject: run.agentKey,
-            }
-          : null;
-    if (key === null) continue;
-    if (
-      !groups.admits(findingFingerprint(key.kind, key.level, key.subject), run)
-    )
-      continue;
-    let measured = 0n;
-    for (const m of run.breakdown.models)
-      measured += m.costByClass.cache_write_5m + m.costByClass.cache_write_1h;
-    const price = runInputPrice(run);
-    groups.add(
-      key,
-      input.window.start,
-      run,
-      {
-        measuredTokens: wrote,
-        counterfactualTokens: wrote,
-        micros:
-          price === null || measured === 0n
-            ? null
-            : { measured, counterfactual: priceInputTokens(price, wrote) },
-      },
-      // The finding is about the run's cache use as a whole, not a call.
-      null,
-    );
-  }
-}
-
-function resultMeasure(
+/** A result's tokens at the run's input price, against a counterfactual number of tokens. */
+export function resultMeasure(
   run: RunTotalsRecord,
   resultTokens: number | null,
   counterfactualTokens: (measured: number) => number,
@@ -333,140 +361,35 @@ function resultMeasure(
 }
 
 /**
- * The tool-call detectors, over every call in time order. A call is claimed
- * by the first of: a repeat inside its run (same tool, input digest and
- * output digest as an earlier call of the run) or an unpaged result.
- *
- * What counts as a repeat is the rollup's rule too (./step-grade.ts,
- * ADR-199): a call this job files as a repeated shell command or a duplicate
- * read is a step the run's productive ratio counts as not advancing it.
+ * A whole request at its own priced cost, against nothing: the request did
+ * no work the run needed.
  */
-function detectToolCalls(
-  input: DetectInput,
-  runs: ReadonlyMap<string, RunTotalsRecord>,
-  groups: Groups,
-): void {
-  const calls = input.toolCalls
-    .filter((c) => runs.has(c.runId))
-    .slice()
-    .sort((a, b) =>
-      a.at.getTime() !== b.at.getTime()
-        ? a.at.getTime() - b.at.getTime()
-        : a.runId !== b.runId
-          ? a.runId < b.runId
-            ? -1
-            : 1
-          : a.seq - b.seq,
-    );
-  const seen = new RepeatedCalls();
-  const windowStart = input.toolWindowStart;
-
-  for (const call of calls) {
-    const run = runs.get(call.runId)!;
-    const frame = { seq: call.seq, sessionUuid: call.sessionUuid };
-    const repeated = seen.repeats(
-      call.runId,
-      call.tool,
-      call.inputDigest,
-      call.outputDigest,
-    );
-
-    let claimed = false;
-    if (repeated) {
-      const repeat = repeatKindOf(call);
-      const key =
-        repeat === "shell"
-          ? {
-              kind: "repeated_shell_commands" as const,
-              level: "tool" as const,
-              subject: SHELL_TOOL,
-            }
-          : repeat === "read" && run.agentKey !== null
-            ? {
-                kind: "duplicate_tool_calls" as const,
-                level: "agent" as const,
-                subject: run.agentKey,
-              }
-            : null;
-      if (key !== null) {
-        claimed = true;
-        if (
-          groups.admits(
-            findingFingerprint(key.kind, key.level, key.subject),
-            run,
-          )
-        )
-          groups.add(
-            key,
-            windowStart,
-            run,
-            resultMeasure(run, call.resultTokens, () => 0),
-            frame,
-          );
-      }
-    }
-
-    if (
-      !claimed &&
-      call.resultTokens !== null &&
-      call.resultTokens > UNPAGED_RESULT_TOKENS
-    ) {
-      const key = {
-        kind: "unpaged_results" as const,
-        level: "tool" as const,
-        subject: call.tool,
-      };
-      if (
-        groups.admits(findingFingerprint(key.kind, key.level, key.subject), run)
-      )
-        groups.add(
-          key,
-          windowStart,
-          run,
-          resultMeasure(run, call.resultTokens, () => PAGE_TOKENS),
-          frame,
-        );
-    }
-  }
+export function requestMeasure(frame: PricedRequestFrame | null): Measure {
+  if (frame === null || frame.costMicros === null)
+    return { measuredTokens: 0, counterfactualTokens: 0, micros: null };
+  return {
+    measuredTokens: frame.tokens,
+    counterfactualTokens: 0,
+    micros: { measured: frame.costMicros, counterfactual: 0n },
+    basis: frame.basis,
+  };
 }
 
-// ── Prose ─────────────────────────────────────────────────────────────────────
+/** The agent a run names, or its operator when it names no agent; null when it names neither. */
+export function agentOrOperator(
+  kind: FindingKind,
+  run: RunTotalsRecord,
+): FindingKey | null {
+  if (run.agentKey !== null)
+    return { kind, level: "agent", subject: run.agentKey };
+  if (run.operatorKey !== null)
+    return { kind, level: "operator", subject: run.operatorKey };
+  return null;
+}
 
-function plural(n: number, one: string, many: string): string {
+export function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 }
-
-function prose(
-  group: Group,
-  evidence: FindingEvidence,
-): { why: string; fix: string } {
-  const runs = plural(group.runs.size, "run", "runs");
-  const calls = plural(evidence.calls, "call", "calls");
-  switch (group.kind) {
-    case "cache_writes_never_read":
-      return {
-        why: `${runs} wrote ${plural(evidence.measuredTokens, "prompt-cache token", "prompt-cache tokens")} and read none of them back.`,
-        fix: "Stop marking the prefix cacheable on runs that end before a second call reads it.",
-      };
-    case "repeated_shell_commands":
-      return {
-        why: `${calls} on ${runs} re-ran a shell command whose identical input had already returned the identical output earlier in the run.`,
-        fix: "Serve an identical command from the run's earlier result until a write changes what it reads.",
-      };
-    case "duplicate_tool_calls":
-      return {
-        why: `${calls} on ${runs} repeated a read-only tool call with an identical input and output digest earlier in the same run.`,
-        fix: "Tell the agent not to re-read a result it already holds in the run.",
-      };
-    case "unpaged_results":
-      return {
-        why: `${calls} to ${group.subject} on ${runs} returned more than ${UNPAGED_RESULT_TOKENS.toLocaleString("en-US")} result tokens into the context.`,
-        fix: `Page ${group.subject}'s results at ${PAGE_TOKENS.toLocaleString("en-US")} tokens and fetch the rest on demand.`,
-      };
-  }
-}
-
-// ── Assembly ──────────────────────────────────────────────────────────────────
 
 /**
  * One run's cited frames as stored: seqs ascending (a subagent chain's after
@@ -498,7 +421,44 @@ function citedFrames(frames: readonly CallFrame[]): {
   };
 }
 
-function toDraft(group: Group, windowEnd: Date): FindingDraft | null {
+export type Prose = (
+  group: Group,
+  evidence: FindingEvidence,
+) => { why: string; fix: string };
+
+/** What one pass shares between its detectors. */
+export interface DetectContext {
+  groups: Groups;
+  runs: ReadonlyMap<string, RunTotalsRecord>;
+  /** Each run's calls and requests; see ./requests.ts. */
+  views: readonly RunView[];
+  /**
+   * The frames a counting detector already claimed this pass, by
+   * `claimKey(runId, frameKey)`. A later detector skips them, so a frame
+   * counts under the first detector in counting order (ADR-206).
+   */
+  claimed: Set<string>;
+  /** The tool calls a finding already cites, which a later detector skips. */
+  taken: Set<ToolCallObservation>;
+}
+
+/**
+ * One detector as `detectFindings` runs it. `counting` names the headline
+ * detector a whole-request finding claims frames as (ADR-206); null for a
+ * detector that prices a part of a request and claims none.
+ */
+export interface Detector {
+  kinds: readonly FindingKind[];
+  counting: CountingDetector | null;
+  detect(input: DetectInput, ctx: DetectContext): void;
+  prose: Prose;
+}
+
+export function toDraft(
+  group: Group,
+  windowEnd: Date,
+  prose: Prose,
+): FindingDraft | null {
   if (group.calls === 0 || group.basis === null) return null;
   const coverage = group.covered / group.calls;
   if (coverage < MIN_COVERAGE) return null;
@@ -547,11 +507,11 @@ function toDraft(group: Group, windowEnd: Date): FindingDraft | null {
   };
   // A finding over whole runs pins no frame; the tool-call detectors cite one
   // per call, in every run they cite, not only the ten itemised above.
-  if (group.kind !== "cache_writes_never_read")
+  if (group.citesCalls)
     evidence.frames = Object.fromEntries(
       accs.map((a) => [a.run.runId, citedFrames(a.frames)]),
     );
-  return {
+  const draft: FindingDraft = {
     kind: group.kind,
     level: group.level,
     subject: group.subject,
@@ -566,32 +526,6 @@ function toDraft(group: Group, windowEnd: Date): FindingDraft | null {
     citedRuns: ranked.map((a) => a.run.runId),
     evidence,
   };
-}
-
-/** Every finding the window's runs and tool calls prove, largest saving first, at most ten per kind. */
-export function detectFindings(input: DetectInput): FindingDraft[] {
-  const runs = new Map(input.runs.map((r) => [r.runId, r]));
-  const groups = new Groups(input.decidedSince);
-  detectCacheWritesNeverRead(input, groups);
-  detectToolCalls(input, runs, groups);
-
-  const byKind = new Map<FindingKind, FindingDraft[]>();
-  for (const group of groups.values()) {
-    const draft = toDraft(group, input.window.end);
-    if (!draft) continue;
-    const list = byKind.get(draft.kind) ?? [];
-    list.push(draft);
-    byKind.set(draft.kind, list);
-  }
-  const bySaving = (a: FindingDraft, b: FindingDraft) =>
-    a.savingMicros > b.savingMicros
-      ? -1
-      : a.savingMicros < b.savingMicros
-        ? 1
-        : a.fingerprint < b.fingerprint
-          ? -1
-          : 1;
-  return [...byKind.values()]
-    .flatMap((list) => list.sort(bySaving).slice(0, FINDINGS_PER_KIND))
-    .sort(bySaving);
+  if (group.claims.length > 0) draft.claims = group.claims;
+  return draft;
 }

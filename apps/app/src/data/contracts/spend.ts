@@ -165,13 +165,23 @@ const Instant = z.iso.datetime();
 /** The span a finding or a list of findings covers. */
 const FindingWindow = z.object({ from: Instant, to: Instant });
 
-/** The kinds the findings job detects (ADR-062's detector table). */
-const FindingKind = z.enum([
+/** The kinds the findings job detects (ADR-062's detector table, ADR-206). */
+export const FINDING_KINDS = [
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
-]);
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
+] as const;
+
+const FindingKind = z.enum(FINDING_KINDS);
 
 /** What a finding is about: a tool, an agent, an operator or the workspace. */
 const FindingLevel = z.enum(["tool", "agent", "operator", "workspace"]);

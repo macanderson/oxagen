@@ -12,11 +12,20 @@ import { z } from "zod";
 import { runPublicIdSchema } from "./run.list";
 import { costSchema, moneySchema } from "./spend.shared";
 
+/** The kinds the findings job writes (ADR-062, ADR-206). Mirrors `FINDING_KINDS` in the cost schema. */
 const findingKindSchema = z.enum([
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
 ]);
 
 const findingLevelSchema = z.enum(["tool", "agent", "operator", "workspace"]);

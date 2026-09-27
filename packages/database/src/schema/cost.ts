@@ -25,6 +25,9 @@
 // per (workspace, kind, subject) the detectors see in the trailing window,
 // replaced on every pass; a row a person applied or dismissed is kept with
 // the decision on it, and the detectors cite only runs that started after it.
+//
+// `finding_claims` holds the model calls each whole-call finding priced, so
+// the headline unproductive spend counts a call once (ADR-206).
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { sql } from "drizzle-orm";
 import {
@@ -36,6 +39,7 @@ import {
   integer,
   jsonb,
   numeric,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -506,17 +510,35 @@ export const costCenters = costSchema.table(
 
 // ── findings ──────────────────────────────────────────────────────────────────
 /**
- * What the detectors can prove from the recorded frames today (spec §12.8
- * and the mockup's Spend › Findings; ADR-062's detector table names the
- * field every other §12.8 row waits on).
+ * The finding kinds (spec §12.8; ADR-062's detector table). The first four
+ * shipped with ADR-062. ADR-206 adds `spin_loops` and the seven kinds the
+ * later unproductive spend detectors write, so each lane adds a detector
+ * without a migration of its own.
  */
 export const FINDING_KINDS = [
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
 ] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
+
+/**
+ * The detectors whose findings price whole model calls and claim them
+ * (ADR-206, counting rule 1): 1 is spin and poll loops, 7 is recurring runs,
+ * and 8 is spend with no outcome. The headline counts a claimed call once,
+ * under the lowest of these numbers that claims it.
+ */
+export const FINDING_CLAIM_DETECTORS = [1, 7, 8] as const;
+export type FindingClaimDetector = (typeof FINDING_CLAIM_DETECTORS)[number];
 
 /** Where the fix applies: the level whose key `subject` carries. */
 const FINDING_LEVELS = ["tool", "agent", "operator", "workspace"] as const;
@@ -623,5 +645,56 @@ export const findings = costSchema.table(
       "findings_decision_check",
       sql`(${t.status} = 'open') = (${t.decidedAt} IS NULL) AND (${t.status} = 'applied') = (${t.appliedActionId} IS NOT NULL)`,
     ),
+  }),
+);
+
+// ── finding_claims ────────────────────────────────────────────────────────────
+/**
+ * The model calls a finding claims (ADR-206). A finding from detector 1, 7,
+ * or 8 prices whole calls, and it writes one row per call it priced. The
+ * headline unproductive spend adds these rows and counts a call once, under
+ * the lowest detector that claims it. The rows go with their finding: a pass
+ * that rewrites or deletes an open finding rewrites or deletes its claims.
+ */
+export const findingClaims = costSchema.table(
+  "finding_claims",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    findingId: uuid("finding_id")
+      .notNull()
+      .references(() => findings.id, { onDelete: "cascade" }),
+    // 1 (spin and poll loops), 7 (recurring runs), or 8 (spend with no outcome).
+    detector: smallint("detector").notNull(),
+    // The run's public id (`tse_…` or `arun_…`).
+    runId: text("run_id").notNull(),
+    // The call's instant as the frame store wrote it, then `#` and its place
+    // among the run's calls at that instant (`frameKey` in @oxagen/billing).
+    frameKey: text("frame_key").notNull(),
+    frameAt: timestamp("frame_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    // The run's operator (`prn_…`); null when the run names none.
+    operatorKey: text("operator_key"),
+    // What the call cost, in integer micro-units of `currency`.
+    costMicros: bigint("cost_micros", { mode: "bigint" }).notNull(),
+    currency: text("currency").notNull().default("USD"),
+  },
+  (t) => ({
+    findingFrameIdx: uniqueIndex("finding_claims_finding_frame_idx").on(
+      t.findingId,
+      t.runId,
+      t.frameKey,
+    ),
+    workspaceFrameAtIdx: index("finding_claims_workspace_frame_at_idx").on(
+      t.workspaceId,
+      t.frameAt,
+    ),
+    detectorCheck: check(
+      "finding_claims_detector_check",
+      sql`${t.detector} IN (${sql.raw(FINDING_CLAIM_DETECTORS.join(", "))})`,
+    ),
+    costCheck: check("finding_claims_cost_check", sql`${t.costMicros} >= 0`),
   }),
 );
