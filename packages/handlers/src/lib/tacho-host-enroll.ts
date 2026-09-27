@@ -112,6 +112,29 @@ export function requireEnrollmentSigning(
   return { secret, signer, endpointBase };
 }
 
+/**
+ * Whether an agent version's config declares `containment.required = true`,
+ * the table ADR-198's migration copied from the definition file. Read only to
+ * carry that requirement onto a runtime (ADR-204 §4). Any other shape counts
+ * as not required, the same test the ADR-204 migration's backfill applies.
+ */
+async function versionRequiresContainment(
+  tx: Tx,
+  versionId: string | null,
+): Promise<boolean> {
+  if (versionId === null) return false;
+  const [version] = await tx
+    .select({ config: schema.agentVersions.config })
+    .from(schema.agentVersions)
+    .where(eq(schema.agentVersions.id, versionId))
+    .limit(1);
+  const config = version?.config as
+    | { containment?: { required?: unknown } }
+    | null
+    | undefined;
+  return config?.containment?.required === true;
+}
+
 /** The facts a host reports about itself, as both contracts accept them. */
 interface HostFacts {
   hostname: string;
@@ -286,9 +309,17 @@ export async function mintHostEnrollment(
   // runtimes existed that the backfill left unplaced, take the runtime the
   // hostname names, created when none does. The agent row is not moved: that
   // is `move_agent`, which checks the runtime is free for its harness.
+  //
+  // An unplaced agent whose active version requires containment makes the
+  // hostname's runtime require it (ADR-204 §4). The migration that moved
+  // containment onto runtimes could not reach an agent with no runtime and
+  // no host, so its version config is the one record of the requirement.
   const [agentRuntime] = args.agent
     ? await tx
-        .select({ runtimeId: schema.agents.runtimeId })
+        .select({
+          runtimeId: schema.agents.runtimeId,
+          activeVersionId: schema.agents.activeVersionId,
+        })
         .from(schema.agents)
         .where(eq(schema.agents.id, args.agent.id))
         .limit(1)
@@ -301,6 +332,12 @@ export async function mintHostEnrollment(
         { orgId: args.orgId, workspaceId: args.workspaceId },
         facts.hostname,
         args.userId,
+        {
+          containmentRequired: await versionRequiresContainment(
+            tx,
+            agentRuntime?.activeVersionId ?? null,
+          ),
+        },
       )
     ).id;
 

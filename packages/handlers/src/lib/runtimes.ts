@@ -141,8 +141,33 @@ export async function insertRuntime(
  * of `tacho enroll`): the runtime named after the host, created when none is.
  * The slug is `slugFromName(hostname)` with a trailing `.local` dropped, and a
  * numeric suffix when another runtime already holds it.
+ *
+ * `containmentRequired: true` makes the runtime require containment, whether
+ * it is created here or already existed. It never turns containment off.
  */
 export async function findOrCreateHostRuntime(
+  tx: Tx,
+  scope: Scope,
+  hostname: string,
+  userId: string | null,
+  opts: { containmentRequired?: boolean } = {},
+): Promise<RuntimeRow> {
+  const runtime = await findOrInsertHostRuntime(tx, scope, hostname, userId);
+  if (opts.containmentRequired !== true || runtime.containmentRequired) {
+    return runtime;
+  }
+  await tx
+    .update(schema.runtimes)
+    .set({
+      containmentRequired: true,
+      updatedAt: new Date(),
+      updatedById: userId,
+    })
+    .where(eq(schema.runtimes.id, runtime.id));
+  return { ...runtime, containmentRequired: true };
+}
+
+async function findOrInsertHostRuntime(
   tx: Tx,
   scope: Scope,
   hostname: string,

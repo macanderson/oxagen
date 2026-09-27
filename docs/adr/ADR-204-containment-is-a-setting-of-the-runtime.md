@@ -83,9 +83,17 @@ actions.
 it true on each runtime where a live agent's active version required
 containment. An agent counts as on a runtime when its own `runtime_id`
 names it, or when a host enrollment bound to the runtime belongs to the
-agent, because the bundle reads the host's runtime. The version configs keep
-their tables, so a rollback that drops the column returns the previous
-answer.
+agent, because the bundle reads the host's runtime. A revoked host does not
+count, so a runtime an agent has moved off does not inherit its
+requirement. The migration reports how many runtimes it switched and how
+many live hosts sit on them. The version configs keep their tables, so a
+rollback that drops the column returns the previous answer.
+
+An agent on no runtime has no runtime to carry the requirement to. Its
+version config holds it until its first host enrollment. That enrollment
+binds the runtime named after the host, and turns containment on for that
+runtime when the agent's active version required it
+(`findOrCreateHostRuntime`). An enrollment never turns containment off.
 
 ### 5. The budget stays per agent and read-only
 
@@ -108,6 +116,13 @@ it.
   runtime, including agents registered later. There is no per-agent
   exception. An owner who wants one uncontained agent on a machine gives it
   its own runtime.
+- Turning containment on changes what each host on the runtime does at its
+  next bundle fetch. A host whose tacho predates the `containment` bundle
+  feature is suspended, because it cannot read the requirement. On a host
+  in enforce mode, a session not started with `tacho run --contained`
+  (which needs Docker) has its governed actions refused with
+  `containment_required`. A host in observe mode records and refuses
+  nothing.
 - Moving an agent to another runtime (`move_agent`) changes its containment
   to the new runtime's. `move_agent` revokes the agent's hosts on the old
   runtime, so the new host enrolls and reads the new runtime.

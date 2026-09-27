@@ -278,5 +278,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(clash.id).not.toBe(first.id);
       expect(clash.slug).toBe("build-box-2");
     });
+
+    it("an enrollment that carries containment makes the hostname's runtime require it, and never lifts it", async () => {
+      const scope = { orgId: tenant.orgId, workspaceId: tenant.workspaceId };
+      const open = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Contained-Box", tenant.userId),
+      );
+      expect(open.containmentRequired).toBe(false);
+      const contained = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "contained-box", tenant.userId, {
+          containmentRequired: true,
+        }),
+      );
+      expect(contained.id).toBe(open.id);
+      expect(contained.containmentRequired).toBe(true);
+      const later = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Contained-Box", tenant.userId, {
+          containmentRequired: false,
+        }),
+      );
+      expect(later.containmentRequired).toBe(true);
+      const fresh = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Fresh-Box", tenant.userId, {
+          containmentRequired: true,
+        }),
+      );
+      expect(fresh.containmentRequired).toBe(true);
+    });
   },
 );
