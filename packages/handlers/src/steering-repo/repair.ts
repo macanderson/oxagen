@@ -18,6 +18,7 @@ import {
   GITHUB_SETTINGS_BASELINE,
   GITLAB_SETTINGS_BASELINE,
   OXAGEN_STEERING_APP,
+  STEERING_DEFAULT_BRANCH,
 } from "@oxagen/oxagen/steering-repo";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
 import {
@@ -57,9 +58,36 @@ export interface RepairHost {
   name(): string;
   /** Write every baseline setting that differs. Returns the settings still different. */
   applyBaseline(): Promise<string[]>;
-  /** Merge the pull request that puts main back at `published`. */
+  /**
+   * Merge the pull request that puts main back at `published`.
+   *
+   * The merge runs with the app's bypass of the branch rules. Its squash
+   * carries the `Oxagen-Revert-To` trailer, and the next health read trusts
+   * a commit with that trailer as Oxagen's. Anyone who can push to the
+   * repository can also push to the revert branch, so the branch name proves
+   * nothing about its content. Before it merges, the host reads the head
+   * commit again. It refuses unless the head holds the files of the published
+   * commit and has exactly one parent, the current head of main. The merge
+   * names the head it checked, so a push after the check makes the host
+   * refuse the merge. A refusal makes `repair` read the health again, and
+   * that read writes a new revert commit on the branch (./diverged.ts).
+   */
   mergeRevert(number: number, published: PublishedCommit): Promise<RevertMerge>;
 }
+
+/** The refusal for a revert head whose files differ from the published commit's. */
+function otherFiles(published: PublishedCommit): RevertMerge {
+  return {
+    kind: "refused",
+    message: `Its branch does not hold the files of the published commit ${published.sha.slice(0, 7)}.`,
+  };
+}
+
+/** The refusal for a revert head that is not one commit on top of main. */
+const OFF_MAIN: RevertMerge = {
+  kind: "refused",
+  message: `Its branch is not one commit on top of the current ${STEERING_DEFAULT_BRANCH}.`,
+};
 
 export interface RepairDeps {
   now(): Date;
@@ -203,6 +231,12 @@ interface GithubPull {
   head: { ref: string; sha: string };
 }
 
+interface GithubGitCommit {
+  sha: string;
+  tree: { sha: string };
+  parents: { sha: string }[];
+}
+
 /** The repair host for one GitHub steering repo. */
 export function githubRepairHost(input: GithubRepairInput): RepairHost {
   let client: Promise<gh.GithubRest> | null = null;
@@ -245,13 +279,32 @@ export function githubRepairHost(input: GithubRepairInput): RepairHost {
       );
       if (pull.data === null || pull.data.state !== "open" || !isRevertBranch(pull.data.head.ref))
         return { kind: "gone" };
-      // 405: not mergeable. 409: the head moved.
+      // Check the head before the merge, as the doc comment on RepairHost says.
+      const head = pull.data.head.sha;
+      const commit = await r.request<GithubGitCommit>(
+        "GET",
+        `${root()}/git/commits/${seg(head)}`,
+      );
+      const base = await r.request<GithubGitCommit>(
+        "GET",
+        `${root()}/git/commits/${seg(published.sha)}`,
+      );
+      if (commit.data === null || base.data === null || commit.data.tree.sha !== base.data.tree.sha)
+        return otherFiles(published);
+      const parents = commit.data.parents;
+      const main = await r.request<{ commit: { sha: string } }>(
+        "GET",
+        `${root()}/branches/${seg(STEERING_DEFAULT_BRANCH)}`,
+      );
+      if (main.data === null || parents.length !== 1 || parents[0]?.sha !== main.data.commit.sha)
+        return OFF_MAIN;
+      // 405: not mergeable. 409: the head moved after the check.
       const res = await r.request<{ merged: boolean }>(
         "PUT",
         `${root()}/pulls/${seg(number)}/merge`,
         {
           merge_method: "squash",
-          sha: pull.data.head.sha,
+          sha: head,
           commit_title: revertTitle(published.version),
           commit_message: `${REVERT_TRAILER}: ${published.sha}`,
         },
@@ -277,6 +330,16 @@ interface GitlabMergeRequest {
   state: string;
   sha: string;
   source_branch: string;
+}
+
+interface GitlabCompare {
+  diffs: unknown[];
+  compare_timeout?: boolean;
+}
+
+interface GitlabCommit {
+  id: string;
+  parent_ids: string[];
 }
 
 /** The repair host for one GitLab steering repo. */
@@ -320,12 +383,36 @@ export function gitlabRepairHost(input: GitlabRepairInput): RepairHost {
         !isRevertBranch(request.data.source_branch)
       )
         return { kind: "gone" };
-      // 405 or 422: not mergeable. 409: the head moved.
+      // Check the head before the merge, as the doc comment on RepairHost says.
+      const head = request.data.sha;
+      // An empty diff from the published commit means the head holds its files.
+      const compare = await r.request<GitlabCompare>(
+        "GET",
+        `${root}/repository/compare?from=${seg(published.sha)}&to=${seg(head)}&straight=true`,
+      );
+      if (
+        compare.data === null ||
+        compare.data.compare_timeout === true ||
+        compare.data.diffs.length !== 0
+      )
+        return otherFiles(published);
+      const commit = await r.request<GitlabCommit>(
+        "GET",
+        `${root}/repository/commits/${seg(head)}`,
+      );
+      const main = await r.request<{ commit: { id: string } }>(
+        "GET",
+        `${root}/repository/branches/${seg(STEERING_DEFAULT_BRANCH)}`,
+      );
+      const parents = commit.data?.parent_ids ?? [];
+      if (main.data === null || parents.length !== 1 || parents[0] !== main.data.commit.id)
+        return OFF_MAIN;
+      // 405 or 422: not mergeable. 409: the head moved after the check.
       const res = await r.request<{ state: string }>(
         "PUT",
         `${root}/merge_requests/${seg(iid)}/merge`,
         {
-          sha: request.data.sha,
+          sha: head,
           squash: true,
           squash_commit_message: revertMessage(published),
           should_remove_source_branch: true,

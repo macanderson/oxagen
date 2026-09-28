@@ -59,6 +59,12 @@ const NOW = new Date("2026-09-27T12:00:00.000Z");
 const PUBLISHED: PublishedCommit = { sha: "a1".repeat(20), version: 7 };
 const REVERT_REF = "steering/revert-to-a1a1a1a-d4d4d4d";
 const HEAD = "d4".repeat(20);
+/** The head of main when the repair runs. */
+const MAIN = "e5".repeat(20);
+/** A commit that is not the head of main. */
+const OTHER = "0c".repeat(20);
+const FILES_REFUSED = "Its branch does not hold the files of the published commit a1a1a1a.";
+const OFF_MAIN_REFUSED = "Its branch is not one commit on top of the current main.";
 
 function located(
   provider: "github" | "gitlab",
@@ -447,7 +453,22 @@ describe("githubRepairHost.applyBaseline", () => {
 describe("githubRepairHost.mergeRevert", () => {
   const PULL = `GET ${ROOT}/pulls/12`;
   const MERGE = `PUT ${ROOT}/pulls/12/merge`;
+  const HEAD_COMMIT = `GET ${ROOT}/git/commits/${HEAD}`;
+  const PUBLISHED_COMMIT = `GET ${ROOT}/git/commits/${PUBLISHED.sha}`;
+  const MAIN_BRANCH = `GET ${ROOT}/branches/main`;
+  const TREE = "f6".repeat(20);
   const OPEN_REVERT = { number: 12, state: "open", head: { ref: REVERT_REF, sha: HEAD } };
+
+  function headCommit(tree: string, parents: string[]) {
+    return ok({ sha: HEAD, tree: { sha: tree }, parents: parents.map((sha) => ({ sha })) });
+  }
+
+  /** The reads of a head that holds the published files, one commit on top of main. */
+  const CHECKED = {
+    [HEAD_COMMIT]: headCommit(TREE, [MAIN]),
+    [PUBLISHED_COMMIT]: ok({ sha: PUBLISHED.sha, tree: { sha: TREE }, parents: [{ sha: OTHER }] }),
+    [MAIN_BRANCH]: ok({ name: "main", commit: { sha: MAIN } }),
+  };
 
   function scripted(routes: Parameters<typeof server>[1]) {
     const s = server(GITHUB_BASE, routes);
@@ -459,9 +480,16 @@ describe("githubRepairHost.mergeRevert", () => {
   }
 
   it("squash merges the revert at the head it read, with the trailer", async () => {
-    const { s, host } = scripted({ [PULL]: ok(OPEN_REVERT), [MERGE]: ok({ merged: true }) });
+    const { s, host } = scripted({
+      [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: ok({ merged: true }),
+    });
 
     expect(await host.mergeRevert(12, PUBLISHED)).toEqual({ kind: "merged" });
+    expect(s.sent(HEAD_COMMIT)).toHaveLength(1);
+    expect(s.sent(PUBLISHED_COMMIT)).toHaveLength(1);
+    expect(s.sent(MAIN_BRANCH)).toHaveLength(1);
     expect(s.writes()).toEqual([
       {
         method: "PUT",
@@ -490,6 +518,7 @@ describe("githubRepairHost.mergeRevert", () => {
   it.each([405, 409, 422])("reads a %s answer to the merge as refused", async (status) => {
     const { host } = scripted({
       [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
       [MERGE]: fail(status, "Head branch was modified."),
     });
 
@@ -500,12 +529,66 @@ describe("githubRepairHost.mergeRevert", () => {
   });
 
   it("reads a merge GitHub did not make as refused", async () => {
-    const { host } = scripted({ [PULL]: ok(OPEN_REVERT), [MERGE]: ok({ merged: false }) });
+    const { host } = scripted({
+      [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: ok({ merged: false }),
+    });
 
     expect(await host.mergeRevert(12, PUBLISHED)).toEqual({
       kind: "refused",
       message: "GitHub answered 200.",
     });
+  });
+
+  it("refuses a head whose files differ from the published commit and merges nothing", async () => {
+    const { s, host } = scripted({
+      [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [HEAD_COMMIT]: headCommit("0b".repeat(20), [MAIN]),
+    });
+
+    expect(await host.mergeRevert(12, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: FILES_REFUSED,
+    });
+    expect(s.writes()).toEqual([]);
+  });
+
+  it.each([
+    ["a parent that is not main", [OTHER], MAIN],
+    ["two parents", [MAIN, OTHER], MAIN],
+    ["no parent", [], MAIN],
+    ["a parent main has moved past", [MAIN], OTHER],
+  ])("refuses a head with %s and merges nothing", async (_, parents, main) => {
+    const { s, host } = scripted({
+      [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [HEAD_COMMIT]: headCommit(TREE, parents),
+      [MAIN_BRANCH]: ok({ name: "main", commit: { sha: main } }),
+    });
+
+    expect(await host.mergeRevert(12, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: OFF_MAIN_REFUSED,
+    });
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("names the head it checked, so a push after the check fails the merge", async () => {
+    const { s, host } = scripted({
+      [PULL]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: fail(409, "Head branch was modified. Review and try the merge again."),
+    });
+
+    expect(await host.mergeRevert(12, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: "Head branch was modified. Review and try the merge again.",
+    });
+    expect(s.sent(MERGE)).toEqual([
+      expect.objectContaining({ body: expect.objectContaining({ sha: HEAD }) }),
+    ]);
   });
 
   it("throws on a refused read of the pull request", async () => {
@@ -548,7 +631,21 @@ describe("gitlabRepairHost.applyBaseline", () => {
 describe("gitlabRepairHost.mergeRevert", () => {
   const REQUEST = "GET /projects/1/merge_requests/3";
   const MERGE = "PUT /projects/1/merge_requests/3/merge";
+  const COMPARE = `GET /projects/1/repository/compare?from=${PUBLISHED.sha}&to=${HEAD}&straight=true`;
+  const HEAD_COMMIT = `GET /projects/1/repository/commits/${HEAD}`;
+  const MAIN_BRANCH = "GET /projects/1/repository/branches/main";
   const OPEN_REVERT = { iid: 3, state: "opened", sha: HEAD, source_branch: REVERT_REF };
+
+  function headCommit(parents: string[]) {
+    return ok({ id: HEAD, message: revertMessage(PUBLISHED), parent_ids: parents });
+  }
+
+  /** The reads of a head that holds the published files, one commit on top of main. */
+  const CHECKED = {
+    [COMPARE]: ok({ commits: [], diffs: [] }),
+    [HEAD_COMMIT]: headCommit([MAIN]),
+    [MAIN_BRANCH]: ok({ name: "main", commit: { id: MAIN } }),
+  };
 
   function scripted(routes: Parameters<typeof server>[1]) {
     const s = server(GITLAB_BASE, routes);
@@ -560,9 +657,16 @@ describe("gitlabRepairHost.mergeRevert", () => {
   }
 
   it("squash merges the revert at the head it read, with the trailer", async () => {
-    const { s, host } = scripted({ [REQUEST]: ok(OPEN_REVERT), [MERGE]: ok({ state: "merged" }) });
+    const { s, host } = scripted({
+      [REQUEST]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: ok({ state: "merged" }),
+    });
 
     expect(await host.mergeRevert(3, PUBLISHED)).toEqual({ kind: "merged" });
+    expect(s.sent(COMPARE)).toHaveLength(1);
+    expect(s.sent(HEAD_COMMIT)).toHaveLength(1);
+    expect(s.sent(MAIN_BRANCH)).toHaveLength(1);
     expect(s.writes()).toEqual([
       {
         method: "PUT",
@@ -591,6 +695,7 @@ describe("gitlabRepairHost.mergeRevert", () => {
   it.each([405, 406, 409, 422])("reads a %s answer to the merge as refused", async (status) => {
     const { host } = scripted({
       [REQUEST]: ok(OPEN_REVERT),
+      ...CHECKED,
       [MERGE]: fail(status, "Branch cannot be merged"),
     });
 
@@ -601,12 +706,65 @@ describe("gitlabRepairHost.mergeRevert", () => {
   });
 
   it("reads a merge GitLab left open as refused", async () => {
-    const { host } = scripted({ [REQUEST]: ok(OPEN_REVERT), [MERGE]: ok({ state: "opened" }) });
+    const { host } = scripted({
+      [REQUEST]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: ok({ state: "opened" }),
+    });
 
     expect(await host.mergeRevert(3, PUBLISHED)).toEqual({
       kind: "refused",
       message: "GitLab answered 200.",
     });
+  });
+
+  it.each([
+    ["files that differ", ok({ commits: [], diffs: [{ new_path: "rules/extra.md" }] })],
+    ["a compare that timed out", ok({ commits: [], diffs: [], compare_timeout: true })],
+  ])("refuses a head with %s from the published commit and merges nothing", async (_, reply) => {
+    const { s, host } = scripted({ [REQUEST]: ok(OPEN_REVERT), ...CHECKED, [COMPARE]: reply });
+
+    expect(await host.mergeRevert(3, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: FILES_REFUSED,
+    });
+    expect(s.writes()).toEqual([]);
+  });
+
+  it.each([
+    ["a parent that is not main", [OTHER], MAIN],
+    ["two parents", [MAIN, OTHER], MAIN],
+    ["no parent", [], MAIN],
+    ["a parent main has moved past", [MAIN], OTHER],
+  ])("refuses a head with %s and merges nothing", async (_, parents, main) => {
+    const { s, host } = scripted({
+      [REQUEST]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [HEAD_COMMIT]: headCommit(parents),
+      [MAIN_BRANCH]: ok({ name: "main", commit: { id: main } }),
+    });
+
+    expect(await host.mergeRevert(3, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: OFF_MAIN_REFUSED,
+    });
+    expect(s.writes()).toEqual([]);
+  });
+
+  it("names the head it checked, so a push after the check fails the merge", async () => {
+    const { s, host } = scripted({
+      [REQUEST]: ok(OPEN_REVERT),
+      ...CHECKED,
+      [MERGE]: fail(409, "SHA does not match HEAD of source branch"),
+    });
+
+    expect(await host.mergeRevert(3, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: "SHA does not match HEAD of source branch",
+    });
+    expect(s.sent(MERGE)).toEqual([
+      expect.objectContaining({ body: expect.objectContaining({ sha: HEAD }) }),
+    ]);
   });
 });
 
