@@ -1,0 +1,16 @@
+{
+  "action": "labeled",
+  "number": 42,
+  "label": { "id": 7700112, "name": "steering" },
+  "pull_request": {
+    "id": 2291004417,
+    "number": 42,
+    "state": "open",
+    "updated_at": "2026-09-26T15:09:40Z",
+    "head": { "ref": "oxagen/refund-rule", "sha": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4" },
+    "base": { "ref": "main", "sha": "4f1c0e2a9b6d8e7f3a2b1c0d9e8f7a6b5c4d3e2f" }
+  },
+  "repository": { "id": 904211873, "full_name": "acme/oxagen-steering-platform" },
+  "sender": { "login": "dana-ops", "id": 5412287, "type": "User" },
+  "installation": { "id": 61200044 }
+}

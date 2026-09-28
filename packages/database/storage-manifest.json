@@ -1739,6 +1739,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "get_steering_repo",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_subscription",
       "reads": [],
@@ -3155,6 +3165,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "repair_steering_repo",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "request_mandate",
       "reads": [],
@@ -4282,7 +4302,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2443a667798df8102fc81bf0987df2021614993725c1a5d549d23693ca0feb80",
+  "contentHash": "bbeb8051777d92a33494fff6859e60077e9d6d4ff438a1faca52d828809ebaca",
   "domains": [
     {
       "name": "agent",
@@ -4335,6 +4355,7 @@
         "postgres:agent.memory_rejections",
         "postgres:agent.runtimes",
         "postgres:agent.steering_publications",
+        "postgres:agent.steering_repo_health",
         "postgres:agent.steering_versions",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
@@ -4765,7 +4786,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 170
+      "tableCount": 171
     },
     {
       "domains": [
@@ -10209,6 +10230,124 @@
       "id": "postgres:agent.steering_publications",
       "name": "steering_publications",
       "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "health",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "differences",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "published_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "published_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "revert_pr_number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "notified_health",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "posted_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checked_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "changed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.steering_repo_health",
+      "name": "steering_repo_health",
+      "rls": "workspace_nullable",
       "store": "postgres",
       "tenantScoped": true
     },

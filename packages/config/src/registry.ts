@@ -758,6 +758,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  // The steering health read (lane S2, #4560). The api's GitHub webhook route
+  // routes a delivery from the steering app (its target id is
+  // OXAGEN_STEERING_APP_ID) to the health request, and verifies it with this
+  // secret alone. With the secret unset, it acks every such delivery and
+  // asks for no health read.
+  OXAGEN_STEERING_APP_WEBHOOK_SECRET: {
+    group: "github",
+    description:
+      "The Oxagen Steering GitHub App's webhook secret. The api verifies the steering app's webhook deliveries with it, and each verified delivery asks for a steering repo health read. While it is unset, the api answers every delivery from the steering app with 200, logs an error, and asks for no health read. Set it under the app's settings, Webhook secret.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",

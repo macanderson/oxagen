@@ -1269,6 +1269,15 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-cost-price-book-autoseed"
     },
+    "repair_steering_repo": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "The steering repo health banner in the workspace layout \u203a \u201cRepair settings\u201d, shown on every workspace page while the steering repo is not healthy (features/steering-repo/health-banner-view.tsx, features/steering-repo/actions.ts)",
+      "testid": "steering-repo-repair",
+      "proof": "apps/app/src/features/steering-repo/health-banner.test.tsx",
+      "verifiedAt": "2026-09-27",
+      "verifiedBy": "s2-steering-drift"
+    },
     "request_mandate": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -1808,6 +1817,15 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "steering-rescue-ci"
+    },
+    "get_steering_repo": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories \u203a the steering repo card: provisioning steps, the repository link, the published version, and health. The workspace layout's health banner and onboarding read it too (features/steering-repo/read.ts, card.tsx, health-banner.tsx)",
+      "testid": "steering-repo-card",
+      "proof": "apps/app/src/features/steering-repo/card.test.tsx",
+      "verifiedAt": "2026-09-27",
+      "verifiedBy": "s2-steering-drift"
     },
     "list_memories": {
       "route": "/[org]/[ws]/steering/memory",

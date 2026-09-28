@@ -216,6 +216,8 @@ import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.del
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
 import { publishedSteeringGetRoute } from "./routes/v1/context.steering.published.get";
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
+import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
+import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -1177,6 +1179,9 @@ orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
 orgScoped.route("/context/steering/published", publishedSteeringGetRoute);
 // The published record index and the check context, for `oxagen check`.
 orgScoped.route("/context/steering/index", steeringIndexGetRoute);
+// The workspace's steering repo and its settings repair (lane S2, #4560).
+orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
+orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

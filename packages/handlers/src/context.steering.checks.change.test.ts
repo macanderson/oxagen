@@ -1,6 +1,6 @@
 // The steering PR half of context.steering.checks.ts: the tree loader, the
 // adapter over a steering host, and checkSteeringChange(), which hands both
-// trees to @oxagen/steering-check.
+// trees to @oxagen/steering-check's runChecksWithServers().
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,8 @@ import {
   fixtureContext,
   fixtureRepo,
 } from "@oxagen/oxagen/steering-repo/fixture-repo";
-import { runChecks, type CheckInput } from "@oxagen/steering-check";
+import type { CheckInput } from "@oxagen/steering-check";
+import { runChecksWithServers } from "@oxagen/steering-check/servers";
 import {
   STEERING_TREE_READS_AT_ONCE,
   checkSteeringChange,
@@ -69,7 +70,7 @@ function context(): CheckInput["context"] {
 }
 
 describe("checkSteeringChange", () => {
-  it("reports what runChecks() reports on the same two trees", async () => {
+  it("reports what runChecksWithServers() reports on the same two trees", async () => {
     const head = editedRepo();
     const base = fixtureRepo();
     const { host } = treeHost({ [HEAD]: head, [BASE]: base });
@@ -81,7 +82,7 @@ describe("checkSteeringChange", () => {
 
     const report = await checkSteeringChange({ host, head: HEAD, base: BASE, ...shared });
 
-    expect(report).toEqual(runChecks({ files: head, base, ...shared }));
+    expect(report).toEqual(await runChecksWithServers({ files: head, base, ...shared }));
     expect(report.passed).toBe(true);
     expect(report.findings.filter((finding) => finding.severity === "error")).toEqual([]);
   });
@@ -111,7 +112,7 @@ describe("checkSteeringChange", () => {
 
     const report = await checkSteeringChange({ host, head: HEAD, base: null, ...shared });
 
-    expect(report).toEqual(runChecks({ files: head, base: null, ...shared }));
+    expect(report).toEqual(await runChecksWithServers({ files: head, base: null, ...shared }));
     expect(reads.every((read) => read.ref === HEAD)).toBe(true);
   });
 

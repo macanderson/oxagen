@@ -2,7 +2,7 @@
  * `oxagen check` on S0's fixture steering repo. The tests commit the fixture
  * to a git repository, clone it, apply an invalid case's changes to the
  * clone, and run the command there. The command's findings must equal what
- * runChecks reports for the same trees, and each case's finding must land
+ * runChecksWithServers reports for the same trees, and each case's finding must land
  * where its case.json says.
  */
 import { execFileSync } from "node:child_process";
@@ -28,11 +28,11 @@ import {
 } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import {
   formatHuman,
-  runChecks,
   type CheckReport,
   type Finding,
   type SteeringTree,
 } from "@oxagen/steering-check";
+import { runChecksWithServers } from "@oxagen/steering-check/servers";
 import {
   afterAll,
   afterEach,
@@ -210,13 +210,13 @@ function sorted(tree: SteeringTree): Map<string, string> {
   return new Map([...tree].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
-/** What runChecks reports for the trees, read the way the command reads them. */
+/** What the command's checks report for the trees, read the way it reads them. */
 function direct(
   files: SteeringTree,
   base: SteeringTree | null,
   inputs: PublishedInputs = published(),
-): CheckReport {
-  return runChecks({
+): Promise<CheckReport> {
+  return runChecksWithServers({
     files: sorted(files),
     base: base === null ? null : sorted(base),
     index: inputs.index,
@@ -307,7 +307,7 @@ describe("oxagen check on each invalid fixture case", () => {
     "%s",
     async (_id, item) => {
       const result = await run(cloneWith(item), [], { json: true });
-      const expected = direct(item.files, fixtureRepo());
+      const expected = await direct(item.files, fixtureRepo());
       const printed = findings(result);
 
       expect(printed).toEqual(expected.findings);
@@ -338,7 +338,7 @@ describe("oxagen check on each invalid fixture case", () => {
 describe("the report", () => {
   it("prints what formatHuman renders for a clone with no changes", async () => {
     const result = await run(clone());
-    const expected = direct(fixtureRepo(), fixtureRepo());
+    const expected = await direct(fixtureRepo(), fixtureRepo());
 
     expect(result.out).toEqual([formatHuman(expected).trimEnd()]);
     expect(result.err).toEqual([expect.stringMatching(COMPARED)]);
@@ -371,7 +371,7 @@ describe("the report", () => {
   it("prints each finding and exits 1 when a finding is an error", async () => {
     const item = caseById("owned/agents-md-edited");
     const result = await run(cloneWith(item));
-    const expected = direct(item.files, fixtureRepo());
+    const expected = await direct(item.files, fixtureRepo());
 
     expect(result.out).toEqual([formatHuman(expected).trimEnd()]);
     expect(result.out[0]).toContain(`  error owned/${item.rule} at AGENTS.md`);
@@ -407,7 +407,7 @@ describe("the report", () => {
 
     const result = await run(dir, [], { json: true });
 
-    expect(findings(result)).toEqual(direct(item.files, fixtureRepo()).findings);
+    expect(findings(result)).toEqual((await direct(item.files, fixtureRepo())).findings);
     expect(result.code).toBe(1);
   });
 
@@ -417,7 +417,7 @@ describe("the report", () => {
 
     const result = await run(join(dir, "steering", "billing"), [], { json: true });
 
-    expect(findings(result)).toEqual(direct(item.files, fixtureRepo()).findings);
+    expect(findings(result)).toEqual((await direct(item.files, fixtureRepo())).findings);
   });
 
   it("finds an organization repo by AGENTS.md and steering/", async () => {
@@ -426,7 +426,7 @@ describe("the report", () => {
 
     const result = await run(join(dir, "steering"), [], { json: true, base: "main" });
 
-    expect(findings(result)).toEqual(direct(tree, tree).findings);
+    expect(findings(result)).toEqual((await direct(tree, tree)).findings);
     expect(result.err[0]).toMatch(/^Compared with main at [0-9a-f]{7}\.$/);
   });
 });
@@ -457,7 +457,7 @@ describe("the base", () => {
     git(dir, "remote", "remove", "origin");
 
     const result = await run(dir, [], { json: true });
-    const expected = direct(fixtureRepo(), null);
+    const expected = await direct(fixtureRepo(), null);
 
     expect(findings(result)).toEqual(expected.findings);
     expect(result.err[0]).toBe(
@@ -479,7 +479,10 @@ describe("the base", () => {
 
 describe("paths", () => {
   const item = caseById("compile/lock-matches");
-  const full = direct(item.files, fixtureRepo());
+  let full: CheckReport;
+  beforeAll(async () => {
+    full = await direct(item.files, fixtureRepo());
+  });
   const inSteering = (finding: Finding) =>
     finding.path === "" || finding.path.startsWith("steering/");
 
@@ -751,7 +754,7 @@ describe("the published index cache", () => {
     const second = await run(dir, [], { json: true }, { fetchPublished, cacheDir });
 
     expect(fetchPublished).toHaveBeenCalledTimes(1);
-    expect(findings(second)).toEqual(direct(fixtureRepo(), fixtureRepo(), inputs).findings);
+    expect(findings(second)).toEqual((await direct(fixtureRepo(), fixtureRepo(), inputs)).findings);
     expect(second.out).toEqual(first.out);
   });
 
