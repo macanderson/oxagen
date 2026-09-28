@@ -579,6 +579,165 @@ describe("FakeGitlab deployments", () => {
   });
 });
 
+describe("FakeGitlab hooks", () => {
+  const URL_A = "https://oxagen.example/hooks/gitlab";
+  const URL_B = "https://other.example/hook";
+
+  it("creates a hook with GitLab's defaults and answers 201 without the token", async () => {
+    const { fake } = await withMain();
+    expect(await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "hook-secret" })).toEqual({
+      status: 201,
+      body: {
+        id: 1,
+        url: URL_A,
+        project_id: 1,
+        push_events: true,
+        merge_requests_events: false,
+        enable_ssl_verification: true,
+      },
+    });
+  });
+
+  it("lists hooks in id order without their tokens", async () => {
+    const { fake } = await withMain();
+    await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "hook-secret" });
+    await send(fake, "POST", "/projects/1/hooks", {
+      url: URL_B,
+      token: "hook-secret",
+      push_events: false,
+      merge_requests_events: true,
+      enable_ssl_verification: false,
+    });
+    const res = await send(fake, "GET", "/projects/1/hooks?per_page=100");
+    expect(res).toEqual({
+      status: 200,
+      body: [
+        {
+          id: 1,
+          url: URL_A,
+          project_id: 1,
+          push_events: true,
+          merge_requests_events: false,
+          enable_ssl_verification: true,
+        },
+        {
+          id: 2,
+          url: URL_B,
+          project_id: 1,
+          push_events: false,
+          merge_requests_events: true,
+          enable_ssl_verification: false,
+        },
+      ],
+    });
+    expect(JSON.stringify(res.body)).not.toContain("hook-secret");
+  });
+
+  it("updates a hook in place and keeps each field the request leaves out", async () => {
+    const { fake } = await withMain();
+    await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "old-secret" });
+    const res = await send(fake, "PUT", "/projects/1/hooks/1", {
+      url: URL_A,
+      merge_requests_events: true,
+    });
+    expect(res).toEqual({
+      status: 200,
+      body: {
+        id: 1,
+        url: URL_A,
+        project_id: 1,
+        push_events: true,
+        merge_requests_events: true,
+        enable_ssl_verification: true,
+      },
+    });
+    expect(fake.hooks(1)).toEqual([
+      {
+        id: 1,
+        url: URL_A,
+        token: "old-secret",
+        push_events: true,
+        merge_requests_events: true,
+        enable_ssl_verification: true,
+      },
+    ]);
+
+    await send(fake, "PUT", "/projects/1/hooks/1", {
+      url: URL_B,
+      token: "new-secret",
+      push_events: false,
+      merge_requests_events: false,
+      enable_ssl_verification: false,
+    });
+    expect(fake.hooks(1)).toEqual([
+      {
+        id: 1,
+        url: URL_B,
+        token: "new-secret",
+        push_events: false,
+        merge_requests_events: false,
+        enable_ssl_verification: false,
+      },
+    ]);
+    expect(fake.writes().slice(1)).toEqual([
+      { method: "POST", path: "/projects/1/hooks" },
+      { method: "PUT", path: "/projects/1/hooks/1" },
+      { method: "PUT", path: "/projects/1/hooks/1" },
+    ]);
+  });
+
+  it("refuses an unknown hook, a missing url, or a missing project", async () => {
+    const { fake } = await withMain();
+    await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "hook-secret" });
+    expect(await send(fake, "PUT", "/projects/1/hooks/42", { url: URL_A })).toEqual({
+      status: 404,
+      body: { message: "404 Hook Not Found" },
+    });
+    expect(await send(fake, "POST", "/projects/1/hooks", { token: "hook-secret" })).toEqual({
+      status: 400,
+      body: { error: "url is missing" },
+    });
+    expect(await send(fake, "PUT", "/projects/1/hooks/1", { token: "hook-secret" })).toEqual({
+      status: 400,
+      body: { error: "url is missing" },
+    });
+    expect(await send(fake, "GET", "/projects/42/hooks")).toEqual({
+      status: 404,
+      body: { message: "404 Project Not Found" },
+    });
+    expect(await send(fake, "POST", "/projects/42/hooks", { url: URL_A })).toEqual({
+      status: 404,
+      body: { message: "404 Project Not Found" },
+    });
+    expect(fake.hooks(1)).toHaveLength(1);
+  });
+
+  it("shows each hook in the snapshot without its id or token", async () => {
+    const { fake } = await withMain();
+    await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "hook-secret" });
+    const snap = fake.snapshot();
+    expect(snap.projects["acme/steering"]?.hooks).toEqual([
+      {
+        url: URL_A,
+        push_events: true,
+        merge_requests_events: false,
+        enable_ssl_verification: true,
+      },
+    ]);
+    expect(JSON.stringify(snap)).not.toContain("hook-secret");
+  });
+
+  it("returns copies of the stored hooks, and none for a project it does not hold", async () => {
+    const { fake } = await withMain();
+    await send(fake, "POST", "/projects/1/hooks", { url: URL_A, token: "hook-secret" });
+    const copies = fake.hooks(1);
+    for (const h of copies) h.token = "changed";
+    expect(copies[0]?.token).toBe("changed");
+    expect(fake.hooks(1)[0]?.token).toBe("hook-secret");
+    expect(fake.hooks(42)).toEqual([]);
+  });
+});
+
 describe("FakeGitlab failure injection", () => {
   it("fails a matching request the given number of times, with a default message", async () => {
     const fake = newFake();
@@ -667,16 +826,29 @@ describe("FakeGitlab snapshot", () => {
       tag: false,
       status: "success",
     });
+    await send(fake, "POST", "/projects/2/hooks", {
+      url: "https://b.example/hook",
+      token: "hook-secret",
+    });
+    await send(fake, "POST", "/projects/2/hooks", {
+      url: "https://a.example/hook",
+      token: "hook-secret",
+    });
     const snap = fake.snapshot();
     expect(Object.keys(snap.projects)).toEqual(["acme/a-repo", "acme/b-repo"]);
     const project = snap.projects["acme/a-repo"];
     expect(project?.description).toBe("first");
     expect(project?.deployments.map((d) => d.sha)).toEqual(["aaa", "bbb"]);
+    expect(project?.hooks.map((h) => h.url)).toEqual([
+      "https://a.example/hook",
+      "https://b.example/hook",
+    ]);
     expect(Object.keys(project ?? {}).sort()).toEqual([
       "branches",
       "default_branch",
       "deployments",
       "description",
+      "hooks",
       "name",
       "path",
       "protected_branches",
@@ -684,6 +856,7 @@ describe("FakeGitlab snapshot", () => {
       "visibility",
     ]);
     expect(JSON.stringify(snap)).not.toContain("group-token");
+    expect(JSON.stringify(snap)).not.toContain("hook-secret");
   });
 
   it("gives equal content and message the same sha", async () => {

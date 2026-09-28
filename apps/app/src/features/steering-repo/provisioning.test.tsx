@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // A steering repo's provisioning over fake retries (#4518): each step and its
-// state, the failed step's message with Retry for an owner or admin, the
-// Re-authorize way back on GitHub and GitLab, and the ready repository with
-// its link. The platform does not register `retry_steering_repo_provision`
-// yet, so the refusal a deployment answers today is covered too.
+// state on GitHub and GitLab, the failed step's message with Retry for an
+// owner or admin, the Re-authorize way back on GitHub and GitLab, and the
+// ready repository with its link. The platform does not register
+// `retry_steering_repo_provision` yet, so the refusal a deployment answers
+// today is covered too.
 import {
   cleanup,
   render,
@@ -125,6 +126,31 @@ describe("the steering repo provisioning", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("steering-repo-retry")).toBeNull();
     expect(screen.queryByTestId("steering-repo-ready")).toBeNull();
+  });
+
+  it("shows the project hook step on GitLab in place of the app access step", () => {
+    const root = provisioning(
+      steeringRepoView({
+        status: "provisioning",
+        step: "apply_settings",
+        provider: "gitlab",
+        repository: GITLAB_REPOSITORY,
+        publishedVersion: null,
+        health: null,
+      }),
+    );
+    expect(stepStates(root)).toEqual([
+      ["pick_connection", "done"],
+      ["create_repository", "done"],
+      ["write_first_commit", "done"],
+      ["apply_settings", "done"],
+      ["register_webhook", "running"],
+      ["publish_version", "waiting"],
+      ["bind_repository", "waiting"],
+    ]);
+    const running = within(root).getByRole("listitem", { current: "step" });
+    expect(running).toHaveTextContent("Change notifications");
+    expect(running).toHaveTextContent("Running");
   });
 
   it("shows the failed step's message and Retry to an owner or admin", () => {

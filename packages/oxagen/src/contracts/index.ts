@@ -110,6 +110,7 @@ import { repositoryGitlabAttach } from "./repository.gitlab.attach";
 import { workingCopyRecord } from "./repository.working_copy.record";
 import { workingCopyList } from "./repository.working_copy.list";
 import { publishedSteeringGet } from "./context.steering.published.get";
+import { steeringIndexGet } from "./context.steering.index.get";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -798,6 +799,7 @@ export {
   workingCopyRecord,
   workingCopyList,
   publishedSteeringGet,
+  steeringIndexGet,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1222,6 +1224,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workingCopyRecord,
   workingCopyList,
   publishedSteeringGet,
+  steeringIndexGet,
   runList,
   runGet,
   runFrameBodyGet,
