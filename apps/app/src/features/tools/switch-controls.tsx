@@ -22,7 +22,7 @@ import {
   KILL_SWITCH_KINDS,
 } from "@/data/contracts/tools";
 import { chooseSwitchTargets } from "@/features/shell/client";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -62,6 +62,7 @@ export function FlipControls({
   fixed,
   label,
   members,
+  returnTo,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
@@ -90,6 +91,11 @@ export function FlipControls({
    * card's target is already fixed to `existing.target.ref`.
    */
   members: readonly { id: string; name: string | null; email: string }[];
+  /**
+   * The page to reload after a flip. The switches tab by default; a Studio
+   * server page passes its own path, so the person stays on the server.
+   */
+  returnTo?: SafePath;
 }) {
   const t = useTranslations("tools.switches.dialog");
   const kinds = useTranslations("tools.switches.kinds");
@@ -161,7 +167,9 @@ export function FlipControls({
           return;
         }
         setOpen(false);
-        navigate.replace(routes.tools(at.org, at.ws, { tab: "switches" }));
+        navigate.replace(
+          returnTo ?? routes.tools(at.org, at.ws, { tab: "switches" }),
+        );
         return;
       }
       setFailure(failureText(result));

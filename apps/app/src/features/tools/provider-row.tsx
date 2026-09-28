@@ -20,9 +20,11 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import type { McpServer } from "@/data/contracts/tools";
+import { pathOf } from "@/shared/safe-path";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
 import { ProviderIcon } from "@/ui/provider-icon";
 import { cell, numericCell } from "@/ui/table";
 import { buttonGhost } from "./buttons";
@@ -95,6 +97,7 @@ export function ProviderRow({
   canAdminister: boolean;
 }) {
   const t = useTranslations("tools.providers");
+  const studio = useTranslations("mcpStudio");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const { server, versions, complete } = view;
@@ -190,6 +193,13 @@ export function ProviderRow({
           >
             {t("open")}
           </button>
+          <SafeLink
+            to={pathOf(at.org, at.ws, "tools", "servers", server.id)}
+            data-testid={`provider-studio-${server.id}`}
+            className={buttonSecondary}
+          >
+            {studio("providerLink")}
+          </SafeLink>
           {canAdminister ? <ReconnectProvider at={at} server={server} /> : null}
           {canAdminister ? <RemoveProvider at={at} server={server} /> : null}
         </span>

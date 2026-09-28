@@ -14,7 +14,12 @@ import {
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import { type StudioServerView, type StudioTool, sumTokens } from "./model";
+import { type StudioTool, sumTokens } from "./model";
+
+/** The part of a server view the draft reads: its tools, as the table lists them. */
+type DraftView = {
+  tools: readonly Pick<StudioTool, "name" | "imported" | "tokens">[];
+};
 
 /** tools.toml's limit on a description, in characters. */
 export const DESCRIPTION_MAX = 1024;
@@ -161,7 +166,7 @@ export type DraftLine =
 
 /** The draft's tool surface diff, in tool order. */
 export function draftLines(
-  view: Pick<StudioServerView, "tools">,
+  view: DraftView,
   ops: readonly DraftOp[],
 ): readonly DraftLine[] {
   const lines: DraftLine[] = [];
@@ -203,7 +208,7 @@ export function draftTests(
 export type DraftFile = "tools.toml" | "tools.lock.json" | "tests/calls.jsonl";
 
 export function draftFiles(
-  view: Pick<StudioServerView, "tools">,
+  view: DraftView,
   ops: readonly DraftOp[],
 ): readonly DraftFile[] {
   const lines = draftLines(view, ops);
@@ -218,7 +223,7 @@ export function draftFiles(
 
 /** How many edits the Changes tab counts: the diff's lines and the saved tests. */
 export function draftCount(
-  view: Pick<StudioServerView, "tools">,
+  view: DraftView,
   ops: readonly DraftOp[],
 ): number {
   return draftLines(view, ops).length + draftTests(ops).length;
@@ -229,7 +234,7 @@ export function draftCount(
  * tokens, or null when any imported tool has no measurement.
  */
 export function draftTokens(
-  view: Pick<StudioServerView, "tools">,
+  view: DraftView,
   ops: readonly DraftOp[],
 ): { before: number | null; after: number | null } {
   return {

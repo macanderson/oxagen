@@ -177,8 +177,11 @@ export type StudioTool = {
   annotations: readonly string[];
   shaping: StudioShaping | null;
   feedback: StudioFeedback | null;
-  /** The tool's kill switch while it denies; null when nothing stops the tool. */
-  off: KillSwitch | null;
+  /**
+   * The tool's kill switch: the one denying, else the newest one cleared, so
+   * the page can say who turned it off or back on. Null when the tool has none.
+   */
+  killSwitch: KillSwitch | null;
 };
 
 export type StudioServerView = {
@@ -189,8 +192,8 @@ export type StudioServerView = {
   environments: readonly StudioEnvironment[];
   /** The environment every agent's calls go to; null when the record breaks the rule. */
   agentEnvironment: string | null;
-  /** The server's kill switch while it denies. */
-  off: KillSwitch | null;
+  /** The server's kill switch, picked as a tool's is. */
+  killSwitch: KillSwitch | null;
 };
 
 /**
@@ -215,16 +218,31 @@ function classificationOf(version: ToolVersion): StudioClassification | null {
   };
 }
 
-function switchOn(
+/**
+ * The switch that speaks for a target: one that denies, else the newest by
+ * flip time. A target can carry several rows at two scopes, and the one that
+ * denies is the one the page must show.
+ */
+function switchOf(
   board: KillSwitchBoard | null,
   kind: "tool_server" | "tool_version",
   ref: string,
 ): KillSwitch | null {
-  return (
-    board?.switches.find(
-      (s) => s.on && s.target.kind === kind && s.target.ref === ref,
-    ) ?? null
+  const rows = (board?.switches ?? []).filter(
+    (s) => s.target.kind === kind && s.target.ref === ref,
   );
+  const on = rows.find((s) => s.on);
+  if (on !== undefined) return on;
+  let newest: KillSwitch | null = null;
+  for (const row of rows) {
+    if (
+      newest === null ||
+      Date.parse(row.flippedAt) > Date.parse(newest.flippedAt)
+    ) {
+      newest = row;
+    }
+  }
+  return newest;
 }
 
 /**
@@ -302,10 +320,10 @@ export function buildStudioView({
       annotations: row.annotations,
       shaping: row.shaping,
       feedback: row.feedback,
-      off:
+      killSwitch:
         version === undefined
           ? null
-          : switchOn(board, "tool_version", version.id),
+          : switchOf(board, "tool_version", version.id),
     };
   });
   for (const [name, version] of byName) {
@@ -322,7 +340,7 @@ export function buildStudioView({
       annotations: [],
       shaping: null,
       feedback: null,
-      off: switchOn(board, "tool_version", version.id),
+      killSwitch: switchOf(board, "tool_version", version.id),
     });
   }
   tools.sort((a, b) =>
@@ -339,7 +357,7 @@ export function buildStudioView({
     tools,
     environments,
     agentEnvironment: agentEnvironmentOf(environments),
-    off: switchOn(board, "tool_server", server.id),
+    killSwitch: switchOf(board, "tool_server", server.id),
   };
 }
 
@@ -348,7 +366,9 @@ export function buildStudioView({
  * sum of each tool's measured tokens when every one has a measurement, and
  * null when any is unmeasured.
  */
-export function sumTokens(tools: readonly StudioTool[]): number | null {
+export function sumTokens(
+  tools: readonly Pick<StudioTool, "tokens">[],
+): number | null {
   let sum = 0;
   for (const tool of tools) {
     if (tool.tokens === null) return null;
