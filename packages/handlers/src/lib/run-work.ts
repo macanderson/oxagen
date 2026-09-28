@@ -9,6 +9,7 @@ import type {
   RunSubagent,
 } from "@oxagen/oxagen/contracts/run.work.get";
 import type { RunScope } from "../run.list";
+import { boundRemoteDigests } from "./tacho-unbound-repo";
 
 export interface ConnectedRunRepository extends RunRepository {
   connectionId: string;
@@ -84,8 +85,13 @@ export async function connectedRunRepositories(
 }
 
 /**
- * The digests of the repositories linked to the workspace, as
- * `connectedRunRepositories` reads them, on the caller's transaction.
+ * The digests of the repositories linked to the workspace, on the caller's
+ * transaction. Every head counts, on any provider and whatever its
+ * connection's state: a repository linked through a revoked GitHub App
+ * installation is still linked, and a GitLab head is a link too. Each
+ * repository gives the digest the host computes from its remote and the
+ * case-folded one (`boundRemoteDigests`), so a remote typed in another case
+ * than the binding records still matches.
  *
  * The read runs in a savepoint. A failed statement inside a transaction
  * aborts the whole transaction, so without one a caller that catches the
@@ -98,10 +104,26 @@ export async function linkedRepositoryDigestsIn(
   tx: Tx,
   scope: RunScope,
 ): Promise<Set<string>> {
+  const heads = schema.repositoryBindingHeads;
+  const bindings = schema.repositoryBindings;
   const repositories = await tx.transaction((savepoint) =>
-    connectedRunRepositoriesIn(savepoint, scope),
+    savepoint
+      .select({
+        provider: bindings.provider,
+        fullName: bindings.providerFullName,
+      })
+      .from(heads)
+      .innerJoin(bindings, eq(bindings.id, heads.currentBindingId))
+      .where(
+        and(
+          eq(heads.orgId, scope.orgId),
+          eq(heads.workspaceId, scope.workspaceId),
+          eq(bindings.orgId, scope.orgId),
+          eq(bindings.workspaceId, scope.workspaceId),
+        ),
+      ),
   );
-  return new Set(repositories.map(repositoryDigest));
+  return new Set(boundRemoteDigests(repositories));
 }
 
 /** `connectedRunRepositories` on a transaction the caller holds. */

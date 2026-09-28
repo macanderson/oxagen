@@ -906,7 +906,11 @@ describe("get_run witnessFor (ADR-064)", () => {
       tacho: [
         tachoSession({
           publicId: TACHO_ID,
-          session: { gitRemoteDigest: DIGEST, repositoryUnlinked: true },
+          session: {
+            cwd: "/Users/mb/src/platform",
+            gitRemoteDigest: DIGEST,
+            repositoryUnlinked: true,
+          },
         }),
       ],
       // Linked now: the stamp records the session's start, not today.

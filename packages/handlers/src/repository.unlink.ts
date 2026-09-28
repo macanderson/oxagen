@@ -56,6 +56,19 @@ export interface RepositoryUnlinkDeps {
   steering: RepositorySteeringHost;
 }
 
+/**
+ * The workspace.toml ref of a GitHub repository, or null for a name no ref
+ * can spell. workspace.toml cannot list such a head, so the unlink deletes it
+ * directly instead of throwing an internal error.
+ */
+function refOf(owner: string, name: string): string | null {
+  try {
+    return githubRepoRef(owner, name);
+  } catch {
+    return null;
+  }
+}
+
 function notLinked(bindingId: string): HandlerError {
   return new HandlerError({
     code: "not_found",
@@ -134,9 +147,7 @@ export function createRepositoryUnlinkHandler(
     // `link_repository` writes only GitHub repositories, so workspace.toml
     // names a linked head by its github.com ref.
     const ref =
-      head.provider === GITHUB_PROVIDER
-        ? githubRepoRef(head.owner, head.name)
-        : null;
+      head.provider === GITHUB_PROVIDER ? refOf(head.owner, head.name) : null;
 
     if (file.kind === "read" && ref !== null && file.repositories.includes(ref)) {
       const pullRequest = await openSteeringPullRequest(deps.steering, repo, {

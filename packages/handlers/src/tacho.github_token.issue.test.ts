@@ -68,9 +68,13 @@ const NOT_COVERED = new Error(
 function deps() {
   return {
     enabled: (): boolean => true,
-    governedRepository: vi.fn(async () => repo),
-    installation: vi.fn(async () => ({ installationId: "9" })),
-    mint: vi.fn(async () => ({
+    governedRepository: vi.fn<GithubTokenIssueDeps["governedRepository"]>(
+      async () => repo,
+    ),
+    installation: vi.fn<GithubTokenIssueDeps["installation"]>(async () => ({
+      installationId: "9",
+    })),
+    mint: vi.fn<GithubTokenIssueDeps["mint"]>(async () => ({
       token: "ghs_scoped",
       expiresAt: Date.parse("2027-01-01T00:00:00Z"),
     })),

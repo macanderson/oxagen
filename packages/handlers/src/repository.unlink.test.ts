@@ -478,6 +478,24 @@ describe("unlink_repository: workspace.toml does not list the repository", () =>
     },
   );
 
+  it("deletes a GitHub head whose name no workspace.toml ref can spell, instead of failing with an internal error", async () => {
+    // `..` is no ref segment, so workspace.toml cannot list this head.
+    const oddHead = { ...LINKED_HEAD, name: "..", fullName: "Acme/.." };
+    const { write } = wire({ head: [oddHead] });
+    const { host, run } = steering({ workspaceToml: workspaceToml([REF]) });
+
+    const out = await run(INPUT, makeCTX());
+
+    expect(write.events).toEqual(["lock", "select", "delete"]);
+    expect(write.deletes).toEqual([schema.repositoryBindingHeads]);
+    expect(out).toMatchObject({
+      status: "unlinked",
+      steeringPullRequest: null,
+    });
+    expect(repositoryUnlink.output.parse(out)).toEqual(out);
+    expectNoSteeringPullRequest(host);
+  });
+
   it("deletes a head on another provider even when workspace.toml lists a github.com entry of the same owner and name", async () => {
     const gitlabHead = { ...LINKED_HEAD, provider: "gitlab" };
     const { write } = wire({ head: [gitlabHead] });

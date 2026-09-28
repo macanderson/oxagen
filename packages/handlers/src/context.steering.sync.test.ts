@@ -311,7 +311,7 @@ describe("syncWorkspaceSteering", () => {
     expect(r.sync.state?.error).toContain("has no branch main");
   });
 
-  it("answers no_repository for a workspace with no main repository", async () => {
+  it("answers no_repository for a workspace with no steering repository", async () => {
     const r = rig();
     r.h.github.repository = null;
     const out = await r.run();
@@ -321,7 +321,7 @@ describe("syncWorkspaceSteering", () => {
 
   // A webhook stamps the request before the sync finds there is nothing to
   // read: a retired GitHub connection, or a GitLab project that is not the
-  // main one. Left unanswered, the stamp reads as pending for good and the
+  // steering one. Left unanswered, the stamp reads as pending for good and the
   // page refreshes itself forever.
   it("answers a stamped request even when there is no repository to read", async () => {
     const r = rig();
@@ -329,7 +329,7 @@ describe("syncWorkspaceSteering", () => {
     await r.sync.markRequested(SCOPE, r.h.now());
     await r.run();
     expect(syncView(r.sync.state)?.status).toBe("failed");
-    expect(r.sync.state?.error).toContain("no main repository");
+    expect(r.sync.state?.error).toContain("no steering repository");
   });
 });
 
@@ -1011,6 +1011,38 @@ describe("workspace.toml repositories (ADR-212)", () => {
     await r.run();
     expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
       prior: [],
+      current: [WEB],
+      now: expect.any(Date),
+    });
+  });
+
+  // A file that did not read at the last synced head says nothing about what
+  // it listed. The next file that reads is compared with no prior list, so a
+  // repository dropped across the bad head is never unlinked. This pins that.
+  it("compares with no prior list when the last synced head's workspace.toml did not read", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    const broken = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      `${schemaDirective("workspace/v1")}\n[stella\n`,
+    );
+    await r.run();
+    expect(r.sync.state?.headSha).toBe(broken);
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+    r.h.github.commit("main", "workspace.toml", listing(WEB));
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run();
+    // The sync reads the broken head's file for the prior list.
+    expect(readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      broken,
+    );
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(2);
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: null,
       current: [WEB],
       now: expect.any(Date),
     });
