@@ -1074,7 +1074,8 @@ export function renderIdTable(records: readonly ImportedRecord[]): string {
 /**
  * The body of one import steering PR. An import batch lists the records and
  * skills it converts, with each record's id before and after. The first
- * batch also names the governance mode.
+ * batch also names the governance mode. The first PR the import opens lists
+ * the files and agents it leaves for a person.
  */
 export function importPullRequestBody(
   conversion: OxagenTreeConversion,
@@ -1116,6 +1117,42 @@ export function importPullRequestBody(
         "## Governance",
         "",
         `The mode is \`${conversion.governanceMode}\`.`,
+      );
+    }
+  }
+  // The first PR the import opens names what it leaves for a person, so a
+  // reviewer reads it once, whichever PRs the import needed.
+  if (conversion.branches[0]?.branch === branch.branch) {
+    const waiting = [
+      ...conversion.unconverted.map(
+        (item) =>
+          `- \`${item.path}\`${item.lineage ? ` (\`${item.lineage}\`)` : ""}: ${item.reason}`,
+      ),
+      ...conversion.rulesNeedingKind.map(
+        (lineage) => `- \`${lineage}\`: a person names the rule a business rule or a code rule`,
+      ),
+      ...conversion.constraintsNeedingEffect.map(
+        (lineage) => `- \`${lineage}\`: a person gives the constraint its effect`,
+      ),
+    ];
+    if (waiting.length > 0) {
+      lines.push(
+        "",
+        "## Files to place by hand",
+        "",
+        `These stay in \`.oxagen/\` in ${relinked}, and the cleanup PR keeps them.`,
+        "",
+        ...waiting,
+      );
+    }
+    if (conversion.agentsByHand.length > 0) {
+      lines.push(
+        "",
+        "## Agents to place by hand",
+        "",
+        "Oxagen writes an agent only when it holds the agent's operator, runtime, and harness.",
+        "",
+        ...conversion.agentsByHand.map((agent) => `- \`${agent.name}\`: ${agent.reason}`),
       );
     }
   }

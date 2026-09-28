@@ -439,6 +439,38 @@ describe("importPullRequestBody", () => {
     expect(next).not.toContain("## Governance");
   });
 
+  it("lists what the import leaves for a person on its first PR only", () => {
+    const files = withFiles({
+      ".oxagen/proposals/prp_01.json": "{}\n",
+      ".oxagen/agents/old-bot.toml": 'name = "old-bot"\n',
+    });
+    const conversion = converted({ files, ruleKinds: {} });
+    const [first, ...rest] = conversion.branches;
+    const body = importPullRequestBody(conversion, first!, RELINKED);
+    expect(body).toContain("## Files to place by hand");
+    expect(body).toContain(
+      "- `.oxagen/proposals/prp_01.json`: the steering repo has no place for this file",
+    );
+    expect(body).toContain(
+      `- \`${REFUNDS_RULE}\`: a person names the rule a business rule or a code rule`,
+    );
+    expect(body).toContain("## Agents to place by hand");
+    expect(body).toContain(
+      "- `a-intel.core-platform.old-bot`: .oxagen/agents/old-bot.toml is from before ADR-198",
+    );
+    expect(rest.length).toBeGreaterThan(0);
+    for (const branch of rest) {
+      expect(importPullRequestBody(conversion, branch, RELINKED)).not.toContain("to place by hand");
+    }
+  });
+
+  it("names no files or agents to place by hand when the import converts everything", () => {
+    const conversion = converted();
+    expect(conversion.unconverted).toEqual([]);
+    const body = importPullRequestBody(conversion, conversion.branches[0]!, RELINKED);
+    expect(body).not.toContain("to place by hand");
+  });
+
   it("carries no records section on the workspace.toml PR", () => {
     const conversion = converted();
     const workspace = conversion.branches.find((b) => b.branch === IMPORT_WORKSPACE_BRANCH);
