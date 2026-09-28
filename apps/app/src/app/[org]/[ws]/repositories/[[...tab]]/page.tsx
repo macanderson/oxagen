@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 import { getAuthUser } from "@/features/auth";
-import { parseRepositoryView, Repositories } from "@/features/repositories";
+import {
+  InstructionFindings,
+  parseRepositoryView,
+  Repositories,
+} from "@/features/repositories";
+import { SteeringRepoSection } from "@/features/steering-repo";
 import { requireViewer } from "@/server/viewer";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,6 +24,11 @@ export async function generateMetadata(): Promise<Metadata> {
 //
 // GitHub's install flow returns here with `?settings=repository`; the page
 // then reopens the init wizard, whose first step carries the connection.
+//
+// The workspace's steering repo (#4518) sits above the code repositories. It
+// streams in its own <Suspense>, so a slow read never holds the tabs.
+// Instruction files that drifted in the code repositories sit below them, in
+// their own <Suspense> for the same reason.
 export default async function RepositoriesPage({
   params,
   searchParams,
@@ -28,11 +39,21 @@ export default async function RepositoriesPage({
   const ctx = await requireViewer(org, ws);
   const user = await getAuthUser();
   const query = await searchParams;
+  const t = await getTranslations("repositories.steeringRepo");
   return (
     <main
       id="main"
       className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6"
     >
+      <Suspense
+        fallback={
+          <p role="status" className="text-[13px] text-muted-foreground">
+            {t("loading")}
+          </p>
+        }
+      >
+        <SteeringRepoSection ctx={ctx} />
+      </Suspense>
       <Repositories
         org={org}
         ws={ws}
@@ -48,6 +69,9 @@ export default async function RepositoriesPage({
         }}
         returning={query.settings === "repository"}
       />
+      <Suspense fallback={null}>
+        <InstructionFindings ctx={ctx} />
+      </Suspense>
     </main>
   );
 }

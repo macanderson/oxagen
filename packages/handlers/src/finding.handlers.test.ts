@@ -11,6 +11,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FindingEvidence as StoredEvidence } from "@oxagen/billing";
 import { schema } from "@oxagen/database";
+import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { drizzle } from "drizzle-orm/postgres-js";
 
@@ -463,6 +464,26 @@ describe("get_finding_evidence", () => {
       runId: "tse_0000000000000000000001",
       measured: { micros: "60000", currency: "USD" },
     });
+  });
+
+  it("answers the setting the stored evidence names, and no key on a row that names none", async () => {
+    const recommendation = {
+      setting: "cache_ttl",
+      value: "1h",
+      current: "5m",
+    };
+    const row = findingRow({ citedFrames: evidence({ recommendation }) });
+    const handler = createFindingEvidenceHandler({ read: async () => row });
+    const named = await handler({ findingId: FINDING_ID }, ctx());
+    expect(named.finding.recommendation).toEqual(recommendation);
+    const parsed = findingEvidenceGet.output.parse(named);
+    expect(parsed.finding.recommendation).toEqual(recommendation);
+
+    const bareHandler = createFindingEvidenceHandler({
+      read: async () => findingRow(),
+    });
+    const bare = await bareHandler({ findingId: FINDING_ID }, ctx());
+    expect(bare.finding).not.toHaveProperty("recommendation");
   });
 
   it("refuses an id with no finding in the workspace as not found", async () => {

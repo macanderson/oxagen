@@ -54,6 +54,10 @@ export function toFinding(row: FindingRow): Finding {
     },
     why: row.why,
     fix: row.fix,
+    // A row written before a detector named a setting carries none.
+    ...(evidence.recommendation === undefined
+      ? {}
+      : { recommendation: { ...evidence.recommendation } }),
     runs: row.citedRuns.length,
     calls: evidence.calls,
     status: row.status as FindingStatus,

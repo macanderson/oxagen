@@ -7,6 +7,7 @@
 // Transport, applies its kind's retry rule, and returns the upstream's value.
 // execute() then shapes the result.
 import type { ManifestAuth, ManifestServer, ManifestShaping } from "../contract/manifest";
+import type { RecordedExchange } from "../contract/tests-files";
 import type { RequestKind, RequestTemplate } from "../model/upstream-tool";
 import type { ResolvedCredential } from "./credentials";
 import type { Transport } from "./transport";
@@ -43,8 +44,10 @@ export type SendResult =
       value: unknown;
       /** How many attempts the send took, 1 with no retry. */
       attempts: number;
+      /** The final attempt's request and response, for Try it to save as a test. */
+      exchanges?: RecordedExchange[];
     }
-  | { ok: false; error: SendError; attempts: number };
+  | { ok: false; error: SendError; attempts: number; exchanges?: RecordedExchange[] };
 
 /** The upstream arguments: the agent's input after fixed, defaults, and rename were applied. */
 export type UpstreamArguments = Record<string, unknown>;

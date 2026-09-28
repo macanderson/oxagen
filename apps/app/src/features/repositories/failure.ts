@@ -5,7 +5,9 @@
 // `bind_main_repository`, `list_repositories`, `link_repository`,
 // `unlink_repository`, `get_repository_tree`, `set_production_branch` and
 // `open_init_pr` can give has its own sentence, and any other code is printed
-// as recorded rather than collapsed into "something went wrong".
+// as recorded rather than collapsed into "something went wrong". A write the
+// platform has not registered yet (`tool_not_registered`) names the
+// capability when the caller passes it.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
@@ -13,9 +15,10 @@ export type RepositoriesFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 export function useRepositoriesFailure(): (
   failure: RepositoriesFailure,
+  capability?: string,
 ) => string {
   const t = useTranslations("repositories.failure");
-  return (failure) => {
+  return (failure, capability) => {
     switch (failure.reason) {
       case "denied":
         return t("denied");
@@ -86,6 +89,12 @@ export function useRepositoriesFailure(): (
         });
       case "exhausted":
       case "unavailable":
+        if (
+          failure.code === "tool_not_registered" &&
+          capability !== undefined
+        ) {
+          return t("toolNotRegistered", { capability });
+        }
         return t("unavailable", { code: failure.code });
     }
   };

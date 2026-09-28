@@ -39,6 +39,22 @@ const findingPublicIdSchema = z
   .string()
   .regex(/^fnd_[0-9a-z]+$/, "a finding public id (fnd_…)");
 
+/**
+ * A setting a finding's fix names, with the value it proposes and, when the
+ * findings job read it, the value in effect. A cache finding names a cache
+ * TTL (ADR-210).
+ */
+export const findingRecommendationSchema = z
+  .object({
+    setting: z.string().min(1),
+    value: z.union([z.string(), z.number()]),
+    current: z.union([z.string(), z.number()]).optional(),
+  })
+  .strict();
+export type FindingRecommendation = z.output<
+  typeof findingRecommendationSchema
+>;
+
 export const findingSchema = z
   .object({
     id: findingPublicIdSchema,
@@ -53,6 +69,8 @@ export const findingSchema = z
       .strict(),
     why: z.string(),
     fix: z.string(),
+    /** The setting the fix names. Absent when the fix names none. */
+    recommendation: findingRecommendationSchema.optional(),
     /** Runs and calls the finding cites. */
     runs: z.number().int().positive(),
     calls: z.number().int().positive(),

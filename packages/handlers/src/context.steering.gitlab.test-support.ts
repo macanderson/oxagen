@@ -10,6 +10,7 @@ import {
   type GitLabCommitAction,
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
+import { gitBlobId } from "@oxagen/steering-bundle";
 import type { GitLabRest, GitLabRestResponse } from "./context.steering.gitlab";
 
 interface Commit {
@@ -60,10 +61,27 @@ export class FakeGitLabApi {
   rebaseStuck = false;
   /** The result of the last rebase of each merge request. */
   rebaseState = new Map<number, { polls: number; error: string | null }>();
-  /** The users GitLab reports as approving every merge request. */
-  approvedBy: { id: number; username: string }[] = [
+  /**
+   * The users GitLab reports as approving every merge request, and when. An
+   * approval with no `at` is given the first time GitLab reports it. Null
+   * reports no time at all.
+   */
+  approvedBy: { id: number; username: string; at?: string | null }[] = [
     { id: 501, username: "reviewer" },
   ];
+  /**
+   * The project's "Reset approvals on push" setting. When true, a push to an
+   * open merge request's branch drops every approval. Null answers the read
+   * 403, as a tier without approval settings does.
+   */
+  resetApprovalsOnPush: boolean | null = true;
+  /** Fail the read of that setting with this status, such as 503. */
+  approvalSettingsError: number | null = null;
+  /**
+   * Each merge request's diff versions, oldest first. GitLab records one when
+   * the merge request opens and each time its source branch moves.
+   */
+  versions = new Map<number, { head: string; at: string }[]>();
   deployments: {
     environment: string;
     sha: string;
@@ -73,6 +91,8 @@ export class FakeGitLabApi {
   }[] = [];
   /** Answer deployments 403, as for a Developer-role token. */
   deploymentsRefused = false;
+  /** Every tag written through REST: its name, and the commit it names. */
+  tags = new Map<string, string>();
   seq = 0;
   clock = Date.parse("2026-09-23T10:00:00.000Z");
 
@@ -147,11 +167,23 @@ export class FakeGitLabApi {
     this.addCommit(mr.sourceBranch, files, `rebase ${mr.sourceBranch}`);
     return null;
   }
-  /** A commit anyone with push access makes on a branch. */
+  /**
+   * A commit anyone with push access makes on a branch. A push to an open
+   * merge request drops its approvals when the project resets them on push.
+   * A rebase through the API keeps them, as GitLab does.
+   */
   commit(branch: string, path: string, content: string): string {
     const files = this.tree(branch);
     files.set(path, content);
-    return this.addCommit(branch, files, `edit ${path}`);
+    const sha = this.addCommit(branch, files, `edit ${path}`);
+    if (
+      this.resetApprovalsOnPush === true &&
+      this.mergeRequests.some(
+        (m) => m.state === "opened" && m.sourceBranch === branch,
+      )
+    )
+      this.approvedBy = [];
+    return sha;
   }
   addCommit(
     branch: string,
@@ -167,7 +199,19 @@ export class FakeGitLabApi {
       at: this.tick(),
     });
     this.branches.set(branch, sha);
+    this.recordVersions(branch);
     return sha;
+  }
+  /** Record a new diff version on each open merge request from a branch. */
+  recordVersions(branch: string): void {
+    const head = this.branches.get(branch);
+    if (!head) return;
+    for (const mr of this.mergeRequests) {
+      if (mr.state !== "opened" || mr.sourceBranch !== branch) continue;
+      const seen = this.versions.get(mr.iid) ?? [];
+      if (seen.at(-1)?.head === head) continue;
+      this.versions.set(mr.iid, [...seen, { head, at: this.tick() }]);
+    }
   }
   view(mr: (typeof this.mergeRequests)[number]): GitLabMergeRequest {
     const { labels: _labels, ...rest } = mr;
@@ -198,7 +242,8 @@ export class FakeGitLabApi {
 
 /**
  * The plain REST calls the steering seam makes, answered from one fake
- * project: merge base, rebase and its poll, approvals and deployments.
+ * project: merge base, rebase and its poll, approval settings, approvals,
+ * diff versions, and deployments.
  */
 function restOver(api: FakeGitLabApi): GitLabRest {
   const answer = <T>(status: number, data: unknown): GitLabRestResponse<T> => ({
@@ -214,7 +259,9 @@ function restOver(api: FakeGitLabApi): GitLabRest {
       const route = `${method} /${rest.join("/")}`;
       api.restCalls.push(route);
       const mrRoute =
-        /^(GET|PUT) \/merge_requests\/(\d+)(\/rebase|\/approvals)?$/.exec(route);
+        /^(GET|PUT) \/merge_requests\/(\d+)(\/rebase|\/approvals|\/versions)?$/.exec(
+          route,
+        );
       if (route === "GET /repository/merge_base") {
         const [a, b] = url.searchParams
           .getAll("refs[]")
@@ -222,6 +269,55 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         const id = a && b ? api.mergeBase(a, b) : null;
         if (!id) throw new GitLabApiError(400, "Could not find merge base");
         return answer<T>(200, { id });
+      }
+      if (route === "GET /repository/tree") {
+        const sha = api.sha(url.searchParams.get("ref") ?? "");
+        if (!sha) throw new GitLabApiError(404, "404 Tree Not Found");
+        const entries = [...api.tree(sha)].flatMap(([path, content]) => {
+          // GitLab lists each directory as its own `tree` entry.
+          const dirs = path
+            .split("/")
+            .slice(0, -1)
+            .map((_, i, parts) => parts.slice(0, i + 1).join("/"));
+          return [
+            ...dirs.map((dir) => ({ id: `tree:${dir}`, path: dir, type: "tree" })),
+            { id: gitBlobId(content), path, type: "blob" },
+          ];
+        });
+        const unique = [
+          ...new Map(entries.map((entry) => [entry.path, entry])).values(),
+        ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+        const size = Number(url.searchParams.get("per_page") ?? 20);
+        const page = Number(url.searchParams.get("page") ?? 1);
+        return answer<T>(200, unique.slice((page - 1) * size, page * size));
+      }
+      if (route === "POST /repository/tags") {
+        const { tag_name: name, ref } = body as { tag_name: string; ref: string };
+        if (api.tags.has(name))
+          throw new GitLabApiError(400, `Tag ${name} already exists`);
+        const sha = api.sha(ref);
+        if (!sha) throw new GitLabApiError(400, "Target is invalid");
+        api.tags.set(name, sha);
+        return answer<T>(201, { name, commit: { id: sha } });
+      }
+      const tagRoute = /^GET \/repository\/tags\/(.+)$/.exec(route);
+      if (tagRoute) {
+        const name = decodeURIComponent(tagRoute[1]!);
+        const sha = api.tags.get(name);
+        if (!sha) throw new GitLabApiError(404, "404 Tag Not Found");
+        return answer<T>(200, { name, commit: { id: sha } });
+      }
+      if (route === "GET /approvals") {
+        if (api.approvalSettingsError !== null)
+          throw new GitLabApiError(
+            api.approvalSettingsError,
+            `${api.approvalSettingsError} GitLab failed`,
+          );
+        if (api.resetApprovalsOnPush === null)
+          throw new GitLabApiError(403, "403 Forbidden");
+        return answer<T>(200, {
+          reset_approvals_on_push: api.resetApprovalsOnPush,
+        });
       }
       if (route === "POST /deployments") {
         if (api.deploymentsRefused)
@@ -242,8 +338,22 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         }
         if (mrRoute[1] === "GET" && mrRoute[3] === "/approvals")
           return answer<T>(200, {
-            approved_by: api.approvedBy.map((user) => ({ user })),
+            approved_by: api.approvedBy.map((a) => {
+              if (a.at === undefined) a.at = api.tick();
+              return {
+                user: { id: a.id, username: a.username },
+                approved_at: a.at,
+              };
+            }),
           });
+        if (mrRoute[1] === "GET" && mrRoute[3] === "/versions")
+          return answer<T>(
+            200,
+            [...(api.versions.get(iid) ?? [])].reverse().map((v) => ({
+              head_commit_sha: v.head,
+              created_at: v.at,
+            })),
+          );
         if (mrRoute[1] === "GET" && mrRoute[3] === undefined) {
           const state = api.rebaseState.get(iid) ?? { polls: 0, error: null };
           const running = api.rebaseStuck || state.polls > 0;
@@ -325,6 +435,7 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
         const sha = api.sha(ref);
         if (!sha) throw new GitLabApiError(400, "Invalid reference name");
         api.branches.set(branch, sha);
+        api.recordVersions(branch);
       },
       async deleteBranch({ project, branch }) {
         api.guard(project);
@@ -406,6 +517,7 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
           labels: a.labels ?? [],
         };
         api.mergeRequests.push(mr);
+        api.recordVersions(a.sourceBranch);
         return api.view(mr);
       },
       async updateMergeRequest({

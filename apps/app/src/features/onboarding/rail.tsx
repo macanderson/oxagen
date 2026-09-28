@@ -1,5 +1,5 @@
-// The rails both flows draw: the gate's three steps over the real pages
-// (ADR-065 decision 1) and the register stepper's own three. Presentational —
+// The rails both flows draw: the gate's five steps over the real pages
+// (ADR-065 decision 1) and the register stepper's own three. Presentational:
 // the caller translates each step and hands its target, which is a SafePath or
 // nothing (INV-13). The state is a word as well as a mark, so it survives
 // greyscale.

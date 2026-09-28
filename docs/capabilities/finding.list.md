@@ -37,7 +37,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | `counts` | object | `{ findings, high, medium, operators }`; `operators` counts the distinct operators whose runs the listed findings cite |
 | `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first |
 
-Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`.
+Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one.
 
 A read that names `runId` adds `citation` to each finding: what it cites in that run. A read without `runId` carries no `citation` key.
 

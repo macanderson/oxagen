@@ -184,7 +184,7 @@ export interface ApprovalInput {
   merger: MergeActor;
   /** True when the user holds a role in the workspace or its organization. */
   isMember: (userId: string) => Promise<boolean>;
-  /** True when the merger holds merge_without_review. */
+  /** True when the merger holds merge_pr_without_review (ADR-213). */
   holdsMergeWithoutReview: () => Promise<boolean>;
 }
 
@@ -195,8 +195,8 @@ export interface ApprovalInput {
  * and regulated mode the PR needs an approval on the host, at one of
  * `heads`, by a workspace member other than the author whose host account is
  * linked to an Oxagen user. Without one, an owner of the organization or
- * workspace, or a member holding merge_without_review, may still merge, and
- * the ledger and trailers record that nobody reviewed it.
+ * workspace, or a member holding merge_pr_without_review, may still merge,
+ * and the ledger and trailers record that nobody reviewed it.
  */
 export async function mergeApproval(
   input: ApprovalInput,
@@ -229,7 +229,7 @@ export async function mergeApproval(
   throw new HandlerError({
     code: "forbidden",
     reason: "approval_required",
-    message: `Governance mode ${input.mode} merges a steering PR only after a workspace member other than the author approves it at ${input.heads[input.heads.length - 1]}. An owner, or a member with merge_without_review, may merge without one.`,
+    message: `Governance mode ${input.mode} merges a steering PR only after a workspace member other than the author approves it at ${input.heads[input.heads.length - 1]}. An owner, or a member with merge_pr_without_review, may merge without one.`,
   });
 }
 
