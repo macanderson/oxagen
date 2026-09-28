@@ -5,7 +5,7 @@
  * This is the write behind `list_github_installations`, and the two are one
  * decision: a person who administers several accounts that all carry the App
  * must say which of them this workspace reaches repositories through, because
- * `bind_main_repository` and `list_installation_repositories` both mint a
+ * `link_repository` and `list_installation_repositories` both mint a
  * token with the platform App's private key against whatever installation the
  * workspace's GitHub connection names.
  *
@@ -23,12 +23,11 @@
  *
  * It is idempotent by nature — attaching the installation a workspace already
  * acts through rewrites the same value — and it does not unbind anything. A
- * workspace that has already bound a main repository keeps it; the binding
- * pins a repository by GitHub's own numeric id, and moving a workspace to
- * another repository is `bind_main_repository`'s refusal to make.
+ * workspace keeps its steering repository and its linked repositories. Each
+ * binding pins a repository by GitHub's own numeric id. Moving a workspace to
+ * another repository is not this write's job.
  *
- * Roles: org Owner or Admin, checked by the handler (INV-29) — the pair that
- * may bind, because this is the first half of that write.
+ * Roles: org Owner or Admin, checked by the handler (INV-29).
  * `noBillingGate: true`: a settings write that consumes no AI credits.
  */
 import { z } from "zod";

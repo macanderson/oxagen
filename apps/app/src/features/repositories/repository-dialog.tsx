@@ -16,8 +16,9 @@
 //
 // The production branch never moves on its own (§11.4): when GitHub's
 // default branch moves, the dialog shows both and a person decides, through
-// `set_production_branch`. A main repository whose GitHub connection was
-// retired carries the repair, which binds the same repository again.
+// `set_production_branch`. A steering repository whose GitHub connection was
+// retired says steering is off. The dialog offers no repair since #4616
+// removed the bind that did one, and #4637 tracks its successor.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { LinkedRepository } from "@/data/contracts/repository";
@@ -34,7 +35,6 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { linkWorkspaceRepository, setProductionBranch } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
-import { RepositorySetup } from "./main-repository";
 import { buttonDanger, code, kv, note, prose } from "./parts";
 import { TreeBadge } from "./repositories-tab";
 import { SteeringProposal } from "./steering-proposal";
@@ -331,7 +331,9 @@ function Body({
 
       {row.role === "main" && !row.connectionLive ? (
         <section aria-label={t("retiredLead")}>
-          <RepositorySetup org={org} ws={ws} onChanged={onChanged} />
+          <FormAlert testId="repository-dialog-retired">
+            {t("retired")}
+          </FormAlert>
         </section>
       ) : null}
 

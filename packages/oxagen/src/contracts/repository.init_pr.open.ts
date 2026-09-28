@@ -36,7 +36,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { governanceModeSchema } from "./context.steering.shared";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 
 /** The branch every init pull request is opened from. */
 export const INIT_BRANCH = "oxagen/init";
@@ -60,7 +60,7 @@ export const repositoryInitPrOpen = registerCapability({
   },
   input: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       governanceMode: governanceModeSchema,
       /** `.oxagen/workspace.toml` as the person reviewed it. */
       workspaceToml: z.string().min(1).max(64_000),
@@ -70,7 +70,7 @@ export const repositoryInitPrOpen = registerCapability({
     .strict(),
   output: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       fullName: z.string().min(1),
       branch: z.literal(INIT_BRANCH),
       base: z.string().min(1),

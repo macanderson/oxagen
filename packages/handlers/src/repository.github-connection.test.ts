@@ -527,7 +527,7 @@ describe("attachWorkspaceGithubInstallation", () => {
       },
       updatedById: "u_acting",
     });
-    // Status is left alone: a workspace that already binds a repository is
+    // Status is left alone: a workspace that already links a repository is
     // `connected`, and choosing an installation again is not a demotion.
     expect(captured.updateSet).not.toHaveProperty("status");
     expect(result).toEqual({ connectionId: "conn-uuid", publicId: "con_ABC" });
@@ -537,9 +537,10 @@ describe("attachWorkspaceGithubInstallation", () => {
    * The connection has to name the OAuth account, or the poller cannot
    * authenticate it.
    *
-   * `bind_main_repository` promotes this row to `connected`, which is exactly
-   * the status `source_connections_poll_due_partial_idx` claims — so the
-   * ingestion poll scheduler picks it up, `resolveConnectionAuth` finds neither
+   * `writeLinkedHead` promotes this row to `connected` when the steering sync
+   * writes a linked head on it. That is the status
+   * `source_connections_poll_due_partial_idx` claims, so the ingestion poll
+   * scheduler picks it up, `resolveConnectionAuth` finds neither
    * a linked account nor a per-connection credential, and every poll records
    * `no_usable_credential` and degrades the connection's health, for a
    * workspace whose GitHub works perfectly from the dialog. The install
@@ -629,8 +630,8 @@ describe("attachWorkspaceGithubInstallation", () => {
     });
     // `pending_setup`, not `connected`: `status = 'connected'` is what the
     // ingestion poll scheduler claims, and a workspace with no record-type
-    // mappings does not belong in the sync loop. `bind_main_repository`
-    // promotes it.
+    // mappings does not belong in the sync loop. `writeLinkedHead` promotes it
+    // when the steering sync writes a linked head on it.
     expect(captured.insertValues?.["status"]).toBe("pending_setup");
     expect(result).toEqual({
       connectionId: "conn-new-uuid",

@@ -34,7 +34,7 @@ const MICROS_PER_CENT = 10_000n;
  * deliveries concurrently by design, so this is reachable in normal operation
  * rather than under load.
  *
- * Same idiom as `bind_main_repository` in repository.main.bind.ts: an
+ * Same idiom as `workspaceRepositoriesLock` in repository.binding-write.ts: an
  * xact-scoped advisory lock over a namespaced string, released on commit or
  * rollback with no unlock path to forget.
  */
