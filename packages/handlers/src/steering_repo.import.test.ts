@@ -261,6 +261,15 @@ describe("convertOxagenTree: workspace.toml and governance", () => {
       EXPECTED.get("steering/governance.toml"),
     );
   });
+
+  it("refuses an old governance file whose mode does not read", () => {
+    const files = withFiles({ ".oxagen/rules/governance.toml": 'mode = "anarchy"\n' });
+    expect(convertOxagenTree(input({ files }))).toMatchObject({
+      ok: false,
+      reason: "governance_unreadable",
+      message: expect.stringContaining(".oxagen/rules/governance.toml"),
+    });
+  });
 });
 
 describe("convertOxagenTree: files the import leaves", () => {
