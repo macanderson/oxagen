@@ -26,17 +26,12 @@
  * of a new workspace, so asking about it would offer two paths that both
  * fail.
  */
-import {
-  canonicalRemote,
-  digestBytes,
-  foldedRemote,
-  policyBundleSchema,
-  type PolicyBundle,
-} from "@oxagen/tacho";
+import { policyBundleSchema, type PolicyBundle } from "@oxagen/tacho";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 import { schema, type Tx, withTransactionOrgWideRead } from "@oxagen/database";
-import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { logger } from "../logger";
+import { remoteDigests } from "./remote-digests";
 
 export type UnboundRepoClause = NonNullable<PolicyBundle["unbound_repo"]>;
 
@@ -110,7 +105,7 @@ async function readSkillsHead(
         eq(heads.currentBindingId, versions.repositoryBindingId),
         eq(heads.orgId, scope.orgId),
         eq(heads.workspaceId, scope.workspaceId),
-        eq(heads.role, "main"),
+        inArray(heads.role, schema.STEERING_HEAD_ROLES),
       ),
     )
     .innerJoin(connections, eq(connections.id, heads.connectionId))
@@ -231,11 +226,10 @@ export function boundRemoteDigests(
 ): string[] {
   const digests = new Set<string>();
   for (const repository of repositories) {
-    const canonical = canonicalRemote(
+    for (const digest of remoteDigests(
       `${forgeHost(repository.provider)}/${repository.fullName}`,
-    );
-    digests.add(digestBytes(canonical));
-    digests.add(digestBytes(foldedRemote(canonical)));
+    ))
+      digests.add(digest);
   }
   return [...digests].sort();
 }

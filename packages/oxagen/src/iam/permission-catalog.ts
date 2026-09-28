@@ -157,6 +157,14 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description: "Bind, sync, pause and resume a repository",
     capabilities: ["configure_repo", "sync_repo", "pause_repo", "resume_repo"],
   },
+  {
+    // ADR-213. Only merge_pr_without_review: the approval a steering PR needs
+    // outside solo mode is the one gate it lifts.
+    id: "pr.merge_without_review",
+    group: "Repository",
+    description: "Merge a steering PR that no one approved",
+    capabilities: ["merge_pr_without_review"],
+  },
   // ── Graph and steering ───────────────────────────────────────────────────
   {
     id: "graph.search",

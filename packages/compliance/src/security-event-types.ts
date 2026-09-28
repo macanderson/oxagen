@@ -273,6 +273,12 @@ export const SECURITY_EVENT_TYPES = [
   // carrying how many runs took the pause and which were skipped and why.
   // Emitted by packages/handlers/src/tacho.workspace_runs.pause.ts (#3862).
   "tacho.workspace_runs_paused",
+  // One row per change to a machine group: an admin added an enrolled machine
+  // to a group or removed it. A group decides which machines may run a local
+  // server. Emitted by
+  // packages/handlers/src/mcp-studio/local-calls/machine-group.add.ts and
+  // machine-group.remove.ts.
+  "tacho.machine_group_changed",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -373,7 +379,7 @@ export interface ApprovalRuleInvalidationDetail {
 }
 
 export interface ApprovalToolChangeEvidence {
-  consequenceTags: readonly string[];
+  impacts: readonly string[];
   measures: unknown;
   classification: unknown;
 }
@@ -407,6 +413,25 @@ export interface GovernanceChangeDetail {
 }
 
 /**
+ * A steering record proposal the findings job opened with no acting user
+ * (detector 6, prompt habits). It rides a `capability.invoke_allowed` or
+ * `capability.invoke_error` row for `propose_record` with a null actor. The
+ * proposal steers nothing: a person with a workspace role opens it as a
+ * Context PR, and `merge_context_pr` records `steering.published` when it
+ * merges.
+ */
+export interface SystemProposalDetail {
+  /** The system job that opened the proposal. */
+  actor: "findings_job";
+  /** The attribution the proposal row carries. */
+  source: string;
+  /** The lineage the proposal would add a record to. */
+  lineageId: string;
+  /** The proposal's public id, or null when the write failed. */
+  proposalId: string | null;
+}
+
+/**
  * Everything `security_events.detail` may carry.
  *
  * The column is jsonb with no CHECK, so this union is the only thing keeping
@@ -419,6 +444,13 @@ export interface RunOutcomesPolicyChangeDetail {
   change: "customer_consent" | "platform_access";
   enabled: boolean;
   reason: string | null;
+}
+
+/** A workspace's operator pseudonyms turned on or off (spend spec, Operator ranking). */
+export interface OperatorPseudonymsChangeDetail {
+  feature: "operator_ranking";
+  change: "pseudonyms";
+  enabled: boolean;
 }
 
 export interface RunIssueAuthorizationDetail {
@@ -582,6 +614,19 @@ export interface WorkspaceRunsPausedDetail {
 }
 
 /**
+ * Evidence recorded on `tacho.machine_group_changed`: the group, the machine by
+ * its public id, and whether the admin added or removed it. `changed` is false
+ * when the membership already matched, so the call changed nothing.
+ */
+export interface MachineGroupChangeDetail {
+  change: "added" | "removed";
+  group: string;
+  /** The machine's public id (`tch_…`). */
+  machineId: string;
+  changed: boolean;
+}
+
+/**
  * Evidence recorded when `update_runtime` changes whether a runtime requires
  * the contained launcher (ADR-204). `runtimeId` is the runtime's public id.
  * `previous` is the value the change replaced, so a reader sees a switch
@@ -624,6 +669,7 @@ export interface InterjectionAnsweredDetail {
 export type SecurityEventDetail =
   | InterjectionAnsweredDetail
   | WorkspaceRunsPausedDetail
+  | MachineGroupChangeDetail
   | PasswordChangeDetail
   | ScimTokenDetail
   | ScimUserDetail
@@ -633,9 +679,11 @@ export type SecurityEventDetail =
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
+  | OperatorPseudonymsChangeDetail
   | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
+  | SystemProposalDetail
   | SsoProviderChangeDetail
   | SsoSignInDetail
   | SsoPolicyDetail

@@ -117,18 +117,41 @@ const LIST: RepositoryListResult = {
 };
 
 const LINKED: RepositoryLinkResult = {
-  bindingId: "rpb_new",
-  connectionId: "con_1",
   fullName: "acme/billing",
   defaultRef: "release",
-  role: "linked",
-  linkedAt: "2026-09-18T02:00:00.000Z",
+  status: "proposed",
+  steeringPullRequest: {
+    number: 42,
+    url: "https://github.com/acme/control/pull/42",
+    reused: false,
+  },
+};
+
+const LISTED: RepositoryLinkResult = {
+  fullName: "acme/billing",
+  defaultRef: "release",
+  status: "listed",
+  steeringPullRequest: null,
 };
 
 const UNLINKED: RepositoryUnlinkResult = {
   bindingId: "rpb_linked",
   fullName: "acme/billing",
+  status: "unlinked",
   unlinkedAt: "2026-09-18T03:00:00.000Z",
+  steeringPullRequest: null,
+};
+
+const UNLINK_PROPOSED: RepositoryUnlinkResult = {
+  bindingId: "rpb_linked",
+  fullName: "acme/billing",
+  status: "proposed",
+  unlinkedAt: null,
+  steeringPullRequest: {
+    number: 43,
+    url: "https://github.com/acme/control/pull/43",
+    reused: true,
+  },
 };
 
 beforeEach(() => {
@@ -250,12 +273,22 @@ describe("oxagen repo link", () => {
     expect(err).toEqual([]);
   });
 
-  it("prints the linked repository, its default ref and binding id", async () => {
+  it("prints the steering PR and says the merge finishes the link", async () => {
     (apiPostOrThrow as Mock).mockResolvedValueOnce(LINKED);
     const { writer, out } = memoryWriter();
     await repoLink("acme/billing", {}, writer);
-    expect(out[0]).toBe("linked acme/billing · release · rpb_new");
-    expect(out[1]).toMatch(/oxagen repo unlink <bindingId>/);
+    expect(out).toEqual([
+      "opened steering PR #42 to link acme/billing: https://github.com/acme/control/pull/42",
+      "Merge the steering PR to finish linking.",
+    ]);
+  });
+
+  it("says when workspace.toml lists the repository already, with no PR", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(LISTED);
+    const { writer, out } = memoryWriter();
+    await repoLink("acme/billing", {}, writer);
+    expect(out[0]).toBe("workspace.toml already lists acme/billing");
+    expect(out[1]).toMatch(/next steering sync links it/);
   });
 
   it("refuses a malformed reference before any request, exit 2", async () => {
@@ -271,7 +304,7 @@ describe("oxagen repo link", () => {
   it("routes a refusal to stderr and exits 1", async () => {
     (apiPostOrThrow as Mock).mockRejectedValueOnce(
       new apiMock.ApiError(
-        "acme/billing is the main repository of another workspace",
+        "acme/billing is the steering repository of another workspace",
         409,
       ),
     );
@@ -279,7 +312,7 @@ describe("oxagen repo link", () => {
     await repoLink("acme/billing", {}, writer);
     expect(out).toEqual([]);
     expect(err).toEqual([
-      "✗ acme/billing is the main repository of another workspace",
+      "✗ acme/billing is the steering repository of another workspace",
     ]);
     expect(process.exitCode).toBe(1);
   });
@@ -308,6 +341,16 @@ describe("oxagen repo unlink", () => {
     expect(out[1]).toMatch(/binding versions stay/);
   });
 
+  it("prints the removal steering PR when workspace.toml lists the repository", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(UNLINK_PROPOSED);
+    const { writer, out } = memoryWriter();
+    await repoUnlink("rpb_linked", {}, writer);
+    expect(out).toEqual([
+      "reused steering PR #43 to unlink acme/billing: https://github.com/acme/control/pull/43",
+      "Merge the steering PR to finish unlinking. The repository stays linked until then.",
+    ]);
+  });
+
   it("refuses an empty id before any request, exit 2", async () => {
     const { writer, err } = memoryWriter();
     await repoUnlink("   ", {}, writer);
@@ -317,10 +360,10 @@ describe("oxagen repo unlink", () => {
     expect(process.exitCode).toBe(2);
   });
 
-  it("routes the main-repository refusal to stderr and exits 1", async () => {
+  it("routes the steering-repository refusal to stderr and exits 1", async () => {
     (apiPostOrThrow as Mock).mockRejectedValueOnce(
       new apiMock.ApiError(
-        "acme/control is this workspace's main repository and cannot be unlinked",
+        "acme/control is this workspace's steering repository and cannot be unlinked",
         409,
       ),
     );

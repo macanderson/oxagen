@@ -1,15 +1,18 @@
-// context.steering.published.get.ts — `get_published_steering`, the read
+// context.steering.published.get.ts: `get_published_steering`, the read
 // behind `oxagen pull`.
 //
 // Flow:
 //   1. The repository: the binding the caller named
 //      (`not_found: repository_not_linked`), or with no binding id, the
-//      workspace's main repository (`conflict: main_repo_unbound`), because
-//      the main repository's `.oxagen/` is the one that steers the workspace.
-//   2. A client for the workspace's installation
-//      (`conflict: github_not_connected`), and the repository as GitHub
-//      reports it, checked against the immutable id the binding was made
-//      against (`not_found: repository_not_installed`).
+//      workspace's steering repository (`conflict: main_repo_unbound`),
+//      because its `.oxagen/` is the one that steers the workspace.
+//   2. A client for the head's connection (`conflict: github_not_connected`),
+//      and the repository as GitHub reports it, checked against the immutable
+//      id the binding was made against (`not_found: repository_not_installed`).
+//      A steering repository the provisioner created hangs from a
+//      `github_steering` connection, and only the Oxagen Steering app can
+//      read it, so that connection mints the app's installation token. This
+//      is a server-side read. No agent receives the token.
 //   3. The production branch's head. A branch GitHub no longer has answers
 //      `head: null` and no files, as `get_repository_tree` does.
 //   4. Every blob under `.oxagen/` at that head except `workspace.json`,
@@ -27,7 +30,7 @@ import {
 } from "@oxagen/oxagen/contracts/context.steering.published.get";
 import { WORKSPACE_LINK_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   readBoundRepository,
   repositoryHostUnsupported,
@@ -66,9 +69,9 @@ export function mainRepoUnbound(): HandlerError {
 }
 
 /**
- * The workspace's main repository: the head whose role is `main`, through its
- * current binding. Refuses `conflict: main_repo_unbound` without one and
- * `conflict: repository_host_unsupported` for a GitLab project.
+ * The workspace's steering repository: the head whose role is `steering`,
+ * through its current binding. Refuses `conflict: main_repo_unbound` without
+ * one and `conflict: repository_host_unsupported` for a GitLab project.
  */
 export async function readMainBoundRepository(
   scope: Scope,
@@ -88,7 +91,10 @@ export async function readMainBoundRepository(
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
         ),
       )
       .limit(1);
@@ -141,7 +147,14 @@ export function createPublishedSteeringGetHandler(
       input.bindingId === undefined
         ? await deps.readMain(scope)
         : await deps.readBound(scope, input.bindingId);
-    const gh = await requireWorkspaceGithub(deps.github, scope);
+    // The head's connection picks the credential, so a provisioned steering
+    // repository reads through the Oxagen Steering app and not through the
+    // workspace installation, which cannot see it.
+    const gh = await requireWorkspaceGithub(
+      deps.github,
+      scope,
+      bound.connectionId,
+    );
     // The repository GitHub holds at these coordinates must still be the one
     // the binding was made against, or a re-created repository's files would
     // be written onto a machine as this workspace's steering.

@@ -1,6 +1,6 @@
-// The organization action through the real viewer and kernel seams: the session
+// The onboarding actions through the real viewer and kernel seams: the session
 // and the kernel's invoke() are the only fakes, so each case shows what the
-// person gets back and whether create_org ran.
+// person gets back and whether the capability ran.
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,11 +31,11 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
-const { WsCtx } = await import("@/server/viewer");
+const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   advanceOnboarding,
-  bindMainRepository,
+  createFirstWorkspace,
   createOrganizationAction,
   issueEnrollmentToken,
   registerAgent,
@@ -72,8 +72,6 @@ const form = {
   name: "  Acme Robotics ",
   slug: "acme",
   namespace: "acme",
-  workspaceName: "Core platform",
-  workspaceSlug: "core-platform",
 };
 const created = {
   publicId: "org_01",
@@ -81,7 +79,7 @@ const created = {
   slug: "acme",
   type: "business",
   createdAt: "2026-09-15T00:00:00.000Z",
-  workspace: { publicId: "wrk_01", slug: "core-platform" },
+  workspace: null,
 };
 
 beforeEach(() => {
@@ -105,12 +103,12 @@ describe("createOrganizationAction", () => {
 
   it("refuses an invalid field with its catalog key, creating nothing (negative)", async () => {
     expect(
-      await createOrganizationAction({ ...form, workspaceSlug: "billing" }),
+      await createOrganizationAction({ ...form, slug: "new-organization" }),
     ).toEqual({
       ok: false,
       reason: "invalid",
-      code: "workspaceSlugReserved",
-      field: "workspaceSlug",
+      code: "slugReserved",
+      field: "slug",
     });
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -164,11 +162,14 @@ describe("createOrganizationAction", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("creates the organization with its chosen namespace as the signed-in person and continues to Wrap an agent", async () => {
+  // The form names no workspace: the first one is its own step once a code
+  // host is connected, because a workspace needs a steering repo (#4518). It
+  // sends `workspace: null`, since an omitted field makes "Default" (#4582).
+  it("creates the organization with its chosen namespace and no workspace as the signed-in person and continues to Connect a code host", async () => {
     invoke.mockResolvedValue(created);
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
-      value: { to: "/welcome/acme/core-platform/wrap" },
+      value: { to: "/welcome/acme/new-workspace/connect" },
     });
     expect(invoke).toHaveBeenCalledWith(
       "create_org",
@@ -176,13 +177,54 @@ describe("createOrganizationAction", () => {
         name: "Acme Robotics",
         slug: "acme",
         namespace: "acme",
-        workspace: { name: "Core platform", slug: "core-platform" },
+        workspace: null,
       },
       expect.objectContaining({
         userId: "u-owner",
         orgId: "",
         workspaceId: "",
       }),
+    );
+  });
+
+  // The CLI consent page skips the welcome flow and lists only organizations
+  // that have a workspace, so an organization made on the way there gets the
+  // "Default" one, or the consent page sends you straight back here.
+  it("gives the organization a Default workspace and continues to a requested destination", async () => {
+    invoke.mockResolvedValue({
+      ...created,
+      workspace: { publicId: "ws_01", slug: "default" },
+    });
+    expect(
+      await createOrganizationAction(form, "/cli/authorize?state=abc"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/cli/authorize?state=abc" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      {
+        name: "Acme Robotics",
+        slug: "acme",
+        namespace: "acme",
+        workspace: { name: "Default", slug: "default" },
+      },
+      expect.objectContaining({ userId: "u-owner" }),
+    );
+  });
+
+  it("treats an off-site destination as none: no workspace, then Connect (negative)", async () => {
+    invoke.mockResolvedValue(created);
+    expect(
+      await createOrganizationAction(form, "//evil.example/cli/authorize"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/welcome/acme/new-workspace/connect" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      expect.objectContaining({ workspace: null }),
+      expect.anything(),
     );
   });
 });
@@ -431,44 +473,67 @@ describe("advanceOnboarding", () => {
   });
 });
 
-describe("bindMainRepository", () => {
-  const repository = { owner: "acme", name: "platform" };
+describe("createFirstWorkspace", () => {
+  // The first workspace is made before any workspace exists, so the viewer is
+  // the organization's alone.
+  const orgCtx = unsafeMint(OrgCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+  });
+  const workspace = {
+    publicId: "wrk_01",
+    name: "Core platform",
+    slug: "core-platform",
+    orgSlug: "acme",
+    createdAt: "2026-09-15T14:10:00.000Z",
+    steering_repo: { status: "provisioning" },
+  };
 
-  it("binds the repository and reports whether it closed the provisional window", async () => {
-    invoke.mockResolvedValue({
-      provider: "github",
-      bindingId: "rpb_1",
-      connectionId: "con_1",
-      fullName: "acme/platform",
-      defaultRef: "main",
-      boundAt: "2026-09-15T14:10:00.000Z",
-      provisionalClosed: true,
-    });
-    expect(
-      await bindMainRepository("acme", "core-platform", repository),
-    ).toEqual({
+  beforeEach(() => {
+    requireViewer.mockResolvedValue(orgCtx);
+  });
+
+  it("creates the workspace from its name, slugged from the name, for the organization viewer", async () => {
+    invoke.mockResolvedValue(workspace);
+    expect(await createFirstWorkspace("acme", "  Core platform ")).toEqual({
       ok: true,
-      value: {
-        fullName: "acme/platform",
-        defaultRef: "main",
-        boundAt: "2026-09-15T14:10:00.000Z",
-        provisionalClosed: true,
-      },
+      value: { slug: "core-platform" },
     });
+    expect(requireViewer).toHaveBeenCalledWith("acme");
     expect(invoke).toHaveBeenCalledWith(
-      "bind_main_repository",
-      { owner: "acme", name: "platform" },
-      expect.objectContaining(TENANT),
+      "create_workspace",
+      { name: "Core platform", slug: "core-platform" },
+      expect.objectContaining({ orgId: orgCtx.orgId, surface: "app" }),
     );
   });
 
-  it("refuses a repository name the contract would refuse, before the kernel runs (negative)", async () => {
-    expect(
-      await bindMainRepository("acme", "core-platform", {
-        owner: "acme",
-        name: "not a repo",
-      }),
-    ).toEqual({
+  it("refuses an empty name, creating nothing (negative)", async () => {
+    expect(await createFirstWorkspace("acme", "   ")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "name_required",
+      field: "name",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a name over 120 characters, creating nothing (negative)", async () => {
+    expect(await createFirstWorkspace("acme", "a".repeat(121))).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "name_too_long",
+      field: "name",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // `Billing` slugs to `billing`, an org page's segment the contract refuses.
+  // The person typed a name, not a slug, so the refusal comes back on the name.
+  it("returns a slug the contract refuses on the name field, creating nothing (negative)", async () => {
+    expect(await createFirstWorkspace("acme", "Billing")).toEqual({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
@@ -477,19 +542,28 @@ describe("bindMainRepository", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("returns a workspace with no installation as a conflict (negative)", async () => {
+  it("returns a taken address as the handler's conflict (negative)", async () => {
     invoke.mockRejectedValue(
-      new kernel.HandlerError({
-        code: "conflict",
-        reason: "github_not_connected",
-      }),
+      new kernel.HandlerError({ code: "conflict", reason: "slug_taken" }),
     );
-    expect(
-      await bindMainRepository("acme", "core-platform", repository),
-    ).toEqual({
+    expect(await createFirstWorkspace("acme", "Core platform")).toEqual({
       ok: false,
       reason: "conflict",
-      code: "github_not_connected",
+      code: "slug_taken",
+    });
+  });
+
+  it("returns the handler's role refusal as denied (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    expect(await createFirstWorkspace("acme", "Core platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
     });
   });
 });

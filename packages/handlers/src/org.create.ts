@@ -16,6 +16,11 @@ import { bootstrapOrgIAM } from "./iam-provision";
 import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 import { provisionAssistantModelKey } from "./assistant-key-bootstrap";
+import {
+  initialSteeringRepoState,
+  settingsWithSteeringRepo,
+  startSteeringRepoProvision,
+} from "./steering_repo.provision";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
@@ -29,6 +34,11 @@ import { provisionAssistantModelKey } from "./assistant-key-bootstrap";
  * exists without it. No other billing row is written: no contract_terms,
  * gau_buckets or gau_settlements row, and the billing settings row appears on
  * the first write that needs it.
+ *
+ * A caller that sends `workspace: null` gets no first workspace. The gate
+ * opens with no workspace, and the org's first `create_workspace` fills it in
+ * (#4582). The web app does this so its welcome flow can ask you to name the
+ * first workspace. Every other caller omits the field and gets "Default".
  */
 export const organizationCreateHandler: CapabilityHandler<
   typeof organizationCreate
@@ -170,28 +180,23 @@ export const organizationCreateHandler: CapabilityHandler<
       });
 
       // The first workspace, on the same transaction: an org with no
-      // workspace has no page to land on.
+      // workspace has no page to land on. Skipped when the caller sent
+      // `workspace: null`, because the web app's welcome flow names the first
+      // workspace itself (#4582).
       //
-      // Deliberately WITHOUT a main repository, although §10.1 says a
-      // workspace has exactly one and `create_workspace` refuses to make one
-      // without it (ADR-099). This is the spec's own exception (Mission
-      // Control spec §7, line ~222): onboarding binds the main repo in a LATER
-      // step — the installer offers the git remote of the directory it ran in
-      // and one more click installs the GitHub App — and if that step is
-      // skipped the workspace is provisional for 14 days (the gate
-      // `openOnboardingGate` opens below), with steering, records and agent
-      // definitions off until `bind_main_repository` closes the window. It
-      // cannot be otherwise: the org does not exist until this transaction
-      // commits, so it holds no GitHub authorization and no repository is
-      // reachable to bind. `create_workspace` — a SECOND workspace, in an org
-      // that can already reach GitHub — is the path that requires one.
-      const workspace = await bootstrapWorkspace({
-        tx,
-        orgId: org.id,
-        userId,
-        name: input.workspace.name,
-        slug: input.workspace.slug,
-      });
+      // It has no repository yet. The provision job started below creates
+      // its steering repo once the owner connects GitHub or GitLab, and code
+      // repositories are linked afterwards, the same as `create_workspace`.
+      const workspace =
+        input.workspace === null
+          ? null
+          : await bootstrapWorkspace({
+              tx,
+              orgId: org.id,
+              userId,
+              name: input.workspace.name,
+              slug: input.workspace.slug,
+            });
 
       // The signup grant commits with the org: a failed grant rolls the org
       // back rather than leaving an org whose first assistant turn the credit
@@ -200,18 +205,45 @@ export const organizationCreateHandler: CapabilityHandler<
 
       await openOnboardingGate(tx, {
         orgId: org.id,
-        workspaceId: workspace.id,
+        workspaceId: workspace?.id ?? null,
         now: org.createdAt,
       });
 
-      return { org, workspace };
+      // The first state of both steering repos (#4450): the organization's
+      // `<org>/oxagen` and the first workspace's own. The provision jobs start
+      // after this commits and record their progress here. With no first
+      // workspace, only the organization's repo starts. `create_workspace`
+      // starts the workspace's own when it makes one.
+      const steering = initialSteeringRepoState(org.createdAt);
+      await tx
+        .update(schema.organizations)
+        .set({
+          settings: settingsWithSteeringRepo(
+            schema.organizations.settings,
+            steering,
+          ),
+        })
+        .where(eq(schema.organizations.id, org.id));
+      if (workspace !== null) {
+        await tx
+          .update(schema.workspaces)
+          .set({
+            settings: settingsWithSteeringRepo(
+              schema.workspaces.settings,
+              steering,
+            ),
+          })
+          .where(eq(schema.workspaces.id, workspace.id));
+      }
+
+      return { org, workspace, steering };
     });
 
     logger.info(
       {
         orgId: created.org.id,
         slug: created.org.slug,
-        workspaceId: created.workspace.id,
+        workspaceId: created.workspace?.id ?? null,
         surface: ctx.surface,
       },
       "organization.create: organization created successfully",
@@ -251,16 +283,42 @@ export const organizationCreateHandler: CapabilityHandler<
       );
     });
 
+    // Start the provision jobs: the organization's, and the first
+    // workspace's when there is one. A new organization has no GitHub or
+    // GitLab connection yet, so each job stops at `pick_connection` and
+    // records that it waits for one. Onboarding sends the event again once
+    // the owner connects. A send that fails is recorded on the setting, never
+    // thrown: the organization already exists.
+    const { workspace } = created;
+    await Promise.all([
+      startSteeringRepoProvision(
+        { orgId: created.org.id, workspaceId: null, actorUserId: userId },
+        created.steering,
+      ),
+      ...(workspace === null
+        ? []
+        : [
+            startSteeringRepoProvision(
+              {
+                orgId: created.org.id,
+                workspaceId: workspace.id,
+                actorUserId: userId,
+              },
+              created.steering,
+            ),
+          ]),
+    ]);
+
     return {
       publicId: created.org.publicId,
       name: created.org.name,
       slug: created.org.slug,
       type: created.org.type,
       createdAt: created.org.createdAt.toISOString(),
-      workspace: {
-        publicId: created.workspace.publicId,
-        slug: created.workspace.slug,
-      },
+      workspace:
+        workspace === null
+          ? null
+          : { publicId: workspace.publicId, slug: workspace.slug },
     };
   } catch (err) {
     if (isUniqueViolation(err, "organizations_slug_idx")) {

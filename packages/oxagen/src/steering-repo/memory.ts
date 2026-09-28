@@ -20,7 +20,7 @@ import {
   runIdSchema,
   toolTargetSchema,
 } from "./common";
-import { recordKindSchema } from "./record";
+import { recordKindSchema } from "./record-kind";
 
 /** How a memory reached Oxagen. */
 export const MEMORY_CAPTURES = [

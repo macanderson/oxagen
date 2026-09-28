@@ -12,6 +12,7 @@
 // the page prints the kind rather than the uuid (CLAUDE.md, citing nodes).
 import { z } from "zod";
 import { PublicId } from "./common";
+import { Cost } from "./money";
 
 const Instant = z.iso.datetime();
 const Count = z.number().int().nonnegative();
@@ -27,7 +28,7 @@ export const ToolEgress = z.enum(["local", "org_tenant", "third_party"]);
 export type ToolEgress = z.infer<typeof ToolEgress>;
 
 /** snake_case, the starter set and every customer tag; the registry's "category". */
-const ConsequenceTag = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
+const Impact = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
 
 /** The tag that makes a tool version financial (spec §6.9; the mockup's `moves_funds`). */
 export const MONEY_TAG = "moves_money";
@@ -64,7 +65,7 @@ const ToolMeasure = z.object({
 export const ToolClassification = z.object({
   sideEffect: ToolSideEffect,
   egress: ToolEgress,
-  consequenceTags: z.array(ConsequenceTag),
+  impacts: z.array(Impact),
   dataClasses: z.array(z.string().min(1)),
   measures: z.array(ToolMeasure),
 });
@@ -161,7 +162,7 @@ export const KillSwitchKind = z.enum(KILL_SWITCH_KINDS);
 export type KillSwitchKind = z.infer<typeof KillSwitchKind>;
 
 /**
- * What a switch names. `ref` is the target's public id, or the consequence tag
+ * What a switch names. `ref` is the target's public id, or the impact
  * for a class switch — and, for the operator, workspace and org kinds, the
  * database uuid the contract carries, which the page never prints as a label.
  */
@@ -258,11 +259,11 @@ export const ApprovalRule = z.object({
   /** The contract admits an offset here, so the view does too. */
   lastWrittenAt: z.iso.datetime({ offset: true }),
   /**
-   * The consequence tags the rule's tools carried when it was last written.
+   * The impacts the rule's tools carried when it was last written.
    * Null when the record carries no stamp, which the evaluator reads as "does
    * not qualify" until the rule is saved again.
    */
-  authoredConsequences: z.array(ConsequenceTag).nullable(),
+  authoredConsequences: z.array(Impact).nullable(),
   /** Calls this rule released with no person in the window. */
   released: Count,
   /** Calls in the window that reached a person with this rule read beside them. */
@@ -406,6 +407,17 @@ export const McpServer = z.object({
   iconUrl: z.url({ protocol: /^https$/ }).nullable(),
   /** Null unless `authKind` is `oauth`. */
   authorization: McpAuthorization.nullable(),
+  /**
+   * The tokens its tool definitions add to every model call, from the newest
+   * listing of the last 7 days that names it (#4537). Null when none does.
+   */
+  contextTokens: Count.nullable().default(null),
+  /**
+   * What those tokens cost the workspace over the last 7 days, an estimate
+   * the server priced from the book at each call's rate (#4537, ADR-060).
+   * Null when `contextTokens` is null or the week has no priced call.
+   */
+  weeklyPrice: Cost.nullable().default(null),
 });
 export type McpServer = z.infer<typeof McpServer>;
 

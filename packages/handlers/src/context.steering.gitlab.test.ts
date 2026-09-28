@@ -1,12 +1,13 @@
 // The GitLab steering seam (#3762), against an in-memory gitlab.com project.
 //
 // The first block runs the real handlers end to end: a proposal becomes a
-// merge request on the GitLab project, its six checks become commit statuses,
+// merge request on the GitLab project, its six checks become one commit status,
 // and a reviewer's merge squashes the checked head and publishes the record.
 // The rest pins the seam's GitLab-specific behaviour one call at a time.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { gitBlobId } from "@oxagen/steering-bundle";
 
 const gate = vi.hoisted(() => ({ refuse: false }));
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -53,7 +54,7 @@ import {
 const TOKEN = "glpat-stored-token-never-shown";
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
-const BRANCH = `context/${LINEAGE}`;
+const BRANCH = `steering/${LINEAGE}`;
 
 const CONNECTION: GitLabSteeringConnection = {
   connectionId: "0192d4a8-7c1e-7a00-8000-00000000c011",
@@ -137,7 +138,7 @@ beforeEach(() => {
 });
 
 describe("a context record published through a GitLab merge request", () => {
-  it("opens a merge request, reports six commit statuses, then squash-merges the checked head and publishes", async () => {
+  it("opens a merge request, reports one commit status for the six checks, then squash-merges the checked head and publishes", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
 
@@ -161,11 +162,14 @@ describe("a context record published through a GitLab merge request", () => {
     expect(mr!.description).toContain(proposalId);
     const head = api.branches.get(BRANCH)!;
     expect(opened.pr!.headSha).toBe(head);
-    expect(api.statuses).toHaveLength(6);
-    expect(
-      api.statuses.every((s) => s.sha === head && s.state === "success"),
-    ).toBe(true);
-    expect(api.statuses.map((s) => s.name)).toContain("Oxagen · Schema");
+    // One required status carries all six outcomes.
+    expect(api.statuses).toEqual([
+      expect.objectContaining({
+        sha: head,
+        name: "Oxagen steering",
+        state: "success",
+      }),
+    ]);
     // The record's set id is the approved project path, dotted.
     const file = api.commits.get(head)!.files.get(PATH)!;
     expect(file).toContain('set_id = "acme.platform.rules"');
@@ -185,7 +189,14 @@ describe("a context record published through a GitLab merge request", () => {
         iid: 1,
         sha: head,
         squash: true,
-        message: `steering: publish ${LINEAGE} (#1)`,
+        // GitLab takes the squash title and the trailers in one message.
+        message: [
+          `steering: publish ${LINEAGE} (#1)`,
+          "",
+          `Oxagen-Approved-By: ${REVIEWER}`,
+          "Oxagen-Checks: schema,lineage_uniqueness,record_hash,secret_pii_scan,conflict_against_active,constraint_effect",
+          "Oxagen-Version: 1",
+        ].join("\n"),
       },
     ]);
     // The squash commit is what landed on main, and the published record is
@@ -212,6 +223,63 @@ describe("a context record published through a GitLab merge request", () => {
     ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
     expect(api.merges).toHaveLength(0);
     expect(h.store.records).toHaveLength(0);
+  });
+
+  it.each([
+    ["keeps approvals on push", false],
+    ["will not say whether it resets approvals", null],
+  ] as const)(
+    "refuses the merge when the project %s, so no approval binds to the head",
+    async (_case, reset) => {
+      const { api, h } = gitlabHarness();
+      const proposalId = await propose(h);
+      await createOpenContextPrHandler(h)({ proposalId }, ctx());
+      api.resetApprovalsOnPush = reset;
+
+      await expect(
+        createMergeContextPrHandler(h)(
+          { proposalId },
+          ctx({ userId: REVIEWER }),
+        ),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+      });
+      expect(api.merges).toHaveLength(0);
+      expect(h.store.records).toHaveLength(0);
+    },
+  );
+
+  it("asks the reviewer to approve again after Oxagen rebases the merge request, because GitLab keeps the old approval", async () => {
+    const { api, h } = gitlabHarness();
+    const proposalId = await propose(h);
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const checked = api.branches.get(BRANCH)!;
+    api.commit("main", "other.md", "x\n");
+    const merge = createMergeContextPrHandler(h);
+
+    await expect(
+      merge({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "approval_required" });
+    expect(api.rebases).toEqual([1]);
+    expect(api.merges).toHaveLength(0);
+    const rebased = api.branches.get(BRANCH)!;
+    expect(rebased).not.toBe(checked);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      headSha: rebased,
+    });
+
+    // The reviewer approves the rebased head, and the merge goes through.
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    const merged = await merge({ proposalId }, ctx({ userId: REVIEWER }));
+    expect(merged.status).toBe("merged");
+    expect(api.merges).toEqual([
+      expect.objectContaining({
+        sha: rebased,
+        message: expect.stringContaining(`Oxagen-Approved-By: ${REVIEWER}\n`),
+      }),
+    ]);
   });
 
   it("fails a check when the branch changes another file, so nothing merges", async () => {
@@ -328,6 +396,49 @@ describe("the GitLab seam", () => {
     });
   });
 
+  describe("a steering project the provisioner bound", () => {
+    const GROUP_TOKEN = "glpat-group-token-never-shown";
+    const steeringSeam = (api: FakeGitLabApi, stored: string | null) => {
+      const resolveToken = vi.fn(async () => TOKEN);
+      const steeringGroupToken = vi.fn(async () => stored);
+      const seam = createSteeringGitLab({
+        readConnection: async () => ({ ...CONNECTION, steeringGroupId: 77 }),
+        resolveToken,
+        steeringGroupToken,
+        client: (token) => api.client(token),
+        rest: (token) => api.rest(token),
+        sleep: vi.fn(async () => {}),
+      });
+      return { seam, resolveToken, steeringGroupToken };
+    };
+
+    it("uses the group's stored token and never the connection's", async () => {
+      const api = new FakeGitLabApi();
+      const { seam, resolveToken, steeringGroupToken } = steeringSeam(
+        api,
+        GROUP_TOKEN,
+      );
+      const repo = await seam.resolveRepository(SCOPE);
+      expect(repo.fullName).toBe("acme/platform/rules");
+      expect(steeringGroupToken).toHaveBeenCalledWith(SCOPE.orgId, 77);
+      expect(resolveToken).not.toHaveBeenCalled();
+      expect(api.tokens).toEqual([GROUP_TOKEN, GROUP_TOKEN]);
+    });
+
+    it("refuses when the organization stored no usable group token", async () => {
+      const api = new FakeGitLabApi();
+      const { seam, resolveToken } = steeringSeam(api, null);
+      const err = await seam.resolveRepository(SCOPE).catch((e: unknown) => e);
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "gitlab_not_connected",
+      });
+      expect((err as Error).message).toContain("acme/platform/rules");
+      expect(resolveToken).not.toHaveBeenCalled();
+      expect(api.tokens).toEqual([]);
+    });
+  });
+
   it("fails closed on a revoked token, naming the project and not the token", async () => {
     const api = new FakeGitLabApi();
     api.revoked = true;
@@ -375,6 +486,22 @@ describe("the GitLab seam", () => {
     await expect(
       seam.ensureBranch(repo, "b", "main", { exclusive: true }),
     ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+  });
+
+  it("creates a branch at the commit it is given, not at the base branch's head", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo } = await resolved(api);
+    const planned = api.branches.get("main")!;
+    await seam.ensureBranch(repo, "other", "main");
+    const { commitSha: moved } = await seam.putFile(repo, {
+      path: "a.toml",
+      content: "1",
+      message: "m",
+      branch: "other",
+    });
+    api.branches.set("main", moved);
+    await seam.ensureBranch(repo, "b", "main", { exclusive: true, at: planned });
+    expect(api.branches.get("b")).toBe(planned);
   });
 
   it("creates, updates, and answers the head for an identical write", async () => {
@@ -646,6 +773,27 @@ describe("the GitLab seam's merge-queue calls", () => {
       { path: "old.toml", status: "removed" },
       { path: "new.toml", status: "added" },
     ]);
+
+    // The same 300-file refusal as GitHub, so both hosts refuse one change.
+    api.client = (t) => ({
+      ...client(t),
+      compare: async () =>
+        Array.from({ length: 300 }, (_, i) => ({
+          oldPath: `r${i}.toml`,
+          newPath: `r${i}.toml`,
+          renamed: false,
+          deleted: false,
+          added: true,
+        })),
+    });
+    const { seam: wide } = gitlabSeam(api);
+    const wideRepo = await wide.resolveRepository(SCOPE);
+    await expect(wide.changedFiles(wideRepo, "c0", head)).rejects.toMatchObject(
+      { code: "conflict", reason: "too_many_files" },
+    );
+    await expect(wide.changedPaths(wideRepo, "c0", head)).rejects.toMatchObject(
+      { reason: "too_many_files" },
+    );
   });
 
   it("commits writes and deletions on the parent, skipping a file already at its content", async () => {
@@ -715,12 +863,15 @@ describe("the GitLab seam's merge-queue calls", () => {
       number: mr.number,
       branch: "b",
       expectedHead: head,
+      base: main,
     });
     expect(api.rebases).toEqual([mr.number]);
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(1000);
     expect(out.headSha).toBe(api.branches.get("b"));
     expect(out.headSha).not.toBe(head);
+    // A rebase makes no merge commit, so no approval carries onto it.
+    expect(out.parents).toBeNull();
     await expect(seam.holdsCommit(repo, out.headSha, main)).resolves.toBe(true);
     expect(Object.fromEntries(api.tree(out.headSha))).toEqual({
       a: "1",
@@ -735,6 +886,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: "c0",
+        base: "main",
       }),
     ).rejects.toMatchObject({ reason: "head_moved" });
     expect(api.rebases).toEqual([]);
@@ -748,6 +900,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       code: "conflict",
@@ -765,6 +918,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       reason: "update_conflict",
@@ -775,22 +929,185 @@ describe("the GitLab seam's merge-queue calls", () => {
 
   it("resets a branch by deleting it and creating it again at the SHA", async () => {
     const { api, seam, repo, head } = await onBranch();
-    api.commit("b", "a", "stamped");
-    await seam.resetBranch(repo, "b", head);
+    const stamp = api.commit("b", "a", "stamped");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(true);
     expect(api.branches.get("b")).toBe(head);
   });
 
-  it("lists approvals with each reviewer's linked Oxagen user and no head", async () => {
-    const { api, seam, repo, mr, linkAccount } = await onBranch();
+  it("leaves a branch that moved off the stamp", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    const stamp = api.commit("b", "a", "stamped");
+    const pushed = api.commit("b", "a", "pushed");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.get("b")).toBe(pushed);
+    await expect(
+      seam.resetBranch(repo, "gone", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.has("gone")).toBe(false);
+  });
+
+  it("lists approvals with each reviewer's linked Oxagen user at the current head", async () => {
+    const { api, seam, repo, mr, head, linkAccount } = await onBranch();
     api.approvedBy = [
       { id: 501, username: "reviewer" },
       { id: 777, username: "stranger" },
     ];
     await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
-      { userId: REVIEWER, login: "reviewer", commitSha: null },
-      { userId: null, login: "stranger", commitSha: null },
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+      { userId: null, login: "stranger", commitSha: head },
     ]);
     expect(linkAccount).toHaveBeenCalledWith("gitlab", "777");
+    // The setting is read first, then the approvals, then the diff versions
+    // each approval is placed on.
+    expect(api.restCalls.slice(-3)).toEqual([
+      "GET /approvals",
+      "GET /merge_requests/1/approvals",
+      "GET /merge_requests/1/versions",
+    ]);
+  });
+
+  it("places an approval given before the queue's rebase on the old head, and a new one on the rebased head", async () => {
+    const { api, seam, repo, head, mr } = await onBranch();
+    // The reviewer approves the head the author pushed.
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    const main = api.commit("main", "z", "1");
+    const out = await seam.updateBranch(repo, {
+      number: mr.number,
+      branch: "b",
+      expectedHead: head,
+      base: main,
+    });
+    // GitLab keeps the approval across the rebase. It still covers only the
+    // head the reviewer saw.
+    expect(api.approvedBy).toHaveLength(1);
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: out.headSha },
+    ]);
+  });
+
+  it("refuses as gitlab_refused while GitLab has not recorded the head as a version", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    const pushed = api.commit("b", "a", "pushed");
+    // GitLab has not yet recorded the push, and the reviewer approves.
+    api.versions.get(mr.number)!.pop();
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "gitlab_refused",
+      message: expect.stringContaining(`GitLab has not recorded ${pushed}`),
+    });
+  });
+
+  it("drops an approval older than every version", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvedBy = [
+      { id: 777, username: "stranger", at: "2026-09-23T09:00:00.000Z" },
+    ];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+  });
+
+  it.each([
+    ["no time", null],
+    ["an unreadable time", "yesterday"],
+  ])(
+    "refuses approvals_not_head_bound for an approval with %s, before reading the versions",
+    async (_label, at) => {
+      const { api, seam, repo, mr } = await onBranch();
+      api.approvedBy = [
+        { id: 777, username: "stranger" },
+        { id: 501, username: "reviewer", at },
+      ];
+      await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+        message: expect.stringContaining(
+          `GitLab did not report when reviewer approved !${mr.number}`,
+        ),
+      });
+      expect(api.restCalls).not.toContain("GET /merge_requests/1/versions");
+    },
+  );
+
+  it("answers no approvals without reading the diff versions", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvedBy = [];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+    expect(api.restCalls).not.toContain("GET /merge_requests/1/versions");
+  });
+
+  it("drops an approval when a push follows it, so none stands on the new head", async () => {
+    const { api, seam, repo, mr, head } = await onBranch();
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    api.commit("b", "a", "pushed after the approval");
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+  });
+
+  it("refuses approvals_not_head_bound when the project keeps approvals on push", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = false;
+    // GitLab keeps the approval across the push, so it no longer shows which
+    // head was reviewed.
+    api.commit("b", "a", "pushed after the approval");
+    expect(api.approvedBy).toHaveLength(1);
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining('Turn on "Reset approvals on push"'),
+    });
+    expect(api.restCalls).not.toContain("GET /merge_requests/1/approvals");
+  });
+
+  it("refuses approvals_not_head_bound when GitLab will not read the setting", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = null;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining("The setting needs GitLab Premium."),
+    });
+  });
+
+  it("refuses approvals_not_head_bound when GitLab answers 404 for the setting", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvalSettingsError = 404;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+    });
+  });
+
+  it.each([429, 500, 503])(
+    "lets a %i on the setting read escape as gitlab_refused, so a retry can pass",
+    async (status) => {
+      const { api, seam, repo, mr } = await onBranch();
+      api.approvalSettingsError = status;
+      await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "gitlab_refused",
+        message: expect.stringContaining(String(status)),
+      });
+      expect(api.restCalls).not.toContain("GET /merge_requests/1/approvals");
+    },
+  );
+
+  it("names a revoked token, not the setting, when GitLab rejects the approvals read", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.revoked = true;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      reason: "gitlab_credential_rejected",
+    });
   });
 
   it("records a publish as a successful deployment with no page of its own", async () => {
@@ -831,6 +1148,71 @@ describe("the GitLab seam's merge-queue calls", () => {
     await expect(seam.recordDeployment(repo, args)).rejects.toMatchObject({
       reason: "gitlab_credential_rejected",
     });
+  });
+
+  it("lists every file at a commit with its blob id, a page of one hundred at a time", async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 150; i++) files[`rules/r${i}.toml`] = `rule ${i}`;
+    const { api, seam, repo } = await onBranch(files);
+    const entries = await seam.listTree(repo, "c0");
+    expect(entries).toHaveLength(150);
+    expect(entries).toContainEqual({
+      path: "rules/r7.toml",
+      blob: gitBlobId("rule 7"),
+    });
+    // The directory itself is not a file, so it is left out.
+    expect(entries.map((entry) => entry.path)).not.toContain("rules");
+    expect(
+      api.restCalls.filter((call) => call === "GET /repository/tree"),
+    ).toHaveLength(2);
+    await expect(seam.listTree(repo, "missing")).rejects.toMatchObject({
+      reason: "gitlab_refused",
+    });
+  });
+
+  it("refuses a tree larger than a publish reads", async () => {
+    const { api } = await onBranch();
+    // The seam takes its REST caller when it resolves the repository, so a
+    // fresh seam picks up this one.
+    const request = api.rest.bind(api);
+    api.rest = (token) => {
+      const inner = request(token);
+      return {
+        request: async <T>(method: string, path: string, body?: unknown) =>
+          path.includes("/repository/tree")
+            ? {
+                status: 200,
+                data: Array.from({ length: 100 }, (_, i) => ({
+                  id: `b${i}`,
+                  path: `f${i}`,
+                  type: "blob",
+                })) as T,
+              }
+            : inner.request<T>(method, path, body),
+      };
+    };
+    const { seam: large } = gitlabSeam(api);
+    const fresh = await large.resolveRepository(SCOPE);
+    await expect(large.listTree(fresh, "c0")).rejects.toMatchObject({
+      reason: "tree_too_large",
+    });
+  });
+
+  it("tags a commit, keeps a tag already at it, and refuses to move one", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    await expect(
+      seam.createTag(repo, "steering/1", "c0"),
+    ).resolves.toBeUndefined();
+    expect(api.tags.get("steering/1")).toBe("c0");
+    await expect(
+      seam.createTag(repo, "steering/1", "c0"),
+    ).resolves.toBeUndefined();
+    await expect(seam.createTag(repo, "steering/1", head)).rejects.toMatchObject(
+      { reason: "tag_exists", message: expect.stringContaining("c0") },
+    );
+    await expect(
+      seam.createTag(repo, "steering/2", "missing"),
+    ).rejects.toMatchObject({ reason: "gitlab_refused" });
   });
 
   it("refuses a REST call on a handle it did not resolve", async () => {
@@ -972,8 +1354,13 @@ describe("the host dispatcher", () => {
       files: [],
     });
     await host.holdsCommit(repo, "b", "a");
-    await host.updateBranch(repo, { number: 1, branch: "b", expectedHead: "a" });
-    await host.resetBranch(repo, "b", "a");
+    await host.updateBranch(repo, {
+      number: 1,
+      branch: "b",
+      expectedHead: "a",
+      base: "c",
+    });
+    await host.resetBranch(repo, "b", { from: "b", to: "a" });
     await host.listApprovals(repo, 1);
     await host.recordDeployment(repo, {
       sha: "a",
@@ -981,6 +1368,8 @@ describe("the host dispatcher", () => {
       environment: "steering",
       description: "d",
     });
+    await host.listTree(repo, "a");
+    await host.createTag(repo, "steering/1", "a");
     expect(calls).toEqual([
       "changedFiles",
       "commitFiles",
@@ -989,6 +1378,8 @@ describe("the host dispatcher", () => {
       "resetBranch",
       "listApprovals",
       "recordDeployment",
+      "listTree",
+      "createTag",
     ]);
   });
 });

@@ -20,7 +20,7 @@ import { agentApprovalResolve } from "../agent.approval.resolve";
  * bound to the agent, run, exact action, expiry, and the approval event." A
  * decision that authorizes calls nobody has seen yet is not an approval — it is
  * standing authority, and §6.9 has a name and a tool for that (a mandate,
- * granted through `grant_mandate`, bounded by a consequence tag and an amount,
+ * granted through `grant_mandate`, bounded by an impact and an amount,
  * with an entry in the mandates ledger). Folding it back in here would let a
  * one-click consent dialog mint unbounded authority with no ledger row.
  *

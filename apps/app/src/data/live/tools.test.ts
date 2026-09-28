@@ -80,7 +80,7 @@ describe("tools.versions", () => {
     expect(plain?.classification).toBeNull();
   });
 
-  it("carries the consequence tag, the server, and the cursor the view asked for", async () => {
+  it("carries the impact, the server, and the cursor the view asked for", async () => {
     kernelRead.mockResolvedValue(readOk(toolVersionListOutput()));
     await tools.versions(ctx, {
       category: "moves_money",

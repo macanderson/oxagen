@@ -7,7 +7,7 @@
 // no binding), so a workspace with no GitLab main head goes to GitHub exactly
 // as it did before GitLab existed.
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   createSteeringGitHub,
   readGitHubConnection,
@@ -22,7 +22,8 @@ import {
 } from "./context.steering.gitlab";
 
 /**
- * The provider of the workspace's MAIN head, or null when it has none.
+ * The provider of the workspace's steering head (role `main` or `steering`),
+ * or null when it has none.
  *
  * Read without joining the connection on purpose: a head whose connection is
  * retired still says which host the workspace steers through, and that host's
@@ -42,7 +43,10 @@ export async function readMainRepositoryProvider(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
         ),
       )
       .limit(1),
@@ -115,6 +119,8 @@ export function createSteeringHost(
     getPullRequest: (repo, number) => on(repo).getPullRequest(repo, number),
     branchHead: (repo, branch) => on(repo).branchHead(repo, branch),
     listFiles: (repo, ref, dir) => on(repo).listFiles(repo, ref, dir),
+    listTree: (repo, commit) => on(repo).listTree(repo, commit),
+    createTag: (repo, name, sha) => on(repo).createTag(repo, name, sha),
     changedPaths: (repo, base, head) => on(repo).changedPaths(repo, base, head),
     reportCheckRun: (repo, args) => on(repo).reportCheckRun(repo, args),
     mergePullRequest: (repo, args) => on(repo).mergePullRequest(repo, args),
@@ -125,7 +131,8 @@ export function createSteeringHost(
     holdsCommit: (repo, head, ancestor) =>
       on(repo).holdsCommit(repo, head, ancestor),
     updateBranch: (repo, args) => on(repo).updateBranch(repo, args),
-    resetBranch: (repo, branch, sha) => on(repo).resetBranch(repo, branch, sha),
+    resetBranch: (repo, branch, args) =>
+      on(repo).resetBranch(repo, branch, args),
     listApprovals: (repo, number) => on(repo).listApprovals(repo, number),
     recordDeployment: (repo, args) => on(repo).recordDeployment(repo, args),
   };

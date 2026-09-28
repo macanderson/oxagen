@@ -5,10 +5,12 @@
 //
 // An interjection has a kind (#3941). A `question` row takes free text in
 // `answer`. A `repo_unknown` row, raised when a session starts in a
-// repository the workspace has not bound, takes a `path`: `link` binds the
-// repository to the run's workspace, and `create` makes a new workspace for
-// it from `create`. Which fields a call must send depends on the row, so the
-// handler checks the combination and refuses a wrong one as
+// repository the workspace has not bound, takes a `path`: `link` opens a
+// steering PR that links the repository to the run's workspace (ADR-212),
+// and `create` makes a new workspace for it from `create`. Since lane S1 (#4450) the new workspace binds no
+// repository, so a create leaves the repository unbound. Which fields a call
+// must send depends on the row, so the handler checks the combination and
+// refuses a wrong one as
 // `HandlerError { code: "conflict", reason: "interjection_answer_shape" }`.
 // A `deny` is never a person's answer: the timeout writes it.
 //
@@ -27,6 +29,7 @@ import { INTERJECTION_RECEIPT_ID_PATTERN } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";
+import { steeringPullRequestSchema } from "./repository.link";
 
 const PUBLIC_ID = /^inj_[0-9a-z]+$/i;
 const ROW_UUID =
@@ -108,12 +111,18 @@ export const agentInterjectionAnswer = registerCapability({
       receiptId: z.string().regex(INTERJECTION_RECEIPT_ID_PATTERN),
       /** The path taken; null for a free-text answer. */
       path: z.enum(INTERJECTION_ANSWER_PATHS).nullable(),
-      /** The repository a link or create bound; null for a free-text answer. */
+      /**
+       * The repository a link answered for; null for a free-text answer and a
+       * create. A link opens a steering PR, and the binding follows its merge.
+       */
       repository: z
         .object({
-          bindingId: z.string(),
           /** `owner/name`. */
           fullName: z.string().min(1),
+          /** The binding when the repository was linked already, or null. */
+          bindingId: z.string().nullable(),
+          /** The steering PR that adds the repository, or null when it was linked already or `workspace.toml` lists it. */
+          steeringPullRequest: steeringPullRequestSchema.nullable(),
         })
         .strict()
         .nullable(),

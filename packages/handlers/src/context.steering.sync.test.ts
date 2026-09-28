@@ -29,20 +29,30 @@ import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { syncView } from "./context.steering.freshness";
 import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
+import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
 import {
   MERGE_GRACE_SECONDS,
   SYNC_CHECK_NAME,
   syncWorkspaceSteering,
   type SyncDeps,
 } from "./context.steering.sync";
+import type { SyncFinding } from "./context.steering.sync.plan";
 import {
   MemorySyncStore,
+  REPO,
   REVIEWER,
   SCOPE,
   ctx,
   harness,
   type Harness,
 } from "./context.steering.test-support";
+import type { ReconcileLinks } from "./repository.link.reconcile";
+import {
+  githubRepoRef,
+  newWorkspaceToml,
+  readWorkspaceToml,
+  withRepository,
+} from "./repository.workspace-toml";
 
 const RULES = ".oxagen/rules";
 
@@ -302,7 +312,7 @@ describe("syncWorkspaceSteering", () => {
     expect(r.sync.state?.error).toContain("has no branch main");
   });
 
-  it("answers no_repository for a workspace with no main repository", async () => {
+  it("answers no_repository for a workspace with no steering repository", async () => {
     const r = rig();
     r.h.github.repository = null;
     const out = await r.run();
@@ -312,7 +322,7 @@ describe("syncWorkspaceSteering", () => {
 
   // A webhook stamps the request before the sync finds there is nothing to
   // read: a retired GitHub connection, or a GitLab project that is not the
-  // main one. Left unanswered, the stamp reads as pending for good and the
+  // steering one. Left unanswered, the stamp reads as pending for good and the
   // page refreshes itself forever.
   it("answers a stamped request even when there is no repository to read", async () => {
     const r = rig();
@@ -320,7 +330,7 @@ describe("syncWorkspaceSteering", () => {
     await r.sync.markRequested(SCOPE, r.h.now());
     await r.run();
     expect(syncView(r.sync.state)?.status).toBe("failed");
-    expect(r.sync.state?.error).toContain("no main repository");
+    expect(r.sync.state?.error).toContain("no steering repository");
   });
 });
 
@@ -371,9 +381,9 @@ describe("Context PRs on the host", () => {
     const edited = (await r.h.github.readFile(
       r.h.github.repository!,
       path,
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
     ))!.replace("more than once in a run.", "more than once per run.");
-    r.h.github.commit(`context/${LINEAGE}`, path, edited);
+    r.h.github.commit(`steering/${LINEAGE}`, path, edited);
     r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
     pastGrace(r);
 
@@ -401,7 +411,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Edited on the PR."),
     );
@@ -468,7 +478,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Push with ghp_0123456789abcdefghijklmnopqrstuvwx."),
     );
@@ -498,7 +508,7 @@ describe("Context PRs on the host", () => {
     expect(active(r)).toEqual([]);
     // The next proposal on the lineage branches from main, not from the
     // closed PR's commits.
-    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
   });
 
   it("resets the checks when the PR's branch moves on GitHub", async () => {
@@ -506,7 +516,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     const moved = r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Moved."),
     );
@@ -562,7 +572,119 @@ describe("Context PRs on the host", () => {
       mergedByUserId: null,
     });
     expect(r.h.store.versions).toHaveLength(1);
-    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
+  });
+
+  // ── The merge claim (#4504) ────────────────────────────────────────────────
+
+  /** A claim older than MERGE_CLAIM_SECONDS at the sync's clock. */
+  const lapsed = (r: Rig) =>
+    new Date(r.deps.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000);
+
+  /**
+   * Claims the proposal between the sync's read of the PR and its write, as
+   * a merge from Oxagen can. The sync holds the row it read, so the stored
+   * row is replaced rather than changed in place.
+   */
+  const claimAfterRead = (r: Rig, id: string) => {
+    const realGet = r.h.github.getPullRequest.bind(r.h.github);
+    return vi
+      .spyOn(r.h.github, "getPullRequest")
+      .mockImplementation(async (repo, number) => {
+        const i = r.h.store.proposals.findIndex((p) => p.publicId === id);
+        r.h.store.proposals[i] = {
+          ...r.h.store.proposals[i]!,
+          mergeClaimedAt: r.deps.now(),
+        };
+        return realGet(repo, number);
+      });
+  };
+
+  // A merge from Oxagen stamps the PR, so the host merges a head the row
+  // does not name. While the claim stands, the sync leaves the merge to it.
+  it("defers a PR merged at another head while a merge claims it, and publishes it once the claim lapses", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    r.h.github.commit(
+      `steering/${LINEAGE}`,
+      proposal(r, id).path!,
+      recordText(LINEAGE, "Stamped."),
+    );
+    r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
+    pastGrace(r);
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const claimed = await r.run();
+    expect(claimed.retryAfterSeconds).toBe(MERGE_GRACE_SECONDS);
+    expect(claimed.proposals).toMatchObject({ merged: 0, rejected: 0 });
+    expect(proposal(r, id).status).toBe("checks_passed");
+    expect(active(r)).toEqual([]);
+
+    // A claim taken after the sync read the PR still holds the link and the
+    // rejection off.
+    Object.assign(proposal(r, id), { mergeClaimedAt: null });
+    const spy = claimAfterRead(r, id);
+    const raced = await r.run();
+    spy.mockRestore();
+    expect(raced.proposals).toMatchObject({ merged: 0, rejected: 0 });
+    expect(proposal(r, id).status).toBe("checks_passed");
+
+    Object.assign(proposal(r, id), { mergeClaimedAt: lapsed(r) });
+    const out = await r.run();
+    expect(out.proposals.merged).toBe(1);
+    expect(proposal(r, id)).toMatchObject({
+      status: "merged",
+      mergeClaimedAt: null,
+    });
+    expect(active(r)[0]?.statement).toBe("Stamped.");
+  });
+
+  it("does not reset the checks of a claimed PR whose head moved", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    const checked = proposal(r, id).headSha;
+    r.h.github.commit(
+      `steering/${LINEAGE}`,
+      proposal(r, id).path!,
+      recordText(LINEAGE, "Stamped."),
+    );
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const out = await r.run();
+    expect(out.proposals.stale).toBe(0);
+    expect(proposal(r, id)).toMatchObject({
+      status: "checks_passed",
+      headSha: checked,
+    });
+  });
+
+  it("does not reject a claimed PR closed on the host until the claim lapses", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    r.h.github.closeOnHost(r.h.github.pulls[0]!.number);
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const claimed = await r.run();
+    expect(claimed.proposals.rejected).toBe(0);
+    expect(proposal(r, id).status).toBe("checks_passed");
+    expect(r.h.github.deletedBranches).not.toContain(`steering/${LINEAGE}`);
+
+    // A claim taken after the sync read the PR refuses the rejection too.
+    Object.assign(proposal(r, id), { mergeClaimedAt: null });
+    const spy = claimAfterRead(r, id);
+    const raced = await r.run();
+    spy.mockRestore();
+    expect(raced.proposals.rejected).toBe(0);
+    expect(proposal(r, id).status).toBe("checks_passed");
+
+    Object.assign(proposal(r, id), { mergeClaimedAt: lapsed(r) });
+    const out = await r.run();
+    expect(out.proposals.rejected).toBe(1);
+    expect(proposal(r, id)).toMatchObject({
+      status: "rejected",
+      dismissedReason: "Closed on GitHub without merging",
+    });
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
   });
 });
 
@@ -701,5 +823,415 @@ describe("workspace.toml settings (#4435)", () => {
     expect(r.sync.state?.findings[0]?.message).toMatch(
       /^workspace\.toml is not valid TOML/,
     );
+  });
+});
+
+describe("publishing the steering repository (#4447)", () => {
+  // The sync reads the main code repository, so it hands the publisher only
+  // the workspace's scope. The publisher resolves the steering repository and
+  // reads its head, and never receives the code repository's name or head.
+  it("publishes with the workspace's scope and no code repository", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi.fn(async () => ({
+      status: "published" as const,
+      version: 1,
+    }));
+    const out = await syncWorkspaceSteering({ ...r.deps, publish }, SCOPE);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish.mock.calls[0]).toEqual([SCOPE]);
+    expect(out.published).toEqual({ status: "published", version: 1 });
+    expect(out.outcome).toBe("synced");
+  });
+
+  it("asks for a publish when the code repository has not moved", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi.fn(async () => ({
+      status: "current" as const,
+      version: 1,
+    }));
+    const deps = { ...r.deps, publish };
+    await syncWorkspaceSteering(deps, SCOPE);
+    const again = await syncWorkspaceSteering(deps, SCOPE);
+    expect(again.outcome).toBe("current");
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(again.published).toEqual({ status: "current", version: 1 });
+  });
+
+  it("publishes nothing and says so when no publisher is wired", async () => {
+    const r = rig();
+    const out = await r.run();
+    expect(out.published).toBeNull();
+  });
+
+  it("keeps the sync when the publish throws, and the next sync tries again", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("the version store is down"))
+      .mockResolvedValueOnce({ status: "published", version: 1 });
+    const deps = { ...r.deps, publish };
+    const first = await syncWorkspaceSteering(deps, SCOPE);
+    expect(first.outcome).toBe("synced");
+    expect(first.published).toBeNull();
+    expect(r.sync.state).toMatchObject({ status: "synced", error: null });
+    const second = await syncWorkspaceSteering(deps, SCOPE);
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(second.published).toEqual({ status: "published", version: 1 });
+  });
+});
+
+describe("workspace.toml repositories (ADR-212)", () => {
+  const API = githubRepoRef("a-intel", "api");
+  const WEB = githubRepoRef("a-intel", "web");
+  const DOCS = githubRepoRef("a-intel", "docs");
+
+  const LINK_WARNING: SyncFinding = {
+    level: "warning",
+    path: "workspace.toml",
+    lineageId: null,
+    code: "repository_link",
+    message:
+      "workspace.toml lists github.com/a-intel/web, and Oxagen could not link it (repository_not_found).",
+  };
+
+  /** A workspace/v1 file whose `[[repositories]]` list holds these refs, in order. */
+  function listing(first: string, ...rest: string[]): string {
+    let text = newWorkspaceToml("a-intel", "core-platform", first);
+    for (const ref of rest) {
+      const file = readWorkspaceToml(text);
+      if (file.kind !== "read")
+        throw new Error("The fixture does not read as workspace/v1.");
+      text = withRepository(file, ref);
+    }
+    return text;
+  }
+
+  /** The rig with a reconcile spy that links nothing and finds nothing. */
+  function linkRig() {
+    const r = rig();
+    const reconcileLinks = vi.fn<ReconcileLinks>(async () => ({
+      linked: [],
+      unlinked: [],
+      findings: [],
+    }));
+    const deps: SyncDeps = { ...r.deps, reconcileLinks };
+    return {
+      ...r,
+      deps,
+      reconcileLinks,
+      run: (force = false) => syncWorkspaceSteering(deps, SCOPE, { force }),
+    };
+  }
+
+  it("reconciles the first synced head with no prior list", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API, WEB));
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+    expect(r.reconcileLinks).toHaveBeenCalledWith(SCOPE, {
+      prior: null,
+      current: [API, WEB],
+      now: expect.any(Date),
+    });
+  });
+
+  it("compares the list at the last synced head with the list at the new head", async () => {
+    const r = linkRig();
+    const first = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      listing(API, WEB),
+    );
+    await r.run();
+    const second = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      listing(API, DOCS),
+    );
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run();
+    expect(readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      first,
+    );
+    expect(readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      second,
+    );
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(2);
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: [API, WEB],
+      current: [API, DOCS],
+      now: expect.any(Date),
+    });
+    expect(r.sync.state?.headSha).toBe(second);
+  });
+
+  it("does not reconcile again when the head has not moved", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    expect(r.sync.state?.status).toBe("synced");
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles a forced run at the same head against the list that head holds", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API, WEB));
+    await r.run();
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run(true);
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(2);
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: [API, WEB],
+      current: [API, WEB],
+      now: expect.any(Date),
+    });
+    // The prior list is the one the head holds, so the sync reads the file once.
+    expect(
+      readFile.mock.calls.filter(([, path]) => path === "workspace.toml"),
+    ).toHaveLength(1);
+  });
+
+  // The new steering repository's history says nothing about the list the old
+  // one held, so no head is removed on its word.
+  it("reconciles with no prior list after the steering repository is replaced", async () => {
+    const r = linkRig();
+    const first = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      listing(API, WEB),
+    );
+    await r.run();
+    r.h.github.repository = {
+      ...REPO,
+      repo: "steering",
+      fullName: "a-intel/steering",
+      currentFullName: "a-intel/steering",
+    };
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: null,
+      current: [API],
+      now: expect.any(Date),
+    });
+    expect(readFile).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      first,
+    );
+    expect(r.sync.state?.repository).toBe("a-intel/steering");
+  });
+
+  // The fork case: the new repository holds the old one's commits. A failed
+  // first sync there must not store the old head beside the new name.
+  it("keeps no head from the old steering repository when the new one's first sync fails", async () => {
+    const r = linkRig();
+    const first = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      listing(API, WEB),
+    );
+    await r.run();
+    r.h.github.repository = {
+      ...REPO,
+      repo: "steering",
+      fullName: "a-intel/steering",
+      currentFullName: "a-intel/steering",
+    };
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    r.reconcileLinks.mockRejectedValueOnce(new Error("The database is down."));
+    await expect(r.run()).rejects.toThrow("The database is down.");
+    expect(r.sync.state).toMatchObject({
+      repository: "a-intel/steering",
+      headSha: null,
+      status: "failed",
+    });
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: null,
+      current: [API],
+      now: expect.any(Date),
+    });
+    expect(readFile).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      first,
+    );
+  });
+
+  it("leaves the linked heads alone when workspace.toml does not read", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 0"),
+    );
+    const out = await r.run();
+    expect(out.findings).toEqual([
+      expect.objectContaining({ path: "workspace.toml", code: "schema" }),
+    ]);
+    // A forced run reads the same file and still moves no head.
+    await r.run(true);
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      `${schemaDirective("workspace/v1")}\n[stella\n`,
+    );
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+  });
+
+  // Only a workspace/v1 file that reads moves a head. Removal takes a file
+  // that still reads and no longer lists the repository, so a deleted file or
+  // a slip on the first line unlinks nothing.
+  it("leaves the linked heads alone when workspace.toml is removed or belongs to another tool", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    r.h.github.remove("main", "workspace.toml");
+    await r.run();
+    await r.run(true);
+    r.h.github.commit("main", "workspace.toml", '[tool]\nname = "other"\n');
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+    // The next file that reads is compared with the list at the last synced
+    // head. Another tool's file lists nothing there, so no head is removed.
+    r.h.github.commit("main", "workspace.toml", listing(WEB));
+    await r.run();
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: [],
+      current: [WEB],
+      now: expect.any(Date),
+    });
+  });
+
+  // A file that did not read at the last synced head says nothing about what
+  // it listed. The next file that reads is compared with no prior list, so a
+  // repository dropped across the bad head is never unlinked. This pins that.
+  it("compares with no prior list when the last synced head's workspace.toml did not read", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    const broken = r.h.github.commit(
+      "main",
+      "workspace.toml",
+      `${schemaDirective("workspace/v1")}\n[stella\n`,
+    );
+    await r.run();
+    expect(r.sync.state?.headSha).toBe(broken);
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+    r.h.github.commit("main", "workspace.toml", listing(WEB));
+    const readFile = vi.spyOn(r.h.github, "readFile");
+    await r.run();
+    // The sync reads the broken head's file for the prior list.
+    expect(readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "workspace.toml",
+      broken,
+    );
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(2);
+    expect(r.reconcileLinks).toHaveBeenLastCalledWith(SCOPE, {
+      prior: null,
+      current: [WEB],
+      now: expect.any(Date),
+    });
+  });
+
+  it("reports a repository the sync could not link beside the other findings and still finishes", async () => {
+    const r = linkRig();
+    r.reconcileLinks.mockResolvedValueOnce({
+      linked: [],
+      unlinked: [],
+      findings: [LINK_WARNING],
+    });
+    r.h.github.commit("main", `${RULES}/ctx.a.one.toml`, "schema = [broken");
+    r.h.github.commit("main", "workspace.toml", listing(API, WEB));
+    const out = await r.run();
+    expect(out.outcome).toBe("problems");
+    expect(out.findings).toEqual([
+      expect.objectContaining({
+        level: "error",
+        path: `${RULES}/ctx.a.one.toml`,
+        code: "not_toml",
+      }),
+      LINK_WARNING,
+    ]);
+    expect(r.sync.state).toMatchObject({
+      status: "problems",
+      error: null,
+      headSha: r.h.github.heads.get("main"),
+    });
+    expect(r.sync.state?.findings).toEqual(out.findings);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+  });
+
+  it("keeps the link warning at the same head and clears it when the next head links cleanly", async () => {
+    const r = linkRig();
+    r.reconcileLinks.mockResolvedValueOnce({
+      linked: [],
+      unlinked: [],
+      findings: [LINK_WARNING],
+    });
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    await r.run();
+    const again = await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+    expect(again.findings).toEqual([LINK_WARNING]);
+    r.h.github.commit("main", "workspace.toml", listing(API, WEB));
+    const next = await r.run();
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(2);
+    expect(next.findings).toEqual([]);
+    expect(r.sync.state?.status).toBe("synced");
+  });
+
+  it("syncs as before when no reconcile is wired", async () => {
+    const r = rig();
+    r.h.github.commit("main", "workspace.toml", listing(API, WEB));
+    const out = await r.run();
+    expect(out.findings).toEqual([]);
+    expect(r.sync.state).toMatchObject({ status: "synced", error: null });
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+  });
+
+  // Step 8 publishes the steering repository on every run, but the linked
+  // heads follow the synced head, so only step 5 reconciles them.
+  it("reconciles once per synced head and never from the publish step", async () => {
+    const r = linkRig();
+    r.h.github.commit("main", "workspace.toml", listing(API));
+    const seen: number[] = [];
+    const publish = vi.fn(async () => {
+      seen.push(r.reconcileLinks.mock.calls.length);
+      return { status: "published" as const, version: 1 };
+    });
+    const deps = { ...r.deps, publish };
+    await syncWorkspaceSteering(deps, SCOPE);
+    await syncWorkspaceSteering(deps, SCOPE);
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual([1, 1]);
+    expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
   });
 });

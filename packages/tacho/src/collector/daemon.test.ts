@@ -37,6 +37,7 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { MEMORY_UPLOAD_PATH } from "./memory-capture/memory-upload";
 import { HOOK_ID_REPLAY_WINDOW_MS } from "./registry";
 
 // The command test's session reports pid 59942, which is not running here, so
@@ -1839,5 +1840,94 @@ describe("tachod", () => {
     expect(log.filter((l) => l.includes("command poll refused"))).toHaveLength(
       2,
     );
+  });
+
+  /** A fetch that answers memory uploads with 201 and passes the rest to the plane. */
+  function recordingMemoryUploads(plane: ReturnType<typeof fakeControlPlane>) {
+    const uploads: Array<{
+      url: string;
+      authorization: string | undefined;
+      body: unknown;
+    }> = [];
+    const fetch: FetchLike = async (url, init) => {
+      if (!url.endsWith(MEMORY_UPLOAD_PATH)) return plane.fetch(url, init);
+      uploads.push({
+        url,
+        authorization: init.headers["Authorization"],
+        body: JSON.parse(init.body ?? "null"),
+      });
+      return { ok: true, status: 201, text: async () => "{}" };
+    };
+    return { fetch, uploads };
+  }
+
+  /** Writes a Claude Code memory file and its index, and returns the file's path. */
+  function writeClaudeMemory(
+    paths: ReturnType<typeof scratchPaths>,
+    text: string,
+  ): string {
+    const dir = join(paths.claudeProjects, "-home-dev-proj", "memory");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "MEMORY.md"), "- [Use pnpm](use-pnpm.md)\n");
+    const file = join(dir, "use-pnpm.md");
+    writeFileSync(file, text);
+    return file;
+  }
+
+  it("uploads a Claude Code memory file when memory capture is on", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const recorded = recordingMemoryUploads(plane);
+    const paths = scratchPaths();
+    const file = writeClaudeMemory(
+      paths,
+      "---\nname: use-pnpm\n---\nUse pnpm, not npm.\n",
+    );
+    const { host } = await boot(plane, paths, {
+      fetch: recorded.fetch,
+      memoryCapture: true,
+    });
+    await vi.waitFor(() => expect(recorded.uploads).toHaveLength(1), {
+      timeout: 2_000,
+    });
+    // The index file is not a memory, and the frontmatter is not sent.
+    expect(recorded.uploads).toEqual([
+      {
+        url: `${host.api_url}${MEMORY_UPLOAD_PATH}`,
+        authorization: `Bearer ${host.api_key}`,
+        body: {
+          host_enrollment_id: host.host_enrollment_id,
+          harness: "claude-code",
+          path: file,
+          statement: "Use pnpm, not npm.",
+        },
+      },
+    ]);
+  });
+
+  it("reads memory files only when TACHO_MEMORY_CAPTURE is 1", async () => {
+    try {
+      const offPlane = fakeControlPlane("etag-3");
+      const off = recordingMemoryUploads(offPlane);
+      const offPaths = scratchPaths();
+      writeClaudeMemory(offPaths, "Use pnpm, not npm.\n");
+      vi.stubEnv("TACHO_MEMORY_CAPTURE", "");
+      await boot(offPlane, offPaths, { fetch: off.fetch });
+
+      const onPlane = fakeControlPlane("etag-3");
+      const on = recordingMemoryUploads(onPlane);
+      const onPaths = scratchPaths();
+      writeClaudeMemory(onPaths, "Use pnpm, not npm.\n");
+      vi.stubEnv("TACHO_MEMORY_CAPTURE", "1");
+      await boot(onPlane, onPaths, { fetch: on.fetch });
+
+      // The second daemon has scanned and uploaded. The first builds no
+      // reader, so it has nothing that could upload later.
+      await vi.waitFor(() => expect(on.uploads).toHaveLength(1), {
+        timeout: 2_000,
+      });
+      expect(off.uploads).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

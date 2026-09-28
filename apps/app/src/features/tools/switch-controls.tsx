@@ -14,7 +14,7 @@
 // as a security event — before the confirming button, never after.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import { STARTER_CONSEQUENCE_TAGS } from "@/data/contracts/mandates";
+import { STARTER_IMPACTS } from "@/data/contracts/mandates";
 import {
   type KillSwitch,
   type KillSwitchBoard,
@@ -50,8 +50,8 @@ function loadsTargets(kind: KillSwitch["target"]["kind"]): kind is LoadedKind {
   );
 }
 
-/** A class switch names a consequence tag: one of the starter set, or one typed. */
-const TAG_OPTIONS: readonly PickerOption[] = STARTER_CONSEQUENCE_TAGS.map(
+/** A class switch names an impact: one of the starter set, or one typed. */
+const TAG_OPTIONS: readonly PickerOption[] = STARTER_IMPACTS.map(
   (tag) => ({ value: tag, label: tag }),
 );
 

@@ -175,7 +175,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           provider: "github",
           providerRepositoryId: connectionId,
           currentBindingId: repositoryBindingId,
-          role: "main",
+          // The only role a steering head carries.
+          role: "steering",
         });
       });
     });

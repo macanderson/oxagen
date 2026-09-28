@@ -9,14 +9,23 @@
  * wire is estimated by the reader.
  */
 import { z } from "zod";
-import { runPublicIdSchema } from "./run.list";
+import { RUN_LABEL_MAX, runPublicIdSchema } from "./run.list";
 import { costSchema, moneySchema } from "./spend.shared";
 
+/** The kinds the findings job writes (ADR-062, ADR-208). Mirrors `FINDING_KINDS` in the cost schema. */
 const findingKindSchema = z.enum([
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
 ]);
 
 const findingLevelSchema = z.enum(["tool", "agent", "operator", "workspace"]);
@@ -29,6 +38,22 @@ export const findingStatusSchema = z.enum(["open", "applied", "dismissed"]);
 const findingPublicIdSchema = z
   .string()
   .regex(/^fnd_[0-9a-z]+$/, "a finding public id (fnd_…)");
+
+/**
+ * A setting a finding's fix names, with the value it proposes and, when the
+ * findings job read it, the value in effect. A cache finding names a cache
+ * TTL (ADR-210).
+ */
+export const findingRecommendationSchema = z
+  .object({
+    setting: z.string().min(1),
+    value: z.union([z.string(), z.number()]),
+    current: z.union([z.string(), z.number()]).optional(),
+  })
+  .strict();
+export type FindingRecommendation = z.output<
+  typeof findingRecommendationSchema
+>;
 
 export const findingSchema = z
   .object({
@@ -44,6 +69,8 @@ export const findingSchema = z
       .strict(),
     why: z.string(),
     fix: z.string(),
+    /** The setting the fix names. Absent when the fix names none. */
+    recommendation: findingRecommendationSchema.optional(),
     /** Runs and calls the finding cites. */
     runs: z.number().int().positive(),
     calls: z.number().int().positive(),
@@ -59,6 +86,8 @@ export type Finding = z.output<typeof findingSchema>;
 const findingRunEvidenceSchema = z
   .object({
     runId: runPublicIdSchema,
+    /** The session name the Fleet board shows, or null when the run has none (#4571). */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
     startedAt: z.string().datetime(),
     calls: z.number().int().positive(),
     measuredTokens: z.number().int().nonnegative(),
@@ -108,7 +137,8 @@ export const findingRunCitationSchema = z
     runId: runPublicIdSchema,
     /**
      * True for a finding that cites the run as a whole
-     * (`cache_writes_never_read`). It pins no turn, and `frames` is empty.
+     * (`cache_writes_never_read`, `standing_context`, `model_class_fit`). It
+     * pins no turn, and `frames` is empty.
      */
     runLevel: z.boolean(),
     /**

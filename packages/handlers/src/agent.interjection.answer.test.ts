@@ -11,6 +11,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { type CapabilityContext, isHandlerError } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { agentInterjectionAnswer } from "@oxagen/oxagen/contracts/agent.interjection.answer";
+import type { RepositoryLinkOutput } from "@oxagen/oxagen/contracts/repository.link";
 import { schema } from "@oxagen/database";
 import { type InterjectBody, interjectBodySchema } from "@oxagen/tacho";
 
@@ -34,6 +35,8 @@ import {
   createAnswerInterjectionHandler,
   type InterjectionAnswerStore,
   type InterjectionAuditEvent,
+  INTERJECTION_LINK_LISTED_TEXT,
+  INTERJECTION_LINK_TEXT,
   INTERJECTION_RELEASE_TTL_MS,
   type InterjectionPathCalls,
   type LockedInterjection,
@@ -255,14 +258,26 @@ class MemoryStore implements InterjectionAnswerStore {
   }
 }
 
-const LINKED = {
-  bindingId: "rpb_0123456789abcdef012345",
-  connectionId: "con_0123456789abcdefghjkmn",
+/** The binding a repository linked already carries. */
+const BINDING_ID = "rpb_0123456789abcdef012345";
+
+const STEERING_PR = {
+  number: 42,
+  url: "https://github.com/acme/steering/pull/42",
+  reused: false,
+};
+
+/** link_repository's answer: it opened a steering PR, and bound nothing. */
+const LINKED: RepositoryLinkOutput = {
   fullName: "acme/api",
   defaultRef: "main",
-  role: "linked" as const,
-  linkedAt: NOW.toISOString(),
+  status: "proposed",
+  steeringPullRequest: STEERING_PR,
 };
+
+/** The row's answer when the link opened the steering PR. */
+const PROPOSED_ANSWER = (slug: string) =>
+  `Opened steering PR #42 to link acme/api to the workspace ${slug}: ${STEERING_PR.url}. Merge the steering PR to finish linking.`;
 
 const CREATED = {
   publicId: "ws_0123456789abcdefghjkmn",
@@ -270,13 +285,7 @@ const CREATED = {
   slug: "api",
   orgSlug: "acme",
   createdAt: NOW.toISOString(),
-  mainRepo: {
-    bindingId: "rpb_fedcba9876543210fedcba",
-    connectionId: "con_fedcba9876543210fedcba",
-    provider: "github" as const,
-    fullName: "acme/api",
-    defaultRef: "main",
-  },
+  steering_repo: { status: "provisioning" as const },
 };
 
 function fakePaths() {
@@ -439,7 +448,7 @@ describe("answer_interjection: answering", () => {
 describe("answer_interjection: the link path", () => {
   beforeEach(() => tenant("Admin"));
 
-  it("links the repository, records the answer with its path and receipt, and releases the host's hold", async () => {
+  it("opens a steering PR for the repository, records the answer with its path and receipt, and releases the host's hold", async () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
@@ -455,14 +464,18 @@ describe("answer_interjection: the link path", () => {
       commandIds: ["tcm_1"],
       receiptId: "rcp_test1",
       path: "link",
-      repository: { bindingId: LINKED.bindingId, fullName: "acme/api" },
+      repository: {
+        fullName: "acme/api",
+        bindingId: null,
+        steeringPullRequest: STEERING_PR,
+      },
       workspace: null,
     });
     expect(store.questions[0]).toMatchObject({
       path: "link",
       receiptId: "rcp_test1",
       answeredBy: USER,
-      answer: "Linked acme/api to the workspace core.",
+      answer: PROPOSED_ANSWER("core"),
     });
     expect(store.queued[0]?.payload).toMatchObject({
       interjection_id: "inj_0123456789abcdefghjkmn",
@@ -472,10 +485,14 @@ describe("answer_interjection: the link path", () => {
         source: "person",
         receipt_id: "rcp_test1",
         answered_by: USER_PUBLIC_ID,
-        binding_id: LINKED.bindingId,
         workspace_slug: "core",
       },
     });
+    // Nothing is bound until the steering PR merges, so the release names no
+    // binding and the host seals no `repo.bound`.
+    expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
+      "binding_id",
+    );
     expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
       "workspace_id",
     );
@@ -491,7 +508,7 @@ describe("answer_interjection: the link path", () => {
       path: "link",
       source: "person",
       receiptId: "rcp_test1",
-      bindingId: LINKED.bindingId,
+      steeringPullRequest: STEERING_PR.url,
       commandIds: ["tcm_1"],
     });
   });
@@ -501,10 +518,10 @@ describe("answer_interjection: the link path", () => {
     store.slug = "core-platform";
     await handlerFor(store)(pathInput(), OPERATOR);
     expect(store.questions[0]).toMatchObject({
-      answer: "Linked acme/api to the workspace core-platform.",
+      answer: PROPOSED_ANSWER("core-platform"),
     });
     expect(store.queued[0]?.payload).toMatchObject({
-      text: "A person linked this repository to the workspace core-platform. The session goes on under that workspace.",
+      text: "A person opened steering PR #42 to link this repository to the workspace core-platform. The link takes effect when the steering PR merges. The session goes on under that workspace.",
       interjection: { path: "link", workspace_slug: "core-platform" },
     });
   });
@@ -537,9 +554,9 @@ describe("answer_interjection: the link path", () => {
     expect(store.questions[0]?.answeredAt).toBeNull();
   });
 
-  it("takes the existing link when a retry finds the repository already linked", async () => {
+  it("answers with the existing binding when the repository is linked already", async () => {
     const store = new MemoryStore([repoQuestion()]);
-    store.links.push({ bindingId: LINKED.bindingId, fullName: "acme/api" });
+    store.links.push({ bindingId: BINDING_ID, fullName: "acme/api" });
     const paths = fakePaths();
     paths.link.mockRejectedValueOnce(
       new HandlerError({
@@ -549,11 +566,79 @@ describe("answer_interjection: the link path", () => {
       }),
     );
     const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
-    expect(out.repository).toEqual({
-      bindingId: LINKED.bindingId,
+    expect(agentInterjectionAnswer.output.parse(out).repository).toEqual({
+      bindingId: BINDING_ID,
       fullName: "acme/api",
+      steeringPullRequest: null,
     });
-    expect(store.questions[0]?.path).toBe("link");
+    expect(store.questions[0]).toMatchObject({
+      path: "link",
+      answer: "acme/api is linked to the workspace core already.",
+    });
+    expect(store.queued[0]?.payload).toMatchObject({
+      text: INTERJECTION_LINK_TEXT("core"),
+      interjection: { path: "link", binding_id: BINDING_ID },
+    });
+    expect(store.audits[0]?.detail).toMatchObject({ bindingId: BINDING_ID });
+    expect(store.audits[0]?.detail).not.toHaveProperty("steeringPullRequest");
+  });
+
+  it("answers a repository the steering record lists already with no steering PR and no binding", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    paths.link.mockResolvedValueOnce({
+      ...LINKED,
+      status: "listed",
+      steeringPullRequest: null,
+    });
+    const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
+    expect(agentInterjectionAnswer.output.parse(out).repository).toEqual({
+      fullName: "acme/api",
+      bindingId: null,
+      steeringPullRequest: null,
+    });
+    expect(store.questions[0]).toMatchObject({
+      answer:
+        "The steering record of the workspace core already lists acme/api. The next steering sync links it.",
+    });
+    expect(store.queued[0]?.payload).toMatchObject({
+      text: INTERJECTION_LINK_LISTED_TEXT("core"),
+    });
+    expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
+      "binding_id",
+    );
+    expect(store.audits[0]?.detail).not.toHaveProperty("bindingId");
+    expect(store.audits[0]?.detail).not.toHaveProperty("steeringPullRequest");
+  });
+
+  it("answers a retried link with the steering PR it found open", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    const reused = { ...STEERING_PR, reused: true };
+    paths.link.mockResolvedValueOnce({
+      ...LINKED,
+      steeringPullRequest: reused,
+    });
+    const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
+    expect(out.repository?.steeringPullRequest).toEqual(reused);
+    expect(store.questions[0]?.answer).toBe(PROPOSED_ANSWER("core"));
+  });
+
+  it("refuses when the link says linked but the store finds no binding (negative)", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    paths.link.mockRejectedValueOnce(
+      new HandlerError({
+        code: "conflict",
+        reason: "repository_already_linked",
+        message: "acme/api is already linked to this workspace",
+      }),
+    );
+    await expect(
+      handlerFor(store, { paths })(pathInput(), OPERATOR),
+    ).rejects.toSatisfy(conflict("repository_already_linked"));
+    expect(store.questions[0]?.answeredAt).toBeNull();
+    expect(store.queued).toEqual([]);
   });
 
   it("passes any other link refusal through and records nothing (negative)", async () => {
@@ -572,12 +657,19 @@ describe("answer_interjection: the link path", () => {
 
   it("leaves off a release the host's schema would refuse, and still records the answer (negative)", async () => {
     const store = new MemoryStore([repoQuestion()]);
-    const paths = fakePaths();
     // A binding id past the host's 64-character bound.
-    paths.link.mockResolvedValueOnce({
-      ...LINKED,
+    store.links.push({
       bindingId: `rpb_${"0".repeat(80)}`,
+      fullName: "acme/api",
     });
+    const paths = fakePaths();
+    paths.link.mockRejectedValueOnce(
+      new HandlerError({
+        code: "conflict",
+        reason: "repository_already_linked",
+        message: "acme/api is already linked to this workspace",
+      }),
+    );
     const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
     expect(out.path).toBe("link");
     expect(store.questions[0]?.path).toBe("link");
@@ -606,7 +698,9 @@ describe("answer_interjection: the link path", () => {
 describe("answer_interjection: the create path", () => {
   beforeEach(() => tenant("Admin"));
 
-  it("creates the workspace with the repository as its main one, and names both on the answer and the release", async () => {
+  // Since lane S1 (#4450) create_workspace binds no repository, so the
+  // create path sends no mainRepo and its answer names no binding.
+  it("creates the workspace without binding the repository, and names the workspace on the answer and the release", async () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     const out = await handlerFor(store, { paths })(
@@ -614,43 +708,39 @@ describe("answer_interjection: the create path", () => {
       OPERATOR,
     );
     expect(paths.create).toHaveBeenCalledWith(
-      {
-        name: "API",
-        slug: "api",
-        mainRepo: { provider: "github", owner: "acme", name: "api" },
-      },
+      { name: "API", slug: "api" },
       expect.objectContaining({ orgId: ORG, workspaceId: WORKSPACE }),
     );
     expect(paths.link).not.toHaveBeenCalled();
     expect(agentInterjectionAnswer.output.parse(out)).toMatchObject({
       path: "create",
       receiptId: "rcp_test1",
-      repository: {
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      },
+      repository: null,
       workspace: { publicId: CREATED.publicId, slug: "api" },
     });
     expect(store.questions[0]).toMatchObject({
       path: "create",
-      answer: "Created the workspace api for acme/api, with skills off.",
+      answer:
+        "Created the workspace api for acme/api, with skills off. The repository is not linked to it yet.",
     });
     expect(store.queued[0]?.payload).toMatchObject({
-      text: "A person created the workspace api for this repository. Its skills are off, so the session goes on without skills.",
+      text: "A person created the workspace api for this repository. The repository is not linked to it yet. Its skills are off, so the session goes on without skills.",
       interjection: {
         key: KEY,
         path: "create",
         source: "person",
-        binding_id: CREATED.mainRepo.bindingId,
         workspace_id: CREATED.publicId,
         workspace_slug: "api",
       },
     });
+    expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
+      "binding_id",
+    );
     expect(store.audits[0]?.detail).toMatchObject({
       path: "create",
-      bindingId: CREATED.mainRepo.bindingId,
       workspaceId: CREATED.publicId,
     });
+    expect(store.audits[0]?.detail).not.toHaveProperty("bindingId");
   });
 
   it("takes the workspace an earlier try made when a retry finds its slug taken", async () => {
@@ -664,41 +754,35 @@ describe("answer_interjection: the create path", () => {
       }),
     );
     const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
-      async () => ({
-        publicId: CREATED.publicId,
-        slug: "api",
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      }),
+      async () => ({ publicId: CREATED.publicId, slug: "api" }),
     );
     const out = await handlerFor(store, { paths, createdWorkspace })(
       pathInput({ path: "create", create: { name: "API", slug: "api" } }),
       OPERATOR,
     );
+    // The claim is the workspace this person made under the slug after the
+    // question was raised.
     expect(createdWorkspace).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WORKSPACE },
       {
         interjectionRowId: store.questions[0]?.id,
         slug: "api",
-        fullName: "acme/api",
+        createdById: USER,
       },
     );
     expect(out).toMatchObject({
       path: "create",
-      repository: {
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      },
+      repository: null,
       workspace: { publicId: CREATED.publicId, slug: "api" },
     });
     expect(store.questions[0]).toMatchObject({
       path: "create",
-      answer: "Created the workspace api for acme/api, with skills off.",
+      answer:
+        "Created the workspace api for acme/api, with skills off. The repository is not linked to it yet.",
     });
     expect(store.queued[0]?.payload).toMatchObject({
       interjection: {
         path: "create",
-        binding_id: CREATED.mainRepo.bindingId,
         workspace_id: CREATED.publicId,
         workspace_slug: "api",
       },
@@ -730,7 +814,7 @@ describe("answer_interjection: the create path", () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     paths.create.mockRejectedValueOnce(
-      new HandlerError({ code: "conflict", reason: "main_repo_claimed" }),
+      new HandlerError({ code: "not_found", reason: "org_not_found" }),
     );
     const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
       async () => null,
@@ -740,7 +824,9 @@ describe("answer_interjection: the create path", () => {
         pathInput({ path: "create", create: { name: "API", slug: "api" } }),
         OPERATOR,
       ),
-    ).rejects.toSatisfy(conflict("main_repo_claimed"));
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "org_not_found",
+    );
     expect(createdWorkspace).not.toHaveBeenCalled();
     expect(store.questions[0]?.answeredAt).toBeNull();
   });
@@ -1149,7 +1235,7 @@ describe("answerCommand", () => {
     source: "person" as const,
     receipt_id: "rcp_abc",
     answered_by: USER_PUBLIC_ID,
-    binding_id: LINKED.bindingId,
+    binding_id: BINDING_ID,
     workspace_slug: "core",
   };
 

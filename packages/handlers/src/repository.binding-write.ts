@@ -1,6 +1,7 @@
-// repository.binding-write.ts — the one writer of a NEW binding head, shared
-// by `create_workspace` (the main head, written with the workspace) and
-// `link_repository` (a linked head).
+// repository.binding-write.ts: the one writer of a NEW binding head, shared
+// by `create_workspace` (the steering head, written with the workspace) and
+// the steering sync (a linked head, once a steering PR that lists the
+// repository merges; see repository.link.write.ts).
 //
 // `bind_main_repository` keeps its own writer because it also repairs and
 // re-approves an EXISTING head in place; this one only ever adds a head.
@@ -14,10 +15,28 @@
 // something has, and only when there is none is a version 1 written.
 import { schema, type Tx } from "@oxagen/database";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 
-export type RepositoryHeadRole = "main" | "linked";
+/**
+ * The transaction-scoped advisory lock every writer of a workspace's binding
+ * heads takes, so each reads the heads the previous one committed. The
+ * writers are `bind_main_repository`, `link_repository`,
+ * `unlink_repository`, `set_production_branch`, and the steering
+ * provisioner's bind step. The key keeps its original spelling so a deploy
+ * that mixes old and new processes still serialises on one lock.
+ */
+export function workspaceRepositoriesLock(workspaceId: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
+}
+
+/**
+ * A head's role (`repository_binding_heads_role_check`). `steering` is the
+ * workspace's steering record source, of which it has one; `linked` is a code
+ * repository, of which it may have many. 20260927185600 moved every former
+ * `main` head to `steering` (ADR-212).
+ */
+export type RepositoryHeadRole = "linked" | "steering";
 
 /** The hosts a binding can name (`repository_bindings_provider_check`). */
 export type RepositoryProvider = "github" | "gitlab";
@@ -47,7 +66,12 @@ export interface NewRepositoryHead {
    * within one host, so the retained-version lookup filters on it too.
    */
   provider?: RepositoryProvider;
-  userId: string;
+  /**
+   * The person who asked for the head, or null when the steering sync writes
+   * it after a steering PR merged (ADR-212). The merge is the host's fact,
+   * and the merging account need not be an Oxagen user.
+   */
+  userId: string | null;
   now: Date;
 }
 

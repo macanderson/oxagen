@@ -38,6 +38,7 @@ import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.l
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { z } from "zod";
 import type { ContextPr } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
@@ -256,14 +257,24 @@ export async function readWorkspaceRepositories(
 }
 
 /**
- * Link a repository as one of the workspace's LINKED repositories. Names only
- * the repository, as the bind does and for the same reason: the installation
- * is the workspace's own. The handler refuses the workspace's main repository
- * (`conflict: main_repo`), a repository already linked
- * (`conflict: repository_already_linked`), another workspace's main
- * repository (`conflict: main_repo_claimed`, ADR-099), one the installation
- * cannot see (`not_found: repository_not_installed`), and a workspace with
- * no installation attached (`conflict: github_not_connected`).
+ * Propose linking a repository to the workspace (ADR-212). Names only the
+ * repository, as the bind does and for the same reason: the installation is
+ * the workspace's own. Nothing is bound here. `workspace.toml` on the steering
+ * repository decides which repositories are linked, so the handler opens a
+ * steering PR that adds the entry and answers `proposed` with it. `reused`
+ * says that PR was already open. When `workspace.toml` lists the repository
+ * already, it answers `listed` with no PR, and the next steering sync writes
+ * the link. The binding follows the merge either way.
+ *
+ * The handler refuses a workspace with no installation attached
+ * (`conflict: github_not_connected`), one with no steering repository to hold
+ * the steering record (`conflict: main_repo_unbound`), the workspace's own
+ * steering repository (`conflict: main_repo`), a repository already linked
+ * (`conflict: repository_already_linked`), another workspace's steering
+ * repository (`conflict: main_repo_claimed`, ADR-099), a `workspace.toml` that
+ * is present but does not read as `workspace/v1`
+ * (`conflict: workspace_toml_unreadable`), and a repository the installation
+ * cannot see (`not_found: repository_not_installed`).
  */
 export async function linkWorkspaceRepository(
   org: string,
@@ -280,21 +291,28 @@ export async function linkWorkspaceRepository(
     ? {
         ok: true,
         value: {
-          bindingId: result.value.bindingId,
           fullName: result.value.fullName,
           defaultRef: result.value.defaultRef,
-          linkedAt: result.value.linkedAt,
+          status: result.value.status,
+          steeringPullRequest: result.value.steeringPullRequest,
         },
       }
     : result;
 }
 
 /**
- * Unlink a linked repository by the binding id the list answered. The head
- * goes; every binding version stays, because runs admitted against it still
- * cite it. The main repository is refused (`conflict: main_repo_unlink_refused`)
- * and the section never offers it; a binding this workspace does not see is
- * `not_found: repository_not_linked`.
+ * Unlink a linked repository by the binding id the list answered (ADR-212).
+ * When `workspace.toml` lists the repository, the handler opens a steering PR
+ * that removes the entry and answers `proposed` with it. The link stays until
+ * the PR merges and the steering sync reads the new file. A link that predates
+ * the steering record has no entry to remove, so the handler deletes its head
+ * at once and answers `unlinked`. Every binding version stays either way,
+ * because runs admitted against it still cite it.
+ *
+ * The steering repository is refused (`conflict: main_repo_unlink_refused`)
+ * and the section never offers it. A binding this workspace does not see is
+ * `not_found: repository_not_linked`, and a `workspace.toml` that is present
+ * but does not read as `workspace/v1` is `conflict: workspace_toml_unreadable`.
  */
 export async function unlinkWorkspaceRepository(
   org: string,
@@ -309,7 +327,9 @@ export async function unlinkWorkspaceRepository(
         value: {
           bindingId: result.value.bindingId,
           fullName: result.value.fullName,
+          status: result.value.status,
           unlinkedAt: result.value.unlinkedAt,
+          steeringPullRequest: result.value.steeringPullRequest,
         },
       }
     : result;
@@ -562,5 +582,39 @@ export async function closeRepositoryChange(
   });
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
+    : result;
+}
+
+/**
+ * `promote_instruction_to_steering` as the page calls it before the platform
+ * registers it (#4518). The kernel answers `tool_not_registered` today, and
+ * the same call reaches the handler once the capability lands. The schemas
+ * are the proposed shapes, and the platform contract replaces them.
+ */
+const promoteInstructionContract = {
+  name: "promote_instruction_to_steering",
+  input: z
+    .object({ repository_id: z.string().min(1), path: z.string().min(1) })
+    .strict(),
+  output: z.object({ proposal_id: z.string().min(1) }),
+};
+
+/**
+ * Promote an instruction file that drifted in a code repository into the
+ * steering repo. The platform opens a steering proposal from the file, and
+ * the answer names it.
+ */
+export async function promoteInstructionToSteering(
+  org: string,
+  ws: string,
+  input: { repositoryId: string; path: string },
+): Promise<ActionResult<{ proposalId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, promoteInstructionContract, {
+    repository_id: input.repositoryId,
+    path: input.path,
+  });
+  return result.ok
+    ? { ok: true, value: { proposalId: result.value.proposal_id } }
     : result;
 }

@@ -48,6 +48,18 @@ import {
   type SessionRegistry,
 } from "./registry";
 import type { RepositoryRemote } from "./git-facts";
+import type { SessionSkills } from "./session-skills";
+import type {
+  MemoryRecall,
+  RecalledMemory,
+} from "./memory-capture/memory-recall";
+import {
+  notePolicyDenial,
+  notePrompt,
+  noteToolCall,
+  noteToolFailure,
+  reflectionAsk,
+} from "./memory-capture/reflection-ask";
 import {
   expireInterjection,
   INTERJECTION_TIMED_OUT_TEXT,
@@ -55,6 +67,12 @@ import {
   raiseInterjection,
   showsRefusedPrompt,
 } from "./interjection";
+import {
+  forgetRecallHints,
+  noteRecallHints,
+  readRepository,
+  recallScope,
+} from "./recall-hints";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -125,8 +143,11 @@ export interface HookHandlerDeps {
    * The repository a session runs in, read from its `origin` remote
    * (`readRepositoryRemote` in `./git-facts`): the digests the host looks
    * for in the bundle's `unbound_repo.bound_remote_digests`, and the name the
-   * create path proposes (#3941). Absent, or answering undefined, the host
-   * asks nothing.
+   * create path proposes (#3941). A memory recall sends the same digests and
+   * names files relative to the root it reads. A session reads it once, and
+   * again only when its `cwd` leaves that repository (`readRepository` in
+   * `./recall-hints`). Absent, or answering undefined, the host asks
+   * nothing, and a recall names no repository and no files.
    */
   repositoryRemote?: (cwd: string) => Promise<RepositoryRemote | undefined>;
   /**
@@ -136,6 +157,22 @@ export interface HookHandlerDeps {
    * alone.
    */
   cedar?: () => Promise<CedarRuntime | null>;
+  /**
+   * The host's skills folders (`sessionSkills` in `./session-skills`). A
+   * live start writes the verified bundle's skills where the session's
+   * harness reads them, and the session's end removes them. Absent, as in
+   * `tacho-hook`, no hook touches a skills folder.
+   */
+  skills?: SessionSkills;
+  /**
+   * Ask the control plane for the memories most relevant to a prompt
+   * (`createMemoryRecall` in `./memory-capture/memory-recall`). A live prompt
+   * of a harness that reads a prompt answer's context gets them after the
+   * operator's messages, within `ADDITIONAL_CONTEXT_MAX_CHARS`. It resolves
+   * with none on any failure or past its timeout. Absent, as in `tacho-hook`,
+   * no prompt recalls anything.
+   */
+  recallMemories?: MemoryRecall;
 }
 
 export interface HookReplay {
@@ -334,14 +371,10 @@ async function askAboutRepository(
     deps.repositoryRemote === undefined
   )
     return [];
-  let remote: RepositoryRemote | undefined;
-  try {
-    remote = await deps.repositoryRemote(record.cwd);
-  } catch {
-    // A failed read proves nothing about the repository, and the prompt it
-    // was read for must still go through.
-    remote = undefined;
-  }
+  // The read is shared with the memory recall, so a session that started one
+  // at an earlier hook reuses it. A failed read answers undefined, because
+  // it proves nothing about the repository and the prompt must go through.
+  const remote = await readRepository(record, deps.repositoryRemote);
   if (remote === undefined || isBound(clause, remote)) return [];
   return raiseInterjection(record, clause, remote, deps.now(), fields) ?? [];
 }
@@ -836,6 +869,83 @@ async function gitPushBasis(
   }
 }
 
+/**
+ * A `UserPromptSubmit`'s text, from `prompt` or, for a harness that sends it
+ * there, `user_input`, the way `normalizeHook` reads it.
+ */
+function promptText(input: HookInput): string | undefined {
+  const prompt = input["prompt"];
+  if (typeof prompt === "string") return prompt;
+  const userInput = input["user_input"];
+  return typeof userInput === "string" ? userInput : undefined;
+}
+
+/** What heads the memories a prompt's answer hands the agent. */
+export const RECALL_HEADING =
+  "Memories Oxagen recalled for this prompt, most relevant first:";
+
+/**
+ * The recalled memories as one block of a prompt's answer, with how many it
+ * holds, or undefined when none fits. `used` is how many characters the
+ * answer already carries. Memories go in their order, one line each with its
+ * whitespace collapsed. One that does not fit is left out, and a shorter one
+ * after it may still go.
+ */
+function recallContext(
+  memories: readonly RecalledMemory[],
+  used: number,
+): { text: string; count: number } | undefined {
+  const room =
+    ADDITIONAL_CONTEXT_MAX_CHARS -
+    used -
+    (used > 0 ? CONTEXT_JOINER.length : 0);
+  let text = RECALL_HEADING;
+  let count = 0;
+  for (const memory of memories) {
+    const statement = memory.statement.replace(/\s+/g, " ").trim();
+    if (statement.length === 0) continue;
+    const line = `\n- ${statement}`;
+    if (text.length + line.length > room) continue;
+    text += line;
+    count += 1;
+  }
+  return count > 0 ? { text, count } : undefined;
+}
+
+/**
+ * The harness whose skills folder a session reads, or undefined for a custom
+ * agent (`tacho hook --agent`), which reads none. The registry records a
+ * session with no harness as Claude Code's.
+ */
+function skillsHarness(record: SessionRecord): TachoHarness | undefined {
+  if (record.customAgent !== undefined) return undefined;
+  return record.harness ?? "claude-code";
+}
+
+/**
+ * Write the bundle's published skills for a starting session (#4458). Only a
+ * bundle whose signature the host verified places any, because the agent
+ * reads each skill as instructions.
+ */
+async function placeSessionSkills(
+  view: PolicyView,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+  env: Record<string, string | undefined>,
+): Promise<void> {
+  const skills = view.bundle.skills;
+  const harness = skillsHarness(record);
+  if (
+    deps.skills === undefined ||
+    harness === undefined ||
+    !view.verified ||
+    skills === undefined ||
+    skills.length === 0
+  )
+    return;
+  await deps.skills.place(harness, record.harnessSessionId, skills, env);
+}
+
 async function routeHook(
   raw: unknown,
   env: Record<string, string | undefined>,
@@ -918,6 +1028,21 @@ async function routeHook(
   ) {
     return { events: reopening, response: {}, record };
   }
+  // A memory recall names the session's repository, and the hook queue is
+  // serial, so a prompt must not wait on git. The read starts at the first
+  // live hook that carries a `cwd` and runs while the session works, and a
+  // prompt sends what it has settled. Only a session whose prompts recall
+  // starts one, so a host that recalls nothing runs no extra git.
+  if (
+    replay === undefined &&
+    !record.sealed &&
+    record.pendingTerminal !== true &&
+    input.hook_event_name !== "SessionEnd" &&
+    deps.recallMemories !== undefined &&
+    deps.repositoryRemote !== undefined &&
+    deliversMessages(record.harness, "UserPromptSubmit")
+  )
+    void readRepository(record, deps.repositoryRemote);
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
@@ -1002,6 +1127,11 @@ async function routeHook(
           record,
         };
       }
+      // The skills go in place before the start is answered, so the harness
+      // finds them as the session begins. A replayed start reaches a session
+      // that has been running since, so it places nothing.
+      if (replay === undefined)
+        await placeSessionSkills(view, record, deps, env);
       // What the agent was shown at this start, sealed into its chain beside
       // the start event (ADR-093): the bundle's manifest, and every steer
       // delivered with the prefix. A bundle from a control plane that signs
@@ -1067,12 +1197,48 @@ async function routeHook(
         deliversMessages(record.harness, input.hook_event_name)
           ? drainMessages(record, deps, events, notice?.length ?? 0)
           : [];
+      const delivered = [
+        ...(notice !== undefined ? [notice] : []),
+        ...messages.map((m) => m.text),
+      ];
+      // The memories most relevant to this prompt (#4458), after the
+      // operator's messages, in what room the answer has left. Only a live
+      // prompt whose answer the harness reads asks, so a replay, Stella, and
+      // Cursor never wait on the control plane for text nobody would read.
+      // The ask names the repository by its remote's digests, so the owner
+      // and host stay on the machine, and adds the tools and files the
+      // session used. It sends only what is already known, so the prompt
+      // never waits on git.
+      const recalled =
+        block === undefined &&
+        replay === undefined &&
+        deps.recallMemories !== undefined &&
+        deliversMessages(record.harness, input.hook_event_name)
+          ? recallContext(
+              await deps.recallMemories({
+                ...recallScope(record),
+                text: promptText(input) ?? "",
+              }),
+              delivered.join(CONTEXT_JOINER).length,
+            )
+          : undefined;
       // A person prompting supersedes a resume's continuation.
       if (block === undefined) record.control.resumeOwed = undefined;
+      // Only a prompt the agent received can correct it.
+      if (block === undefined) notePrompt(record, promptText(input));
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
+            ...(recalled !== undefined
+              ? {
+                  attrs: {
+                    ...draft.attrs,
+                    "oxagen.recall_digest": digestText(recalled.text),
+                    "oxagen.recalled_memories": String(recalled.count),
+                  },
+                }
+              : {}),
             body: {
               ...draft.body,
               policy_decision: block === undefined ? "allow" : "deny",
@@ -1092,8 +1258,8 @@ async function routeHook(
         };
       }
       const context = [
-        ...(notice !== undefined ? [notice] : []),
-        ...messages.map((m) => m.text),
+        ...delivered,
+        ...(recalled !== undefined ? [recalled.text] : []),
       ];
       return {
         events,
@@ -1113,6 +1279,10 @@ async function routeHook(
     case "PreToolUse": {
       const toolName = input.tool_name ?? "unknown";
       const toolInput = input.tool_input;
+      noteToolCall(record, toolName, toolInput);
+      // A recall names the tools and files the session used. A call with no
+      // tool name adds its file only, because "unknown" names no tool.
+      noteRecallHints(record, input.tool_name, toolInput);
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
@@ -1195,6 +1365,10 @@ async function routeHook(
           };
         }
       }
+      // A deny from the operator (a pause, a cancel, an interrupting steer)
+      // says nothing about how the run went, so only the policy's counts.
+      if (evaluation.decision === "deny" && evaluation.source !== "human")
+        notePolicyDenial(record, toolName);
       const facts = policyFacts(evaluation, currentView);
       const attrs = policyAttrs(evaluation, replay);
       const toolDrafts = normalizeHook(payload, env, {
@@ -1411,6 +1585,8 @@ async function routeHook(
     case "PostToolUse":
     case "PostToolUseFailure": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
+      if (input.hook_event_name === "PostToolUseFailure")
+        noteToolFailure(record, input.tool_name);
       if (operatorBlock(view, record) !== undefined)
         return { events, response: {}, record };
       const texts = drainMidTurn(input, record, deps, events, replay);
@@ -1445,9 +1621,29 @@ async function routeHook(
       // Claude Code ignores a StopFailure answer, so only Stop drains.
       if (input.hook_event_name === "StopFailure")
         return { events, response: {}, record };
+      // A run that showed trouble is asked once to record a reflection
+      // (`memory-capture/reflection-ask.ts`). A custom agent speaks Claude
+      // Code's hooks but may have no Oxagen MCP server, so it is not asked.
+      // A subagent's hook is not the session's turn end, as in
+      // `drainMidTurn`, so it leaves the ask for the main agent's Stop.
+      const ask =
+        input.agent_id !== undefined
+          ? undefined
+          : reflectionAsk(record, {
+              harness:
+                record.customAgent !== undefined
+                  ? undefined
+                  : (record.harness ?? "claude-code"),
+              stopHookActive: input["stop_hook_active"] === true,
+              replayed: replay !== undefined,
+            });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.
-      const texts = drainMidTurn(input, record, deps, events, replay);
+      // The ask goes last, and its length is held back from the steers.
+      const texts = [
+        ...drainMidTurn(input, record, deps, events, replay, ask?.length ?? 0),
+        ...(ask !== undefined ? [ask] : []),
+      ];
       return {
         events,
         response:
@@ -1461,6 +1657,11 @@ async function routeHook(
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       deps.registry.seal(record);
+      // The record outlives the session, so its recall hints go now.
+      forgetRecallHints(record);
+      const harness = skillsHarness(record);
+      if (deps.skills !== undefined && harness !== undefined)
+        await deps.skills.remove(harness, record.harnessSessionId, env);
       return { events, response: {}, record };
     }
 

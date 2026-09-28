@@ -57,6 +57,9 @@
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
+  SYSTEM_CONTEXT_PARTS_MAX,
+  systemContextPartSchema,
+  type SystemContextPart,
 } from "@oxagen/tacho";
 import { clickhouse } from "./clickhouse";
 
@@ -84,6 +87,65 @@ export interface ModelCallFrameRow {
   /** The micro-USD the frame's own record carries; null when it carries none. */
   reportedCostMicros: string | null;
   basis: CostFrameBasis;
+  /**
+   * The chain a wrapped frame was recorded on (`session_uuid`), which is the
+   * root session for a call on the root's own chain. Absent on a gateway
+   * frame, which has no chain.
+   */
+  sessionUuid?: string;
+  /**
+   * The tokens the call spent on tool definitions, context frames, and
+   * steering, as the recorder measured them on the frame (#4493). Each is
+   * null when the frame carried none. A ledger frame carries none: the gateway
+   * does not measure them. They ride this read so the rollup sums them over
+   * exactly the calls it prices.
+   */
+  toolDefinitionTokens: number | null;
+  contextFrameTokens: number | null;
+  steeringTokens: number | null;
+  /**
+   * The digest over the ordered parts of the call's system context
+   * (`system_context_digest`). Absent on a ledger frame and on a wrapped frame
+   * that carried none.
+   */
+  systemContextDigest?: string;
+  /**
+   * The parts that digest covers (`system_context_parts`), in request order.
+   * Absent when the frame listed none, which is usual: the recorder lists them
+   * once per digest, and a reader takes a frame's parts from the latest frame
+   * at or before it whose digest matches and whose list is set. A list that
+   * does not parse is absent too.
+   */
+  systemContextParts?: readonly SystemContextPart[];
+}
+
+const SYSTEM_CONTEXT_PARTS = systemContextPartSchema
+  .array()
+  .max(SYSTEM_CONTEXT_PARTS_MAX);
+
+/**
+ * A frame's system context parts from the column's JSON text, or undefined
+ * when the column is empty or the text is not a valid list.
+ */
+export function parseSystemContextParts(
+  text: string | null | undefined,
+): readonly SystemContextPart[] | undefined {
+  if (text === null || text === undefined || text === "") return undefined;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const parsed = SYSTEM_CONTEXT_PARTS.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** A count ClickHouse returns for a Nullable column, or null when absent. */
+function nullableCount(
+  value: string | number | null | undefined,
+): number | null {
+  return value === null || value === undefined ? null : Number(value);
 }
 
 /**
@@ -311,6 +373,10 @@ function runSessions(run: {
  * A wrapped frame carries the call's web searches as `server_tool_request`,
  * priced per request. Web fetches are not counted: the vendor does not charge
  * per fetch (#3721).
+ *
+ * A wrapped frame also names the chain it was recorded on. `ts` keeps
+ * milliseconds, so two chains' calls can share one instant, and the findings
+ * job tells their requests apart by the chain.
  */
 export async function readModelCallFrames(args: {
   orgId: string;
@@ -371,6 +437,9 @@ export async function readModelCallFrames(args: {
       serverToolRequests: 0,
       reportedCostMicros: r.cost_micros,
       basis: "gateway_observed",
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
     }));
   }
 
@@ -387,13 +456,20 @@ export async function readModelCallFrames(args: {
         toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
         ${FRAME_REASONING} AS reasoning,
         ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
-        c.cost_usd_micros AS cost_micros
+        c.cost_usd_micros AS cost_micros,
+        toString(c.session_uuid) AS session_uuid,
+        c.tool_definition_tokens AS tool_definition_tokens,
+        c.context_frame_tokens AS context_frame_tokens,
+        c.steering_tokens AS steering_tokens,
+        c.system_context_digest AS system_context_digest,
+        c.system_context_parts AS system_context_parts
       FROM (
         SELECT
-          ts, seq, model, provider, input_tokens, output_tokens,
+          ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
-          message_id
+          message_id, tool_definition_tokens, context_frame_tokens,
+          steering_tokens, system_context_digest, system_context_parts
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -460,22 +536,39 @@ export async function readModelCallFrames(args: {
     reasoning: string;
     server_tool_request: string;
     cost_micros: string | null;
+    session_uuid: string;
+    tool_definition_tokens?: string | number | null;
+    context_frame_tokens?: string | number | null;
+    steering_tokens?: string | number | null;
+    system_context_digest?: string | null;
+    system_context_parts?: string | null;
   };
   const rows = (await result.json()) as Row[];
-  return rows.map((r) => ({
-    at: r.at,
-    model: r.model,
-    provider: r.provider === "" ? null : r.provider,
-    inputUncached: Number(r.input_uncached),
-    cacheRead: Number(r.cache_read),
-    cacheWrite5m: Number(r.cache_write_5m),
-    cacheWrite1h: Number(r.cache_write_1h),
-    output: Number(r.output),
-    reasoning: Number(r.reasoning),
-    serverToolRequests: Number(r.server_tool_request),
-    reportedCostMicros: r.cost_micros,
-    basis: "client_attested",
-  }));
+  return rows.map((r): ModelCallFrameRow => {
+    const parts = parseSystemContextParts(r.system_context_parts);
+    return {
+      at: r.at,
+      model: r.model,
+      provider: r.provider === "" ? null : r.provider,
+      inputUncached: Number(r.input_uncached),
+      cacheRead: Number(r.cache_read),
+      cacheWrite5m: Number(r.cache_write_5m),
+      cacheWrite1h: Number(r.cache_write_1h),
+      output: Number(r.output),
+      reasoning: Number(r.reasoning),
+      serverToolRequests: Number(r.server_tool_request),
+      reportedCostMicros: r.cost_micros,
+      basis: "client_attested",
+      sessionUuid: r.session_uuid,
+      toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
+      contextFrameTokens: nullableCount(r.context_frame_tokens),
+      steeringTokens: nullableCount(r.steering_tokens),
+      ...(r.system_context_digest
+        ? { systemContextDigest: r.system_context_digest }
+        : {}),
+      ...(parts === undefined ? {} : { systemContextParts: parts }),
+    };
+  });
 }
 
 /**
@@ -561,6 +654,87 @@ export async function readTachoToolCallFrames(args: {
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
   }));
+}
+
+/**
+ * One step of a wrapped run as the no-progress check reads it, in the run's
+ * order: a hook tool call, or a file the harness said changed. A file change
+ * carries nothing else, since the check only needs to know one happened.
+ */
+export type ProgressFrameRow =
+  | { fileChanged: true }
+  | {
+      /** Null when the frame names no tool. */
+      name: string | null;
+      /** Null when the hook recorded no digest. */
+      inputDigest: string | null;
+      outputDigest: string | null;
+      /** The classifier's flag; null when it said nothing. */
+      isMutating: boolean | null;
+    };
+
+/**
+ * A wrapped run's hook tool calls and `oxagen:file_changed` frames, oldest
+ * first, in the run's own workspace and sessions (#4490). The no-progress
+ * check counts identical calls in a row, and a file change between two of
+ * them ends the row: the second call may read what the change wrote. The
+ * rollup's read ({@link readTachoToolCallFrames}) leaves file changes out,
+ * so the check reads its own.
+ */
+export async function readTachoProgressFrames(args: {
+  orgId: string;
+  workspaceId: string;
+  rootSessionUuid: string;
+  /** The run's sessions, root first ({@link FrameRunRef}). */
+  sessionUuids: readonly string[];
+}): Promise<ProgressFrameRow[]> {
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT
+        kind               AS kind,
+        tool_name          AS name,
+        tool_input_digest  AS input_digest,
+        tool_output_digest AS output_digest,
+        tool_is_mutating   AS is_mutating
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND root_session_uuid = {rootSessionUuid:UUID}
+        AND ${RUN_SESSIONS}
+        AND (
+          (kind = 'tool_call' AND source = 'hook')
+          OR kind = 'oxagen:file_changed'
+        )
+      ORDER BY ts, seq
+    `,
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      rootSessionUuid: args.rootSessionUuid,
+      sessionUuids: runSessions(args),
+    },
+    format: "JSONEachRow",
+  });
+  type Row = {
+    kind: string;
+    name: string;
+    input_digest: string;
+    output_digest: string;
+    is_mutating: boolean | null;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map(
+    (r): ProgressFrameRow =>
+      r.kind === "tool_call"
+        ? {
+            name: r.name === "" ? null : r.name,
+            inputDigest: r.input_digest === "" ? null : r.input_digest,
+            outputDigest: r.output_digest === "" ? null : r.output_digest,
+            isMutating: r.is_mutating,
+          }
+        : { fileChanged: true },
+  );
 }
 
 /** One hook-recorded tool call of a wrapped run, as the findings job reads it. */

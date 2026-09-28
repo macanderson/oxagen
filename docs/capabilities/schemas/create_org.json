@@ -100,26 +100,33 @@
         ]
       },
       "workspace": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 120
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 40,
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              }
+            },
+            "required": [
+              "name",
+              "slug"
+            ],
+            "additionalProperties": false
           },
-          "slug": {
-            "type": "string",
-            "minLength": 2,
-            "maxLength": 40,
-            "x-server-validated": true,
-            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          {
+            "type": "null"
           }
-        },
-        "required": [
-          "name",
-          "slug"
         ],
-        "additionalProperties": false,
         "default": {
           "name": "Default",
           "slug": "default"
@@ -154,20 +161,27 @@
         "type": "string"
       },
       "workspace": {
-        "type": "object",
-        "properties": {
-          "publicId": {
-            "type": "string"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "publicId": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "publicId",
+              "slug"
+            ],
+            "additionalProperties": false
           },
-          "slug": {
-            "type": "string"
+          {
+            "type": "null"
           }
-        },
-        "required": [
-          "publicId",
-          "slug"
-        ],
-        "additionalProperties": false
+        ]
       }
     },
     "required": [

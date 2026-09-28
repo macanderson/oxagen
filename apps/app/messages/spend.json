@@ -47,7 +47,29 @@
         "cache_writes_never_read": "Cache written and never read",
         "duplicate_tool_calls": "Duplicate tool calls",
         "repeated_shell_commands": "Repeated shell commands",
-        "unpaged_results": "Unpaged results"
+        "unpaged_results": "Unpaged results",
+        "spin_loops": "Spin loops",
+        "standing_context": "Standing context",
+        "idle_cache_rewrites": "Idle cache rewrites",
+        "cache_busts": "Cache busts",
+        "model_class_fit": "Model class fit",
+        "repeated_instructions": "Repeated instructions",
+        "recurring_runs": "Recurring runs",
+        "spend_with_no_outcome": "Spend with no outcome"
+      },
+      "kindDefinition": {
+        "cache_writes_never_read": "A run wrote a prompt cache that no later request read.",
+        "duplicate_tool_calls": "Every tool call in the request repeated an earlier call in the run with the same input and the same result.",
+        "repeated_shell_commands": "Every shell command in the request repeated an earlier command in the run with the same input and the same result.",
+        "unpaged_results": "A tool returned more than 20,000 tokens in one result where a 4,000-token page would do.",
+        "spin_loops": "An agent repeated the same call 20 or more times in a row in one run and got the same result each time.",
+        "standing_context": "Every request in a run re-read the same prefix of system prompt, tool definitions, and steering.",
+        "idle_cache_rewrites": "A request after an idle gap longer than the cache lifetime wrote the whole prefix again.",
+        "cache_busts": "A change near the top of the prefix made a request write the whole cache again with no idle gap.",
+        "model_class_fit": "A run that changed no file is repriced on a smaller model class as an estimate.",
+        "repeated_instructions": "The same instruction reached 3 or more runs as prompt text instead of as a steering record.",
+        "recurring_runs": "A run started with the same prompt as 4 or more other runs, made no mutating call, and changed no file.",
+        "spend_with_no_outcome": "A run ended with nothing kept because its PR closed unmerged, its change was reverted, or it stopped mid-step."
       },
       "level": {
         "tool": "tool",
@@ -73,8 +95,9 @@
         "counterfactual": "What the alternative would have cost",
         "runs": "The cited runs with the largest saving",
         "runsEmpty": "The evidence lists no run for this finding.",
+        "untitled": "Untitled session",
         "columns": {
-          "run": "Run",
+          "run": "Session name",
           "startedAt": "Started",
           "measured": "Measured",
           "counterfactual": "Alternative estimate"
@@ -251,7 +274,8 @@
       "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",
       "none": "No run in this period shows waste in its frames.",
       "openRun": "Open the run",
-      "showFrames": "Show the frames"
+      "showFrames": "Show the frames",
+      "untitled": "Untitled session"
     },
     "budgets": {
       "title": "Budgets",
@@ -683,6 +707,44 @@
         "publishSteering": "Publish steering between runs",
         "resizeBudget": "Resize the budget before it stops a run",
         "selfReported": "Move the last self-reported agents behind the gateway"
+      }
+    },
+    "ranking": {
+      "title": "Operator ranking",
+      "note": "Operators by unproductive spend for this period, highest first. Each figure links to its definition.",
+      "managersOnly": "An org Owner or Admin, or the workspace Owner, can read the operator ranking. Ask one of them for the figures.",
+      "empty": "No run has unproductive spend in this period.",
+      "mixedCurrency": "This period holds unproductive spend in more than one currency. The ranking adds up one currency, so Oxagen built no ranking.",
+      "unnamed": "Unnamed operator",
+      "unattributed": "Runs with no operator",
+      "total": "Workspace total",
+      "hidden": "Hidden",
+      "hiddenNote": "Pseudonyms are on. The unproductive share, the run count, and the runs are hidden, because each could match a pseudonym to a name in the By operator table.",
+      "runsBehind": "{count, plural, one {# run} other {# runs}}",
+      "definitionsTitle": "Definitions",
+      "columns": {
+        "rank": "Rank",
+        "operator": "Operator",
+        "unproductive": "Unproductive spend",
+        "shareOfTotal": "Share of total",
+        "unproductiveShare": "Unproductive share",
+        "runs": "Runs",
+        "runsBehind": "Runs behind"
+      },
+      "definitions": {
+        "unproductive": "The cost of the frames Oxagen marked unproductive in this operator's runs during the period. A frame that two checks mark counts once.",
+        "shareOfTotal": "This operator's unproductive spend divided by the workspace total for the period.",
+        "unproductiveShare": "This operator's unproductive spend divided by everything this operator's runs cost in the period.",
+        "runs": "The runs in the period with at least one frame marked unproductive."
+      },
+      "pseudonyms": {
+        "on": "Pseudonyms on. Each operator shows as a stable pseudonym.",
+        "off": "Pseudonyms off. Each operator shows by name.",
+        "turnOn": "Turn on pseudonyms",
+        "turnOff": "Turn off pseudonyms",
+        "saving": "Saving",
+        "denied": "Only an org Owner or Admin can change this setting.",
+        "failed": "The setting did not save. Try again."
       }
     },
     "toolChart": {

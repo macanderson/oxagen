@@ -107,6 +107,47 @@ export const INCIDENT_KINDS = [
   "unknown_model_cost",
 ] as const;
 
+/**
+ * How a token source count was obtained (ADR-062). `reported` is a count the
+ * harness or the vendor stated. `estimated` is one Oxagen computed from the
+ * bytes it saw.
+ */
+export const TOKEN_SOURCE_BASES = ["reported", "estimated"] as const;
+
+/**
+ * The kinds of part a model call's system context is made of: a block of the
+ * system prompt, one tool definition, one steering record, or one context
+ * frame.
+ */
+export const SYSTEM_CONTEXT_PART_KINDS = [
+  "system",
+  "tool",
+  "steering",
+  "context",
+] as const;
+
+/** The most parts one frame lists. A context with more lists none. */
+export const SYSTEM_CONTEXT_PARTS_MAX = 1024;
+
+/**
+ * One part of a model call's system context, as ids, digests, and counts.
+ * The text never travels. `name` is the tool's name, the steering record's
+ * id, or the system block's position. `provider` is set on a tool part: the
+ * MCP server that serves it, or `builtin`. `digest` is over the part's
+ * canonical JSON, so an unchanged part keeps its digest from call to call.
+ */
+export const systemContextPartSchema = z
+  .object({
+    kind: z.enum(SYSTEM_CONTEXT_PART_KINDS),
+    name: short,
+    provider: short.optional(),
+    digest,
+    tokens: u32,
+  })
+  .strict();
+
+export type SystemContextPart = z.output<typeof systemContextPartSchema>;
+
 // ---------------------------------------------------------------------------
 // Fact groups. A member appears in exactly one group; its name is its column.
 // ---------------------------------------------------------------------------
@@ -226,6 +267,36 @@ export const modelFacts = z.object({
    * Absent when Oxagen did not proxy the call or the request carried none.
    */
   request_effort: short.optional(),
+  /**
+   * The three token sources of ADR-062, each beside the basis it was
+   * obtained on. Tool definitions are the tools the request declared.
+   * Context frames are the frames a harness injected as context. Steering is
+   * the steering records the session was delivered. An absent count means
+   * nothing measured it, never zero.
+   */
+  tool_definition_tokens: u32.optional(),
+  tool_definition_tokens_basis: z.enum(TOKEN_SOURCE_BASES).optional(),
+  context_frame_tokens: u32.optional(),
+  context_frame_tokens_basis: z.enum(TOKEN_SOURCE_BASES).optional(),
+  steering_tokens: u32.optional(),
+  steering_tokens_basis: z.enum(TOKEN_SOURCE_BASES).optional(),
+  /**
+   * One digest over the ordered parts of the system context: each part's
+   * kind, name, and digest. Two calls with the same system context carry the
+   * same digest, and a change to any one part changes it.
+   */
+  system_context_digest: digest.optional(),
+  /**
+   * The parts `system_context_digest` covers, in request order. The Claude
+   * Code recorder lists them on the first call of each turn and on any call
+   * whose digest differs from the last list it sent. A reader takes a frame's
+   * parts from the latest frame at or before it whose `system_context_digest`
+   * matches and whose list is set.
+   */
+  system_context_parts: z
+    .array(systemContextPartSchema)
+    .max(SYSTEM_CONTEXT_PARTS_MAX)
+    .optional(),
 });
 
 /** Prompt and response facts (data-model section 2.8). */

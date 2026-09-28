@@ -47,7 +47,7 @@ export const workspaces = workspaceSchema.table(
     // merges it atomically via jsonb `||`.
     promptConfig: jsonb("prompt_config").notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
-    // Consequence tag → the IAM org role names that may grant, change or
+    // Impact → the IAM org role names that may grant, change or
     // revoke a mandate for that consequence (ADR-059 decision 1). Overrides
     // only: a tag with no entry takes DEFAULT_CONSEQUENCE_ROLES from
     // @oxagen/oxagen/mandates/schemas. Written by update_workspace_settings.
@@ -318,6 +318,84 @@ export const tachoSessionPolicy = workspaceSchema.table(
     modelDenyCheck: check(
       "tacho_session_policy_model_deny_check",
       sql`jsonb_typeof(${t.modelDeny}) = 'array'`,
+    ),
+  }),
+);
+
+// Per-workspace no-progress limit (spend spec, detector 1): the owning team's
+// rule that a run calling the same tool with the same input and getting the
+// same output N times in a row has stopped making progress. It covers every
+// run of the workspace, wrapped or in-app, so it is its own row and not a
+// clause of tacho_session_policy. The limit ships with no default count:
+// absent row or NULL `repeats` ⇒ no check. `cost.run-progress` runs the
+// check (packages/billing/src/no-progress-store.ts) and records each hit in
+// cost.no_progress_hits.
+export const noProgressPolicy = workspaceSchema.table(
+  "no_progress_policy",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    // The calls in a row that make a hit, the first one included. NULL = no
+    // limit set.
+    repeats: integer("repeats"),
+    // "observe" = record each hit and let the run continue; "enforced" =
+    // also pause the run at the next checkpoint, on governed calls.
+    mode: text("mode").notNull().default("observe"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgWorkspaceIdx: index("no_progress_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    modeCheck: check(
+      "no_progress_policy_mode_check",
+      sql`${t.mode} IN ('observe', 'enforced')`,
+    ),
+    // One call and one repeat of it is the smallest loop there is.
+    repeatsCheck: check(
+      "no_progress_policy_repeats_check",
+      sql`${t.repeats} IS NULL OR ${t.repeats} >= 2`,
+    ),
+  }),
+);
+
+// Per-workspace operator ranking setting (spend spec, Operator ranking). With
+// `pseudonyms` on, the ranking shows a stable pseudonym in place of each
+// operator's name, for a workspace where a works council or local law
+// requires it. No row means off. `pseudonym_salt` is written once with the
+// row and keyed into each pseudonym's HMAC, so a pseudonym stays the same
+// across changes and cannot be read back by hashing a known principal id.
+// packages/handlers/src/lib/operator-pseudonyms.ts reads and writes it.
+export const operatorRankingPolicy = workspaceSchema.table(
+  "operator_ranking_policy",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    pseudonyms: boolean("pseudonyms").notNull().default(false),
+    pseudonymSalt: uuid("pseudonym_salt")
+      .notNull()
+      .default(sql`gen_random_uuid()`),
+    // The user who last changed the setting.
+    updatedById: uuid("updated_by_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgWorkspaceIdx: index("operator_ranking_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
     ),
   }),
 );

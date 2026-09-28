@@ -36,6 +36,7 @@
         "model": null,
         "machine": null,
         "harness": null,
+        "repositoryUnlinked": false,
         "name": "Release notes",
         "summary": null
       },

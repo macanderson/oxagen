@@ -12,11 +12,13 @@ import type { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.eviden
 import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import type { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import type { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
 import type {
   FleetSpend,
   GatewayPolicy,
+  OperatorRanking,
   PriceBook,
   SpendBudgets,
   SpendDrill,
@@ -118,7 +120,41 @@ export function toSpendWaste(
       cause: cause.cause,
       wasted: cause.wasted,
       runs: cause.runs,
-      provingRuns: cause.runIds,
+      provingRuns: cause.provingRuns.map((run) => ({
+        runId: run.runId,
+        name: run.name,
+      })),
+    })),
+  };
+}
+
+/**
+ * The ranking as the operator tab reads it: every figure copied whole. A
+ * pseudonym row carries no key and no facts, and the view keeps it that way.
+ */
+export function toOperatorRanking(
+  out: ContractOutput<typeof spendOperatorRanking>,
+): z.input<typeof OperatorRanking> {
+  return {
+    period: out.period,
+    pseudonyms: out.pseudonyms,
+    unproductive: out.unproductive,
+    unattributed: out.unattributed,
+    operators: out.operators.map((row) => ({
+      rank: row.rank,
+      operator:
+        row.operator.kind === "named"
+          ? {
+              kind: "named",
+              key: row.operator.key,
+              facts: row.operator.facts,
+            }
+          : { kind: "pseudonym", pseudonym: row.operator.pseudonym },
+      unproductive: row.unproductive,
+      shareOfTotal: row.shareOfTotal,
+      unproductiveShare: row.unproductiveShare,
+      runs: row.runs,
+      topRuns: row.topRuns,
     })),
   };
 }
@@ -141,6 +177,9 @@ function toFinding(finding: FindingOut): z.input<typeof SpendFinding> {
     window: finding.window,
     why: finding.why,
     fix: finding.fix,
+    ...(finding.recommendation === undefined
+      ? {}
+      : { recommendation: finding.recommendation }),
     runs: finding.runs,
     calls: finding.calls,
   };
@@ -178,6 +217,7 @@ export function toSpendFindingEvidence(
     counterfactual: out.evidence.counterfactual,
     runs: out.evidence.runs.map((run) => ({
       runId: run.runId,
+      name: run.name,
       startedAt: run.startedAt,
       calls: run.calls,
       measuredTokens: run.measuredTokens,

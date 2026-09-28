@@ -7,7 +7,9 @@
 // org owner approved — not whatever GitHub reports as the default branch
 // today. Every operation runs with the workspace's own token (ADR-020:
 // installation token, then the connecting user's OAuth token, then the
-// local-only PAT).
+// local-only PAT). A steering repository the provisioner created is the one
+// exception: only the Oxagen Steering app can reach it, so the seam mints that
+// app's installation token for it.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -20,9 +22,13 @@ import {
   type GitHubPathCommit,
   type GitHubRest,
 } from "@oxagen/github";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
+import {
+  GITHUB_STEERING_PROVIDER,
+  mintSteeringInstallationToken,
+} from "./lib/steering-app";
 
 /**
  * The repository hosts steering can publish through. A Context PR on GitHub is
@@ -105,6 +111,12 @@ interface SteeringRepositoryFields {
   defaultBranch: string;
 }
 
+/** One file in a commit's tree: its path, and its git blob id. */
+export interface SteeringTreeEntry {
+  path: string;
+  blob: string;
+}
+
 /**
  * The port every steering handler publishes through (ADR-061). The method
  * names are GitHub's because GitHub was the first host; a GitLab
@@ -136,12 +148,16 @@ export interface SteeringHost {
     path: string,
     ref: string,
   ): Promise<GitHubPathCommit | null>;
-  /** Create the branch from `fromBranch`; an existing branch is reused. */
+  /**
+   * Create the branch from `fromBranch`; an existing branch is reused. With
+   * `at`, the branch starts at that commit instead of at `fromBranch`'s head.
+   * The host creates it there in one call, so nothing moves it in between.
+   */
   ensureBranch(
     repo: SteeringRepository,
     branch: string,
     fromBranch: string,
-    options?: { exclusive: boolean },
+    options?: { exclusive: boolean; at?: string },
   ): Promise<void>;
   /** Remove omitted files from a proposal's owned paths before writing its replacement. */
   reconcileFiles(
@@ -202,8 +218,23 @@ export interface SteeringHost {
     dir: string,
   ): Promise<string[]>;
   /**
+   * Every file at `commit`, with its git blob id. A publish reads the merged
+   * tree through this, and skips fetching a file whose blob it already holds.
+   */
+  listTree(
+    repo: SteeringRepository,
+    commit: string,
+  ): Promise<SteeringTreeEntry[]>;
+  /**
+   * Tag the commit `sha` as `name`. A tag already at `sha` is left as it is,
+   * so a publish that runs again succeeds. A tag at another commit refuses
+   * with `tag_exists`.
+   */
+  createTag(repo: SteeringRepository, name: string, sha: string): Promise<void>;
+  /**
    * Every path the commit `head` changes against `base`, as its pull request
-   * shows them; a rename names both its paths.
+   * shows them; a rename names both its paths. Refuses with `too_many_files`
+   * at 300 files, where the host's list may be cut short.
    */
   changedPaths(
     repo: SteeringRepository,
@@ -247,7 +278,8 @@ export interface SteeringHost {
   /**
    * What the commit `head` does to each path against `base`. A rename is a
    * removal of the old path and an addition of the new one, because the stamp
-   * and the ledger speak of paths, not of moves.
+   * and the ledger speak of paths, not of moves. Refuses with
+   * `too_many_files` at 300 files, as {@link SteeringHost.changedPaths} does.
    */
   changedFiles(
     repo: SteeringRepository,
@@ -279,18 +311,36 @@ export interface SteeringHost {
    * Bring the steering PR's branch up to date with the production branch.
    * Refuses with `head_moved` when the branch is not at `expectedHead`, and
    * with `update_conflict` when the production branch does not merge in
-   * cleanly. Answers the branch's new head.
+   * cleanly. Answers the branch's new head. When the update made a merge
+   * commit, it also answers that commit's parents in order.
+   *
+   * GitHub merges `base`, the production branch head Oxagen read, so the
+   * parents are `expectedHead` and then `base`. GitLab rebases onto the
+   * production branch as it is when the rebase runs. A rebase makes no merge
+   * commit, so `parents` is null there.
    */
   updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ): Promise<{ headSha: string }>;
-  /** Point `branch` at `sha`, discarding what came after it. */
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }>;
+  /**
+   * Point `branch` back at `to` while it still points at `from`, discarding
+   * the commits between them. The answer is false when the branch has moved
+   * off `from`: it holds a push Oxagen did not make, so it is left alone.
+   * GitHub checks and moves the ref in one step. GitLab has no guarded move,
+   * so it reads the branch first, and a push between the read and the reset
+   * is lost.
+   */
   resetBranch(
     repo: SteeringRepository,
     branch: string,
-    sha: string,
-  ): Promise<void>;
+    args: { from: string; to: string },
+  ): Promise<boolean>;
   /** The approvals the PR holds now, one per reviewer. */
   listApprovals(
     repo: SteeringRepository,
@@ -323,8 +373,11 @@ export interface SteeringChangedFile {
  * `userId` is the Oxagen user the host account is linked to, or null when
  * nobody linked it: an approval by a stranger to the workspace counts for
  * nothing. `commitSha` is the head the reviewer approved, or null when the
- * host does not say (GitLab), in which case the approval stands whatever the
- * head is now.
+ * host did not name one, in which case the approval stands whatever the head
+ * is now. GitLab never names one, so its adapter places each approval on the
+ * newest diff version GitLab recorded before `approved_at`, and never reports
+ * null. A GitLab project that keeps approvals on push, or an approval with no
+ * readable `approved_at`, refuses with `approvals_not_head_bound`.
  */
 export interface SteeringApproval {
   userId: string | null;
@@ -338,6 +391,29 @@ export type SteeringGitHub = SteeringHost;
 interface DeliveryConfig {
   owner?: unknown;
   repo?: unknown;
+  /**
+   * The Oxagen Steering app's installation id, on a `github_steering`
+   * connection the steering repo provisioner wrote.
+   */
+  installationId?: unknown;
+}
+
+/**
+ * The installation id on a `github_steering` connection's delivery config, as
+ * a positive integer. The provisioner writes a number. A string of digits
+ * reads too, because the settings-path GitHub connections store theirs as one.
+ */
+function steeringInstallationIdOf(
+  config: DeliveryConfig | null,
+): number | null {
+  const raw = config?.installationId;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 /**
@@ -377,6 +453,13 @@ export type SteeringConnection =
        */
       approvedFullName: string;
       approvedDefaultRef: string;
+      /**
+       * Set when the head hangs from a `github_steering` connection: the
+       * steering repo provisioner created the repository through the Oxagen
+       * Steering app, and only that app's installation can reach it. The seam
+       * then mints that installation's token, not the workspace's own.
+       */
+      steeringInstallationId?: number;
     }
   | {
       /**
@@ -447,6 +530,8 @@ export async function readGitHubConnection(scope: {
         repo: schema.repositoryBindings.providerName,
         approvedFullName: schema.repositoryBindings.providerFullName,
         approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
+        connectorId: schema.sourceConnections.connectorId,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -467,14 +552,15 @@ export async function readGitHubConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          // Only the MAIN repository steers. `role` is 'main' for every head
-          // the binder writes, and 'linked' only for one the exclusivity
-          // migration demoted because an older head already claimed the
-          // repository. A reader that ignores the column goes on resolving
-          // through a demoted head, so the cross-workspace steering collision
-          // the index forbids would survive the reconciliation that was meant
-          // to end it.
-          eq(schema.repositoryBindingHeads.role, "main"),
+          // Only the steering head steers. Its role is 'steering', and
+          // 'linked' marks a repository that only receives PRs. A reader
+          // that ignores the column goes on resolving through a linked
+          // head, so the cross-workspace steering collision the index
+          // forbids would survive the reconciliation meant to end it.
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
           eq(schema.repositoryBindingHeads.provider, "github"),
           isNull(schema.sourceConnections.deletedAt),
           notInArray(schema.sourceConnections.status, [
@@ -483,14 +569,30 @@ export async function readGitHubConnection(scope: {
         ),
       )
       .limit(1);
-    if (bound)
-      return {
-        source: "binding",
+    if (bound) {
+      const answer = {
+        source: "binding" as const,
         owner: bound.owner,
         repo: bound.repo,
         approvedFullName: bound.approvedFullName,
         approvedDefaultRef: bound.approvedDefaultRef,
       };
+      if (bound.connectorId !== GITHUB_STEERING_PROVIDER) return answer;
+      // A provisioned steering repository. The workspace's own GitHub token
+      // cannot see it, so the seam needs the Oxagen Steering installation the
+      // provisioner recorded. Without one, every call would fail on GitHub
+      // with a 404 that names no cause, so the read refuses here instead.
+      const installationId = steeringInstallationIdOf(
+        bound.deliveryConfig as DeliveryConfig | null,
+      );
+      if (installationId === null)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "steering_installation_missing",
+          message: `The steering repository ${bound.approvedFullName} hangs from an Oxagen Steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
+        });
+      return { ...answer, steeringInstallationId: installationId };
+    }
 
     // Why the join missed. A head is the workspace's declaration that it HAS a
     // main repository; its presence survives the connection being retired,
@@ -503,11 +605,14 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           eq(schema.repositoryBindingHeads.provider, "github"),
-          // Only a MAIN head declares a main repository. A linked head
-          // (`link_repository`) declares nothing about steering, and counting
-          // it would report "bound but retired" for a workspace whose linked
-          // repository is all it has.
-          eq(schema.repositoryBindingHeads.role, "main"),
+          // Only the steering head (role 'steering') declares the
+          // steering repository. A linked head (`link_repository`) declares
+          // nothing about steering, and counting it would report "bound but
+          // retired" for a workspace whose linked repository is all it has.
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
         ),
       )
       .limit(1);
@@ -544,6 +649,12 @@ interface SteeringGitHubDeps {
   }) => Promise<string>;
   client: (token: string) => GitHubClient;
   /**
+   * The Oxagen Steering app's token for one installation, used when the
+   * steering head hangs from a `github_steering` connection. Defaults to
+   * {@link mintSteeringInstallationToken}.
+   */
+  steeringToken?: (installationId: number) => Promise<string>;
+  /**
    * The plain REST calls the merge queue makes that `GitHubClient` does not
    * carry: git data, branch updates, reviews, deployments. Defaults to
    * `githubRest` with the same token.
@@ -563,8 +674,9 @@ export async function linkedOxagenUser(
   providerId: string,
   accountId: string,
 ): Promise<string | null> {
-  // withSystemDb: auth.accounts is platform state, keyed by the host's own
-  // account id, and no tenant owns the link between a login and a user.
+  // tenancy: global. auth.accounts is platform state with no org_id column,
+  // and no tenant owns the link between a login and a user. The query is
+  // filtered to one providerId and the host's own accountId.
   const [row] = await withSystemDb((tx) =>
     tx
       .select({ userId: schema.accounts.userId })
@@ -710,11 +822,111 @@ export function assertSameHost(
 }
 
 /**
+ * GitHub's compare answers at most 300 files and does not say when it cut the
+ * list. A list that long may be missing paths, so the branch-scope check and
+ * the stamp would each see only part of the change.
+ */
+const COMPARE_FILE_LIMIT = 300;
+
+/**
+ * Refuse a compare that may have been cut short. Both hosts call it, so
+ * GitHub and GitLab refuse the same change; GitLab's own limit is higher.
+ */
+export function refuseLongCompare(
+  files: number,
+  base: string,
+  head: string,
+): void {
+  if (files < COMPARE_FILE_LIMIT) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "too_many_files",
+    message: `${head} changes ${files} or more files against ${base}. Oxagen reads at most ${COMPARE_FILE_LIMIT - 1} files in one steering PR, so split it into smaller steering PRs.`,
+  });
+}
+
+/**
  * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
  * message. A `HandlerError` passes through unchanged, so a refusal this
  * module already shaped (`proposal_branch_exists`, a missing binding) keeps
  * its reason when a caller wraps a whole GitHub sequence in one try.
  */
+/**
+ * Move one branch ref, but only while it points at `beforeOid`. GitHub
+ * applies every update in the list or none of them.
+ */
+const RESET_BRANCH = `mutation ResetSteeringBranch(
+  $repositoryId: ID!
+  $refUpdates: [RefUpdate!]!
+) {
+  updateRefs(input: { repositoryId: $repositoryId, refUpdates: $refUpdates }) {
+    clientMutationId
+  }
+}`;
+
+/** The refusal for a tag that already names another commit. */
+export function tagExists(
+  fullName: string,
+  name: string,
+  tagged: string,
+  sha: string,
+): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "tag_exists",
+    message: `The tag ${name} in ${fullName} already names commit ${tagged}, so it was not moved to ${sha}.`,
+  });
+}
+
+interface GitTreeListing {
+  truncated?: boolean;
+  tree: { path: string; type: string; sha: string }[];
+}
+
+/**
+ * Every blob under the tree `treeSha`, with its blob id. GitHub cuts a
+ * recursive listing short on a very large tree and flags it `truncated`, so a
+ * cut listing is walked again one directory at a time. A partial tree is never
+ * returned as the whole one, because a publish would read a file it cannot see
+ * as deleted.
+ */
+async function listGitTree(
+  rest: GitHubRest,
+  repoPath: string,
+  treeSha: string,
+): Promise<SteeringTreeEntry[]> {
+  const whole = await rest.request<GitTreeListing>(
+    "GET",
+    `${repoPath}/git/trees/${githubPath(treeSha)}?recursive=1`,
+  );
+  if (!whole.data.truncated)
+    return whole.data.tree
+      .filter((item) => item.type === "blob")
+      .map((item) => ({ path: item.path, blob: item.sha }));
+  const entries: SteeringTreeEntry[] = [];
+  const pending = [{ sha: treeSha, prefix: "" }];
+  for (let dir = pending.pop(); dir; dir = pending.pop()) {
+    const level = await rest.request<GitTreeListing>(
+      "GET",
+      `${repoPath}/git/trees/${githubPath(dir.sha)}`,
+    );
+    if (level.data.truncated)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "tree_too_large",
+        message: `GitHub cut short the listing of the directory ${dir.prefix || "/"} in ${repoPath}, so the tree cannot be read whole.`,
+      });
+    for (const item of level.data.tree) {
+      const itemPath = `${dir.prefix}${item.path}`;
+      if (item.type === "blob")
+        entries.push({ path: itemPath, blob: item.sha });
+      else if (item.type === "tree")
+        pending.push({ sha: item.sha, prefix: `${itemPath}/` });
+    }
+  }
+  return entries;
+}
+
 export function githubRefused(err: unknown): HandlerError {
   if (err instanceof HandlerError) return err;
   return new HandlerError({
@@ -767,7 +979,15 @@ export function createSteeringGitHub(
             "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
         });
       }
-      const token = await deps.resolveToken(scope);
+      // A provisioned steering repository answers only to the Oxagen Steering
+      // app. Every other head uses the workspace's own token.
+      const token =
+        connection.source === "binding" &&
+        connection.steeringInstallationId !== undefined
+          ? await (deps.steeringToken ?? mintSteeringInstallationToken)(
+              connection.steeringInstallationId,
+            )
+          : await deps.resolveToken(scope);
       const gh = deps.client(token);
       const info = await gh.getRepoInfo({
         owner: connection.owner,
@@ -862,6 +1082,7 @@ export function createSteeringGitHub(
           repo: repo.repo,
           branch,
           fromBranch,
+          fromSha: options?.at,
         });
       } catch (err) {
         if (
@@ -961,6 +1182,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return [
           ...new Set(
             files.flatMap((f) =>
@@ -1015,6 +1237,44 @@ export function createSteeringGitHub(
       } catch (err) {
         throw githubRefused(err);
       }
+    },
+    async listTree(repo, commit) {
+      const { rest, path } = restFor(repo);
+      try {
+        const head = await rest.request<{ tree: { sha: string } }>(
+          "GET",
+          `${path}/git/commits/${githubPath(commit)}`,
+        );
+        return await listGitTree(rest, path, head.data.tree.sha);
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async createTag(repo, name, sha) {
+      const { rest, path } = restFor(repo);
+      try {
+        await rest.request("POST", `${path}/git/refs`, {
+          ref: `refs/tags/${name}`,
+          sha,
+        });
+        return;
+      } catch (err) {
+        if (!(err instanceof GitHubApiError && err.status === 422))
+          throw githubRefused(err);
+      }
+      // GitHub answers 422 when the tag exists. At `sha` it is this tag,
+      // written by an earlier run of the same publish.
+      let tagged: string;
+      try {
+        const out = await rest.request<{ object: { sha: string } }>(
+          "GET",
+          `${path}/git/ref/tags/${githubPath(name)}`,
+        );
+        tagged = out.data.object.sha;
+      } catch (err) {
+        throw githubRefused(err);
+      }
+      if (tagged !== sha) throw tagExists(repo.fullName, name, tagged, sha);
     },
     async reportCheckRun(repo, args) {
       try {
@@ -1099,6 +1359,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return files.flatMap((f): SteeringChangedFile[] => {
           if (f.status === "renamed" && f.previousPath)
             return [
@@ -1192,13 +1453,22 @@ export function createSteeringGitHub(
           branch: args.branch,
         });
         if (current?.sha !== args.expectedHead) throw headMoved(args.branch);
-        const out = await rest.request<{ sha: string } | undefined>(
-          "POST",
-          `${path}/merges`,
-          { base: args.branch, head: repo.defaultBranch },
-        );
+        const out = await rest.request<
+          { sha: string; parents?: { sha: string }[] } | undefined
+        >("POST", `${path}/merges`, {
+          base: args.branch,
+          // The sha, not the branch name, so the second parent is the head
+          // Oxagen read even when the production branch moves meanwhile.
+          head: args.base,
+        });
         // 204: the branch already holds the production branch.
-        return { headSha: out.data?.sha ?? args.expectedHead };
+        if (!out.data) return { headSha: args.expectedHead, parents: null };
+        // GitHub merges into the branch as it is when the request lands. A
+        // push after the read above becomes the first parent, and the
+        // approvals would carry onto a commit nobody reviewed.
+        const parents = out.data.parents?.map((p) => p.sha) ?? [];
+        if (parents[0] !== args.expectedHead) throw headMoved(args.branch);
+        return { headSha: out.data.sha, parents };
       } catch (err) {
         if (err instanceof GitHubApiError && err.status === 409)
           throw new HandlerError({
@@ -1209,17 +1479,57 @@ export function createSteeringGitHub(
         throw githubRefused(err);
       }
     },
-    async resetBranch(repo, branch, sha) {
+    async resetBranch(repo, branch, args) {
       const { rest, path } = restFor(repo);
+      // The REST ref update takes no expected value, so the reset goes
+      // through GraphQL, whose `beforeOid` moves the ref only while it still
+      // points at `from`. The client's base is api.github.com, so `/graphql`
+      // is GitHub's own endpoint.
+      let refusal: unknown;
       try {
-        await rest.request(
-          "PATCH",
-          `${path}/git/refs/heads/${githubPath(branch)}`,
-          { sha, force: true },
+        const info = await rest.request<{ node_id: string }>("GET", path);
+        const out = await rest.request<{ errors?: { message: string }[] }>(
+          "POST",
+          "/graphql",
+          {
+            query: RESET_BRANCH,
+            variables: {
+              repositoryId: info.data.node_id,
+              refUpdates: [
+                {
+                  name: `refs/heads/${branch}`,
+                  afterOid: args.to,
+                  beforeOid: args.from,
+                  force: true,
+                },
+              ],
+            },
+          },
         );
+        // GraphQL answers 200 and puts a refusal in `errors`.
+        const errors = out.data.errors ?? [];
+        if (errors.length === 0) return true;
+        refusal = new Error(errors.map((e) => e.message).join("; "));
       } catch (err) {
-        throw githubRefused(err);
+        refusal = err;
       }
+      // The refusal does not say whether the check on `from` failed, so the
+      // branch is read again. A branch at `to` took the reset before the
+      // answer was lost. A branch anywhere else but `from` moved.
+      let now: string | null;
+      try {
+        const out = await clientFor(repo).getBranch({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch,
+        });
+        now = out?.sha ?? null;
+      } catch {
+        throw githubRefused(refusal);
+      }
+      if (now === args.to) return true;
+      if (now !== args.from) return false;
+      throw githubRefused(refusal);
     },
     async listApprovals(repo, number) {
       const { rest, path } = restFor(repo);

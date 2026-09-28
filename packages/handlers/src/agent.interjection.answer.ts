@@ -16,14 +16,19 @@
 //      a missing one it needs, is `interjection_answer_shape`. All three leave
 //      before any write.
 //   3. A path answer does what it names, outside any transaction, because
-//      both paths call GitHub. `link` runs link_repository on the repository
-//      the host asked about. `create` runs create_workspace with it as the new
-//      workspace's main repository, and the new workspace starts with skills
-//      off. Both run through the kernel, so an enterprise org's policies and
-//      the capability's own audit row apply to them. The repository is the
-//      one the timeout function resolved onto the row, or, when it has not
-//      yet, the one this call resolves from the frame's remote digest. None is
-//      `interjection_repository_unresolved`.
+//      the link calls GitHub and the create starts a durable job. `link` runs
+//      link_repository on the repository the host asked about, which opens a
+//      steering PR that adds it to `workspace.toml` (ADR-212). The binding
+//      follows the steering PR's merge, so a link answer names the steering
+//      PR and, until the merge, no binding. `create` runs
+//      create_workspace, and the new workspace starts with skills off. Since
+//      lane S1 (#4450) create_workspace binds no repository, so the create
+//      path leaves the questioned repository unbound and its answer carries
+//      no binding. Both run through the kernel, so an enterprise org's
+//      policies and the capability's own audit row apply to them. The
+//      repository is the one the timeout function resolved onto the row, or,
+//      when it has not yet, the one this call resolves from the frame's
+//      remote digest. None is `interjection_repository_unresolved`.
 //   4. One tenant transaction. Lock the question and check it again, then the
 //      UPDATE that records the answer, its path and a new `rcp_…` receipt,
 //      guarded by `answered_at IS NULL AND expires_at > now()`. The row lock
@@ -33,12 +38,14 @@
 //      `agent.interjection_answered` security event records the receipt.
 //
 // A link or create that succeeded before step 4 found the question closed
-// stays done: the refusal says the question was answered, and the repository
-// stays bound. A link retried after it bound the repository takes the
-// existing binding as its own. A create retried after it made the workspace
+// stays done: the refusal says the question was answered, and the steering PR
+// stays open. A link retried after it opened the steering PR finds that PR
+// open and answers it again, `reused`. A link that finds the repository linked
+// already takes the existing binding as its answer. A create retried after it
+// made the workspace
 // meets `slug_taken`. It takes the org's workspace under that slug as its own
-// when the workspace was made after the question was raised and its main
-// repository is the questioned one.
+// when the workspace was made after the question was raised, by the person
+// who is answering.
 //
 // A free-text answer's command expires with the question: past it, the run
 // has carried on without an answer and a late message would arrive out of
@@ -66,6 +73,7 @@ import {
   type RepositoryLinkInput,
   type RepositoryLinkOutput,
   repositoryLink,
+  type SteeringPullRequest,
 } from "@oxagen/oxagen/contracts/repository.link";
 import {
   type WorkspaceCreateInput,
@@ -88,7 +96,6 @@ import {
   interjectBodySchema,
   interjectionAnswerPayloadSchema,
 } from "@oxagen/tacho";
-import { getPrincipalAttribution, runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { resolveInterjectionRepository } from "./lib/interjection-repository";
 import { logger } from "./logger";
@@ -172,7 +179,10 @@ export interface InterjectionAnswerStore {
    * when the row is gone.
    */
   workspaceSlug(scope: RunScope): Promise<string | null>;
-  /** The workspace's existing link to `fullName`, for a link that was already made. */
+  /**
+   * The workspace's existing link to `fullName`, for a repository a link
+   * answer finds linked already.
+   */
   linkedBinding(
     scope: RunScope,
     fullName: string,
@@ -202,12 +212,16 @@ export type AnswerInterjectionDeps = {
   paths: InterjectionPathCalls;
   /**
    * The workspace an earlier try of this create path made: the org's
-   * workspace under `slug`, made at or after the question was raised, whose
-   * main repository is `fullName`. Null when there is none.
+   * workspace under `slug`, made at or after the question was raised, by
+   * `createdById`. Null when there is none, or when the caller has no user.
    */
   createdWorkspace(
     scope: RunScope,
-    args: { interjectionRowId: string; slug: string; fullName: string },
+    args: {
+      interjectionRowId: string;
+      slug: string;
+      createdById: string | null;
+    },
   ): Promise<CreatedWorkspace | null>;
   /** `owner/name` of the repository a frame's remote digest names, or null. */
   resolveRepository(
@@ -305,31 +319,50 @@ function nestedContext(ctx: CheckedContext): CapabilityContext {
   return plain;
 }
 
+/** What a link answer did for the repository it names. */
+type LinkAnswer = {
+  /** `owner/name`. */
+  fullName: string;
+  /** The binding when the repository was linked already, or null. */
+  bindingId: string | null;
+  /**
+   * The steering PR that adds the repository to `workspace.toml`, or null
+   * when it was linked already or `workspace.toml` lists it.
+   */
+  steeringPullRequest: SteeringPullRequest | null;
+};
+
 /** What a path answer did, before the answer is recorded. */
 type PathOutcome = {
   path: "link" | "create";
   text: string;
   /** The row's answer. */
   answer: string;
-  repository: { bindingId: string; fullName: string };
+  /** What a link did. Null on a create, which binds nothing. */
+  repository: LinkAnswer | null;
   workspace: { publicId: string; slug: string } | null;
   /** The slug the host names in `repo.bound`. */
   workspaceSlug: string;
 };
 
-/** A workspace the create path made, and its main repository's binding. */
+/** A workspace the create path made. */
 export type CreatedWorkspace = {
   publicId: string;
   slug: string;
-  bindingId: string;
-  fullName: string;
 };
 
 /** What the agent is told once the question is settled. */
 export const INTERJECTION_LINK_TEXT = (slug: string): string =>
   `A person linked this repository to the workspace ${slug}. The session goes on under that workspace.`;
+export const INTERJECTION_LINK_PROPOSED_TEXT = (
+  slug: string,
+  pr: SteeringPullRequest,
+): string =>
+  `A person opened steering PR #${pr.number} to link this repository to the workspace ${slug}. The link takes effect when the steering PR merges. The session goes on under that workspace.`;
+export const INTERJECTION_LINK_LISTED_TEXT = (slug: string): string =>
+  `The steering record of the workspace ${slug} already lists this repository, and the next steering sync links it. The session goes on under that workspace.`;
 export const INTERJECTION_CREATE_TEXT = (slug: string): string =>
-  `A person created the workspace ${slug} for this repository. Its skills are off, so the session goes on without skills.`;
+  `A person created the workspace ${slug} for this repository. The repository is not linked to it yet. Its skills are off, so the session goes on without skills.`;
 
 async function linkPath(
   deps: AnswerInterjectionDeps,
@@ -338,40 +371,70 @@ async function linkPath(
   body: InterjectBody,
   fullName: string,
 ): Promise<PathOutcome> {
-  let repository: { bindingId: string; fullName: string };
+  let repository: LinkAnswer;
   try {
+    // A link opens a steering PR, or finds `workspace.toml` lists the
+    // repository already. Either way nothing is bound yet: the steering sync
+    // writes the binding once the steering record lists the repository. A
+    // retry after a link that opened the steering PR and then failed to
+    // record the answer finds that PR open, and answers it again.
     const linked = await deps.paths.link(
       { provider: "github", ...splitFullName(fullName) },
       nestedContext(ctx),
     );
-    repository = { bindingId: linked.bindingId, fullName: linked.fullName };
+    repository = {
+      fullName: linked.fullName,
+      bindingId: null,
+      steeringPullRequest: linked.steeringPullRequest,
+    };
   } catch (err) {
-    // A retry after a link that bound the repository and then failed to
-    // record the answer. The binding that exists is this answer's.
+    // The repository is linked already: an earlier steering PR merged, or a
+    // person linked it. The binding that exists is this answer's.
     if (!isHandlerError(err) || err.reason !== "repository_already_linked")
       throw err;
     const existing = await deps.withStore((store) =>
       store.linkedBinding(scope, fullName),
     );
     if (existing === null) throw err;
-    repository = existing;
+    repository = { ...existing, steeringPullRequest: null };
   }
-  // The link bound the repository to the caller's workspace, so the agent's
-  // text, the answer, and the release name that workspace's slug as its row
-  // holds it now. The body's slug is what the host's bundle said when the
-  // question was raised: a rename since then, or a host that wrote any slug
-  // the schema takes, would name a workspace the session is not under. The
-  // body's slug stands only if the row is gone, which the link would refuse.
+  // The link is to the caller's workspace, so the agent's text, the answer,
+  // and the release name that workspace's slug as its row holds it now. The
+  // body's slug is what the host's bundle said when the question was raised:
+  // a rename since then, or a host that wrote any slug the schema takes,
+  // would name a workspace the session is not under. The body's slug stands
+  // only if the row is gone, which the link would refuse.
   const slug =
     (await deps.withStore((store) => store.workspaceSlug(scope))) ??
     body.paths[0].workspace_slug;
   return {
     path: "link",
-    text: INTERJECTION_LINK_TEXT(slug),
-    answer: `Linked ${repository.fullName} to the workspace ${slug}.`,
+    ...linkTexts(repository, slug),
     repository,
     workspace: null,
     workspaceSlug: slug,
+  };
+}
+
+/** The agent's text and the row's answer for what a link did. */
+function linkTexts(
+  repository: LinkAnswer,
+  slug: string,
+): { text: string; answer: string } {
+  const { fullName, bindingId, steeringPullRequest: pr } = repository;
+  if (pr !== null)
+    return {
+      text: INTERJECTION_LINK_PROPOSED_TEXT(slug, pr),
+      answer: `Opened steering PR #${pr.number} to link ${fullName} to the workspace ${slug}: ${pr.url}. Merge the steering PR to finish linking.`,
+    };
+  if (bindingId !== null)
+    return {
+      text: INTERJECTION_LINK_TEXT(slug),
+      answer: `${fullName} is linked to the workspace ${slug} already.`,
+    };
+  return {
+    text: INTERJECTION_LINK_LISTED_TEXT(slug),
+    answer: `The steering record of the workspace ${slug} already lists ${fullName}. The next steering sync links it.`,
   };
 }
 
@@ -382,33 +445,27 @@ async function createPath(
   row: LockedInterjection,
   create: { name: string; slug: string },
   fullName: string,
+  actingUserId: string | null,
 ): Promise<PathOutcome> {
   let made: CreatedWorkspace;
   try {
+    // create_workspace binds no repository since lane S1 (#4450), so the
+    // questioned repository stays unbound. The new workspace gets its
+    // steering repo from a durable job.
     const created = await deps.paths.create(
-      {
-        name: create.name,
-        slug: create.slug,
-        mainRepo: { provider: "github", ...splitFullName(fullName) },
-      },
+      { name: create.name, slug: create.slug },
       nestedContext(ctx),
     );
-    made = {
-      publicId: created.publicId,
-      slug: created.slug,
-      bindingId: created.mainRepo.bindingId,
-      fullName: created.mainRepo.fullName,
-    };
+    made = { publicId: created.publicId, slug: created.slug };
   } catch (err) {
     // A retry after a create that made the workspace and then failed to
-    // record the answer. A workspace made under this slug after the question
-    // was raised, with the questioned repository as its main one, is this
-    // answer's.
+    // record the answer. A workspace this person made under this slug after
+    // the question was raised is this answer's.
     if (!isHandlerError(err) || err.reason !== "slug_taken") throw err;
     const existing = await deps.createdWorkspace(scope, {
       interjectionRowId: row.id,
       slug: create.slug,
-      fullName,
+      createdById: actingUserId,
     });
     if (existing === null) throw err;
     made = existing;
@@ -416,8 +473,8 @@ async function createPath(
   return {
     path: "create",
     text: INTERJECTION_CREATE_TEXT(made.slug),
-    answer: `Created the workspace ${made.slug} for ${made.fullName}, with skills off.`,
-    repository: { bindingId: made.bindingId, fullName: made.fullName },
+    answer: `Created the workspace ${made.slug} for ${fullName}, with skills off. The repository is not linked to it yet.`,
+    repository: null,
     workspace: { publicId: made.publicId, slug: made.slug },
     workspaceSlug: made.slug,
   };
@@ -447,7 +504,12 @@ async function releaseOf(args: {
     source: "person",
     receipt_id: args.receiptId,
     answered_by: userPublicId?.toLowerCase() ?? null,
-    binding_id: outcome.repository.bindingId,
+    // A link names its binding only when the repository was linked already.
+    // Until the steering PR merges there is none, and the host seals no
+    // `repo.bound`.
+    ...(outcome.repository?.bindingId == null
+      ? {}
+      : { binding_id: outcome.repository.bindingId }),
     workspace_slug: outcome.workspaceSlug,
     ...(outcome.workspace === null
       ? {}
@@ -475,6 +537,7 @@ async function takePath(
   scope: RunScope,
   row: LockedInterjection,
   input: Pick<AgentInterjectionAnswerInput, "path" | "create">,
+  actingUserId: string | null,
 ): Promise<{ outcome: PathOutcome; resolvedRepository: string | null }> {
   const body = row.body;
   if (body === null) {
@@ -494,7 +557,15 @@ async function takePath(
   if (fullName === null) throw unresolved();
   const outcome =
     input.path === "create" && input.create !== undefined
-      ? await createPath(deps, ctx, scope, row, input.create, fullName)
+      ? await createPath(
+          deps,
+          ctx,
+          scope,
+          row,
+          input.create,
+          fullName,
+          actingUserId,
+        )
       : await linkPath(deps, ctx, scope, body, fullName);
   return { outcome, resolvedRepository };
 }
@@ -589,7 +660,7 @@ export function createAnswerInterjectionHandler(
 
     const taken =
       first.kind === "repo_unknown"
-        ? await takePath(deps, ctx, scope, first, input)
+        ? await takePath(deps, ctx, scope, first, input, actingUserId)
         : null;
     const outcome = taken?.outcome ?? null;
     const resolvedRepository = taken?.resolvedRepository ?? null;
@@ -661,9 +732,14 @@ export function createAnswerInterjectionHandler(
           path: outcome?.path ?? null,
           source: "person",
           receiptId,
-          ...(outcome === null
+          ...(outcome?.repository?.bindingId == null
             ? {}
             : { bindingId: outcome.repository.bindingId }),
+          ...(outcome?.repository?.steeringPullRequest == null
+            ? {}
+            : {
+                steeringPullRequest: outcome.repository.steeringPullRequest.url,
+              }),
           ...(outcome?.workspace
             ? { workspaceId: outcome.workspace.publicId }
             : {}),
@@ -854,21 +930,27 @@ export function postgresInterjectionAnswerStore(
 
 /**
  * The workspace an earlier try of the create path made for this question.
- * The workspace read runs in the question's scope, where every workspace in
- * the org is readable. The head read runs in the new workspace's scope,
- * because a binding head is readable only from its own workspace.
+ * The read runs in the question's scope, where every workspace in the org is
+ * readable.
  *
- * The workspace must have been made at or after the question was raised, so
- * a workspace that already held the slug is never claimed as this answer's.
+ * The workspace must have been made at or after the question was raised, by
+ * the person answering, so a workspace that already held the slug, or one
+ * someone else made, is never claimed as this answer's.
  */
 async function readCreatedWorkspace(
   scope: RunScope,
-  args: { interjectionRowId: string; slug: string; fullName: string },
+  args: {
+    interjectionRowId: string;
+    slug: string;
+    createdById: string | null;
+  },
 ): Promise<CreatedWorkspace | null> {
+  const createdById = args.createdById;
+  if (createdById === null) return null;
   const ws = schema.workspaces;
   const [workspace] = await withTenantDb((tx) =>
     tx
-      .select({ id: ws.id, publicId: ws.publicId, slug: ws.slug })
+      .select({ publicId: ws.publicId, slug: ws.slug })
       .from(ws)
       .innerJoin(
         ij,
@@ -882,48 +964,13 @@ async function readCreatedWorkspace(
         and(
           eq(ws.orgId, scope.orgId),
           eq(ws.slug, args.slug),
+          eq(ws.createdById, createdById),
           gte(ws.createdAt, ij.raisedAt),
         ),
       )
       .limit(1),
   );
-  if (workspace === undefined) return null;
-  const heads = schema.repositoryBindingHeads;
-  const bindings = schema.repositoryBindings;
-  const [binding] = await runInTenantScope(
-    {
-      ...getPrincipalAttribution(),
-      orgId: scope.orgId,
-      workspaceId: workspace.id,
-    },
-    () =>
-      withTenantDb((tx) =>
-        tx
-          .select({
-            bindingId: bindings.publicId,
-            fullName: bindings.providerFullName,
-          })
-          .from(heads)
-          .innerJoin(bindings, eq(bindings.id, heads.currentBindingId))
-          .where(
-            and(
-              eq(heads.orgId, scope.orgId),
-              eq(heads.workspaceId, workspace.id),
-              eq(heads.provider, "github"),
-              eq(heads.role, "main"),
-              sql`lower(${bindings.providerFullName}) = lower(${args.fullName})`,
-            ),
-          )
-          .limit(1),
-      ),
-  );
-  if (binding === undefined) return null;
-  return {
-    publicId: workspace.publicId,
-    slug: workspace.slug,
-    bindingId: binding.bindingId,
-    fullName: binding.fullName,
-  };
+  return workspace ?? null;
 }
 
 export const agentInterjectionAnswerHandler = createAnswerInterjectionHandler({

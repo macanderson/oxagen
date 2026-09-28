@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Onboarding step 2 as an operator drives it: the three harness tabs and their
+// Onboarding step 4 as an operator drives it: the three harness tabs and their
 // panels word for word, the one-time token minted when the step opens and the
 // enroll command built from it, Download for <OS> saying no package is
 // published, the SDK credential and five lines, the continue that moves the
@@ -104,7 +104,7 @@ describe("fiveLines", () => {
 describe("WrapStep", () => {
   it("draws the header, the tabs with their sub-lines and the Claude Code panel, then mints the token once", async () => {
     renderStep();
-    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Step 4 of 5")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 1, name: "Wrap an agent" }),
     ).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("WrapStep", () => {
     );
     expect(
       screen.getByRole("button", {
-        name: "I have already installed it — continue",
+        name: "I have already installed it. Continue",
       }).className,
     ).not.toContain("bg-button-primary-bg");
   });
@@ -246,7 +246,7 @@ describe("WrapStep", () => {
     });
     renderStep();
     const cont = screen.getByRole("button", {
-      name: "I have already installed it — continue",
+      name: "I have already installed it. Continue",
     });
     await userEvent.click(cont);
     expect(await screen.findByTestId("advance-failure")).toBeInTheDocument();
@@ -266,7 +266,7 @@ describe("WrapStep", () => {
     renderStep({ gated: false });
     await userEvent.click(
       screen.getByRole("button", {
-        name: "I have already installed it — continue",
+        name: "I have already installed it. Continue",
       }),
     );
     await waitFor(() => {

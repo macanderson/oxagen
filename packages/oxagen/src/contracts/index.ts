@@ -76,8 +76,13 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
+import { tachoMemoriesIngest } from "./tacho.memories.ingest";
+import { tachoMemoriesRecall } from "./tacho.memories.recall";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
+import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
+import { tachoMachineGroupRemove } from "./tacho.machine_group.remove";
+import { tachoMachineGroupList } from "./tacho.machine_group.list";
 import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
@@ -119,6 +124,8 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { spendOperatorRanking } from "./spend.operator_ranking";
+import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -178,6 +185,8 @@ import { agentMemoryList } from "./agent.memory.list";
 import { agentMemoryUpdate } from "./agent.memory.update";
 import { agentMemoryDelete } from "./agent.memory.delete";
 import { agentMemoryRemember } from "./agent.memory.remember";
+import { agentMemoryLessonRemember } from "./agent.memory.lesson.remember";
+import { agentMemoryReflectionRecord } from "./agent.memory.reflection.record";
 // Bulk memory import (parse → editable review grid → commit).
 import { agentMemoryImportParse } from "./agent.memory_import.parse";
 import { agentMemoryImportCommit } from "./agent.memory_import.commit";
@@ -296,6 +305,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -728,6 +738,8 @@ export {
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryLessonRemember,
+  agentMemoryReflectionRecord,
   agentMemoryImportParse,
   agentMemoryImportCommit,
   agentMemoryPromote,
@@ -749,9 +761,14 @@ export {
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
+  tachoMemoriesRecall,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
+  tachoMachineGroupAdd,
+  tachoMachineGroupRemove,
+  tachoMachineGroupList,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,
@@ -814,6 +831,8 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -943,6 +962,7 @@ export {
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1140,6 +1160,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryLessonRemember,
+  agentMemoryReflectionRecord,
   agentMemoryImportParse,
   agentMemoryImportCommit,
   agentMemoryPromote,
@@ -1161,9 +1183,14 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
+  tachoMemoriesRecall,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
+  tachoMachineGroupAdd,
+  tachoMachineGroupRemove,
+  tachoMachineGroupList,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,
@@ -1226,6 +1253,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1354,6 +1383,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

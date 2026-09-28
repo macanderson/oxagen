@@ -58,7 +58,7 @@ const TENANT = {
 const draft = {
   agentId: " agt_invoicebot ",
   requestId: null,
-  consequenceTags: "moves_money, communicates_externally, moves_money",
+  impacts: "moves_money, communicates_externally, moves_money",
   measure: "rows",
   unit: "rows",
   perCall: "50",
@@ -81,7 +81,7 @@ const draft = {
 /** The body grant_mandate receives for `draft` in UTC. */
 const BODY = {
   agentId: "agt_invoicebot",
-  consequenceTags: ["moves_money", "communicates_externally"],
+  impacts: ["moves_money", "communicates_externally"],
   limits: {
     rows: {
       perCall: "50",
@@ -189,8 +189,8 @@ describe("grantMandate", () => {
 
   it.each([
     ["agentId", { agentId: "  " }],
-    ["consequenceTags", { consequenceTags: "" }],
-    ["consequenceTags", { consequenceTags: "Moves Money" }],
+    ["impacts", { impacts: "" }],
+    ["impacts", { impacts: "Moves Money" }],
     ["measure", { measure: "calls" }],
     ["measure", { measure: "Rows Read" }],
     ["unit", { unit: "u".repeat(33) }],

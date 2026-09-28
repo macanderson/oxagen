@@ -42,7 +42,7 @@ export const mandateGrantHandler: CapabilityHandler<
   );
   const roleAtGrant = await assertConsequenceRole(
     ctx,
-    input.consequenceTags,
+    input.impacts,
     overrides,
   );
 
@@ -56,7 +56,7 @@ export const mandateGrantHandler: CapabilityHandler<
     const limits = await assertToolsDeclareMeasures(tx, workspaceId, input);
     const body = {
       agentPrincipalId: agent.principalId,
-      consequenceTags: input.consequenceTags,
+      impacts: input.impacts,
       limits,
       targets: input.targets,
       tools: input.tools,

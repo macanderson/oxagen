@@ -130,9 +130,8 @@ vi.mock("@oxagen/oxagen/contracts/org.create", async () => {
   };
 });
 
-// The action parses `workspaceCreate.input.omit({ mainRepo: true })`: the
-// real contract requires a main repository and the first workspace of a new
-// org cannot have one yet (ADR-099). The mock carries the same `omit`.
+// The action parses `workspaceCreate.input.omit({ mainRepo: true })`, so the
+// mock carries the same `omit`.
 vi.mock("@oxagen/oxagen/contracts/workspace.create", async () => {
   const { z } = await import("zod");
   const realSchema = z.object({
@@ -222,10 +221,11 @@ function wrapWithSuccessfulDb(fn: (tx: unknown) => Promise<unknown>) {
 describe("the first workspace's shape against the real contract", () => {
   // The mock above stands in for the contract during the action tests. This
   // block reads the real one, so a contract change that makes the bootstrap
-  // `{ name: "Default", slug: "default" }` parse fail unconditionally (as
-  // requiring `mainRepo` did before the action omitted it) fails here rather
-  // than as "Invalid workspace" on every sign-up.
-  it("accepts the default workspace once mainRepo is omitted, and refuses it on the full contract", async () => {
+  // `{ name: "Default", slug: "default" }` parse fail unconditionally fails
+  // here rather than as "Invalid workspace" on every sign-up. Since lane S1
+  // (#4450) the full contract accepts it too, because `mainRepo` is optional
+  // and ignored.
+  it("accepts the default workspace with mainRepo omitted, and on the full contract", async () => {
     const { workspaceCreate: real } = await vi.importActual<
       typeof import("@oxagen/oxagen/contracts/workspace.create")
     >("@oxagen/oxagen/contracts/workspace.create");
@@ -233,7 +233,7 @@ describe("the first workspace's shape against the real contract", () => {
     expect(real.input.omit({ mainRepo: true }).safeParse(draft).success).toBe(
       true,
     );
-    expect(real.input.safeParse(draft).success).toBe(false);
+    expect(real.input.safeParse(draft).success).toBe(true);
   });
 });
 

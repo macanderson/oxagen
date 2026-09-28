@@ -68,8 +68,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
 | [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
+| [record_reflection](agent.memory.reflection.record.md) | [agent.memory.reflection.record.ts](../../packages/oxagen/src/contracts/agent.memory.reflection.record.ts) | mcp |
 | [register_agent](agent.register.md) | [agent.register.ts](../../packages/oxagen/src/contracts/agent.register.ts) | api, cli |
 | [register_mcp_server](agent.mcp.register.md) | [agent.mcp.register.ts](../../packages/oxagen/src/contracts/agent.mcp.register.ts) | api, mcp |
+| [remember_lesson](agent.memory.lesson.remember.md) | [agent.memory.lesson.remember.ts](../../packages/oxagen/src/contracts/agent.memory.lesson.remember.ts) | mcp |
 | [resolve_approval](agent.approval.resolve.md) | [agent.approval.resolve.ts](../../packages/oxagen/src/contracts/agent.approval.resolve.ts) | api, mcp |
 | [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp |
 | `resolve_mcp_servers` | [agent.mcp.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp.resolve.ts) | api |
@@ -211,6 +213,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp |
 | [list_records](context.records.list.md) | [context.records.list.ts](../../packages/oxagen/src/contracts/context.records.list.ts) | api, mcp, agent |
 | [merge_context_pr](context.pr.merge.md) | [context.pr.merge.ts](../../packages/oxagen/src/contracts/context.pr.merge.ts) | api |
+| [merge_pr_without_review](context.pr.merge_without_review.md) | [context.pr.merge_without_review.ts](../../packages/oxagen/src/contracts/context.pr.merge_without_review.ts) | api |
 | [open_context_pr](context.pr.open.md) | [context.pr.open.ts](../../packages/oxagen/src/contracts/context.pr.open.ts) | api |
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
@@ -560,6 +563,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [export_cost_center_statement](spend.cost_center_statement.export.md) | [spend.cost_center_statement.export.ts](../../packages/oxagen/src/contracts/spend.cost_center_statement.export.ts) | api, mcp |
 | [export_statement](spend.statement.export.md) | [spend.statement.export.ts](../../packages/oxagen/src/contracts/spend.statement.export.ts) | api, mcp |
 | [get_finding_evidence](finding.evidence.get.md) | [finding.evidence.get.ts](../../packages/oxagen/src/contracts/finding.evidence.get.ts) | api, mcp |
+| [get_operator_ranking](spend.operator_ranking.md) | [spend.operator_ranking.ts](../../packages/oxagen/src/contracts/spend.operator_ranking.ts) | api |
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp |
@@ -567,6 +571,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |
 | [record_finding_fix](finding.fix.record.md) | [finding.fix.record.ts](../../packages/oxagen/src/contracts/finding.fix.record.ts) | api, mcp, agent |
 | [set_cost_center](cost_center.set.md) | [cost_center.set.ts](../../packages/oxagen/src/contracts/cost_center.set.ts) | api, mcp |
+| [set_operator_pseudonyms](spend.operator_pseudonyms.set.md) | [spend.operator_pseudonyms.set.ts](../../packages/oxagen/src/contracts/spend.operator_pseudonyms.set.ts) | api |
 
 ## System
 
@@ -578,6 +583,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [add_group_machine](tacho.machine_group.add.md) | [tacho.machine_group.add.ts](../../packages/oxagen/src/contracts/tacho.machine_group.add.ts) | none |
 | [create_enrollment_token](tacho.enrollment_token.create.md) | [tacho.enrollment_token.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment_token.create.ts) | api, cli |
 | [create_tacho_enrollment](tacho.enrollment.create.md) | [tacho.enrollment.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment.create.ts) | api |
 | [create_github_token](tacho.github_token.issue.md) | [tacho.github_token.issue.ts](../../packages/oxagen/src/contracts/tacho.github_token.issue.ts) | api |
@@ -585,9 +591,13 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_tacho_bundle](tacho.bundle.get.md) | [tacho.bundle.get.ts](../../packages/oxagen/src/contracts/tacho.bundle.get.ts) | api |
 | [get_tacho_session](tacho.session.get.md) | [tacho.session.get.ts](../../packages/oxagen/src/contracts/tacho.session.get.ts) | api |
 | [ingest_tacho_events](tacho.events.ingest.md) | [tacho.events.ingest.ts](../../packages/oxagen/src/contracts/tacho.events.ingest.ts) | api |
+| [ingest_tacho_memories](tacho.memories.ingest.md) | [tacho.memories.ingest.ts](../../packages/oxagen/src/contracts/tacho.memories.ingest.ts) | api |
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp |
+| [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
+| [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
+| [remove_group_machine](tacho.machine_group.remove.md) | [tacho.machine_group.remove.ts](../../packages/oxagen/src/contracts/tacho.machine_group.remove.ts) | none |
 | [revoke_tacho_enrollment](tacho.enrollment.revoke.md) | [tacho.enrollment.revoke.ts](../../packages/oxagen/src/contracts/tacho.enrollment.revoke.ts) | api |
 
 ## Telemetry

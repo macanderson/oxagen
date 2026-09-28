@@ -36,7 +36,7 @@ export {
   isFloorReason,
   withinBusinessHours,
   HARD_FLOOR_REASONS,
-  IRREVERSIBLE_CONSEQUENCE_TAGS,
+  IRREVERSIBLE_IMPACTS,
   REASON,
   type AutoApprovalOutcome,
   type AutoApprovalSubject,

@@ -21,6 +21,7 @@ import {
   OBSERVED_TOKEN_CLASSES,
   readModelCallFrames,
   readObservedModels,
+  readTachoProgressFrames,
   readTachoToolCallFrames,
   readTachoToolCallObservations,
 } from "./cost-frames";
@@ -28,6 +29,8 @@ import {
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
+/** A subagent chain under RUN. */
+const CHILD = "00000000-0000-4000-8000-0000000000cc";
 
 /**
  * The thinking figure the wrapped read prices a frame with: the transcript
@@ -90,6 +93,7 @@ describe("readModelCallFrames", () => {
         reasoning: "0",
         server_tool_request: "0",
         cost_micros: "4125",
+        session_uuid: RUN,
       },
       {
         at: "2026-09-14T10:00:01.000Z",
@@ -103,12 +107,13 @@ describe("readModelCallFrames", () => {
         reasoning: "0",
         server_tool_request: "0",
         cost_micros: null,
+        session_uuid: CHILD,
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN, CHILD] },
     });
 
     const { query, query_params } = lastQuery();
@@ -129,12 +134,18 @@ describe("readModelCallFrames", () => {
       "reasoning",
       "server_tool_request",
       "cost_micros",
+      "session_uuid",
+      "tool_definition_tokens",
+      "context_frame_tokens",
+      "steering_tokens",
+      "system_context_digest",
+      "system_context_parts",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
-      sessionUuids: [RUN],
+      sessionUuids: [RUN, CHILD],
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
@@ -168,6 +179,10 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "4125",
         basis: "client_attested",
+        sessionUuid: RUN,
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
       {
         at: "2026-09-14T10:00:01.000Z",
@@ -182,6 +197,12 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: null,
         basis: "client_attested",
+        // The chain each frame was recorded on, so the findings job can keep
+        // two chains' requests apart when they share a millisecond.
+        sessionUuid: CHILD,
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -362,6 +383,9 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "4125",
         basis: "client_attested",
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -411,6 +435,129 @@ describe("readModelCallFrames", () => {
     expect(frames[0]).toMatchObject({ serverToolRequests: 3 });
   });
 
+  // #4493. The rollup sums the token sources over the calls it prices. A
+  // second read of its own could see a call a live run added after this one,
+  // so the sources ride the priced row itself.
+  it("carries the token sources the recorder measured on the priced row", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        cache_write_1h: "0",
+        output: "200",
+        reasoning: "0",
+        server_tool_request: "0",
+        cost_micros: null,
+        tool_definition_tokens: 12_000,
+        context_frame_tokens: null,
+        steering_tokens: "0",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    // The priced row selects the three columns so the outer read can use them.
+    const { query } = lastQuery();
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf("LEFT JOIN"));
+    for (const column of [
+      "tool_definition_tokens",
+      "context_frame_tokens",
+      "steering_tokens",
+    ]) {
+      expect(priced).toContain(column);
+    }
+    // A measured zero stays zero, and an unmeasured source stays null.
+    expect(frames[0]).toMatchObject({
+      toolDefinitionTokens: 12_000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    });
+  });
+
+  it("carries the system context digest, and the parts when the frame listed them", async () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const part = {
+      kind: "tool",
+      name: "Read",
+      provider: "builtin",
+      digest: `sha256:${"b".repeat(64)}`,
+      tokens: 420,
+    };
+    const base = {
+      model: "claude-sonnet-5",
+      provider: "firstParty",
+      input_uncached: "1000",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "200",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+    };
+    answer([
+      {
+        ...base,
+        at: "2026-09-14T10:00:00.000Z",
+        system_context_digest: digest,
+        system_context_parts: JSON.stringify([part]),
+      },
+      // The recorder lists the parts once per digest.
+      {
+        ...base,
+        at: "2026-09-14T10:00:01.000Z",
+        system_context_digest: digest,
+        system_context_parts: "",
+      },
+      // A list that does not parse is left out, and the digest stays.
+      {
+        ...base,
+        at: "2026-09-14T10:00:02.000Z",
+        system_context_digest: digest,
+        system_context_parts: JSON.stringify([{ kind: "unknown" }]),
+      },
+      {
+        ...base,
+        at: "2026-09-14T10:00:03.000Z",
+        system_context_digest: digest,
+        system_context_parts: "not json",
+      },
+      // A frame that carried no system context has neither key.
+      {
+        ...base,
+        at: "2026-09-14T10:00:04.000Z",
+        system_context_digest: "",
+        system_context_parts: "",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    const { query } = lastQuery();
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf("LEFT JOIN"));
+    expect(priced).toContain("system_context_digest");
+    expect(priced).toContain("system_context_parts");
+    expect(frames[0]).toMatchObject({
+      systemContextDigest: digest,
+      systemContextParts: [part],
+    });
+    expect(frames[1]!.systemContextDigest).toBe(digest);
+    expect(frames[1]).not.toHaveProperty("systemContextParts");
+    expect(frames[2]!.systemContextDigest).toBe(digest);
+    expect(frames[2]).not.toHaveProperty("systemContextParts");
+    expect(frames[3]).not.toHaveProperty("systemContextParts");
+    expect(frames[4]).not.toHaveProperty("systemContextDigest");
+    expect(frames[4]).not.toHaveProperty("systemContextParts");
+  });
+
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {
     answer([
       {
@@ -450,6 +597,10 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "3000",
         basis: "gateway_observed",
+        // The gateway does not measure the token sources (#4493).
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -625,6 +776,78 @@ describe("readTachoToolCallFrames", () => {
       "error",
       "rejected",
     ]);
+  });
+});
+
+describe("readTachoProgressFrames", () => {
+  const args = {
+    orgId: ORG,
+    workspaceId: WS,
+    rootSessionUuid: RUN,
+    sessionUuids: [RUN],
+  };
+
+  it("reads the hook source's tool calls and the file changes between them, in the run's order", async () => {
+    answer([
+      {
+        kind: "tool_call",
+        name: "Bash",
+        input_digest: "sha256:in",
+        output_digest: "sha256:out",
+        is_mutating: null,
+      },
+      {
+        kind: "oxagen:file_changed",
+        name: "",
+        input_digest: "",
+        output_digest: "",
+        is_mutating: null,
+      },
+      {
+        kind: "tool_call",
+        name: "",
+        input_digest: "",
+        output_digest: "",
+        is_mutating: false,
+      },
+    ]);
+    const frames = await readTachoProgressFrames(args);
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("(kind = 'tool_call' AND source = 'hook')");
+    expect(query).toContain("OR kind = 'oxagen:file_changed'");
+    expect(query).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+    expect(query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
+    expect(query).toContain("ORDER BY ts, seq");
+    expect(query_params).toEqual(args);
+    expect(selectedColumns(query)).toEqual([
+      "kind",
+      "name",
+      "input_digest",
+      "output_digest",
+      "is_mutating",
+    ]);
+    expect(frames).toEqual([
+      {
+        name: "Bash",
+        inputDigest: "sha256:in",
+        outputDigest: "sha256:out",
+        isMutating: null,
+      },
+      { fileChanged: true },
+      {
+        name: null,
+        inputDigest: null,
+        outputDigest: null,
+        isMutating: false,
+      },
+    ]);
+  });
+
+  it("names the root session when the run's list left it out", async () => {
+    answer([]);
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    await readTachoProgressFrames({ ...args, sessionUuids: [SUBAGENT] });
+    expect(lastQuery().query_params["sessionUuids"]).toEqual([RUN, SUBAGENT]);
   });
 });
 

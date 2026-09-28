@@ -15,6 +15,7 @@ import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
 import { EnforcementTier, ReplayGrade, RunRow, RunTokenCounts } from "./runs";
+import { FINDING_KINDS } from "./spend";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -186,6 +187,24 @@ const RunCostByTool = z.object({
   cost: Cost.nullable(),
 });
 
+/**
+ * One source of the context every model call re-sends: the tokens the calls
+ * after the first re-sent, and their cost, always `estimated`. It attributes
+ * input the run's cost already counts and never adds to it.
+ */
+const RunCostStandingSource = z.object({
+  resentTokens: Count,
+  cost: Cost.nullable(),
+});
+
+/** The standing context by source; a source the recorder did not report is null. */
+const RunCostStandingContext = z.object({
+  toolDefinitions: RunCostStandingSource.nullable(),
+  steering: RunCostStandingSource.nullable(),
+  contextFrames: RunCostStandingSource.nullable(),
+});
+export type RunCostStandingContext = z.infer<typeof RunCostStandingContext>;
+
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
   tokens: RunTokenCounts,
@@ -211,6 +230,8 @@ const RunCostRollup = z.object({
     .nullable(),
   byModel: z.array(RunCostByModel),
   byTool: z.array(RunCostByTool),
+  /** The context every call after the first re-sent, by source (#4537); null when no source was reported. */
+  standingContext: RunCostStandingContext.nullable().optional(),
   /** The price entries the frames were priced with (spec §12.2). */
   priceEntryIds: z.array(z.string()),
   /** When the row was last rebuilt from the frames. */
@@ -316,12 +337,7 @@ export const RunFindings = z.object({
   findings: z.array(
     z.object({
       id: PublicId,
-      kind: z.enum([
-        "cache_writes_never_read",
-        "duplicate_tool_calls",
-        "repeated_shell_commands",
-        "unpaged_results",
-      ]),
+      kind: z.enum(FINDING_KINDS),
       /** The level's key: a tool name, an agent key, an operator, or the workspace. */
       subject: z.string(),
       saving: Cost,

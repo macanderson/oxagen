@@ -144,7 +144,7 @@
           "noteRequired": "Write the reason this call is denied.",
           "noPrincipal": "Oxagen could not establish who you are. Sign in again. The call is untouched.",
           "orgRoleRequired": "Your roles do not cover this decision. On a call a mandate parked, the office accountable for the mandate's consequences answers it. The call is untouched.",
-          "noRoleCoversAllTags": "No single organization role is named for all of this mandate's consequence tags, so nobody can answer this call until the workspace names one. The call is untouched.",
+          "noRoleCoversAllTags": "No single organization role is named for all of this mandate's impacts, so nobody can answer this call until the workspace names one. The call is untouched.",
           "notAnApprover": "This mandate's approval rule names who may answer, and you are not one of them. The call is untouched.",
           "agentCannotResolveOwnMandate": "An agent cannot answer a call its own mandate parked. A person answers. The call is untouched.",
           "approvalExpired": "No pending call matched: it timed out, somebody else answered it, or it was never in this workspace. Nothing was billed.",
@@ -173,8 +173,7 @@
       "sortBy": "Sort by {column}",
       "tokensUnsorted": "Runs are ordered on the server, which cannot order them by tokens yet.",
       "columns": {
-        "run": "Run",
-        "summary": "Summary",
+        "run": "Session name",
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
@@ -224,8 +223,7 @@
       "exportQueued": "Export bundle queued for {run}.",
       "exportFailed": "The export bundle for {run} was not queued. {reason}",
       "actionsColumn": "Actions",
-      "summaryNone": "No summary yet",
-      "summaryOff": "Summaries off",
+      "untitled": "Untitled session",
       "prFilter": {
         "label": "Filter by pull requests",
         "any": "All runs",

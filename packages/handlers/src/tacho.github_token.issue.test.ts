@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { Tx } from "@oxagen/database";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -8,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   db: vi.fn(),
   role: vi.fn(),
   actingUser: vi.fn(),
+  steeringMint: vi.fn(),
 }));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
@@ -20,6 +23,12 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 vi.mock("./lib/tacho-host", () => ({ resolveEnrolledHost: mocks.resolve }));
 vi.mock("./logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
+// The handler must never mint an Oxagen Steering app token. The spy catches a
+// call if a later change imports the minter.
+vi.mock("./lib/steering-app", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/steering-app")>()),
+  mintSteeringInstallationToken: mocks.steeringMint,
+}));
 import {
   createTachoGithubTokenIssueHandler,
   selectGovernedRepository,
@@ -41,19 +50,31 @@ const input = {
   name: "Repo",
   run_token_id: "rt_0123456789abcdef0123",
 };
-const repo = {
+/** The columns `selectGovernedRepository` reads, less the head's role. */
+const head = {
   owner: "Acme",
   name: "Repo",
   fullName: "Acme/Repo",
   providerRepositoryId: "42",
-  role: "main" as const,
 };
+const repo = { ...head, role: "linked" as const, steering: false };
+const steeringRepo = { ...head, role: "main" as const, steering: true };
+const PROPOSE_ONLY_MESSAGE =
+  "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.";
+/** What GitHub's mint answers for a repository the installation lacks. */
+const NOT_COVERED = new Error(
+  "GitHub App token mint failed (422): There is at least one repository that does not exist or is not accessible to the parent installation.",
+);
 function deps() {
   return {
     enabled: (): boolean => true,
-    governedRepository: vi.fn(async () => repo),
-    installation: vi.fn(async () => ({ installationId: "9" })),
-    mint: vi.fn(async () => ({
+    governedRepository: vi.fn<GithubTokenIssueDeps["governedRepository"]>(
+      async () => repo,
+    ),
+    installation: vi.fn<GithubTokenIssueDeps["installation"]>(async () => ({
+      installationId: "9",
+    })),
+    mint: vi.fn<GithubTokenIssueDeps["mint"]>(async () => ({
       token: "ghs_scoped",
       expiresAt: Date.parse("2027-01-01T00:00:00Z"),
     })),
@@ -174,7 +195,7 @@ describe("repository-scoped GitHub credentials", () => {
         predicate = sql;
         return chain;
       },
-      limit: async () => [repo],
+      limit: async () => [{ ...head, role: "linked" }],
     };
     expect(
       await selectGovernedRepository(
@@ -194,5 +215,110 @@ describe("repository-scoped GitHub credentials", () => {
     ]);
     expect(compiled.sql).toContain('"workspace_id"');
     expect(compiled.sql).toContain("lower(");
+  });
+  it("reads a steering head as the main repository, not a linked one", async () => {
+    const chain = {
+      from: () => chain,
+      innerJoin: () => chain,
+      where: () => chain,
+      limit: async () => [{ ...head, role: "steering" }],
+    };
+    const row = await selectGovernedRepository(
+      { select: () => chain } as unknown as Tx,
+      ctx,
+      "Acme",
+      "Repo",
+    );
+    expect(row).toEqual(steeringRepo);
+  });
+});
+
+describe("the steering repository", () => {
+  it("gets the workspace installation's token when it covers the repository", async () => {
+    const d = deps();
+    d.governedRepository.mockResolvedValue(steeringRepo);
+    const result = await createTachoGithubTokenIssueHandler(d)(input, ctx);
+    expect(d.mint).toHaveBeenCalledWith({
+      installationId: "9",
+      repositoryId: 42,
+    });
+    expect(tachoGithubTokenIssue.output.parse(result)).toMatchObject({
+      token: "ghs_scoped",
+      repository: { full_name: "Acme/Repo", role: "main" },
+    });
+  });
+  it("refuses steering_repo_propose_only when no workspace installation exists", async () => {
+    const d = deps();
+    d.governedRepository.mockResolvedValue(steeringRepo);
+    d.installation.mockResolvedValue(null);
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_repo_propose_only",
+      message: PROPOSE_ONLY_MESSAGE,
+    });
+    expect(d.mint).not.toHaveBeenCalled();
+  });
+  it("maps GitHub's 422 on the mint to steering_repo_propose_only", async () => {
+    const d = deps();
+    d.governedRepository.mockResolvedValue(steeringRepo);
+    d.mint.mockRejectedValue(NOT_COVERED);
+    const error = await createTachoGithubTokenIssueHandler(d)(
+      input,
+      ctx,
+    ).catch((error: Error) => error);
+    expect(error).toMatchObject({
+      code: "conflict",
+      reason: "steering_repo_propose_only",
+      message: PROPOSE_ONLY_MESSAGE,
+    });
+    expect((error as Error).message).not.toContain("parent installation");
+  });
+  it.each([401, 404, 500])(
+    "keeps github_refused when the steering repository's mint fails with %s",
+    async (status) => {
+      const d = deps();
+      d.governedRepository.mockResolvedValue(steeringRepo);
+      d.mint.mockRejectedValue(
+        new Error(`GitHub App token mint failed (${status}): refused`),
+      );
+      await expect(
+        createTachoGithubTokenIssueHandler(d)(input, ctx),
+      ).rejects.toMatchObject({ code: "conflict", reason: "github_refused" });
+    },
+  );
+  it("keeps today's refusals for a repository that is not the steering repository", async () => {
+    const refused = deps();
+    refused.mint.mockRejectedValue(NOT_COVERED);
+    await expect(
+      createTachoGithubTokenIssueHandler(refused)(input, ctx),
+    ).rejects.toMatchObject({ code: "conflict", reason: "github_refused" });
+    const unconnected = deps();
+    unconnected.installation.mockResolvedValue(null);
+    await expect(
+      createTachoGithubTokenIssueHandler(unconnected)(input, ctx),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "github_not_connected",
+    });
+  });
+  it("never mints an Oxagen Steering app token", async () => {
+    const source = readFileSync(
+      join(__dirname, "tacho.github_token.issue.ts"),
+      "utf8",
+    );
+    expect(source).not.toMatch(/from\s+"\.\/lib\/steering-app"/);
+    expect(source).not.toContain("mintSteeringInstallationToken");
+    for (const setup of ["covered", "uncovered", "unconnected"]) {
+      const d = deps();
+      d.governedRepository.mockResolvedValue(steeringRepo);
+      if (setup === "uncovered") d.mint.mockRejectedValue(NOT_COVERED);
+      if (setup === "unconnected") d.installation.mockResolvedValue(null);
+      await createTachoGithubTokenIssueHandler(d)(input, ctx).catch(
+        () => undefined,
+      );
+    }
+    expect(mocks.steeringMint).not.toHaveBeenCalled();
   });
 });

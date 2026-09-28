@@ -1,4 +1,4 @@
-// tacho.github_token.issue.ts — a GitHub App installation token for one
+// tacho.github_token.issue.ts: a GitHub App installation token for one
 // repository governed by the calling host's workspace (ADR-151).
 //
 // Git in a wrapped run asks tacho's credential helper for a credential; the
@@ -7,6 +7,14 @@
 // to the workspace's live GitHub connection. The host names the repository;
 // it never names the installation, for the reason `bind_main_repository`
 // gives (ADR-027).
+//
+// The workspace's steering repository takes changes through a steering PR.
+// This handler never mints an Oxagen Steering app token for it. That app holds
+// the only bypass on the "Oxagen merges" ruleset, so its token could merge
+// without Oxagen's queue, stamp, and publish. The token comes from the
+// workspace's own installation, which the rulesets stop at main. When that
+// installation does not cover the steering repository, the handler refuses
+// with `conflict: steering_repo_propose_only`.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError } from "@oxagen/oxagen";
@@ -44,6 +52,8 @@ export interface GovernedRepository {
   fullName: string;
   providerRepositoryId: string;
   role: "main" | "linked";
+  /** True when this head is the workspace's steering repository. */
+  steering: boolean;
 }
 
 /**
@@ -84,7 +94,34 @@ export async function selectGovernedRepository(
     )
     .limit(1);
   if (!row) return null;
-  return { ...row, role: row.role === "main" ? "main" : "linked" };
+  // A `steering` head is the workspace's main head under its new name, so it
+  // maps to "main" and not to "linked".
+  return {
+    ...row,
+    role: row.role === "linked" ? "linked" : "main",
+    steering: schema.isSteeringHeadRole(row.role),
+  };
+}
+
+/** The refusal for a steering repository the workspace token cannot write. */
+function steeringRepoProposeOnly(): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "steering_repo_propose_only",
+    message:
+      "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.",
+  });
+}
+
+/**
+ * GitHub's HTTP status on a refused mint, or null. `createAppInstallationToken`
+ * throws a plain Error whose message starts with the status, and its own test
+ * pins that format.
+ */
+function mintRefusalStatus(err: unknown): number | null {
+  if (!(err instanceof Error)) return null;
+  const match = /^GitHub App token mint failed \((\d{3})\)/.exec(err.message);
+  return match ? Number(match[1]) : null;
 }
 
 export interface GithubTokenIssueDeps {
@@ -174,6 +211,15 @@ export function createTachoGithubTokenIssueHandler(
     );
     const installation = await deps.installation(scope);
     if (!installation) {
+      // No installation covers the steering repository, and attaching one
+      // may not reach it either. The steering PR path always does.
+      if (repo.steering) {
+        logger.info(
+          { ...scope, repository: repo.fullName },
+          "tacho.github_token.issue: steering repository has no installation",
+        );
+        throw steeringRepoProposeOnly();
+      }
       throw new HandlerError({
         code: "conflict",
         reason: "github_not_connected",
@@ -188,6 +234,16 @@ export function createTachoGithubTokenIssueHandler(
         repositoryId: Number(repo.providerRepositoryId),
       });
     } catch (err) {
+      // GitHub answers 422 when the installation does not cover a repository
+      // in the mint's scope. For the steering repository that is the designed
+      // outcome, so the handler names the steering PR path.
+      if (repo.steering && mintRefusalStatus(err) === 422) {
+        logger.info(
+          { ...scope, repository: repo.fullName },
+          "tacho.github_token.issue: installation does not cover steering repository",
+        );
+        throw steeringRepoProposeOnly();
+      }
       logger.error(
         { err, repository: repo.fullName },
         "GitHub refused the scoped token mint",

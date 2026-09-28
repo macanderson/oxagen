@@ -9,7 +9,7 @@ export const toolClassificationSet = registerCapability({
   name: "set_tool_classification",
   domain: "tool",
   description:
-    "Set a tool version's safety classification — risk grade, side-effect class, egress class, consequence tags, measures and data classes — recording who reclassified it and why. Classification describes the tool; class kill switches and approval rules decide against it.",
+    "Set a tool version's safety classification — risk grade, side-effect class, egress class, impacts, measures and data classes — recording who reclassified it and why. Classification describes the tool; class kill switches and approval rules decide against it.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

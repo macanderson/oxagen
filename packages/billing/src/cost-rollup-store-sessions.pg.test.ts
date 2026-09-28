@@ -10,10 +10,33 @@ import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => ({
-  readModelCallFrames: vi.fn(async () => []),
-  readTachoToolCallFrames: vi.fn(async () => []),
-}));
+const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => {
+  /** One priced proxy call as the frame read returns it (#4493). */
+  const frame = (at: string, tools: number, steering: number) => ({
+    at,
+    model: "claude-sonnet-5",
+    provider: "anthropic",
+    inputUncached: 10,
+    cacheRead: 0,
+    cacheWrite5m: 0,
+    cacheWrite1h: 0,
+    output: 5,
+    reasoning: 0,
+    serverToolRequests: 0,
+    reportedCostMicros: null,
+    basis: "client_attested" as const,
+    toolDefinitionTokens: tools,
+    contextFrameTokens: null,
+    steeringTokens: steering,
+  });
+  return {
+    readModelCallFrames: vi.fn(async () => [
+      frame("2001-09-01T00:00:01.000Z", 12_000, 500),
+      frame("2001-09-01T00:00:02.000Z", 400, 400),
+    ]),
+    readTachoToolCallFrames: vi.fn(async () => []),
+  };
+});
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
@@ -100,5 +123,26 @@ describe.skipIf(!enabled)("a wrapped run's session list against Postgres", () =>
       rootSessionUuid: uuids.root,
       sessionUuids: [uuids.root, uuids.child],
     });
+  });
+
+  it("stores the sources summed over its priced calls, with an unmeasured one as null (#4493)", async () => {
+    await rebuildRunTotals(publicId("root"));
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({
+          toolDefinitionTokens: schema.runTotals.toolDefinitionTokens,
+          contextFrameTokens: schema.runTotals.contextFrameTokens,
+          steeringTokens: schema.runTotals.steeringTokens,
+        })
+        .from(schema.runTotals)
+        .where(eq(schema.runTotals.runId, publicId("root"))),
+    );
+    expect(rows).toEqual([
+      {
+        toolDefinitionTokens: 12_400,
+        contextFrameTokens: null,
+        steeringTokens: 900,
+      },
+    ]);
   });
 });

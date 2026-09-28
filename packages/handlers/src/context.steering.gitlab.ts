@@ -1,7 +1,10 @@
 // context.steering.gitlab.ts: the GitLab implementation of the steering port
 // (#3762; ADR-061). A Context PR on GitLab is a merge request, a check is a
 // commit status, and every call authenticates with the project access token
-// the workspace connected.
+// the workspace connected. A steering project the provisioner created is the
+// one exception: it hangs from a `gitlab_steering` connection with no token of
+// its own, so the seam uses the group access token the organization stored for
+// that project's group.
 //
 // Three GitLab facts shape this file:
 //
@@ -23,17 +26,21 @@ import {
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
 import { HandlerError } from "@oxagen/oxagen";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
+  refuseLongCompare,
+  tagExists,
   type SteeringChangedFile,
   type SteeringHost,
   type SteeringRepository,
+  type SteeringTreeEntry,
 } from "./context.steering.github";
 import {
   GITLAB_PROVIDER,
   resolveGitLabCredential,
 } from "./lib/gitlab-credential";
+import { GITLAB_STEERING_PROVIDER } from "./lib/steering-app";
 import { logger } from "./logger";
 
 type GitLabRepository = Extract<SteeringRepository, { provider: "gitlab" }>;
@@ -57,6 +64,11 @@ const STATUS_DESCRIPTION_LIMIT = 255;
 
 /** How many times the branch update polls a rebase before giving up. */
 const REBASE_POLL_LIMIT = 30;
+
+/** Entries per page of a tree listing, GitLab's largest page. */
+const TREE_PAGE_SIZE = 100;
+/** Pages of a tree listing read before the tree counts as too large. */
+const TREE_PAGE_LIMIT = 100;
 
 const GITLAB_BASE_URL = "https://gitlab.com";
 const GITLAB_REQUEST_TIMEOUT_MS = 30_000;
@@ -148,6 +160,31 @@ export interface GitLabSteeringConnection {
   repo: string;
   approvedFullName: string;
   approvedDefaultRef: string;
+  /**
+   * The GitLab group whose stored group access token reaches this project.
+   * Set only for a steering project the provisioner bound through a
+   * `gitlab_steering` connection. Every other project uses the token stored
+   * on its own connection.
+   */
+  steeringGroupId?: number;
+}
+
+/**
+ * The group id a `gitlab_steering` connection's `delivery_config` holds, or
+ * null when it holds none. The provisioner writes `{ groupId, groupPath }`.
+ */
+function steeringGroupIdOf(config: unknown): number | null {
+  const raw =
+    config !== null && typeof config === "object"
+      ? (config as { groupId?: unknown }).groupId
+      : undefined;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 /**
@@ -158,6 +195,11 @@ export interface GitLabSteeringConnection {
  * binding rows outlive a revoked connection, and steering must stop at the
  * revoke rather than when the purge runs. There is no legacy fallback: GitLab
  * support starts with bindings.
+ *
+ * The connection is either the workspace's own GitLab project connection or
+ * the `gitlab_steering` connection the provisioner wrote. For the second, the
+ * answer carries the group id whose token the seam uses, and a connection
+ * with no group id refuses, because no stored token can reach the project.
  */
 export async function readGitLabConnection(scope: {
   orgId: string;
@@ -172,6 +214,8 @@ export async function readGitLabConnection(scope: {
         repo: schema.repositoryBindings.providerName,
         approvedFullName: schema.repositoryBindings.providerFullName,
         approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
+        connectorId: schema.sourceConnections.connectorId,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -192,9 +236,15 @@ export async function readGitLabConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
           eq(schema.repositoryBindingHeads.provider, GITLAB_PROVIDER),
-          eq(schema.sourceConnections.connectorId, GITLAB_PROVIDER),
+          inArray(schema.sourceConnections.connectorId, [
+            GITLAB_PROVIDER,
+            GITLAB_STEERING_PROVIDER,
+          ]),
           isNull(schema.sourceConnections.deletedAt),
           notInArray(schema.sourceConnections.status, [
             ...RETIRED_CONNECTION_STATUSES,
@@ -202,7 +252,24 @@ export async function readGitLabConnection(scope: {
         ),
       )
       .limit(1);
-    return bound ?? null;
+    if (!bound) return null;
+    const answer: GitLabSteeringConnection = {
+      connectionId: bound.connectionId,
+      projectId: bound.projectId,
+      owner: bound.owner,
+      repo: bound.repo,
+      approvedFullName: bound.approvedFullName,
+      approvedDefaultRef: bound.approvedDefaultRef,
+    };
+    if (bound.connectorId !== GITLAB_STEERING_PROVIDER) return answer;
+    const groupId = steeringGroupIdOf(bound.deliveryConfig);
+    if (groupId === null)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "steering_group_missing",
+        message: `The steering project ${bound.approvedFullName} hangs from a GitLab steering connection with no group id, so Oxagen cannot pick its group access token. Provision the steering repository again.`,
+      });
+    return { ...answer, steeringGroupId: groupId };
   });
 }
 
@@ -256,6 +323,36 @@ export interface SteeringGitLabDeps {
     providerId: string,
     accountId: string,
   ) => Promise<string | null>;
+  /**
+   * The group access token the organization stored for one GitLab group, or
+   * null when none is usable. The seam calls it for a steering project the
+   * provisioner bound. Defaults to the provisioner's `steeringGroupToken`.
+   */
+  steeringGroupToken?: (
+    orgId: string,
+    groupId: number,
+  ) => Promise<string | null>;
+}
+
+/** The provisioner's group token reader, loaded only when a head needs it. */
+async function storedSteeringGroupToken(
+  orgId: string,
+  groupId: number,
+): Promise<string | null> {
+  const { steeringGroupToken } = await import("./steering_repo.provision");
+  return steeringGroupToken(orgId, groupId);
+}
+
+/**
+ * The refusal for a steering project whose group has no usable stored token.
+ * It names the project and the repair, and nothing about any token.
+ */
+function steeringGroupNotConnected(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "gitlab_not_connected",
+    message: `No usable GitLab group access token is stored for the group that holds the steering project ${fullName}. An organization owner must connect the group again.`,
+  });
 }
 
 const defaultDeps: SteeringGitLabDeps = {
@@ -274,6 +371,72 @@ function describeStatus(title: string, summary: string): string {
   return text.length <= STATUS_DESCRIPTION_LIMIT
     ? text
     : `${text.slice(0, STATUS_DESCRIPTION_LIMIT - 1)}…`;
+}
+
+/** One diff version of a merge request: the head it showed, and when. */
+interface DiffVersion {
+  sha: string;
+  at: number;
+}
+
+/**
+ * A merge request's diff versions, newest first. GitLab records a version
+ * each time the source branch moves, stamped by its own clock. A version with
+ * no head or no readable time is left out.
+ */
+async function diffVersions(
+  rest: GitLabRest,
+  projectPath: string,
+  iid: number,
+): Promise<DiffVersion[]> {
+  const out = await rest.request<
+    { head_commit_sha?: string | null; created_at?: string | null }[]
+  >("GET", `${projectPath}/merge_requests/${iid}/versions?per_page=100`);
+  return (Array.isArray(out.data) ? out.data : [])
+    .flatMap((v) => {
+      const at = Date.parse(v.created_at ?? "");
+      return v.head_commit_sha && !Number.isNaN(at)
+        ? [{ sha: v.head_commit_sha, at }]
+        : [];
+    })
+    .sort((a, b) => b.at - a.at);
+}
+
+/**
+ * Refuse a merge when the project keeps approvals across a push. The merge
+ * places each approval on the diff version it followed (`listApprovals`), and
+ * this setting is a second guard: a project that keeps every approval on
+ * every push is refused with `approvals_not_head_bound`, and so is one whose
+ * setting GitLab will not show (403, or 404 on a tier without it). Any other
+ * failure, such as a 429 or a 5xx, escapes, so the caller reports GitLab's
+ * error and a retry can pass. A rejected token escapes as a 401, so the
+ * caller names the token.
+ */
+async function requireApprovalsResetOnPush(
+  rest: GitLabRest,
+  projectPath: string,
+  fullName: string,
+): Promise<void> {
+  let reset: boolean | null | undefined;
+  try {
+    const out = await rest.request<{
+      reset_approvals_on_push?: boolean | null;
+    }>("GET", `${projectPath}/approvals`);
+    reset = out.data.reset_approvals_on_push;
+  } catch (err) {
+    if (!isStatus(err, 403) && !isStatus(err, 404)) throw err;
+    reset = null;
+  }
+  if (reset === true) return;
+  const fix = `Turn on "Reset approvals on push" (Settings > Merge requests > Approval settings, where GitLab labels it "Remove all approvals when commits are added to the source branch").`;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "approvals_not_head_bound",
+    message:
+      reset === false
+        ? `GitLab keeps approvals on ${fullName} after a push, so an approval may not cover the head Oxagen merges. ${fix}`
+        : `GitLab did not say whether ${fullName} resets approvals on push, so an approval may not cover the head Oxagen merges. ${fix} The setting needs GitLab Premium.`,
+  });
 }
 
 function asPullRequest(mr: GitLabMergeRequest) {
@@ -366,10 +529,20 @@ export function createSteeringGitLab(
             "This workspace has no connected GitLab project; a Context PR needs the main repository (MC spec §10.1)",
         });
       }
-      const token = await deps.resolveToken({
-        ...scope,
-        connectionId: connection.connectionId,
-      });
+      let token: string;
+      if (connection.steeringGroupId === undefined) {
+        token = await deps.resolveToken({
+          ...scope,
+          connectionId: connection.connectionId,
+        });
+      } else {
+        const stored = await (
+          deps.steeringGroupToken ?? storedSteeringGroupToken
+        )(scope.orgId, connection.steeringGroupId);
+        if (stored === null)
+          throw steeringGroupNotConnected(connection.approvedFullName);
+        token = stored;
+      }
       const gl = deps.client(token);
       let project;
       try {
@@ -448,7 +621,11 @@ export function createSteeringGitLab(
     ensureBranch(repo, branch, fromBranch, options) {
       return call(repo, async (gl, project) => {
         try {
-          await gl.createBranch({ project, branch, ref: fromBranch });
+          await gl.createBranch({
+            project,
+            branch,
+            ref: options?.at ?? fromBranch,
+          });
         } catch (err) {
           if (
             isStatus(err, 400) &&
@@ -585,9 +762,62 @@ export function createSteeringGitLab(
       );
     },
 
+    listTree(repo, commit) {
+      return callRest(repo, async (rest, path) => {
+        const entries: SteeringTreeEntry[] = [];
+        for (let page = 1; page <= TREE_PAGE_LIMIT; page++) {
+          const out = await rest.request<
+            { id: string; path: string; type: string }[]
+          >(
+            "GET",
+            `${path}/repository/tree?recursive=true&ref=${encodeURIComponent(commit)}&per_page=${TREE_PAGE_SIZE}&page=${page}`,
+          );
+          for (const item of out.data)
+            if (item.type === "blob")
+              entries.push({ path: item.path, blob: item.id });
+          if (out.data.length < TREE_PAGE_SIZE) return entries;
+        }
+        // A partial tree would read every file it missed as deleted.
+        throw new HandlerError({
+          code: "conflict",
+          reason: "tree_too_large",
+          message: `${repo.fullName} holds more than ${TREE_PAGE_SIZE * TREE_PAGE_LIMIT} entries at ${commit}, more than a steering publish reads.`,
+        });
+      });
+    },
+
+    createTag(repo, name, sha) {
+      return callRest(repo, async (rest, path) => {
+        try {
+          await rest.request("POST", `${path}/repository/tags`, {
+            tag_name: name,
+            ref: sha,
+          });
+          return;
+        } catch (err) {
+          // GitLab answers 400 when the tag exists. At `sha` it is this tag,
+          // written by an earlier run of the same publish.
+          if (!isStatus(err, 400) && !isStatus(err, 409)) throw err;
+          let tagged: string;
+          try {
+            const out = await rest.request<{ commit: { id: string } }>(
+              "GET",
+              `${path}/repository/tags/${encodeURIComponent(name)}`,
+            );
+            tagged = out.data.commit.id;
+          } catch {
+            // No such tag: the 400 was about something else, so report it.
+            throw err;
+          }
+          if (tagged !== sha) throw tagExists(repo.fullName, name, tagged, sha);
+        }
+      });
+    },
+
     changedPaths(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return [
           ...new Set(
             diffs.flatMap((d) =>
@@ -687,6 +917,7 @@ export function createSteeringGitLab(
     changedFiles(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return diffs.flatMap((d): SteeringChangedFile[] => {
           if (d.renamed && d.oldPath !== d.newPath)
             return [
@@ -762,7 +993,8 @@ export function createSteeringGitLab(
             message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
           });
         // GitLab brings a merge request up to date by rebasing it onto the
-        // target branch. The rebase runs in the background, so poll it.
+        // target branch as it is now, so it cannot pin `args.base`. The
+        // rebase runs in the background, so poll it.
         await rest.request(
           "PUT",
           `${path}/merge_requests/${args.number}/rebase`,
@@ -783,7 +1015,8 @@ export function createSteeringGitLab(
                 reason: "update_conflict",
                 message: `${repo.defaultBranch} does not rebase cleanly under ${args.branch}: ${mr.data.merge_error}. Resolve the conflict on the steering PR, then merge again.`,
               });
-            return { headSha: mr.data.sha ?? args.expectedHead };
+            // A rebase makes no merge commit, so it has no parents to answer.
+            return { headSha: mr.data.sha ?? args.expectedHead, parents: null };
           }
           await deps.sleep(1000);
         }
@@ -795,31 +1028,79 @@ export function createSteeringGitLab(
       });
     },
 
-    resetBranch(repo, branch, sha) {
+    resetBranch(repo, branch, args) {
       // GitLab has no call that moves a branch backwards, so the branch is
-      // deleted and created again at `sha`. The merge request keeps its
-      // source branch name and picks the branch up again.
+      // deleted and created again at `to`. The merge request keeps its
+      // source branch name and picks the branch up again. Neither call takes
+      // an expected head, so the branch is read first: a branch that moved
+      // off `from` is left alone.
       return call(repo, async (gl, project) => {
+        const head = await gl.getBranch({ project, branch });
+        if (head?.commitSha !== args.from) return false;
         await gl.deleteBranch({ project, branch });
-        await gl.createBranch({ project, branch, ref: sha });
+        await gl.createBranch({ project, branch, ref: args.to });
+        return true;
       });
     },
 
     listApprovals(repo, number) {
-      return callRest(repo, async (rest, path) => {
+      return callRest(repo, async (rest, path, gl, project) => {
+        // A project that keeps every approval on every push is refused first.
+        await requireApprovalsResetOnPush(rest, path, repo.fullName);
         const out = await rest.request<{
-          approved_by?: { user: { id: number; username: string } | null }[];
+          approved_by?: {
+            user: { id: number; username: string } | null;
+            approved_at?: string | null;
+          }[];
         }>("GET", `${path}/merge_requests/${number}/approvals`);
-        const users = (out.data.approved_by ?? []).flatMap((a) =>
-          a.user ? [a.user] : [],
+        const approvals = (out.data.approved_by ?? []).flatMap((a) =>
+          a.user ? [{ user: a.user, at: Date.parse(a.approved_at ?? "") }] : [],
         );
-        // GitLab does not say which head each reviewer approved, so an
-        // approval stands whatever the head is now.
+        if (approvals.length === 0) return [];
+        // GitLab documents `approved_at` on every approval. One without a
+        // readable time cannot be placed on a head, so the merge refuses and
+        // names it, owners included, as it does for a project that keeps
+        // approvals on push. Dropping it would report a real review as absent.
+        const undated = approvals.find(({ at }) => Number.isNaN(at));
+        if (undated)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "approvals_not_head_bound",
+            message: `GitLab did not report when ${undated.user.username} approved !${number}, so Oxagen cannot tell which head the approval covers. Oxagen needs a GitLab version that reports approved_at on each merge request approval.`,
+          });
+        // The head is read after the approvals. A push between the two reads
+        // makes a head the merge queue never produced, so no approval of it
+        // counts.
+        const head = (await gl.getMergeRequest({ project, iid: number })).sha;
+        if (!head)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "gitlab_refused",
+            message: `GitLab did not report a head commit for !${number}. Merge again once GitLab shows the merge request's commits.`,
+          });
+        // GitLab does not say which head a reviewer approved, and it keeps
+        // approvals across a push that leaves the diff's patch unchanged, as
+        // the queue's own rebase does. So each approval is placed on the
+        // newest diff version GitLab recorded strictly before it. A version
+        // recorded at the same instant does not count as seen. An approval
+        // older than every version is dropped. None is given a null head,
+        // because the merge reads null as "any head".
+        const versions = await diffVersions(rest, path, number);
+        if (!versions.some((v) => v.sha === head))
+          throw new HandlerError({
+            code: "conflict",
+            reason: "gitlab_refused",
+            message: `GitLab has not recorded ${head} as a version of !${number} yet, so no approval can be placed on it. Merge again in a minute.`,
+          });
+        const placed = approvals.flatMap(({ user, at }) => {
+          const seen = versions.find((v) => v.at < at);
+          return seen ? [{ user, commitSha: seen.sha }] : [];
+        });
         return Promise.all(
-          users.map(async (user) => ({
+          placed.map(async ({ user, commitSha }) => ({
             userId: await linkAccount(GITLAB_PROVIDER, String(user.id)),
             login: user.username,
-            commitSha: null,
+            commitSha,
           })),
         );
       });

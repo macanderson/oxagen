@@ -1,4 +1,9 @@
-import { rebuildDailyTotals, rebuildRunTotals, utcDay } from "@oxagen/billing";
+import {
+  checkNoProgress,
+  rebuildDailyTotals,
+  rebuildRunTotals,
+  utcDay,
+} from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { RUN_PROGRESSED_EVENT } from "../events";
@@ -28,6 +33,13 @@ import { logger } from "../logger";
  *
  * No findings pass: findings judge a finished run, and `cost.run-rollup`
  * requests one at the seal.
+ *
+ * Last, the no-progress check (#4490) reads the run's tool calls against the
+ * workspace's no-progress limit and records each loop that reached it. It
+ * runs here, not at the seal, because an enforced limit pauses the run while
+ * it is still open. A workspace with no limit skips it after one read. It
+ * runs after the rollup steps so a failure in it never holds back the run's
+ * cost.
  */
 export const [costRunProgress] = createFunction(
   {
@@ -66,12 +78,23 @@ export const [costRunProgress] = createFunction(
         day: run.day,
       }),
     );
+    const noProgress = await step.run("no-progress", () =>
+      checkNoProgress({
+        runId,
+        orgId: run.orgId,
+        workspaceId: run.workspaceId,
+        sealed: run.sealed,
+      }),
+    );
     logger.info(
       {
         runId,
         sealed: run.sealed,
         costMicros: run.costMicros,
         costBasis: run.costBasis,
+        noProgressLoops: noProgress.loops,
+        noProgressNewLoops: noProgress.newLoops,
+        noProgressPaused: noProgress.paused,
       },
       "cost.run-progress complete",
     );

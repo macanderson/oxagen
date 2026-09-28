@@ -350,6 +350,25 @@ describe("the GitHub seam", () => {
     });
   });
 
+  it("creates a branch at the commit it is given in one call", async () => {
+    const createBranch = vi
+      .fn()
+      .mockResolvedValue({ ref: "refs/heads/memory/x", sha: "planned" });
+    const { gh } = seam(fakeClient({ createBranch }));
+    const repo = await gh.resolveRepository(SCOPE);
+    await gh.ensureBranch(repo, "memory/x", "main", {
+      exclusive: true,
+      at: "planned",
+    });
+    expect(createBranch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: "memory/x",
+        fromBranch: "main",
+        fromSha: "planned",
+      }),
+    );
+  });
+
   it("records a check run's url, answers null when the token cannot write checks, and refuses on anything else", async () => {
     const createCheckRun = vi
       .fn()
@@ -692,7 +711,7 @@ describe("the workspace's main repository", () => {
   // repository the workspace can see and is not steered by. Context PRs and
   // `get_steering_freshness` both resolve through this read, so an unordered
   // `limit(1)` without the filter could steer either one by a linked head.
-  it("names the head's role in the joined read, so only a main head steers", async () => {
+  it("names the head's role in the joined read, so only a steering head steers", async () => {
     const counts = db({ bound: [] });
     await readGitHubConnection(SELECT_SCOPE);
     expect(columnsIn(counts.boundWhere).has("role")).toBe(true);
@@ -770,7 +789,7 @@ describe("the workspace's main repository", () => {
   // compiled, because a reader that ignored the column would write steering
   // into a linked repository. repository.pg.test.ts proves the same with both
   // heads present in Postgres.
-  it("asks only for the main head, on both reads", async () => {
+  it("asks only for a steering head, on both reads", async () => {
     const captured: SQL[] = [];
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -799,8 +818,8 @@ describe("the workspace's main repository", () => {
     const dialect = new PgDialect();
     for (const cond of captured.slice(0, 2)) {
       const query = dialect.sqlToQuery(cond);
-      expect(query.sql).toMatch(/"role" = \$\d+/);
-      expect(query.params).toContain("main");
+      expect(query.sql).toMatch(/"role" in \(\$\d+\)/);
+      expect(query.params).toContain("steering");
     }
   });
 
@@ -874,6 +893,139 @@ describe("the workspace's main repository", () => {
       expect(counts.headReads).toBe(0);
       expect(counts.connectionReads).toBe(0);
     });
+  });
+
+  // The steering repo provisioner binds its repository through a
+  // `github_steering` connection, and only the Oxagen Steering app can reach
+  // that repository. The read carries the installation id so the seam can
+  // mint that app's token.
+  describe("a steering head the provisioner bound", () => {
+    const PROVISIONED = {
+      owner: "acme",
+      repo: "acme-steering",
+      approvedFullName: "acme/acme-steering",
+      approvedDefaultRef: "main",
+      connectorId: "github_steering",
+    };
+
+    it("carries the Oxagen Steering installation id", async () => {
+      db({
+        bound: [
+          {
+            ...PROVISIONED,
+            deliveryConfig: { installationId: 4242, owner: "acme" },
+          },
+        ],
+      });
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        source: "binding",
+        owner: "acme",
+        repo: "acme-steering",
+        approvedFullName: "acme/acme-steering",
+        approvedDefaultRef: "main",
+        steeringInstallationId: 4242,
+      });
+    });
+
+    it("reads an installation id stored as a string of digits", async () => {
+      db({
+        bound: [{ ...PROVISIONED, deliveryConfig: { installationId: "4242" } }],
+      });
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toMatchObject({
+        steeringInstallationId: 4242,
+      });
+    });
+
+    it.each([
+      ["no delivery config", null],
+      ["no installation id", { owner: "acme" }],
+      ["a zero installation id", { installationId: 0 }],
+      ["an installation id that is not a number", { installationId: "abc" }],
+    ])("refuses a steering head with %s", async (_label, deliveryConfig) => {
+      db({ bound: [{ ...PROVISIONED, deliveryConfig }] });
+      await expect(readGitHubConnection(SELECT_SCOPE)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_installation_missing",
+      });
+    });
+
+    it("leaves a head on the workspace's own GitHub connection alone", async () => {
+      db({
+        bound: [
+          {
+            ...PROVISIONED,
+            connectorId: "github",
+            deliveryConfig: { installationId: "555" },
+          },
+        ],
+      });
+      const answer = await readGitHubConnection(SELECT_SCOPE);
+      expect(answer).not.toHaveProperty("steeringInstallationId");
+    });
+  });
+});
+
+describe("the GitHub seam's token for a provisioned steering repository", () => {
+  const PROVISIONED_BOUND: SteeringConnection = {
+    source: "binding",
+    owner: "a-intel",
+    repo: "platform",
+    approvedFullName: "a-intel/platform",
+    approvedDefaultRef: "main",
+    steeringInstallationId: 4242,
+  };
+
+  it("mints the Oxagen Steering token and never asks for the workspace's", async () => {
+    const resolveToken = vi.fn(async () => "workspace-tok");
+    const steeringToken = vi.fn(async () => "steering-tok");
+    const client = vi.fn(() => fakeClient());
+    const gh = createSteeringGitHub({
+      readConnection: async () => PROVISIONED_BOUND,
+      resolveToken,
+      steeringToken,
+      client,
+    });
+    await gh.resolveRepository(SCOPE);
+    expect(steeringToken).toHaveBeenCalledWith(4242);
+    expect(resolveToken).not.toHaveBeenCalled();
+    expect(client).toHaveBeenCalledWith("steering-tok");
+  });
+
+  it("uses the workspace's token for a head with no steering installation", async () => {
+    const resolveToken = vi.fn(async () => "workspace-tok");
+    const steeringToken = vi.fn(async () => "steering-tok");
+    const client = vi.fn(() => fakeClient());
+    const gh = createSteeringGitHub({
+      readConnection: async () => BOUND,
+      resolveToken,
+      steeringToken,
+      client,
+    });
+    await gh.resolveRepository(SCOPE);
+    expect(resolveToken).toHaveBeenCalledWith(SCOPE);
+    expect(steeringToken).not.toHaveBeenCalled();
+    expect(client).toHaveBeenCalledWith("workspace-tok");
+  });
+
+  it("refuses by default when the deployment has no Oxagen Steering app", async () => {
+    vi.stubEnv("OXAGEN_STEERING_APP_ID", "");
+    vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "");
+    vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "");
+    try {
+      const resolveToken = vi.fn(async () => "workspace-tok");
+      const gh = createSteeringGitHub({
+        readConnection: async () => PROVISIONED_BOUND,
+        resolveToken,
+        client: () => fakeClient(),
+      });
+      await expect(gh.resolveRepository(SCOPE)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_app_unconfigured",
+      });
+      expect(resolveToken).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
@@ -1009,6 +1161,36 @@ describe("the GitHub seam's merge-queue calls", () => {
     await expect(
       failing.gh.changedFiles(failing.repo, "b0", "h1"),
     ).rejects.toMatchObject({ reason: "github_refused" });
+
+    // GitHub's compare stops at 300 files without saying so. A list that
+    // long may be missing paths, so both reads refuse it; 299 still passes.
+    let count = 300;
+    const long = await restSeam(
+      {},
+      fakeClient({
+        compareCommits: async () =>
+          Array.from({ length: count }, (_, i) => file(`r${i}.toml`, "added")),
+      }),
+    );
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "too_many_files",
+      message: expect.stringContaining(
+        "h1 changes 300 or more files against b0",
+      ),
+    });
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({ reason: "too_many_files" });
+    count = 299;
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
   });
 
   const commitRoutes = (patch: Route = () => ({})): Record<string, Route> => ({
@@ -1099,27 +1281,62 @@ describe("the GitHub seam's merge-queue calls", () => {
     });
   });
 
-  it("merges main into the branch and answers the new head, or the old one when nothing changed", async () => {
-    let merged: unknown = { sha: "u1" };
+  it("merges the main head it was given into the branch and answers the new head and its parents, or the old head when nothing changed", async () => {
+    let merged: unknown = { sha: "u1", parents: [{ sha: "h1" }, { sha: "m1" }] };
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
     const { gh, repo, calls } = await restSeam(
       { [`POST ${REPO_PATH}/merges`]: () => merged },
       fakeClient({ getBranch }),
     );
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "u1",
+      parents: ["h1", "m1"],
     });
-    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "main" });
+    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "m1" });
     merged = undefined;
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "h1",
+      parents: null,
+    });
+  });
+
+  it("refuses an update that merged main into a push made after the head was read", async () => {
+    let merged: unknown = { sha: "u2", parents: [{ sha: "h2" }, { sha: "m1" }] };
+    const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
+    const { gh, repo } = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: () => merged },
+      fakeClient({ getBranch }),
+    );
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+    });
+    merged = { sha: "u2" };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      reason: "head_moved",
     });
   });
 
   it("refuses a branch update on a moved head, a conflict, or any other refusal", async () => {
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h2" }));
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     const moved = await restSeam({}, fakeClient({ getBranch }));
     await expect(moved.gh.updateBranch(moved.repo, args)).rejects.toMatchObject(
       { reason: "head_moved" },
@@ -1146,15 +1363,110 @@ describe("the GitHub seam's merge-queue calls", () => {
     ).rejects.toMatchObject({ reason: "github_refused" });
   });
 
-  it("resets a branch by forcing its ref back, and wraps a refusal", async () => {
-    const ref = `PATCH ${REPO_PATH}/git/refs/heads/steering/ctx.rule`;
-    const { gh, repo, calls } = await restSeam({ [ref]: () => ({}) });
-    await gh.resetBranch(repo, "steering/ctx.rule", "p1");
-    expect(calls[0]!.body).toEqual({ sha: "p1", force: true });
-    const refused = await restSeam({ [ref]: refuse(422, "Reference missing") });
-    await expect(
-      refused.gh.resetBranch(refused.repo, "steering/ctx.rule", "p1"),
-    ).rejects.toMatchObject({ reason: "github_refused" });
+  describe("resetBranch", () => {
+    const branch = "steering/ctx.rule";
+    const args = { from: "s1", to: "p1" };
+    const repoInfo = { [`GET ${REPO_PATH}`]: () => ({ node_id: "R_1" }) };
+    const at = (sha: string | null) =>
+      fakeClient({
+        getBranch: vi.fn(async () => (sha ? { name: "b", sha } : null)),
+      });
+
+    it("moves the ref back only while it still points at the stamp", async () => {
+      const getBranch = vi.fn();
+      const { gh, repo, calls } = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: { clientMutationId: null } },
+          }),
+        },
+        fakeClient({ getBranch }),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+        `GET ${REPO_PATH}`,
+        "POST /graphql",
+      ]);
+      expect(calls[1]!.body).toMatchObject({
+        query: expect.stringContaining("updateRefs"),
+        variables: {
+          repositoryId: "R_1",
+          refUpdates: [
+            {
+              name: "refs/heads/steering/ctx.rule",
+              afterOid: "p1",
+              beforeOid: "s1",
+              force: true,
+            },
+          ],
+        },
+      });
+      expect(getBranch).not.toHaveBeenCalled();
+    });
+
+    it("leaves a branch that moved off the stamp", async () => {
+      const graphql = () => ({
+        data: { updateRefs: null },
+        errors: [{ message: "Ref was not at the expected value" }],
+      });
+      for (const sha of ["h9", null]) {
+        const { gh, repo } = await restSeam(
+          { ...repoInfo, "POST /graphql": graphql },
+          at(sha),
+        );
+        await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(false);
+      }
+    });
+
+    it("answers true when the reset landed but its answer was lost", async () => {
+      const { gh, repo } = await restSeam(
+        { ...repoInfo, "POST /graphql": refuse(502, "Bad Gateway") },
+        at("p1"),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+    });
+
+    it("wraps a refusal when the branch is still at the stamp", async () => {
+      const errors = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: null },
+            errors: [{ message: "Resource not accessible" }, { message: "x" }],
+          }),
+        },
+        at("s1"),
+      );
+      await expect(
+        errors.gh.resetBranch(errors.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: "Resource not accessible; x",
+      });
+      const http = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        at("s1"),
+      );
+      await expect(
+        http.gh.resetBranch(http.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+      const unread = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        fakeClient({
+          getBranch: vi.fn().mockRejectedValue(new Error("unreachable")),
+        }),
+      );
+      await expect(
+        unread.gh.resetBranch(unread.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+    });
   });
 
   it("lists each reviewer's standing approval across pages, with the linked Oxagen user", async () => {
@@ -1228,6 +1540,112 @@ describe("the GitHub seam's merge-queue calls", () => {
         environment: "steering",
         description: "d",
       }),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("lists a commit's files with their blob ids, leaving out directories and submodules", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: false,
+        tree: [
+          { path: "rules", type: "tree", sha: "t2" },
+          { path: "rules/a.toml", type: "blob", sha: "b1" },
+          { path: "vendor", type: "commit", sha: "s1" },
+        ],
+      }),
+    });
+    await expect(gh.listTree(repo, "c1")).resolves.toEqual([
+      { path: "rules/a.toml", blob: "b1" },
+    ]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("walks a tree GitHub cut short one directory at a time", async () => {
+    const { gh, repo } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: true,
+        tree: [],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t1`]: () => ({
+        tree: [
+          { path: "rules", type: "tree", sha: "t2" },
+          { path: "README.md", type: "blob", sha: "b0" },
+        ],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t2`]: () => ({
+        tree: [{ path: "a.toml", type: "blob", sha: "b1" }],
+      }),
+    });
+    const entries = await gh.listTree(repo, "c1");
+    expect(entries).toHaveLength(2);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { path: "README.md", blob: "b0" },
+        { path: "rules/a.toml", blob: "b1" },
+      ]),
+    );
+  });
+
+  it("refuses a tree when even one directory's listing is cut short", async () => {
+    const { gh, repo } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: true,
+        tree: [],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t1`]: () => ({ truncated: true, tree: [] }),
+    });
+    await expect(gh.listTree(repo, "c1")).rejects.toMatchObject({
+      reason: "tree_too_large",
+    });
+    const missing = await restSeam({});
+    await expect(
+      missing.gh.listTree(missing.repo, "c1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("tags a commit, and keeps a tag that already names that commit", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: () => ({ ref: "refs/tags/steering/3" }),
+    });
+    await expect(
+      gh.createTag(repo, "steering/3", "sq1"),
+    ).resolves.toBeUndefined();
+    expect(calls[0]!.body).toEqual({ ref: "refs/tags/steering/3", sha: "sq1" });
+    const again = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+      [`GET ${REPO_PATH}/git/ref/tags/steering/3`]: () => ({
+        object: { sha: "sq1" },
+      }),
+    });
+    await expect(
+      again.gh.createTag(again.repo, "steering/3", "sq1"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses to move a tag that names another commit", async () => {
+    const { gh, repo } = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+      [`GET ${REPO_PATH}/git/ref/tags/steering/3`]: () => ({
+        object: { sha: "sq0" },
+      }),
+    });
+    await expect(gh.createTag(repo, "steering/3", "sq1")).rejects.toMatchObject(
+      { reason: "tag_exists", message: expect.stringContaining("sq0") },
+    );
+    const refused = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(403, "Resource not accessible"),
+    });
+    await expect(
+      refused.gh.createTag(refused.repo, "steering/3", "sq1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+    const unreadable = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+    });
+    await expect(
+      unreadable.gh.createTag(unreadable.repo, "steering/3", "sq1"),
     ).rejects.toMatchObject({ reason: "github_refused" });
   });
 

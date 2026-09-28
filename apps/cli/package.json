@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Oxagen governance CLI — spend, lineage, grounding, credentials, and audit (agentic coding lives in the stella CLI)",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,10 +20,10 @@
     "metering",
     "knowledge-graph"
   ],
-  "homepage": "https://github.com/oxagen/oxagen-monorepo#readme",
+  "homepage": "https://github.com/macanderson/oxagen#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oxagen/oxagen-monorepo.git",
+    "url": "git+https://github.com/macanderson/oxagen.git",
     "directory": "apps/cli"
   },
   "scripts": {
@@ -42,6 +42,7 @@
   "dependencies": {
     "@oxagen/billing": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/steering-check": "workspace:*",
     "@oxagen/steering-freshness": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "commander": "12.1.0",

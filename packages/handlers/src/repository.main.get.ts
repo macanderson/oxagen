@@ -41,7 +41,7 @@ import {
   buildManageInstallationUrl,
 } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   isLiveConnectionRow,
   resolveWorkspaceGithubInstallation,
@@ -224,14 +224,15 @@ export function createMainRepositoryGetHandler(
             and(
               eq(schema.repositoryBindingHeads.orgId, scope.orgId),
               eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-              // Only the MAIN repository steers. `role` is 'main' for every head
-              // the binder writes, and 'linked' only for one the exclusivity
-              // migration demoted because an older head already claimed the
-              // repository. A reader that ignores the column goes on resolving
-              // through a demoted head, so the cross-workspace steering collision
-              // the index forbids would survive the reconciliation that was meant
-              // to end it.
-              eq(schema.repositoryBindingHeads.role, "main"),
+              // Only the steering head steers. Its role is 'steering', and
+              // 'linked' marks a repository that only receives PRs. A reader
+              // that ignores the column goes on resolving through a linked
+              // head, so the cross-workspace steering collision the index
+              // forbids would survive the reconciliation meant to end it.
+              inArray(
+                schema.repositoryBindingHeads.role,
+                schema.STEERING_HEAD_ROLES,
+              ),
             ),
           )
           .limit(1);

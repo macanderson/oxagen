@@ -90,3 +90,22 @@ export type AgentInterjectionRaisedEventData = {
   /** RFC 3339; the deadline the control plane computed, not the host's. */
   expiresAt: string;
 };
+
+/**
+ * Asks `memory.curate` to settle one workspace's memory PRs and open the
+ * day's memory PR (ADR-206). Sent by `run.reflect` when a sealed run leaves
+ * 20 or more memories waiting in the workspace, and by `memory.curate-daily`
+ * once a day for every workspace with memory work. Data is
+ * `{ orgId, workspaceId }`. Deliveries for one workspace are debounced.
+ */
+export const MEMORY_CURATE_REQUESTED_EVENT = "memory/curate.requested";
+
+/**
+ * Asks `conversation.title` to replace a new in-app conversation's prompt
+ * title with one the fast model writes (#4571). Sent after the insert
+ * commits, by `chat.message.send` and by the assistant turn through the
+ * sender `@oxagen/handlers/register` installs. Data is
+ * `{ conversationId, orgId, workspaceId }`; the function reads the question
+ * back inside the tenant scope.
+ */
+export const CONVERSATION_OPENED_EVENT = "chat/conversation.opened";

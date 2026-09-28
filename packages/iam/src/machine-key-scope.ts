@@ -102,9 +102,11 @@ export const STELLA_TELEMETRY_PURPOSE = "stella_operational_telemetry_v1";
 export const MACHINE_KEY_CAPABILITIES: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  // The enrolled daemon's four control calls, and nothing else. A host
-  // reports events, fetches its mandate, polls for commands, and asks for a
-  // repository-scoped git credential (ADR-151); it does not
+  // The enrolled daemon's six control calls, and nothing else. A host
+  // reports events, fetches its mandate, polls for commands, asks for a
+  // repository-scoped git credential (ADR-151), sends the memories its
+  // harnesses wrote, and asks for the memories a prompt should see
+  // (ADR-206); it does not
   // enroll, revoke, or read the fleet. The command poll is `fetch_commands`
   // since ADR-025 renamed it from `fetch_tacho_commands`; this list kept the
   // old name, so every host's poll was refused and a pause or revoke never
@@ -117,6 +119,12 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     // ADR-151: the git credential a wrapped run pushes with. Refused unless
     // the repository is bound to the host's workspace.
     "create_github_token",
+    // ADR-206: a memory a harness wrote on the host. It waits for the
+    // curator in the key's own workspace.
+    "ingest_tacho_memories",
+    // ADR-206: the memories one prompt on the host should see, from the
+    // key's own workspace. Each record served is stamped as recalled.
+    "recall_tacho_memories",
   ]),
   [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),

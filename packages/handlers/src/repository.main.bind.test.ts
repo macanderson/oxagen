@@ -426,7 +426,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
-            role: "main",
+            role: "steering",
             provider: "github",
             connectionId: "conn-uuid",
             providerRepositoryId: "4242",
@@ -450,7 +450,7 @@ describe("bind_main_repository", () => {
         [
           {
             id: "head-uuid",
-            role: "main",
+            role: "steering",
             provider: "github",
             // The head already names the connection the bind resolved, so
             // nothing has moved and nothing is written.
@@ -504,7 +504,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository through a replacement connection", () => {
     const RETIRED_HEAD = {
       id: "head-uuid",
-      role: "main",
+      role: "steering",
       provider: "github",
       // The connection this workspace acted through before the delete.
       connectionId: "retired-conn-uuid",
@@ -636,7 +636,7 @@ describe("bind_main_repository", () => {
   describe("re-binding the same repository after its recorded facts moved", () => {
     const HEAD = {
       id: "head-uuid",
-      role: "main",
+      role: "steering",
       provider: "github",
       connectionId: "conn-uuid",
       providerRepositoryId: "9001",
@@ -767,6 +767,90 @@ describe("bind_main_repository", () => {
   // claim, so `rethrowHeadConflict` passes them through and the operator used
   // to get a 500 on the one move that would give the workspace a main
   // repository back.
+  // A steering repo provisioned by `provision_steering_repo` carries head role
+  // `steering`, not `main`. Each check below read only `main` before, so each
+  // test pins the steering role through it.
+  describe("a workspace whose head carries the steering role", () => {
+    const STEERING_HEAD = {
+      id: "head-uuid",
+      role: "steering",
+      provider: "github",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    const CURRENT_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 1,
+      connectionId: "conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: REPO.defaultBranch,
+    };
+
+    it("refuses a repository that is the steering repo of another workspace", async () => {
+      claimedElsewhere([{ role: "steering", workspaceId: "ws-other" }]);
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.locks).toBe(0);
+    });
+
+    it("refuses a different repository while this workspace has a steering head", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[{ ...STEERING_HEAD, providerRepositoryId: "4242" }]],
+      });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_bound",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.updates).toHaveLength(0);
+    });
+
+    it("writes nothing when the steering repo itself is bound again and nothing moved", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[STEERING_HEAD], [CURRENT_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+      expect(writes.inserts).toHaveLength(0);
+      expect(
+        writes.updates.filter((w) => w.table === schema.repositoryBindingHeads),
+      ).toHaveLength(0);
+      expect(out).toMatchObject({
+        bindingId: "rpb_first",
+        boundAt: CURRENT_BINDING.createdAt.toISOString(),
+      });
+    });
+
+    it("keeps a steering head's role when a re-bind writes a successor", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [
+          [STEERING_HEAD],
+          [{ ...CURRENT_BINDING, configuredDefaultRef: "main" }],
+        ],
+        insertReturns: [{ id: "binding-2", publicId: "rpb_second" }],
+      });
+      await handler().run(INPUT, makeCTX());
+      const head = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({
+        currentBindingId: "binding-2",
+        role: "steering",
+      });
+    });
+  });
+
   describe("binding a repository this workspace holds as a linked head", () => {
     const LINKED_HEAD = {
       id: "head-uuid",
@@ -800,7 +884,7 @@ describe("bind_main_repository", () => {
       const headUpdate = writes.updates.find(
         (w) => w.table === schema.repositoryBindingHeads,
       );
-      expect(headUpdate?.values).toMatchObject({ role: "main" });
+      expect(headUpdate?.values).toMatchObject({ role: "steering" });
       // The binding records nothing new, so the retained version answers.
       expect(out.bindingId).toBe("rpb_first");
       // `boundAt` is the promotion, not the original link: now is when this
@@ -810,14 +894,14 @@ describe("bind_main_repository", () => {
       );
     });
 
-    it("still refuses a different repository while a main head sits beside the linked one", async () => {
+    it("still refuses a different repository while a steering head sits beside the linked one", async () => {
       const writes = wire({
         connections: [CONNECTED_CONNECTION],
         selects: [
           [
             {
               id: "other-head",
-              role: "main",
+              role: "steering",
               provider: "github",
               connectionId: "conn-uuid",
               providerRepositoryId: "4242",
@@ -851,7 +935,7 @@ describe("bind_main_repository", () => {
         (w) => w.table === schema.repositoryBindingHeads,
       );
       expect(head?.values).toMatchObject({
-        role: "main",
+        role: "steering",
         provider: "github",
         currentBindingId: "binding-1",
       });
@@ -869,7 +953,7 @@ describe("bind_main_repository", () => {
   describe("a repository already steering another workspace", () => {
     it("is refused, and the refusal names neither the org nor the workspace holding it", async () => {
       claimedElsewhere([
-        { role: "main", workspaceId: "someone-elses-workspace" },
+        { role: "steering", workspaceId: "someone-elses-workspace" },
       ]);
       const writes = wire({ connections: [CONNECTED_CONNECTION] });
 
@@ -921,10 +1005,10 @@ describe("bind_main_repository", () => {
       expect(writes.locks).toBe(0);
     });
 
-    it("a main head elsewhere wins the sentence over a linked one, as the trigger orders them", async () => {
+    it("a steering head elsewhere wins the sentence over a linked one, as the trigger orders them", async () => {
       claimedElsewhere([
         { role: "linked", workspaceId: "ws-linked" },
-        { role: "main", workspaceId: "ws-main" },
+        { role: "steering", workspaceId: "ws-main" },
       ]);
       wire({ connections: [CONNECTED_CONNECTION] });
       await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
@@ -932,7 +1016,7 @@ describe("bind_main_repository", () => {
       });
     });
 
-    it("refuses as repository_linked_elsewhere when the trigger refuses the main head because a link landed elsewhere mid-flight", async () => {
+    it("refuses as repository_linked_elsewhere when the trigger refuses the steering head because a link landed elsewhere mid-flight", async () => {
       claimedElsewhere([]);
       wire({ connections: [CONNECTED_CONNECTION] });
       const violation = Object.assign(new Error("insert failed"), {
@@ -1063,13 +1147,13 @@ describe("bind_main_repository", () => {
       expect(writes.inserts).toHaveLength(0);
     });
 
-    it("marks the head it writes as the main repository, which is what the index constrains", async () => {
+    it("marks the head it writes as the steering repository, which is what the index constrains", async () => {
       const writes = wire({ connections: [CONNECTED_CONNECTION] });
       await handler().run(INPUT, makeCTX());
       const head = writes.inserts.find(
         (w) => w.table === schema.repositoryBindingHeads,
       );
-      expect(head?.values).toMatchObject({ role: "main" });
+      expect(head?.values).toMatchObject({ role: "steering" });
     });
 
     it("refuses an organisation on a dedicated data plane, where the index cannot see other planes", async () => {
@@ -1192,7 +1276,7 @@ describe("bind_main_repository on GitLab", () => {
     const head = writes.inserts.find(
       (w) => w.table === schema.repositoryBindingHeads,
     );
-    expect(head?.values).toMatchObject({ provider: "gitlab", role: "main" });
+    expect(head?.values).toMatchObject({ provider: "gitlab", role: "steering" });
     expect(out).toMatchObject({
       provider: "gitlab",
       connectionId: "con_gl1",
@@ -1206,7 +1290,7 @@ describe("bind_main_repository on GitLab", () => {
       [
         {
           id: "head-uuid",
-          role: "main",
+          role: "steering",
           provider: "github",
           connectionId: "conn-uuid",
           providerRepositoryId: "4242",

@@ -489,6 +489,21 @@
       }
     },
     {
+      "name": "remember_lesson",
+      "file": "agent.memory.lesson.remember.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "list_memories",
       "file": "agent.memory.list.ts",
       "domain": "agent",
@@ -542,6 +557,21 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "record_reflection",
+      "file": "agent.memory.reflection.record.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },
@@ -2069,6 +2099,22 @@
     {
       "name": "merge_context_pr",
       "file": "context.pr.merge.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "merge_pr_without_review",
+      "file": "context.pr.merge_without_review.ts",
       "domain": "context",
       "mode": "sync",
       "surfaces": [
@@ -6172,6 +6218,38 @@
       }
     },
     {
+      "name": "set_operator_pseudonyms",
+      "file": "spend.operator_pseudonyms.set.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_operator_ranking",
+      "file": "spend.operator_ranking.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_statement",
       "file": "spend.statement.export.ts",
       "domain": "spend",
@@ -6435,6 +6513,72 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "add_group_machine",
+      "file": "tacho.machine_group.add.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_machine_groups",
+      "file": "tacho.machine_group.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "remove_group_machine",
+      "file": "tacho.machine_group.remove.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "ingest_tacho_memories",
+      "file": "tacho.memories.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "recall_tacho_memories",
+      "file": "tacho.memories.recall.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

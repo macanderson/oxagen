@@ -63,6 +63,16 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_appends", policyClass: "standard" },
   // The repository sync's per-workspace state (ADR-184).
   { table: "agent.context_sync_state", policyClass: "standard" },
+  // Memories, reflections, and memory PRs (ADR-206); org_id + workspace_id NOT NULL.
+  { table: "agent.memory_reflections", policyClass: "standard" },
+  { table: "agent.memory_prs", policyClass: "standard" },
+  { table: "agent.memories", policyClass: "standard" },
+  { table: "agent.memory_rejections", policyClass: "standard" },
+  { table: "agent.memory_recalls", policyClass: "standard" },
+  // Published steering versions and the publish lease (S3, #4449); org_id +
+  // workspace_id NOT NULL.
+  { table: "agent.steering_versions", policyClass: "standard" },
+  { table: "agent.steering_publications", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
@@ -150,6 +160,15 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.daily_totals", policyClass: "standard" },
   // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
   { table: "cost.findings", policyClass: "standard" },
+  // The model calls a finding claims (ADR-208); org_id + workspace_id NOT NULL.
+  { table: "cost.finding_claims", policyClass: "standard" },
+  // What each run's pull requests became (#4491); org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_outcomes", policyClass: "standard" },
+  // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // The loops that reached a workspace's no-progress limit (spend spec,
+  // detector 1); org_id + workspace_id NOT NULL.
+  { table: "cost.no_progress_hits", policyClass: "standard" },
   // The organization's cost-center labels (ADR-142): org_id NOT NULL, no
   // workspace_id, so org_only.
   { table: "cost.cost_centers", policyClass: "org_only" },
@@ -308,6 +327,12 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // refuses for a Claude Code or Codex session. org_id + workspace_id both
   // NOT NULL → standard tenant_isolation RLS.
   { table: "workspace.tacho_session_policy", policyClass: "standard" },
+  // The no-progress limit the owning team sets for its runs. org_id +
+  // workspace_id both NOT NULL → standard tenant_isolation RLS.
+  { table: "workspace.no_progress_policy", policyClass: "standard" },
+  // The operator ranking's pseudonym setting (spend spec, Operator ranking).
+  // org_id + workspace_id both NOT NULL → standard tenant_isolation RLS.
+  { table: "workspace.operator_ranking_policy", policyClass: "standard" },
   // Verified-Outcome Market Router governance. org_id NOT NULL + workspace_id
   // NULLABLE → workspace_nullable tenant_isolation RLS.
   { table: "workspace.routing_policy", policyClass: "workspace_nullable" },
@@ -368,4 +393,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // what keeps one organisation's evidence out of another's tier.
   { table: "tacho.gateway_chains", policyClass: "standard" },
   { table: "tacho.contained_launches", policyClass: "standard" },
+  // Machine groups (mcp-studio-spec, Local servers, Machines): which enrolled
+  // hosts may run a local server. Read by the cloud gateway before it signs
+  // a local call envelope.
+  { table: "tacho.machine_group_members", policyClass: "standard" },
 ];

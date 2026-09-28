@@ -8,19 +8,21 @@
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { SecurityEventInput } from "@oxagen/telemetry";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { gitBlobId } from "@oxagen/steering-bundle";
 import type { SteeringDeps } from "./context.steering.deps";
-import type {
-  SteeringApproval,
-  SteeringChangedFile,
-  SteeringGitHub,
-  SteeringRepository,
+import {
+  tagExists,
+  type SteeringApproval,
+  type SteeringChangedFile,
+  type SteeringGitHub,
+  type SteeringRepository,
 } from "./context.steering.github";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
-  headMoved,
-  proposalMoved,
+  refusedWrite,
   type AppendRow,
+  type ProposalGuard,
   type ProposalRow,
   type PublishedRecordRow,
   type SteeringStore,
@@ -169,6 +171,7 @@ export class MemoryStore implements SteeringStore {
       promotionEventId: null,
       dismissedAt: null,
       dismissedReason: null,
+      mergeClaimedAt: null,
       ...values,
     };
     this.proposals.push(row);
@@ -232,15 +235,21 @@ export class MemoryStore implements SteeringStore {
     id: string,
     patch: Parameters<SteeringStore["updateProposal"]>[1],
     from: readonly ProposalStatus[],
-    guard?: { headSha: string },
+    guard?: ProposalGuard,
   ) {
     const i = this.proposals.findIndex((p) => p.id === id);
     if (i < 0) throw new Error(`no proposal ${id}`);
     const current = this.proposals[i]!;
-    if (!from.includes(current.status as ProposalStatus))
-      throw proposalMoved(current.publicId, current.status);
-    if (guard && current.headSha !== guard.headSha)
-      throw headMoved(current.publicId, current.headSha, guard.headSha);
+    const claimStands =
+      guard?.noClaimSince !== undefined &&
+      current.mergeClaimedAt !== null &&
+      current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime();
+    if (
+      !from.includes(current.status as ProposalStatus) ||
+      (guard?.headSha !== undefined && current.headSha !== guard.headSha) ||
+      claimStands
+    )
+      throw refusedWrite(current, from, guard);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
     if (
       OPEN.has(next.status) &&
@@ -520,9 +529,11 @@ export class MemoryStore implements SteeringStore {
       checksum: version.checksum,
     });
     this.ledger.push(promotion);
-    await this.updateProposal(proposal.id, { status: "merged" }, [
-      "checks_passed",
-    ]);
+    await this.updateProposal(
+      proposal.id,
+      { status: "merged", mergeClaimedAt: null },
+      ["checks_passed"],
+    );
     Object.assign(this.proposals.find((p) => p.id === proposal.id)!, {
       mergedCommit: input.commitSha,
       mergedAt: input.mergedAt,
@@ -635,8 +646,11 @@ export class FakeGitHub implements SteeringGitHub {
   deploymentRefused = false;
   /**
    * The approvals every PR holds, or null for the default: one approval by
-   * REVIEWER at the PR's current head, standing for "a linked reviewer
-   * approved on the host". A test about approvals sets its own list.
+   * REVIEWER, standing for "a linked reviewer approved on the host". The
+   * default approval sits at the last head someone other than the merge queue
+   * pushed. A merge the queue made on top of that head never moves it, so a
+   * queue test proves the approval carries rather than being given again. A
+   * test about approvals sets its own list.
    */
   approvals: SteeringApproval[] | null = null;
   /** Runs right after each stamp commit, so a test can move main then. */
@@ -787,7 +801,7 @@ export class FakeGitHub implements SteeringGitHub {
     _repo: SteeringRepository,
     branch: string,
     from: string,
-    options?: { exclusive: boolean },
+    options?: { exclusive: boolean; at?: string },
   ) {
     if (this.heads.has(branch)) {
       if (options?.exclusive) {
@@ -800,7 +814,7 @@ export class FakeGitHub implements SteeringGitHub {
       return;
     }
     this.branches.push({ branch, from });
-    this.heads.set(branch, this.shaOf(from));
+    this.heads.set(branch, options?.at ?? this.shaOf(from));
   }
   async reconcileFiles(
     _repo: SteeringRepository,
@@ -920,6 +934,19 @@ export class FakeGitHub implements SteeringGitHub {
       .filter((path) => path.startsWith(`${dir}/`))
       .sort();
   }
+  /** Every tag `createTag` wrote: its name, and the commit it names. */
+  tags = new Map<string, string>();
+  async listTree(_repo: SteeringRepository, commit: string) {
+    return [...this.tree(this.shaOf(commit))]
+      .map(([path, content]) => ({ path, blob: gitBlobId(content) }))
+      .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  }
+  async createTag(repo: SteeringRepository, name: string, sha: string) {
+    const tagged = this.tags.get(name);
+    if (tagged !== undefined && tagged !== sha)
+      throw tagExists(repo.fullName, name, tagged, sha);
+    this.tags.set(name, sha);
+  }
   /** Remove a file on a branch, as a person with push access does. */
   remove(branch: string, path: string, message = ""): string {
     const sha = this.commit(branch, path, "", message);
@@ -1003,7 +1030,8 @@ export class FakeGitHub implements SteeringGitHub {
       return this.refused("GitHub API error 409: Head branch was modified");
     }
     this.merges.push(args);
-    const mergeSha = `merge${args.number}`;
+    // A full 40-character object id: S5's publish() refuses any other commit.
+    const mergeSha = String(args.number).padStart(40, "0");
     for (const [key, content] of this.files)
       if (key.startsWith(`${head}:`))
         this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
@@ -1093,19 +1121,26 @@ export class FakeGitHub implements SteeringGitHub {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
   /**
-   * Merge the production branch into the PR's branch, as GitHub's "Update
-   * branch" does. Each path the branch changed since the merge base keeps the
-   * branch's version; a path both sides changed differently is a conflict.
+   * Merge `base`, a production branch head, into the PR's branch, as GitHub's
+   * merges endpoint does. Each path the branch changed since the merge base
+   * keeps the branch's version; a path both sides changed differently is a
+   * conflict.
    */
   async updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ) {
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }> {
     const head = this.heads.get(args.branch);
     if (head !== args.expectedHead) return this.headMovedOn(args.branch);
-    const main = this.shaOf(repo.defaultBranch);
-    if (this.lineage(head).includes(main)) return { headSha: head };
-    const mergeBase = this.mergeBase(repo.defaultBranch, head);
+    const main = args.base;
+    if (this.lineage(head).includes(main))
+      return { headSha: head, parents: null };
+    const mergeBase = this.mergeBase(main, head);
     const baseTree = mergeBase
       ? this.tree(mergeBase)
       : new Map<string, string>();
@@ -1140,11 +1175,17 @@ export class FakeGitHub implements SteeringGitHub {
     this.updates.push({ branch: args.branch, from: head, to: sha });
     const pr = this.pulls.find((p) => p.number === args.number);
     if (pr && pr.state === "open") pr.headSha = sha;
-    return { headSha: sha };
+    return { headSha: sha, parents: [head, main] };
   }
-  async resetBranch(_repo: SteeringRepository, branch: string, sha: string) {
-    this.heads.set(branch, sha);
-    this.resets.push({ branch, sha });
+  async resetBranch(
+    _repo: SteeringRepository,
+    branch: string,
+    args: { from: string; to: string },
+  ) {
+    if (this.heads.get(branch) !== args.from) return false;
+    this.heads.set(branch, args.to);
+    this.resets.push({ branch, sha: args.to });
+    return true;
   }
   async listApprovals(
     _repo: SteeringRepository,
@@ -1154,8 +1195,21 @@ export class FakeGitHub implements SteeringGitHub {
     const pr = this.pull(number);
     if (pr.state !== "open") return [];
     return [
-      { userId: REVIEWER, login: "reviewer", commitSha: this.shaOf(pr.head) },
+      {
+        userId: REVIEWER,
+        login: "reviewer",
+        commitSha: this.pushedHead(this.shaOf(pr.head)),
+      },
     ];
+  }
+  /** `sha`, walked back through every merge the queue made on top of it. */
+  private pushedHead(sha: string): string {
+    let head = sha;
+    for (;;) {
+      const update = this.updates.find((u) => u.to === head);
+      if (!update) return head;
+      head = update.from;
+    }
   }
   async recordDeployment(
     _repo: SteeringRepository,
@@ -1419,7 +1473,12 @@ export class MemorySyncStore implements SyncStore {
   async linkMergedProposal(
     scope: SyncScope,
     proposalId: string,
-    args: { lineageId: string; mergedCommit: string; mergedAt: Date },
+    args: {
+      lineageId: string;
+      mergedCommit: string;
+      mergedAt: Date;
+      noClaimSince: Date;
+    },
   ) {
     const record = this.store.records.find(
       (r) =>
@@ -1435,6 +1494,11 @@ export class MemorySyncStore implements SyncStore {
     if (!promotion) return false;
     const proposal = this.store.proposals.find((p) => p.id === proposalId);
     if (!proposal || !OPEN.has(proposal.status)) return false;
+    if (
+      proposal.mergeClaimedAt !== null &&
+      proposal.mergeClaimedAt.getTime() > args.noClaimSince.getTime()
+    )
+      return false;
     Object.assign(proposal, {
       status: "merged",
       mergedCommit: args.mergedCommit,
@@ -1442,6 +1506,7 @@ export class MemorySyncStore implements SyncStore {
       mergedByUserId: null,
       publishedRecordId: record.id,
       promotionEventId: promotion.id,
+      mergeClaimedAt: null,
     });
     return true;
   }

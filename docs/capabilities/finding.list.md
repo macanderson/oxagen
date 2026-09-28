@@ -37,14 +37,14 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | `counts` | object | `{ findings, high, medium, operators }`; `operators` counts the distinct operators whose runs the listed findings cite |
 | `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first |
 
-Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`.
+Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one.
 
 A read that names `runId` adds `citation` to each finding: what it cites in that run. A read without `runId` carries no `citation` key.
 
 | Field | Type | Description |
 |---|---|---|
 | `runId` | string | the run asked for |
-| `runLevel` | boolean | true for a finding that cites the run as a whole (`cache_writes_never_read`); it pins no turn, `frames` is empty, and `framesTotal` is 0 |
+| `runLevel` | boolean | true for a finding that cites the run as a whole (`cache_writes_never_read`, `standing_context`, `model_class_fit`); it pins no turn, `frames` is empty, and `framesTotal` is 0 |
 | `frames` | object[] or null | `{ seq, sessionUuid? }` for each cited call, seqs ascending, at most 50. `sessionUuid` names a subagent chain and is absent on the run's own chain, because a seq counts on its own chain. Null when the finding was written before frames were cited, until the findings job's next pass |
 | `framesTotal` | integer or null | every call the finding cites in the run, including any past the 50. On a finding written before frames were cited, the calls its evidence counted in the run, and null when that evidence did not itemise the run (it itemises the ten runs with the largest saving) |
 
@@ -54,9 +54,11 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 
 | Kind | Level and subject | Counterfactual |
 |---|---|---|
+| `spin_loops` | agent, or the operator when the run names no agent | nothing: each turn that only repeated a call made 20 or more times in a row counts at its own priced cost |
+| `repeated_shell_commands` | tool `Bash` | nothing: each turn that only re-ran shell commands with an identical earlier result counts at its own priced cost |
+| `duplicate_tool_calls` | agent, or the operator when the run names no agent | nothing: each turn that only repeated calls with an identical earlier result counts at its own priced cost |
 | `cache_writes_never_read` | operator (`prn_…`), or the agent when the run names no operator | the written prefix sent uncached |
-| `repeated_shell_commands` | tool `Bash` | the earlier identical result, already in the run |
-| `duplicate_tool_calls` | agent | the earlier identical result of a read-only tool, already in the run |
 | `unpaged_results` | tool | the same result capped at 4,000 tokens |
+| `repeated_instructions` | the agent or operator every run it reached names, or the workspace when those runs name more than one | a steering record in place of the paste: each later prompt that repeats it counts at the priced cost of the turns it answered, an upper bound. It claims no frame and adds nothing to the unproductive spend headline |
 
-ADR-062's detector table has the detection rule, the rollup and frame fields each kind reads, and the §12.8 rows that wait on a recorder.
+A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-208 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.

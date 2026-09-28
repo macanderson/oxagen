@@ -11,7 +11,7 @@
 // tool's upstream, so every field here is plain JSON with a published schema.
 import { z } from "zod";
 import {
-  consequenceTagSchema,
+  impactSchema,
   toolEgressClassSchema,
   toolRiskGradeSchema,
   toolSideEffectClassSchema,
@@ -202,7 +202,7 @@ export const toolSuggestionSchema = z
     risk: toolRiskGradeSchema.optional(),
     side_effect: toolSideEffectClassSchema.optional(),
     egress: toolEgressClassSchema.optional(),
-    impacts: uniqueList(consequenceTagSchema, "impacts", 32).optional(),
+    impacts: uniqueList(impactSchema, "impacts", 32).optional(),
   })
   .strict();
 export type ToolSuggestion = z.output<typeof toolSuggestionSchema>;

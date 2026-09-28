@@ -25,6 +25,9 @@
 // per (workspace, kind, subject) the detectors see in the trailing window,
 // replaced on every pass; a row a person applied or dismissed is kept with
 // the decision on it, and the detectors cite only runs that started after it.
+//
+// `finding_claims` holds the model calls each whole-call finding priced, so
+// the headline unproductive spend counts a call once (ADR-208).
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { sql } from "drizzle-orm";
 import {
@@ -36,6 +39,7 @@ import {
   integer,
   jsonb,
   numeric,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -506,17 +510,35 @@ export const costCenters = costSchema.table(
 
 // ── findings ──────────────────────────────────────────────────────────────────
 /**
- * What the detectors can prove from the recorded frames today (spec §12.8
- * and the mockup's Spend › Findings; ADR-062's detector table names the
- * field every other §12.8 row waits on).
+ * The finding kinds (spec §12.8; ADR-062's detector table). The first four
+ * shipped with ADR-062. ADR-208 adds `spin_loops` and the seven kinds the
+ * later unproductive spend detectors write, so each lane adds a detector
+ * without a migration of its own.
  */
 export const FINDING_KINDS = [
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
 ] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
+
+/**
+ * The detectors whose findings price whole model calls and claim them
+ * (ADR-208, counting rule 1): 1 is spin and poll loops, 7 is recurring runs,
+ * and 8 is spend with no outcome. The headline counts a claimed call once,
+ * under the lowest of these numbers that claims it.
+ */
+export const FINDING_CLAIM_DETECTORS = [1, 7, 8] as const;
+export type FindingClaimDetector = (typeof FINDING_CLAIM_DETECTORS)[number];
 
 /** Where the fix applies: the level whose key `subject` carries. */
 const FINDING_LEVELS = ["tool", "agent", "operator", "workspace"] as const;
@@ -622,6 +644,135 @@ export const findings = costSchema.table(
     decisionCheck: check(
       "findings_decision_check",
       sql`(${t.status} = 'open') = (${t.decidedAt} IS NULL) AND (${t.status} = 'applied') = (${t.appliedActionId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// ── finding_claims ────────────────────────────────────────────────────────────
+/**
+ * The model calls a finding claims (ADR-208). A finding from detector 1, 7,
+ * or 8 prices whole calls, and it writes one row per call it priced. The
+ * headline unproductive spend adds these rows and counts a call once, under
+ * the lowest detector that claims it. The rows go with their finding: a pass
+ * that rewrites or deletes an open finding rewrites or deletes its claims.
+ */
+export const findingClaims = costSchema.table(
+  "finding_claims",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    findingId: uuid("finding_id")
+      .notNull()
+      .references(() => findings.id, { onDelete: "cascade" }),
+    // 1 (spin and poll loops), 7 (recurring runs), or 8 (spend with no outcome).
+    detector: smallint("detector").notNull(),
+    // The run's public id (`tse_…` or `arun_…`).
+    runId: text("run_id").notNull(),
+    // The call's instant as the frame store wrote it, then `#` and its place
+    // among the run's calls at that instant (`frameKey` in @oxagen/billing).
+    frameKey: text("frame_key").notNull(),
+    frameAt: timestamp("frame_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    // The run's operator (`prn_…`); null when the run names none.
+    operatorKey: text("operator_key"),
+    // What the call cost, in integer micro-units of `currency`.
+    costMicros: bigint("cost_micros", { mode: "bigint" }).notNull(),
+    currency: text("currency").notNull().default("USD"),
+  },
+  (t) => ({
+    findingFrameIdx: uniqueIndex("finding_claims_finding_frame_idx").on(
+      t.findingId,
+      t.runId,
+      t.frameKey,
+    ),
+    workspaceFrameAtIdx: index("finding_claims_workspace_frame_at_idx").on(
+      t.workspaceId,
+      t.frameAt,
+    ),
+    detectorCheck: check(
+      "finding_claims_detector_check",
+      sql`${t.detector} IN (${sql.raw(FINDING_CLAIM_DETECTORS.join(", "))})`,
+    ),
+    costCheck: check("finding_claims_cost_check", sql`${t.costMicros} >= 0`),
+  }),
+);
+
+/** The no-progress limit's modes (workspace.no_progress_policy). */
+const NO_PROGRESS_HIT_MODES = ["observe", "enforced"] as const;
+
+/** `paused` only when an enforced limit paused the run. */
+const NO_PROGRESS_HIT_OUTCOMES = ["would_pause", "paused"] as const;
+
+// `no_progress_hits` is one row per loop that reached the workspace's
+// no-progress limit (spend spec, detector 1). A loop is the same call, with
+// the same tool, input digest, and output digest, made again and again in a
+// row. `cost.run-progress` runs the check on every progress rollup and reads
+// the whole run each time, so a loop's row is written once and later passes
+// only raise `repeats` as the loop grows. The mode and outcome are the ones
+// in force when the loop reached the limit, and are never rewritten.
+export const noProgressHits = costSchema.table(
+  "no_progress_hits",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    // The run's public id: `arun_…` (evidence ledger) or `tse_…` (tacho).
+    runId: text("run_id").notNull(),
+    tool: text("tool").notNull(),
+    inputDigest: text("input_digest").notNull(),
+    outputDigest: text("output_digest").notNull(),
+    // 1 for the call's first loop in the run, 2 for its second.
+    loop: integer("loop").notNull(),
+    // The calls in the loop so far, the first one included.
+    repeats: integer("repeats").notNull(),
+    // The limit the loop reached.
+    limitRepeats: integer("limit_repeats").notNull(),
+    // The call that reached the limit, counted from 1 in the run's call order.
+    atCall: integer("at_call").notNull(),
+    mode: text("mode").notNull(),
+    outcome: text("outcome").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    loopIdx: uniqueIndex("no_progress_hits_loop_idx").on(
+      t.workspaceId,
+      t.runId,
+      t.tool,
+      t.inputDigest,
+      t.outputDigest,
+      t.loop,
+    ),
+    orgWorkspaceIdx: index("no_progress_hits_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    modeCheck: check(
+      "no_progress_hits_mode_check",
+      sql`${t.mode} IN (${inList(NO_PROGRESS_HIT_MODES)})`,
+    ),
+    outcomeCheck: check(
+      "no_progress_hits_outcome_check",
+      sql`${t.outcome} IN (${inList(NO_PROGRESS_HIT_OUTCOMES)})`,
+    ),
+    // Only an enforced limit pauses a run.
+    pausedCheck: check(
+      "no_progress_hits_paused_check",
+      sql`${t.outcome} = 'would_pause' OR ${t.mode} = 'enforced'`,
+    ),
+    loopCheck: check("no_progress_hits_loop_check", sql`${t.loop} >= 1`),
+    repeatsCheck: check(
+      "no_progress_hits_repeats_check",
+      sql`${t.limitRepeats} >= 2 AND ${t.repeats} >= ${t.limitRepeats}`,
+    ),
+    atCallCheck: check(
+      "no_progress_hits_at_call_check",
+      sql`${t.atCall} >= ${t.limitRepeats}`,
     ),
   }),
 );

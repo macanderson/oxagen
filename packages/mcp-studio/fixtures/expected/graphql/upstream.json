@@ -1,0 +1,817 @@
+[
+  {
+    "description": "Read any record by its global id.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "node",
+    "outputSchema": {
+      "properties": {
+        "__typename": {
+          "enum": [
+            "Comment",
+            "Issue",
+            "Team",
+            "User"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "id",
+          "property": "id",
+          "type": "ID!"
+        }
+      ],
+      "field": "Query.node",
+      "kind": "graphql",
+      "operation_type": "query",
+      "selection": "{ __typename id }"
+    }
+  },
+  {
+    "description": "Read one issue by its number.",
+    "inputSchema": {
+      "properties": {
+        "number": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "type": "object"
+    },
+    "name": "issue",
+    "outputSchema": {
+      "properties": {
+        "assignee": {
+          "properties": {
+            "__typename": {
+              "enum": [
+                "Team",
+                "User"
+              ],
+              "type": "string"
+            },
+            "email": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "closedAt": {
+          "description": "An ISO 8601 date and time with an offset."
+        },
+        "createdAt": {
+          "description": "An ISO 8601 date and time with an offset."
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "priority": {
+          "enum": [
+            "LOW",
+            "NORMAL",
+            "HIGH",
+            "URGENT"
+          ],
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "OPEN",
+            "IN_PROGRESS",
+            "CLOSED"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "number",
+          "property": "number",
+          "type": "Int!"
+        }
+      ],
+      "field": "Query.issue",
+      "kind": "graphql",
+      "operation_type": "query",
+      "selection": "{ id number title body state priority labels createdAt closedAt assignee { __typename ... on User { id name email } ... on Team { id name } } }"
+    }
+  },
+  {
+    "description": "List issues, newest first, as a Relay connection.",
+    "inputSchema": {
+      "properties": {
+        "after": {
+          "type": "string"
+        },
+        "before": {
+          "type": "string"
+        },
+        "filter": {
+          "properties": {
+            "assigneeId": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "priority": {
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "HIGH",
+                "URGENT"
+              ],
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "OPEN",
+                "IN_PROGRESS",
+                "CLOSED"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "first": {
+          "type": "integer"
+        },
+        "last": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "issues",
+    "outputSchema": {
+      "properties": {
+        "edges": {
+          "items": {
+            "properties": {
+              "cursor": {
+                "type": "string"
+              },
+              "node": {
+                "properties": {
+                  "body": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "closedAt": {
+                    "description": "An ISO 8601 date and time with an offset."
+                  },
+                  "createdAt": {
+                    "description": "An ISO 8601 date and time with an offset."
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "labels": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "number": {
+                    "type": "integer"
+                  },
+                  "priority": {
+                    "enum": [
+                      "LOW",
+                      "NORMAL",
+                      "HIGH",
+                      "URGENT"
+                    ],
+                    "type": "string"
+                  },
+                  "state": {
+                    "enum": [
+                      "OPEN",
+                      "IN_PROGRESS",
+                      "CLOSED"
+                    ],
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "pageInfo": {
+          "properties": {
+            "endCursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "hasNextPage": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "totalCount": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "paging": {
+      "has_more": "pageInfo.hasNextPage",
+      "input": "after",
+      "items": "edges",
+      "limit": "first",
+      "next": "pageInfo.endCursor",
+      "style": "connection"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "first",
+          "property": "first",
+          "type": "Int"
+        },
+        {
+          "name": "after",
+          "property": "after",
+          "type": "String"
+        },
+        {
+          "name": "last",
+          "property": "last",
+          "type": "Int"
+        },
+        {
+          "name": "before",
+          "property": "before",
+          "type": "String"
+        },
+        {
+          "name": "filter",
+          "property": "filter",
+          "type": "IssueFilter"
+        }
+      ],
+      "field": "Query.issues",
+      "kind": "graphql",
+      "operation_type": "query",
+      "selection": "{ totalCount edges { cursor node { id number title body state priority labels createdAt closedAt } } pageInfo { hasNextPage endCursor } }"
+    }
+  },
+  {
+    "description": "Search issues and people by text.",
+    "inputSchema": {
+      "properties": {
+        "first": {
+          "default": 10,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "search",
+    "outputSchema": {
+      "properties": {
+        "items": {
+          "items": {
+            "properties": {
+              "__typename": {
+                "enum": [
+                  "Issue",
+                  "User"
+                ],
+                "type": "string"
+              },
+              "assignee": {
+                "properties": {
+                  "__typename": {
+                    "enum": [
+                      "Team",
+                      "User"
+                    ],
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "closedAt": {
+                "description": "An ISO 8601 date and time with an offset."
+              },
+              "createdAt": {
+                "description": "An ISO 8601 date and time with an offset."
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              },
+              "number": {
+                "type": "integer"
+              },
+              "priority": {
+                "enum": [
+                  "LOW",
+                  "NORMAL",
+                  "HIGH",
+                  "URGENT"
+                ],
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "OPEN",
+                  "IN_PROGRESS",
+                  "CLOSED"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "text",
+          "property": "text",
+          "type": "String!"
+        },
+        {
+          "name": "first",
+          "property": "first",
+          "type": "Int"
+        }
+      ],
+      "field": "Query.search",
+      "kind": "graphql",
+      "operation_type": "query",
+      "selection": "{ __typename ... on Issue { id number title body state priority labels createdAt closedAt assignee { __typename ... on User { id name email } ... on Team { id name } } } ... on User { id name email } }"
+    }
+  },
+  {
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "viewer",
+    "outputSchema": {
+      "properties": {
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [],
+      "field": "Query.viewer",
+      "kind": "graphql",
+      "operation_type": "query",
+      "selection": "{ id name email }"
+    }
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "input": {
+          "properties": {
+            "assigneeId": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "priority": {
+              "default": "NORMAL",
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "HIGH",
+                "URGENT"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "type": "object"
+    },
+    "name": "create_issue",
+    "outputSchema": {
+      "properties": {
+        "issue": {
+          "properties": {
+            "body": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "closedAt": {
+              "description": "An ISO 8601 date and time with an offset."
+            },
+            "createdAt": {
+              "description": "An ISO 8601 date and time with an offset."
+            },
+            "id": {
+              "type": "string"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "number": {
+              "type": "integer"
+            },
+            "priority": {
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "HIGH",
+                "URGENT"
+              ],
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "OPEN",
+                "IN_PROGRESS",
+                "CLOSED"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "input",
+          "property": "input",
+          "type": "CreateIssueInput!"
+        }
+      ],
+      "field": "Mutation.createIssue",
+      "kind": "graphql",
+      "operation_type": "mutation",
+      "selection": "{ issue { id number title body state priority labels createdAt closedAt } }"
+    }
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "input": {
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "priority": {
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "HIGH",
+                "URGENT"
+              ],
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "OPEN",
+                "IN_PROGRESS",
+                "CLOSED"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "type": "object"
+    },
+    "name": "update_issue",
+    "outputSchema": {
+      "properties": {
+        "issue": {
+          "properties": {
+            "body": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "closedAt": {
+              "description": "An ISO 8601 date and time with an offset."
+            },
+            "createdAt": {
+              "description": "An ISO 8601 date and time with an offset."
+            },
+            "id": {
+              "type": "string"
+            },
+            "labels": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "number": {
+              "type": "integer"
+            },
+            "priority": {
+              "enum": [
+                "LOW",
+                "NORMAL",
+                "HIGH",
+                "URGENT"
+              ],
+              "type": "string"
+            },
+            "state": {
+              "enum": [
+                "OPEN",
+                "IN_PROGRESS",
+                "CLOSED"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "input",
+          "property": "input",
+          "type": "UpdateIssueInput!"
+        }
+      ],
+      "field": "Mutation.updateIssue",
+      "kind": "graphql",
+      "operation_type": "mutation",
+      "selection": "{ issue { id number title body state priority labels createdAt closedAt } }"
+    }
+  },
+  {
+    "description": "Delete an issue and its comments. This cannot be undone.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "delete_issue",
+    "outputSchema": {
+      "properties": {
+        "deletedId": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "id",
+          "property": "id",
+          "type": "ID!"
+        }
+      ],
+      "field": "Mutation.deleteIssue",
+      "kind": "graphql",
+      "operation_type": "mutation",
+      "selection": "{ deletedId }"
+    }
+  },
+  {
+    "inputSchema": {
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "add_comment",
+    "outputSchema": {
+      "properties": {
+        "author": {
+          "properties": {
+            "email": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "description": "An ISO 8601 date and time with an offset."
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "request": {
+      "arguments": [
+        {
+          "name": "issueId",
+          "property": "issueId",
+          "type": "ID!"
+        },
+        {
+          "name": "body",
+          "property": "body",
+          "type": "String!"
+        }
+      ],
+      "field": "Mutation.addComment",
+      "kind": "graphql",
+      "operation_type": "mutation",
+      "selection": "{ id body createdAt author { id name email } }"
+    }
+  }
+]

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 399,
+  "generatedCount": 409,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -21,6 +21,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "add_group_machine",
+      "domain": "tacho",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1486,6 +1494,16 @@
       "consumes": []
     },
     {
+      "name": "get_operator_ranking",
+      "domain": "spend",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_org_settings",
       "domain": "org",
       "surfaces": [
@@ -2062,6 +2080,16 @@
       "consumes": []
     },
     {
+      "name": "ingest_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "install_integration",
       "domain": "integration",
       "surfaces": [
@@ -2435,6 +2463,14 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_machine_groups",
+      "domain": "tacho",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2920,6 +2956,16 @@
       "consumes": []
     },
     {
+      "name": "merge_pr_without_review",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "move_agent",
       "domain": "agent",
       "surfaces": [
@@ -3233,6 +3279,16 @@
       "consumes": []
     },
     {
+      "name": "recall_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "recommend_schema",
       "domain": "schema",
       "surfaces": [
@@ -3263,6 +3319,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_reflection",
+      "domain": "agent",
+      "surfaces": [
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -3318,6 +3384,24 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remember_lesson",
+      "domain": "agent",
+      "surfaces": [
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remove_group_machine",
+      "domain": "tacho",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -3865,6 +3949,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

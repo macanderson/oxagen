@@ -1,6 +1,7 @@
 # ADR-099: A workspace is born with its main repository, and a repository is main for at most one workspace
 
-- **Status:** Accepted
+- **Status:** Accepted. Superseded in part by ADR-212: the `main` role became
+  `steering`, and a repository is linked through a steering PR.
 - **Date:** 2026-09-18
 - **Owners:** platform, app, cli
 - **Related:** Mission Control spec §10.1 (one main repo, any number of

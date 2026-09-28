@@ -1,7 +1,12 @@
+import { setConversationOpenedSender } from "@oxagen/agent/runtime/conversation-opened-event";
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
+import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
+import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -23,6 +28,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
   // the assistant's seal sends `cost/run.sealed` as every other seal does
   // (#4167). The client is imported on first send, not at boot.
   setRunSealedSender(async (event) => {
+    const { eventClient } = await import("./event-client");
+    await eventClient.send(event);
+  });
+  // A new conversation is named from its first prompt inside @oxagen/agent,
+  // and `chat/conversation.opened` asks the titler for a better name. The
+  // sender is handed in here for the same reason as the seal's above.
+  setConversationOpenedSender(async (event) => {
     const { eventClient } = await import("./event-client");
     await eventClient.send(event);
   });
@@ -54,6 +66,33 @@ registerHandlersOnce("@oxagen/handlers", () => {
       retryAfterSeconds: out.retryAfterSeconds,
     };
   });
+  // Provisioning a steering repo (lane S1, #4450) runs the steps in
+  // ./steering_repo.provision, which @oxagen/inngest-functions cannot import.
+  // A workspace step that binds the repository enters the workspace's tenant
+  // scope itself. The organization repository has no workspace, so its steps
+  // run outside a tenant scope.
+  setSteeringRepoProvisionRunner({
+    steps: async () =>
+      (await import("./steering_repo.provision")).STEERING_REPO_STEPS,
+    runStep: async (scope, step) => {
+      const provision = await import("./steering_repo.provision");
+      if (!provision.isSteeringRepoStep(step))
+        throw Object.assign(new Error(`unknown provision step ${step}`), {
+          isNonRetriable: true,
+        });
+      return provision.runSteeringRepoStep(
+        provision.steeringRepoProvisionDeps({ actorUserId: scope.actorUserId }),
+        scope.workspaceId === null
+          ? { kind: "organization", orgId: scope.orgId }
+          : {
+              kind: "workspace",
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+            },
+        step,
+      );
+    },
+  });
   // The durable Model fit reading (#3893, ADR-201) reads the run the way the
   // Run page does, through this package, which @oxagen/inngest-functions
   // cannot import. The reader is installed here and loaded on the first run.
@@ -67,6 +106,41 @@ registerHandlersOnce("@oxagen/handlers", () => {
     );
     return out.outcome;
   });
+  // The memory jobs (ADR-206) read runs and write the steering repo through
+  // this package, so their runner is installed here and loaded on first use.
+  // Each step runs in its workspace's tenant scope. Listing the workspaces
+  // with memory work reads across tenants, as the daily sweep must.
+  const memory = async () => {
+    const [{ runInTenantScope }, runner] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./memory/runner"),
+    ]);
+    return { runInTenantScope, runner };
+  };
+  setMemoryRunner({
+    async capture(scope, runPublicId) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.captureMemories(runner.defaultMemoryRunnerDeps(), scope, runPublicId),
+      );
+    },
+    async digest(scope, runPublicId) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.digestRun(runner.defaultMemoryRunnerDeps(), scope, runPublicId),
+      );
+    },
+    async curate(scope, now) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.curateMemories(runner.defaultMemoryRunnerDeps(), scope, now),
+      );
+    },
+    async workspaces() {
+      const { postgresMemoryStore } = await import("./memory/store");
+      return postgresMemoryStore.listCurateWorkspaces();
+    },
+  });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
   setPullRequestBackfillRunner(async (request) =>
@@ -74,6 +148,31 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // The hourly run outcome refresh (#4491) reads GitHub through this package
+  // too. It runs in the workspace's tenant scope, and is loaded on its first
+  // run.
+  setRunPrOutcomesRunner(async (scope) => {
+    const [{ runInTenantScope }, refresh] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-pr-outcomes-refresh"),
+    ]);
+    return runInTenantScope(scope, () =>
+      refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
+    );
+  });
+  // The findings pass (detector 6, prompt habits) opens a steering record
+  // proposal for each instruction operators repeat. The proposal path lives
+  // in this package, which @oxagen/billing cannot import. It runs in the
+  // workspace's tenant scope, and is loaded on the first pass that opens one.
+  setInstructionProposalOpener(async (scope, proposals) => {
+    const [{ runInTenantScope }, open] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/instruction-proposals"),
+    ]);
+    await runInTenantScope(scope, () =>
+      open.openInstructionProposalsFor(scope, proposals),
+    );
+  });
   // The interjection timeout (#3941) lives there too, and is loaded on its
   // first run.
   setInterjectionTimeoutRunner({
@@ -143,6 +242,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./agent.memory_policy.write"))
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remember_lesson",
+    async () =>
+      (await import("./agent.memory.lesson.remember"))
+        .agentMemoryLessonRememberHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "record_reflection",
+    async () =>
+      (await import("./agent.memory.reflection.record"))
+        .agentMemoryReflectionRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_api_key",
@@ -975,6 +1086,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .mergeContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "merge_pr_without_review",
+    async () =>
+      (await import("./context.pr.merge_without_review"))
+        .mergePrWithoutReviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_governance_mode",
     async () =>
       (await import("./context.governance_mode.set"))
@@ -1269,6 +1386,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoGithubTokenIssueHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "ingest_tacho_memories",
+    async () =>
+      (await import("./tacho.memories.ingest"))
+        .tachoMemoriesIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "recall_tacho_memories",
+    async () =>
+      (await import("./tacho.memories.recall"))
+        .tachoMemoriesRecallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
@@ -1279,6 +1408,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.workspace_runs.pause"))
         .pauseWorkspaceRunsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "add_group_machine",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.add"))
+        .tachoMachineGroupAddHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remove_group_machine",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.remove"))
+        .tachoMachineGroupRemoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_machine_groups",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.list"))
+        .tachoMachineGroupListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "fetch_commands",
@@ -1578,6 +1725,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_waste",
     async () =>
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_operator_ranking",
+    async () =>
+      (await import("./spend.operator_ranking"))
+        .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_operator_pseudonyms",
+    async () =>
+      (await import("./spend.operator_pseudonyms.set"))
+        .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_clone_draft",

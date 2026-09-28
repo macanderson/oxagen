@@ -86,10 +86,11 @@
       "mainRepo": "That is this workspace’s main repository. It is bound above, and a main repository is never also linked.",
       "repositoryAlreadyLinked": "That repository is already linked to this workspace.",
       "mainRepoClaimed": "Another workspace steers by that repository. A workspace’s main repository cannot be linked by another workspace, because Context PRs would open on its .oxagen/ tree.",
-      "mainRepoUnbound": "Bind this workspace’s main repository first. A linked repository is its second.",
+      "mainRepoUnbound": "This workspace has no steering repository yet. Oxagen proposes each link as a steering PR on that repository. Set one up first.",
       "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be this workspace’s main. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
       "mainRepoUnlinkRefused": "The main repository cannot be unlinked. A workspace without one cannot exist.",
       "repositoryNotLinked": "That repository is no longer linked to this workspace. Reload the page to read the current list.",
+      "workspaceTomlUnreadable": "The steering repository’s workspace.toml is present but unreadable. It must read as workspace/v1. Fix the file, then try again.",
       "branchNotFound": "GitHub has no branch by that name in this repository. Check the spelling, or push the branch first.",
       "productionBranchMissing": "The production branch this repository records no longer exists on GitHub. Set the production branch first.",
       "productionBranchIsInitBranch": "This repository records oxagen/init as its production branch, which is where the init pull request is pushed. Set another production branch first.",
@@ -102,7 +103,8 @@
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
       "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
-      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab."
+      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab.",
+      "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
     },
     "page": {
       "title": "Repositories",
@@ -234,7 +236,6 @@
       "unlink": "Unlink",
       "link": "Link to this workspace",
       "linking": "Linking",
-      "linked": "{repository} linked to {workspace}. Its issues and events reach this workspace, and a run may bind to it.",
       "seeChanges": "See its changes",
       "addOxagen": "Add Oxagen",
       "branch": {
@@ -253,12 +254,21 @@
     "unlink": {
       "title": "Unlink {repository} from {workspace}?",
       "body": "Its issues and events stop reaching this workspace, and a run can no longer bind to it here. The repository is untouched: nothing is deleted, no branch moves, and <code>.oxagen/</code> stays where it is.",
-      "governed": "Records published in this repository stop steering runs in {workspace} the moment this is written. Runs already recorded keep naming the hashes they carried.",
+      "governed": "Records published in this repository stop steering runs in {workspace} once the unlink takes effect. Runs already recorded keep naming the hashes they carried.",
       "copies": "Working copies linked through it are not recorded yet, so this cannot say how many stop appearing on the Working copies tab.",
       "keep": "Keep it linked",
       "submit": "Unlink it",
       "pending": "Unlinking",
-      "done": "{repository} unlinked from {workspace}. Runs already recorded keep naming it; nothing new binds to it here."
+      "done": "{repository} unlinked from {workspace}. Runs already recorded keep naming it. Nothing new binds to it here."
+    },
+    "steering": {
+      "linkProposed": "Steering PR <pr>#{number}</pr> adds {repository} to <code>workspace.toml</code>.",
+      "linkReused": "Steering PR <pr>#{number}</pr> already adds {repository} to <code>workspace.toml</code>.",
+      "linkMerge": "Merge the steering PR to finish linking.",
+      "linkListed": "<code>workspace.toml</code> lists {repository} already. The next steering sync links it.",
+      "unlinkProposed": "Steering PR <pr>#{number}</pr> removes {repository} from <code>workspace.toml</code>.",
+      "unlinkReused": "Steering PR <pr>#{number}</pr> already removes {repository} from <code>workspace.toml</code>.",
+      "unlinkMerge": "Merge the steering PR to finish unlinking."
     },
     "copies": {
       "title": "Working copies",
@@ -634,6 +644,100 @@
         "reused": "{repository}#{number} already adds .oxagen/. Nothing new was pushed.",
         "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
         "link": "Open #{number} on GitHub"
+      },
+      "resume": "Once {repository} is linked, open this wizard again to add <code>.oxagen/</code> to it."
+    },
+    "drift": {
+      "heading": "Instruction files",
+      "notBacked": "Oxagen cannot read instruction files in code repositories yet, so this section lists none. The read needs <code>{capability}</code>.",
+      "detected": "<code>{path}</code> differs from the steering records.",
+      "promote": "Promote to steering",
+      "promoting": "Promoting…",
+      "promoted": "Oxagen opened steering proposal {proposalId}. The file steers runs once its steering PR merges."
+    },
+    "steeringRepo": {
+      "heading": "Steering repo",
+      "loading": "Reading the steering repo…",
+      "unavailable": {
+        "body": "No capability answers the steering repo read yet, so this panel shows no state.",
+        "capability": "The read needs <code>{capability}</code>."
+      },
+      "card": {
+        "repository": "Repository",
+        "notCreated": "Not created yet",
+        "version": "Published version",
+        "notPublished": "None yet",
+        "versionNumber": "Version {version}",
+        "health": "Health"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "drifted": "Settings drift",
+        "disconnected": "Disconnected",
+        "diverged": "Unmerged commit on main",
+        "unknown": "Unread"
+      },
+      "healthNote": {
+        "healthy": "Every prescribed setting matches, and main holds only merged steering PRs.",
+        "drifted": "A prescribed setting differs, so Oxagen merges and publishes nothing until an owner or admin repairs it.",
+        "disconnected": "Oxagen Steering lost its grant, so Oxagen merges and publishes nothing until an owner or admin authorizes it again.",
+        "diverged": "Main has a commit no steering PR merged, so Oxagen opened a steering PR that reverts it.",
+        "unknown": "Oxagen has not read the repository's health yet."
+      },
+      "provisioning": {
+        "stepsLabel": "Provisioning steps",
+        "steps": {
+          "pick_connection": "Host connection",
+          "create_repository": "Repository",
+          "add_to_installation": "Oxagen app access",
+          "write_first_commit": "First commit",
+          "apply_settings": "Prescribed settings",
+          "publish_version": "First version",
+          "bind_repository": "Workspace binding"
+        },
+        "state": {
+          "done": "Done",
+          "running": "Running",
+          "failed": "Failed",
+          "blocked": "Blocked",
+          "waiting": "Waiting"
+        },
+        "retry": "Retry",
+        "retrying": "Retrying…",
+        "ready": "The steering repo is ready at"
+      },
+      "reauthorize": {
+        "heading": "Authorization needed",
+        "body": "Oxagen Steering lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
+        "action": "Re-authorize"
+      },
+      "banner": {
+        "heading": {
+          "drifted": "Settings drift",
+          "disconnected": "Repository disconnected",
+          "diverged": "Unmerged commit on main"
+        },
+        "body": "Oxagen merges and publishes nothing until you repair the repository.",
+        "differencesLabel": "Settings that differ",
+        "columns": {
+          "setting": "Setting",
+          "expected": "Prescribed",
+          "actual": "Current",
+          "changed": "Changed by"
+        },
+        "changedByAt": "{name} at {at}",
+        "changedUnknown": "Unknown",
+        "repair": "Repair settings",
+        "repairing": "Repairing…",
+        "reverting": "Oxagen opened a steering PR that reverts main."
+      },
+      "failure": {
+        "denied": "Only an organization owner or admin can change the steering repo.",
+        "invalid": "The platform refused the request as malformed.",
+        "refused": "This was refused: {code}.",
+        "pendingApproval": "This needs a person to approve it. Request {accessRequestId} is waiting.",
+        "unavailable": "The steering repo did not answer ({code}). Try again in a moment.",
+        "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
       }
     }
   }

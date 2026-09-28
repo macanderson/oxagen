@@ -2,7 +2,7 @@ import { schema, type Tx } from "@oxagen/database";
 import { emitSecurityEventIn } from "@oxagen/database/security";
 import { isHandlerError } from "@oxagen/oxagen";
 import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
-import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
+import { unionImpacts } from "@oxagen/oxagen/contracts/tool.classification";
 import { toolMatches } from "@oxagen/rules";
 import { eq } from "drizzle-orm";
 import { assertRulesSavable, readRules, writeRules } from "../_approval_rule";
@@ -11,7 +11,7 @@ import { canonicalJson } from "../registry-digest";
 export interface ApprovalToolFacts {
   slug: string;
   version: number;
-  consequenceTags: readonly string[];
+  impacts: readonly string[];
   classification: unknown;
   measures: unknown;
 }
@@ -151,13 +151,13 @@ export async function invalidateApprovalRules(
         reason: code,
         before: args.before
           ? {
-              consequenceTags: unionConsequenceTags(args.before),
+              impacts: unionImpacts(args.before),
               measures: args.before.measures,
               classification: args.before.classification,
             }
           : null,
         after: {
-          consequenceTags: unionConsequenceTags(args.after),
+          impacts: unionImpacts(args.after),
           measures: args.after.measures,
           classification: args.after.classification,
         },

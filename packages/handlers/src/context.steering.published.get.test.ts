@@ -151,6 +151,44 @@ describe("get_published_steering", () => {
     expect(readMain).not.toHaveBeenCalled();
   });
 
+  // A provisioned steering repository hangs from a `github_steering`
+  // connection, and only the Oxagen Steering app can read it. The handler
+  // names the head's connection so the client mints that app's token (#4519).
+  it("asks for the steering head's connection when no bindingId is given", async () => {
+    const steering: BoundRepository = {
+      ...BOUND,
+      connectionId: "conn-steering",
+    };
+    const client = vi.fn(async () => fakeGithub());
+    const out = await createPublishedSteeringGetHandler({
+      github: { client },
+      readBound: vi.fn(async () => LINKED),
+      readMain: vi.fn(async () => steering),
+      now: () => NOW,
+    })({}, makeCTX());
+    expect(out.bindingId).toBe("rpb_0a1b");
+    expect(client).toHaveBeenCalledTimes(1);
+    expect(client).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      "conn-steering",
+    );
+  });
+
+  it("asks for the named binding's connection when a bindingId is given", async () => {
+    const named: BoundRepository = { ...LINKED, connectionId: "conn-linked" };
+    const client = vi.fn(async () => fakeGithub());
+    await createPublishedSteeringGetHandler({
+      github: { client },
+      readBound: vi.fn(async () => named),
+      readMain: vi.fn(async () => BOUND),
+      now: () => NOW,
+    })({ bindingId: "rpb_0c2d" }, makeCTX());
+    expect(client).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      "conn-linked",
+    );
+  });
+
   it("answers head null and no files when the production branch is gone", async () => {
     const client = fakeGithub({ getBranch: vi.fn(async () => null) });
     const out = await handler(client)({}, makeCTX());
@@ -281,7 +319,7 @@ describe("readMainBoundRepository", () => {
   const scope = { orgId: "org_1", workspaceId: "ws_1" };
   const row = {
     headId: "head-1",
-    role: "main",
+    role: "steering",
     provider: "github",
     connectionId: "conn-1",
     providerRepositoryId: "42",

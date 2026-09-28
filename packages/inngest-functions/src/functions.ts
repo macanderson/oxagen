@@ -1,10 +1,13 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
+import { steeringRepoProvision } from "./functions/steering-repo.provision";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { runFit } from "./functions/run.fit";
+import { runReflect } from "./functions/run.reflect";
+import { memoryCurate, memoryCurateDaily } from "./functions/memory.curate";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
 import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
@@ -12,6 +15,10 @@ import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { costPriceBookSync } from "./functions/cost.price-book-sync";
 import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
 import { costFindings, costFindingsNightly } from "./functions/cost.findings";
+import {
+  costRunPrOutcomesDelivery,
+  costRunPrOutcomesHourly,
+} from "./functions/cost.run-pr-outcomes";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -66,6 +73,7 @@ import {
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
+import { conversationTitle } from "./functions/conversation.title";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -76,11 +84,15 @@ export const functions: any[] = [
   contextLabelsBackfill,
   steeringSync,
   steeringSyncSweep,
+  steeringRepoProvision,
   billingDunningSweep,
   billingGauClose,
   billingUsageDelivery,
   costRunRollup,
   runFit,
+  runReflect,
+  memoryCurate,
+  memoryCurateDaily,
   costRunProgress,
   tachoSessionIdleClose,
   runLedgerIdleClose,
@@ -89,6 +101,8 @@ export const functions: any[] = [
   costPriceBookReprice,
   costFindings,
   costFindingsNightly,
+  costRunPrOutcomesHourly,
+  costRunPrOutcomesDelivery,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,
@@ -129,4 +143,5 @@ export const functions: any[] = [
   runPullRequestBackfill,
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
+  conversationTitle,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

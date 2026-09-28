@@ -10,8 +10,12 @@ import { Cost, Money } from "./money";
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-/** A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one). */
-const RunPublicId = z.string().regex(/^(arun|tse)_[0-9a-z]+$/);
+/**
+ * A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one).
+ * Fields narrow `PublicId` with it rather than alias it, so INV-11
+ * (`src/test/arch/public-ids.test.ts`) still reads each one as a PublicId.
+ */
+const RUN_PUBLIC_ID = /^(arun|tse)_[0-9a-z]+$/;
 
 /** An inclusive range of UTC days. */
 export const DayRange = z.object({ from: Day, to: Day });
@@ -152,12 +156,66 @@ export const SpendWaste = z.object({
       cause: z.enum(["cache_write_never_read"]),
       wasted: Cost,
       runs: Count,
-      /** The runs that prove the cause, largest waste first. */
-      provingRuns: z.array(RunPublicId),
+      /**
+       * The runs that prove the cause, largest waste first, each with the
+       * session name the Fleet board shows, or null when it has none (#4571).
+       */
+      provingRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          name: z.string().nullable(),
+        }),
+      ),
     }),
   ),
 });
 export type SpendWaste = z.infer<typeof SpendWaste>;
+
+/** Who a ranking row names: the person, or the pseudonym the workspace's setting shows instead. */
+const RankedOperator = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("named"),
+    /** The principal public id: the key, never the label. */
+    key: z.string().min(1),
+    facts: OperatorFacts.nullable(),
+  }),
+  z.object({
+    kind: z.literal("pseudonym"),
+    pseudonym: z.string().regex(/^Operator [0-9A-F]{8}$/),
+  }),
+]);
+
+/**
+ * `get_operator_ranking` (D15): the workspace's operators by unproductive
+ * spend, highest first. The operator totals and `unattributed` sum to
+ * `unproductive`. Under pseudonyms, `unproductiveShare` and `runs` are null
+ * and `topRuns` is empty.
+ */
+export const OperatorRanking = z.object({
+  period: DayRange,
+  pseudonyms: z.boolean(),
+  unproductive: Money,
+  unattributed: z.object({ unproductive: Money, runs: Count }),
+  operators: z.array(
+    z.object({
+      rank: z.number().int().positive(),
+      operator: RankedOperator,
+      unproductive: Money,
+      shareOfTotal: Ratio,
+      unproductiveShare: Ratio.nullable(),
+      runs: z.number().int().positive().nullable(),
+      /** The runs behind the figure, largest first. */
+      topRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          unproductive: Money,
+        }),
+      ),
+    }),
+  ),
+});
+export type OperatorRanking = z.infer<typeof OperatorRanking>;
+export type OperatorRankingRow = OperatorRanking["operators"][number];
 
 /** An instant a contract carries as ISO 8601 in UTC. */
 const Instant = z.iso.datetime();
@@ -165,19 +223,40 @@ const Instant = z.iso.datetime();
 /** The span a finding or a list of findings covers. */
 const FindingWindow = z.object({ from: Instant, to: Instant });
 
-/** The kinds the findings job detects (ADR-062's detector table). */
-const FindingKind = z.enum([
+/** The kinds the findings job detects (ADR-062's detector table, ADR-208). */
+export const FINDING_KINDS = [
   "cache_writes_never_read",
   "duplicate_tool_calls",
   "repeated_shell_commands",
   "unpaged_results",
-]);
+  "spin_loops",
+  "standing_context",
+  "idle_cache_rewrites",
+  "cache_busts",
+  "model_class_fit",
+  "repeated_instructions",
+  "recurring_runs",
+  "spend_with_no_outcome",
+] as const;
+
+const FindingKind = z.enum(FINDING_KINDS);
 
 /** What a finding is about: a tool, an agent, an operator or the workspace. */
 const FindingLevel = z.enum(["tool", "agent", "operator", "workspace"]);
 
 /** The share of the cited calls the counterfactual covers, as the job graded it. */
 const FindingConfidence = z.enum(["high", "medium"]);
+
+/**
+ * A setting a finding's fix names, with the value it proposes and, when the
+ * detector read it, the value in effect. A cache finding names a cache TTL
+ * (ADR-210).
+ */
+const FindingRecommendation = z.object({
+  setting: z.string().min(1),
+  value: z.union([z.string(), z.number()]),
+  current: z.union([z.string(), z.number()]).optional(),
+});
 
 /**
  * One costed finding (`list_findings`): the saving is the job's figure,
@@ -196,6 +275,8 @@ export const SpendFinding = z.object({
   window: FindingWindow,
   why: z.string().min(1),
   fix: z.string().min(1),
+  /** The setting the fix names; absent when the fix names none. */
+  recommendation: FindingRecommendation.optional(),
   /** What the finding cites. */
   runs: Count,
   calls: Count,
@@ -237,6 +318,8 @@ export const SpendFindingEvidence = z.object({
   runs: z.array(
     z.object({
       runId: PublicId,
+      /** The session name the Fleet board shows, or null when the run has none (#4571). */
+      name: z.string().nullable(),
       startedAt: Instant,
       calls: Count,
       measuredTokens: Count,

@@ -218,88 +218,41 @@ describe("createWorkspace", () => {
     slug: "research",
     orgSlug: "acme",
     createdAt: "2026-09-15T00:00:00.000Z",
-    mainRepo: {
-      provider: "github",
-      bindingId: "rpb_0a1b2c",
-      connectionId: "con_01hq",
-      fullName: "acme/research",
-      defaultRef: "main",
-    },
+    // What `create_workspace` answers since lane S1 (#4450). Without it the
+    // kernel seam refuses the answer as `contract_output_mismatch`.
+    steering_repo: { status: "provisioning" },
   };
 
-  it("creates the workspace with its main repository and reports its slug", async () => {
+  it("sends the name and slug only, and reports the slug, the name, and the steering repo status", async () => {
     invoke.mockResolvedValue(CREATED);
     expect(
-      await createWorkspace("acme", {
-        name: " Research ",
-        slug: "research",
-        mainRepo: "acme/research",
-      }),
-    ).toEqual({ ok: true, value: { slug: "research" } });
+      await createWorkspace("acme", { name: " Research ", slug: "research" }),
+    ).toEqual({
+      ok: true,
+      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
+    });
+    // `mainRepo` is deprecated in the contract, and the action never sends it.
     expect(invoke).toHaveBeenCalledWith(
       "create_workspace",
-      {
-        name: "Research",
-        slug: "research",
-        mainRepo: { provider: "github", owner: "acme", name: "research" },
-      },
+      { name: "Research", slug: "research" },
       expect.objectContaining(TENANT),
     );
+    expect(invoke.mock.calls[0]?.[1]).not.toHaveProperty("mainRepo");
   });
 
-  // What a person pastes from GitHub: the clone URL's tail, with space around
-  // it. Only the two segments reach the contract.
-  it("drops surrounding space and a trailing .git from the repository", async () => {
-    invoke.mockResolvedValue(CREATED);
-    await createWorkspace("acme", {
-      name: "Research",
-      slug: "research",
-      mainRepo: "  acme/research.git ",
-    });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      mainRepo: { owner: "acme", name: "research" },
-    });
-  });
-
-  it.each(["", "research", "acme/research/extra", "/research", "acme/"])(
-    "refuses %j as the main repository before the kernel runs (negative)",
-    async (mainRepo) => {
+  it.each(["ready", "failed", "blocked"] as const)(
+    "reports a steering repo that is already %s when the call returns",
+    async (status) => {
+      invoke.mockResolvedValue({ ...CREATED, steering_repo: { status } });
       expect(
-        await createWorkspace("acme", {
-          name: "Research",
-          slug: "research",
-          mainRepo,
-        }),
-      ).toEqual({
-        ok: false,
-        reason: "invalid",
-        code: "repository_unparsable",
-        field: "mainRepo",
-      });
-      expect(invoke).not.toHaveBeenCalled();
+        await createWorkspace("acme", { name: "Research", slug: "research" }),
+      ).toMatchObject({ ok: true, value: { steeringRepo: status } });
     },
   );
 
-  // The segments' spelling is the contract's to judge: `bind_main_repository`'s
-  // GitHub-shaped owner and name schemas, carried by import.
-  it("refuses an owner GitHub would not accept before the kernel runs, naming the field (negative)", async () => {
-    expect(
-      await createWorkspace("acme", {
-        name: "Research",
-        slug: "research",
-        mainRepo: "-acme-/research",
-      }),
-    ).toMatchObject({ ok: false, reason: "invalid", field: "mainRepo.owner" });
-    expect(invoke).not.toHaveBeenCalled();
-  });
-
   it("refuses a slug the contract's shape rejects before the kernel runs (negative)", async () => {
     expect(
-      await createWorkspace("acme", {
-        name: "Research",
-        slug: "Research Lab",
-        mainRepo: "acme/research",
-      }),
+      await createWorkspace("acme", { name: "Research", slug: "Research Lab" }),
     ).toMatchObject({ ok: false, reason: "invalid", field: "slug" });
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -307,21 +260,14 @@ describe("createWorkspace", () => {
   it("carries a slug already taken to the caller as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refusal("conflict", "slug_taken"));
     expect(
-      await createWorkspace("acme", {
-        name: "Research",
-        slug: "research",
-        mainRepo: "acme/research",
-      }),
+      await createWorkspace("acme", { name: "Research", slug: "research" }),
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
   });
 
   it("makes the slug from the name when the form sends none, as the design's form has no slug", async () => {
     invoke.mockResolvedValue(CREATED);
-    await createWorkspace("acme", {
-      name: "  Data Platform (EU) ",
-      mainRepo: "acme/research",
-    });
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+    await createWorkspace("acme", { name: "  Data Platform (EU) " });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
       name: "Data Platform (EU)",
       slug: "data-platform-eu",
     });
@@ -329,33 +275,13 @@ describe("createWorkspace", () => {
 
   it("names a slug the name made invalid on the Name field, which is the one the person can fix (negative)", async () => {
     // A one-letter name makes a slug the contract refuses as too short.
-    expect(
-      await createWorkspace("acme", { name: "X", mainRepo: "acme/research" }),
-    ).toMatchObject({ ok: false, reason: "invalid", field: "name" });
+    expect(await createWorkspace("acme", { name: "X" })).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "name",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
-
-  // The five repository refusals `create_workspace` documents, each carried
-  // with its reason intact so the dialog can print its own sentence.
-  it.each([
-    ["conflict", "github_not_authorized"],
-    ["not_found", "installation_unreachable"],
-    ["not_found", "repository_not_installed"],
-    ["conflict", "main_repo_claimed"],
-    ["conflict", "repository_linked_elsewhere"],
-  ] as const)(
-    "carries a %s: %s from the handler to the caller (negative)",
-    async (code, reason) => {
-      invoke.mockRejectedValue(refusal(code, reason));
-      expect(
-        await createWorkspace("acme", {
-          name: "Research",
-          slug: "research",
-          mainRepo: "acme/research",
-        }),
-      ).toEqual({ ok: false, reason: code, code: reason });
-    },
-  );
 });
 
 /** What `update_workspace_settings` answers, which the edit reads a slug off. */

@@ -24,6 +24,8 @@ import {
   type ChainCursor,
   type TachoEvent,
   type UnsealedTachoEvent,
+  canonicalRemote,
+  digestBytes,
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
@@ -251,9 +253,12 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(org).toBeDefined();
     if (!org) return;
     orgId = org.id;
+    const first = out.workspace;
+    expect(first).not.toBeNull();
+    if (!first) return;
     const workspace = await withSystemDb((tx) =>
       tx.query.workspaces.findFirst({
-        where: eq(schema.workspaces.publicId, out.workspace.publicId),
+        where: eq(schema.workspaces.publicId, first.publicId),
       }),
     );
     expect(workspace).toBeDefined();
@@ -281,7 +286,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
     expect(state).toMatchObject({
       step: "wrap",
-      workspace: { id: out.workspace.publicId, slug: "core" },
+      workspace: { id: first.publicId, slug: "core" },
       provisional: { mainRepoBoundAt: null, detectedRepository: null },
     });
     expect(
@@ -904,6 +909,125 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
       contextRecordPublishHandler(record, ctxFor(ownerId)),
     );
     expect(published.published).toBe(true);
+  });
+
+  it("a session opened in the bound repository reads linked, one opened elsewhere reads unlinked, and both are recorded", async () => {
+    // The repository the test above bound: it is linked to this workspace now.
+    const [binding] = await withSystemDb((tx) =>
+      tx
+        .select({
+          owner: schema.repositoryBindings.providerOwner,
+          name: schema.repositoryBindings.providerName,
+        })
+        .from(schema.repositoryBindings)
+        .where(eq(schema.repositoryBindings.workspaceId, workspaceId)),
+    );
+    if (!binding) throw new Error("the bind test left no repository binding");
+    // The digests the host computes from `git remote get-url origin`
+    // (`collector/git-facts.ts`), so this proves the host's rule and the
+    // server's rule agree.
+    const linked = digestBytes(
+      canonicalRemote(`https://github.com/${binding.owner}/${binding.name}.git`),
+    );
+    const elsewhere = digestBytes(
+      canonicalRemote(`git@github.com:acme/unlinked-${tag}.git`),
+    );
+    mocks.insertTachoEvents.mockResolvedValue(undefined);
+
+    const open = async (sessionId: string, remote: string | null) => {
+      const session = sessionUuid(hostPublicId, sessionId);
+      const unsealed = (
+        kind: UnsealedTachoEvent["kind"],
+        body: Record<string, unknown>,
+      ): UnsealedTachoEvent =>
+        ({
+          v: "tacho/1.0",
+          event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+          session_id: sessionId,
+          session_uuid: session,
+          root_session_uuid: session,
+          ts: "2026-09-15T12:05:00.000Z",
+          fidelity: "sdk",
+          source: "hook",
+          agent: {
+            agent_key: agentKey,
+            fleet_id: "wrk_1",
+            runtime: "claude-code",
+            harness: "claude-code",
+            wrapper_version: "2.1.1",
+            host_enrollment_id: hostPublicId,
+          },
+          context: {
+            cwd: "/home/dev/proj",
+            ...(remote === null ? {} : { git_remote_digest: remote }),
+          },
+          kind,
+          body,
+        }) as UnsealedTachoEvent;
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      const events: TachoEvent[] = [];
+      for (const draft of [
+        unsealed("agent_start", { session_start_source: "startup" }),
+        unsealed("agent_stop", {
+          session_outcome: "completed",
+          session_end_reason: "other",
+        }),
+      ]) {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        events.push(sealed.event);
+      }
+      const output = await inScope(() =>
+        tachoEventsIngestHandler(
+          { schema: "tacho.batch.v1", host_enrollment_id: hostPublicId, events },
+          { ...ctxFor(null), apiKeyId: hostApiKeyId },
+        ),
+      );
+      // Nothing refuses a session in a repository the workspace has not
+      // linked: every frame lands either way.
+      expect(output.accepted).toBe(2);
+      return session;
+    };
+
+    const inBound = await open("sess-3", linked);
+    const outside = await open("sess-4", elsewhere);
+    const noRemote = await open("sess-5", null);
+
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({
+          sessionUuid: schema.tachoSessions.sessionUuid,
+          workspaceId: schema.tachoSessions.workspaceId,
+          gitRemoteDigest: schema.tachoSessions.gitRemoteDigest,
+          repositoryUnlinked: schema.tachoSessions.repositoryUnlinked,
+        })
+        .from(schema.tachoSessions)
+        .where(
+          inArray(schema.tachoSessions.sessionUuid, [
+            inBound,
+            outside,
+            noRemote,
+          ]),
+        ),
+    );
+    const bySession = new Map(rows.map((row) => [row.sessionUuid, row]));
+    expect(bySession.get(inBound)).toMatchObject({
+      workspaceId,
+      gitRemoteDigest: linked,
+      repositoryUnlinked: false,
+    });
+    // The unlinked session is still this workspace's run: the key names the
+    // workspace, and the flag only records what the remote matched.
+    expect(bySession.get(outside)).toMatchObject({
+      workspaceId,
+      gitRemoteDigest: elsewhere,
+      repositoryUnlinked: true,
+    });
+    expect(bySession.get(noRemote)).toMatchObject({
+      workspaceId,
+      gitRemoteDigest: null,
+      repositoryUnlinked: false,
+    });
   });
 
   it("a live host keeps its agent key, a revoked host gives it up to a new token, and a retired agent's token is refused", async () => {

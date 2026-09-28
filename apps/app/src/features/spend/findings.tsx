@@ -383,13 +383,23 @@ export function FindingEvidence({
             >
               {value.runs.map((run) => (
                 <tr key={run.runId} data-key={run.runId}>
-                  <th scope="row" className={`${cell} text-left font-normal`}>
+                  <th
+                    scope="row"
+                    className={`${cell} min-w-48 max-w-72 text-left font-normal`}
+                  >
                     <SafeLink
                       to={routes.run(at.org, at.ws, run.runId)}
-                      className={`${linkText} ${mono}`}
+                      title={run.name ?? undefined}
+                      className={`${linkText} block truncate`}
+                    >
+                      {run.name ?? t("findings.evidence.untitled")}
+                    </SafeLink>
+                    <span
+                      data-testid="run-id"
+                      className={`${mono} block truncate text-[11px] text-dim`}
                     >
                       {run.runId}
-                    </SafeLink>
+                    </span>
                   </th>
                   <td className={cell}>
                     <Instant iso={run.startedAt} />

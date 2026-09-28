@@ -75,7 +75,9 @@ export interface SyncFinding {
     | "sharing_scope"
     | "constraint_effect"
     | "constraint_conflict"
-    | "stale_stamp";
+    | "stale_stamp"
+    /** workspace.toml lists a repository the sync cannot link (ADR-212). */
+    | "repository_link";
   message: string;
 }
 
