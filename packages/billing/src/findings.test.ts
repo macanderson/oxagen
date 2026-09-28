@@ -28,6 +28,7 @@ import {
   UNPAGED_RESULT_TOKENS,
   type ClaimRow,
   type DetectInput,
+  type FrameClassPrices,
   type PricedRequestFrame,
   type ToolCallObservation,
 } from "./findings";
@@ -152,6 +153,47 @@ function request(
   costMicros: bigint | null = TURN_MICROS,
 ): PricedRequestFrame {
   return frameAt(new Date(r.startedAt.getTime() + at * 1_000 - 1), costMicros);
+}
+
+/** A price book entry of `microsPerMillion` for one class, in the run's currency. */
+function listEntry(tokenClass: string, microsPerMillion: bigint) {
+  return {
+    entryId: `list:test:${tokenClass}`,
+    microsPerMillion,
+    currency: "USD",
+    source: "list" as const,
+  };
+}
+
+/** Uncached input at 3 micros a token, the runs' own input price. */
+const FRAME_PRICES: FrameClassPrices = {
+  input_uncached: listEntry("input_uncached", 3_000_000n),
+  cache_read: listEntry("cache_read", 300_000n),
+  cache_write_5m: listEntry("cache_write_5m", 3_750_000n),
+  cache_write_1h: listEntry("cache_write_1h", 6_000_000n),
+  output: listEntry("output", 15_000_000n),
+  reasoning: listEntry("reasoning", 15_000_000n),
+  server_tool_request: null,
+};
+
+/**
+ * The same frames with their tokens and prices by class, all uncached input.
+ * Detector 5 prices each carry from the carrying request's own class prices
+ * (#4544), so a frame without them leaves the carry uncovered.
+ */
+function priced(
+  frames: Map<string, PricedRequestFrame[]>,
+): Map<string, PricedRequestFrame[]> {
+  for (const [runId, list] of frames)
+    frames.set(
+      runId,
+      list.map((f) => ({
+        ...f,
+        classTokens: { ...ZERO_TOKENS, input_uncached: f.tokens },
+        classPrices: FRAME_PRICES,
+      })),
+    );
+  return frames;
 }
 
 /** One model request just before each call, so each call is its own turn. */
@@ -922,7 +964,7 @@ describe("unpaged results", () => {
     const findings = detect({
       runs: [r],
       toolCalls,
-      frames: turns(toolCalls, 100_000n),
+      frames: priced(turns(toolCalls, 100_000n)),
     });
     expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
       ["repeated_shell_commands", 1],
@@ -1169,7 +1211,7 @@ describe("the frames a finding cites (#4001)", () => {
     // A third request re-reads the second result, so both results count.
     const frames = turns(toolCalls);
     frames.get(r.runId)!.push(request(r, 3));
-    const findings = detect({ runs: [r], toolCalls, frames });
+    const findings = detect({ runs: [r], toolCalls, frames: priced(frames) });
     expect(
       findings.map((f) => [f.kind, f.evidence.frames?.[r.runId]?.total]),
     ).toEqual([["unpaged_results", 2]]);
