@@ -21,6 +21,7 @@ import { STALE_REREAD_MS } from "@/data/contracts/runs";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { Toaster } from "@/ui/toast";
 import {
   agentPage,
   approvalItem,
@@ -201,7 +202,14 @@ async function renderFleet(
 ) {
   const { source, calls } = fleetSource(reads);
   const element = await Fleet({ ctx, source, cursor, banners, ...view });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The root layout mounts the app's one toaster (ADR-221). The page's
+  // confirmations land there, so the harness mounts it the same way.
+  const { container } = render(
+    <IntlProvider>
+      <Toaster />
+      {element}
+    </IntlProvider>,
+  );
   return { container, calls };
 }
 
@@ -1568,7 +1576,7 @@ describe("the Runs panel", () => {
       "core-platform",
       "arun_sealed",
     );
-    // The design confirms with a toast in the page's polite live region.
+    // The design confirms with a toast in the app's polite live region.
     const toast = await screen.findByText(
       "Export bundle queued for arun_sealed.",
     );
@@ -1576,7 +1584,7 @@ describe("the Runs panel", () => {
       "data-tone",
       "allowed",
     );
-    expect(screen.getByTestId("runs-toasts")).toHaveAttribute(
+    expect(screen.getByTestId("toasts")).toHaveAttribute(
       "aria-live",
       "polite",
     );

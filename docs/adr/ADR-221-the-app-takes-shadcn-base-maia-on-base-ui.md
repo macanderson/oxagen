@@ -42,7 +42,7 @@ tokens and fonts.
 2. **What maia sets.** Controls are pills (`rounded-4xl`) 36px tall, text is
    `text-sm`, popups are `rounded-2xl` and their items `rounded-xl`, and
    spacing follows the registry (`gap-2.5`, `px-3 py-2`).
-3. **Translucent popups.** A menu, select, hover card or popover fills at 70%
+3. **Translucent popups.** A menu, select, hover card, popover or toast fills at 70%
    of its surface token, with a `backdrop-blur-2xl backdrop-saturate-150`
    layer behind it and a `ring-1 ring-foreground/5` edge. The blur sits on a
    `before:` layer so it does not become the containing block for the

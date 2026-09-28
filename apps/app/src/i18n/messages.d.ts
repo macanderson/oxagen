@@ -11143,6 +11143,10 @@ type Messages = {
       failed: string;
       photoPlaceholder: string;
     };
+    toast: {
+      region: string;
+      close: string;
+    };
   };
 };
 
