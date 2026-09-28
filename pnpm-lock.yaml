@@ -1088,6 +1088,9 @@ importers:
       '@oxagen/stella-engine-client':
         specifier: workspace:*
         version: link:../stella-engine-client
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

@@ -67,6 +67,14 @@ export interface PersistGeneratedAssetArgs {
    * `conversation.attachment.add` pass `"user_upload"`.
    */
   source?: AssetSource;
+  /**
+   * The storage key's folder, without a trailing slash. Defaults to
+   * `generated/<kind>s/<orgId>`. The assistant's attachments pass
+   * `attachments/<orgId>/<workspaceId>` so a workspace's files sit together.
+   */
+  keyPrefix?: string;
+  /** Hex SHA-256 of `bytes`, kept in `metadata.sha256` for the turn record. */
+  sha256?: string;
 }
 
 export interface PersistedGeneratedAsset {
@@ -109,6 +117,8 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/zip": "zip",
   "text/markdown": "md",
   "text/plain": "txt",
+  "text/csv": "csv",
+  "application/json": "json",
 };
 
 function extFor(mimeType: string): string {
@@ -124,9 +134,14 @@ function extFor(mimeType: string): string {
  */
 function buildMetadata(
   displayName: string | null | undefined,
-): { displayName: string } | undefined {
+  sha256?: string,
+): { displayName?: string; sha256?: string } | undefined {
   const name = displayName?.trim();
-  return name ? { displayName: name } : undefined;
+  if (!name && !sha256) return undefined;
+  return {
+    ...(name ? { displayName: name } : {}),
+    ...(sha256 ? { sha256 } : {}),
+  };
 }
 
 /**
@@ -194,7 +209,8 @@ async function resolveConversationId(
 export async function persistGeneratedAsset(
   args: PersistGeneratedAssetArgs,
 ): Promise<PersistedGeneratedAsset> {
-  const key = `generated/${args.kind}s/${args.orgId}/${randomUUID()}.${extFor(args.mimeType)}`;
+  const prefix = args.keyPrefix ?? `generated/${args.kind}s/${args.orgId}`;
+  const key = `${prefix}/${randomUUID()}.${extFor(args.mimeType)}`;
   const store = storage();
   // Store as private blobs; the CDN URL must never be publicly guessable.
   // Access is served exclusively through the auth-gated /api/v1/assets/[publicId]
@@ -240,7 +256,7 @@ export async function persistGeneratedAsset(
         sizeBytes: BigInt(bytes),
         prompt: args.prompt,
         model: args.model,
-        metadata: buildMetadata(args.displayName),
+        metadata: buildMetadata(args.displayName, args.sha256),
         conversationId: conversationId ?? undefined,
         messageId: args.messageId ?? undefined,
       })

@@ -220,8 +220,9 @@ function userParts(content: UserContent): {
       const mediaType =
         part.mediaType ??
         (part.type === "image" ? "image/png" : "application/octet-stream");
+      const filename = part.type === "file" ? part.filename : undefined;
       attachments.push({
-        name: `attachment-${n}`,
+        name: filename || `attachment-${n}`,
         media_type: mediaType,
         byte_len: bytes.byteLength,
         source: { type: "data", base64: Buffer.from(bytes).toString("base64") },
@@ -256,7 +257,15 @@ function userContent(message: CompletionMessage): UserContent {
         mediaType: attachment.media_type,
       });
     } else {
-      parts.push({ type: "file", data, mediaType: attachment.media_type });
+      parts.push({
+        type: "file",
+        data,
+        mediaType: attachment.media_type,
+        // `attachment-<n>` is the name userParts gives a part that had none.
+        ...(/^attachment-\d+$/.test(attachment.name)
+          ? {}
+          : { filename: attachment.name }),
+      });
     }
   }
   return parts;
