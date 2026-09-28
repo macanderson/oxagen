@@ -186,10 +186,10 @@ function Providers({
           {value.providers.map((provider) => (
             <tr key={provider.providerRef} data-provider={provider.providerRef}>
               <td className={cell}>
-                <div className="font-medium text-foreground">
+                <div className="font-medium text-foreground md:truncate">
                   {provider.displayName}
                 </div>
-                <div className={`${mono} text-muted-foreground`}>
+                <div className={`${mono} text-muted-foreground md:truncate`}>
                   {provider.providerRef}
                 </div>
               </td>
@@ -200,7 +200,7 @@ function Providers({
               </td>
               {canEdit ? (
                 <td className={cell}>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-2 max-md:flex-wrap">
                     {canSetUp ? (
                       <SsoProviderDialog org={org} provider={provider} />
                     ) : null}

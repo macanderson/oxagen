@@ -385,7 +385,7 @@ export function FindingEvidence({
                 <tr key={run.runId} data-key={run.runId}>
                   <th
                     scope="row"
-                    className={`${cell} min-w-48 max-w-72 text-left font-normal`}
+                    className={`${cell} min-w-48 text-left font-normal`}
                   >
                     <SafeLink
                       to={routes.run(at.org, at.ws, run.runId)}

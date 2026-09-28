@@ -37,6 +37,10 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
 | `web` | `apps/web/` | oxagen.sh public website + `/blog` — hand-authored HTML plus MDX posts from `content/`, built to `dist/`, deployed to S3 + CloudFront |
 
+### Domains
+
+Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the team with slug `oxagen-inc`, which Mac migrated to from an earlier Vercel team. Vercel stays the registrar, so a nameserver change happens in that team. The nameservers point at the Route 53 zone in `infra/stacks-new/oxagen/dns-oxagen-app.tf`. `oxagen.app` is the production web app's domain (ADR-215, #4655). Until ADR-215's cutover, the app is canonical at `app.oxagen.sh`. After it, `app.oxagen.sh` redirects page visits to `oxagen.app` and keeps answering `/api/*`. `api`, `mcp`, and `docs` stay on `oxagen.sh`. `oxagen.dev`, bought the same day, only redirects to the docs (`dns-vanity-domains.tf`).
+
 ### Core Packages
 
 | Package | Key File | Purpose |
@@ -228,7 +232,6 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **Reproduce from the log.** Read each failing job with `gh run view --job <id> --log-failed` and name the cause before you change anything.
 - **Push only the fix.** The commit message names each failing job, its cause, and the issue as `Refs #N`. Leave the close to CI, because the time between open and close is the recovery time.
 - **Watch the push.** Follow the `main` run on your commit until every job and both deploys pass. If it is still red, push the next fix the same way.
-- **Bring the open PRs up to date.** Once `main` is green, merge `origin/main` into each open PR branch and push, so its CI runs against the fix. Merge rather than rebase a branch someone else owns.
 
 Any other change to `main` still goes through a PR.
 

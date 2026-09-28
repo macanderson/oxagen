@@ -119,10 +119,10 @@ function OffTheBelt({ tools }: { tools: Toolbelt["cannotSee"] }) {
           {tools.map((tool) => (
             <tr key={tool.name} data-testid="belt-off-row">
               <td className={cell}>
-                <span className={`${mono} break-all`}>{tool.name}</span>
+                <span className={mono}>{tool.name}</span>
                 {tool.server === null ? null : (
                   <span
-                    className={`${mono} block text-xs text-muted-foreground`}
+                    className={`${mono} block text-xs text-muted-foreground md:truncate`}
                   >
                     {tool.server}
                   </span>

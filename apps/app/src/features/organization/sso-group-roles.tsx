@@ -144,7 +144,7 @@ export function SsoGroupRoles({
                     {error === null ? null : (
                       <p
                         id={`${idBase}-group-${String(row.key)}-error`}
-                        className="mt-1 text-sm text-error-ink"
+                        className="mt-1 text-sm text-error-ink md:truncate"
                       >
                         {error}
                       </p>

@@ -2,7 +2,7 @@
 // Compile; mcp-studio-spec, Try it and tests). For each server folder a
 // steering PR changes, it:
 //
-// 1. Runs MCP Studio's tool checks (lane M5) through the lint option.
+// 1. Runs MCP Studio's tool checks (lane M5): its lint, or the lint option.
 // 2. Verifies the lock: it parses, it names the server, and each entry's
 //    upstream_hash is the hash of its upstream.
 // 3. Compiles the folder against its lock with MCP Studio's compile (lane M4).
@@ -21,6 +21,7 @@
 import {
   compile,
   CompileError,
+  lint as toolChecks,
   mcpToolsLockSchema,
   parseLock,
   parseRecordedCalls,
@@ -75,7 +76,7 @@ export const CALLS_FILE = "tests/calls.jsonl";
 export type ServerLint = (folder: LintServerFolder, context: LintContext) => readonly LintFinding[];
 
 export interface ServerCheckOptions {
-  /** The tool checks to run on each changed folder. Unset runs none until lane M5 builds lint(). */
+  /** The tool checks to run on each changed folder. Unset runs MCP Studio's lint(). */
   lint?: ServerLint;
 }
 
@@ -84,8 +85,6 @@ export interface ServerCheckOutcome {
   findings: Finding[];
   notes: string[];
 }
-
-const NO_LINT: ServerLint = () => [];
 
 /** Text with a period at the end. Its first letter stays as it is, since a message may open on a tool key. */
 function closed(text: string): string {
@@ -206,11 +205,15 @@ function toolField(tool: string, field: string | undefined): string {
 }
 
 /**
- * The tool check the seam leaves out. The references check reports a
- * credential the vault does not hold as credential-exists, with its line and
- * the closest name, so unknown_credential would report it twice.
+ * The tool checks the seam leaves out, since another check reports the same
+ * fault. The references check reports a credential the vault does not hold as
+ * credential-exists, with its line and the closest name. The lock stands in
+ * for what the source offers, so tool_not_offered would repeat two compile
+ * findings: lock-matches reports a tool the lock does not hold, and it passes
+ * one whose operation the OpenAPI document holds, which the next sync adds.
+ * server-compiles reports a locked tool that selects nothing.
  */
-const REPORTED_ELSEWHERE: ReadonlySet<string> = new Set(["unknown_credential"]);
+const REPORTED_ELSEWHERE: ReadonlySet<string> = new Set(["unknown_credential", "tool_not_offered"]);
 
 function lintFindings(name: string, texts: FolderTexts, found: readonly LintFinding[]): Finding[] {
   return found.filter((item) => !REPORTED_ELSEWHERE.has(item.rule)).map((item) => {
@@ -511,7 +514,7 @@ export async function checkServerFolders(
     credentials: new Set(input.context.credentials.map((credential) => `${CREDENTIAL_REF_PREFIX}${credential}`)),
     accepted_unchanged: new Set(),
   };
-  const lint = options.lint ?? NO_LINT;
+  const lint = options.lint ?? toolChecks;
   const { changed, removed } = changedPaths(input.files, input.base);
   const change: Change = { base: input.base, changed, removed };
   const findings: Finding[] = [];
