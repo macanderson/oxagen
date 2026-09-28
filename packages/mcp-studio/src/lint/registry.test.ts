@@ -1,5 +1,6 @@
 // lint: the registry rows of the Tool checks table. Each rule has a folder
-// that trips it and one that does not. A drift table holds lint's registry
+// that trips it and one that does not, and a case that trips a rule states
+// each finding's message. A drift table holds lint's registry
 // errors to registryLaunch's problems, field for field, on every case
 // registry-launch.test.ts runs. Another holds registry_without_remote to the
 // remotes registryLockSource pins.
@@ -138,6 +139,8 @@ interface Case {
   name: string;
   folder: ServerFolder;
   found: Found[];
+  /** Each finding's message, in order. A case that finds nothing leaves it out. */
+  says?: string[];
 }
 
 const REQUIRED_ROOT = npm({ packageArguments: [{ type: "named", name: "--root", isRequired: true }] });
@@ -152,6 +155,7 @@ const CASES: Case[] = [
     name: "registry_without_remote: a cloud source whose entry lists no remote",
     folder: folder(registrySourceSchema.parse(catalog) as RegistrySource, entry(npm())),
     found: [["registry_without_remote", undefined, "source.machines"]],
+    says: ["The catalog entry for io.github.acme/files 1.4.0 lists no remote, and source.machines names no machine group, so the server runs nowhere."],
   },
   {
     name: "registry_without_remote: a cloud source whose entry lists a remote",
@@ -162,26 +166,31 @@ const CASES: Case[] = [
     name: "registry_without_remote: a cloud source whose entry lists only an sse remote",
     folder: folder(registrySourceSchema.parse(catalog) as RegistrySource, withRemotes("sse")),
     found: [["registry_without_remote", undefined, "source.machines"]],
+    says: ["The catalog entry for io.github.acme/files 1.4.0 lists no streamable-http remote, and source.machines names no machine group, so the server runs nowhere. The cloud gateway calls only streamable-http remotes."],
   },
   {
     name: "registry_without_remote: source.machines that names no group",
     folder: folder(source({ machines: [], registry_type: "npm" }), entry(npm())),
     found: [["registry_without_remote", undefined, "source.machines"]],
+    says: ["source.machines names no machine group, so the package runs nowhere."],
   },
   {
     name: "package_cannot_run: no package of source.registry_type",
     folder: folder(onNpm(), PYPI_ONLY),
     found: [["package_cannot_run", undefined, "source.registry_type"]],
+    says: ["The catalog entry lists no npm package, so nothing could start the server."],
   },
   {
     name: "package_cannot_run: no source.registry_type, before the entry is read",
     folder: folder(withoutRegistryType(FILES_SOURCE)),
     found: [["package_cannot_run", undefined, "source.registry_type"]],
+    says: ["source.registry_type is not set, so the local gateway has no package to run."],
   },
   {
     name: "argument_without_value: a required argument with no value",
     folder: folder(onNpm(), entry(REQUIRED_ROOT)),
     found: [["argument_without_value", undefined, "source.arguments.--root"]],
+    says: ["packageArguments[0] is required, and neither source.arguments nor the entry gives it a value."],
   },
   {
     name: "argument_without_value: a required argument source.arguments sets",
@@ -192,11 +201,13 @@ const CASES: Case[] = [
     name: "env_variable_missing: an argument's ${NAME} that source.env does not list",
     folder: folder({ ...FILES_SOURCE, arguments: { directory: "${ROOT}" } }, PACKAGE_ENTRY),
     found: [["env_variable_missing", undefined, "source.arguments.directory"]],
+    says: ["source.arguments.directory uses ${ROOT}, and source.env does not list ROOT, so the local gateway would not pass it."],
   },
   {
     name: "env_variable_missing: a variable the package requires",
     folder: folder(onNpm(), entry(REQUIRED_KEY)),
     found: [["env_variable_missing", undefined, "source.env"]],
+    says: ["The npm package requires API_KEY, and source.env does not list it, so the local gateway would not pass it."],
   },
   {
     name: "env_variable_missing: a required variable source.env lists",
@@ -207,6 +218,7 @@ const CASES: Case[] = [
     name: "secret_literal: a secret set to a literal",
     folder: folder(onNpm({ env: ["TOKEN"], arguments: { "--token": "Bearer ${TOKEN}" } }), entry(SECRET_TOKEN)),
     found: [["secret_literal", undefined, "source.arguments.--token"]],
+    says: ["--token is a secret argument, and source.arguments sets it to a literal, so the secret would enter the repository."],
   },
   {
     name: "secret_literal: a secret set to one variable",
@@ -216,13 +228,14 @@ const CASES: Case[] = [
 ];
 
 describe("lint's registry checks", () => {
-  it.each(CASES)("$name", ({ folder: value, found: expected }) => {
+  it.each(CASES)("$name", ({ folder: value, found: expected, says }) => {
     const findings = lint(value, CONTEXT);
     expect(found(findings)).toStrictEqual(expected);
+    expect(findings.map((finding) => finding.message)).toStrictEqual(says ?? []);
     expectShape(findings);
   });
 
-  it("trips every registry rule in a case above", () => {
+  it("trips every registry rule in a case above that states its message", () => {
     const tripped = new Set(CASES.flatMap((each) => each.found.map(([rule]) => rule)));
     const rules = Object.entries(LINT_RULES)
       .filter(([, rule]) => JSON.stringify(rule.sources) === JSON.stringify(["registry"]))

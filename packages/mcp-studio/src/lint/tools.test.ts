@@ -1,6 +1,7 @@
 // lint: every row of the Tool checks table outside the registry rows, and
 // over_definition_budget, each with a folder that trips it and one that does
-// not. registry.test.ts covers the registry rows.
+// not. A case that trips a rule states each finding's message. registry.test.ts
+// covers the registry rows.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -210,6 +211,14 @@ function found(findings: readonly Finding[]): Found[] {
   return findings.map((finding) => [finding.rule, finding.tool, finding.field]);
 }
 
+/**
+ * The messages a case expects, none when it gives none. A pattern matches in
+ * place of a string, so a case with findings and no says fails.
+ */
+function messages(says: readonly (string | RegExp)[] = []): unknown[] {
+  return says.map((each) => (typeof each === "string" ? each : expect.stringMatching(each)));
+}
+
 /** Every finding has the rule's level, the six fields, and a message and fix that are sentences. */
 function expectShape(findings: readonly Finding[]): void {
   for (const finding of findings) {
@@ -227,6 +236,11 @@ interface Case {
   folder: ServerFolder;
   context?: LintContext;
   found: Found[];
+  /**
+   * Each finding's message, in order. A case that finds nothing leaves it out.
+   * A pattern stands in for a message that holds a measured token count.
+   */
+  says?: (string | RegExp)[];
 }
 
 const LONG_KEY = `list_${"a".repeat(55)}`;
@@ -265,26 +279,31 @@ const CASES: Case[] = [
       offered: [mcpTool("list_issues")],
     }),
     found: [["missing_classification", "list_issues", "risk"]],
+    says: ["list_issues has no risk, and Oxagen decides each call from risk, side_effect, and egress."],
   },
   {
     name: "tool_not_offered: a selector the source does not read",
     folder: issues({ ...READ, operation: "listIssues" }),
     found: [["tool_not_offered", "list_issues", "operation"]],
+    says: ["list_issues sets operation, which a remote source does not read, so the entry selects no tool."],
   },
   {
     name: "tool_not_offered: an OpenAPI entry with no operation",
     folder: openapi({ list_charges: READ }, [httpTool("listCharges")]),
     found: [["tool_not_offered", "list_charges", "operation"]],
+    says: ["list_charges does not say which operation it imports."],
   },
   {
     name: "tool_not_offered: a tool the source no longer offers",
     folder: folder({ tools: tools({ list_issues: READ }), offered: [] }),
     found: [["tool_not_offered", "list_issues", "upstream"]],
+    says: ["list_issues imports tool list_issues, and the source no longer offers it."],
   },
   {
     name: "no_description: neither tools.toml nor the source describes the tool",
     folder: issues(READ, { description: undefined }),
     found: [["no_description", "list_issues", "description"]],
+    says: ["list_issues has no description, and the model picks a tool by its description."],
   },
   {
     name: "invalid_name: a key that is not a tool key",
@@ -293,6 +312,7 @@ const CASES: Case[] = [
       offered: [mcpTool("list_issues")],
     }),
     found: [["invalid_name", "List-Issues", "name"]],
+    says: ['"List-Issues" is not a tool key, so model APIs would reject acme__List-Issues.'],
   },
   {
     name: "invalid_name: a key search mode serves itself",
@@ -302,22 +322,26 @@ const CASES: Case[] = [
       offered: [mcpTool("search_issues")],
     }),
     found: [["invalid_name", "search", "name"]],
+    says: ["acme__search names two tools, because search mode serves its own acme__search."],
   },
   {
     name: "invalid_name: a full name over 64 characters",
     folder: folder({ tools: tools({ [LONG_KEY]: READ }), offered: [mcpTool(LONG_KEY)] }),
     found: [["invalid_name", LONG_KEY, "name"]],
+    says: [`acme__${LONG_KEY} is 66 characters, and model APIs reject a tool name over 64.`],
   },
   {
     name: "invalid_name: a server name that breaks every tool name",
     folder: folder({ server: { ...server(), name: "Acme" }, tools: tools({ list_issues: READ }), offered: [mcpTool("list_issues")] }),
     found: [["invalid_name", undefined, "name"]],
+    says: ['The server name "Acme" breaks every tool name, and model APIs reject a tool name that breaks the pattern.'],
   },
   {
     name: "unknown_credential: a credential the organization does not have",
     folder: issues(),
     context: context({ credentials: new Set() }),
     found: [["unknown_credential", undefined, "auth.credential"]],
+    says: ["auth.credential names oxagen:credential/acme, and the organization has no credential by that name, so every call would fail."],
   },
   {
     name: "long_description: an own description over 1,024 characters",
@@ -326,11 +350,13 @@ const CASES: Case[] = [
       offered: [mcpTool("list_issues")],
     }),
     found: [["long_description", "list_issues", "description"]],
+    says: ["list_issues's description is 1,025 characters, over the 1,024 a description may be, and every request pays for it."],
   },
   {
     name: "long_description: a source description import cut",
     folder: issues(READ, { description: "a".repeat(1024) }),
     found: [["long_description", "list_issues", "description"]],
+    says: ["The source's description of list_issues is 1,024 characters, at the 1,024 import cuts a description to, and every request pays for it."],
   },
   {
     name: "long_description: an own description of exactly 1,024 characters",
@@ -341,6 +367,7 @@ const CASES: Case[] = [
     name: "many_inputs: 21 inputs",
     folder: issues(READ, { inputSchema: { type: "object", properties: properties(21) } }),
     found: [["many_inputs", "list_issues", "inputSchema.properties"]],
+    says: ["list_issues takes 21 inputs, and models fill a form of more than 20 poorly."],
   },
   {
     name: "many_inputs: 21 inputs with one hidden",
@@ -351,6 +378,7 @@ const CASES: Case[] = [
     name: "large_enum: an enum of 51 values",
     folder: issues(READ, { inputSchema: { type: "object", properties: { state: { type: "string", enum: states(51) } } } }),
     found: [["large_enum", "list_issues", "inputSchema.properties.state.enum"]],
+    says: ["inputSchema.properties.state lists 51 values, and every request pays for each one."],
   },
   {
     name: "large_enum: an enum of 50 values",
@@ -365,6 +393,7 @@ const CASES: Case[] = [
       offered: [mcpTool("list_issues")],
     }),
     found: [["over_definition_budget", undefined, "exposure.mode"]],
+    says: [/^The one imported tool costs about [\d,]+ tokens on every request, over the definition_budget of 1\.$/],
   },
   {
     name: "over_definition_budget: search mode past the budget",
@@ -380,6 +409,7 @@ const CASES: Case[] = [
     folder: folder({ tools: tools({ delete_issue: IRREVERSIBLE }), offered: [mcpTool("delete_issue")] }),
     context: context({ accepted_unchanged: new Set(["delete_issue"]) }),
     found: [["irreversible_suggestion_unreviewed", "delete_issue", "side_effect"]],
+    says: ["delete_issue is irreversible, and its suggested classification was accepted without a change."],
   },
   {
     name: "irreversible_suggestion_unreviewed: a read suggestion accepted unchanged",
@@ -393,6 +423,7 @@ const CASES: Case[] = [
     name: "no_output_schema: an operation with no JSON response schema",
     folder: openapi({ create_refund: { ...READ, operation: "createRefund" } }, [httpTool("createRefund", { outputSchema: undefined })]),
     found: [["no_output_schema", "create_refund", "outputSchema"]],
+    says: ["create_refund has no JSON schema for its 2xx response, so the model gets its result as text only."],
   },
   {
     name: "no_output_schema: an MCP tool with no outputSchema",
@@ -408,6 +439,7 @@ const CASES: Case[] = [
       }),
     ]),
     found: [["unbounded_array", "list_items", "select"]],
+    says: ["list_items returns an array with no paging, so one result can fill the context."],
   },
   {
     name: "unbounded_array: an array response cut with select",
@@ -427,6 +459,7 @@ const CASES: Case[] = [
       }),
     ]),
     found: [["undiscriminated_one_of", "create_payment", "inputSchema.properties.method.oneOf"]],
+    says: ["inputSchema.properties.method is a oneOf of 2 branches with no discriminator, so the model guesses the branch."],
   },
   {
     name: "undiscriminated_one_of: a oneOf with a discriminator",
@@ -455,6 +488,7 @@ const CASES: Case[] = [
     name: "deprecated_imported: a deprecated GraphQL field",
     folder: graphql({ issue: { ...READ, field: "Query.issue" } }, [graphqlTool("Query.issue", {}, { deprecated: true })]),
     found: [["deprecated_imported", "issue", "field"]],
+    says: ["issue imports field Query.issue, which the source marks deprecated, so it may go away."],
   },
   {
     name: "deprecated_imported: a deprecated MCP tool",
@@ -469,6 +503,7 @@ const CASES: Case[] = [
       graphqlTool("Query.issue", { selection: "{ issue { assignee { team { name } } } }" }),
     ]),
     found: [["deep_selection", "issue", "selection"]],
+    says: ["issue's selection set nests 4 levels, and a set deeper than 3 makes large results and slow queries."],
   },
   {
     name: "deep_selection: a deep selection tools.toml replaces",
@@ -481,6 +516,7 @@ const CASES: Case[] = [
     name: "unpaged_list: a list field with no paging argument",
     folder: graphql({ issues: { ...READ, field: "Query.issues" } }, [graphqlTool("Query.issues", {}, { outputSchema: ITEMS_OUTPUT })]),
     found: [["unpaged_list", "issues", "outputSchema.properties.items"]],
+    says: ["issues returns a list, and field Query.issues takes no paging argument, so one result can fill the context."],
   },
   {
     name: "unpaged_list: a list field that takes first",
@@ -501,6 +537,7 @@ const CASES: Case[] = [
       grpcTool(POST_ENTRY, {}, { inputSchema: { type: "object", properties: { detail: ANY } } }),
     ]),
     found: [["any_field", "post_entry", "inputSchema.properties.detail"]],
+    says: ["inputSchema.properties.detail is a google.protobuf.Any, whose type is known only at run time, so the model cannot tell what it holds."],
   },
   {
     name: "any_field: an Any in the output",
@@ -508,6 +545,7 @@ const CASES: Case[] = [
       grpcTool(POST_ENTRY, {}, { outputSchema: { type: "object", properties: { detail: ANY } } }),
     ]),
     found: [["any_field", "post_entry", "outputSchema.properties.detail"]],
+    says: ["outputSchema.properties.detail is a google.protobuf.Any, whose type is known only at run time, so the model cannot tell what it holds."],
   },
   {
     name: "any_field: an @type property on an MCP tool",
@@ -518,6 +556,7 @@ const CASES: Case[] = [
     name: "unbounded_stream: a server stream with no max_items",
     folder: grpc({ list_entries: { ...READ, method: LIST_ENTRIES } }, [grpcTool(LIST_ENTRIES, { streaming: "server" })]),
     found: [["unbounded_stream", "list_entries", "max_items"]],
+    says: [`list_entries imports server-streaming method ${LIST_ENTRIES} without max_items, so a stream that never ends runs to its deadline on every call.`],
   },
   {
     name: "unbounded_stream: a server stream capped by max_items",
@@ -528,6 +567,7 @@ const CASES: Case[] = [
     name: "no_idempotency_level: a method with no idempotency_level",
     folder: grpc({ post_entry: { ...READ, method: POST_ENTRY } }, [grpcTool(POST_ENTRY, { idempotency_level: "IDEMPOTENCY_UNKNOWN" })]),
     found: [["no_idempotency_level", "post_entry", "method"]],
+    says: [`${POST_ENTRY} sets no idempotency_level, so the suggestion falls back to write and high.`],
   },
 
   // Local.
@@ -535,6 +575,7 @@ const CASES: Case[] = [
     name: "local_without_machines: a local server with no machine group",
     folder: folder({ server: mcpServerSchema.parse(LOCAL), tools: tools({ list_issues: READ }), offered: [mcpTool("list_issues")] }),
     found: [["local_without_machines", undefined, "source.machines"]],
+    says: ["The server names no machine group, so it runs nowhere."],
   },
   {
     name: "local_without_machines: a local server on dev-laptops",
@@ -548,9 +589,10 @@ const CASES: Case[] = [
 ];
 
 describe("lint's tool checks", () => {
-  it.each(CASES)("$name", ({ folder: value, context: given, found: expected }) => {
+  it.each(CASES)("$name", ({ folder: value, context: given, found: expected, says }) => {
     const findings = lint(value, given ?? context());
     expect(found(findings)).toStrictEqual(expected);
+    expect(findings.map((finding) => finding.message)).toStrictEqual(messages(says));
     expectShape(findings);
   });
 
@@ -620,6 +662,8 @@ interface FixtureCase {
   /** The rules the case checks. Other findings on the fixture are left to their own cases. */
   rules: LintRule[];
   found: Found[];
+  /** Each finding's message, in order. A case that finds nothing leaves it out. */
+  says?: string[];
 }
 
 const FIXTURE_CASES: FixtureCase[] = [
@@ -630,12 +674,14 @@ const FIXTURE_CASES: FixtureCase[] = [
     }),
     rules: ["deprecated_imported"],
     found: [["deprecated_imported", "list_pet_photos", "operation"]],
+    says: ["list_pet_photos imports operation listPetPhotos, which the source marks deprecated, so it may go away."],
   },
   {
     name: "unbounded_array: multi-file's listItems",
     folder: imported("openapi", "expected/openapi/multi-file.json", { list_items: { ...READ, operation: "listItems" } }),
     rules: ["unbounded_array"],
     found: [["unbounded_array", "list_items", "select"]],
+    says: ["list_items returns an array with no paging, so one result can fill the context."],
   },
   {
     name: "recursive_schema: the Category notes, and none for get_employee, which tools.toml leaves out",
@@ -647,6 +693,10 @@ const FIXTURE_CASES: FixtureCase[] = [
     found: [
       ["recursive_schema", "get_category", undefined],
       ["recursive_schema", "create_tree", undefined],
+    ],
+    says: [
+      "get_category holds Category, a schema that refers to itself, and import cut it at depth 4.",
+      "create_tree holds Category, a schema that refers to itself, and import cut it at depth 4.",
     ],
   },
   {
@@ -662,15 +712,16 @@ const FIXTURE_CASES: FixtureCase[] = [
 ];
 
 describe("lint on what the importers return", () => {
-  it.each(FIXTURE_CASES)("$name", ({ folder: value, rules, found: expected }) => {
+  it.each(FIXTURE_CASES)("$name", ({ folder: value, rules, found: expected, says }) => {
     const findings = lint(value, context()).filter((finding) => rules.includes(finding.rule));
     expect(found(findings)).toStrictEqual(expected);
+    expect(findings.map((finding) => finding.message)).toStrictEqual(messages(says));
     expectShape(findings);
   });
 });
 
 describe("lint's coverage of the Tool checks table", () => {
-  it("trips every rule outside the registry rows in a case above", () => {
+  it("trips every rule outside the registry rows in a case above that states its message", () => {
     const tripped = new Set([...CASES, ...FIXTURE_CASES].flatMap((each) => each.found.map(([rule]) => rule)));
     const rules = Object.entries(LINT_RULES)
       .filter(([, rule]) => JSON.stringify(rule.sources) !== JSON.stringify(["registry"]))
