@@ -6,9 +6,13 @@
 // one the test finds the module the handler loads from — `register.ts` for
 // packages/handlers, the `LOADERS` map in `index.ts` for packages/agent —
 // parses that module with the TypeScript compiler API and asserts the
-// exported handler contains a call expression to a role gate: in its
-// initializer, in the same-file factory its initializer calls, or in its body
-// when it is a function declaration. A role gate is `assertOrgRole`, or
+// exported handler reaches a role gate: in its initializer, in its body when
+// it is a function declaration, or in a same-file function it calls or passes
+// on, such as the factory its initializer calls. The reader is
+// `tools/scripts/lib/role-gate-ast.mjs`, the one `check-role-enforcement.mjs`
+// uses too (#3490), so the test and the CI check cannot disagree about what a
+// gate is. A comment or an unused import that names a gate does not count. A
+// role gate is `assertOrgRole`, or
 // `assertConsequenceRole` (`@oxagen/iam/mandate-role`), which asks for the org
 // roles a workspace names for a consequence and calls `assertOrgRole` with the
 // resolved user itself (rule two scans that call), or `assertContractRole`
@@ -29,6 +33,14 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { getCapability } from "@oxagen/oxagen";
+import {
+  agentHandlerModule as findAgentHandlerModule,
+  handlerBinding as findHandlerBinding,
+  handlerCallsRoleGate as reachesRoleGate,
+  isCallTo,
+  parseSource,
+  soleHandlerExport as findSoleHandlerExport,
+} from "../../../tools/scripts/lib/role-gate-ast.mjs";
 
 const ROLE_CHECKED_CONTRACTS = [
   "authorize_cli",
@@ -155,6 +167,11 @@ const AGENT_ROLE_CHECKED_CONTRACTS = [
   // A rule-authoring turn (ADR-186) takes ask_assistant's roles, and asserts
   // them before it asks for the turn.
   "author_graph_rule",
+  // Returns every enabled server's decrypted token (#3490). Its contract
+  // declared org Owner/Admin and workspace Owner/Member while the handler
+  // checked nothing, and check-role-enforcement skipped it because the
+  // handler lives here rather than in packages/handlers.
+  "resolve_mcp_servers",
 ] as const;
 
 const SRC = join(__dirname);
@@ -166,26 +183,11 @@ function handlerBinding(
   registerSource: ts.SourceFile,
   capability: string,
 ): { module: string; exportName: string } {
-  let found: { module: string; exportName: string } | undefined;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "registerHandler" &&
-      node.arguments[0] &&
-      ts.isStringLiteral(node.arguments[0]) &&
-      node.arguments[0].text === capability
-    ) {
-      const text = node.arguments[1]?.getText(registerSource) ?? "";
-      const module = /import\("(\.\/[^"]+)"\)/.exec(text)?.[1];
-      const exportName = /\)\)\s*\.(\w+)/.exec(text)?.[1];
-      if (module && exportName) found = { module, exportName };
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(registerSource);
-  if (!found) throw new Error(`register.ts binds no handler for ${capability}`);
-  return found;
+  const found = findHandlerBinding(registerSource, capability);
+  if (!found?.exportName) {
+    throw new Error(`register.ts binds no handler for ${capability}`);
+  }
+  return { module: found.module, exportName: found.exportName };
 }
 
 /** The `./module` packages/agent's `LOADERS` entry for a capability imports. */
@@ -193,20 +195,7 @@ function agentHandlerModule(
   indexSource: ts.SourceFile,
   capability: string,
 ): string {
-  let module: string | undefined;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isPropertyAssignment(node) &&
-      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-      node.name.text === capability
-    ) {
-      module = /import\("(\.\/[^"]+)"\)/.exec(
-        node.initializer.getText(indexSource),
-      )?.[1];
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(indexSource);
+  const module = findAgentHandlerModule(indexSource, capability);
   if (!module) {
     throw new Error(
       `packages/agent LOADERS binds no handler for ${capability}`,
@@ -215,50 +204,21 @@ function agentHandlerModule(
   return module;
 }
 
-const isExported = (node: ts.Node): boolean =>
-  ts.canHaveModifiers(node) &&
-  (ts.getModifiers(node) ?? []).some(
-    (m) => m.kind === ts.SyntaxKind.ExportKeyword,
-  );
-
 /**
  * The module's one exported `*Handler` — the fallback `resolveHandler` in
  * packages/agent/src/handlers/index.ts resolves a snake_case capability by.
  */
 function soleHandlerExport(source: ts.SourceFile): string {
-  const names: string[] = [];
-  for (const statement of source.statements) {
-    if (!isExported(statement)) continue;
-    if (ts.isFunctionDeclaration(statement) && statement.name) {
-      names.push(statement.name.text);
-    }
-    if (ts.isVariableStatement(statement)) {
-      for (const decl of statement.declarationList.declarations) {
-        if (ts.isIdentifier(decl.name)) names.push(decl.name.text);
-      }
-    }
+  const name = findSoleHandlerExport(source);
+  if (!name) {
+    throw new Error(`${source.fileName} exports no single *Handler name`);
   }
-  const handlers = names.filter((n) => n.endsWith("Handler"));
-  if (handlers.length !== 1) {
-    throw new Error(
-      `${source.fileName} exports ${handlers.length} *Handler names`,
-    );
-  }
-  return handlers[0]!;
-}
-
-function parseSource(file: string, text: string): ts.SourceFile {
-  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  return name;
 }
 
 function parse(file: string): ts.SourceFile {
   return parseSource(file, readFileSync(file, "utf8"));
 }
-
-const isCallTo = (node: ts.Node, name: string): node is ts.CallExpression =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
-  node.expression.text === name;
 
 /**
  * The calls that gate a handler on an org role. `assertContractRole`
@@ -271,52 +231,12 @@ const ROLE_GATES = [
   "assertContractRole",
 ] as const;
 
-/**
- * Whether the exported handler contains a call to a role gate: in its
- * initializer (`export const h = async (…) => …`), in the body of the
- * same-file factory its initializer calls (`export const h = createH(deps)`),
- * or in its body when it is a function declaration.
- */
+/** Whether the exported handler reaches one of `ROLE_GATES`, in this file. */
 function handlerCallsRoleGate(
   source: ts.SourceFile,
   exportName: string,
 ): boolean {
-  let calls = false;
-  const scan = (node: ts.Node) => {
-    if (ROLE_GATES.some((gate) => isCallTo(node, gate))) calls = true;
-    ts.forEachChild(node, scan);
-  };
-  const functionNamed = (name: string) =>
-    source.statements.find(
-      (s): s is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(s) && s.name?.text === name,
-    );
-  for (const statement of source.statements) {
-    if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === exportName
-    ) {
-      scan(statement);
-    }
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const decl of statement.declarationList.declarations) {
-      if (
-        !ts.isIdentifier(decl.name) ||
-        decl.name.text !== exportName ||
-        !decl.initializer
-      )
-        continue;
-      scan(decl.initializer);
-      if (
-        ts.isCallExpression(decl.initializer) &&
-        ts.isIdentifier(decl.initializer.expression)
-      ) {
-        const factory = functionNamed(decl.initializer.expression.text);
-        if (factory) scan(factory);
-      }
-    }
-  }
-  return calls;
+  return reachesRoleGate(source, exportName, { gates: ROLE_GATES });
 }
 
 /** `resolveActingUserId(...)` or `await resolveActingUserId(...)`. */

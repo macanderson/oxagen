@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   selectMock: vi.fn(),
   getWorkspaceSecret: vi.fn(),
   decryptMcpAuthConfig: vi.fn(),
+  assertOrgRole: vi.fn(),
+  resolveActingUserId: vi.fn(),
 }));
 
 mocks.whereMock.mockImplementation(
@@ -31,6 +33,12 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
+
+// The role gate reads Postgres; the suite decides its answer (#3490).
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: mocks.assertOrgRole,
+  resolveActingUserId: mocks.resolveActingUserId,
+}));
 
 vi.mock("@oxagen/plugins", () => ({
   getWorkspaceSecret: mocks.getWorkspaceSecret,
@@ -63,6 +71,39 @@ describe("agent.mcp.resolve handler", () => {
     mocks.getWorkspaceSecret.mockReset();
     mocks.decryptMcpAuthConfig.mockReset();
     mocks.decryptMcpAuthConfig.mockResolvedValue({});
+    mocks.assertOrgRole.mockReset();
+    mocks.assertOrgRole.mockResolvedValue("Member");
+    mocks.resolveActingUserId.mockReset();
+    mocks.resolveActingUserId.mockImplementation(
+      async (ctx: { userId: string | null }) => ctx.userId,
+    );
+  });
+
+  // #3490: the contract grants org Owner/Admin and workspace Owner/Member,
+  // and the kernel's IAM check allows every call below the enterprise tier,
+  // so only this gate keeps a workspace Viewer from reading every token.
+  it("asserts the contract's roles for the acting user before any read", async () => {
+    mocks.resolveActingUserId.mockResolvedValueOnce("creator_1");
+    mocks.rows.mockReturnValueOnce([]);
+    await agentMcpResolveHandler({}, { ...CTX, userId: null, apiKeyId: "k" });
+    expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: CTX.orgId, userId: "creator_1" }),
+      { org: ["Owner", "Admin"], workspace: ["Owner", "Member"] },
+    );
+  });
+
+  it("refuses a caller outside those roles and reads nothing", async () => {
+    mocks.assertOrgRole.mockRejectedValueOnce(
+      Object.assign(new Error("org role required"), {
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    await expect(agentMcpResolveHandler({}, CTX)).rejects.toMatchObject({
+      reason: "org_role_required",
+    });
+    expect(mocks.selectMock).not.toHaveBeenCalled();
+    expect(mocks.getWorkspaceSecret).not.toHaveBeenCalled();
   });
 
   it("returns [] with no workspace in context", async () => {
