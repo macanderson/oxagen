@@ -10,6 +10,7 @@ import {
   type FakeGithubOptions,
 } from "@oxagen/github/provision/testing";
 import {
+  GitLabApiError,
   type GitlabRest,
   type GitlabResponse,
   type SteeringGroup,
@@ -22,6 +23,7 @@ import {
   OXAGEN_STEERING_APP,
 } from "@oxagen/oxagen/steering-repo";
 import { describe, expect, it, vi } from "vitest";
+import { steeringHookTarget } from "./lib/steering-hook";
 import {
   FIRST_COMMIT_MESSAGE,
   initialSteeringRepoState,
@@ -73,6 +75,24 @@ const ORG_TARGET: ProvisionTarget = { org_slug: ORG, workspace: null };
 const GROUP: SteeringGroup = { id: 42, full_path: ORG };
 const BOT = { user_id: 7, username: "group_42_bot" };
 const BINDING_ID = "rpb_test";
+const HOOK_SECRET = "a-steering-hook-secret-of-32-chars!";
+const API_URL = "https://api.example.test";
+
+/** The hook a steering project should carry, with the secret it was made with. */
+function hookOf(
+  scope: SteeringRepoScope,
+  projectId: number,
+  secret = HOOK_SECRET,
+): { url: string; token: string } {
+  return steeringHookTarget(
+    {
+      kind: scope.kind,
+      scopeId: scope.kind === "workspace" ? scope.workspaceId : scope.orgId,
+      projectId,
+    },
+    { BETTER_AUTH_SECRET: secret, NEXT_PUBLIC_API_URL: API_URL },
+  );
+}
 
 const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
@@ -234,6 +254,10 @@ class Harness {
   groupsRefused = false;
   githubConfigured = true;
   workspaceGone = false;
+  /** The secret the hook's token is made with. A test rotates it. */
+  hookSecret = HOOK_SECRET;
+  /** Every scope and project the hook step asked a target for. */
+  readonly hookRequests: { scope: SteeringRepoScope; projectId: number }[] = [];
 
   constructor(
     readonly hub: FakeGithub | null,
@@ -315,6 +339,10 @@ class Harness {
       notifyReauthorize: (scope, provider) => {
         this.notified.push({ scope, provider });
         return Promise.resolve();
+      },
+      steeringHook: (scope, projectId) => {
+        this.hookRequests.push({ scope, projectId });
+        return hookOf(scope, projectId, this.hookSecret);
       },
     };
   }
@@ -707,6 +735,7 @@ describe("a GitLab workspace", () => {
       { step: "add_to_installation", status: "provisioning", ran: false },
       { step: "write_first_commit", status: "provisioning", ran: true },
       { step: "apply_settings", status: "provisioning", ran: true },
+      { step: "register_webhook", status: "provisioning", ran: true },
       { step: "publish_version", status: "provisioning", ran: true },
       { step: "bind_repository", status: "ready", ran: true },
     ]);
@@ -717,6 +746,7 @@ describe("a GitLab workspace", () => {
       { method: "PUT", path: "/projects/1" },
       { method: "POST", path: "/projects/1/approvals" },
       { method: "POST", path: "/projects/1/protected_branches" },
+      { method: "POST", path: "/projects/1/hooks" },
       { method: "POST", path: "/projects/1/deployments" },
     ]);
 
@@ -758,9 +788,30 @@ describe("a GitLab workspace", () => {
           deployments: [
             { environment: "steering", ref: "main", sha, status: "success" },
           ],
+          hooks: [
+            {
+              url: hookOf(WS, 1).url,
+              push_events: true,
+              merge_requests_events: true,
+              enable_ssl_verification: true,
+            },
+          ],
         },
       },
     });
+    expect(h.hookRequests).toEqual([{ scope: WS, projectId: 1 }]);
+    expect(lab.hooks(1)).toEqual([
+      {
+        id: 1,
+        ...hookOf(WS, 1),
+        push_events: true,
+        merge_requests_events: true,
+        enable_ssl_verification: true,
+      },
+    ]);
+    expect(hookOf(WS, 1).url).toBe(
+      `${API_URL}/webhooks/gitlab/steering/workspace/ws_1`,
+    );
 
     const commit = h.gitlabCalls.find(
       (c) => c.method === "POST" && c.path === "/projects/1/repository/commits",
@@ -801,11 +852,156 @@ describe("a GitLab workspace", () => {
     const snapshot = lab.snapshot();
     const state = h.state(WS);
     const writes = lab.writes().length;
+    const hooks = lab.hooks(1);
 
     expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
     expect(lab.snapshot()).toEqual(snapshot);
     expect(h.state(WS)).toEqual(state);
-    expect(lab.writes()).toHaveLength(writes);
+    expect(lab.hooks(1)).toEqual(hooks);
+    // GitLab never returns a hook's token, so the rerun writes the current
+    // one onto the same hook. That PUT is its one write.
+    expect(lab.writes().slice(writes)).toEqual([
+      { method: "PUT", path: "/projects/1/hooks/1" },
+    ]);
+  });
+
+  it("writes the new token onto the same hook after the secret rotates", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    const rotated = "a-rotated-steering-hook-secret-of-32!";
+    h.hookSecret = rotated;
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    const [hook, ...others] = lab.hooks(1);
+    expect(others).toEqual([]);
+    expect(hook).toMatchObject({ id: 1, ...hookOf(WS, 1, rotated) });
+    expect(hook?.token).not.toBe(hookOf(WS, 1).token);
+  });
+
+  it("adopts a hook that already holds the URL and creates no second one", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    const deps = h.deps();
+    for (const step of STEERING_REPO_STEPS.slice(
+      0,
+      STEERING_REPO_STEPS.indexOf("register_webhook"),
+    ))
+      await runSteeringRepoStep(deps, WS, step);
+    const other = await lab
+      .rest()
+      .request<{ id: number }>("POST", "/projects/1/hooks", {
+        url: "https://elsewhere.example.test/hook",
+        token: "someone-else",
+      });
+    const stale = await lab
+      .rest()
+      .request<{ id: number }>("POST", "/projects/1/hooks", {
+        url: hookOf(WS, 1).url,
+        token: "a-stale-token",
+        merge_requests_events: false,
+      });
+
+    await runSteeringRepoStep(deps, WS, "register_webhook");
+    expect(lab.hooks(1)).toEqual([
+      {
+        id: other.data?.id,
+        url: "https://elsewhere.example.test/hook",
+        token: "someone-else",
+        push_events: true,
+        merge_requests_events: false,
+        enable_ssl_verification: true,
+      },
+      {
+        id: stale.data?.id,
+        ...hookOf(WS, 1),
+        push_events: true,
+        merge_requests_events: true,
+        enable_ssl_verification: true,
+      },
+    ]);
+  });
+});
+
+describe("a GitLab hook URL that GitLab refuses", () => {
+  it.each([400, 422])(
+    "finishes the run and logs a warning on a %i",
+    async (status) => {
+      const lab = gitlabFake();
+      const h = new Harness(null, lab);
+      lab.failNext({
+        method: "POST",
+        path: "/projects/1/hooks",
+        status,
+        message: "Invalid url given",
+        times: 3,
+      });
+
+      expect(await runUntilStopped(h.deps(), WS)).toBeNull();
+      expect(lab.hooks(1)).toEqual([]);
+      expect(h.state(WS)).toMatchObject({
+        status: "ready",
+        step: "bind_repository",
+        failed_step: null,
+        error: null,
+      });
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: WS.orgId,
+          scope: "workspace",
+          projectId: 1,
+          url: hookOf(WS, 1).url,
+        }),
+        expect.stringContaining("refused the steering hook's URL"),
+      );
+    },
+  );
+
+  it("registers the hook on a run after GitLab accepts the URL", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    lab.failNext({ method: "POST", path: "/projects/1/hooks", status: 422 });
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(lab.hooks(1)).toEqual([]);
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(lab.hooks(1)).toEqual([
+      expect.objectContaining({ id: 1, ...hookOf(WS, 1) }),
+    ]);
+  });
+
+  it("still fails the step on a 403, which is not a refused URL", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    lab.failNext({ method: "POST", path: "/projects/1/hooks", status: 403 });
+
+    const err = await runUntilStopped(h.deps(), WS);
+    expect(err).toBeInstanceOf(GitLabApiError);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "register_webhook",
+      error: { code: "step_failed" },
+    });
+  });
+
+  it("fails the step when the hook's secret is missing", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    const deps: ProvisionDeps = {
+      ...h.deps(),
+      steeringHook: () => {
+        throw new Error("BETTER_AUTH_SECRET is not set");
+      },
+    };
+
+    const err = await runUntilStopped(deps, WS);
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "register_webhook",
+      error: { code: "step_failed", message: "BETTER_AUTH_SECRET is not set" },
+    });
+    expect(lab.hooks(1)).toEqual([]);
   });
 });
 
@@ -826,9 +1022,11 @@ describe("the organization repo", () => {
       ["add_to_installation", "provisioning", true],
       ["write_first_commit", "provisioning", true],
       ["apply_settings", "provisioning", true],
+      ["register_webhook", "provisioning", false],
       ["publish_version", "ready", true],
       ["bind_repository", "ready", false],
     ]);
+    expect(h.hookRequests).toEqual([]);
     const repo = githubRepo(hub, "oxagen");
     expect(repo?.description).toBe(ORG_DESCRIPTION);
     const files = seedFilesOf("github", "acme/oxagen", false);
@@ -1212,6 +1410,31 @@ describe("other stops", () => {
     ).toEqual({ step: "bind_repository", status: "provisioning", ran: false });
     expect(h.saves).toEqual([]);
   });
+
+  it("skips the hook step on GitHub without asking for a target", async () => {
+    const h = new Harness(githubFake(), null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    expect(
+      await runSteeringRepoStep(h.deps(), WS, "register_webhook"),
+    ).toEqual({ step: "register_webhook", status: "provisioning", ran: false });
+    expect(h.hookRequests).toEqual([]);
+    expect(h.saves).toEqual([]);
+  });
+
+  it("fails the hook step when the create step has not recorded a project", async () => {
+    const h = new Harness(null, gitlabFake());
+    h.connections.set("org_1", GITLAB_CONNECTION);
+    const err = await stepError(h.deps(), WS, "register_webhook");
+    expect((err as Error).message).toBe(
+      "the create step has not recorded a repository",
+    );
+    expect(h.hookRequests).toEqual([]);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "register_webhook",
+      error: { code: "step_failed" },
+    });
+  });
 });
 
 // ── Name collisions ──────────────────────────────────────────────────────────
@@ -1433,6 +1656,23 @@ describe("a rerun after one failure", () => {
       step: "apply_settings",
       inject: (lab) =>
         lab.failNext({ method: "POST", path: "/projects/1/approvals", status: 500 }),
+    },
+    {
+      label: "the hook create before GitLab applies it",
+      step: "register_webhook",
+      inject: (lab) =>
+        lab.failNext({ method: "POST", path: "/projects/1/hooks", status: 500 }),
+    },
+    {
+      label: "the hook create after GitLab applies it",
+      step: "register_webhook",
+      inject: (lab) =>
+        lab.failNext({
+          method: "POST",
+          path: "/projects/1/hooks",
+          status: 500,
+          after: true,
+        }),
     },
     {
       label: "the deployment before GitLab records it",
