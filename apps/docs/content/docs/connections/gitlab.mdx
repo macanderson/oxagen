@@ -1,13 +1,16 @@
 ---
 title: Connect GitLab
-description: Keep a workspace's steering in a gitlab.com project. Context records publish as merge requests, checked and merged the way they are on GitHub.
+description: Keep a workspace's steering repo on gitlab.com. Steering PRs open as merge requests, checked and merged the way they are on GitHub.
 ---
 
 ## Overview
 
-A workspace keeps its steering in its main repository, under `.oxagen/`. That repository can be a gitlab.com project instead of a GitHub repository. Each context record then publishes as a merge request on the project. Oxagen reports the six checks as commit statuses, and a reviewer's merge squashes the commit the checks ran on.
+A workspace keeps its steering records in a steering repo. The steering repo can be a gitlab.com project instead of a GitHub repository. Each steering PR then opens as a merge request on the project. Oxagen reports its checks as commit statuses, and a reviewer's merge squashes the commit the checks ran on.
 
-Oxagen connects to the project with a **project access token**. You create the token on the project, so it reaches that one project and nothing else.
+Oxagen connects to GitLab in one of two ways:
+
+- **A group access token.** During onboarding, an organization Owner or Admin enters a group path and a group access token with the `api` scope and the Maintainer role. Oxagen creates the steering repos as projects in that group. Group access tokens need GitLab Premium on gitlab.com. Oxagen refuses a token that is not the group's own with `gitlab_token_not_group`. A project Oxagen creates has no merge request webhook yet.
+- **A project access token.** You create the token on one existing project, so it reaches that one project and nothing else. The rest of this page covers this path.
 
 Only gitlab.com is supported. Self-managed GitLab needs its own host setting first.
 
@@ -32,7 +35,7 @@ Oxagen refuses a personal access token, a group access token, and another projec
 2. Under **Or connect a GitLab project**, enter the project path, such as `acme/platform/rules`.
 3. Paste the token and select **Connect and bind**.
 
-Oxagen checks the token with GitLab, stores it encrypted, and binds the project as the workspace's main repository. It never shows the token again.
+Oxagen checks the token with GitLab, stores it encrypted, and binds the project as the workspace's steering repo. It does not show the token again. The bind works only for a workspace with no steering repo yet. When the workspace already has a different steering repo, Oxagen refuses with `main_repo_bound`.
 
 The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/gitlab/attach` with `{ "projectPath", "token" }`, then `POST /v1/{orgSlug}/{workspaceSlug}/repository/main` with `{ "provider": "gitlab", "projectPath" }`. `create_workspace` no longer takes a project. Create the workspace first, then make the two calls.
 
@@ -40,17 +43,17 @@ The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/
 
 | Action | On GitLab |
 | --- | --- |
-| Propose, open, check, merge and dismiss a Context PR | A merge request, with the checks as commit statuses |
-| Publish, revise and retire records, and set the governance mode | Through the same merge request flow |
+| Propose, open, check, merge, and dismiss a steering PR | A merge request, with the checks as commit statuses |
+| Publish, revise, and retire steering records, and set the governance mode | Through the same merge request flow |
 | Propose a skill or a configuration clone | Through the same merge request flow |
 | `oxagen steering` freshness in a checkout | Matches the project's gitlab.com remote, nested groups included |
-| Repository tree, production branch, init pull request, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
+| Repository tree, production branch, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
 
 A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. Records stay stamped with the path you approved when you bound it.
 
 ## Approvals
 
-In `team` and `regulated` mode, a Context PR merges only after a workspace member other than the author approves it. GitLab does not record which commit a reviewer approved. Oxagen compares when each approval was given with when GitLab recorded each version of the merge request's diff. An approval counts for the newest version GitLab recorded before it.
+In `team` and `regulated` mode, a steering PR merges only after a workspace member other than the author approves it. An owner, or a member with `merge_pr_without_review`, may merge without one. GitLab does not record which commit a reviewer approved. Oxagen compares when each approval was given with when GitLab recorded each version of the merge request's diff. An approval counts for the newest version GitLab recorded before it.
 
 GitLab keeps an approval across a rebase, because a rebase leaves the diff unchanged. So when Oxagen rebases the branch onto a newer main before it merges, an approval given before the rebase does not count. The reviewer removes the approval and approves again. The same holds for an approval given in the moment after a push and before GitLab records the push as a new version. When GitLab has not yet recorded the latest push, Oxagen refuses the merge with `gitlab_refused`. Merge again in a minute. When GitLab reports an approval with no `approved_at` time, Oxagen cannot place it on a head, so it refuses the merge with `approvals_not_head_bound`. It refuses an owner's merge too.
 
