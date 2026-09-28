@@ -306,7 +306,7 @@ export function MandatesSection({
                                   place.ws,
                                   mandate.id,
                                 )}
-                                className={`${mono} ${linkText} break-all`}
+                                className={`${mono} ${linkText}`}
                               >
                                 {mandate.id}
                               </SafeLink>
@@ -346,7 +346,7 @@ export function MandatesSection({
                               {starts ? (
                                 <div
                                   data-state="upcoming"
-                                  className="whitespace-nowrap text-xs text-muted-foreground"
+                                  className="whitespace-nowrap text-xs text-muted-foreground md:truncate"
                                 >
                                   {t("startsOn", {
                                     date: format.dateTime(

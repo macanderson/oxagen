@@ -97,7 +97,7 @@ function Runs({
       >
         {runs.value.map((run: RunRow) => (
           <tr key={run.id} data-testid="agent-run">
-            <td className={`${cell} max-w-72`}>
+            <td className={cell}>
               {/* #4571: the session name leads, as on Fleet, with the id
                   on the line below it. */}
               <SafeLink
