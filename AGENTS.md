@@ -227,7 +227,6 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **Reproduce from the log.** Read each failing job with `gh run view --job <id> --log-failed` and name the cause before you change anything.
 - **Push only the fix.** The commit message names each failing job, its cause, and the issue as `Refs #N`. Leave the close to CI, because the time between open and close is the recovery time.
 - **Watch the push.** Follow the `main` run on your commit until every job and both deploys pass. If it is still red, push the next fix the same way.
-- **Bring the open PRs up to date.** Once `main` is green, merge `origin/main` into each open PR branch and push, so its CI runs against the fix. Merge rather than rebase a branch someone else owns.
 
 Any other change to `main` still goes through a PR.
 
