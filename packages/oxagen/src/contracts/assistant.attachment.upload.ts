@@ -1,6 +1,6 @@
 /**
  * `upload_assistant_attachment`: store one file a person attaches to a message
- * for the in-app assistant, before the message is sent (#4690, ADR-221).
+ * for the in-app assistant, before the message is sent (#4690, ADR-222).
  *
  * The composer uploads each file as it is attached and sends the returned
  * `gen_` ids with the message in `ask_assistant`'s `attachments`. The turn

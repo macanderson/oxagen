@@ -1,4 +1,4 @@
-// The files a person attaches to an in-app agent turn (#4690, ADR-221).
+// The files a person attaches to an in-app agent turn (#4690, ADR-222).
 //
 // A file arrives once, through `upload_assistant_attachment`, which checks its
 // bytes here and stores them in blob storage under the workspace. The turn

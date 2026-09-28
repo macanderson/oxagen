@@ -160,7 +160,7 @@ export interface AssistantTurnRequest {
   pageContext: AssistantPageContext | null;
   /**
    * The public ids of files the person uploaded for this turn
-   * (`upload_assistant_attachment`, ADR-221).
+   * (`upload_assistant_attachment`, ADR-222).
    */
   attachments?: readonly string[];
   /** Makes the turn goal-shaped: a verifier judges each round against it. */
@@ -740,7 +740,7 @@ async function runPreparedTurn(
           compacted.frame !== null && compacted.frame.text !== null ? 1 : 0,
       },
       // The text files ride the instruction; the stored message keeps only
-      // what the person typed (ADR-221).
+      // what the person typed (ADR-222).
       instruction: instructionWithAttachments(
         request.content,
         p.attachments.inlineText,

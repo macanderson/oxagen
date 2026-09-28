@@ -12,7 +12,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Read back a file a person attached to an assistant message, so a sent
- * message's card opens it (#4690, ADR-221).
+ * message's card opens it (#4690, ADR-222).
  *
  * Only the person who uploaded the file reads it, and only inside the
  * organisation and workspace this route is scoped to. A missing file, one

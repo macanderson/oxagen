@@ -748,7 +748,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
-  // A file attached to an in-app assistant message (#4690, ADR-221).
+  // A file attached to an in-app assistant message (#4690, ADR-222).
   registerHandler(
     "upload_assistant_attachment",
     async () =>

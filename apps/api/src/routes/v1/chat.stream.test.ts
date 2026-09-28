@@ -362,7 +362,7 @@ describe("POST chat/stream — the turn on the wire", () => {
   });
 
   // The composer uploads each file first and sends the ids with the text
-  // (#4690, ADR-221). Dropped here, the turn would answer without the files.
+  // (#4690, ADR-222). Dropped here, the turn would answer without the files.
   it("carries the attached upload ids to ask_assistant, and sends none when there are none", async () => {
     await post({ content: "hi", attachments: ["gen_a1", "gen_b2"] }).then((r) =>
       r.text(),

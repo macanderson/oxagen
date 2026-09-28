@@ -83,7 +83,7 @@ async function authorize(
     // Creator-only: requires a user identity that matches. A principal that
     // also names a scope (the api surface, where an API key acts as its
     // creator) reads only inside that scope, so a key minted in one
-    // organisation cannot read its creator's files from another (ADR-221).
+    // organisation cannot read its creator's files from another (ADR-222).
     if (principal.userId === undefined || principal.userId !== asset.userId)
       return false;
     if (principal.orgId && asset.orgId !== principal.orgId) return false;

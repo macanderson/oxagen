@@ -1286,7 +1286,7 @@ const ROUTES: ThinRoute[] = [
     jsonGuard: true,
     status: 200,
   },
-  // A file attached to an assistant message (#4690, ADR-221).
+  // A file attached to an assistant message (#4690, ADR-222).
   {
     file: "assistant.attachment.upload",
     route: assistantAttachmentUploadRoute as unknown as Hono<never>,

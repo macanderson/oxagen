@@ -50,7 +50,7 @@ const BodySchema = z.object({
   // nobody can stop the turn by name.
   turnId: assistantAsk.input.shape.turnId,
   // Files the person attached, as the `gen_` ids the upload route returned
-  // (#4690, ADR-221). Omitted, the turn carries text alone.
+  // (#4690, ADR-222). Omitted, the turn carries text alone.
   attachments: z
     .array(assistantAttachmentIdSchema)
     .max(ASSISTANT_ATTACHMENT_MAX_FILES)
@@ -270,7 +270,7 @@ chatStreamRoute.post("/", async (c) => {
  */
 const STREAM_ERROR_CODES: ReadonlySet<string> = new Set([
   ...Object.keys(ASSISTANT_TURN_ERROR_STATUS),
-  // A file the attachment rules refused before the turn began (ADR-221). Its
+  // A file the attachment rules refused before the turn began (ADR-222). Its
   // message names the rule the file broke, so the composer shows it as is.
   ATTACHMENT_REFUSED_CODE,
 ]);

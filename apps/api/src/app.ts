@@ -916,7 +916,7 @@ orgScoped.route("/assistant/turn/cancel", assistantTurnCancelRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);
 orgScoped.route("/assistant/reply", assistantReplyGetRoute);
 orgScoped.route("/assistant/feedback", assistantReplyFeedbackRecordRoute);
-// Files attached to an assistant message (#4690, ADR-221): the upload, then
+// Files attached to an assistant message (#4690, ADR-222): the upload, then
 // the read a sent message's card opens.
 orgScoped.route("/assistant/attachments/upload", assistantAttachmentUploadRoute);
 orgScoped.route("/assistant/attachments", assistantAttachmentGetRoute);

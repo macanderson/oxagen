@@ -127,7 +127,7 @@ function isEmbeddingUnavailableError(
 
 /**
  * The code `AttachmentRefusedError` (@oxagen/agent) carries: a file the
- * attachment rules refused, at upload or when a turn reads it (ADR-221). The
+ * attachment rules refused, at upload or when a turn reads it (ADR-222). The
  * streaming route names it too.
  */
 export const ATTACHMENT_REFUSED_CODE = "attachment_refused";

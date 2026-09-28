@@ -1,5 +1,5 @@
 // upload_assistant_attachment: store one file a person attaches to a message
-// for the in-app assistant (#4690, ADR-221).
+// for the in-app assistant (#4690, ADR-222).
 //
 // The bytes are checked by the same function the turn uses to read them back
 // (`checkAttachmentBytes` in @oxagen/agent), so a file that uploads is a file
