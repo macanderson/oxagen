@@ -50,10 +50,12 @@ vi.mock("./mcp-studio/migrate", () => {
 });
 
 // steeringWriter() counts the legacy rows a migration would still move. The
-// count reads through withTenantDb, which this double answers with 0.
+// count reads through withTenantDb, which this double answers with 0. The
+// organization seam gets the same double, so a read that moves to withOrgDb
+// (ADR-086) meets the double rather than a real seam with no tenant scope.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...real, withTenantDb: mocks.withTenantDb, withOrgDb: mocks.withTenantDb };
 });
 
 await import("./register");
