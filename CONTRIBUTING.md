@@ -19,7 +19,7 @@ pnpm dev                     # starts Docker + migrations + all apps
 
 ## Git Workflow — branch early, push often, open a PR
 
-`main` is a shared, contested branch worked in parallel by multiple humans and coding agents. **Never commit or push directly to `main`.** Test suites run in CI on every push and PR (not in git hooks), so pushing is cheap — push early and often.
+`main` is a shared, contested branch worked in parallel by multiple humans and coding agents. **Never commit or push directly to `main`.** The one exception is the fix for a red `main` under a P0 outage issue, which goes straight to `main` (AGENTS.md, Git Workflow). Test suites run in CI on every push and PR (not in git hooks), so pushing is cheap — push early and often.
 
 1. **Start from a fresh, synced `main`:** `git fetch origin`; if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts) before cutting your branch.
 2. **Cut a branch and push it immediately:** `git switch -c <type>/<slug> && git push -u origin <type>/<slug>`. Use a `git worktree` for any large body of work: `git worktree add ~/Projects/.worktrees/oxagen/<slug> -b <branch>`.

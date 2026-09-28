@@ -217,7 +217,17 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 
 ## Git Workflow
 
-`main` is shared and contested — never commit or push to it directly. Cut a branch from a fresh, synced `main`, push it immediately, commit and push frequently, and open a PR against `main`. Tests run in CI on every push/PR, not in git hooks. Full workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+`main` is shared and contested — never commit or push to it directly, except to repair a red `main` (below). Cut a branch from a fresh, synced `main`, push it immediately, commit and push frequently, and open a PR against `main`. Tests run in CI on every push/PR, not in git hooks. Full workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+**A red `main` is repaired on `main`.** Mac set this on 2026-09-28. When a P0 issue reports a `main` outage (the `deployment-failure` issue CI files when a `main` run goes red or a production deploy fails, or any P0 about the same outage), commit the fix straight to `main` and push it. Open no branch and no PR for it. Every open PR is red until `main` is green, and a PR round trip adds a full CI run to that wait.
+
+- **Check first.** Fetch `origin/main` and read the latest run on it, so you do not push a second copy of a fix already landed.
+- **Reproduce from the log.** Read each failing job with `gh run view --job <id> --log-failed` and name the cause before you change anything.
+- **Push only the fix.** The commit message names each failing job, its cause, and the issue as `Refs #N`. Leave the close to CI, because the time between open and close is the recovery time.
+- **Watch the push.** Follow the `main` run on your commit until every job and both deploys pass. If it is still red, push the next fix the same way.
+- **Bring the open PRs up to date.** Once `main` is green, merge `origin/main` into each open PR branch and push, so its CI runs against the fix. Merge rather than rebase a branch someone else owns.
+
+Any other change to `main` still goes through a PR.
 
 **Residue merges; it does not iterate.** A PR whose checks are green and whose only remaining review findings are **P2 or below merges now.** Every outstanding finding at P2 or below is carried into a residue issue, titled to the standard in `CLAUDE.md` under Issue titles with a trailing `(residue #<PR>)`, and the threads are resolved with a comment naming it. **One issue per PR is the default; never one per comment.** Split into more than one only where the findings cannot honestly share an issue — this repo requires exactly one `kind:` and one `job:` per issue and one full change per DoD (SCR-003), so residue spanning genuinely unrelated changes needs an issue each. Findings belonging to the same change stay together however many there are. From a reviewer's fourth round the round rule below extends this to a P1.
 
