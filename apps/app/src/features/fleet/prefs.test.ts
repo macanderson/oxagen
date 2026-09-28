@@ -13,9 +13,16 @@ import {
 
 describe("readFleetPrefs", () => {
   it("reads the page size and the hidden columns a cookie holds", () => {
-    expect(readFleetPrefs("v1|100|summary~tokens")).toEqual({
+    expect(readFleetPrefs("v1|100|agent~tokens")).toEqual({
       pageSize: 100,
-      hidden: new Set(["summary", "tokens"]),
+      hidden: new Set(["agent", "tokens"]),
+    });
+  });
+
+  it("still loads a cookie saved while the Summary column existed (#4571)", () => {
+    expect(readFleetPrefs("v1|25|summary~tokens")).toEqual({
+      pageSize: 25,
+      hidden: new Set(["tokens"]),
     });
   });
 

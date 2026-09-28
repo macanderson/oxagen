@@ -99,3 +99,13 @@ export type AgentInterjectionRaisedEventData = {
  * `{ orgId, workspaceId }`. Deliveries for one workspace are debounced.
  */
 export const MEMORY_CURATE_REQUESTED_EVENT = "memory/curate.requested";
+
+/**
+ * Asks `conversation.title` to replace a new in-app conversation's prompt
+ * title with one the fast model writes (#4571). Sent after the insert
+ * commits, by `chat.message.send` and by the assistant turn through the
+ * sender `@oxagen/handlers/register` installs. Data is
+ * `{ conversationId, orgId, workspaceId }`; the function reads the question
+ * back inside the tenant scope.
+ */
+export const CONVERSATION_OPENED_EVENT = "chat/conversation.opened";

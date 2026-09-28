@@ -263,7 +263,7 @@ describe("automatic run enrichment", () => {
   it("writes a generated account, then avoids charging for the identical input", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     expect(state.writes.at(-1)).toMatchObject({
-      name: "Repair authentication (tse_12345678)",
+      name: "Repair authentication",
       summaryModel: "fast-test",
     });
     expect(await run()).toMatchObject({ status: "unchanged" });
@@ -284,17 +284,53 @@ describe("automatic run enrichment", () => {
     await expect(run()).rejects.toThrow("credit gate refused");
     // The one write is the prompt's title; no summary, model or digest lands.
     expect(state.writes).toEqual([
-      { name: "Please repair authentication on fix/auth-redirect" },
+      { name: "Repair authentication on fix/auth-redirect" },
     ]);
   });
   it("names the run for its first prompt, then replaces that with the model's name", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     expect(state.writes[0]).toEqual({
-      name: "Please repair authentication on fix/auth-redirect",
+      name: "Repair authentication on fix/auth-redirect",
     });
     expect(state.writes.at(-1)).toMatchObject({
-      name: "Repair authentication (tse_12345678)",
+      name: "Repair authentication",
       summaryError: null,
+    });
+  });
+  it("cuts an answer longer than it asked for to a session name and three sentences (#4571)", async () => {
+    state.call.mockResolvedValue({
+      text: JSON.stringify({
+        name: `"${"Repair the authentication redirect ".repeat(4)}"`,
+        summary: Array.from(
+          { length: 6 },
+          (_, i) => `Sentence ${i + 1} ${"says more ".repeat(12)}.`,
+        ).join(" "),
+      }),
+      model: "fast-test",
+    });
+    expect(await run()).toMatchObject({ status: "generated" });
+    const name = String(state.writes.at(-1)?.name);
+    const summary = String(state.writes.at(-1)?.summary);
+    expect(Array.from(name).length).toBeLessThanOrEqual(72);
+    expect(name).toMatch(/^Repair the authentication redirect/);
+    expect(name).not.toContain('"');
+    expect(name).not.toContain("tse_12345678");
+    expect(Array.from(summary).length).toBeLessThanOrEqual(400);
+    expect(summary).toContain("Sentence 1");
+    expect(summary).not.toContain("Sentence 4");
+  });
+  it("keeps the prompt's title when the model's name is only quotes", async () => {
+    state.call.mockResolvedValue({
+      text: JSON.stringify({ name: '""', summary: "Fixed the redirect." }),
+      model: "fast-test",
+    });
+    expect(await run()).toMatchObject({ status: "generated" });
+    expect(state.writes[0]).toEqual({
+      name: "Repair authentication on fix/auth-redirect",
+    });
+    expect(state.writes.at(-1)).not.toHaveProperty("name");
+    expect(state.writes.at(-1)).toMatchObject({
+      summary: "Fixed the redirect.",
     });
   });
   it("still asks the model when the same input left only a fallback title", async () => {
