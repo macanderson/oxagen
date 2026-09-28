@@ -69,6 +69,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
+  // Published steering versions and the publish lease (S3, #4449); org_id +
+  // workspace_id NOT NULL.
+  { table: "agent.steering_versions", policyClass: "standard" },
+  { table: "agent.steering_publications", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

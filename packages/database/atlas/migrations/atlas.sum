@@ -1,4 +1,4 @@
-h1:5TqZxMqnoYs9yDNTl0UFCL8JkIDqsQ3mAmDxNh1j1ag=
+h1:Us+DSt/ru+78+HRXKt15UycJRc41ILrgNGs6Temg2jQ=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -226,3 +226,4 @@ h1:5TqZxMqnoYs9yDNTl0UFCL8JkIDqsQ3mAmDxNh1j1ag=
 20260927164200_steering_tool_registry.sql h1:7lfixcNkA/V9t7Ojjn9bheWduhVLzUruXIXIuUZRZ94=
 20260927170000_machine_group_members.sql h1:tlxnathytvldI3ocI12n+K2lNO5dfdHnD094DY0Y5m8=
 20260927185600_repository_binding_heads_main_to_steering.sql h1:StovFkz1m/vV84JJox/DWbBbILm7n8rDAHd7bypSIIg=
+20260927194500_steering_versions.sql h1:/XiZQt5eHB2+IvwHW/p7gWwv0j7JwVk++mHsk/Rt7+c=

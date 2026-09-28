@@ -1788,6 +1788,13 @@ export const contextProposals = agentSchema.table(
     // entry per §10.3 check, in the order they run.
     checks: jsonb("checks").notNull().default(sql`'[]'::jsonb`),
     // ── The merge, set by merge_context_pr ──────────────────────────────────
+    // Set while merge_context_pr is landing the PR, so running the checks
+    // again cannot move the row under a merge the host is about to make. A
+    // claim older than ten minutes has lapsed (#4504).
+    mergeClaimedAt: timestamp("merge_claimed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     mergedCommit: text("merged_commit"),
     mergedAt: timestamp("merged_at", { withTimezone: true, mode: "date" }),
     mergedByUserId: uuid("merged_by_user_id"),
