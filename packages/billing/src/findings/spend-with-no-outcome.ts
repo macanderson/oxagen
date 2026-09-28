@@ -7,10 +7,12 @@
  *
  * The finding prices each of the run's model-call frames whole, against
  * nothing, and claims it as detector 8. It runs after detectors 1 and 7, so a
- * frame either of them claimed this pass is skipped and counts once. A run
- * whose frames were not read, or whose read found none of the model calls its
- * rollup counted, is cited and not priced. A run whose rollup counted no model
- * call spent nothing, so it is left out.
+ * frame either of them claimed this pass is skipped and counts once. Each
+ * model call the rollup counted and the read did not return is cited and not
+ * priced: every call of a run the frame cap left unread, and each call a short
+ * read missed. Coverage counts every call of the run, so the coverage gate
+ * sees the calls a short read missed. A run whose rollup counted no model
+ * call, and whose read returned no frame, spent nothing, so it is left out.
  *
  * A run stays unpriced until its outcome is read: a pull request whose state
  * is not read yet, or one still open, leaves the whole run out. A merged pull
@@ -26,17 +28,6 @@ import {
   requestMeasure,
   type Detector,
 } from "./shared";
-
-declare module "./shared" {
-  interface DetectInput {
-    /**
-     * Each run's rows of `cost.run_pr_outcomes`, by run public id. Detector 8
-     * prices only the runs listed here, and it prices nothing when this is
-     * absent.
-     */
-    outcomes?: ReadonlyMap<string, readonly OutcomeRow[]>;
-  }
-}
 
 /** A revert this many days or fewer after the merge undoes the run's work. */
 export const REVERT_WINDOW_DAYS = 14;
@@ -105,6 +96,8 @@ export const spendWithNoOutcome: Detector = {
   kinds: ["spend_with_no_outcome"],
   counting: 8,
   detect(input, ctx) {
+    // Detector 8 prices only the runs whose outcome rows the pass read, and
+    // nothing when it read none.
     const outcomes = input.outcomes;
     if (outcomes === undefined) return;
     for (const run of input.runs) {
@@ -112,22 +105,13 @@ export const spendWithNoOutcome: Detector = {
       if (rows === undefined || noOutcomeReason(rows) === null) continue;
       const key = agentOrOperator("spend_with_no_outcome", run);
       if (key === null || !ctx.groups.admits(key, run)) continue;
-      const frames = input.frames?.get(run.runId);
-      if (frames === undefined || frames.length === 0) {
-        // The rollup counted no model call, so the run spent nothing. Citing
-        // it would add an unpriced call and pull the group's coverage down.
-        if (run.modelCalls === 0) continue;
-        // The frames were not read, or the read missed the calls the rollup
-        // counted: the run is cited, and nothing prices it.
-        ctx.groups.add(
-          key,
-          input.window.start,
-          run,
-          requestMeasure(null),
-          null,
-        );
-        continue;
-      }
+      // A run absent here was not read: the frame cap left it out, or it has
+      // no frame source.
+      const frames = input.frames?.get(run.runId) ?? [];
+      // The rollup counted no model call, and the read found none, so the run
+      // spent nothing. Citing it would add an unpriced call and pull the
+      // group's coverage down.
+      if (frames.length === 0 && run.modelCalls === 0) continue;
       for (const frame of frames) {
         const claim = claimKey(run.runId, frame.key);
         if (ctx.claimed.has(claim)) continue;
@@ -141,6 +125,18 @@ export const spendWithNoOutcome: Detector = {
           { detector: 8, frame },
         );
       }
+      // Each call the rollup counted and the read did not return is cited,
+      // and nothing prices it. A frame an earlier detector claimed was read,
+      // so it is not missing. A read with more frames than the rollup counted
+      // adds none.
+      for (let i = frames.length; i < run.modelCalls; i += 1)
+        ctx.groups.add(
+          key,
+          input.window.start,
+          run,
+          requestMeasure(null),
+          null,
+        );
     }
   },
   prose: (group) => ({

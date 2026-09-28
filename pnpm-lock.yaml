@@ -1734,6 +1734,9 @@ importers:
       '@oxagen/run-evidence':
         specifier: workspace:*
         version: link:../run-evidence
+      graphql:
+        specifier: 16.14.2
+        version: 16.14.2
       smol-toml:
         specifier: 1.9.0
         version: 1.9.0
@@ -2086,6 +2089,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -10122,6 +10128,10 @@ packages:
     resolution: {integrity: sha512-8SSImzgUUYC89Z042s+0r/vMibY7GX/Emz4LDO5e7jYXhuoWfHISPFJYjpRLUSJGq6UQ6xlenvX1p/hJdfXuXg==}
     peerDependencies:
       graphology-types: '>=0.24.0'
+
+  graphql@16.14.2:
+    resolution: {integrity: sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
   h3@1.15.11:
     resolution: {integrity: sha512-L3THSe2MPeBwgIZVSH5zLdBBU90TOxarvhK9d04IDY2AmVS8j2Jz2LIWtwsGOU3lu2I5jCN7FNvVfY2+XyF+mg==}
@@ -21613,6 +21623,8 @@ snapshots:
     dependencies:
       events: 3.3.0
       graphology-types: 0.24.8
+
+  graphql@16.14.2: {}
 
   h3@1.15.11:
     dependencies:

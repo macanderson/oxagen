@@ -942,6 +942,85 @@
             ],
             "additionalProperties": false
           },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lineage": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "body": {
+                  "type": "string"
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "encoding": {
+                        "type": "string",
+                        "enum": [
+                          "utf8",
+                          "base64"
+                        ]
+                      },
+                      "content": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "path",
+                      "encoding",
+                      "content"
+                    ],
+                    "additionalProperties": false,
+                    "x-server-validated": true,
+                    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                  },
+                  "maxItems": 1000
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "organization",
+                    "workspace"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "lineage",
+                "name",
+                "description",
+                "body",
+                "files",
+                "source",
+                "version"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 128,
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          },
           "signature": {
             "type": "object",
             "properties": {

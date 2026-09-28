@@ -1194,7 +1194,13 @@ export interface RunAnswerResult {
   commandIds: string[];
   receiptId: string;
   path: "link" | "create" | null;
-  repository: { bindingId: string; fullName: string } | null;
+  repository: {
+    /** The binding when the repository was linked already, or null. */
+    bindingId: string | null;
+    fullName: string;
+    /** The steering PR that links it, or null when none was needed. */
+    steeringPullRequest: { number: number; url: string; reused: boolean } | null;
+  } | null;
   workspace: { publicId: string; slug: string } | null;
 }
 
@@ -1256,7 +1262,8 @@ export function runAnswerBody(
  * `oxagen run answer <interjection-id>`: `answer_interjection`. Answers the
  * question an agent paused its run to ask, with `--text`, or the question a
  * host asked when a session started in a repository the workspace has not
- * bound, with `--link` (bind it to this workspace) or `--create <name>
+ * bound, with `--link` (open the steering PR that links it to this
+ * workspace) or `--create <name>
  * --slug <slug>` (a new workspace for it, with skills off). Prints the
  * receipt, what a link or create bound, and the command that carries the
  * answer to the run.
@@ -1303,10 +1310,21 @@ export async function runAnswer(
         ? `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}) for ${result.repository.fullName}. Its skills are off.`
         : `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}). Its skills are off, and no repository is linked to it yet.`,
     );
-  else if (result.path === "link" && result.repository)
-    writer.write(
-      `Linked ${result.repository.fullName} to this workspace (binding ${result.repository.bindingId}).`,
-    );
+  else if (result.path === "link" && result.repository) {
+    const { fullName, bindingId, steeringPullRequest: pr } = result.repository;
+    if (pr)
+      writer.write(
+        `Opened steering PR #${pr.number} to link ${fullName} to this workspace: ${pr.url}. Merge the steering PR to finish linking.`,
+      );
+    else if (bindingId)
+      writer.write(
+        `${fullName} is linked to this workspace already (binding ${bindingId}).`,
+      );
+    else
+      writer.write(
+        `workspace.toml already lists ${fullName}. The next steering sync links it.`,
+      );
+  }
   writer.write(
     result.commandIds.length > 0
       ? `The run's host collects the answer with command ${result.commandIds.join(", ")}.`

@@ -1,23 +1,28 @@
 /**
- * `oxagen repo …` — the workspace's repositories (Mission Control spec §10.1;
- * ADR-099). A workspace has one main repository, bound when the workspace is
- * created, and any number of linked ones. This surface reads and changes the
- * linked set; the main repository is neither linked nor unlinked here.
+ * `oxagen repo …`: the workspace's repositories (ADR-099, ADR-212). A
+ * workspace has one steering repository, which holds its steering record, and
+ * any number of linked ones. The steering record's workspace.toml lists the
+ * linked set, so linking and unlinking open a steering PR that edits it. The
+ * link follows the merge. This surface never links or unlinks the steering
+ * repository.
  *
- *   oxagen repo list                    — every repository the workspace
- *                                         binds, main first (list_repositories)
- *   oxagen repo link <owner/name>       — link a repository the workspace's
- *                                         GitHub App installation reaches
+ *   oxagen repo list                    : every repository the workspace
+ *                                         binds, the steering repository
+ *                                         first (list_repositories)
+ *   oxagen repo link <owner/name>       : open the steering PR that links a
+ *                                         repository the workspace's GitHub
+ *                                         App installation reaches
  *                                         (link_repository)
- *   oxagen repo unlink <bindingId>      — remove a linked repository by the
- *                                         `rpb_…` id `repo list` shows
- *                                         (unlink_repository)
- *   oxagen repo tree <bindingId>        — what the repository holds under
+ *   oxagen repo unlink <bindingId>      : remove a linked repository by the
+ *                                         `rpb_…` id `repo list` shows, by
+ *                                         steering PR when workspace.toml
+ *                                         lists it (unlink_repository)
+ *   oxagen repo tree <bindingId>        : what the repository holds under
  *                                         .oxagen/ on its production branch
  *                                         (get_repository_tree)
- *   oxagen repo branch <bindingId> <b>  — confirm or change the production
+ *   oxagen repo branch <bindingId> <b>  : confirm or change the production
  *                                         branch (set_production_branch)
- *   oxagen repo init <bindingId>        — open the pull request that adds
+ *   oxagen repo init <bindingId>        : open the pull request that adds
  *                                         .oxagen/ (open_init_pr)
  *
  * Every call goes through the shared org-scoped API client in lib/api.ts:
@@ -28,9 +33,9 @@
  * workspace's GitHub connection.
  *
  * Output discipline (ADR-023 §4): `--json` emits the exact contract payload
- * as one line on stdout; pretty mode prints a table (list) or one line (link,
- * unlink); failures are uniform stderr lines (exit 2 for a bad argument,
- * exit 1 for an API failure).
+ * as one line on stdout. Pretty mode prints a table (list) or a short
+ * summary (link, unlink). Failures are uniform stderr lines (exit 2 for a bad
+ * argument, exit 1 for an API failure).
  */
 import { readFile } from "node:fs/promises";
 import { apiGetOrThrow, apiPostOrThrow, printTable } from "../lib/api.js";
@@ -67,21 +72,30 @@ export interface RepositoryListResult {
   repositories: RepositoryRow[];
 }
 
+/** The steering PR a link or an unlink opens, or reuses. */
+export interface SteeringPullRequest {
+  number: number;
+  url: string;
+  reused: boolean;
+}
+
 /** The `link_repository` output. */
 export interface RepositoryLinkResult {
-  bindingId: string;
-  connectionId: string;
   fullName: string;
   defaultRef: string;
-  role: "linked";
-  linkedAt: string;
+  /** `proposed`: a steering PR is open. `listed`: workspace.toml lists it already. */
+  status: "proposed" | "listed";
+  steeringPullRequest: SteeringPullRequest | null;
 }
 
 /** The `unlink_repository` output. */
 export interface RepositoryUnlinkResult {
   bindingId: string;
   fullName: string;
-  unlinkedAt: string;
+  /** `unlinked`: the link is gone. `proposed`: a steering PR removes it. */
+  status: "unlinked" | "proposed";
+  unlinkedAt: string | null;
+  steeringPullRequest: SteeringPullRequest | null;
 }
 
 /** The `get_repository_tree` output. */
@@ -186,7 +200,7 @@ export async function repoList(
   }
   if (result.repositories.length === 0) {
     writer.write(
-      "No repositories are bound to this workspace. Bind a main repository in Oxagen, then link more with `oxagen repo link <owner/name>`.",
+      "No repositories are bound to this workspace. Connect its steering repository in Oxagen, then link more with `oxagen repo link <owner/name>`.",
     );
     return;
   }
@@ -242,11 +256,17 @@ export async function repoLink(
     out.data(result);
     return;
   }
+  const pr = result.steeringPullRequest;
+  if (result.status === "proposed" && pr) {
+    writer.write(
+      `${pr.reused ? "reused" : "opened"} steering PR #${pr.number} to link ${result.fullName}: ${pr.url}`,
+    );
+    writer.write("Merge the steering PR to finish linking.");
+    return;
+  }
+  writer.write(`workspace.toml already lists ${result.fullName}`);
   writer.write(
-    `linked ${result.fullName} · ${result.defaultRef} · ${result.bindingId}`,
-  );
-  writer.write(
-    "Runs on this repository can cite it in a grant's resource_scope; unlink it with `oxagen repo unlink <bindingId>`.",
+    "The next steering sync links it. Run `oxagen repo list` to see it once the sync has run.",
   );
 }
 
@@ -277,6 +297,16 @@ export async function repoUnlink(
   }
   if (out.isJson) {
     out.data(result);
+    return;
+  }
+  const pr = result.steeringPullRequest;
+  if (result.status === "proposed" && pr) {
+    writer.write(
+      `${pr.reused ? "reused" : "opened"} steering PR #${pr.number} to unlink ${result.fullName}: ${pr.url}`,
+    );
+    writer.write(
+      "Merge the steering PR to finish unlinking. The repository stays linked until then.",
+    );
     return;
   }
   writer.write(`unlinked ${result.fullName} · ${result.bindingId}`);

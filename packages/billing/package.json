@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./pricing": "./src/pricing.ts",
+    "./proposal-opener": "./src/findings/proposal-opener.ts",
     "./rate-card": "./src/rate-card.ts"
   },
   "scripts": {

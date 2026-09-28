@@ -243,7 +243,14 @@ export const runGet = registerCapability({
     .strict(),
   output: z
     .object({
-      run: runItemSchema,
+      run: runItemSchema.extend({
+        /**
+         * True when the session's git remote matched no repository linked to
+         * the workspace at session start. The run's cost goes to the agent's
+         * workspace either way. A ledger run answers false.
+         */
+        repositoryUnlinked: z.boolean(),
+      }),
       frames: runFramePageSchema,
       /**
        * The worker run this run witnessed (spec §8.5 "Stamping"; ADR-064): a

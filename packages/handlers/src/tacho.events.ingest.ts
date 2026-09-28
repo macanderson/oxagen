@@ -97,6 +97,7 @@ import { machineSnapshotOf } from "./lib/machine-facts";
 import { operatorRoleOf, type RunOperatorRole } from "./lib/operator-role";
 import { rollupFiles, sessionChangedFilesWhere } from "./lib/file-facts-rollup";
 import { latestHarnessTitle } from "./lib/harness-title";
+import { linkedRepositoryDigestsIn } from "./lib/run-work";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
@@ -923,6 +924,44 @@ async function enrollingOperator(
 }
 
 /**
+ * The digests of the repositories linked to the session's workspace, or null
+ * when the read failed.
+ *
+ * The flag this feeds (`tacho.sessions.repository_unlinked`) records a fact
+ * and gates nothing. An unlinked session is still recorded, and its cost
+ * still goes to the workspace the host's key names. So a failed read must not
+ * fail the batch. It is logged, and the session opens with the flag false.
+ * False is also what a session that matched reads, so a failed read can miss
+ * an unlinked repository but never marks a linked one unlinked. The read runs
+ * in a savepoint (`linkedRepositoryDigestsIn`), so its failure leaves the
+ * batch's transaction usable.
+ */
+async function linkedRepositoryDigests(
+  tx: Tx,
+  ctx: Scope,
+  sessionUuid: string,
+): Promise<ReadonlySet<string> | null> {
+  try {
+    // The key's organization and workspace, never ones the batch names.
+    return await linkedRepositoryDigestsIn(tx, {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        sessionUuid,
+      },
+      "tacho.events.ingest: the linked-repository read failed; the session opens with repository_unlinked false",
+    );
+    return null;
+  }
+}
+
+/**
  * The cost basis the batch's counted model calls reported
  * (`llm_call` `cost_basis`, data-model section 2.7), or null when none did.
  * The last one wins, as `lastRecordedContext` reads the run facts.
@@ -1659,6 +1698,11 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
     let initiator: SessionInitiator | undefined;
+    // The digests of the repositories linked to this workspace, read on the
+    // first genesis row that carries a git remote and kept for the batch.
+    // Undefined until then. Null when the read failed, and a failed read is
+    // not asked again in the same batch (`linkedRepositoryDigests`).
+    let linkedDigests: ReadonlySet<string> | null | undefined;
     // Asked once for the whole batch rather than per session: the answer is
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
@@ -2258,10 +2302,20 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           gatewayTier === TACHO_GATEWAY_TIER ? gatewayEvidenceAt : null,
           sessionGenesisHash,
         );
+        // Stamped here and nowhere else, like `operatorRole`: whether the
+        // repository the session opened in was linked to the workspace then.
+        // A session with no git remote has nothing to match and stays false.
+        const digest = row.gitRemoteDigest ?? "";
+        const remote = digest.trim() === "" ? null : digest;
+        if (remote !== null && linkedDigests === undefined)
+          linkedDigests = await linkedRepositoryDigests(tx, ctx, sessionUuid);
+        const repositoryUnlinked =
+          remote !== null && linkedDigests != null && !linkedDigests.has(remote);
         const written = await tx
           .insert(schema.tachoSessions)
           .values({
             ...row,
+            repositoryUnlinked,
             ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
             ...terminalColumns,
             ...costBasisPatch,

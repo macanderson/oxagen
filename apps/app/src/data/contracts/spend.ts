@@ -11,7 +11,8 @@ const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one). */
-const RunPublicId = z.string().regex(/^(arun|tse)_[0-9a-z]+$/);
+const RUN_PUBLIC_ID = /^(arun|tse)_[0-9a-z]+$/;
+const RunPublicId = z.string().regex(RUN_PUBLIC_ID);
 
 /** An inclusive range of UTC days. */
 export const DayRange = z.object({ from: Day, to: Day });
@@ -158,6 +159,52 @@ export const SpendWaste = z.object({
   ),
 });
 export type SpendWaste = z.infer<typeof SpendWaste>;
+
+/** Who a ranking row names: the person, or the pseudonym the workspace's setting shows instead. */
+const RankedOperator = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("named"),
+    /** The principal public id: the key, never the label. */
+    key: z.string().min(1),
+    facts: OperatorFacts.nullable(),
+  }),
+  z.object({
+    kind: z.literal("pseudonym"),
+    pseudonym: z.string().regex(/^Operator [0-9A-F]{8}$/),
+  }),
+]);
+
+/**
+ * `get_operator_ranking` (D15): the workspace's operators by unproductive
+ * spend, highest first. The operator totals and `unattributed` sum to
+ * `unproductive`. Under pseudonyms, `unproductiveShare` and `runs` are null
+ * and `topRuns` is empty.
+ */
+export const OperatorRanking = z.object({
+  period: DayRange,
+  pseudonyms: z.boolean(),
+  unproductive: Money,
+  unattributed: z.object({ unproductive: Money, runs: Count }),
+  operators: z.array(
+    z.object({
+      rank: z.number().int().positive(),
+      operator: RankedOperator,
+      unproductive: Money,
+      shareOfTotal: Ratio,
+      unproductiveShare: Ratio.nullable(),
+      runs: z.number().int().positive().nullable(),
+      /** The runs behind the figure, largest first. */
+      topRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          unproductive: Money,
+        }),
+      ),
+    }),
+  ),
+});
+export type OperatorRanking = z.infer<typeof OperatorRanking>;
+export type OperatorRankingRow = OperatorRanking["operators"][number];
 
 /** An instant a contract carries as ISO 8601 in UTC. */
 const Instant = z.iso.datetime();

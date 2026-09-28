@@ -231,6 +231,7 @@ describe("the detector registry", () => {
       [["unpaged_results"], null],
       [["standing_context"], null],
       [["model_class_fit"], null],
+      [["repeated_instructions"], null],
     ]);
   });
 

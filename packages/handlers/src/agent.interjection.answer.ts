@@ -17,7 +17,10 @@
 //      before any write.
 //   3. A path answer does what it names, outside any transaction, because
 //      the link calls GitHub and the create starts a durable job. `link` runs
-//      link_repository on the repository the host asked about. `create` runs
+//      link_repository on the repository the host asked about, which opens a
+//      steering PR that adds it to `workspace.toml` (ADR-212). The binding
+//      follows the steering PR's merge, so a link answer names the steering
+//      PR and, until the merge, no binding. `create` runs
 //      create_workspace, and the new workspace starts with skills off. Since
 //      lane S1 (#4450) create_workspace binds no repository, so the create
 //      path leaves the questioned repository unbound and its answer carries
@@ -35,9 +38,11 @@
 //      `agent.interjection_answered` security event records the receipt.
 //
 // A link or create that succeeded before step 4 found the question closed
-// stays done: the refusal says the question was answered, and the repository
-// stays bound. A link retried after it bound the repository takes the
-// existing binding as its own. A create retried after it made the workspace
+// stays done: the refusal says the question was answered, and the steering PR
+// stays open. A link retried after it opened the steering PR finds that PR
+// open and answers it again, `reused`. A link that finds the repository linked
+// already takes the existing binding as its answer. A create retried after it
+// made the workspace
 // meets `slug_taken`. It takes the org's workspace under that slug as its own
 // when the workspace was made after the question was raised, by the person
 // who is answering.
@@ -68,6 +73,7 @@ import {
   type RepositoryLinkInput,
   type RepositoryLinkOutput,
   repositoryLink,
+  type SteeringPullRequest,
 } from "@oxagen/oxagen/contracts/repository.link";
 import {
   type WorkspaceCreateInput,
@@ -173,7 +179,10 @@ export interface InterjectionAnswerStore {
    * when the row is gone.
    */
   workspaceSlug(scope: RunScope): Promise<string | null>;
-  /** The workspace's existing link to `fullName`, for a link that was already made. */
+  /**
+   * The workspace's existing link to `fullName`, for a repository a link
+   * answer finds linked already.
+   */
   linkedBinding(
     scope: RunScope,
     fullName: string,
@@ -310,14 +319,27 @@ function nestedContext(ctx: CheckedContext): CapabilityContext {
   return plain;
 }
 
+/** What a link answer did for the repository it names. */
+type LinkAnswer = {
+  /** `owner/name`. */
+  fullName: string;
+  /** The binding when the repository was linked already, or null. */
+  bindingId: string | null;
+  /**
+   * The steering PR that adds the repository to `workspace.toml`, or null
+   * when it was linked already or `workspace.toml` lists it.
+   */
+  steeringPullRequest: SteeringPullRequest | null;
+};
+
 /** What a path answer did, before the answer is recorded. */
 type PathOutcome = {
   path: "link" | "create";
   text: string;
   /** The row's answer. */
   answer: string;
-  /** The binding a link wrote. Null on a create, which binds nothing. */
-  repository: { bindingId: string; fullName: string } | null;
+  /** What a link did. Null on a create, which binds nothing. */
+  repository: LinkAnswer | null;
   workspace: { publicId: string; slug: string } | null;
   /** The slug the host names in `repo.bound`. */
   workspaceSlug: string;
@@ -332,6 +354,13 @@ export type CreatedWorkspace = {
 /** What the agent is told once the question is settled. */
 export const INTERJECTION_LINK_TEXT = (slug: string): string =>
   `A person linked this repository to the workspace ${slug}. The session goes on under that workspace.`;
+export const INTERJECTION_LINK_PROPOSED_TEXT = (
+  slug: string,
+  pr: SteeringPullRequest,
+): string =>
+  `A person opened steering PR #${pr.number} to link this repository to the workspace ${slug}. The link takes effect when the steering PR merges. The session goes on under that workspace.`;
+export const INTERJECTION_LINK_LISTED_TEXT = (slug: string): string =>
+  `The steering record of the workspace ${slug} already lists this repository, and the next steering sync links it. The session goes on under that workspace.`;
 export const INTERJECTION_CREATE_TEXT = (slug: string): string =>
   `A person created the workspace ${slug} for this repository. The repository is not linked to it yet. Its skills are off, so the session goes on without skills.`;
 
@@ -342,40 +371,70 @@ async function linkPath(
   body: InterjectBody,
   fullName: string,
 ): Promise<PathOutcome> {
-  let repository: { bindingId: string; fullName: string };
+  let repository: LinkAnswer;
   try {
+    // A link opens a steering PR, or finds `workspace.toml` lists the
+    // repository already. Either way nothing is bound yet: the steering sync
+    // writes the binding once the steering record lists the repository. A
+    // retry after a link that opened the steering PR and then failed to
+    // record the answer finds that PR open, and answers it again.
     const linked = await deps.paths.link(
       { provider: "github", ...splitFullName(fullName) },
       nestedContext(ctx),
     );
-    repository = { bindingId: linked.bindingId, fullName: linked.fullName };
+    repository = {
+      fullName: linked.fullName,
+      bindingId: null,
+      steeringPullRequest: linked.steeringPullRequest,
+    };
   } catch (err) {
-    // A retry after a link that bound the repository and then failed to
-    // record the answer. The binding that exists is this answer's.
+    // The repository is linked already: an earlier steering PR merged, or a
+    // person linked it. The binding that exists is this answer's.
     if (!isHandlerError(err) || err.reason !== "repository_already_linked")
       throw err;
     const existing = await deps.withStore((store) =>
       store.linkedBinding(scope, fullName),
     );
     if (existing === null) throw err;
-    repository = existing;
+    repository = { ...existing, steeringPullRequest: null };
   }
-  // The link bound the repository to the caller's workspace, so the agent's
-  // text, the answer, and the release name that workspace's slug as its row
-  // holds it now. The body's slug is what the host's bundle said when the
-  // question was raised: a rename since then, or a host that wrote any slug
-  // the schema takes, would name a workspace the session is not under. The
-  // body's slug stands only if the row is gone, which the link would refuse.
+  // The link is to the caller's workspace, so the agent's text, the answer,
+  // and the release name that workspace's slug as its row holds it now. The
+  // body's slug is what the host's bundle said when the question was raised:
+  // a rename since then, or a host that wrote any slug the schema takes,
+  // would name a workspace the session is not under. The body's slug stands
+  // only if the row is gone, which the link would refuse.
   const slug =
     (await deps.withStore((store) => store.workspaceSlug(scope))) ??
     body.paths[0].workspace_slug;
   return {
     path: "link",
-    text: INTERJECTION_LINK_TEXT(slug),
-    answer: `Linked ${repository.fullName} to the workspace ${slug}.`,
+    ...linkTexts(repository, slug),
     repository,
     workspace: null,
     workspaceSlug: slug,
+  };
+}
+
+/** The agent's text and the row's answer for what a link did. */
+function linkTexts(
+  repository: LinkAnswer,
+  slug: string,
+): { text: string; answer: string } {
+  const { fullName, bindingId, steeringPullRequest: pr } = repository;
+  if (pr !== null)
+    return {
+      text: INTERJECTION_LINK_PROPOSED_TEXT(slug, pr),
+      answer: `Opened steering PR #${pr.number} to link ${fullName} to the workspace ${slug}: ${pr.url}. Merge the steering PR to finish linking.`,
+    };
+  if (bindingId !== null)
+    return {
+      text: INTERJECTION_LINK_TEXT(slug),
+      answer: `${fullName} is linked to the workspace ${slug} already.`,
+    };
+  return {
+    text: INTERJECTION_LINK_LISTED_TEXT(slug),
+    answer: `The steering record of the workspace ${slug} already lists ${fullName}. The next steering sync links it.`,
   };
 }
 
@@ -445,7 +504,10 @@ async function releaseOf(args: {
     source: "person",
     receipt_id: args.receiptId,
     answered_by: userPublicId?.toLowerCase() ?? null,
-    ...(outcome.repository === null
+    // A link names its binding only when the repository was linked already.
+    // Until the steering PR merges there is none, and the host seals no
+    // `repo.bound`.
+    ...(outcome.repository?.bindingId == null
       ? {}
       : { binding_id: outcome.repository.bindingId }),
     workspace_slug: outcome.workspaceSlug,
@@ -670,9 +732,14 @@ export function createAnswerInterjectionHandler(
           path: outcome?.path ?? null,
           source: "person",
           receiptId,
-          ...(outcome?.repository
-            ? { bindingId: outcome.repository.bindingId }
-            : {}),
+          ...(outcome?.repository?.bindingId == null
+            ? {}
+            : { bindingId: outcome.repository.bindingId }),
+          ...(outcome?.repository?.steeringPullRequest == null
+            ? {}
+            : {
+                steeringPullRequest: outcome.repository.steeringPullRequest.url,
+              }),
           ...(outcome?.workspace
             ? { workspaceId: outcome.workspace.publicId }
             : {}),

@@ -208,6 +208,12 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   worktreeBranch?: string | null;
   /** The digest of the session's git remote; absent where not selected. */
   gitRemoteDigest?: string | null;
+  /**
+   * `tacho.sessions.repository_unlinked`, stamped by the genesis row: the
+   * remote matched no repository linked to the workspace. Absent where a
+   * reader did not select it, which reads as false.
+   */
+  repositoryUnlinked?: boolean;
   permissionModeInitial?: string | null;
   permissionModeFinal?: string | null;
   /** Token counters ingest folds from the session's counted `llm_call` frames. */
