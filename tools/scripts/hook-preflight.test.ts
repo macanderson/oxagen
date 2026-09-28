@@ -6,7 +6,12 @@
  */
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { CANNOT_RUN, preflight, report } from "./hook-preflight.mjs";
+import {
+  CANNOT_RUN,
+  commandFor,
+  preflight,
+  report,
+} from "./hook-preflight.mjs";
 
 const ROOT = "/repo";
 
@@ -157,6 +162,53 @@ describe("preflight", () => {
     const result = await preflight("check:gone", checkout(SOURCES));
     expect(result.unknownScript).toBe(true);
     expect(report("check:gone", result)).toContain('no "check:gone" script');
+  });
+});
+
+describe("preflight on a script file", () => {
+  const FILE = "tools/scripts/typecheck-staged.mjs";
+  const files = {
+    ...SOURCES,
+    [FILE]: 'import ts from "typescript";\nimport { plan } from "./lib/plan.mjs";\n',
+    "tools/scripts/lib/plan.mjs": 'import { join } from "node:path";\n',
+  };
+
+  it("reads a path with a script extension as a file the hook runs with node", () => {
+    expect(commandFor(FILE, {})).toEqual({
+      command: `node ${FILE}`,
+      label: `node ${FILE}`,
+    });
+    expect(commandFor("tools/scripts/gen.ts", {}).command).toBe(
+      "tsx tools/scripts/gen.ts",
+    );
+    expect(commandFor("check:contracts", { "check:contracts": "x" })).toEqual({
+      command: "x",
+      label: "pnpm check:contracts",
+    });
+  });
+
+  it("names a missing package the file imports", async () => {
+    const result = await preflight(FILE, checkout(files));
+    expect(result.missing).toEqual([{ name: "typescript", neededBy: FILE }]);
+    expect(report(FILE, result)).toContain(
+      `\`node ${FILE}\` could not run, so it neither passed nor failed.`,
+    );
+  });
+
+  it("passes when the file's imports are installed", async () => {
+    const result = await preflight(
+      FILE,
+      checkout({ ...files, ...installed("typescript") }),
+    );
+    expect(result).toEqual({ missing: [], unknownScript: false });
+  });
+
+  it("flags a file that does not exist", async () => {
+    const result = await preflight("tools/scripts/gone.mjs", checkout(files));
+    expect(result.unknownScript).toBe(true);
+    expect(report("tools/scripts/gone.mjs", result)).toContain(
+      "tools/scripts/gone.mjs does not exist",
+    );
   });
 });
 

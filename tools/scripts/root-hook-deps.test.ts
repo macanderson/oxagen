@@ -238,4 +238,13 @@ describe("root scripts declare what they import (#3403)", () => {
       );
     }
   });
+
+  it("runs the preflight before the staged typecheck", () => {
+    const typecheck = runs.find(
+      (r) => r.hook === "pre-commit" && r.command === "typecheck",
+    );
+    expect(typecheck?.run).toBe(
+      "node tools/scripts/hook-preflight.mjs tools/scripts/typecheck-staged.mjs && node tools/scripts/typecheck-staged.mjs {staged_files}",
+    );
+  });
 });

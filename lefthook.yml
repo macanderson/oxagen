@@ -94,7 +94,10 @@ pre-commit:
         - ".agents/**"
         - ".claude/**"
         - "scripts/**"
-      run: node tools/scripts/typecheck-staged.mjs {staged_files}
+      # The preflight first: the wrapper imports `typescript`, and a checkout
+      # without it would otherwise fail on a module-resolution error that reads
+      # like a type error in the staged change (#3403).
+      run: node tools/scripts/hook-preflight.mjs tools/scripts/typecheck-staged.mjs && node tools/scripts/typecheck-staged.mjs {staged_files}
 
 # pre-push stays light. The unit-test and e2e suites are NOT run here — they run
 # in CI on every pull request and on push to `main` (see .github/workflows/

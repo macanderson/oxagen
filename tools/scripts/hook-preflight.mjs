@@ -3,6 +3,7 @@
  * Say plainly when a hook's check cannot run, before it runs.
  *
  *   node tools/scripts/hook-preflight.mjs check:contracts && pnpm check:contracts
+ *   node tools/scripts/hook-preflight.mjs tools/scripts/typecheck-staged.mjs && node tools/scripts/typecheck-staged.mjs {staged_files}
  *
  * `lefthook.yml`'s pre-push commands run root scripts such as
  * `pnpm check:contracts` and `pnpm env:check`. Those scripts import workspace
@@ -36,9 +37,27 @@ import {
 export const CANNOT_RUN = 3;
 
 /**
- * What the named root script needs that this checkout lacks.
+ * The command a preflight target stands for. A target with a slash and a
+ * script extension is a file the hook runs directly (`node` for JavaScript,
+ * `tsx` for TypeScript). Anything else names a root package.json script.
  *
- * @param {string} name a root package.json script, such as `check:contracts`
+ * @param {string} target
+ * @param {Record<string, string>} scripts
+ * @returns {{ command: string | undefined, label: string }}
+ */
+export function commandFor(target, scripts) {
+  if (target.includes("/") && /\.(mjs|cjs|js|ts|mts|cts)$/.test(target)) {
+    const runner = /\.(mjs|cjs|js)$/.test(target) ? "node" : "tsx";
+    return { command: `${runner} ${target}`, label: `${runner} ${target}` };
+  }
+  return { command: scripts[target], label: `pnpm ${target}` };
+}
+
+/**
+ * What the named root script, or script file, needs that this checkout lacks.
+ *
+ * @param {string} name a root package.json script, such as `check:contracts`,
+ *   or a repo-relative script file, such as `tools/scripts/typecheck-staged.mjs`
  * @param {{
  *   repoRoot: string,
  *   read: (p: string) => string,
@@ -49,7 +68,11 @@ export const CANNOT_RUN = 3;
  */
 export async function preflight(name, { repoRoot, read, exists, loadTs }) {
   const { scripts = {} } = JSON.parse(read(join(repoRoot, "package.json")));
-  if (scripts[name] === undefined) return { missing: [], unknownScript: true };
+  const { command, label } = commandFor(name, scripts);
+  const isFile = !label.startsWith("pnpm ");
+  if (command === undefined || (isFile && !exists(resolve(repoRoot, name)))) {
+    return { missing: [], unknownScript: true };
+  }
 
   const missing = [];
   const need = (pkg, neededBy, fromDir = repoRoot) => {
@@ -58,7 +81,7 @@ export async function preflight(name, { repoRoot, read, exists, loadTs }) {
     }
   };
 
-  if (usesTsx(scripts[name], scripts)) need("tsx", "package.json");
+  if (usesTsx(command, scripts)) need("tsx", "package.json");
 
   // The import walk parses each file with TypeScript. The root declares it,
   // but a checkout that lacks it cannot be walked, and that is itself the
@@ -72,7 +95,7 @@ export async function preflight(name, { repoRoot, read, exists, loadTs }) {
     return { missing, unknownScript: false };
   }
 
-  const entries = entriesOf(scripts[name], scripts);
+  const entries = entriesOf(command, scripts);
   const imported = packagesImportedBy(repoRoot, entries, { read, exists, ts });
   for (const [pkg, file] of imported) {
     need(pkg, file, dirname(resolve(repoRoot, file)));
@@ -88,11 +111,14 @@ export async function preflight(name, { repoRoot, read, exists, loadTs }) {
  * @returns {string}
  */
 export function report(name, result) {
+  const { label } = commandFor(name, {});
   if (result.unknownScript) {
-    return `hook-preflight: the root package.json has no "${name}" script, so the hook that runs it cannot run.\n`;
+    return label.startsWith("pnpm ")
+      ? `hook-preflight: the root package.json has no "${name}" script, so the hook that runs it cannot run.\n`
+      : `hook-preflight: ${name} does not exist, so the hook that runs it cannot run.\n`;
   }
   const lines = [
-    `hook-preflight: \`pnpm ${name}\` could not run, so it neither passed nor failed.`,
+    `hook-preflight: \`${label}\` could not run, so it neither passed nor failed.`,
     ...result.missing.map(
       (m) => `  ${m.name} is not installed (needed by ${m.neededBy}).`,
     ),
@@ -106,7 +132,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const name = process.argv[2];
   if (!name) {
     process.stderr.write(
-      "usage: node tools/scripts/hook-preflight.mjs <root-script>\n",
+      "usage: node tools/scripts/hook-preflight.mjs <root-script | script-file>\n",
     );
     process.exit(2);
   }
