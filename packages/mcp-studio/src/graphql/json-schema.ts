@@ -1,8 +1,12 @@
 // json-schema.ts: the JSON Schema that GraphQL arguments and results map to.
 import { isEnumType, type GraphQLLeafType } from "graphql";
 
-/** The part of JSON Schema that GraphQL import writes. */
-export interface JsonSchema {
+/**
+ * The part of JSON Schema that GraphQL import writes. It is a type alias
+ * because only an alias gets an implicit index signature, and the contract's
+ * inputSchema and outputSchema take `{ [k: string]: unknown }`.
+ */
+export type JsonSchema = {
   type?: string | string[];
   description?: string;
   enum?: (string | null)[];
@@ -11,7 +15,7 @@ export interface JsonSchema {
   required?: string[];
   default?: unknown;
   deprecated?: boolean;
-}
+};
 
 /** A JSON Schema whose type is object, as inputSchema and outputSchema must be. */
 export type ObjectSchema = JsonSchema & { type: "object"; properties: Record<string, JsonSchema> };
