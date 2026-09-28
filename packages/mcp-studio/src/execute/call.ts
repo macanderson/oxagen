@@ -154,6 +154,10 @@ export async function executeCall(
     if (note !== undefined) notes.push(note);
   } else {
     const sent = await send(upstream, shaping.deadline_ms);
+    // SendResult leaves exchanges optional. The HTTP and GraphQL Senders
+    // return none when a request fails to build and nothing is sent, and a
+    // Sender passed in options.senders may leave them out. The gRPC Sender
+    // always returns them, so this fallback never hides one of its calls.
     exchanges = sent.exchanges ?? [];
     if (!sent.ok) return failed(errorText(sent.error), exchanges);
     value = sent.value;

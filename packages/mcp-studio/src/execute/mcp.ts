@@ -11,6 +11,7 @@
 //
 // A server on the older HTTP+SSE transport is refused before anything is
 // sent. The relay carries streamable HTTP only, and so does this Sender.
+// Review refuses such a server first (ADR-211).
 import type { ManifestServer, ManifestTool } from "../contract/manifest";
 import type { RecordedExchange } from "../contract/tests-files";
 import type { McpRequest } from "../model/upstream-tool";
@@ -152,12 +153,16 @@ function checkTransport(server: ManifestServer, network: string): void {
       `${server.name} runs on the local gateway, so its calls go through the local route, not a remote MCP session.`,
     );
   }
+  // Review refuses sse, so the schema no longer names it (ADR-211). A manifest
+  // that reached the executor another way can still carry it, so the Sender
+  // keeps this refusal as a backstop.
   const source = server.source;
   const pinned = server.pinned;
-  const sse =
-    (source.type === "remote" && source.transport === "sse") ||
-    (pinned.type === "registry" && pinned.transport === "sse");
-  if (sse) {
+  const transports: readonly (string | undefined)[] = [
+    source.type === "remote" ? source.transport : undefined,
+    pinned.type === "registry" ? pinned.transport : undefined,
+  ];
+  if (transports.includes("sse")) {
     throw unsupportedTransport(
       `${server.name} uses the HTTP+SSE transport. The gateway calls MCP servers over streamable HTTP only.`,
     );

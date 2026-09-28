@@ -140,7 +140,7 @@ describe("countMovableLegacyServers", () => {
     where = undefined;
   });
 
-  it("counts live, enabled, legacy rows on a remote transport", async () => {
+  it("counts live, enabled, legacy rows on streamable-http", async () => {
     const n = await countMovableLegacyServers(countTx(3) as never, SCOPE);
 
     expect(n).toBe(3);
@@ -148,10 +148,12 @@ describe("countMovableLegacyServers", () => {
     expect(q.sql).toMatch(/"origin" = \$\d+/);
     expect(q.sql).toMatch(/"enabled" = \$\d+/);
     expect(q.sql).toMatch(/"deleted_at" is null/);
-    expect(q.sql).toMatch(/"transport_type" in \(\$\d+, \$\d+\)/);
+    expect(q.sql).toMatch(/"transport_type" in \(\$\d+\)/);
     expect(q.params).toEqual(
-      expect.arrayContaining(["org-1", "ws-1", "legacy", true, "streamable-http", "sse"]),
+      expect.arrayContaining(["org-1", "ws-1", "legacy", true, "streamable-http"]),
     );
+    // Review refuses sse (ADR-211), so an sse row stays legacy and blocks nothing.
+    expect(q.params).not.toContain("sse");
   });
 
   it("reads no row as zero", async () => {
