@@ -12,8 +12,9 @@
  *
  * The cross-file checks read the published index and what Oxagen knows
  * outside the repository: runtimes, members, teams, reviewer groups, and
- * credentials. The command fetches both once and caches them for ten minutes
- * under the CLI's config directory. `--refresh` fetches them again.
+ * credentials. The command fetches both once from `get_steering_index`
+ * (GET context/steering/index) and caches them for ten minutes under the
+ * CLI's config directory. `--refresh` fetches them again.
  *
  * Two inputs the PR check can take stay out on a laptop. Nothing reads the
  * host's settings, so the settings check is skipped. No Cedar evaluator is
@@ -47,6 +48,8 @@ import {
   TOOLS_DIR,
   WORKSPACE_TOML_PATH,
 } from "@oxagen/oxagen/steering-repo/paths";
+import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
+import { workspaceSchema } from "@oxagen/oxagen/steering-repo/workspace";
 import {
   formatHuman,
   runChecks,
@@ -58,6 +61,7 @@ import {
   type IndexRecord,
   type SteeringTree,
 } from "@oxagen/steering-check";
+import { apiGetOrThrow } from "../lib/api.js";
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { getConfigDir } from "../lib/config.js";
@@ -121,9 +125,6 @@ const DEFAULT_BASES: readonly string[] = ["origin/HEAD", "origin/main"];
 
 const NOT_A_STEERING_REPO =
   "This directory is not in a steering repo. Run oxagen check inside a clone that holds workspace.toml, or AGENTS.md and steering/ for an organization repo.";
-
-const NO_INDEX_ROUTE =
-  "No Oxagen API route serves the published index and the workspace context to the CLI. Push the branch, and the steering PR check runs the checks.";
 
 const NO_BASE = `No production branch to compare with. ${DEFAULT_BASES.join(" and ")} do not resolve in this clone, so the checks read the working tree whole. Pass --base <ref> to compare with a branch.`;
 
@@ -470,9 +471,50 @@ async function publishedInputs(
   return fetched;
 }
 
+/** The two slugs the index is read for. The schema check reports the rest of workspace.toml. */
+const workspaceSlugs = workspaceSchema
+  .pick({ organization: true, workspace: true })
+  .passthrough();
+
+/**
+ * The organization and workspace a steering repo's workspace.toml names, or
+ * undefined for an organization repo, which has no workspace.toml. Throws
+ * when the file names no organization or no workspace, since then no one
+ * index is the right one.
+ */
+function workspaceOf(root: string): { org: string; ws: string } | undefined {
+  const text = readWorkingFile(root, WORKSPACE_TOML_PATH);
+  if (text === null) return undefined;
+  const read = readTomlFile(text, "workspace/v1", workspaceSlugs);
+  if (!read.ok) {
+    const [issue] = read.issues;
+    throw new Error(
+      `${WORKSPACE_TOML_PATH} does not name the organization and workspace to read the index for${issue === undefined ? "" : `: ${issue.message}`}. Fix ${WORKSPACE_TOML_PATH}, then run oxagen check again.`,
+    );
+  }
+  return { org: read.value.organization, ws: read.value.workspace };
+}
+
+/**
+ * The published index and context from `get_steering_index`. A workspace
+ * repo reads the workspace its workspace.toml names. An organization repo
+ * reads the context of the workspace the CLI has selected and no index, since
+ * no organization version publishes yet, so its records check as a first
+ * publish. The caller checks the answer's shape.
+ */
+async function fetchSteeringIndex(root: string): Promise<PublishedInputs> {
+  const scope = workspaceOf(root);
+  const answer = await apiGetOrThrow<PublishedInputs>(
+    "context/steering/index",
+    undefined,
+    scope,
+  );
+  return scope === undefined ? { ...answer, index: null } : answer;
+}
+
 function defaultDeps(): CheckDeps {
   return {
-    fetchPublished: () => Promise.reject(new Error(NO_INDEX_ROUTE)),
+    fetchPublished: fetchSteeringIndex,
     cacheDir: join(getConfigDir(), "cache", "steering-check"),
     now: () => Date.now(),
   };

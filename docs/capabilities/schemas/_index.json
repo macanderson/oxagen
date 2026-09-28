@@ -1,5 +1,5 @@
 {
-  "generatedCount": 409,
+  "generatedCount": 410,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1894,6 +1894,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_index",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "component": null,
       "produces": [],

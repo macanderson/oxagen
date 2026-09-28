@@ -144,6 +144,29 @@ A file the last pull wrote that is no longer published is deleted if you did not
 
 After a pull, the directory is reported to Oxagen with the commit it pulled, the same way `init` reports it. The command exits 0 on success or when there is nothing to do, 1 on a refusal or an API failure, and 2 on a bad argument.
 
+## oxagen check: steering PR checks
+
+```bash
+oxagen check [paths...] [--base <ref>] [--refresh] [--json]
+```
+
+Run `check` inside a clone of a steering repo to see what the steering PR check will report before you push. It runs the same checks on your working tree. The tree is every file git tracks or would add among `AGENTS.md`, `CLAUDE.md`, `README.md`, `.gitattributes`, `workspace.toml`, and the files under `agents/`, `steering/`, `tools/`, and `policy/`. The checks compare the tree with the production branch: `--base <ref>`, else `origin/HEAD`, else `origin/main`. With no base, they read the tree whole, as for a first publish.
+
+Paths narrow the report. The checks still read the whole tree, and the report keeps the findings in the files and folders you name.
+
+Some checks read more than the tree. The hash, conflicts, and references checks compare your change with the records the workspace has published. The references check also looks up each runtime, operator, reviewer group, and credential your repo names. `check` fetches the published index and this context from Oxagen in one call and caches the answer for ten minutes. `--refresh` fetches it again.
+
+- A workspace repo reads the workspace its `workspace.toml` names.
+- An organization repo reads the context of the workspace the CLI has selected. It reads no index, because no organization version is published yet, so its records check as a first publish.
+
+Oxagen does not store member handles, teams, or reviewer group slugs yet. Until it does, the references check reports each agent's `operator` and each reviewer group as missing.
+
+Two checks do less on your machine. The settings check is skipped, and the compile check does not evaluate the Cedar policies.
+
+`--json` prints one finding per line on stdout and the result line on stderr.
+
+The command exits 0 when no finding is an error and 1 when at least one is. It exits 2 when the checks cannot run: outside a steering repo or a git clone, with a `--base` that names no commit, or when `check` cannot fetch the index and context, for example before you log in.
+
 ## oxagen agent: the agent identity
 
 ```bash

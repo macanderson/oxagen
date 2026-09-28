@@ -137,6 +137,7 @@ import "./contracts/context.records.get";
 import "./contracts/context.records.list";
 import "./contracts/context.steering.deliveries";
 import "./contracts/context.steering.freshness";
+import "./contracts/context.steering.index.get";
 import "./contracts/context.steering.published.get";
 import "./contracts/context.steering.shared";
 import "./contracts/conversation.archive";

@@ -43,6 +43,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { ApiError } from "../lib/api.js";
 import type { CommandWriter } from "../lib/capture-writer.js";
 import { buildProgram } from "../program.js";
 import {
@@ -58,6 +59,14 @@ import {
 // Each test clones a repository and runs every check, so it can take longer
 // than vitest's five-second default on a busy runner.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
+// The default fetcher's one call to the API. Every other test passes its own
+// fetcher, so only the default-fetcher tests reach this.
+const api = vi.hoisted(() => ({ apiGetOrThrow: vi.fn() }));
+vi.mock("../lib/api.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api.js")>()),
+  apiGetOrThrow: api.apiGetOrThrow,
+}));
 
 // ── git ──────────────────────────────────────────────────────────────────────
 
@@ -342,6 +351,23 @@ describe("the report", () => {
     expect(report).toMatch(/The steering PR passes, with 0 errors and 0 warnings\.$/);
   });
 
+  it("runs on the index and context the default fetcher reads", async () => {
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockResolvedValue(published());
+
+    const result = await runRaw(clone(), [], {}, { cacheDir: null });
+    const expected = direct(fixtureRepo(), fixtureRepo());
+
+    expect(api.apiGetOrThrow).toHaveBeenCalledTimes(1);
+    expect(api.apiGetOrThrow).toHaveBeenCalledWith(
+      "context/steering/index",
+      undefined,
+      { org: "a-intel", ws: "core-platform" },
+    );
+    expect(result.out).toEqual([formatHuman(expected).trimEnd()]);
+    expect(result.code).toBeUndefined();
+  });
+
   it("prints each finding and exits 1 when a finding is an error", async () => {
     const item = caseById("owned/agents-md-edited");
     const result = await run(cloneWith(item));
@@ -580,11 +606,14 @@ describe("exit 2", () => {
     expect(result.code).toBe(2);
   });
 
-  it("when no route serves the published index", async () => {
+  it("when the default fetcher's API call fails", async () => {
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockRejectedValue(new ApiError("The API answered 503.", 503));
+
     const result = await runRaw(clone(), [], {}, { cacheDir: null });
 
     expect(result.err).toEqual([
-      "✗ Oxagen could not fetch the published index. No Oxagen API route serves the published index and the workspace context to the CLI. Push the branch, and the steering PR check runs the checks.",
+      "✗ Oxagen could not fetch the published index. The API answered 503.",
     ]);
     expect(result.out).toEqual([]);
     expect(result.code).toBe(2);

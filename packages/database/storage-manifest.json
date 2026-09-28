@@ -1729,6 +1729,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_steering_index",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_subscription",
       "reads": [],
@@ -1886,6 +1896,15 @@
     {
       "domain": "tacho",
       "name": "ingest_tacho_events",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "ingest_tacho_memories",
       "reads": [],
       "surfaces": [
         "api"
@@ -2972,6 +2991,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "recall_tacho_memories",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4254,7 +4282,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7b5875ba73c44eecf51249ca09a7c5b03a949af543e70b20b57089bb4c9fac32",
+  "contentHash": "00e9766d64a501e3ba740f8eec31579f860498c61c1823bac6d4ab47cd17e1b3",
   "domains": [
     {
       "name": "agent",

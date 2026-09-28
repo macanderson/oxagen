@@ -2354,6 +2354,23 @@
       }
     },
     {
+      "name": "get_steering_index",
+      "file": "context.steering.index.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_published_steering",
       "file": "context.steering.published.get.ts",
       "domain": "context",
