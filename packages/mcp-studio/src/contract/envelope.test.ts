@@ -24,6 +24,7 @@ function pathsAndMessages(result: ParseOutcome): { path: string; message: string
 const relayEnvelope = {
   schema: "relay-envelope/v1",
   relay: "billing-vpc",
+  workspace: "wrk_3hs7vd1qkp9mxe2lt5ga8r",
   nonce: "q8Zt3rXy1mB9nVc2LwPa7s",
   issued_at: "2026-09-26T12:00:00Z",
   expires_at: "2026-09-26T12:00:05Z",
@@ -69,6 +70,28 @@ describe("relay-envelope/v1", () => {
       },
     };
     expect(relayEnvelopeSchema.safeParse(grpc).success).toBe(true);
+  });
+
+  it("refuses an envelope that names no workspace", () => {
+    const { workspace: _workspace, ...unbound } = relayEnvelope;
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(unbound))).toStrictEqual([
+      { path: "workspace", message: "Required" },
+    ]);
+  });
+
+  it.each(["billing", "WRK_3HS7VD1QKP9MXE2LT5GA8R", "wrk_", `wrk_${"a".repeat(65)}`, "wrk_3hs7-vd1q"])(
+    "refuses the workspace %j, which is not a workspace public id",
+    (workspace) => {
+      expect(pathsAndMessages(relayEnvelopeSchema.safeParse({ ...relayEnvelope, workspace }))).toStrictEqual([
+        { path: "workspace", message: "a workspace id is wrk_ and up to 64 lowercase letters and digits" },
+      ]);
+    },
+  );
+
+  it("signs the workspace, so an envelope cannot move to another workspace", () => {
+    const moved = { ...relayEnvelope, workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m" };
+    expect(relayEnvelopeSchema.safeParse(moved).success).toBe(true);
+    expect(envelopeSigningBytes(moved)).not.toEqual(envelopeSigningBytes(relayEnvelope));
   });
 
   it("refuses a target with no scheme or a scheme other than https and http", () => {

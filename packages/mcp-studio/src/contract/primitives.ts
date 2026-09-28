@@ -84,6 +84,15 @@ export const remoteTransportSchema = withJsonSchema(z.string(), {
 /** A relay's name, as `relay:<name>` writes it. */
 export const RELAY_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+/**
+ * A workspace's public id: `wrk_` and a lowercase suffix. Oxagen mints the
+ * suffix as 22 Crockford base32 characters and never changes it, unlike the
+ * workspace slug, which a rename changes.
+ */
+export const workspacePublicIdSchema = z
+  .string()
+  .regex(/^wrk_[0-9a-z]{1,64}$/, "a workspace id is wrk_ and up to 64 lowercase letters and digits");
+
 /** `cloud`, or `relay:<name>` for a server inside a private network. */
 export const networkSchema = z
   .string()
