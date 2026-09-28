@@ -267,6 +267,23 @@ export function createTachoBundleGetHandler(
   return async (input, ctx) => {
     const now = new Date();
     const signer = requireBundleSigner("get_tacho_bundle");
+    // The skills are read outside the tenant transaction below. The version
+    // store's port opens tenant transactions of its own and reads the forge,
+    // so a read made inside that transaction would hold one pool connection
+    // while it waits for another, which exhausts the pool under load
+    // (`withTransactionOrgWideRead` in `@oxagen/database` explains). A short
+    // transaction resolves the host first, so only an enrolled host reaches
+    // the skills, and the transaction below resolves it again for the row it
+    // updates.
+    const caller = await withTenantDb((tx) =>
+      resolveEnrolledHost(
+        "get_tacho_bundle",
+        ctx,
+        tx as never,
+        input.host_enrollment_id,
+      ),
+    );
+    const skills = await hostSkills(deps.published, skillsCache, ctx, caller);
     return withTenantDb(async (tx) => {
       const host = await resolveEnrolledHost(
         "get_tacho_bundle",
@@ -274,14 +291,12 @@ export function createTachoBundleGetHandler(
         tx as never,
         input.host_enrollment_id,
       );
-      const [denyGeneration, retention, steering, mandate, skills] =
-        await Promise.all([
-          readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
-          readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
-          readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
-          resolveHostMandate(tx as never, ctx, host),
-          hostSkills(deps.published, skillsCache, ctx, host),
-        ]);
+      const [denyGeneration, retention, steering, mandate] = await Promise.all([
+        readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
+        readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+        readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
+        resolveHostMandate(tx as never, ctx, host),
+      ]);
       const built = unsignedBundle(
         host,
         denyGeneration,

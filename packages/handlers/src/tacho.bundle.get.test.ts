@@ -338,6 +338,48 @@ describe("get_tacho_bundle skills", () => {
     );
   });
 
+  it("reads the published skills outside any tenant transaction", async () => {
+    // The version store's port opens tenant transactions of its own, so a
+    // read made inside the handler's would hold one pool connection while it
+    // waits for another.
+    let open = 0;
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        open += 1;
+        try {
+          return await fn({
+            update: () => ({
+              set: (values: Record<string, unknown>) => ({
+                where: async () => {
+                  writes.push(values);
+                },
+              }),
+            }),
+          });
+        } finally {
+          open -= 1;
+        }
+      },
+    );
+    const outside = <T>(read: () => Promise<T>) => async (): Promise<T> => {
+      if (open > 0) throw new Error("read inside a tenant transaction");
+      return read();
+    };
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const counted = port();
+    const read = counted.readAsset;
+    counted.published = outside(() => fixtureDelivery());
+    counted.readAsset = (source, bundle, file) =>
+      outside(() => read(source, bundle, file))();
+    const answer = await createTachoBundleGetHandler({ published: counted })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect(answer.bundle?.skills?.length).toBeGreaterThan(0);
+    expect(counted.reads).toBeGreaterThan(0);
+    expect(writes).toHaveLength(1);
+  });
+
   it("reads a published version once and answers not_modified while it stands", async () => {
     mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
     const published = port();
