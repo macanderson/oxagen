@@ -1,7 +1,7 @@
 {
   "name": "unlink_repository",
   "domain": "repository",
-  "description": "Unlink a linked repository from the workspace. The main repository cannot be unlinked; binding history is kept.",
+  "description": "Unlink a linked repository from the workspace. A repository that workspace.toml lists is removed by a steering PR. The steering repository cannot be unlinked, and binding history is kept.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -40,14 +40,59 @@
         "type": "string",
         "minLength": 1
       },
+      "status": {
+        "type": "string",
+        "enum": [
+          "unlinked",
+          "proposed"
+        ]
+      },
       "unlinkedAt": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "steeringPullRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "reused": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "number",
+              "url",
+              "reused"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
       "bindingId",
       "fullName",
-      "unlinkedAt"
+      "status",
+      "unlinkedAt",
+      "steeringPullRequest"
     ],
     "additionalProperties": false
   }

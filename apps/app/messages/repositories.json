@@ -86,10 +86,11 @@
       "mainRepo": "That is this workspace’s main repository. It is bound above, and a main repository is never also linked.",
       "repositoryAlreadyLinked": "That repository is already linked to this workspace.",
       "mainRepoClaimed": "Another workspace steers by that repository. A workspace’s main repository cannot be linked by another workspace, because Context PRs would open on its .oxagen/ tree.",
-      "mainRepoUnbound": "Bind this workspace’s main repository first. A linked repository is its second.",
+      "mainRepoUnbound": "This workspace has no steering repository yet. Oxagen proposes each link as a steering PR on that repository. Set one up first.",
       "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be this workspace’s main. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
       "mainRepoUnlinkRefused": "The main repository cannot be unlinked. A workspace without one cannot exist.",
       "repositoryNotLinked": "That repository is no longer linked to this workspace. Reload the page to read the current list.",
+      "workspaceTomlUnreadable": "The steering repository’s workspace.toml is present but unreadable. It must read as workspace/v1. Fix the file, then try again.",
       "branchNotFound": "GitHub has no branch by that name in this repository. Check the spelling, or push the branch first.",
       "productionBranchMissing": "The production branch this repository records no longer exists on GitHub. Set the production branch first.",
       "productionBranchIsInitBranch": "This repository records oxagen/init as its production branch, which is where the init pull request is pushed. Set another production branch first.",
@@ -235,7 +236,6 @@
       "unlink": "Unlink",
       "link": "Link to this workspace",
       "linking": "Linking",
-      "linked": "{repository} linked to {workspace}. Its issues and events reach this workspace, and a run may bind to it.",
       "seeChanges": "See its changes",
       "addOxagen": "Add Oxagen",
       "branch": {
@@ -254,12 +254,21 @@
     "unlink": {
       "title": "Unlink {repository} from {workspace}?",
       "body": "Its issues and events stop reaching this workspace, and a run can no longer bind to it here. The repository is untouched: nothing is deleted, no branch moves, and <code>.oxagen/</code> stays where it is.",
-      "governed": "Records published in this repository stop steering runs in {workspace} the moment this is written. Runs already recorded keep naming the hashes they carried.",
+      "governed": "Records published in this repository stop steering runs in {workspace} once the unlink takes effect. Runs already recorded keep naming the hashes they carried.",
       "copies": "Working copies linked through it are not recorded yet, so this cannot say how many stop appearing on the Working copies tab.",
       "keep": "Keep it linked",
       "submit": "Unlink it",
       "pending": "Unlinking",
-      "done": "{repository} unlinked from {workspace}. Runs already recorded keep naming it; nothing new binds to it here."
+      "done": "{repository} unlinked from {workspace}. Runs already recorded keep naming it. Nothing new binds to it here."
+    },
+    "steering": {
+      "linkProposed": "Steering PR <pr>#{number}</pr> adds {repository} to <code>workspace.toml</code>.",
+      "linkReused": "Steering PR <pr>#{number}</pr> already adds {repository} to <code>workspace.toml</code>.",
+      "linkMerge": "Merge the steering PR to finish linking.",
+      "linkListed": "<code>workspace.toml</code> lists {repository} already. The next steering sync links it.",
+      "unlinkProposed": "Steering PR <pr>#{number}</pr> removes {repository} from <code>workspace.toml</code>.",
+      "unlinkReused": "Steering PR <pr>#{number}</pr> already removes {repository} from <code>workspace.toml</code>.",
+      "unlinkMerge": "Merge the steering PR to finish unlinking."
     },
     "copies": {
       "title": "Working copies",
@@ -635,7 +644,8 @@
         "reused": "{repository}#{number} already adds .oxagen/. Nothing new was pushed.",
         "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
         "link": "Open #{number} on GitHub"
-      }
+      },
+      "resume": "Once {repository} is linked, open this wizard again to add <code>.oxagen/</code> to it."
     },
     "drift": {
       "heading": "Instruction files",

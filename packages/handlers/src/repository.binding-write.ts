@@ -1,6 +1,7 @@
-// repository.binding-write.ts — the one writer of a NEW binding head, shared
-// by `create_workspace` (the main head, written with the workspace) and
-// `link_repository` (a linked head).
+// repository.binding-write.ts: the one writer of a NEW binding head, shared
+// by `create_workspace` (the steering head, written with the workspace) and
+// the steering sync (a linked head, once a steering PR that lists the
+// repository merges; see repository.link.write.ts).
 //
 // `bind_main_repository` keeps its own writer because it also repairs and
 // re-approves an EXISTING head in place; this one only ever adds a head.
@@ -65,7 +66,12 @@ export interface NewRepositoryHead {
    * within one host, so the retained-version lookup filters on it too.
    */
   provider?: RepositoryProvider;
-  userId: string;
+  /**
+   * The person who asked for the head, or null when the steering sync writes
+   * it after a steering PR merged (ADR-212). The merge is the host's fact,
+   * and the merging account need not be an Oxagen user.
+   */
+  userId: string | null;
   now: Date;
 }
 

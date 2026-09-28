@@ -1,9 +1,9 @@
 /**
  * `oxagen run answer` (`answer_interjection`, #3941): each answer form posts
  * its body to agent/interjections/answer, `--json` emits the contract
- * payload, pretty mode prints the receipt, what a link or create bound, and
- * the command, and a wrong set of flags or an API failure goes to stderr
- * before or instead of any request. The API client is mocked; no network is
+ * payload, pretty mode prints the receipt, what a link or create opened or
+ * bound, and the command, and a wrong set of flags or an API failure goes to
+ * stderr before or instead of any request. The API client is mocked; no network is
  * needed.
  */
 import {
@@ -60,10 +60,19 @@ const TEXT: RunAnswerResult = {
   workspace: null,
 };
 
+// A link opens a steering PR and binds nothing until it merges (ADR-212).
 const LINKED: RunAnswerResult = {
   ...TEXT,
   path: "link",
-  repository: { bindingId: "rpb_0123456789abcdef012345", fullName: "acme/api" },
+  repository: {
+    bindingId: null,
+    fullName: "acme/api",
+    steeringPullRequest: {
+      number: 7,
+      url: "https://github.com/acme/control/pull/7",
+      reused: false,
+    },
+  },
 };
 
 // A create binds no repository since lane S1 (#4450).
@@ -95,7 +104,7 @@ describe("oxagen run answer", () => {
     expect(err).toEqual([]);
   });
 
-  it("links the repository and prints the receipt, the binding and the command", async () => {
+  it("prints the receipt, the steering PR that links the repository, and the command", async () => {
     post.mockResolvedValue(LINKED);
     const { writer, out } = memoryWriter();
     await runAnswer(ID, { link: true }, writer);
@@ -105,9 +114,41 @@ describe("oxagen run answer", () => {
     });
     expect(out).toEqual([
       `Answered ${ID} on tse_0123456789abcdefghjkmn. Receipt rcp_0123456789abcdefghjkmn.`,
-      "Linked acme/api to this workspace (binding rpb_0123456789abcdef012345).",
+      "Opened steering PR #7 to link acme/api to this workspace: https://github.com/acme/control/pull/7. Merge the steering PR to finish linking.",
       "The run's host collects the answer with command tcm_1.",
     ]);
+  });
+
+  it("names the binding when the repository was linked already", async () => {
+    post.mockResolvedValue({
+      ...LINKED,
+      repository: {
+        bindingId: "rpb_0123456789abcdef012345",
+        fullName: "acme/api",
+        steeringPullRequest: null,
+      },
+    });
+    const { writer, out } = memoryWriter();
+    await runAnswer(ID, { link: true }, writer);
+    expect(out[1]).toBe(
+      "acme/api is linked to this workspace already (binding rpb_0123456789abcdef012345).",
+    );
+  });
+
+  it("says the next sync links a repository workspace.toml lists already", async () => {
+    post.mockResolvedValue({
+      ...LINKED,
+      repository: {
+        bindingId: null,
+        fullName: "acme/api",
+        steeringPullRequest: null,
+      },
+    });
+    const { writer, out } = memoryWriter();
+    await runAnswer(ID, { link: true }, writer);
+    expect(out[1]).toBe(
+      "workspace.toml already lists acme/api. The next steering sync links it.",
+    );
   });
 
   it("creates a workspace for the repository and prints what it made", async () => {
@@ -132,6 +173,7 @@ describe("oxagen run answer", () => {
       repository: {
         bindingId: "rpb_fedcba9876543210fedcba",
         fullName: "acme/api",
+        steeringPullRequest: null,
       },
       commandIds: [],
     });

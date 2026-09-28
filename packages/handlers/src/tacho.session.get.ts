@@ -116,6 +116,7 @@ export const tachoSessionGetHandler: CapabilityHandler<
         terminalReason: row.terminalReason,
         projectDir: row.projectDir,
         gitRemoteDigest: row.gitRemoteDigest,
+        repositoryUnlinked: row.repositoryUnlinked,
         gitHeadShaStart: row.gitHeadShaStart,
         worktreeBranch: row.worktreeBranch,
         inputTokens: row.inputTokens,

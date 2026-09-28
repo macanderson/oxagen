@@ -629,6 +629,9 @@ const tachoColumns = {
     // The digest of the session's git remote, which `get_run` matches to a
     // connected repository to name it.
     gitRemoteDigest: sessions.gitRemoteDigest,
+    // Stamped by ingest's genesis row when that digest matched no repository
+    // linked to the workspace. `get_run` answers it as recorded.
+    repositoryUnlinked: sessions.repositoryUnlinked,
     permissionModeInitial: sessions.permissionModeInitial,
     permissionModeFinal: sessions.permissionModeFinal,
     inputTokens: sessions.inputTokens,
