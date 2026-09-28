@@ -13,6 +13,9 @@
  * --brand   kit checkout. Defaults to $OXAGEN_BRAND_KIT, then the deprecated
  *           $OXAGEN_HOUSE_BRAND alias, then ../oxagen-brand.
  * --check   verify vendored files without writing. Exit non-zero on drift.
+ *           That covers the marks, the icons, the tokens, the fonts, the
+ *           branding skill, and the INK palette apps/web's art modules draw
+ *           with (apps/web/scripts/lib/theme.mjs).
  *
  * Each surface has an explicit mark allowlist. The product uses the wordmark
  * where a word fits and the hive for square icons. The kit also supplies a
@@ -28,6 +31,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -469,6 +473,58 @@ function tokens() {
 }
 
 /**
+ * The `INK` palette apps/web's generated images draw with, as the kit's
+ * tokens give it: each key of `INK_TOKENS` mapped to the hex of the token it
+ * names. Throws when the kit has no such token, so a renamed token fails the
+ * sync instead of writing `undefined`.
+ *
+ * @param {Record<string, unknown>} kitTokens
+ * @param {Readonly<Record<string, string>>} [map]
+ * @returns {Record<string, string>}
+ */
+export function expectedInk(kitTokens, map = INK_TOKENS) {
+  const ink = {};
+  for (const [key, token] of Object.entries(map)) {
+    const hex = kitTokens[token];
+    if (typeof hex !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+      throw new Error(`house kit has no colour token "${token}" for INK.${key}`);
+    }
+    ink[key] = hex;
+  }
+  return ink;
+}
+
+/**
+ * `theme.mjs`'s source with each `key: "#hex"` line inside `INK` set to the
+ * hex in `ink`. Throws when a key has no such line, so the check cannot pass
+ * over a palette it could not read.
+ */
+export function rewriteInk(src, ink) {
+  const block = src.match(/export const INK = Object\.freeze\(\{[\s\S]*?\}\);/);
+  if (!block) throw new Error("theme.mjs has no `export const INK` block");
+  let body = block[0];
+  for (const [key, hex] of Object.entries(ink)) {
+    const line = new RegExp(`(\\n\\s*${key}:\\s*)"#[0-9A-Fa-f]{6}"`);
+    if (!line.test(body)) throw new Error(`theme.mjs INK has no ${key} colour`);
+    body = body.replace(line, `$1"${hex}"`);
+  }
+  return src.replace(block[0], body);
+}
+
+/**
+ * The web art modules. apps/web draws its social cards and blog figures from
+ * `INK` in `scripts/lib/theme.mjs`, so its values are written from the kit
+ * tokens here, and `--check` reports the file when one has drifted (#3074).
+ */
+function webTheme() {
+  const kit = JSON.parse(
+    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
+  ).tokens;
+  const path = "apps/web/scripts/lib/theme.mjs";
+  emit(path, rewriteInk(readFileSync(join(REPO, path), "utf8"), expectedInk(kit)));
+}
+
+/**
  * The marks, as data, for the React components in @oxagen/ui.
  *
  * <img src="…"> cannot follow the app theme, and hand-copying path data into a
@@ -645,6 +701,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   skill();
   fonts();
   tokens();
+  webTheme();
   marks();
   nextSurface("apps/app/public", "oxagen");
   nextSurface("apps/docs/public", "oxagen");
