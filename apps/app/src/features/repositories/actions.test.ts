@@ -556,16 +556,19 @@ describe("readWorkingCopies", () => {
 });
 
 describe("linkWorkspaceRepository", () => {
+  const STEERING_PR = {
+    number: 41,
+    url: "https://github.com/acme/control/pull/41",
+    reused: false,
+  };
   const LINKED = {
-    bindingId: "rpb_0d1e2f",
-    connectionId: "con_01hq",
     fullName: "acme/docs-site",
     defaultRef: "trunk",
-    role: "linked",
-    linkedAt: "2026-09-17T10:00:00.000Z",
+    status: "proposed",
+    steeringPullRequest: STEERING_PR,
   };
 
-  it("links the named repository and answers what the handler wrote", async () => {
+  it("answers the steering PR a proposed link opened", async () => {
     invoke.mockResolvedValue(LINKED);
     expect(
       await linkWorkspaceRepository("acme", "core-platform", {
@@ -575,11 +578,73 @@ describe("linkWorkspaceRepository", () => {
     ).toEqual({
       ok: true,
       value: {
-        bindingId: "rpb_0d1e2f",
         fullName: "acme/docs-site",
         defaultRef: "trunk",
-        linkedAt: "2026-09-17T10:00:00.000Z",
+        status: "proposed",
+        steeringPullRequest: STEERING_PR,
       },
+    });
+  });
+
+  it("says when the steering PR was already open", async () => {
+    invoke.mockResolvedValue({
+      ...LINKED,
+      steeringPullRequest: { ...STEERING_PR, reused: true },
+    });
+    expect(
+      await linkWorkspaceRepository("acme", "core-platform", {
+        owner: "acme",
+        name: "docs-site",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        status: "proposed",
+        steeringPullRequest: { number: 41, reused: true },
+      },
+    });
+  });
+
+  it("answers listed with no PR when workspace.toml lists the repository already", async () => {
+    invoke.mockResolvedValue({
+      ...LINKED,
+      status: "listed",
+      steeringPullRequest: null,
+    });
+    expect(
+      await linkWorkspaceRepository("acme", "core-platform", {
+        owner: "acme",
+        name: "docs-site",
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        fullName: "acme/docs-site",
+        defaultRef: "trunk",
+        status: "listed",
+        steeringPullRequest: null,
+      },
+    });
+  });
+
+  it("refuses the output a binding link answered before ADR-212 (negative)", async () => {
+    invoke.mockResolvedValue({
+      bindingId: "rpb_0d1e2f",
+      connectionId: "con_01hq",
+      fullName: "acme/docs-site",
+      defaultRef: "trunk",
+      role: "linked",
+      linkedAt: "2026-09-17T10:00:00.000Z",
+    });
+    expect(
+      await linkWorkspaceRepository("acme", "core-platform", {
+        owner: "acme",
+        name: "docs-site",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "contract_output_mismatch",
     });
   });
 
@@ -605,6 +670,7 @@ describe("linkWorkspaceRepository", () => {
     ["conflict", "repository_already_linked"],
     ["conflict", "main_repo_claimed"],
     ["conflict", "main_repo_unbound"],
+    ["conflict", "workspace_toml_unreadable"],
     ["not_found", "repository_not_installed"],
   ] as const)(
     "carries a %s: %s from the handler to the caller (negative)",
@@ -636,11 +702,13 @@ describe("linkWorkspaceRepository", () => {
 });
 
 describe("unlinkWorkspaceRepository", () => {
-  it("unlinks the binding the list named and answers what left", async () => {
+  it("unlinks a link that predates the steering record at once", async () => {
     invoke.mockResolvedValue({
       bindingId: "rpb_0d1e2f",
       fullName: "acme/docs-site",
+      status: "unlinked",
       unlinkedAt: "2026-09-18T10:00:00.000Z",
+      steeringPullRequest: null,
     });
     expect(
       await unlinkWorkspaceRepository("acme", "core-platform", "rpb_0d1e2f"),
@@ -649,7 +717,9 @@ describe("unlinkWorkspaceRepository", () => {
       value: {
         bindingId: "rpb_0d1e2f",
         fullName: "acme/docs-site",
+        status: "unlinked",
         unlinkedAt: "2026-09-18T10:00:00.000Z",
+        steeringPullRequest: null,
       },
     });
     expect(invoke).toHaveBeenCalledWith(
@@ -660,6 +730,47 @@ describe("unlinkWorkspaceRepository", () => {
         workspaceId: ctx.workspaceId,
       }),
     );
+  });
+
+  it("answers the steering PR that removes a listed repository, with no unlink time", async () => {
+    const proposal = {
+      number: 42,
+      url: "https://github.com/acme/control/pull/42",
+      reused: false,
+    };
+    invoke.mockResolvedValue({
+      bindingId: "rpb_0d1e2f",
+      fullName: "acme/docs-site",
+      status: "proposed",
+      unlinkedAt: null,
+      steeringPullRequest: proposal,
+    });
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "rpb_0d1e2f"),
+    ).toEqual({
+      ok: true,
+      value: {
+        bindingId: "rpb_0d1e2f",
+        fullName: "acme/docs-site",
+        status: "proposed",
+        unlinkedAt: null,
+        steeringPullRequest: proposal,
+      },
+    });
+  });
+
+  it("carries a workspace.toml that is present but unreadable across (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "conflict",
+      reason: "workspace_toml_unreadable",
+    });
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "rpb_0d1e2f"),
+    ).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "workspace_toml_unreadable",
+    });
   });
 
   // The invariant said back at this seam: the main repository never leaves,

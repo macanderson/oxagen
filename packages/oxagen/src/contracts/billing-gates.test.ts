@@ -99,6 +99,8 @@ const CONSOLE_CONTRACTS = [
   "get_spend",
   "get_spend_drill",
   "list_waste",
+  "get_operator_ranking",
+  "set_operator_pseudonyms",
   "get_spend_budget",
   "set_spend_budget",
   "export_statement",

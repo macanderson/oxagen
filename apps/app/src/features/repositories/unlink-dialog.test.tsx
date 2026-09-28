@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 // Unlinking a repository, on its own: the warning a governed repository adds,
 // the throw the action can end in, and Keep it linked, which writes nothing
-// and forgets the refusal it showed.
+// and forgets the refusal it showed. An unlink of a repository workspace.toml
+// lists opens a steering PR (ADR-212): the dialog names it, says to merge it,
+// and stays open. A link that predates the steering record goes at once.
 import {
   act,
   cleanup,
@@ -142,6 +144,137 @@ describe("the unlink dialog", () => {
     expect(
       await within(dialog).findByTestId("unlink-failure"),
     ).toHaveTextContent("action_failed");
+    expect(onUnlinked).not.toHaveBeenCalled();
+  });
+
+  it("closes with the notice when the unlink took effect at once", async () => {
+    actions.unlinkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        bindingId: "rpb_link01",
+        fullName: "acme/docs-site",
+        status: "unlinked",
+        unlinkedAt: "2026-09-19T10:00:00.000Z",
+        steeringPullRequest: null,
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <Harness />
+      </IntlProvider>,
+    );
+    const dialog = await screen.findByTestId("unlink-dialog");
+    await user.click(within(dialog).getByTestId("unlink-submit"));
+    await waitFor(() => {
+      expect(onUnlinked).toHaveBeenCalledWith(
+        "acme/docs-site unlinked from Core platform. Runs already recorded keep naming it. Nothing new binds to it here.",
+      );
+    });
+    expect(within(dialog).queryByTestId("unlink-proposed")).toBeNull();
+  });
+
+  it("names the steering PR an unlink opened, says to merge it, and stays open", async () => {
+    actions.unlinkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        bindingId: "rpb_link01",
+        fullName: "acme/docs-site",
+        status: "proposed",
+        unlinkedAt: null,
+        steeringPullRequest: {
+          number: 44,
+          url: "https://github.com/acme/platform/pull/44",
+          reused: false,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <Harness />
+      </IntlProvider>,
+    );
+    const dialog = await screen.findByTestId("unlink-dialog");
+    await user.click(within(dialog).getByTestId("unlink-submit"));
+    const proposal = await within(dialog).findByTestId("unlink-proposed");
+    expect(proposal).toHaveAttribute("data-state", "proposed");
+    expect(proposal).toHaveTextContent(
+      "Steering PR #44 removes acme/docs-site from workspace.toml.",
+    );
+    expect(proposal).toHaveTextContent(
+      "Merge the steering PR to finish unlinking.",
+    );
+    expect(
+      within(proposal).getByTestId("unlink-proposed-link"),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/44");
+    expect(onUnlinked).not.toHaveBeenCalled();
+    // Nothing is left to submit, and the dismiss button no longer says to
+    // keep the link: the steering PR is open.
+    expect(within(dialog).queryByTestId("unlink-submit")).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Keep it linked" }),
+    ).toBeNull();
+
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("unlink-dialog")).toBeNull();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "reopen" }));
+    const reopened = await screen.findByTestId("unlink-dialog");
+    expect(within(reopened).queryByTestId("unlink-proposed")).toBeNull();
+    expect(within(reopened).getByTestId("unlink-submit")).toBeTruthy();
+  });
+
+  it("says a steering PR already open removes the repository", async () => {
+    actions.unlinkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        bindingId: "rpb_link01",
+        fullName: "acme/docs-site",
+        status: "proposed",
+        unlinkedAt: null,
+        steeringPullRequest: {
+          number: 44,
+          url: "https://github.com/acme/platform/pull/44",
+          reused: true,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <Harness />
+      </IntlProvider>,
+    );
+    const dialog = await screen.findByTestId("unlink-dialog");
+    await user.click(within(dialog).getByTestId("unlink-submit"));
+    const proposal = await within(dialog).findByTestId("unlink-proposed");
+    expect(proposal).toHaveAttribute("data-state", "reused");
+    expect(proposal).toHaveTextContent(
+      "Steering PR #44 already removes acme/docs-site from workspace.toml.",
+    );
+  });
+
+  it("names the refusal when workspace.toml is present but unreadable (negative)", async () => {
+    actions.unlinkWorkspaceRepository.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "workspace_toml_unreadable",
+    });
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <Harness />
+      </IntlProvider>,
+    );
+    const dialog = await screen.findByTestId("unlink-dialog");
+    await user.click(within(dialog).getByTestId("unlink-submit"));
+    expect(
+      await within(dialog).findByTestId("unlink-failure"),
+    ).toHaveTextContent("workspace.toml is present but unreadable");
+    expect(within(dialog).queryByTestId("unlink-proposed")).toBeNull();
     expect(onUnlinked).not.toHaveBeenCalled();
   });
 

@@ -481,9 +481,13 @@ GitLab has no app. An owner connects a GitLab group with a group access token th
 Maintainer role or higher and the `api` scope. Onboarding sends it to
 `POST /v1/{org_slug}/connections/steering/gitlab` with `{ "group": "<path or id>", "token": "<token>" }`
 (`apps/api/src/routes/v1/gitlab-oauth.ts`). The route checks the token with GitLab first and answers
-422 with `gitlab_token_invalid`, `gitlab_group_unreachable` or `gitlab_token_insufficient` when a
-check fails. Oxagen stores the token in `ingestion.oauth_accounts`
-with `provider = 'gitlab_steering'` and uses it the way it uses Oxagen Steering on GitHub. The
+422 with `gitlab_token_invalid`, `gitlab_group_unreachable`, `gitlab_token_not_group` or
+`gitlab_token_insufficient` when a check fails. It takes only the group's own access token: GitLab
+must report the token's user as a bot named `group_<id>_bot…` for the group's id. It refuses a
+personal access token, which reaches every group its person belongs to, and a project or parent
+group token, which belongs to something other than this group. Oxagen stores the token in
+`ingestion.oauth_accounts` with `provider = 'gitlab_steering'` and uses it the way it uses Oxagen
+Steering on GitHub. The
 token's bot user acts on steering repos. The prescribed settings protect `main` so no one pushes
 and only that bot user merges. That protection needs GitLab Premium.
 

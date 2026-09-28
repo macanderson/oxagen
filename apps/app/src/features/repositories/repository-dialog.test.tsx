@@ -2,7 +2,9 @@
 // One repository's dialog on its own, over rows in the states the page test
 // does not reach: a tree that could not be read, a production branch GitHub
 // no longer has, a governed linked repository, an init pull request waiting,
-// a retired main connection, and a production branch that did not move.
+// a retired main connection, and a production branch that did not move. A link
+// opens a steering PR (ADR-212), so the dialog names that PR and says to merge
+// it, or says the next steering sync links a repository workspace.toml lists.
 import {
   cleanup,
   render,
@@ -251,6 +253,116 @@ describe("the repository dialog", () => {
     await waitFor(() => {
       expect(root).toHaveTextContent("action_failed");
     });
+    expect(handlers.onChanged).not.toHaveBeenCalled();
+  });
+
+  const AVAILABLE: RepositoryRow = {
+    ...LINKED,
+    role: "available",
+    bindingId: null,
+    events: null,
+    tree: null,
+  };
+
+  it("names the steering PR a link opened and says to merge it", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/docs-site",
+        defaultRef: "trunk",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: false,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    const root = dialog(AVAILABLE);
+    await user.click(within(root).getByTestId("repository-dialog-link"));
+    const linked = await within(root).findByTestId("repository-dialog-linked");
+    expect(linked).toHaveAttribute("data-state", "proposed");
+    expect(linked).toHaveTextContent(
+      "Steering PR #43 adds acme/docs-site to workspace.toml.",
+    );
+    expect(linked).toHaveTextContent(
+      "Merge the steering PR to finish linking.",
+    );
+    const link = within(linked).getByTestId("repository-dialog-linked-link");
+    expect(link).toHaveTextContent("#43");
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/pull/43",
+    );
+    expect(within(root).queryByTestId("repository-dialog-link")).toBeNull();
+    expect(handlers.onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the steering PR was already open when the link reused it", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/docs-site",
+        defaultRef: "trunk",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: true,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    const root = dialog(AVAILABLE);
+    await user.click(within(root).getByTestId("repository-dialog-link"));
+    const linked = await within(root).findByTestId("repository-dialog-linked");
+    expect(linked).toHaveAttribute("data-state", "reused");
+    expect(linked).toHaveTextContent(
+      "Steering PR #43 already adds acme/docs-site to workspace.toml.",
+    );
+    expect(linked).toHaveTextContent(
+      "Merge the steering PR to finish linking.",
+    );
+  });
+
+  it("says the next steering sync links a repository workspace.toml lists already", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/docs-site",
+        defaultRef: "trunk",
+        status: "listed",
+        steeringPullRequest: null,
+      },
+    });
+    const user = userEvent.setup();
+    const root = dialog(AVAILABLE);
+    await user.click(within(root).getByTestId("repository-dialog-link"));
+    const linked = await within(root).findByTestId("repository-dialog-linked");
+    expect(linked).toHaveAttribute("data-state", "listed");
+    expect(linked).toHaveTextContent(
+      "workspace.toml lists acme/docs-site already. The next steering sync links it.",
+    );
+    expect(
+      within(linked).queryByTestId("repository-dialog-linked-link"),
+    ).toBeNull();
+    expect(linked).not.toHaveTextContent("Merge the steering PR");
+  });
+
+  it("names the refusal when workspace.toml is present but unreadable (negative)", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "workspace_toml_unreadable",
+    });
+    const user = userEvent.setup();
+    const root = dialog(AVAILABLE);
+    await user.click(within(root).getByTestId("repository-dialog-link"));
+    expect(
+      await within(root).findByTestId("repository-dialog-failure"),
+    ).toHaveTextContent("workspace.toml is present but unreadable");
+    expect(within(root).queryByTestId("repository-dialog-linked")).toBeNull();
     expect(handlers.onChanged).not.toHaveBeenCalled();
   });
 

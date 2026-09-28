@@ -59,6 +59,9 @@ const ROLE_CHECKED_CONTRACTS = [
   "get_auto_eligibility",
   "update_workspace_settings",
   "set_spend_budget",
+  // The operator ranking and its pseudonym setting (#2962, D15): managers only.
+  "get_operator_ranking",
+  "set_operator_pseudonyms",
   "set_price_entry",
   "remove_price_entry",
   // Reads of the same commercial detail set/remove already gate (#3271

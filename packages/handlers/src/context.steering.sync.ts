@@ -1,5 +1,5 @@
 // context.steering.sync.ts: the repository sync (ADR-184). The record files on
-// the main repository's production branch are the records in force; the
+// the steering repository's production branch are the records in force; the
 // registry mirrors them for listing, the ledger, and the policy bundle every
 // wrapped agent receives. This makes the mirror match the branch, whatever
 // changed it: a Context PR merged in Oxagen or on the host, a direct push, a
@@ -11,15 +11,19 @@
 // out-of-order delivery reads the same branch and finds nothing left to do.
 //
 // Flow:
-//   1. The workspace's main repository. No repository, no sync.
+//   1. The workspace's steering repository. No repository, no sync.
 //   2. Every open Context PR, read from the host before the branch, so a merge
 //      seen here is already on the head read next.
 //   3. The production branch's head. Unchanged since the last sync with
 //      nothing merged to settle: done.
 //   4. Every file under `.oxagen/rules/` at that head, planned against the
 //      registry and written in one transaction (context.steering.sync.store).
-//   5. The settings workspace.toml sets at that head, written to the
-//      workspace row. A problem with the file is a warning.
+//   5. workspace.toml at that head. Its settings go to the workspace row, and
+//      its `[[repositories]]` list moves the linked heads (ADR-212,
+//      repository.link.reconcile): an entry that appears since the last synced
+//      head is linked, and one that goes away is unlinked. This runs once per
+//      synced head, here and never in step 8. A problem with the file, or a
+//      repository the sync cannot link, is a warning.
 //   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset. A
 //      proposal a merge from Oxagen has claimed is left to that merge.
@@ -34,13 +38,8 @@ import {
   CHECK_NAMES,
   type CheckResult,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
-import {
-  type FileIssue,
-  readTomlFile,
-} from "@oxagen/oxagen/steering-repo/files";
+import type { FileIssue } from "@oxagen/oxagen/steering-repo/files";
 import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
-import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
-import { workspaceSchema } from "@oxagen/oxagen/steering-repo/workspace";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -65,6 +64,14 @@ import {
   type SyncStore,
 } from "./context.steering.sync.store";
 import { logger } from "./logger";
+import {
+  type ReconcileLinks,
+  reconcileWorkspaceLinks,
+} from "./repository.link.reconcile";
+import {
+  listedRepositories,
+  readWorkspaceToml,
+} from "./repository.workspace-toml";
 import { withToolProjection } from "./mcp-studio/publish-deps";
 import { steeringSyncPublish } from "./steering-repo/publisher";
 
@@ -107,6 +114,11 @@ export interface SyncDeps {
    * publishes also writes the workspace's tool registry.
    */
   publish?: SyncPublish;
+  /**
+   * Moves the linked heads to match workspace.toml's `[[repositories]]` list
+   * (ADR-212). Unset, the sync leaves every head alone.
+   */
+  reconcileLinks?: ReconcileLinks;
 }
 
 export function syncDeps(): SyncDeps {
@@ -116,6 +128,7 @@ export function syncDeps(): SyncDeps {
     store: postgresSyncStore,
     steering: postgresSteeringStore,
     now: () => new Date(),
+    reconcileLinks: reconcileWorkspaceLinks,
     // The same publisher merge_context_pr calls, over the same host, so a
     // merge made on the host reaches the same version sequence.
     publish: steeringSyncPublish({ host: github, extend: withToolProjection }),
@@ -247,39 +260,81 @@ interface SettingsRead {
   /** The settings to write, or null to keep the ones the workspace has. */
   publish: PublishedWorkspaceSettings | null;
   findings: SyncFinding[];
+  /** The repositories the file lists, or null when nobody can tell. */
+  repositories: string[] | null;
 }
 
 /**
- * The settings workspace.toml sets at `ref` (workspace/v1). With no such
- * file, the workspace falls back to every default. A file of that name whose
- * first line does not name workspace/v1 is some other tool's configuration,
- * so it sets nothing either.
+ * The settings and the linked repositories workspace.toml sets at `ref`
+ * (workspace/v1), read the way `link_repository` reads it
+ * (repository.workspace-toml). With no such file, the workspace falls back to
+ * every default and no linked head moves. A file of that name whose first line
+ * does not name workspace/v1 is some other tool's configuration, so it sets
+ * nothing and moves no head either.
  *
- * A workspace/v1 file that does not read cleanly leaves the last settings in
- * place and becomes one warning. It is never an error: the file may sit at the
- * root of a code repository, and its check must not fail over a file the
- * record sync does not own.
+ * A workspace/v1 file that does not read cleanly leaves the last settings and
+ * the linked heads in place, and becomes one warning. It is never an error: a
+ * steering repository that was a code repository before may still carry
+ * another tool's file there, and the check must not fail over it.
  */
 async function readWorkspaceSettings(
   github: SteeringHost,
   repo: SteeringRepository,
   ref: string,
 ): Promise<SettingsRead> {
-  const text = await github.readFile(repo, WORKSPACE_TOML_PATH, ref);
-  // A byte-order mark or a CRLF ending does not hide a workspace/v1 file.
-  // The reader below reports either one.
-  const firstLine = text?.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0];
-  if (text === null || firstLine !== schemaDirective("workspace/v1"))
-    return { publish: { stellaArchiveAfterDays: null }, findings: [] };
-  const read = readTomlFile(text, "workspace/v1", workspaceSchema);
-  if (read.ok)
-    return {
-      publish: {
-        stellaArchiveAfterDays: read.value.stella?.archive_after_days ?? null,
-      },
-      findings: [],
-    };
-  return { publish: null, findings: [settingsFinding(read.issues)] };
+  const file = readWorkspaceToml(
+    await github.readFile(repo, WORKSPACE_TOML_PATH, ref),
+  );
+  switch (file.kind) {
+    case "missing":
+    case "foreign":
+      // No workspace/v1 file lists nothing, and a slip on its first line
+      // would otherwise unlink every repository it listed. Removal takes a
+      // file that still reads and no longer lists the repository.
+      return {
+        publish: { stellaArchiveAfterDays: null },
+        findings: [],
+        repositories: null,
+      };
+    case "unreadable":
+      return {
+        publish: null,
+        findings: [settingsFinding(file.issues)],
+        repositories: null,
+      };
+    case "read":
+      return {
+        publish: {
+          stellaArchiveAfterDays: file.value.stella?.archive_after_days ?? null,
+        },
+        findings: [],
+        repositories: file.repositories,
+      };
+  }
+}
+
+/**
+ * The repositories workspace.toml listed at the last synced head, or null
+ * when nobody can tell: no head was synced before, it was another repository's
+ * head, or the file there did not read. A commit the host no longer has reads
+ * as a missing file, which lists nothing, so no head is removed on its word.
+ */
+async function priorRepositories(
+  github: SteeringHost,
+  repo: SteeringRepository,
+  prior: SyncState | null,
+  head: string,
+  current: string[],
+): Promise<string[] | null> {
+  if (prior?.headSha == null) return null;
+  if (prior.provider !== repo.provider || prior.repository !== repo.fullName)
+    return null;
+  if (prior.headSha === head) return current;
+  return listedRepositories(
+    readWorkspaceToml(
+      await github.readFile(repo, WORKSPACE_TOML_PATH, prior.headSha),
+    ),
+  );
 }
 
 /** A workspace.toml that did not read cleanly, as one warning. */
@@ -336,7 +391,7 @@ export async function syncWorkspaceSteering(
   try {
     repo = await deps.github.resolveRepository(scope);
   } catch (err) {
-    // No main repository is a workspace with nothing to sync, not a failure.
+    // No steering repository is a workspace with nothing to sync, not a failure.
     // A request the webhook already stamped is answered, though: an
     // unanswered stamp reads as pending for good, and the page would refresh
     // itself forever waiting for it.
@@ -347,7 +402,7 @@ export async function syncWorkspaceSteering(
           ...prior,
           status: "failed",
           error:
-            "This workspace has no main repository Oxagen can read, so there is nothing to sync.",
+            "This workspace has no steering repository Oxagen can read, so there is nothing to sync.",
           syncedAt: deps.now(),
         });
       return { ...outcome, outcome: "no_repository" };
@@ -449,10 +504,9 @@ export async function syncWorkspaceSteering(
       });
     }
 
-    // 5. The settings in workspace.toml at that head. Any push can change
-    // them, so the file is read whenever the head moves. Otherwise its last
-    // findings stand. A read that fails stops the sync, and the next run
-    // reads the file again.
+    // 5. workspace.toml at that head. Any push can change it, so the file is
+    // read whenever the head moves. Otherwise its last findings stand. A read
+    // that fails stops the sync, and the next run reads the file again.
     let settingsFindings = (prior?.findings ?? []).filter(
       (f) => f.path === WORKSPACE_TOML_PATH,
     );
@@ -461,6 +515,24 @@ export async function syncWorkspaceSteering(
       if (settings.publish)
         await deps.store.publishWorkspaceSettings(scope, settings.publish);
       settingsFindings = settings.findings;
+      // The linked heads follow the list. With no workspace/v1 file that
+      // reads, none moves. The prior list is the last synced head's, and a
+      // failed sync keeps that head, so the next run compares the same two
+      // lists again.
+      if (deps.reconcileLinks && settings.repositories !== null) {
+        const reconciled = await deps.reconcileLinks(scope, {
+          prior: await priorRepositories(
+            deps.github,
+            repo,
+            prior,
+            head,
+            settings.repositories,
+          ),
+          current: settings.repositories,
+          now,
+        });
+        settingsFindings = [...settingsFindings, ...reconciled.findings];
+      }
     }
     findings = [
       ...findings.filter((f) => f.path !== WORKSPACE_TOML_PATH),
@@ -704,7 +776,13 @@ async function dropBranch(
   }
 }
 
-/** Keep the last good head and findings, and say why this run failed. */
+/**
+ * Keep the last good head and findings, and say why this run failed. A head
+ * the prior state took from another steering repository is not kept: stored
+ * beside the new repository's name, it would make the next run read that
+ * repository at the old repository's sha, and a reconcile there could remove
+ * heads on a list the new repository never held.
+ */
 async function recordFailure(
   deps: SyncDeps,
   scope: { orgId: string; workspaceId: string },
@@ -712,15 +790,20 @@ async function recordFailure(
   err: unknown,
   repo?: SteeringRepository,
 ): Promise<void> {
+  const kept =
+    repo === undefined ||
+    (prior?.provider === repo.provider && prior?.repository === repo.fullName)
+      ? prior
+      : null;
   try {
     await deps.store.writeState(scope, {
       provider: repo?.provider ?? prior?.provider ?? null,
       repository: repo?.fullName ?? prior?.repository ?? null,
       branch: repo?.defaultBranch ?? prior?.branch ?? null,
-      headSha: prior?.headSha ?? null,
-      rulesSha: prior?.rulesSha ?? null,
+      headSha: kept?.headSha ?? null,
+      rulesSha: kept?.rulesSha ?? null,
       status: "failed",
-      findings: prior?.findings ?? [],
+      findings: kept?.findings ?? [],
       error: err instanceof Error ? err.message : String(err),
       syncedAt: deps.now(),
     });

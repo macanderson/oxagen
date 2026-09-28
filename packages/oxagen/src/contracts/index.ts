@@ -76,6 +76,8 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
+import { tachoMemoriesIngest } from "./tacho.memories.ingest";
+import { tachoMemoriesRecall } from "./tacho.memories.recall";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
@@ -122,6 +124,8 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { spendOperatorRanking } from "./spend.operator_ranking";
+import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -757,6 +761,8 @@ export {
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
+  tachoMemoriesRecall,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -825,6 +831,8 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1175,6 +1183,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
+  tachoMemoriesRecall,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1243,6 +1253,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,

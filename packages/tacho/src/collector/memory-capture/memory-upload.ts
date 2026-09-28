@@ -1,7 +1,9 @@
 /**
  * The daemon's `send` for the memory reader: one POST per memory to the
  * control plane's `/v1/tacho/memories`, authenticated by the host API key,
- * the way the GitHub broker mints a token.
+ * the way the GitHub broker mints a token. The body names the host, the
+ * harness, the file, and its statement (`ingest_tacho_memories`). The API
+ * refuses any other field, so an old collector's extra fields answer 400.
  *
  * Resolving marks the entry sent, and rejecting leaves it for the next scan.
  * A 404 means the API does not take memories yet. It is logged once, and the
@@ -22,7 +24,11 @@ const ENTRY_REFUSED: ReadonlySet<number> = new Set([400, 413, 422]);
 
 export interface MemoryUploadDeps {
   /** Read at every send, so a renewed key is the one used. */
-  host: () => { api_url: string; api_key: string };
+  host: () => {
+    api_url: string;
+    api_key: string;
+    host_enrollment_id: string;
+  };
   fetch: FetchLike;
   log: (line: string) => void;
   timeoutMs?: number;
@@ -64,12 +70,10 @@ export function createMemoryUpload(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            source: "local_gateway",
+            host_enrollment_id: host.host_enrollment_id,
             harness: entry.harness,
             path: entry.path,
             statement: entry.statement,
-            contentDigest: entry.contentDigest,
-            modifiedAt: entry.modifiedAt,
           }),
           signal: controller.signal,
         },

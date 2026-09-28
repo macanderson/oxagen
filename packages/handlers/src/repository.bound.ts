@@ -8,6 +8,11 @@
 // binding carries that id, and a client minted from the installation attached
 // to the workspace's live GitHub connection. The caller never names an
 // installation, for the reason `bind_main_repository` gives.
+//
+// A steering repository the provisioner created is the one exception. Its head
+// hangs from a `github_steering` connection, and only the Oxagen Steering app
+// can see it. A caller that names the head's connection gets a client minted
+// from that app's installation instead.
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import {
   createGitHubClient,
@@ -16,7 +21,11 @@ import {
   type GitHubRepoInfo,
 } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
+import {
+  GITHUB_STEERING_PROVIDER,
+  mintSteeringInstallationToken,
+} from "./lib/steering-app";
 import { resolveWorkspaceGithubInstallation } from "./repository.github-connection";
 
 type Scope = { orgId: string; workspaceId: string };
@@ -130,14 +139,99 @@ export async function readBoundRepository(
   return bound;
 }
 
+/**
+ * The installation id on a `github_steering` connection's delivery config, as
+ * a positive integer, or null when it holds none. The provisioner writes a
+ * number. A string of digits reads too, because the settings-path GitHub
+ * connections store theirs as one. `context.steering.github.ts` holds a
+ * private copy of the same rule.
+ */
+export function steeringInstallationIdOf(config: unknown): number | null {
+  const raw =
+    config !== null && typeof config === "object"
+      ? (config as { installationId?: unknown }).installationId
+      : undefined;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * The refusal for a `github_steering` connection with no installation id.
+ * Every GitHub call would otherwise fail with a 404 that names no cause.
+ */
+export function steeringInstallationMissing(fullName?: string): HandlerError {
+  const what = fullName
+    ? `The steering repository ${fullName}`
+    : "This steering repository";
+  return new HandlerError({
+    code: "conflict",
+    reason: "steering_installation_missing",
+    message: `${what} hangs from an Oxagen Steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
+  });
+}
+
+/**
+ * The Oxagen Steering installation a live `github_steering` connection names,
+ * or null when the connection is any other kind, retired, or not in this
+ * workspace. Refuses with `conflict: steering_installation_missing` when a
+ * steering connection holds no usable installation id.
+ */
+export async function readSteeringInstallationId(
+  scope: Scope,
+  connectionId: string,
+): Promise<number | null> {
+  const connection = schema.sourceConnections;
+  const [row] = await withTenantDb((tx) =>
+    tx
+      .select({
+        connectorId: connection.connectorId,
+        deliveryConfig: connection.deliveryConfig,
+      })
+      .from(connection)
+      .where(
+        and(
+          eq(connection.orgId, scope.orgId),
+          eq(connection.workspaceId, scope.workspaceId),
+          eq(connection.id, connectionId),
+          isNull(connection.deletedAt),
+          notInArray(connection.status, ["deleting", "deleted"]),
+        ),
+      )
+      .limit(1),
+  );
+  if (!row || row.connectorId !== GITHUB_STEERING_PROVIDER) return null;
+  const installationId = steeringInstallationIdOf(row.deliveryConfig);
+  if (installationId === null) throw steeringInstallationMissing();
+  return installationId;
+}
+
 /** Where a handler gets its GitHub client; the tests pass a fake. */
 export interface WorkspaceGithub {
-  /** A client for the workspace's installation, or null when none is attached. */
-  client(scope: Scope): Promise<GitHubClient | null>;
+  /**
+   * A client for the workspace's installation, or null when none is
+   * attached. A caller that names a head's `connectionId` gets the Oxagen
+   * Steering installation's client when that connection is `github_steering`.
+   */
+  client(scope: Scope, connectionId?: string): Promise<GitHubClient | null>;
 }
 
 export const workspaceGithub: WorkspaceGithub = {
-  async client(scope) {
+  async client(scope, connectionId) {
+    // The steering connection comes first. A workspace whose only repository
+    // is its provisioned steering repository has no installation of its own,
+    // and the workspace read below would answer null for it.
+    if (connectionId !== undefined) {
+      const steering = await readSteeringInstallationId(scope, connectionId);
+      if (steering !== null) {
+        const token = await mintSteeringInstallationToken(steering);
+        return createGitHubClient({ token });
+      }
+    }
     const installation = await resolveWorkspaceGithubInstallation(scope);
     if (!installation) return null;
     const appId = process.env["GITHUB_APP_ID"];
@@ -156,12 +250,16 @@ export const workspaceGithub: WorkspaceGithub = {
   },
 };
 
-/** The client, or `conflict: github_not_connected`. */
+/**
+ * The client, or `conflict: github_not_connected`. Pass the bound head's
+ * `connectionId` so a steering repository reads through its own app.
+ */
 export async function requireWorkspaceGithub(
   github: WorkspaceGithub,
   scope: Scope,
+  connectionId?: string,
 ): Promise<GitHubClient> {
-  const client = await github.client(scope);
+  const client = await github.client(scope, connectionId);
   if (!client) {
     throw new HandlerError({
       code: "conflict",

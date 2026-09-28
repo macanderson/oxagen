@@ -1106,6 +1106,7 @@ export function runSource(reads: RunReads) {
           ? refuse()
           : Promise.resolve(reads.priceBook);
       },
+      operatorRanking: refuse,
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

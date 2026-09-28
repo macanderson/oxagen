@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   recordInterjectionFrames: vi.fn(),
   fetchAgentRunAuthzIn: vi.fn(),
   selectAgentDaySpend: vi.fn(),
+  linkedRepositoryDigestsIn: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
@@ -66,7 +68,16 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
 });
 
 vi.mock("./logger", () => ({
-  logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn() },
+  logger: { error: mocks.loggerError, warn: mocks.loggerWarn, info: vi.fn() },
+}));
+
+// The linked-repository read joins the workspace's binding heads, bindings,
+// and connections, which this file's fake does not carry. The read itself
+// and its savepoint run against Postgres in `onboarding.pg.test.ts`. Here the
+// question is what ingest stamps from its answer.
+vi.mock("./lib/run-work", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/run-work")>()),
+  linkedRepositoryDigestsIn: mocks.linkedRepositoryDigestsIn,
 }));
 vi.mock("./lib/onboarding", () => ({
   unlockOnboardingGate: mocks.unlockOnboardingGate,
@@ -191,10 +202,12 @@ function unsealed(
 /**
  * One ordinary wrapped session, sealed. `agent` adds members to every frame's
  * `agent` block before the seal, so a batch can name principals of its own
- * and still verify (#2951).
+ * and still verify (#2951). `context` adds members to every frame's `context`
+ * block the same way.
  */
 function session(
   agent: Partial<UnsealedTachoEvent["agent"]> = {},
+  context: Partial<NonNullable<UnsealedTachoEvent["context"]>> = {},
 ): TachoEvent[] {
   let cursor: ChainCursor = GENESIS_CURSOR;
   const out: TachoEvent[] = [];
@@ -255,7 +268,11 @@ function session(
     }),
   ]) {
     const sealed = sealEvent(
-      { ...draft, agent: { ...draft.agent, ...agent } } as UnsealedTachoEvent,
+      {
+        ...draft,
+        agent: { ...draft.agent, ...agent },
+        context: { ...draft.context, ...context },
+      } as UnsealedTachoEvent,
       cursor,
     );
     cursor = sealed.next;
@@ -1105,6 +1122,8 @@ beforeEach(() => {
     grants: [],
     policies: [],
   });
+  // No repository is linked unless a case links one.
+  mocks.linkedRepositoryDigestsIn.mockResolvedValue(new Set());
 });
 
 describe("ingest_tacho_events", () => {
@@ -2201,6 +2220,104 @@ describe("ingest_tacho_events", () => {
       expect(db.membershipLookups).not.toHaveBeenCalled();
       for (const update of db.updates.filter((u) => u.table === "sessions"))
         expect(update.values).not.toHaveProperty("operatorRole");
+    });
+  });
+
+  // #4516: whether the session's git remote matched a repository linked to
+  // the workspace when it opened. Stamped once, at genesis. It refuses
+  // nothing, and the cost goes to the key's workspace either way.
+  describe("unlinked repository stamp", () => {
+    const LINKED = digestBytes("github.com/acme/widgets");
+    const UNLINKED = digestBytes("github.com/acme/elsewhere");
+
+    it("stamps true when the session's remote matches no linked repository", async () => {
+      const db = fakeDb();
+      wire(db);
+      mocks.linkedRepositoryDigestsIn.mockResolvedValue(new Set([LINKED]));
+      const events = session({}, { git_remote_digest: UNLINKED });
+      const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(output.accepted).toBe(events.length);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        gitRemoteDigest: UNLINKED,
+        repositoryUnlinked: true,
+      });
+      // The read names the key's workspace, never one the batch chose.
+      expect(mocks.linkedRepositoryDigestsIn).toHaveBeenCalledOnce();
+      expect(mocks.linkedRepositoryDigestsIn).toHaveBeenCalledWith(
+        expect.anything(),
+        { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
+      );
+    });
+
+    it("stamps false when the session's remote matches a linked repository", async () => {
+      const db = fakeDb();
+      wire(db);
+      mocks.linkedRepositoryDigestsIn.mockResolvedValue(new Set([LINKED]));
+      await tachoEventsIngestHandler(
+        batch(session({}, { git_remote_digest: LINKED })),
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        gitRemoteDigest: LINKED,
+        repositoryUnlinked: false,
+      });
+    });
+
+    it("stamps false, and reads nothing, for a session with no git remote", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(batch(session()), CONTEXT);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        gitRemoteDigest: null,
+        repositoryUnlinked: false,
+      });
+      expect(mocks.linkedRepositoryDigestsIn).not.toHaveBeenCalled();
+    });
+
+    it("stamps false and still accepts the batch when the read fails", async () => {
+      const db = fakeDb();
+      wire(db);
+      const failure = new Error("connection reset");
+      mocks.linkedRepositoryDigestsIn.mockRejectedValue(failure);
+      const events = session({}, { git_remote_digest: UNLINKED });
+      const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(output.accepted).toBe(events.length);
+      expect(output.event_ids).toEqual(events.map((e) => e.event_id_idem));
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        gitRemoteDigest: UNLINKED,
+        repositoryUnlinked: false,
+      });
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: failure,
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+          sessionUuid: SESSION,
+        }),
+        expect.stringContaining("repository_unlinked false"),
+      );
+    });
+
+    it("never rewrites the stamp on a later batch", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = session({}, { git_remote_digest: UNLINKED });
+      await tachoEventsIngestHandler(batch(events.slice(0, 3)), CONTEXT);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        repositoryUnlinked: true,
+      });
+
+      // The repository is linked between the two batches.
+      mocks.linkedRepositoryDigestsIn.mockResolvedValue(new Set([UNLINKED]));
+      mocks.linkedRepositoryDigestsIn.mockClear();
+      await tachoEventsIngestHandler(batch(events.slice(3)), CONTEXT);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        repositoryUnlinked: true,
+        outcome: "completed",
+      });
+      expect(mocks.linkedRepositoryDigestsIn).not.toHaveBeenCalled();
+      for (const update of db.updates.filter((u) => u.table === "sessions"))
+        expect(update.values).not.toHaveProperty("repositoryUnlinked");
     });
   });
 
