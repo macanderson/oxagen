@@ -44,3 +44,6 @@ export * from "./execute";
 
 // Replay of recorded calls (lane M16).
 export * from "./replay";
+
+// Search-mode ranking by embeddings (lane M15).
+export * from "./search";

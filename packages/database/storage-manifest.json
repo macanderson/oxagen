@@ -4292,7 +4292,7 @@
       "writes": []
     }
   ],
-  "contentHash": "44326c02d2d4ab5ae6a9c1c5b20c3837e53e86614c9a4e4a80e4e381c6406929",
+  "contentHash": "3e57069e4b0a256c7aa2b9d0b18c0f4e87aad868be3037a0d35467f923e24671",
   "domains": [
     {
       "name": "agent",
@@ -4573,6 +4573,7 @@
         "postgres:mcp.credentials",
         "postgres:mcp.mcp_servers",
         "postgres:mcp.registries",
+        "postgres:mcp.search_embeddings",
         "postgres:mcp.tool_snapshots"
       ]
     },
@@ -4776,7 +4777,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 171
+      "tableCount": 172
     },
     {
       "domains": [
@@ -19372,6 +19373,64 @@
       "domain": "mcp",
       "id": "postgres:mcp.registries",
       "name": "registries",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "target_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "content_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "dimensions",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "vector",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.search_embeddings",
+      "name": "search_embeddings",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
