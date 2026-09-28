@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => {
     resolveCredentialKms: vi.fn(),
     decryptCredentialSecrets: vi.fn(),
     httpEmbedder: vi.fn(),
+    searchUsageRecorder: vi.fn(),
+    usageSink: vi.fn(),
     warn: vi.fn(),
   };
 });
@@ -53,6 +55,8 @@ vi.mock("@oxagen/mcp-studio", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/mcp-studio")>();
   return { ...real, httpEmbedder: mocks.httpEmbedder };
 });
+
+vi.mock("./search-usage", () => ({ searchUsageRecorder: mocks.searchUsageRecorder }));
 
 vi.mock("../logger", () => ({ logger: { warn: mocks.warn, info: vi.fn() } }));
 
@@ -161,6 +165,7 @@ describe("embedderFor", () => {
 
   it("sends Oxagen's provider to Voyage with the deployment's key and an input type", async () => {
     vi.stubEnv("VOYAGE_API_KEY", "voyage-test-key");
+    mocks.searchUsageRecorder.mockReturnValue(mocks.usageSink);
 
     const embedder = await embedderFor(OXAGEN, SCOPE);
 
@@ -171,7 +176,10 @@ describe("embedderFor", () => {
       key: OXAGEN.key,
       apiKey: "voyage-test-key",
       inputType: true,
+      onUsage: mocks.usageSink,
     });
+    // Each request's tokens go to token_usage under this workspace's scope.
+    expect(mocks.searchUsageRecorder).toHaveBeenCalledWith(SCOPE, "voyage-4-large");
   });
 
   it("throws no_key without quoting anything when the deployment has no Voyage key", async () => {
