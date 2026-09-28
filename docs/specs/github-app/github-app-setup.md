@@ -427,14 +427,53 @@ organization owner to authorize Oxagen Steering again. A retry starts from that 
 
 ### Webhook subscriptions
 
-Provisioning needs no webhook. Leave **Active** off under **Webhook**, and subscribe to no events.
+Oxagen Steering sends webhooks so Oxagen hears about a change to a steering repo's settings when
+it happens. Provisioning needs none of them.
+
+| Field | Dev | Prod |
+| --- | --- | --- |
+| **Active** | On | On |
+| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://api.oxagen.sh/webhooks/github/app` |
+| **Secret** | value of `OXAGEN_STEERING_APP_WEBHOOK_SECRET` (dev) | value of `OXAGEN_STEERING_APP_WEBHOOK_SECRET` (prod) |
+| **SSL verification** | Enable | Enable |
+
+The URL is the one the Oxagen app uses. The route
+(`apps/api/src/routes/v1/github-webhook.ts`) tells a steering delivery apart by its
+`x-github-hook-installation-target-id` header, which equals `OXAGEN_STEERING_APP_ID`. It verifies
+the delivery with `OXAGEN_STEERING_APP_WEBHOOK_SECRET` alone and sends it to the steering repo
+health read. A steering delivery never reaches ingestion or the installation lifecycle in
+[Webhooks](#webhooks). The route can tell a steering delivery apart only while
+`OXAGEN_STEERING_APP_ID` is set. While the ID is set and `OXAGEN_STEERING_APP_WEBHOOK_SECRET` is
+unset, the route answers every steering delivery with 200, logs an error, and asks for no health
+read.
+
+Subscribe to these events:
+
+| GitHub event | Why Oxagen reads it |
+| --- | --- |
+| `repository_ruleset` | A ruleset was created, edited, or deleted. |
+| `branch_protection_configuration` | Branch protection was turned on or off. |
+| `repository` | The repository was edited, renamed, transferred, archived, unarchived, deleted, or made public or private. |
+| `push` | Someone pushed to `main`. Oxagen merges every commit on `main`, so a push can mean the repo diverged. |
+| `pull_request` | A steering PR opened, reopened, became ready for review, or got a new head, so its check needs posting. |
+
+GitHub sends `installation` and `installation_repositories` without a subscription. Oxagen reads
+them when a steering repo leaves the installation, or when the app is suspended or removed.
+
+Each delivery that can change a steering repo's health sends one `steering-repo/health.requested`
+event per scope that holds the repo (`packages/handlers/src/steering-repo/health.events.ts`). The
+durable job `steering-repo/health-check`
+(`packages/inngest-functions/src/functions/steering-repo.sweep.ts`) reads the repo's settings and
+stores its health. While the repo is not healthy, the job fails the `Oxagen steering` check on
+every open steering PR. The job `steering-repo/health-sweep` asks for the same read for every ready
+steering repo every 10 minutes, so a lost delivery delays a drift report until the next sweep.
 
 ### Configuration
 
-Set five variables on the **`api`** service, where the connect routes and the provisioning job
-run. `steeringAppFromEnv()` in `packages/handlers/src/steering_repo.provision.ts` reads the App ID,
-the private key and the slug. When any of those is unset, or the App ID is not a positive integer,
-provisioning stops with `steering_app_unconfigured`. The connect routes read all five and
+Set six variables on the **`api`** service, where the connect routes, the webhook route, and the
+provisioning job run. `steeringAppFromEnv()` in `packages/handlers/src/steering_repo.provision.ts`
+reads the App ID, the private key and the slug. When any of those is unset, or the App ID is not a positive integer,
+provisioning stops with `steering_app_unconfigured`. The connect routes read the first five and
 `GITHUB_APP_INSTALL_STATE_SECRET`, which signs the connect's state. When one is unset, the connect
 answers 503 with `steering_app_unconfigured` and names the variable.
 
@@ -445,6 +484,10 @@ answers 503 with `steering_app_unconfigured` and names the variable.
 | `OXAGEN_STEERING_APP_CLIENT_SECRET` | yes | api (steering connect) | Dev Steering App → generated client secret | Prod Steering App → generated client secret |
 | `OXAGEN_STEERING_APP_PRIVATE_KEY` | yes | api (steering provisioning) | Dev Steering App → generated private key (PEM) | Prod Steering App → generated private key (PEM) |
 | `OXAGEN_STEERING_APP_SLUG` | no | api (steering provisioning) | Dev Steering App → public slug | Prod Steering App → public slug |
+| `OXAGEN_STEERING_APP_WEBHOOK_SECRET` | yes | api (steering webhook) | Dev Steering App → webhook secret | Prod Steering App → webhook secret |
+
+The connect routes and provisioning do not read `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Only the
+webhook route in [Webhook subscriptions](#webhook-subscriptions) reads it.
 
 Oxagen compares the slug with the app GitHub names on the `steering` deployment when it reads the
 settings back.
@@ -465,13 +508,14 @@ under your organization's settings to own it at the organization level.
 5. Leave **Expire user authorization tokens** off. Provisioning reuses the stored owner token, and
    no job refreshes it.
 6. Leave **Setup URL** blank.
-7. Turn **Webhook → Active** off.
+7. Turn **Webhook → Active** on. Set the URL, the secret, and the events in
+   [Webhook subscriptions](#webhook-subscriptions).
 8. Grant every permission in [Permissions](#permissions). Then add **Administration: Read and
    write** and **Deployments: Read and write**.
 9. Set **Where can this GitHub App be installed?** to **Any account** for production, so customers
    can install it on their organizations. **Only on this account** is fine for development.
 10. Generate a private key and a client secret. Copy the App ID, the Client ID and the public slug.
-    Set the five variables in [Configuration](#configuration).
+    Set the six variables in [Configuration](#configuration), with the webhook secret from step 7.
 11. Ask an organization owner to install the app on the GitHub organization, on all repositories or
     on selected repositories.
 
@@ -490,6 +534,11 @@ group token, which belongs to something other than this group. Oxagen stores the
 Steering on GitHub. The
 token's bot user acts on steering repos. The prescribed settings protect `main` so no one pushes
 and only that bot user merges. That protection needs GitLab Premium.
+
+The GitLab webhook route (`apps/api/src/routes/v1/gitlab-webhook.ts`) asks for a steering repo
+health read on a push to `main`, on a merge request with a new head, and on a project or
+membership event that names the project. Provisioning registers no project hook on a GitLab steering repo yet (#4562), so today the
+10-minute sweep finds drift on GitLab.
 
 ---
 
