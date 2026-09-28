@@ -5,6 +5,21 @@ const mocks = vi.hoisted(() => ({
   whereMock: vi.fn(),
   fromMock: vi.fn(),
   selectMock: vi.fn(),
+  providerTokens: vi.fn(),
+  weeklyPrice: vi.fn(),
+}));
+
+// The standing context reads (#4537) default to nothing listed and no
+// priced week, so the roster tests below read null for both.
+mocks.providerTokens.mockResolvedValue([]);
+mocks.weeklyPrice.mockResolvedValue(null);
+vi.mock("@oxagen/telemetry", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
+  selectToolProviderTokens: mocks.providerTokens,
+}));
+vi.mock("@oxagen/billing", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/billing")>()),
+  readWeeklyContextPrice: mocks.weeklyPrice,
 }));
 
 // Rows written before #4132's joins carry no listing or credential columns;
@@ -198,6 +213,81 @@ describe("agent.mcp.list handler", () => {
     const beforeWhere = mocks.whereMock.mock.calls.length;
     await agentMcpListHandler({}, CTX);
     expect(mocks.whereMock.mock.calls.length - beforeWhere).toBe(1);
+  });
+
+  describe("standing context (#4537)", () => {
+    const row = (publicId: string, name: string) => ({
+      publicId,
+      name,
+      transportType: "sse",
+      endpointUrl: "https://mcp.example.com/sse",
+      healthStatus: "healthy",
+      lastHealthcheckAt: null,
+      discoveredTools: ["a"],
+    });
+
+    const PRICE = {
+      perThousandMicros: 48_000n,
+      currency: "USD",
+      requests: 400,
+      unpricedRequests: 0,
+      since: new Date("2026-09-20T00:00:00Z"),
+    };
+
+    it("gives each server the tokens listed under its name, priced at the week's rate", async () => {
+      mocks.selectResult.mockReturnValueOnce([
+        row("mcp_1", "github"),
+        row("mcp_2", "linear"),
+      ]);
+      mocks.providerTokens.mockResolvedValueOnce([
+        { provider: "github", tokens: 5_200, listedAt: "2026-09-26 12:00:00.000" },
+        { provider: "builtin", tokens: 9_100, listedAt: "2026-09-26 12:00:00.000" },
+      ]);
+      mocks.weeklyPrice.mockResolvedValueOnce(PRICE);
+      const result = await agentMcpListHandler({}, CTX);
+      // 5,200 tokens at 48,000 micros per 1,000 is 249,600 micros.
+      expect(
+        result.servers.map((s) => [s.name, s.contextTokens, s.weeklyPrice]),
+      ).toEqual([
+        [
+          "github",
+          5_200,
+          { micros: "249600", currency: "USD", basis: "estimated" },
+        ],
+        ["linear", null, null],
+      ]);
+      expect(mocks.weeklyPrice).toHaveBeenLastCalledWith(
+        { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+        expect.any(Date),
+      );
+      const window = mocks.providerTokens.mock.lastCall![0] as {
+        fromMs: number;
+        toMs: number;
+      };
+      expect(window.toMs - window.fromMs).toBe(7 * 24 * 60 * 60 * 1000);
+      expect(agentMcpList.output.parse(result)).toEqual(result);
+    });
+
+    it("keeps the tokens and prices nothing when the price read fails (negative)", async () => {
+      mocks.selectResult.mockReturnValueOnce([row("mcp_1", "github")]);
+      mocks.providerTokens.mockResolvedValueOnce([
+        { provider: "github", tokens: 5_200, listedAt: "2026-09-26 12:00:00.000" },
+      ]);
+      mocks.weeklyPrice.mockRejectedValueOnce(new Error("price book down"));
+      const result = await agentMcpListHandler({}, CTX);
+      expect(result.servers[0]?.contextTokens).toBe(5_200);
+      expect(result.servers[0]?.weeklyPrice).toBeNull();
+    });
+
+    it("lists the servers with null figures when both reads fail (negative)", async () => {
+      mocks.selectResult.mockReturnValueOnce([row("mcp_1", "github")]);
+      mocks.providerTokens.mockRejectedValueOnce(new Error("clickhouse down"));
+      mocks.weeklyPrice.mockRejectedValueOnce(new Error("price book down"));
+      const result = await agentMcpListHandler({}, CTX);
+      expect(result.servers).toHaveLength(1);
+      expect(result.servers[0]?.contextTokens).toBeNull();
+      expect(result.servers[0]?.weeklyPrice).toBeNull();
+    });
   });
 
   describe("authorization (#4132)", () => {

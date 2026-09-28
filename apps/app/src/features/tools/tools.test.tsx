@@ -666,6 +666,7 @@ describe("Tools › providers tab", () => {
       "Provider",
       "Transport",
       "Tools",
+      "Weekly price",
       "Toolbelts",
       "Agents",
       "Health",
@@ -687,9 +688,14 @@ describe("Tools › providers tab", () => {
     ).toBeVisible();
     expect(stripe.getByText("12 pinned at last check")).toBeVisible();
     expect(stripe.getByText("ok")).toBeVisible();
-    // Toolbelts, Agents, Last import. Connection is the status light and
-    // Authorization how the provider authenticates.
-    expect(stripe.getAllByText("not recorded")).toHaveLength(3);
+    // Weekly price (no listing names Stripe), Toolbelts, Agents, Last import.
+    // Connection is the status light and Authorization how the provider
+    // authenticates.
+    expect(stripe.getAllByText("not recorded")).toHaveLength(4);
+    expect(stripe.getByTestId("provider-weekly-mcs_01k5s1")).toHaveAttribute(
+      "data-state",
+      "absent",
+    );
     expect(stripe.getByTestId("provider-status-mcs_01k5s1")).toHaveAttribute(
       "data-light",
       "green",
@@ -751,6 +757,8 @@ describe("Tools › providers tab", () => {
                 authKind: "none",
                 iconUrl: null,
                 authorization: null,
+                contextTokens: null,
+                weeklyPrice: null,
               },
             ],
           }),
