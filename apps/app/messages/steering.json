@@ -612,7 +612,6 @@
         "invalid": "Write a reason before you dismiss the proposal.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed.",
-        "approvalRequired": "This steering PR needs an approval from a workspace member other than the author. An owner, or a member allowed to merge without review, may merge it without one.",
         "repositoryUnhealthy": "The workspace repository's settings need repair, so Oxagen merges nothing until they are fixed. Runs keep the last published version.",
         "tooManyFiles": "This steering PR changes too many files to merge. Nothing was merged.",
         "versionMismatch": "The steering version this PR was checked against is not the one in force. Run the checks again.",

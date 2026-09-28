@@ -512,11 +512,18 @@
         "byCalls": "What each tool cost is not recorded, so the tools are listed by calls.",
         "byCost": "Each tool's cost is an estimate: its result tokens at the run's input rate. It is part of the run's cost, not added to it.",
         "resultsTitle": "The tools' result tokens at the run's input rate, an estimate inside the run's cost",
+        "standingTitle": "Re-sent on every call after the first: {split}, an estimate inside the run's cost",
+        "sources": {
+          "toolDefinitions": "{count, plural, one {# token} other {# tokens}} of tool definitions",
+          "steering": "{count, plural, one {# token} other {# tokens}} of steering",
+          "contextFrames": "{count, plural, one {# token} other {# tokens}} of context frames"
+        },
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
         "unnamedTool": "A tool the record did not name",
         "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteWithResults": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Tool calls is the tools' result tokens at the run's input rate, an estimate. How the rest of a request splits between the other five is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithStanding": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Every call after the first re-sent the run's standing context: {split}. Those tokens are priced at the run's cache read rate, or its input rate when it read nothing from the cache, and they are an estimate. {results, select, yes {Tool calls is the tools' result tokens at the run's input rate, an estimate. } other {}}How the rest of a request splits between the other areas is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },
       "calls": {
