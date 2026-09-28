@@ -5,20 +5,91 @@ vi.mock("@oxagen/ai", () => ({
   selectModelFromFunding: vi.fn(),
 }));
 vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: vi.fn() }));
-import { uniqueRunName } from "./run-enrichment";
+import {
+  accountName,
+  accountSummary,
+  ENRICHMENT_BUDGET_NOTE,
+  partialEvidenceNote,
+} from "./run-enrichment";
 
-describe("uniqueRunName", () => {
-  it("puts the run id in parentheses after the name", () => {
-    expect(uniqueRunName("Repair authentication", "tse_12345678")).toBe(
-      "Repair authentication (tse_12345678)",
-    );
-    expect(uniqueRunName("  Fix login ", "tse_1")).toBe("Fix login (tse_1)");
-    expect(uniqueRunName("Fix login", "tse_1")).not.toMatch(/·/);
+const points = (text: string | null): number => Array.from(text ?? "").length;
+
+describe("accountName", () => {
+  it("keeps the model's name as the session name, with no run id (#4571)", () => {
+    expect(accountName("Repair authentication")).toBe("Repair authentication");
+    expect(accountName("  Fix   login ")).toBe("Fix login");
   });
 
-  it("stays within 80 characters and keeps the id whole", () => {
-    const name = uniqueRunName("x".repeat(100), "tse_12345678");
-    expect(name).toHaveLength(80);
-    expect(name.endsWith(" (tse_12345678)")).toBe(true);
+  it("strips the quotes a model wraps a name in", () => {
+    expect(accountName('"Repair authentication"')).toBe(
+      "Repair authentication",
+    );
+    expect(accountName("“Fix login”")).toBe("Fix login");
+  });
+
+  it("never passes 72 code points", () => {
+    const name = accountName("Repair the authentication redirect ".repeat(5));
+    expect(points(name)).toBeLessThanOrEqual(72);
+    expect(name).toMatch(/^Repair the authentication redirect/);
+  });
+
+  it("returns null when nothing is left, so the run keeps its title", () => {
+    expect(accountName('""')).toBeNull();
+    expect(accountName("   ")).toBeNull();
+  });
+});
+
+describe("accountSummary", () => {
+  const long = Array.from(
+    { length: 6 },
+    (_, i) => `Sentence ${i + 1} ${"says more ".repeat(12)}.`,
+  ).join(" ");
+
+  it("keeps a short summary as written", () => {
+    expect(accountSummary("Fixed the redirect.", "")).toBe(
+      "Fixed the redirect.",
+    );
+  });
+
+  it("keeps at most three sentences and 400 code points", () => {
+    const summary = accountSummary(long, "");
+    expect(points(summary)).toBeLessThanOrEqual(400);
+    expect(summary).toContain("Sentence 1");
+    expect(summary).not.toContain("Sentence 4");
+    expect(accountSummary("One. Two. Three. Four.", "")).toBe(
+      "One. Two. Three.",
+    );
+  });
+
+  it("keeps the notes whole and the total within 400", () => {
+    const notes = partialEvidenceNote(3) + ENRICHMENT_BUDGET_NOTE;
+    const summary = accountSummary(long, notes);
+    expect(points(summary)).toBeLessThanOrEqual(400);
+    expect(summary.endsWith(notes)).toBe(true);
+    expect(summary).toContain("Sentence 1");
+    expect(summary).not.toContain("Sentence 2");
+  });
+
+  it("counts each note toward the three-sentence cap", () => {
+    expect(accountSummary("One. Two. Three.", partialEvidenceNote(2))).toBe(
+      "One. Two. Evidence is partial: 2 recorded bodies were unavailable.",
+    );
+    expect(
+      accountSummary(
+        "One. Two. Three.",
+        partialEvidenceNote(2) + ENRICHMENT_BUDGET_NOTE,
+      ),
+    ).toBe(
+      `One. Evidence is partial: 2 recorded bodies were unavailable.${ENRICHMENT_BUDGET_NOTE}`,
+    );
+  });
+});
+
+describe("partialEvidenceNote", () => {
+  it("says how many bodies were unavailable, and nothing when none were", () => {
+    expect(partialEvidenceNote(2)).toBe(
+      " Evidence is partial: 2 recorded bodies were unavailable.",
+    );
+    expect(partialEvidenceNote(0)).toBe("");
   });
 });

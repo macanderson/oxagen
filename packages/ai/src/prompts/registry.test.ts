@@ -107,9 +107,12 @@ describe("registry ownership (ADR-043)", () => {
 });
 
 describe("conversationTitlePrompt", () => {
-  it("asks for a short Title Case title and nothing else", () => {
+  it("asks for a sentence-case subject of at most 72 characters and nothing else", () => {
     const prompt = conversationTitlePrompt();
-    expect(prompt).toMatch(/Title Case/);
-    expect(prompt).toMatch(/Return only the title/);
+    expect(prompt).toMatch(/at most 72 characters/);
+    expect(prompt).toMatch(/sentence case/);
+    expect(prompt).toMatch(/Fix conflicts on PR 123/);
+    expect(prompt).toMatch(/Return only the subject line/);
+    expect(prompt).not.toMatch(/Title Case/);
   });
 });

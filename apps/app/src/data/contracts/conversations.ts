@@ -72,8 +72,9 @@ export const AssistantSession = z.object({
   /** The `cnv_` id the flyout opens it by. */
   id: PublicId,
   /**
-   * The first question, as `ask_assistant` titles a conversation it opens.
-   * Null for a conversation opened before it did, which the list shows as
+   * A subject of at most 72 characters named from the first question, or a
+   * name the person or the fast model tier gave it later. Null only when the
+   * first question had no words in it, which the list shows as
    * "Untitled session".
    */
   title: z.string().nullable(),
