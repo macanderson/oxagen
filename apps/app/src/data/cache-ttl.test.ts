@@ -1,16 +1,42 @@
 // cache-ttl.test.ts — which open finding's TTL recommendation the agent page
 // shows: the newest one about the agent that names the cache TTL.
 import { describe, expect, it } from "vitest";
-import { spendFindings } from "@/features/agents/agents.builders";
 import { cacheTtlOf } from "./cache-ttl";
 import type { SpendFinding, SpendFindings } from "./contracts/spend";
 
 const AGENT = "acme.core.release-bot";
 
 function listOf(findings: Partial<SpendFinding>[]): SpendFindings {
-  const read = spendFindings(findings);
-  if (!read.ok) throw new Error("the builder answers every read");
-  return read.value;
+  return {
+    window: null,
+    saving: null,
+    spend: null,
+    share: null,
+    annualised: null,
+    counts: {
+      findings: findings.length,
+      high: findings.length,
+      medium: 0,
+      operators: 0,
+    },
+    findings: findings.map((finding) => ({
+      id: "fnd_01",
+      kind: "duplicate_tool_calls",
+      level: "agent",
+      subject: AGENT,
+      saving: { micros: "2000000", currency: "USD", basis: "gateway_observed" },
+      confidence: "high",
+      window: {
+        from: "2026-09-01T00:00:00.000Z",
+        to: "2026-09-15T00:00:00.000Z",
+      },
+      why: "The same read ran twice on eleven turns.",
+      fix: "Cache the first result.",
+      runs: 3,
+      calls: 22,
+      ...finding,
+    })),
+  };
 }
 
 function idle(
