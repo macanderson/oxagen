@@ -215,9 +215,11 @@ describe("convertOxagenTree: workspace.toml and governance", () => {
   });
 
   it("refuses a steering repo whose workspace.toml names another workspace", () => {
+    // `billing` is a reserved slug, so a file naming it reads as unreadable
+    // before the workspace comparison runs. `payments` is a legal slug.
     const other = (EXPECTED.get("workspace.toml") as string).replace(
       'workspace = "core-platform"',
-      'workspace = "billing"',
+      'workspace = "payments"',
     );
     expect(convertOxagenTree(input({ workspaceToml: other }))).toMatchObject({
       ok: false,
@@ -235,7 +237,7 @@ describe("convertOxagenTree: workspace.toml and governance", () => {
     const files = withFiles({
       ".oxagen/workspace.toml": (INPUT.get(".oxagen/workspace.toml") as string).replace(
         'slug = "core-platform"',
-        'slug = "billing"',
+        'slug = "payments"',
       ),
     });
     expect(convertOxagenTree(input({ files }))).toMatchObject({
