@@ -120,7 +120,8 @@ type DefinitionFile = { path: string; text: string };
 type StudioDraftSource =
   | {
       type: "mcp";
-      lockSource: string;
+      /** The lock's source object, parsed; never a JSON string. */
+      lockSource: Readonly<Record<string, unknown>>;
       tools: readonly Readonly<Record<string, unknown>>[];
     }
   | {
@@ -131,7 +132,11 @@ type StudioDraftSource =
       commit?: string;
     }
   | { type: "graphql"; sdl: string; commit?: string }
-  | { type: "graphql"; introspection: string }
+  | {
+      type: "graphql";
+      /** The introspection result, parsed; never a JSON string. */
+      introspection: Readonly<Record<string, unknown>>;
+    }
   | { type: "grpc"; files: readonly DefinitionFile[]; commit?: string }
   | { type: "grpc"; reflection: readonly string[] };
 
@@ -139,7 +144,8 @@ type StudioDraftSource =
  * One save of a server's draft (`save_studio_draft`). The ops replace the
  * stored ones. `revision` is the stored revision the draft was built on: 0
  * for a draft never saved, so a save over someone else's is refused with
- * `conflict` rather than overwriting it.
+ * `conflict` rather than overwriting it. The page always sends it, because
+ * a save with no revision overwrites whatever is stored.
  *
  * The browser sends neither `serverToml` nor `source`. The definition can
  * run to 25 MiB, so PR2's server action attaches the recorded one whenever
