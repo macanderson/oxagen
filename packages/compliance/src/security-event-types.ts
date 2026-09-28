@@ -427,6 +427,13 @@ export interface RunOutcomesPolicyChangeDetail {
   reason: string | null;
 }
 
+/** A workspace's operator pseudonyms turned on or off (spend spec, Operator ranking). */
+export interface OperatorPseudonymsChangeDetail {
+  feature: "operator_ranking";
+  change: "pseudonyms";
+  enabled: boolean;
+}
+
 export interface RunIssueAuthorizationDetail {
   feature: "run_outcomes";
   provider: "linear";
@@ -653,6 +660,7 @@ export type SecurityEventDetail =
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
+  | OperatorPseudonymsChangeDetail
   | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail

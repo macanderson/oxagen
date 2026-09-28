@@ -336,6 +336,8 @@ import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
+import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
+import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
 import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
@@ -797,6 +799,10 @@ orgScoped.route("/runs/summarize", runSummarizeRoute);
 orgScoped.route("/spend", spendGetRoute);
 orgScoped.route("/spend/drill", spendDrillRoute);
 orgScoped.route("/spend/waste", spendWasteListRoute);
+// The operator ranking by unproductive spend (managers only) and its
+// pseudonym setting (spend spec, Operator ranking).
+orgScoped.route("/spend/operators", spendOperatorRankingRoute);
+orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
 // are organization-level (`scoped: false`). Set writes the active workspace or

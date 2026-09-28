@@ -48,7 +48,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **secret** (8): delete_secret_key, export_secrets, import_env_secrets, list_secret_keys, reveal_secret, set_secret_value, unset_secret_value, upsert_secret_key
 - **shell** (1): get_nav_counts
 - **skill** (6): get_skill_config, list_skills, preview_skill_search, propose_skill, summarize_skill_search, update_skill_config
-- **spend** (13): create_cost_center, delete_cost_center, dismiss_finding, export_cost_center_statement, export_statement, get_finding_evidence, get_spend, get_spend_drill, list_cost_centers, list_findings, list_waste, record_finding_fix, set_cost_center
+- **spend** (15): create_cost_center, delete_cost_center, dismiss_finding, export_cost_center_statement, export_statement, get_finding_evidence, get_operator_ranking, get_spend, get_spend_drill, list_cost_centers, list_findings, list_waste, record_finding_fix, set_cost_center, set_operator_pseudonyms
 - **system** (1): get_install_instructions
 - **tacho** (17): add_group_machine, create_enrollment_token, create_github_token, create_tacho_enrollment, enroll_host, get_tacho_bundle, get_tacho_session, get_tacho_session_policy, ingest_tacho_events, list_incidents, list_machine_groups, list_tacho_hosts, list_tacho_sessions, register_contained_launch, remove_group_machine, revoke_tacho_enrollment, update_tacho_session_policy
 - **telemetry** (3): create_stella_enrollment, ingest_stella_operational_telemetry, list_error_clusters

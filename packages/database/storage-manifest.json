@@ -1358,6 +1358,15 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_operator_ranking",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_org_settings",
       "reads": [],
@@ -1714,6 +1723,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "get_steering_repo",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -3118,6 +3137,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "repair_steering_repo",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "request_mandate",
       "reads": [],
@@ -3566,6 +3595,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "set_operator_pseudonyms",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4236,7 +4274,7 @@
       "writes": []
     }
   ],
-  "contentHash": "3451f8f0bfd544387f9b501296f61c0288302e99d4859412b74d4357e9c86e64",
+  "contentHash": "22e179758804294b7ceb8740feb505ed20ef8823e5970e0de259f4e4960dd35e",
   "domains": [
     {
       "name": "agent",
@@ -4679,6 +4717,7 @@
       "tables": [
         "neo4j:Workspace",
         "postgres:workspace.no_progress_policy",
+        "postgres:workspace.operator_ranking_policy",
         "postgres:workspace.routing_policy",
         "postgres:workspace.tacho_session_policy",
         "postgres:workspace.workspace_budget_policy",
@@ -4719,7 +4758,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 170
+      "tableCount": 171
     },
     {
       "domains": [
@@ -25287,6 +25326,64 @@
       "domain": "workspace",
       "id": "postgres:workspace.no_progress_policy",
       "name": "no_progress_policy",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "pseudonyms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "pseudonym_salt",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "workspace",
+      "id": "postgres:workspace.operator_ranking_policy",
+      "name": "operator_ranking_policy",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

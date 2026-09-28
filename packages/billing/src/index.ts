@@ -32,6 +32,8 @@ export * from "./class-cost";
 export * from "./cache-savings";
 export * from "./cost-rollup";
 export * from "./cost-rollup-store";
+export * from "./standing-context-price";
+export * from "./standing-context-price-store";
 export {
   countClaims,
   type ClaimRow,
@@ -40,8 +42,10 @@ export {
 } from "./findings";
 export {
   listWorkspacesForFindings,
+  readUnproductiveClaims,
   readUnproductiveSpend,
   runFindingsPass,
+  type UnproductiveClaim,
 } from "./findings-store";
 export * from "./run-pr-outcomes";
 export {

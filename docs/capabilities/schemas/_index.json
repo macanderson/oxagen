@@ -1494,6 +1494,16 @@
       "consumes": []
     },
     {
+      "name": "get_operator_ranking",
+      "domain": "spend",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_org_settings",
       "domain": "org",
       "surfaces": [
@@ -3941,6 +3951,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
