@@ -127,7 +127,8 @@ function duplicateKeys(text: string): string[] {
       while (/\s/.test(text[next] ?? "")) next++;
       const top = stack.at(-1);
       if (text[next] === ":" && top?.keys) {
-        const key = JSON.parse(raw) as string;
+        const key: unknown = JSON.parse(raw);
+        if (typeof key !== "string") continue;
         if (top.keys.has(key)) duplicates.push(`${top.path}${key}`);
         top.keys.add(key);
         lastKey = key;
