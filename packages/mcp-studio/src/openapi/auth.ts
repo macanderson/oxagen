@@ -4,6 +4,8 @@
 // server.toml's auth.scheme can name. Each entry of servers becomes a
 // SuggestedEnvironment. An entry import cannot express leaves a note.
 import { httpUrlSchema } from "../contract/primitives";
+import { parseEndpoint } from "../execute/endpoint";
+import { BuildError } from "../execute/util";
 import type { ImportNote, SuggestedAuth, SuggestedEnvironment } from "../model/import-result";
 import { securitySchemeSchema, type SecurityScheme } from "../model/security-scheme";
 import { isList, isRecord, recordField, stringField, type JsonRecord } from "./json";
@@ -140,7 +142,18 @@ function expandServerUrl(url: string, server: JsonRecord): string {
   });
 }
 
-/** The environments the document suggests: each absolute URL in servers. */
+/** Why the executor refuses url as an API's base url, or undefined when it accepts it. */
+function baseUrlRefusal(url: string): string | undefined {
+  try {
+    parseEndpoint(url, "base");
+    return undefined;
+  } catch (error) {
+    if (error instanceof BuildError) return error.message;
+    throw error;
+  }
+}
+
+/** The environments the document suggests: each absolute URL in servers the executor can call. */
 export function readEnvironments(document: JsonRecord, notes: ImportNote[]): SuggestedEnvironment[] {
   const servers = isList(document.servers) ? document.servers : [];
   const environments: SuggestedEnvironment[] = [];
@@ -153,6 +166,17 @@ export function readEnvironments(document: JsonRecord, notes: ImportNote[]): Sug
       note(
         notes,
         `Import skipped the server "${raw}", because it is not an absolute http or https URL. ` +
+          "Set the environment's url in server.toml.",
+      );
+      continue;
+    }
+    // The executor reads an environment's url as a base url, and refuses a
+    // query, a fragment, and an IPv6 host. Offering one would fail every call.
+    const refusal = baseUrlRefusal(url);
+    if (refusal !== undefined) {
+      note(
+        notes,
+        `Import skipped the server "${raw}", because a tool call cannot use it as a base url. ${refusal} ` +
           "Set the environment's url in server.toml.",
       );
       continue;

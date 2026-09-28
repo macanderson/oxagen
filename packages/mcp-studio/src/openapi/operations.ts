@@ -2,10 +2,11 @@
 // (mcp-studio-spec, Mapping: OpenAPI).
 //
 // Path-level and operation-level parameters merge, and the operation's win.
-// Every parameter and the request body become one inputSchema. The first 2xx
-// response with a JSON schema becomes the outputSchema, and an array result
-// is wrapped as { items }. Webhooks and callbacks are listed and never
-// become tools.
+// Every parameter and the request body become one inputSchema, except a
+// parameter with content instead of schema, which is skipped with a note.
+// The first 2xx response with a JSON schema becomes the outputSchema, and an
+// array result is wrapped as { items }. Webhooks and callbacks are listed and
+// never become tools.
 import type { ImportNote, ListedEntry } from "../model/import-result";
 import {
   cutDescription,
@@ -103,12 +104,7 @@ class ToolBuilder {
   }
 
   private parameterSchema(parameter: JsonRecord): unknown {
-    let source = parameter.schema;
-    if (source === undefined) {
-      const content = recordField(parameter, "content");
-      const first = content === undefined ? undefined : Object.values(content)[0];
-      source = isRecord(first) ? first.schema : undefined;
-    }
+    const source = parameter.schema;
     const expanded = source === undefined ? {} : this.resolver.schema(source, "input");
     const schema: JsonRecord = isRecord(expanded) ? { ...expanded } : {};
     const description = stringField(parameter, "description");
@@ -142,14 +138,31 @@ class ToolBuilder {
       }
       if (this.skipped.has(key)) continue;
       if (where === "header" && GATEWAY_HEADERS.has(name.toLowerCase())) continue;
+      if (this.skipContent(name, where, parameter)) continue;
       this.addParameter(name, where as Location, parameter);
     }
+  }
+
+  /**
+   * A parameter with content instead of schema is sent as that media type,
+   * such as JSON text under one name. The template sends a parameter by its
+   * style only, so import skips it rather than send the value another way.
+   */
+  private skipContent(name: string, where: string, parameter: JsonRecord): boolean {
+    const content = parameter.schema === undefined ? recordField(parameter, "content") : undefined;
+    if (content === undefined) return false;
+    const media = normalizeMedia(Object.keys(content)[0] ?? "");
+    const as = media === "" ? "content" : media;
+    const outcome = parameter.required === true || where === "path" ? " The API requires it, so a call to this tool fails." : "";
+    this.note(`Import skipped the ${where} parameter ${name}, because the gateway cannot send a parameter as ${as}.${outcome}`);
+    return true;
   }
 
   private addParameter(name: string, where: Location, parameter: JsonRecord): void {
     let property = name;
     if (Object.hasOwn(this.properties, property)) {
       property = `${name}_${where}`;
+      for (let n = 2; Object.hasOwn(this.properties, property); n += 1) property = `${name}_${where}_${n}`;
       this.note(`Two parameters are named ${name}, so the ${where} parameter's input is ${property}.`);
     }
     const required = where === "path" || parameter.required === true;
