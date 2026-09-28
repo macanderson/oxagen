@@ -7,7 +7,7 @@ description = "Payments, refunds, and invoices in the a-intel Stripe account."
 [source]
 type = "remote"                            # remote, registry, local, or openapi
 url = "https://mcp.stripe.com"
-transport = "http"                         # http or sse
+transport = "http"                         # http, MCP's streamable HTTP
 
 [auth]
 mode = "service"                           # none, service, or operator-oauth

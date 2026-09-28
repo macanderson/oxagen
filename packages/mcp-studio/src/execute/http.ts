@@ -144,14 +144,36 @@ function headerText(parameter: HttpParameter, value: unknown): string {
   return text;
 }
 
-/** A cookie parameter's value: the form style without explode, sent as written. */
-function cookieText(parameter: HttpParameter, value: unknown): string {
+/**
+ * A cookie parameter's cookies, as [name, value], by the form style and sent
+ * as written. Explode defaults to true, as for a form query parameter.
+ * Exploded, a list sends one cookie per item under the parameter's name, and
+ * an object sends one cookie per property under the property's name.
+ * Unexploded, the parameter sends one cookie that joins the items, or the
+ * keys and values, with commas.
+ */
+function cookiePairs(parameter: HttpParameter, value: unknown): Array<[string, string]> {
+  const name = checkedName(parameter);
+  const explode = parameter.explode ?? (parameter.style ?? "form") === "form";
   const shape = shapeOf(value, parameter.name);
-  const text = shape.kind === "scalar" ? shape.text : shape.kind === "list" ? shape.items.join(",") : shape.entries.flat().join(",");
-  if (UNSAFE_COOKIE_VALUE.test(text)) {
-    throw invalidArguments(`The cookie ${parameter.name} holds a semicolon, a line break, or a NUL, so no request can carry it.`);
+  const pairs: Array<[string, string]> =
+    shape.kind === "scalar"
+      ? [[name, shape.text]]
+      : !explode
+        ? [[name, shape.kind === "list" ? shape.items.join(",") : shape.entries.flat().join(",")]]
+        : shape.kind === "list"
+          ? shape.items.map((item): [string, string] => [name, item])
+          : shape.entries;
+  for (const [cookie, text] of pairs) {
+    // An exploded object's keys come from the arguments and name cookies, so each is checked.
+    if (!TOKEN.test(cookie)) {
+      throw invalidArguments(`The cookie ${parameter.name} holds a key that is not an HTTP token, so no cookie can take it as a name.`);
+    }
+    if (UNSAFE_COOKIE_VALUE.test(text)) {
+      throw invalidArguments(`The cookie ${parameter.name} holds a semicolon, a line break, or a NUL, so no request can carry it.`);
+    }
   }
-  return text;
+  return pairs;
 }
 
 /** One query pair: the raw name and value for the recording, and the encoded pair for the target. */
@@ -316,7 +338,7 @@ export function buildHttpExchange(
       const lower = parameter.name.toLowerCase();
       if (RESERVED_HEADERS.has(lower) || lower === idempotencyHeader?.toLowerCase()) continue;
       headerParams.push([checkedName(parameter), headerText(parameter, value)]);
-    } else cookies.push([checkedName(parameter), cookieText(parameter, value)]);
+    } else cookies.push(...cookiePairs(parameter, value));
   }
   const body = buildBody(template, args);
 
@@ -338,12 +360,15 @@ export function buildHttpExchange(
   const credential = placeCredential(context.auth, context.credential, context.environment.network);
   const pairs = [...query.map((q) => q.encoded), ...credential.query.map(([name, value]) => queryPair(name, value))];
   const target = httpTarget(endpoint, template.method, withQuery(`${endpoint.path}${path}`, pairs));
+  // A parameter cookie that takes the credential cookie's name is not sent, as a reserved header is not.
+  const credentialCookies = new Set(credential.cookies.map(([name]) => name));
+  const parameterCookies = cookies.filter(([name]) => !credentialCookies.has(name));
   const headers: HeaderEntry[] = [
     ...headerParams,
     ["Accept", template.response?.media_type ?? "application/json"],
     ...(body === undefined ? [] : [["Content-Type", body.media_type] as const]),
     ...(idempotency === undefined ? [] : [idempotency]),
-    ...cookieHeader([...cookies, ...credential.cookies]),
+    ...cookieHeader([...parameterCookies, ...credential.cookies]),
     ...credential.headers,
   ];
   return {

@@ -29,7 +29,7 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 vi.mock("@oxagen/agent/runtime/steering-pr", () => ({
-  MOVABLE_TRANSPORTS: ["streamable-http", "sse"],
+  MOVABLE_TRANSPORTS: ["streamable-http"],
   steeringWriter: mocks.steeringWriter,
 }));
 
@@ -52,8 +52,8 @@ const LISTING = {
   name: "Linear",
   pluginType: "mcp_server",
   enabled: true,
-  endpointUrl: "https://mcp.linear.app/sse",
-  transport: "sse",
+  endpointUrl: "https://mcp.linear.app/mcp",
+  transport: "streamable-http",
   authKind: "oauth",
   deletedAt: null,
 };
@@ -166,7 +166,7 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
     expect(mocks.steeringWriter).toHaveBeenCalledWith({ orgId: "org-1", workspaceId: "ws-1" });
     expect(txLog[2]).toMatchObject({
       op: "insert",
-      values: { origin: "proposed", enabled: false, orgListingId: "porg-1", transportType: "sse" },
+      values: { origin: "proposed", enabled: false, orgListingId: "porg-1", transportType: "streamable-http" },
     });
     expect(mocks.addServer).toHaveBeenCalledWith({
       orgId: "org-1",
@@ -315,6 +315,8 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
     // An existing proposal the upsert enables becomes a legacy row.
     const origin = new PgDialect().sqlToQuery(txLog[1]?.conflictSet?.origin as SQL).sql;
     expect(origin).toMatch(/CASE WHEN .*"origin" = 'proposed' THEN 'legacy' ELSE .*"origin" END/);
+    // A streamable-http row keeps its folder name, so projection still holds a steering row.
+    expect(txLog[1]?.conflictSet).not.toHaveProperty("steeringName");
   });
 
   it("never asks for a writer for a stdio plugin", async () => {
@@ -324,6 +326,34 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
 
     expect(mocks.steeringWriter).not.toHaveBeenCalled();
     expect(mocks.addServer).not.toHaveBeenCalled();
+  });
+
+  it("enables an sse plugin as a legacy row, because review refuses sse (ADR-211)", async () => {
+    queue([{ ...LISTING, transport: "sse" }], [{ publicId: "mcp-pub-1" }]);
+
+    const result = await handler(ENABLE, ctx);
+
+    expect(result).toEqual({ ok: true, workspaceServerId: "mcp-pub-1" });
+    expect(mocks.steeringWriter).not.toHaveBeenCalled();
+    expect(mocks.addServer).not.toHaveBeenCalled();
+    expect(txLog[1]).toMatchObject({ op: "insert", values: { enabled: true, transportType: "sse" } });
+  });
+
+  it("turns an existing sse row into an unnamed legacy row when it enables it (ADR-211)", async () => {
+    // A row steering held before ADR-211 stays under projection while it keeps
+    // its origin and folder name, and projection retires it when someone
+    // removes the folder review now refuses. The conflict update releases it.
+    queue([{ ...LISTING, transport: "sse" }], [{ publicId: "mcp-pub-2" }]);
+
+    const result = await handler(ENABLE, ctx);
+
+    expect(result).toEqual({ ok: true, workspaceServerId: "mcp-pub-2" });
+    expect(mocks.steeringWriter).not.toHaveBeenCalled();
+    expect(txLog[1]?.conflictSet).toMatchObject({
+      enabled: true,
+      origin: "legacy",
+      steeringName: null,
+    });
   });
 
   it("disables directly without asking for a writer", async () => {
