@@ -19,10 +19,10 @@ pre-commit:
       run: cd packages/database && atlas migrate validate --dir "file://atlas/migrations"
 
     # Format staged TS/TSX/JS/JSON files with Biome (the sole formatter, see
-    # ADR-015) and re-stage the result. Scoped to staged files only. CI's
-    # `checks` job runs `pnpm format:check` over the whole tree (#4055), so a
-    # file this hook never saw still fails there. This hook keeps the author's
-    # own change formatted before it gets that far.
+    # ADR-015) and re-stage the result. Scoped to staged files only. Nothing
+    # checks the whole tree yet: #4055 formats the tree once, then adds
+    # `pnpm format:check` to CI. Until then this hook is the only check, and a
+    # file it never saw can reach main unformatted.
     # --no-errors-on-unmatched: a commit whose only staged match is a file
     # biome.json ignores (packages/database/storage-manifest.json, which
     # `pnpm schema:manifest` regenerates and CI requires committed) is not a
@@ -46,9 +46,9 @@ pre-commit:
     # docs/, .agents/, and .claude/ are excluded (docs + agent/skill assets
     # are not part of the typed source tree).
     #
-    # ADR-015: Biome (above) covers pre-commit formatting on staged files, and
-    # `pnpm format:check` in CI covers the whole tree (#4055). Test suites run
-    # in CI, not in any git hook (see the pre-push note below).
+    # ADR-015: Biome (above) covers pre-commit formatting on staged files. The
+    # whole-tree check in CI waits on #4055. Test suites run in CI, not in any
+    # git hook (see the pre-push note below).
     lint:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:
