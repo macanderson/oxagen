@@ -144,15 +144,15 @@ describe("serverColumns", () => {
     expect(columns.discoveredTools).toEqual(["create_refund", "list_charges"]);
   });
 
-  it("maps sse, local and registry sources, and a server with no auth", () => {
+  it("maps remote, local, and registry sources, and a server with no auth", () => {
     const stripe = server("stripe");
-    const sse = serverColumns({
+    const remote = serverColumns({
       ...stripe,
       auth: null,
-      source: { type: "remote", url: "https://mcp.example.com/sse", transport: "sse", network: "cloud" },
+      source: { type: "remote", url: "https://mcp.example.com/mcp", transport: "http", network: "cloud" },
     } as typeof stripe);
-    expect(sse.transportType).toBe("sse");
-    expect(sse.authStrategy).toBe("none");
+    expect(remote.transportType).toBe("streamable-http");
+    expect(remote.authStrategy).toBe("none");
 
     const local = serverColumns({
       ...stripe,

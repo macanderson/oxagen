@@ -48,6 +48,39 @@ export const httpUrlSchema = z
     "a URL starts with https:// or http:// and has no user name or password",
   );
 
+/** Review's message for a server or lock that names the older HTTP+SSE transport (ADR-211). */
+export const SSE_REFUSAL =
+  "sse is the older HTTP+SSE transport, which the gateway does not call. Point url at the server's streamable-http endpoint and set transport to http.";
+
+const httpOnlySchema = z.enum(["http"]);
+
+/** SSE_REFUSAL for sse, and zod's own enum message for any other value. */
+function transportMessage(value: string): string {
+  if (value === "sse") return SSE_REFUSAL;
+  const parsed = httpOnlySchema.safeParse(value);
+  if (parsed.success) return "";
+  return parsed.error.issues[0]?.message ?? "transport is http";
+}
+
+/**
+ * How the gateway reaches a remote MCP server: http, MCP's streamable HTTP
+ * transport. The relay and the executor carry nothing else, so review refuses
+ * sse with a message that names streamable-http (ADR-211). Any other value
+ * keeps zod's message.
+ *
+ * It is a refined string, not a z.enum, because a failed enum aborts its
+ * object. The source union then reports only "Invalid input" at source, and
+ * the refusal never reaches the person. A failed refinement leaves the union
+ * the remote source's own issue, at source.transport. The JSON Schema still
+ * publishes the enum.
+ */
+export const remoteTransportSchema = withJsonSchema(z.string(), {
+  enum: ["http"],
+}).refine(
+  (value): value is "http" => value === "http",
+  (value) => ({ message: transportMessage(value) }),
+);
+
 /** A relay's name, as `relay:<name>` writes it. */
 export const RELAY_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 

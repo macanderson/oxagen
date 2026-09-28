@@ -2,6 +2,7 @@
 // ledger server built from M0's ledger.proto fixture.
 import type { JsonObject } from "@bufbuild/protobuf";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { recordedExchangeSchema } from "../../contract/tests-files";
 import type { SendResult } from "../sender";
 import { createGrpcCarrier } from "./carrier";
 import {
@@ -116,6 +117,12 @@ describe("a unary call", () => {
       ok: false,
       error: { title: "NOT_FOUND", detail: "No entry e_9.", status: 5 },
       attempts: 1,
+      exchanges: [
+        {
+          request: { method: GET_ENTRY.method, message: { id: "e_9" } },
+          response: { code: "NOT_FOUND", message: "No entry e_9." },
+        },
+      ],
     });
   });
 
@@ -123,6 +130,7 @@ describe("a unary call", () => {
     const result = await sender.send(GET_ENTRY, { id: "e_1", color: "red" }, context());
     expect(result.attempts).toBe(0);
     expectError(result, "Invalid arguments", undefined);
+    expect(result.exchanges).toEqual([]);
     expect(server.calls).toEqual([]);
   });
 });
@@ -147,7 +155,13 @@ describe("a server stream", () => {
   it("returns an empty stream as no items", async () => {
     server.handlers.ListEntries = () => undefined;
     const result = await sender.send(LIST_ENTRIES, {}, context());
-    expect(result).toEqual({ ok: true, value: { items: [], truncated: false }, attempts: 1 });
+    expect(result).toEqual({
+      ok: true,
+      value: { items: [], truncated: false },
+      attempts: 1,
+      // grpc-js ends every call that succeeds with the status message OK.
+      exchanges: [{ request: { method: LIST_ENTRIES.method, message: {} }, response: { code: "OK", message: "OK" } }],
+    });
   });
 
   it("stops at max_items and cancels the rest of the stream", async () => {
@@ -207,6 +221,8 @@ describe("retries on UNAVAILABLE", () => {
     server.handlers.GetEntry = flaky(2);
     const result = await sender.send(GET_ENTRY, { id: "e_1" }, context());
     expect(result).toMatchObject({ ok: true, attempts: 3, value: { id: "e_1" } });
+    expect(result.exchanges).toHaveLength(1);
+    expect(result.exchanges?.[0]?.response).toMatchObject({ code: "OK" });
     expect(server.callsTo("GetEntry")).toHaveLength(3);
   });
 
@@ -232,6 +248,12 @@ describe("retries on UNAVAILABLE", () => {
       ok: false,
       error: { title: "UNAVAILABLE", detail: "The ledger is restarting.", status: UNAVAILABLE },
       attempts: 4,
+      exchanges: [
+        {
+          request: { method: GET_ENTRY.method, message: { id: "e_1" } },
+          response: { code: "UNAVAILABLE", message: "The ledger is restarting." },
+        },
+      ],
     });
     expect(server.callsTo("GetEntry")).toHaveLength(4);
   });
@@ -272,7 +294,91 @@ describe("retries on UNAVAILABLE", () => {
       ok: false,
       error: { title: "UNAVAILABLE", detail: "The ledger went away.", status: UNAVAILABLE },
       attempts: 1,
+      exchanges: [
+        {
+          request: { method: LIST_ENTRIES.method, message: {} },
+          response: {
+            code: "UNAVAILABLE",
+            message: "The ledger went away.",
+            messages: [expect.objectContaining({ id: "e_1" })],
+          },
+        },
+      ],
     });
     expect(server.callsTo("ListEntries")).toHaveLength(1);
+  });
+});
+
+describe("the recorded exchange", () => {
+  it("holds the request as sent and the response, with no credential", async () => {
+    server.handlers.GetEntry = (request) => entry(idOf(request));
+    const result = await sender.send(
+      GET_ENTRY,
+      { id: "e_1" },
+      context({ credential: { type: "bearer", token: "tok_1" } }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: GET_ENTRY.method, message: { id: "e_1" } },
+        response: { code: "OK", message: "OK", messages: [result.value] },
+      },
+    ]);
+    const [exchange] = result.exchanges ?? [];
+    expect(recordedExchangeSchema.safeParse(exchange).success).toBe(true);
+    const recorded = JSON.stringify(result.exchanges);
+    expect(recorded).not.toContain("tok_1");
+    expect(recorded).not.toMatch(/authorization|bearer/i);
+  });
+
+  it("holds the request message in its canonical proto3 JSON form", async () => {
+    server.handlers.PostEntry = () => entry("e_1");
+    const result = await sender.send(
+      POST_ENTRY,
+      { account_id: "acct_1", kind: 1, money: { amount: 1250, currency: "USD" } },
+      context(),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.exchanges?.[0]?.request).toEqual({
+      method: POST_ENTRY.method,
+      message: { accountId: "acct_1", kind: "ENTRY_KIND_DEBIT", money: { amount: "1250", currency: "USD" } },
+    });
+  });
+
+  it("holds a stream's messages and its status", async () => {
+    server.handlers.ListEntries = (_, { write }) => {
+      write(entry("e_1"));
+      write(entry("e_2"));
+    };
+    const result = await sender.send(LIST_ENTRIES, { accountId: "acct_1" }, context());
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: LIST_ENTRIES.method, message: { accountId: "acct_1" } },
+        response: {
+          code: "OK",
+          message: "OK",
+          messages: [expect.objectContaining({ id: "e_1" }), expect.objectContaining({ id: "e_2" })],
+        },
+      },
+    ]);
+    expect(recordedExchangeSchema.safeParse(result.exchanges?.[0]).success).toBe(true);
+  });
+
+  it("ends a stream the Sender cut at max_items with CANCELLED", async () => {
+    server.handlers.ListEntries = async (_, { write, cancelled }) => {
+      for (const id of ["e_1", "e_2", "e_3"]) write(entry(id));
+      await cancelled;
+    };
+    const result = await sender.send(LIST_ENTRIES, {}, context({ max_items: 2 }));
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: LIST_ENTRIES.method, message: {} },
+        response: {
+          code: "CANCELLED",
+          messages: [expect.objectContaining({ id: "e_1" }), expect.objectContaining({ id: "e_2" })],
+        },
+      },
+    ]);
   });
 });
