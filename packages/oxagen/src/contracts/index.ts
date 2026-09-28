@@ -303,6 +303,8 @@ import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
+import { steeringRepoGet } from "./steering_repo.get";
+import { steeringRepoRepair } from "./steering_repo.repair";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -947,6 +949,8 @@ export {
   contextRecordsGet,
   contextSteeringFreshness,
   contextSteeringDeliveries,
+  steeringRepoGet,
+  steeringRepoRepair,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1364,6 +1368,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordsGet,
   contextSteeringFreshness,
   contextSteeringDeliveries,
+  steeringRepoGet,
+  steeringRepoRepair,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

@@ -1,0 +1,47 @@
+{
+  "name": "repair_steering_repo",
+  "domain": "repository",
+  "description": "Put every prescribed setting back on the workspace's steering repo, then read the settings again and answer the health that read finds.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "health": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "drifted",
+          "disconnected",
+          "diverged"
+        ]
+      }
+    },
+    "required": [
+      "health"
+    ],
+    "additionalProperties": false
+  }
+}

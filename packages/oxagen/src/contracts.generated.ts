@@ -371,6 +371,8 @@ import "./contracts/spend.get";
 import "./contracts/spend.shared";
 import "./contracts/spend.statement.export";
 import "./contracts/spend.waste";
+import "./contracts/steering_repo.get";
+import "./contracts/steering_repo.repair";
 import "./contracts/system.install.instructions";
 import "./contracts/tacho.bundle.get";
 import "./contracts/tacho.command.dispatch";

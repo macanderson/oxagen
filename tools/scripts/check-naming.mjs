@@ -149,6 +149,10 @@ const ACTIONS = new Set([
   "patch",
   "sync",
   "reconcile",
+  // repair_steering_repo: put the steering repo's settings back to the
+  // baseline Oxagen applied. Not "reconcile" or "sync": those move records,
+  // and this writes one repository's settings.
+  "repair",
   "approve",
   // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
   "authorize",
