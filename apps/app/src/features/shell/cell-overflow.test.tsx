@@ -57,6 +57,18 @@ function page() {
               <td>Short</td>
             </tr>
             <tr>
+              <td>
+                <span data-hover-card="" data-testid="carded">
+                  {LONG}
+                </span>
+              </td>
+              <td>
+                <span title={LONG} data-testid="titled">
+                  {LONG}
+                </span>
+              </td>
+            </tr>
+            <tr>
               <td colSpan={2} data-testid="spanning">
                 {LONG}
               </td>
@@ -64,6 +76,18 @@ function page() {
           </tbody>
         </table>
       </div>
+      <table aria-label="Grants">
+        <thead>
+          <tr>
+            <th scope="col">Scope</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-testid="dialog-cell">{LONG}</td>
+          </tr>
+        </tbody>
+      </table>
       <p data-testid="outside">{LONG}</p>
       <CellOverflow />
     </>,
@@ -150,6 +174,23 @@ describe("clippedElement", () => {
     measure(owner, 400, 200);
     measure(ownerName, 90, 90);
     expect(clippedElement(ownerName)).toBe(owner);
+  });
+
+  it("reads a table outside the page, such as one in a dialog", () => {
+    page();
+    const cell = screen.getByTestId("dialog-cell");
+    measure(cell, 900, 300);
+    expect(clippedElement(cell)).toBe(cell);
+  });
+
+  it("skips a value that has its own hover card or title", () => {
+    page();
+    const carded = screen.getByTestId("carded");
+    const titled = screen.getByTestId("titled");
+    measure(carded, 900, 300);
+    measure(titled, 900, 300);
+    expect(clippedElement(carded)).toBeNull();
+    expect(clippedElement(titled)).toBeNull();
   });
 
   it("skips a cell that spans columns and text outside a table", () => {

@@ -10,17 +10,20 @@ import { useEffect, useRef, useState } from "react";
 /** How long a pointer rests on a cut value before the whole value shows. */
 export const OPEN_DELAY_MS = 300;
 
-const BODY_CELL = "[data-shell-page] tbody :is(td, th):not([colspan])";
+const BODY_CELL = "tbody :is(td, th):not([colspan])";
 
 /**
  * The element nearest `target`, up to and including its body cell, whose text
- * runs past its own box. Null when the target is outside a body cell or every
- * value in its path fits.
+ * runs past its own box. Null when the target is outside a body cell, sits in
+ * a value with its own hover card or title, or every value in its path fits.
  */
 export function clippedElement(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
   const cell = target.closest(BODY_CELL);
   if (cell === null) return null;
+  // A value with its own hover card or title shows the whole value already.
+  const own = target.closest("[data-hover-card], [title]");
+  if (own !== null && cell.contains(own)) return null;
   for (
     let node: Element | null = target;
     node !== null;

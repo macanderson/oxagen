@@ -43,9 +43,10 @@ type Seal = RunChain["seals"][number];
 
 /**
  * `table.narrow`: a table inside a half-width panel keeps the list table's
- * rows and header but drops its minimum width, so its columns wrap rather
- * than scroll. A cell that cannot wrap (the countersigned pill) still fits:
- * the wrapper scrolls it into reach instead of the panel clipping it.
+ * rows and header but drops its minimum width, so its columns shrink to fit.
+ * Each cell stays on one line and ends a long value in an ellipsis. A cell
+ * that cannot shrink (the countersigned pill) still fits: the wrapper scrolls
+ * it into reach instead of the panel clipping it.
  */
 const narrowTable = "overflow-x-auto [&_table]:min-w-0";
 
@@ -413,11 +414,11 @@ function ReplayGrade({
                 )}
               </td>
               <td className={`${cell} text-xs`}>
-                <span className="block">
+                <span className="block md:truncate">
                   {rung.met ? t("met") : t("unmet")}
                 </span>
                 <span
-                  className={`${mono} block break-all text-[11px] text-dim`}
+                  className={`${mono} block text-[11px] text-dim md:truncate`}
                 >
                   {rung.reason}
                 </span>
@@ -543,24 +544,26 @@ function CheckpointRow({
           ) : (
             <Badge tone="allowed">{t("countersigned")}</Badge>
           )}
-          <span className="text-[11px] text-dim">
+          <span className="max-w-full text-[11px] text-dim md:truncate">
             {t("signed")} <When at={checkpoint.signedAt} />
-            <span className={`${mono} block break-all`}>
+            <span className={`${mono} block md:truncate`}>
               {checkpoint.deviceKeyFingerprint}
             </span>
           </span>
           {checkpoint.countersignedAt === null ? null : (
-            <span className="text-[11px] text-dim">
+            <span className="max-w-full text-[11px] text-dim md:truncate">
               {t("countersignedAt")} <When at={checkpoint.countersignedAt} />
               {checkpoint.platformKey === null ? null : (
-                <span className={`${mono} block break-all`}>
+                <span className={`${mono} block md:truncate`}>
                   {checkpoint.platformKey}
                 </span>
               )}
             </span>
           )}
           {checkpoint.anchorRoot === null ? null : (
-            <span className={`${mono} break-all text-[11px] text-dim`}>
+            <span
+              className={`${mono} max-w-full text-[11px] text-dim md:truncate`}
+            >
               {t("anchored", { root: checkpoint.anchorRoot })}
             </span>
           )}
