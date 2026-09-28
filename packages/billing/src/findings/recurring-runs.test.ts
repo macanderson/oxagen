@@ -160,6 +160,18 @@ function reads(
   });
 }
 
+/** The reads, with the first prompt of each of `runs` given `over`. */
+function withPrompt(
+  input: DetectReads,
+  runs: readonly RunTotalsRecord[],
+  over: Partial<RunFirstPrompt>,
+): DetectReads {
+  const firstPrompts = new Map<string, RunFirstPrompt>(input.firstPrompts);
+  for (const r of runs)
+    firstPrompts.set(r.runId, { ...firstPrompts.get(r.runId)!, ...over });
+  return { ...input, firstPrompts };
+}
+
 function recurring(findings: readonly FindingDraft[]): FindingDraft[] {
   return findings.filter((f) => f.kind === "recurring_runs");
 }
@@ -204,6 +216,50 @@ describe("recurring runs", () => {
     expect(
       detectFindings(reads({ [DIGEST]: runs, "sha256:other": others })),
     ).toEqual([]);
+  });
+
+  it("groups runs whose prompts share a digest, source, and origin", () => {
+    const runs = job(5);
+    const input = withPrompt(reads({ [DIGEST]: runs }), runs, {
+      source: "sdk",
+      origin: '{"kind":"cron"}',
+    });
+    const found = recurring(detectFindings(input));
+    expect(found).toHaveLength(1);
+    expect(found[0]!.citedRuns).toHaveLength(5);
+  });
+
+  it("splits one digest by prompt source", () => {
+    const runs = job(5);
+    const input = reads({ [DIGEST]: runs });
+    const split = withPrompt(
+      withPrompt(input, runs.slice(0, 3), { source: "sdk" }),
+      runs.slice(3),
+      { source: "hook" },
+    );
+    expect(detectFindings(split)).toEqual([]);
+  });
+
+  it("splits one digest by prompt origin", () => {
+    const runs = job(5);
+    const input = reads({ [DIGEST]: runs });
+    const split = withPrompt(
+      withPrompt(input, runs.slice(0, 3), {
+        source: "sdk",
+        origin: '{"kind":"cron"}',
+      }),
+      runs.slice(3),
+      { source: "sdk", origin: null },
+    );
+    expect(detectFindings(split)).toEqual([]);
+  });
+
+  it("never groups a prompt a person typed", () => {
+    const runs = job(5);
+    const input = withPrompt(reads({ [DIGEST]: runs }), runs, {
+      source: "user",
+    });
+    expect(detectFindings(input)).toEqual([]);
   });
 
   it("does not cite a run that changed a file or made a mutating call", () => {

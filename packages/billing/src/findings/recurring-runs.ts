@@ -1,8 +1,9 @@
 /**
  * Recurring runs (detector 7, ADR-208): a job that sends the same prompt on a
  * clock, where a run that finds nothing to do still pays to find that out.
- * The detector groups the window's runs by the digest of their first prompt.
- * A group of `RECURRING_RUNS_MIN` or more runs is recurring. A run in it that
+ * The detector groups the window's runs by their first prompt: its digest,
+ * and its source and origin where the recorder reports them (`jobOf`). A
+ * group of `RECURRING_RUNS_MIN` or more runs is recurring. A run in it that
  * made no mutating call and changed no file changed nothing, and its whole
  * cost is unproductive.
  *
@@ -23,9 +24,11 @@
  * - The classifier said nothing about one of its calls (`isMutating` null).
  * - The file change read has no entry for it.
  *
- * A ledger run records no prompt, so it is never grouped. On a harness that
- * does not report `prompt_source`, the digest is the only sign that runs come
- * from one job, as the detector 7 card notes.
+ * A ledger run records no prompt, so it is never grouped. A prompt a person
+ * typed (`prompt_source` `user`) came from no clock, so its run is never
+ * grouped either. On a harness that does not report `prompt_source`, the
+ * digest is the only sign that runs come from one job, as the detector 7 card
+ * notes.
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import { claimKey } from "./requests";
@@ -40,6 +43,7 @@ import {
   type DetectInput,
   type FindingKey,
   type Group,
+  type RunFirstPrompt,
   type ToolCallObservation,
 } from "./shared";
 
@@ -47,6 +51,20 @@ const KIND = "recurring_runs";
 
 /** A prompt that starts this many runs or more is recurring. */
 export const RECURRING_RUNS_MIN = 5;
+
+/** The `prompt_source` Claude Code records for a prompt a person typed. */
+const PERSON_SOURCE = "user";
+
+/**
+ * The job a run's first prompt names, or null for a prompt a person typed.
+ * One prompt sent by an SDK and by a hook, or from two origins, names two
+ * jobs. A recorder that reports neither field leaves the digest alone to name
+ * the job.
+ */
+function jobOf(prompt: RunFirstPrompt): string | null {
+  if (prompt.source === PERSON_SOURCE) return null;
+  return JSON.stringify([prompt.digest, prompt.source, prompt.origin]);
+}
 
 /** What the pass can tell about a run's changes. */
 export type RunChange = "changed" | "unchanged" | "unknown";
@@ -157,13 +175,15 @@ const reported = new WeakMap<Group, Recurring[]>();
 function detect(input: DetectInput, ctx: DetectContext): void {
   const { firstPrompts, fileChanges } = input;
   if (firstPrompts === undefined || fileChanges === undefined) return;
-  const byDigest = new Map<string, RunTotalsRecord[]>();
+  const byJob = new Map<string, RunTotalsRecord[]>();
   for (const run of input.runs) {
     const prompt = firstPrompts.get(run.runId);
     if (prompt === undefined) continue;
-    const list = byDigest.get(prompt.digest) ?? [];
+    const job = jobOf(prompt);
+    if (job === null) continue;
+    const list = byJob.get(job) ?? [];
     list.push(run);
-    byDigest.set(prompt.digest, list);
+    byJob.set(job, list);
   }
   const callsByRun = new Map<string, ToolCallObservation[]>();
   for (const call of input.toolCalls) {
@@ -173,7 +193,7 @@ function detect(input: DetectInput, ctx: DetectContext): void {
   }
 
   const byKey = new Map<string, Recurring[]>();
-  for (const runs of byDigest.values()) {
+  for (const runs of byJob.values()) {
     const key = keyOf(runs);
     // A decided finding comes back only when the job starts
     // `RECURRING_RUNS_MIN` more runs after the decision.
