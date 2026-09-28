@@ -1,5 +1,9 @@
 import { setConversationOpenedSender } from "@oxagen/agent/runtime/conversation-opened-event";
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import {
+  registerServerFolderWriter,
+  registerSteeringPrOpener,
+} from "@oxagen/agent/runtime/steering-pr";
 import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
@@ -177,6 +181,29 @@ registerHandlersOnce("@oxagen/handlers", () => {
     return runInTenantScope(scope, () =>
       refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
     );
+  });
+  // A tools steering PR opens through tools.pr.open.ts (M11). In a workspace
+  // whose servers live in its steering repo, registering a server, enabling
+  // a plugin, and importing tools open one through the server folder writer
+  // (M13, ADR-209) instead of writing rows. steeringWriter() needs both
+  // halves. Each loads on its first call, so boot opens no host client.
+  registerSteeringPrOpener({
+    hasSteeringRepo: async (scope) =>
+      (await import("./tools.pr.open")).steeringPrOpener.hasSteeringRepo(scope),
+    open: async (request) =>
+      (await import("./tools.pr.open")).steeringPrOpener.open(request),
+    readFile: async (scope, path) =>
+      (await import("./tools.pr.open")).steeringPrOpener.readFile(scope, path),
+  });
+  registerServerFolderWriter({
+    addServer: async (request) =>
+      (await import("./mcp-studio/migrate"))
+        .createServerFolderWriter()
+        .addServer(request),
+    addTools: async (request) =>
+      (await import("./mcp-studio/migrate"))
+        .createServerFolderWriter()
+        .addTools(request),
   });
   // The findings pass (detector 6, prompt habits) opens a steering record
   // proposal for each instruction operators repeat. The proposal path lives
