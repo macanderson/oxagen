@@ -72,10 +72,9 @@
                 "transport": {
                   "type": "string",
                   "enum": [
-                    "http",
-                    "sse"
+                    "http"
                   ],
-                  "description": "How the catalog entry reaches url: http (the catalog's streamable-http) or sse."
+                  "description": "How the catalog entry reaches url: http, the catalog's streamable-http. The lock pins no sse remote (ADR-211)."
                 },
                 "package": {
                   "type": "object",

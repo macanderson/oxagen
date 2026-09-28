@@ -159,13 +159,19 @@ export async function installOne(
 
       const sd = match.server;
 
-      // Prefer the first remote endpoint (hosted MCP server URL).
-      const firstRemote = (sd.remotes ?? [])[0];
-      if (firstRemote?.url) {
-        endpointUrl = firstRemote.url;
-        // Prefer registry-declared transport type; fallback to the remote's own type.
+      // Choose one hosted remote and take both its URL and its transport from
+      // it. Review refuses the older HTTP+SSE transport (ADR-211), and the lock
+      // pins the first streamable-http remote, so prefer that one. An entry
+      // with no streamable-http remote falls back to its first remote.
+      const remotes = sd.remotes ?? [];
+      const remote =
+        remotes.find((r) => r.type === "streamable-http") ?? remotes[0];
+      if (remote?.url) {
+        endpointUrl = remote.url;
+        // The chosen remote's type is its transport. A remote with no type
+        // falls back to the first registry-declared type, then to the default.
         const transportTypes = deriveTransportTypes(sd);
-        transport = transportTypes[0] ?? firstRemote.type ?? transport;
+        transport = remote.type || transportTypes[0] || transport;
         authKind = deriveAuthKind(sd) as AuthKind;
         resolved = true;
         logger.info(

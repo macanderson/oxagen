@@ -107,8 +107,16 @@ export const recordedHttpResponseSchema = withChecks(
   z
     .object({
       status: z.number().int().min(100).max(599),
-      headers: z.record(z.string(), z.string()).optional().describe("Every header but Set-Cookie."),
-      body: z.unknown().optional(),
+      headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          "Every header but Set-Cookie. A Location keeps no query or fragment.",
+        ),
+      body: z
+        .unknown()
+        .optional()
+        .describe("Left out for an empty body and for a redirect."),
     })
     .strict(),
   [noCredentialHeaders(CREDENTIAL_RESPONSE_HEADERS)],
