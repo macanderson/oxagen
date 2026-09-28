@@ -123,6 +123,8 @@ Keep heavy dependencies out of the kernel. Import the handler registration modul
 
 Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw cross-schema JOINs inside handlers.
 
+**Code graph exception** (ADR-214): the code graph keeps its nodes, relationships, and vectors in Postgres (with pgvector) and in fixed S3 graph files, not Neo4j. It covers only copies Oxagen builds from a provider at a commit SHA.
+
 **Connector Dual-Write exception**: Data connectors write to Postgres (operational record, ACID) and Neo4j (graph index, async Inngest). ClickHouse observes ingestion events for telemetry.
 
 ## Repo-Specific Tooling

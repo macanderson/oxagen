@@ -10,6 +10,7 @@ import {
   type GitLabWebhookDeps,
   type WebhookConnection,
 } from "./gitlab.webhook";
+import { logger } from "./logger";
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -356,5 +357,137 @@ describe("GitLab webhook: revoked credentials", () => {
     await expect(deliver(deps, mrEvent({ state: "closed" }))).rejects.toThrow(
       GitLabApiError,
     );
+  });
+});
+
+describe("GitLab webhook: the steering repo health check (S2, #4560)", () => {
+  const MAIN_PUSH = {
+    object_kind: "push",
+    ref: "refs/heads/main",
+    checkout_sha: "da1560886d4f094c3e6c9ef40349f7d38b5d27d7",
+    user_username: "dana-ops",
+    project: {
+      id: 4242,
+      path_with_namespace: "acme/platform/rules",
+      default_branch: "main",
+    },
+    commits: [
+      {
+        id: "da1560886d4f094c3e6c9ef40349f7d38b5d27d7",
+        timestamp: "2026-09-26T18:12:44+02:00",
+      },
+    ],
+  };
+
+  function withHealthCheck(opts: Parameters<typeof world>[0] = {}) {
+    const w = world(opts);
+    const requestHealthCheck = vi.fn(async () => {});
+    w.deps.requestHealthCheck = requestHealthCheck;
+    return { ...w, requestHealthCheck };
+  }
+
+  it("asks for a health read on a push to main, for the connection's project", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    await deliver(deps, MAIN_PUSH);
+    expect(requestHealthCheck).toHaveBeenCalledTimes(1);
+    expect(requestHealthCheck).toHaveBeenCalledWith({
+      provider: "gitlab",
+      repository_ids: [4242],
+      installation_id: null,
+      trigger: {
+        reason: "push",
+        actor: "dana-ops",
+        at: "2026-09-26T16:12:44.000Z",
+        settings: [],
+        pull_request: null,
+      },
+    });
+  });
+
+  it("carries the merge request and its new head on an update", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    await deliver(deps, mrEvent({}));
+    expect(requestHealthCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repository_ids: [4242],
+        trigger: expect.objectContaining({
+          reason: "merge_request.update",
+          pull_request: { number: 7, head_sha: "abc123" },
+        }),
+      }),
+    );
+  });
+
+  it("asks on a system hook body the event parser cannot read, and still answers unparseable", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    const body = {
+      event_name: "project_update",
+      project_id: 4242,
+      updated_at: "2026-09-26T19:44:02Z",
+      path_with_namespace: "acme/platform/rules",
+    };
+    await expect(deliver(deps, body)).resolves.toEqual({
+      status: 202,
+      outcome: "ignored_unparseable",
+    });
+    expect(requestHealthCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: expect.objectContaining({
+          reason: "project_update",
+          settings: ["visibility", "default_branch", "merge_requests", "ci_cd"],
+        }),
+      }),
+    );
+  });
+
+  it("asks for nothing on a delivery that fails authentication", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    await expect(
+      deliver(deps, MAIN_PUSH, "whsec-wrong-wrong-wrong"),
+    ).resolves.toMatchObject({ status: 401 });
+    await deliver(deps, MAIN_PUSH, SECRET, "con_unknown");
+    expect(requestHealthCheck).not.toHaveBeenCalled();
+  });
+
+  it("asks for nothing when the delivery names another project", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    await deliver(deps, { ...MAIN_PUSH, project: { id: 9999, default_branch: "main" } });
+    await deliver(deps, mrEvent({ projectId: 9999 }));
+    expect(requestHealthCheck).not.toHaveBeenCalled();
+  });
+
+  it("asks for nothing on a delivery that cannot change health", async () => {
+    const { deps, requestHealthCheck } = withHealthCheck();
+    await deliver(deps, { ...MAIN_PUSH, ref: "refs/heads/context/use-pnpm" });
+    await deliver(deps, { object_kind: "note", project: { id: 4242 } });
+    await deliver(deps, null);
+    await deliver(deps, [MAIN_PUSH]);
+    expect(requestHealthCheck).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed request and answers the delivery as before", async () => {
+    const { deps, state } = world({ mrState: "closed" });
+    deps.requestHealthCheck = vi.fn(async () => {
+      throw new Error("event bus down");
+    });
+    vi.mocked(logger.error).mockClear();
+    await expect(deliver(deps, mrEvent({ state: "closed" }))).resolves.toEqual({
+      status: 200,
+      outcome: "proposal_rejected",
+    });
+    expect(state.rejected).toEqual([{ id: "p-7", reason: CLOSED_ON_GITLAB }]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: CONNECTION.id, reason: "merge_request.update" }),
+      expect.stringContaining("could not request a steering repo health check"),
+    );
+  });
+
+  it("works without the dependency", async () => {
+    const { deps } = world({});
+    expect(deps.requestHealthCheck).toBeUndefined();
+    await expect(deliver(deps, MAIN_PUSH)).resolves.toEqual({
+      status: 202,
+      outcome: "ignored_event",
+    });
   });
 });

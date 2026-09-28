@@ -95,6 +95,7 @@ import {
   readSteeringLayout,
   recordPublishDeployment,
 } from "./steering-repo/merge-queue";
+import { readSteeringHealth } from "./steering-repo/health.read";
 import {
   type HeldPublish,
   type SteeringPublisher,
@@ -777,12 +778,22 @@ async function mergedAtOnGitHub(
  * is the organization's IAM answer (ADR-213).
  */
 export const productionMergeSeams: MergeSeams = {
+  // A steering repo that is drifted, disconnected, or diverged merges
+  // nothing until it is repaired (S2, #4560). The health is the last read
+  // the settings webhooks and the 10-minute sweep stored.
+  readHealth: (scope, repo) => readSteeringHealth(repo, scope),
   holdsMergeWithoutReview: (scope, userId) =>
     holdsCapability(contextPrMergeWithoutReview, scope, userId),
   // Each workspace publishes through its own version store and host, and
-  // each version writes the workspace's tool registry (M13).
+  // each version writes the workspace's tool registry (M13). The publish
+  // refuses on the same health the merge reads.
   publisher: (scope, host) =>
-    steeringPublisher({ scope, host, extend: withToolProjection }),
+    steeringPublisher({
+      scope,
+      host,
+      extend: withToolProjection,
+      readHealth: readSteeringHealth,
+    }),
 };
 
 export const mergeContextPrHandler = createMergeContextPrHandler(
