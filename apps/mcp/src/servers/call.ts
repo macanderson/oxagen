@@ -242,10 +242,15 @@ function describeTool(entry: ServedTool): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(described, null, 2) }], structuredContent: described };
 }
 
-function servedIn(view: ServedView, server: ManifestServer, name: unknown): ServedTool | null {
-  if (typeof name !== "string" || name === "") return null;
+function servedIn(view: ServedView, server: ManifestServer, name: string): ServedTool | null {
   const entry = findInServer(view, server, name);
   return entry !== null && unserved(view, entry) === null ? entry : null;
+}
+
+/** The tool name a search-mode describe or call passes, or null when it passes none. */
+function toolArgument(args: Record<string, unknown>): string | null {
+  const name = args["tool"];
+  return typeof name === "string" && name !== "" ? name : null;
 }
 
 async function search(view: ServedView, ports: ServedPorts, server: ManifestServer, args: Record<string, unknown>, rank: Ranker): Promise<Answer> {
@@ -269,9 +274,11 @@ async function search(view: ServedView, ports: ServedPorts, server: ManifestServ
 }
 
 function describe(view: ServedView, server: ManifestServer, args: Record<string, unknown>): Answer {
-  const entry = servedIn(view, server, args["tool"]);
+  const name = toolArgument(args);
+  if (name === null) return refusal("describe needs a tool. Pass the tool's name in tool.", "failed");
+  const entry = servedIn(view, server, name);
   if (entry === null) {
-    return refusal(`${server.name} serves no tool named ${String(args["tool"] ?? "")}. Call ${server.name}__search to find one.`, "failed");
+    return refusal(`${server.name} serves no tool named ${name}. Call ${server.name}__search to find one.`, "failed");
   }
   return { result: describeTool(entry), outcome: "allowed" };
 }
@@ -328,12 +335,12 @@ export async function callServed(
 
   // call: decided, parked, run, and metered as the tool it names.
   const inner = args["arguments"] ?? {};
-  const entry = typeof args["tool"] === "string" ? findInServer(view, server, args["tool"]) : null;
+  const name = toolArgument(args);
+  const entry = name === null ? null : findInServer(view, server, name);
   if (entry === null || !isRecord(inner)) {
-    const message =
-      entry === null
-        ? `${server.name} serves no tool named ${String(args["tool"] ?? "")}. Call ${server.name}__search to find one.`
-        : `arguments is an object of the tool's input. Call ${server.name}__describe for its schema.`;
+    let message = `arguments is an object of the tool's input. Call ${server.name}__describe for its schema.`;
+    if (name === null) message = "call needs a tool. Pass the tool's name in tool.";
+    else if (entry === null) message = `${server.name} serves no tool named ${name}. Call ${server.name}__search to find one.`;
     const answer = refusal(message, "failed");
     await meter(view, ports, "call", entry?.tool.name ?? `${server.name}__call`, server.name, answer.outcome);
     return answer.result;
