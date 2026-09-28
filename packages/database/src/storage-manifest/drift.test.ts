@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseClickhouseSchema } from "./sources/clickhouse";
 import { parseCypherSchema } from "./sources/neo4j";
 import { canonicalJson, contentHashOf } from "./canonical-json";
-import { driftReport } from "./cli";
+import { driftReport, firstDifference } from "./cli";
 
 // Drift-detection tests. `pnpm schema:manifest:check` is a byte comparison of
 // the freshly generated canonical JSON against the committed file, so proving
@@ -90,77 +90,107 @@ describe("drift detection — a changed input changes the content hash", () => {
 // ---------------------------------------------------------------------------
 //
 // The report is the whole value of the gate to whoever hits it. A run that
-// fails without naming which of the two things differs sends its reader to
-// diff a 465 KB file by hand.
+// fails without naming the file, both values and the line where they part
+// sends its reader to diff a 465 KB file by hand (#3691).
 
 describe("driftReport", () => {
-  /** A committed file whose body is current and whose recorded hash is not. */
-  function staleFieldOnly(): { committed: string; regenerated: string } {
-    const body = { tables: ["a", "b"], contentHash: "" };
-    const regenerated = contentHashOf(body as Record<string, unknown>);
-    return {
-      committed: canonicalJson({ ...body, contentHash: "0".repeat(64) }),
-      regenerated,
-    };
-  }
+  const regenerated = canonicalJson({ version: 2, tables: ["a", "b"] });
 
-  it("names the stale-field case instead of printing two equal hashes", () => {
-    // The case that blocked the app cutover (ADR-081): the body was current,
-    // the recorded field was not, and the old report printed the recomputed
-    // hash twice with nothing to distinguish it from a broken check.
-    const { committed, regenerated } = staleFieldOnly();
-    const lines = driftReport(committed, regenerated);
-    const text = lines.join("\n");
+  it("names the file, both content hashes and the first differing line", () => {
+    const committed = canonicalJson({ version: 2, tables: ["a"] });
+    const text = driftReport(committed, regenerated).join("\n");
+    expect(text).toContain("packages/database/storage-manifest.json is stale");
     expect(text).toContain(
-      "The body is current; only the recorded contentHash field is stale.",
+      `committed content hash:    ${contentHashOf({ version: 2, tables: ["a"] })}`,
     );
-    expect(text).not.toContain("The body itself has drifted.");
+    expect(text).toContain(
+      `regenerated content hash:  ${contentHashOf({ version: 2, tables: ["a", "b"] })}`,
+    );
+    // canonicalJson puts `"a"` on line 3; the regenerated file has `"a",`.
+    const [line] = text.split("\n").filter((l) => l.includes("first difference"));
+    expect(line).toBe("  first difference at line 3:");
+    expect(text).toContain('committed:   "    \\"a\\""');
+    expect(text).toContain('regenerated: "    \\"a\\","');
+    expect(text).toContain("The content itself has drifted.");
   });
 
-  it("prints the recorded field and the recomputed hash as different numbers", () => {
-    // Both are reported, so the reader can see WHICH one is wrong. Printing
-    // only the recomputed value is what hid this.
-    const { committed, regenerated } = staleFieldOnly();
-    const text = driftReport(committed, regenerated).join("\n");
-    expect(text).toContain("0".repeat(64));
-    expect(text).toContain(regenerated);
-  });
-
-  it("names the body case when the content itself moved", () => {
+  it("names a file that kept a side's contentHash in a merge, with both values", () => {
+    // The wrong resolution #3691 and #3233 describe: the body is the merged
+    // one, and a committed hash from one side sits on top of it. ADR-214 took
+    // the field out of the shape, so it now fails as a legacy field.
     const committed = canonicalJson({
-      tables: ["a"],
-      contentHash: contentHashOf({ tables: ["a"], contentHash: "" }),
-    });
-    const regenerated = contentHashOf({
+      version: 2,
       tables: ["a", "b"],
-      contentHash: "",
-    } as Record<string, unknown>);
+      contentHash: "0".repeat(64),
+    });
     const text = driftReport(committed, regenerated).join("\n");
-    expect(text).toContain("The body itself has drifted.");
-    expect(text).not.toContain("only the recorded contentHash field is stale");
+    expect(text).toContain(
+      'committed:   "  \\"contentHash\\": \\"' + "0".repeat(64) + '\\","',
+    );
+    expect(text).toContain(
+      "The content is current, but the file still records contentHash or stores[].tableCount",
+    );
+    expect(text).not.toContain("The content itself has drifted.");
   });
 
-  it("survives a committed file that is not JSON at all", () => {
-    // A truncated write or a merge marker must report something a reader can
-    // act on rather than throwing out of the gate.
-    const text = driftReport("{ not json", "abc").join("\n");
+  it("names a committed per-store tableCount as a legacy field", () => {
+    const regen = canonicalJson({
+      version: 2,
+      stores: [{ kind: "postgres" }],
+      tables: ["a"],
+    });
+    const committed = canonicalJson({
+      version: 2,
+      stores: [{ kind: "postgres", tableCount: 170 }],
+      tables: ["a"],
+    });
+    const text = driftReport(committed, regen).join("\n");
+    // The first line to differ is the one before the count, which gained a
+    // trailing comma when the count was written after it.
+    expect(text).toContain("first difference at line 4:");
+    expect(text).toContain("still records contentHash or stores[].tableCount");
+  });
+
+  it("names a formatting-only difference", () => {
+    const committed = JSON.stringify({ version: 2, tables: ["a", "b"] });
+    const text = driftReport(committed, regenerated).join("\n");
+    expect(text).toContain("only its formatting differs");
+  });
+
+  it("survives a committed file that is not JSON, such as one with merge markers", () => {
+    const committed = "{\n<<<<<<< HEAD\n";
+    const text = driftReport(committed, regenerated).join("\n");
     expect(text).toContain("not valid JSON");
+    expect(text).toContain('committed:   "<<<<<<< HEAD"');
     expect(text).toContain("Run `pnpm schema:manifest`");
   });
 
-  it("reports an absent contentHash field rather than an empty line", () => {
-    const committed = canonicalJson({ tables: ["a"] });
-    const text = driftReport(committed, "abc").join("\n");
-    expect(text).toContain("(absent)");
+  it("names a custom file path when given one", () => {
+    const text = driftReport("{}", regenerated, "some/other.json").join("\n");
+    expect(text).toContain("some/other.json is stale");
   });
 
   it("always ends with the command that fixes it", () => {
-    const { committed, regenerated } = staleFieldOnly();
     for (const lines of [
-      driftReport(committed, regenerated),
-      driftReport("{ not json", "abc"),
+      driftReport(canonicalJson({ version: 2, tables: ["a"] }), regenerated),
+      driftReport("{ not json", regenerated),
     ]) {
       expect(lines.at(-1)).toContain("pnpm schema:manifest");
+      expect(lines.at(-1)).toContain("regenerate from the merged tree");
     }
+  });
+});
+
+describe("firstDifference", () => {
+  it("returns null for equal texts", () => {
+    expect(firstDifference("a\n", "a\n")).toBeNull();
+  });
+
+  it("reports the end of a shorter file as null", () => {
+    expect(firstDifference("a", "a\nb")).toEqual({
+      line: 2,
+      committed: null,
+      regenerated: "b",
+    });
   });
 });
