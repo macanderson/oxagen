@@ -1,0 +1,125 @@
+{
+  "auth": [
+    {
+      "scheme": "bearer",
+      "type": "http_bearer"
+    }
+  ],
+  "document_hash": "sha256:a46446c32f223384085fb31ac1c929e863f1690f5d703acc20fef3688276c2e8",
+  "environments": [
+    {
+      "url": "https://backoffice.a-intel.com/v7"
+    }
+  ],
+  "first_tool": {
+    "description": "List billing accounts, newest first.",
+    "inputSchema": {
+      "properties": {
+        "cursor": {
+          "description": "The next_cursor from the previous page.",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_billing_accounts",
+    "outputSchema": {
+      "properties": {
+        "data": {
+          "items": {
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "labels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "id",
+              "created_at"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "next_cursor": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "paging": {
+      "input": "cursor",
+      "items": "data",
+      "limit": "limit",
+      "next": "next_cursor",
+      "style": "cursor"
+    },
+    "request": {
+      "kind": "http",
+      "method": "GET",
+      "operation": "listBillingAccounts",
+      "parameters": [
+        {
+          "in": "query",
+          "name": "cursor",
+          "property": "cursor",
+          "required": false
+        },
+        {
+          "in": "query",
+          "name": "limit",
+          "property": "limit",
+          "required": false
+        }
+      ],
+      "path": "/billing/accounts",
+      "response": {
+        "media_type": "application/json",
+        "status": "200"
+      },
+      "security": [
+        {
+          "bearer": []
+        }
+      ]
+    }
+  },
+  "listed": [],
+  "notes": [],
+  "paging": {
+    "cursor": 100,
+    "none": 500
+  },
+  "tools": 600,
+  "tools_digest": "sha256:a4f690ebcf8c782936978adf0553a74803ef1394f8e75c3ad7036defd7f0ebc6"
+}

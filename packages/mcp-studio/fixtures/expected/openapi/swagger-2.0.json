@@ -1,0 +1,317 @@
+{
+  "auth": [
+    {
+      "in": "header",
+      "name": "X-Directory-Key",
+      "scheme": "api_key",
+      "type": "api_key"
+    },
+    {
+      "authorization_url": "https://login.a-intel.com/oauth/authorize",
+      "scheme": "oauth",
+      "scopes": [
+        "directory.read",
+        "directory.write"
+      ],
+      "token_url": "https://login.a-intel.com/oauth/token",
+      "type": "oauth2"
+    }
+  ],
+  "document_hash": "sha256:7427b70cbdb4c4258652d4f58126820120b5e9365f50432dade17fc931b54b95",
+  "environments": [
+    {
+      "url": "https://directory.a-intel.com/v1"
+    }
+  ],
+  "files": [],
+  "listed": [],
+  "notes": [
+    {
+      "message": "Import converted the Swagger 2.0 document to OpenAPI 3.1 in memory. The file in the folder stays Swagger 2.0."
+    },
+    {
+      "message": "This tool sends multipart/form-data, which the gateway cannot send yet, so a call to this tool fails.",
+      "tool": "upload_avatar"
+    }
+  ],
+  "tools": [
+    {
+      "description": "List people, fifty at a time.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_users",
+      "outputSchema": {
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "users": {
+            "items": {
+              "properties": {
+                "active": {
+                  "type": "boolean"
+                },
+                "email": {
+                  "format": "email",
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "team": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "email",
+                "name",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "paging": {
+        "input": "offset",
+        "items": "users",
+        "limit": "limit",
+        "style": "offset"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "listUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "property": "offset",
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "property": "limit",
+            "required": false
+          }
+        ],
+        "path": "/users",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Add a person.",
+      "inputSchema": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "team": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "create_user",
+      "outputSchema": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "team": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "id"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "email",
+            "name",
+            "team"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "createUser",
+        "parameters": [],
+        "path": "/users",
+        "response": {
+          "media_type": "application/json",
+          "status": "201"
+        },
+        "security": [
+          {
+            "oauth": [
+              "directory.write"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "description": "Read one person.",
+      "inputSchema": {
+        "properties": {
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "type": "object"
+      },
+      "name": "get_user",
+      "outputSchema": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "team": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "id"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "property": "userId",
+            "required": true
+          }
+        ],
+        "path": "/users/{userId}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Replace a person's photo.",
+      "inputSchema": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream"
+          },
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "type": "object"
+      },
+      "name": "upload_avatar",
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "multipart/form-data",
+          "properties": [
+            "file"
+          ],
+          "required": false
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "uploadAvatar",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "property": "userId",
+            "required": true
+          }
+        ],
+        "path": "/users/{userId}/avatar",
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    }
+  ]
+}

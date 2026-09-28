@@ -1,17 +1,25 @@
 // create_org against a real Postgres: a signed-in user with no memberships
 // creates an organization and, in one call, holds the owner membership, the
 // IAM bootstrap, the first workspace and the $5 signup grant, and no other
-// billing.* row exists for the new org. Runs wherever DATABASE_URL points at a migrated database — CI's
+// billing.* row exists for the new org. With `workspace: null` it makes no
+// workspace, and the org's first create_workspace takes the onboarding gate
+// (#4582). Runs wherever DATABASE_URL points at a migrated database. CI's
 // `test` job migrates Postgres with Atlas before `turbo run build test:unit`
-// and carries DATABASE_URL in turbo's globalEnv; a local run without one is
-// skipped, not red. Every row it writes is removed in afterAll.
+// and carries DATABASE_URL in turbo's globalEnv. A local run without one is
+// skipped. Every row it writes is removed in afterAll.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import { ORG_ONLY_WORKSPACE_ID, type CapabilityContext } from "@oxagen/oxagen";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { eq, inArray, sql } from "drizzle-orm";
 import { organizationCreateHandler } from "./org.create";
 import { initialSteeringRepoState } from "./steering_repo.provision";
+import {
+  createWorkspaceCreateHandler,
+  type WorkspaceCreateDeps,
+} from "./workspace.create";
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(
@@ -24,6 +32,15 @@ const mocks = vi.hoisted(() => ({
 // event client. The spy stands in for Inngest, so the test needs no live
 // event key and can read what was sent.
 vi.mock("./event-client", () => ({ eventClient: { send: mocks.send } }));
+
+// create_workspace takes its provision request as a dependency, so the
+// welcome-flow test hands it a spy instead of Inngest.
+const requestProvision = vi.fn<WorkspaceCreateDeps["requestProvision"]>(
+  async () => {},
+);
+const workspaceCreateHandler = createWorkspaceCreateHandler({
+  requestProvision,
+});
 
 // The bootstrap test makes ~15 sequential round trips to Postgres plus one per
 // billing table; under `test:coverage` on a shared CI runner that ran past the
@@ -115,6 +132,9 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
           .delete(schema.creditBalances)
           .where(eq(schema.creditBalances.orgId, orgId));
         await tx
+          .delete(schema.onboardingState)
+          .where(eq(schema.onboardingState.orgId, orgId));
+        await tx
           .delete(schema.orgUsers)
           .where(eq(schema.orgUsers.orgId, orgId));
         await tx
@@ -158,7 +178,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     );
     expect(organizationCreate.output.safeParse(out).success).toBe(true);
     expect(out.slug).toBe(slug);
-    expect(out.workspace.slug).toBe("core");
+    expect(out.workspace?.slug).toBe("core");
 
     const snapshot = await withSystemDb(async (tx) => {
       const org = await tx.query.organizations.findFirst({
@@ -283,7 +303,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
 
     expect(snapshot.workspaces).toHaveLength(1);
     const ws = snapshot.workspaces[0]!;
-    expect(ws.publicId).toBe(out.workspace.publicId);
+    expect(ws.publicId).toBe(out.workspace?.publicId);
     expect(ws.slug).toBe("core");
     expect(ws.namespace).toMatch(/^[a-z0-9]{2,6}$/);
     expect(snapshot.wsMembers).toEqual([{ userId, role: "owner" }]);
@@ -383,4 +403,93 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     // A refused organization starts no provision job.
     expect(mocks.send.mock.calls.length).toBe(sentBefore);
   });
+
+  // The web app's welcome flow (#4582). The app sends `workspace: null`, so
+  // create_org makes no workspace and opens the gate with none. The welcome
+  // step then calls create_workspace from an org-only scope, the same scope
+  // the app kernel uses, and that first workspace takes the gate. A second
+  // workspace leaves it alone.
+  it("opens the gate with no workspace on `workspace: null`, and the first create_workspace takes it", async () => {
+    const nullSlug = `wl16n-${tag}`;
+    const sentBefore = mocks.send.mock.calls.length;
+    const out = await organizationCreateHandler(
+      organizationCreate.input.parse({
+        name: `WL16 null ${tag}`,
+        slug: nullSlug,
+        workspace: null,
+      }),
+      ctx,
+    );
+    expect(organizationCreate.output.safeParse(out).success).toBe(true);
+    expect(out.workspace).toBeNull();
+
+    const org = await withSystemDb((tx) =>
+      tx.query.organizations.findFirst({
+        where: eq(schema.organizations.slug, nullSlug),
+        columns: { id: true },
+      }),
+    );
+    expect(org).toBeDefined();
+    if (!org) return;
+    createdOrgIds.push(org.id);
+
+    const readGate = () =>
+      withSystemDb((tx) =>
+        tx
+          .select({
+            workspaceId: schema.onboardingState.workspaceId,
+            step: schema.onboardingState.step,
+          })
+          .from(schema.onboardingState)
+          .where(eq(schema.onboardingState.orgId, org.id)),
+      );
+    const workspacesOf = () =>
+      withSystemDb((tx) =>
+        tx
+          .select({
+            id: schema.workspaces.id,
+            publicId: schema.workspaces.publicId,
+          })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.orgId, org.id)),
+      );
+
+    expect(await workspacesOf()).toEqual([]);
+    expect(await readGate()).toEqual([{ workspaceId: null, step: "wrap" }]);
+    // Only the organization's steering repo job starts.
+    expect(mocks.send.mock.calls.slice(sentBefore)).toEqual([
+      [
+        {
+          name: "steering-repo/provision.requested",
+          data: { orgId: org.id, workspaceId: null, actorUserId: userId },
+        },
+      ],
+    ]);
+
+    const orgOnly = { orgId: org.id, workspaceId: ORG_ONLY_WORKSPACE_ID };
+    const orgCtx: CapabilityContext = { ...ctx, ...orgOnly };
+    const createIn = (name: string, slug: string) =>
+      runInTenantScope(orgOnly, () =>
+        workspaceCreateHandler(
+          workspaceCreate.input.parse({ name, slug }),
+          orgCtx,
+        ),
+      );
+
+    const first = await createIn("Core", "core");
+    const [firstRow] = (await workspacesOf()).filter(
+      (w) => w.publicId === first.publicId,
+    );
+    expect(firstRow).toBeDefined();
+    expect(await readGate()).toEqual([
+      { workspaceId: firstRow?.id, step: "wrap" },
+    ]);
+
+    await createIn("Data", "data");
+    expect(await workspacesOf()).toHaveLength(2);
+    expect(await readGate()).toEqual([
+      { workspaceId: firstRow?.id, step: "wrap" },
+    ]);
+    expect(requestProvision).toHaveBeenCalledTimes(2);
+  }, 30_000);
 });

@@ -1,7 +1,8 @@
 // Connect a code host, onboarding's second step (#4518), at
 // /welcome/{org}/new-workspace/connect. The organization exists and has no
-// workspace yet, so the step connects the host its steering repos live on
-// before the first workspace creates one.
+// workspace yet (the form sent `create_org` `workspace: null`, #4582), so the
+// step connects the host its steering repos live on before the first
+// workspace creates one.
 //
 // **GitHub has two apps.** Oxagen Steering creates the organization's steering
 // repos and holds admin only on the repositories Oxagen creates. Oxagen reads

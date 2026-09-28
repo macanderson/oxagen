@@ -4282,7 +4282,7 @@
       "writes": []
     }
   ],
-  "contentHash": "00e9766d64a501e3ba740f8eec31579f860498c61c1823bac6d4ab47cd17e1b3",
+  "contentHash": "6744c3bca28e018310e24279b1d822f995bd5d45bcbbd25b833a6d3fa726c4ca",
   "domains": [
     {
       "name": "agent",
@@ -19908,7 +19908,7 @@
         },
         {
           "name": "workspace_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },
