@@ -78,8 +78,10 @@ function Row({ grant }: { grant: CredentialGrant }) {
     <tr data-grant={grant.id}>
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
-          <span className={`${mono} text-xs text-foreground`}>{grant.id}</span>
-          <span className="text-xs text-muted-foreground">
+          <span className={`${mono} text-xs text-foreground md:truncate`}>
+            {grant.id}
+          </span>
+          <span className="text-xs text-muted-foreground md:truncate">
             {date(grant.issuedAt)}
           </span>
         </span>
@@ -87,7 +89,7 @@ function Row({ grant }: { grant: CredentialGrant }) {
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
           <NotBackedValue gap="grants" />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground md:truncate">
             {t("fromProvider", { provider: grant.serverName })}
           </span>
         </span>
@@ -96,9 +98,11 @@ function Row({ grant }: { grant: CredentialGrant }) {
         <span className="flex flex-col gap-0.5">
           <NotBackedValue gap="grants" />
           {grant.runId === null ? (
-            <span className="text-xs text-muted-foreground">{t("noRun")}</span>
+            <span className="text-xs text-muted-foreground md:truncate">
+              {t("noRun")}
+            </span>
           ) : (
-            <span className={`${mono} text-xs text-foreground`}>
+            <span className={`${mono} text-xs text-foreground md:truncate`}>
               {grant.runId}
             </span>
           )}
@@ -111,10 +115,10 @@ function Row({ grant }: { grant: CredentialGrant }) {
       </td>
       <td className={cell}>
         <span className="flex flex-col gap-1">
-          <span className={`${mono} break-all text-xs text-foreground`}>
+          <span className={`${mono} text-xs text-foreground md:truncate`}>
             {grant.scope.endpointUrl}
           </span>
-          <span className="flex flex-wrap gap-1">
+          <span className="flex gap-1 max-md:flex-wrap">
             <Chip>{t(`downscope.${grant.scope.downscope}`)}</Chip>
             <Chip>{t(`authKind.${grant.scope.authKind}`)}</Chip>
           </span>
@@ -213,10 +217,12 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
           title={item.displayName}
         >
           <span className="flex flex-col gap-0.5">
-            <span className="font-medium text-foreground">
+            <span className="font-medium text-foreground md:truncate">
               {item.displayName}
             </span>
-            <span className={`${mono} text-xs text-muted-foreground`}>
+            <span
+              className={`${mono} text-xs text-muted-foreground md:truncate`}
+            >
               {item.id}
             </span>
           </span>
@@ -226,7 +232,7 @@ function ConnectionRow({ at, item }: { at: ToolsAt; item: Connection }) {
         <Chip>{item.connector}</Chip>
       </td>
       <td className={cell}>
-        <span className="flex flex-wrap gap-1">
+        <span className="flex gap-1 max-md:flex-wrap">
           <Chip>{item.authScheme}</Chip>
           <Chip>{item.deliveryMethod}</Chip>
         </span>

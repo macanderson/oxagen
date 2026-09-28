@@ -163,7 +163,7 @@ function factCells(
 function WorkspaceCell({ workspace }: { workspace: Workspace }) {
   const t = useTranslations("organization.workspaces");
   return (
-    <div className="flex items-start gap-2.5">
+    <div className="flex min-w-0 items-start gap-2.5">
       <Avatar
         value={workspace.avatarUrl}
         initials={workspace.slug.slice(0, 2)}
@@ -173,8 +173,12 @@ function WorkspaceCell({ workspace }: { workspace: Workspace }) {
         testId="workspace-avatar"
       />
       <div className="min-w-0">
-        <div className="font-semibold text-foreground">{workspace.name}</div>
-        <div className={`${mono} text-[11px] text-dim`}>{workspace.slug}</div>
+        <div className="font-semibold text-foreground md:truncate">
+          {workspace.name}
+        </div>
+        <div className={`${mono} text-[11px] text-dim md:truncate`}>
+          {workspace.slug}
+        </div>
         {workspace.archivedAt === null ? null : (
           <Badge tone="quiet" data-status="archived">
             {t("archived")}
@@ -203,10 +207,10 @@ function GovernanceCell({ workspace }: { workspace: Workspace }) {
       >
         {t("governanceNotRecorded")}
       </Badge>
-      <div className="text-[11px] text-dim" data-issue="3933">
+      <div className="text-[11px] text-dim md:truncate" data-issue="3933">
         {t("retentionNotRecorded")}
       </div>
-      <div className={`${mono} text-[11px] text-dim`}>
+      <div className={`${mono} text-[11px] text-dim md:truncate`}>
         {t("namespace", { namespace: workspace.namespace })}
       </div>
     </>
@@ -225,7 +229,7 @@ function Actions({
   const t = useTranslations("organization.workspaces");
   const live = workspace.archivedAt === null;
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex gap-2 max-md:flex-wrap">
       {live && workspace.role !== null ? (
         <SafeLink
           to={routes.fleet(org, workspace.slug)}
