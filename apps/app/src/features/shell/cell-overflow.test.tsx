@@ -248,3 +248,18 @@ describe("markCutCells", () => {
     expect(clippedElement(owner)).toBe(owner);
   });
 });
+
+describe("CellOverflow keyboard stops", () => {
+  it("measures a row again when a paged table shows it", async () => {
+    page();
+    const description = screen.getByTestId("description");
+    const row = description.closest("tr");
+    if (row === null) throw new Error("the description cell has no row");
+    measure(description, 640, 320);
+    row.style.display = "none";
+    row.style.display = "";
+    await waitFor(() => {
+      expect(description).toHaveAttribute("tabindex", "0");
+    });
+  });
+});

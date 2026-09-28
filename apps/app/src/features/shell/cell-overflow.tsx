@@ -192,10 +192,14 @@ export function CellOverflow() {
     const changed = new MutationObserver((records) => {
       if (records.some(touchesTable)) schedule();
     });
+    // A paged table (ui/list-table.tsx) shows a page by changing each row's
+    // style, so a style, class, or hidden change counts as a change.
     changed.observe(document.body, {
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ["style", "class", "hidden"],
     });
     window.addEventListener("resize", schedule);
     scan();
