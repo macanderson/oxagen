@@ -48,6 +48,8 @@ import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
 import { assistantReplyGetRoute } from "./routes/v1/assistant.reply.get";
 import { assistantReplyFeedbackRecordRoute } from "./routes/v1/assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./routes/v1/assistant.turn.cancel";
+import { assistantAttachmentUploadRoute } from "./routes/v1/assistant.attachment.upload";
+import { assistantAttachmentGetRoute } from "./routes/v1/assistant.attachment.get";
 import { toolsSearchRoute } from "./routes/v1/tools.search";
 import { toolsLoadRoute } from "./routes/v1/tools.load";
 import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
@@ -724,6 +726,12 @@ const chatRateLimiter = distributedRateLimiter({
   keyPrefix: "chat",
   max: () => rateLimitBudgets().chat,
 });
+// Attaching a file stores bytes, so uploads share the chat budget under their
+// own key: a burst of uploads cannot starve the turns, nor the reverse.
+const assistantAttachmentRateLimiter = distributedRateLimiter({
+  keyPrefix: "assistant-attachments",
+  max: () => rateLimitBudgets().chat,
+});
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
 const orgScoped = new Hono<AppEnv>();
 orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
@@ -733,6 +741,7 @@ orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 // not wrap it. The limiter counts POST only, so cheap co-located GET reads pass
 // through untouched.
 orgScoped.use("/chat/*", chatRateLimiter);
+orgScoped.use("/assistant/attachments/*", assistantAttachmentRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 orgScoped.route("/workspaces/archive", workspaceArchiveRoute);
 // Minting an enrollment is an operator action, so it sits behind the session
@@ -907,6 +916,10 @@ orgScoped.route("/assistant/turn/cancel", assistantTurnCancelRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);
 orgScoped.route("/assistant/reply", assistantReplyGetRoute);
 orgScoped.route("/assistant/feedback", assistantReplyFeedbackRecordRoute);
+// Files attached to an assistant message (#4690, ADR-221): the upload, then
+// the read a sent message's card opens.
+orgScoped.route("/assistant/attachments/upload", assistantAttachmentUploadRoute);
+orgScoped.route("/assistant/attachments", assistantAttachmentGetRoute);
 orgScoped.route("/tools/search", toolsSearchRoute);
 orgScoped.route("/tools/load", toolsLoadRoute);
 orgScoped.route("/shell/nav-counts", shellNavCountsGetRoute);

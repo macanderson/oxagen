@@ -125,6 +125,31 @@ function isEmbeddingUnavailableError(
   return (err as { code?: unknown }).code === "embedding_unavailable";
 }
 
+/**
+ * The code `AttachmentRefusedError` (@oxagen/agent) carries: a file the
+ * attachment rules refused, at upload or when a turn reads it (ADR-221). The
+ * streaming route names it too.
+ */
+export const ATTACHMENT_REFUSED_CODE = "attachment_refused";
+
+/**
+ * A refused attachment, matched by shape so this middleware takes no
+ * dependency on the agent runtime. The message is Oxagen's own wording of the
+ * rule the file broke, never a provider's, so it goes to the caller as is.
+ */
+function attachmentRefusal(
+  err: unknown,
+): { reason: string; message: string } | null {
+  if (typeof err !== "object" || err === null) return null;
+  const e = err as Record<string, unknown>;
+  if (e.code !== ATTACHMENT_REFUSED_CODE || typeof e.reason !== "string")
+    return null;
+  return {
+    reason: e.reason,
+    message: typeof e.message === "string" ? e.message : "",
+  };
+}
+
 function assistantTurnFailure(
   err: unknown,
 ): { code: string; status: 402 | 409 | 502 | 503 } | null {
@@ -182,6 +207,24 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
         error: {
           code: "bad_request",
           message: "Request body is not valid JSON",
+        },
+        requestId,
+      },
+      400,
+    );
+  }
+
+  // A file the attachment rules refused is the caller's to fix: a 400 with
+  // the rule's reason, so a surface can say which file and why.
+  const refusal = attachmentRefusal(err);
+  if (refusal) {
+    logger.warn({ requestId, reason: refusal.reason }, "attachment refused");
+    return c.json(
+      {
+        error: {
+          code: ATTACHMENT_REFUSED_CODE,
+          reason: refusal.reason,
+          message: refusal.message,
         },
         requestId,
       },

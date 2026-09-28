@@ -454,6 +454,34 @@ describe("errorMiddleware embedding_unavailable", () => {
   });
 });
 
+describe("errorMiddleware attachment_refused", () => {
+  function refused(): Error {
+    return Object.assign(new Error("This file is too large."), {
+      code: "attachment_refused" as const,
+      reason: "too_large",
+    });
+  }
+
+  it("answers 400 with the rule's reason and its message", async () => {
+    const { status, body } = await triggerError(refused());
+    expect(status).toBe(400);
+    expect(body).toMatchObject({
+      error: {
+        code: "attachment_refused",
+        reason: "too_large",
+        message: "This file is too large.",
+      },
+    });
+  });
+
+  it("keeps an error with the code and no reason on the 500 path (negative)", async () => {
+    const { status } = await triggerError(
+      Object.assign(new Error("x"), { code: "attachment_refused" }),
+    );
+    expect(status).toBe(500);
+  });
+});
+
 // ── CapabilityError → HTTP status codes ──────────────────────────────────────
 
 describe("errorMiddleware CapabilityError", () => {

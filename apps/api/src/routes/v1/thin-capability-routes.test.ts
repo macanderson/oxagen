@@ -274,6 +274,7 @@ import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.ge
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
+import { assistantAttachmentUpload } from "@oxagen/oxagen/contracts/assistant.attachment.upload";
 import { graphRuleAuthor } from "@oxagen/oxagen/contracts/graph.rule.author";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
@@ -285,6 +286,7 @@ import { assistantEngineGetRoute } from "./assistant.engine.get";
 import { assistantReplyGetRoute } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecordRoute } from "./assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./assistant.turn.cancel";
+import { assistantAttachmentUploadRoute } from "./assistant.attachment.upload";
 import { graphRuleAuthorRoute } from "./graph.rule.author";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
@@ -1282,6 +1284,16 @@ const ROUTES: ThinRoute[] = [
     body: { turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1" },
     invalidBody: { turnId: "not-a-uuid" },
     jsonGuard: true,
+    status: 200,
+  },
+  // A file attached to an assistant message (#4690, ADR-221).
+  {
+    file: "assistant.attachment.upload",
+    route: assistantAttachmentUploadRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantAttachmentUpload.name,
+    body: { name: "notes.txt", mediaType: "text/plain", data: "aGk=" },
+    invalidBody: { name: "", mediaType: "text/plain", data: "aGk=" },
     status: 200,
   },
   // A rule authored across two sources as one goal-shaped turn (ADR-186).

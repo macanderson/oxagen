@@ -10,8 +10,15 @@ import {
   assistantGoalSchema,
   assistantPageContextSchema,
 } from "@oxagen/oxagen/contracts/assistant.ask";
+import {
+  ASSISTANT_ATTACHMENT_MAX_FILES,
+  assistantAttachmentIdSchema,
+} from "@oxagen/oxagen/contracts/assistant.attachment.upload";
 import { capabilityContext } from "../../lib/context";
-import { ASSISTANT_TURN_ERROR_STATUS } from "../../middleware/error";
+import {
+  ASSISTANT_TURN_ERROR_STATUS,
+  ATTACHMENT_REFUSED_CODE,
+} from "../../middleware/error";
 import type { AppEnv } from "../../app";
 import {
   createApiStreamTranslator,
@@ -42,6 +49,12 @@ const BodySchema = z.object({
   // with `cancel_assistant_turn` while the stream is open (#4164). Omitted,
   // nobody can stop the turn by name.
   turnId: assistantAsk.input.shape.turnId,
+  // Files the person attached, as the `gen_` ids the upload route returned
+  // (#4690, ADR-221). Omitted, the turn carries text alone.
+  attachments: z
+    .array(assistantAttachmentIdSchema)
+    .max(ASSISTANT_ATTACHMENT_MAX_FILES)
+    .optional(),
   // Per-turn MCP server allowlist. When non-empty, only those servers' tools
   // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
   activeServerIds: z.array(z.string()).optional().default([]),
@@ -189,6 +202,9 @@ chatStreamRoute.post("/", async (c) => {
           pageContext: body.pageContext,
           ...(body.goal ? { goal: body.goal } : {}),
           ...(body.turnId ? { turnId: body.turnId } : {}),
+          ...(body.attachments?.length
+            ? { attachments: body.attachments }
+            : {}),
         },
         ctx,
         { surface: "api" },
@@ -252,9 +268,12 @@ chatStreamRoute.post("/", async (c) => {
  * route answers by code is named here too: a hand-kept copy of the list
  * missed `model_call_failed` the day that code was added.
  */
-const STREAM_ERROR_CODES: ReadonlySet<string> = new Set(
-  Object.keys(ASSISTANT_TURN_ERROR_STATUS),
-);
+const STREAM_ERROR_CODES: ReadonlySet<string> = new Set([
+  ...Object.keys(ASSISTANT_TURN_ERROR_STATUS),
+  // A file the attachment rules refused before the turn began (ADR-221). Its
+  // message names the rule the file broke, so the composer shows it as is.
+  ATTACHMENT_REFUSED_CODE,
+]);
 
 /** The stable code a surface shows, read from the error's shape: a handler refusal's reason, or a turn failure's code. */
 function errorCode(err: unknown): string | undefined {
