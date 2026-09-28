@@ -15,6 +15,7 @@ import {
   parseToolManifest,
   parseToolsToml,
 } from "./parse";
+import { SSE_REFUSAL } from "./primitives";
 
 const SERVER_DIRECTIVE = "#:schema https://oxagen.sh/schemas/mcp-server/v1.json";
 const TOOLS_DIRECTIVE = "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json";
@@ -155,6 +156,14 @@ describe("parseServerToml", () => {
     expect(parseServerToml(file(lines))).toStrictEqual({
       ok: false,
       issues: [{ line: lineOf(lines, 'name = "Stripe"'), field: "name", message: SERVER_NAME_MESSAGE }],
+    });
+  });
+
+  it("refuses a server on the older HTTP+SSE transport, and names streamable-http", () => {
+    const lines = replaced(stripeLines, 'transport = "http"', 'transport = "sse"');
+    expect(parseServerToml(file(lines))).toStrictEqual({
+      ok: false,
+      issues: [{ line: lineOf(lines, "[source]"), field: "source.transport", message: SSE_REFUSAL }],
     });
   });
 

@@ -1893,6 +1893,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "ingest_tacho_memories",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "integration",
       "name": "install_integration",
       "reads": [],
@@ -2972,6 +2981,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "recall_tacho_memories",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4254,7 +4272,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7b5875ba73c44eecf51249ca09a7c5b03a949af543e70b20b57089bb4c9fac32",
+  "contentHash": "1385f6408357d2d6d8694b610806120bdd69e965aedabdf99a144d820db6cdad",
   "domains": [
     {
       "name": "agent",
