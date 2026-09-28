@@ -46,11 +46,17 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { assertOrgRole, type OrgRoleRequirement } from "@oxagen/iam/org-role";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import {
+  createGithubRest,
+  listSteeringInstallations,
+} from "@oxagen/github/provision";
+import {
   GITHUB_STEERING_PROVIDER,
   REAUTHORIZE,
   initialSteeringRepoState,
+  keepSteeringConnection,
   readSteeringRepoState,
   startSteeringRepoProvision,
+  type SteeringConnection,
   type SteeringRepoState,
 } from "@oxagen/handlers/steering_repo.provision";
 import type { AppEnv } from "../../app";
@@ -2434,8 +2440,11 @@ githubSteeringStartRoute.get("/", async (c) => {
  *
  * It trades the code for the owner's user token, stores the token as the
  * organization's `github_steering` account, and sends the provision event
- * again for each scope that waits on a connection. The installation itself is
- * found later, by the job, from the token's `/user/installations`.
+ * again for each scope that waits on a connection. When the install leg names
+ * an `installation_id` that the token lists on a GitHub organization, the
+ * callback stores that installation as the organization's steering connection
+ * first, so the job uses it even when the owner can reach several. Without
+ * one, the job finds the installation from the token's `/user/installations`.
  *
  * An invalid or expired state answers 400, since there is nowhere trusted to
  * send the person. Any later failure redirects to the state's `return_to`
@@ -2445,6 +2454,7 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
   const code = c.req.query("code");
   const rawState = c.req.query("state");
   const setupAction = c.req.query("setup_action");
+  const installationId = c.req.query("installation_id");
 
   const callbackKeys = [
     "OXAGEN_STEERING_APP_CLIENT_ID",
@@ -2562,6 +2572,27 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
     return fail("store_failed");
   }
 
+  // Keep the installation the owner just picked before provisioning runs
+  // again, so pick_connection finds it stored and never stops to ask.
+  if (installationId !== undefined) {
+    const connection = await steeringInstallationConnection(
+      orgId,
+      tokenData.access_token,
+      installationId,
+    );
+    if (connection !== null) {
+      try {
+        await keepSteeringConnection(orgId, connection);
+      } catch (err) {
+        logger.error(
+          { err: String(err), orgId },
+          "Storing the Oxagen Steering installation failed",
+        );
+        return fail("store_failed");
+      }
+    }
+  }
+
   try {
     await resendSteeringProvisioning(orgId, userId, "github");
   } catch (err) {
@@ -2577,3 +2608,53 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
     302,
   );
 });
+
+/**
+ * The steering connection for the installation the install leg named, or null
+ * when the owner's token does not show it on a GitHub organization.
+ *
+ * `installation_id` is a query parameter on a public endpoint, so it counts
+ * only when the owner's own token lists it. The job picks only installations
+ * on organizations, and this check matches it. A null leaves the organization
+ * without a stored connection, which is how the connect behaved before it
+ * read the id: the job then picks the one installation the token reaches.
+ */
+async function steeringInstallationConnection(
+  orgId: string,
+  accessToken: string,
+  rawId: string,
+): Promise<SteeringConnection | null> {
+  const id = Number(rawId);
+  if (!INSTALLATION_ID_PATTERN.test(rawId) || !Number.isSafeInteger(id)) {
+    logger.warn(
+      { orgId, installationId: rawId },
+      "The Oxagen Steering install named a malformed installation_id. The connect did not store it.",
+    );
+    return null;
+  }
+  let installations: Awaited<ReturnType<typeof listSteeringInstallations>>;
+  try {
+    installations = await listSteeringInstallations(
+      createGithubRest({ token: accessToken }),
+    );
+  } catch (err) {
+    logger.warn(
+      { err: String(err), orgId, installationId: id },
+      "Listing the owner's Oxagen Steering installations failed. The connect did not store the installation.",
+    );
+    return null;
+  }
+  const found = installations.find((i) => i.id === id);
+  if (found === undefined || found.account_type !== "Organization") {
+    logger.warn(
+      { orgId, installationId: id, accountType: found?.account_type ?? null },
+      "The owner's token does not show this Oxagen Steering installation on a GitHub organization. The connect did not store it.",
+    );
+    return null;
+  }
+  return {
+    provider: "github",
+    installation_id: found.id,
+    account_login: found.account_login,
+  };
+}

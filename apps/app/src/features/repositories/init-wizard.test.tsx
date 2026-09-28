@@ -3,7 +3,9 @@
 // workspace with no main repository binds the repository first and finds its
 // binding in the list, a production branch changed on step 2 is written
 // before the pull request, every write on the way can refuse, and a pull
-// request that already existed is said to be reused.
+// request that already existed is said to be reused. A linked repository with
+// no binding proposes its link as a steering PR (ADR-212), and the wizard
+// stops there: no branch move and no pull request until the PR merges.
 import {
   cleanup,
   render,
@@ -281,6 +283,106 @@ describe("the init wizard", () => {
       await within(root).findByTestId("init-wizard-failure"),
     ).toHaveTextContent("Another workspace has linked");
     expect(actions.bindWorkspaceRepository).not.toHaveBeenCalled();
+  });
+
+  it("proposes the link as a steering PR and stops before the branch move and the pull request", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/infra",
+        defaultRef: "main",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: false,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    const root = wizard([MAIN, AVAILABLE]);
+    await toLastStep(user, root, "release");
+    await user.click(within(root).getByTestId("init-wizard-open"));
+    const proposal = await within(root).findByTestId("init-wizard-steering-pr");
+    expect(proposal).toHaveAttribute("data-state", "proposed");
+    expect(proposal).toHaveTextContent(
+      "Steering PR #43 adds acme/infra to workspace.toml.",
+    );
+    expect(proposal).toHaveTextContent(
+      "Merge the steering PR to finish linking.",
+    );
+    expect(
+      within(proposal).getByTestId("init-wizard-steering-pr-link"),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/43");
+    expect(within(root).getByTestId("init-wizard-resume")).toHaveTextContent(
+      "Once acme/infra is linked, open this wizard again to add .oxagen/ to it.",
+    );
+    expect(actions.linkWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { owner: "acme", name: "infra" },
+    );
+    expect(actions.bindWorkspaceRepository).not.toHaveBeenCalled();
+    expect(actions.setProductionBranch).not.toHaveBeenCalled();
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+    // The footer is gone: there is nothing left to open from here.
+    expect(within(root).queryByTestId("init-wizard-open")).toBeNull();
+    expect(within(root).queryByTestId("init-wizard-back")).toBeNull();
+    // A steering PR is a write, so the page re-reads.
+    expect(onOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it("says a steering PR already open adds the repository", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/infra",
+        defaultRef: "main",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: true,
+        },
+      },
+    });
+    const user = userEvent.setup();
+    const root = wizard([MAIN, AVAILABLE]);
+    await toLastStep(user, root);
+    await user.click(within(root).getByTestId("init-wizard-open"));
+    const proposal = await within(root).findByTestId("init-wizard-steering-pr");
+    expect(proposal).toHaveAttribute("data-state", "reused");
+    expect(proposal).toHaveTextContent(
+      "Steering PR #43 already adds acme/infra to workspace.toml.",
+    );
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("says the next steering sync links a repository workspace.toml lists already", async () => {
+    actions.linkWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/infra",
+        defaultRef: "main",
+        status: "listed",
+        steeringPullRequest: null,
+      },
+    });
+    const user = userEvent.setup();
+    const root = wizard([MAIN, AVAILABLE]);
+    await toLastStep(user, root);
+    await user.click(within(root).getByTestId("init-wizard-open"));
+    const proposal = await within(root).findByTestId("init-wizard-steering-pr");
+    expect(proposal).toHaveAttribute("data-state", "listed");
+    expect(proposal).toHaveTextContent(
+      "workspace.toml lists acme/infra already. The next steering sync links it.",
+    );
+    expect(
+      within(proposal).queryByTestId("init-wizard-steering-pr-link"),
+    ).toBeNull();
+    expect(actions.setProductionBranch).not.toHaveBeenCalled();
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+    expect(onOpened).toHaveBeenCalledTimes(1);
   });
 
   it("prints the branch write's refusal and opens no pull request (negative)", async () => {

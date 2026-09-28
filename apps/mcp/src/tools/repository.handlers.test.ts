@@ -6,7 +6,8 @@
 //
 // Same pattern as agent.handlers.test.ts: the kernel `invoke` and the context
 // seam are mocked, and each tool must dispatch its own contract with the MCP
-// surface and hand back the contract-parsed output.
+// surface and hand back the contract-parsed output. A link and an unlink of a
+// repository workspace.toml lists answer with a steering PR (ADR-212).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -79,23 +80,26 @@ describe("list_repositories tool", () => {
 });
 
 describe("link_repository tool", () => {
-  it("dispatches the link and answers the linked binding", async () => {
+  const args = {
+    provider: "github" as const,
+    owner: "acme",
+    name: "shared-lib",
+  };
+
+  it("dispatches the link and answers the steering PR that proposes it", async () => {
     expect(linkMetadata.name).toBe("link_repository");
     expect(linkMetadata.annotations?.readOnlyHint).toBe(false);
     const output = {
-      bindingId: "rpb_0b",
-      connectionId: "con_0b",
       fullName: "acme/shared-lib",
       defaultRef: "main",
-      role: "linked",
-      linkedAt: "2026-09-18T00:00:00.000Z",
+      status: "proposed",
+      steeringPullRequest: {
+        number: 7,
+        url: "https://github.com/acme/platform/pull/7",
+        reused: false,
+      },
     };
     mocks.invoke.mockResolvedValue(output);
-    const args = {
-      provider: "github" as const,
-      owner: "acme",
-      name: "shared-lib",
-    };
     await expect(linkTool(args)).resolves.toEqual(output);
     expect(mocks.invoke).toHaveBeenCalledWith(
       "link_repository",
@@ -107,18 +111,43 @@ describe("link_repository tool", () => {
     );
   });
 
+  it("answers listed with no steering PR when workspace.toml lists the repository already", async () => {
+    const output = {
+      fullName: "acme/shared-lib",
+      defaultRef: "main",
+      status: "listed",
+      steeringPullRequest: null,
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(linkTool(args)).resolves.toEqual(output);
+  });
+
+  it("refuses the binding a link answered before ADR-212 (negative)", async () => {
+    mocks.invoke.mockResolvedValue({
+      bindingId: "rpb_0b",
+      connectionId: "con_0b",
+      fullName: "acme/shared-lib",
+      defaultRef: "main",
+      role: "linked",
+      linkedAt: "2026-09-18T00:00:00.000Z",
+    });
+    await expect(linkTool(args)).rejects.toThrow();
+  });
+
   it("refuses a repository name GitHub would refuse (negative)", () => {
     expect(() => linkSchema.name.parse("shared lib")).toThrow();
   });
 });
 
 describe("unlink_repository tool", () => {
-  it("dispatches the unlink by binding id", async () => {
+  it("dispatches the unlink by binding id and answers a link that predates the steering record as unlinked", async () => {
     expect(unlinkMetadata.name).toBe("unlink_repository");
     const output = {
       bindingId: "rpb_0b",
       fullName: "acme/shared-lib",
+      status: "unlinked",
       unlinkedAt: "2026-09-18T00:00:00.000Z",
+      steeringPullRequest: null,
     };
     mocks.invoke.mockResolvedValue(output);
     await expect(unlinkTool({ bindingId: "rpb_0b" })).resolves.toEqual(output);
@@ -128,6 +157,22 @@ describe("unlink_repository tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+  });
+
+  it("answers the steering PR that removes a listed repository, with no unlink time", async () => {
+    const output = {
+      bindingId: "rpb_0b",
+      fullName: "acme/shared-lib",
+      status: "proposed",
+      unlinkedAt: null,
+      steeringPullRequest: {
+        number: 8,
+        url: "https://github.com/acme/platform/pull/8",
+        reused: true,
+      },
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(unlinkTool({ bindingId: "rpb_0b" })).resolves.toEqual(output);
   });
 
   it("refuses an id that is not a binding id (negative)", () => {

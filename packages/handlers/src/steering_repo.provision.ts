@@ -927,6 +927,33 @@ export async function saveSteeringRepoState(
   );
 }
 
+/**
+ * Store `connection` as the organization's steering connection unless the
+ * organization already has one. The choice is permanent, so a later connect
+ * never replaces it. Returns whether this call stored it.
+ */
+export async function keepSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<boolean> {
+  const patch = { [STEERING_CONNECTION_SETTING]: connection };
+  // tenancy: filtered by orgId, which the caller took from a signed state. The
+  // caller checked that the owner's own token reaches the connection.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .update(schema.organizations)
+      .set({ settings: mergeSettings(schema.organizations.settings, patch) })
+      .where(
+        and(
+          eq(schema.organizations.id, orgId),
+          sql`(${schema.organizations.settings} -> ${STEERING_CONNECTION_SETTING}::text) IS NULL`,
+        ),
+      )
+      .returning({ id: schema.organizations.id }),
+  );
+  return rows.length > 0;
+}
+
 /** The email body. The in-app notification carries the link. */
 function reauthorizeEmail(title: string, body: string): string {
   const escape = (s: string) =>

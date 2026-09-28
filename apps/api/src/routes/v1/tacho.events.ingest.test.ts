@@ -290,12 +290,44 @@ describe("the /v1/tacho rate-limit buckets", () => {
     expect([...counts.keys()].some((k) => k.startsWith("tacho-host:"))).toBe(
       false,
     );
-    // The pre-auth credential ceiling (150) sat above every one of these, so
+    // The pre-auth credential ceiling (360) sat above every one of these, so
     // the 429 came from the ingest bucket and not from the shared one.
     const credential = [...counts.entries()].find(([k]) =>
       k.startsWith("tacho-preauth-credential:"),
     );
     expect(credential?.[1]).toBe(121);
+  });
+
+  it("counts memory recall in its own per-host `tacho-recall` bucket, 120 a minute", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 8, 18, 12, 11, 1));
+    mocks.invoke.mockResolvedValue({ items: [] });
+    const recall = () =>
+      app.fetch(
+        new Request("http://localhost/v1/tacho/memories/recall", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-vercel-forwarded-for": "203.0.113.9",
+            authorization: "Bearer ox_test_key",
+          },
+          body: JSON.stringify({
+            host_enrollment_id: HOST,
+            repository_digests: [],
+            tools: [],
+            paths: [],
+            text: "How do I install?",
+          }),
+        }),
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 121; i++) statuses.push((await recall()).status);
+    expect(statuses.slice(0, 120).every((s) => s === 200)).toBe(true);
+    expect(statuses[120]).toBe(429);
+    expect(counts.get("tacho-recall:machine:key_tacho")).toBe(121);
+    // Recall runs once a prompt, so it must not spend the memory upload's
+    // bucket or the control paths' one.
+    expect(counts.has("tacho-memories:machine:key_tacho")).toBe(false);
+    expect(counts.has("tacho-host:machine:key_tacho")).toBe(false);
   });
 
   it("keeps the command poll in the per-host `tacho-host` bucket, apart from ingest", async () => {

@@ -567,7 +567,9 @@ describe("the Repositories tab", () => {
       value: {
         bindingId: "rpb_link01",
         fullName: "acme/docs-site",
+        status: "unlinked",
         unlinkedAt: "2026-09-19T10:00:00.000Z",
+        steeringPullRequest: null,
       },
     });
     const dialog = await openRepository(user, "acme/docs-site");
@@ -613,15 +615,19 @@ describe("the Repositories tab", () => {
     expect(screen.queryByTestId("repositories-notice")).toBeNull();
   });
 
-  it("links a repository the installation reaches from its dialog", async () => {
+  it("links a repository the installation reaches from its dialog by opening a steering PR", async () => {
     const { user } = await loaded();
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: true,
       value: {
-        bindingId: "rpb_new01",
         fullName: "acme/infra",
         defaultRef: "main",
-        linkedAt: "2026-09-19T10:00:00.000Z",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: false,
+        },
       },
     });
     const dialog = await openRepository(user, "acme/infra");
@@ -635,9 +641,19 @@ describe("the Repositories tab", () => {
         { owner: "acme", name: "infra" },
       );
     });
+    const linked = await within(dialog).findByTestId(
+      "repository-dialog-linked",
+    );
+    expect(linked).toHaveTextContent(
+      "Steering PR #43 adds acme/infra to workspace.toml.",
+    );
+    expect(linked).toHaveTextContent(
+      "Merge the steering PR to finish linking.",
+    );
     expect(
-      await within(dialog).findByTestId("repository-dialog-linked"),
-    ).toHaveTextContent("acme/infra linked to Core platform.");
+      within(linked).getByTestId("repository-dialog-linked-link"),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/43");
+    expect(within(dialog).queryByTestId("repository-dialog-link")).toBeNull();
   });
 
   it("prints a link refusal in the dialog and writes nothing else (negative)", async () => {
@@ -1027,7 +1043,7 @@ describe("the init wizard", () => {
     await expectNoAxe(wizard);
   });
 
-  it("links a repository nobody bound before it opens the pull request", async () => {
+  it("proposes the link for a repository nobody bound and stops before the branch move and the pull request", async () => {
     const { user } = await loaded();
     await within(repoRow("acme/docs-site")).findByText("no .oxagen/");
     await user.click(screen.getByTestId("repositories-add-oxagen"));
@@ -1036,44 +1052,52 @@ describe("the init wizard", () => {
       within(wizard).getByTestId("init-wizard-select"),
       "acme/infra",
     );
-    for (let i = 0; i < 4; i += 1)
+    await user.click(within(wizard).getByTestId("init-wizard-next"));
+    // A changed branch would move first on a bound repository. Here there is
+    // no binding to move it on until the steering PR merges.
+    const input = within(wizard).getByTestId("init-wizard-branch-input");
+    await user.clear(input);
+    await user.type(input, "release");
+    for (let i = 0; i < 3; i += 1)
       await user.click(within(wizard).getByTestId("init-wizard-next"));
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: true,
       value: {
-        bindingId: "rpb_new01",
         fullName: "acme/infra",
         defaultRef: "main",
-        linkedAt: "2026-09-19T10:00:00.000Z",
-      },
-    });
-    actions.openInitPullRequest.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/infra",
-        branch: "oxagen/init",
-        base: "main",
-        pullRequest: {
-          number: 8,
-          htmlUrl: "https://github.com/acme/infra/pull/8",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: false,
         },
-        files: [".oxagen/workspace.toml", ".oxagen/rules/governance.toml"],
-        reused: false,
       },
     });
     await user.click(within(wizard).getByTestId("init-wizard-open"));
+    const proposal = await within(wizard).findByTestId(
+      "init-wizard-steering-pr",
+    );
+    expect(proposal).toHaveTextContent(
+      "Steering PR #43 adds acme/infra to workspace.toml.",
+    );
+    expect(proposal).toHaveTextContent(
+      "Merge the steering PR to finish linking.",
+    );
     expect(
-      await within(wizard).findByTestId("init-wizard-opened"),
-    ).toHaveTextContent("Opened acme/infra#8");
+      within(proposal).getByTestId("init-wizard-steering-pr-link"),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/43");
+    expect(within(wizard).getByTestId("init-wizard-resume")).toHaveTextContent(
+      "Once acme/infra is linked, open this wizard again to add .oxagen/ to it.",
+    );
     expect(actions.linkWorkspaceRepository).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       { owner: "acme", name: "infra" },
     );
-    expect(actions.openInitPullRequest.mock.calls[0]?.[2]).toMatchObject({
-      bindingId: "rpb_new01",
-      governanceMode: "team",
-    });
+    expect(actions.setProductionBranch).not.toHaveBeenCalled();
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+    expect(within(wizard).queryByTestId("init-wizard-open")).toBeNull();
+    expect(within(wizard).queryByTestId("init-wizard-opened")).toBeNull();
   });
 
   it("prints a refusal and stays on the last step (negative)", async () => {
@@ -1560,10 +1584,11 @@ describe("repository refusal messages", () => {
     ["main_repo", "never also linked"],
     ["repository_already_linked", "already linked to this workspace"],
     ["main_repo_claimed", "Another workspace steers by that repository"],
-    ["main_repo_unbound", "main repository first"],
+    ["main_repo_unbound", "no steering repository yet"],
     ["repository_linked_elsewhere", "Another workspace has linked"],
     ["main_repo_unlink_refused", "main repository cannot be unlinked"],
     ["repository_not_linked", "Reload the page"],
+    ["workspace_toml_unreadable", "present but unreadable"],
     ["branch_not_found", "Check the spelling"],
     ["production_branch_missing", "Set the production branch first"],
     ["production_branch_is_init_branch", "Set another production branch first"],

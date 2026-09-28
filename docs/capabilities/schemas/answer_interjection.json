@@ -110,17 +110,54 @@
           {
             "type": "object",
             "properties": {
-              "bindingId": {
-                "type": "string"
-              },
               "fullName": {
                 "type": "string",
                 "minLength": 1
+              },
+              "bindingId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "steeringPullRequest": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "number": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "reused": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "number",
+                      "url",
+                      "reused"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
+              "fullName",
               "bindingId",
-              "fullName"
+              "steeringPullRequest"
             ],
             "additionalProperties": false
           },
