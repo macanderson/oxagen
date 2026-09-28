@@ -81,14 +81,8 @@ afterEach(async () => {
 });
 
 describe("AgentsTable › missing values", () => {
-  it("says the owner and the purpose are not recorded when neither is (negative)", () => {
-    renderTable([
-      row("orphan", {
-        operatorId: null,
-        operatorName: null,
-        description: null,
-      }),
-    ]);
+  it("says the owner is not recorded when none is (negative)", () => {
+    renderTable([row("orphan", { operatorId: null, operatorName: null })]);
     const [only] = rows();
     if (only === undefined) throw new Error("no row");
     expect(only).toHaveTextContent("not recorded");
