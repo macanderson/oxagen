@@ -7,8 +7,16 @@
 // and its body travel beside it, bound by headers_hash and body_hash, so a
 // broker cannot downgrade the scheme or change a header without breaking the
 // signature. The relay refuses an envelope that is unsigned, expired,
-// replayed, or aimed at a host its own allowlist does not name, and a request
-// whose headers or body hash to anything else.
+// replayed, signed for another workspace, or aimed at a host its own
+// allowlist does not name, and a request whose headers or body hash to
+// anything else.
+//
+// A relay name is unique only within one workspace, and every relay trusts
+// the same signing key. So the envelope names its workspace inside the signed
+// bytes, and the relay compares it with the workspace it was configured for.
+// The broker routes by organization, workspace, and relay name first. The
+// relay's own comparison is the second check, and it holds even when the
+// broker routes a call to the wrong relay.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { z } from "zod";
 import { sha256Schema } from "@oxagen/oxagen/steering-repo/common";
@@ -30,6 +38,7 @@ import {
   portSchema,
   protoFullNameSchema,
   RELAY_NAME_PATTERN,
+  workspacePublicIdSchema,
 } from "./primitives";
 
 const relaySchemeSchema = z
@@ -113,6 +122,9 @@ export const relayEnvelopeSchema = withChecks(
         .string()
         .regex(RELAY_NAME_PATTERN, "not a relay name")
         .describe("The relay this envelope is for, as network = relay:<name> names it."),
+      workspace: workspacePublicIdSchema.describe(
+        "The public id of the workspace the relay belongs to. The relay refuses an envelope for any other workspace.",
+      ),
       nonce: nonceSchema,
       issued_at: issuedAtSchema,
       expires_at: expiresAtSchema,
