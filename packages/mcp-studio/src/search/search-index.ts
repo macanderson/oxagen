@@ -3,8 +3,11 @@
 //
 // Each search entry's vector is stored under the workspace's target key and
 // the sha256 of the entry's line. A vector is looked up in this process's
-// cache first, then in the store, and only then embedded. Publish warms the
-// index, so search usually embeds only the query. Every failure here is a
+// cache first, then in the store, and only then embedded. Every index in a
+// process shares one map of the vectors being embedded, so a search that
+// arrives during publish's warm waits for the warm's batch instead of
+// sending the same lines again. Publish warms the index, so search usually
+// embeds only the query. Every failure here is a
 // SearchIndexError or a store error, and the caller ranks by keyword instead.
 import { contentHash } from "./entry";
 import { SearchIndexError, type Embedder } from "./embedder";
@@ -71,6 +74,11 @@ export interface SearchIndexOptions {
   store: SearchIndexStore;
   /** A process-wide cache. Each index gets its own when none is passed. */
   cache?: VectorCache;
+  /**
+   * A process-wide map of the vectors being embedded now, by cache key. Each
+   * index gets its own when none is passed.
+   */
+  pending?: Map<string, Promise<Float32Array>>;
   /** Keeps one workspace's cached vectors apart from another's: the workspace id. */
   namespace: string;
   batchSize?: number;
@@ -95,13 +103,14 @@ export class SearchIndex {
   private readonly queue: EmbeddingQueue;
   private readonly rankTimeoutMs: number;
   private readonly log: SearchIndexLog | undefined;
-  /** Hashes being embedded now, so two callers that want one entry send it once. */
-  private readonly pending = new Map<string, Promise<Float32Array>>();
+  /** Vectors being embedded now, by cache key, so two callers that want one line send it once. */
+  private readonly pending: Map<string, Promise<Float32Array>>;
 
   constructor(options: SearchIndexOptions) {
     this.embedder = options.embedder;
     this.store = options.store;
     this.cache = options.cache ?? new VectorCache();
+    this.pending = options.pending ?? new Map();
     this.namespace = options.namespace;
     this.queue = new EmbeddingQueue(options.embedder, options.batchSize ?? EMBED_BATCH_SIZE);
     this.rankTimeoutMs = options.rankTimeoutMs ?? RANK_TIMEOUT_MS;
@@ -170,7 +179,7 @@ export class SearchIndex {
     const waits: Array<Promise<unknown>> = [];
     const fresh: Array<[hash: string, text: string]> = [];
     for (const [hash, text] of missing) {
-      const pending = this.pending.get(hash);
+      const pending = this.pending.get(this.cacheKey("d", hash));
       if (pending === undefined) fresh.push([hash, text]);
       else waits.push(pending.then((vector) => found.set(hash, vector)));
     }
@@ -190,15 +199,33 @@ export class SearchIndex {
     const key = this.cacheKey("q", contentHash(query));
     const cached = this.cache.get(key);
     if (cached !== undefined) return cached;
+    const pending = this.pending.get(key);
+    if (pending !== undefined) return pending;
+    const one = this.embedQuery(query, key);
+    this.pending.set(key, one);
+    try {
+      return await one;
+    } finally {
+      this.release(key, one);
+    }
+  }
+
+  private async embedQuery(query: string, key: string): Promise<Float32Array> {
     const [vector] = await this.embedder.embed([query], "query");
     if (vector === undefined) throw new SearchIndexError("incomplete", "The embeddings endpoint returned no vector for the query.");
     this.cache.set(key, vector);
     return vector;
   }
 
+  /** Drop a pending entry, but only while it is still this call's own. */
+  private release(key: string, own: Promise<Float32Array>): void {
+    if (this.pending.get(key) === own) this.pending.delete(key);
+  }
+
   /** Embed lines no one is embedding yet, store them, and return how many were embedded. */
   private async embedFresh(fresh: ReadonlyArray<[hash: string, text: string]>, found: Map<string, Float32Array>): Promise<number> {
     const batch = this.queue.documents(fresh.map(([, text]) => text));
+    const owned: Array<[key: string, one: Promise<Float32Array>]> = [];
     for (const [at, [hash]] of fresh.entries()) {
       const one = batch.then((vectors) => {
         const vector = vectors[at];
@@ -208,7 +235,9 @@ export class SearchIndex {
       // A caller that waits on this hash handles the rejection. This keeps
       // the promise from being unhandled when no caller waits.
       one.catch(() => undefined);
-      this.pending.set(hash, one);
+      const key = this.cacheKey("d", hash);
+      this.pending.set(key, one);
+      owned.push([key, one]);
     }
     try {
       const vectors = await batch;
@@ -230,7 +259,7 @@ export class SearchIndex {
       }
       return rows.length;
     } finally {
-      for (const [hash] of fresh) this.pending.delete(hash);
+      for (const [key, one] of owned) this.release(key, one);
     }
   }
 

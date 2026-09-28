@@ -20,7 +20,7 @@ import { warmSearch } from "./search-warm";
  * publish() reads from the merged tree goes through unchanged. The rows
  * project() stamps take their time from `deps.now`, the clock publish() uses
  * for the version's `published_at`. Then it embeds the version's search
- * entries, and waits up to WARM_WAIT_MS for them.
+ * entries with the same folder list, and waits up to WARM_WAIT_MS for them.
  */
 export function withToolProjection(
   deps: Omit<PublishDeps, "project">,
@@ -29,7 +29,7 @@ export function withToolProjection(
     ...deps,
     project: async (bundle, options) => {
       await project(bundle, { folders: options?.folders, now: deps.now() });
-      await warmSearch(bundle);
+      await warmSearch(bundle, { folders: options?.folders });
     },
   };
 }

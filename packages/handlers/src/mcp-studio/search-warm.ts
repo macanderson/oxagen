@@ -4,9 +4,10 @@
 // Publish calls this after it projects the version's tools. It embeds every
 // search entry the store does not hold under the workspace's target key, in
 // batches, then deletes the rows search no longer reads. A workspace that
-// ranks by keyword has its rows deleted and sends nothing anywhere. A
-// failure here never fails the publish: search embeds what is missing when
-// it runs, and ranks by keyword until the vectors exist.
+// ranks by keyword has its rows deleted and sends nothing anywhere, and so
+// does a version with no server folder left. A failure here never fails the
+// publish: search embeds what is missing when it runs, and ranks by keyword
+// until the vectors exist.
 import { contentHash, embeddingTarget, searchEntryTexts, toolManifestSchema } from "@oxagen/mcp-studio";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import { logger } from "../logger";
@@ -36,21 +37,37 @@ async function within<T>(promise: Promise<T>, ms: number): Promise<T | "late"> {
   }
 }
 
+export interface WarmOptions {
+  /** How long to wait for the warm. Defaults to WARM_WAIT_MS. */
+  waitMs?: number;
+  /**
+   * The server folders under tools/servers/ at the version's commit, as
+   * project() reads them. A version with no manifest and an empty list has no
+   * server left, so its rows go. A version with no manifest and a folder, or
+   * with no list, failed to compile, and its rows stay for the servers
+   * project() keeps.
+   */
+  folders?: readonly string[];
+}
+
 /**
  * Embed a published bundle's search entries and sweep the rows search no
  * longer reads. Never throws, and logs only an error's name and counts.
  */
-export async function warmSearch(bundle: Bundle, options: { waitMs?: number } = {}): Promise<void> {
-  if (bundle.scope !== "workspace" || !bundle.workspace || bundle.tools === null) return;
+export async function warmSearch(bundle: Bundle, options: WarmOptions = {}): Promise<void> {
+  if (bundle.scope !== "workspace" || !bundle.workspace) return;
+  const serverless = bundle.tools === null && options.folders?.length === 0;
+  if (bundle.tools === null && !serverless) return;
   let workspaceId: string | undefined;
   try {
-    const texts = searchEntryTexts(toolManifestSchema.parse(bundle.tools));
+    const texts = bundle.tools === null ? [] : searchEntryTexts(toolManifestSchema.parse(bundle.tools));
     const ids = await resolveWorkspace(bundle.organization, bundle.workspace);
     workspaceId = ids.workspaceId;
     const scope: SearchScope = { ...ids, principalKind: "service", capabilityName: PROJECT_CAPABILITY };
     const store = postgresSearchStore(scope);
-    // No search-mode server, or a workspace that ranks by keyword: no row
-    // is read again, so every row goes and nothing is embedded.
+    // No server, no search-mode server, or a workspace that ranks by
+    // keyword: no row is read again, so every row goes and nothing is
+    // embedded.
     const target = texts.length === 0 ? null : embeddingTarget(await readEmbeddingSettings(scope));
     const embedder = target === null ? null : await embedderFor(target, scope);
     if (embedder === null) {
