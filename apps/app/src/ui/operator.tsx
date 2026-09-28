@@ -11,7 +11,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import { Avatar } from "./avatar";
-import { mono } from "./control-styles";
+import { mono, popoverSurface } from "./control-styles";
 
 export type OperatorIdentity = {
   /** The principal public id; the key, never the label. */
@@ -92,7 +92,7 @@ export function OperatorName({
         <span
           role="tooltip"
           data-testid="operator-card"
-          className="animate-in absolute top-full left-0 z-30 mt-1.5 block w-max min-w-56 max-w-xs rounded-xl border border-border bg-card px-3.5 py-3 text-left text-sm font-normal whitespace-normal text-card-foreground shadow-md"
+          className={`${popoverSurface} animate-in absolute top-full left-0 z-30 mt-1.5 block w-max min-w-56 max-w-xs px-4 py-3 text-left text-sm font-normal whitespace-normal`}
         >
           <span className="flex items-center gap-2.5">
             <Avatar

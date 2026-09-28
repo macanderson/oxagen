@@ -12,7 +12,7 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { ToastStack, useToasts } from "@/ui/toast";
-import { LoaderCircle } from "lucide-react";
+import { CircleNotchIcon } from "@phosphor-icons/react";
 
 /** The refusal the alert names: another account, a closed invitation, or any other failure. */
 type Failure = "denied" | "closed" | "failed";
@@ -77,7 +77,7 @@ export function InviteDecision({ token }: { token: string }) {
           onClick={() => void run("accept")}
         >
           {pending === "accept" ? (
-            <LoaderCircle
+            <CircleNotchIcon
               aria-hidden
               className="size-4 animate-spin motion-reduce:animate-none"
             />

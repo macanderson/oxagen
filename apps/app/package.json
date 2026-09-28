@@ -36,6 +36,7 @@
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/ui": "workspace:*",
+    "@phosphor-icons/react": "2.1.10",
     "@streamdown/code": "1.1.1",
     "drizzle-orm": "0.45.3",
     "lucide-react": "1.47.0",

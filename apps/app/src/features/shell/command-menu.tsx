@@ -23,7 +23,7 @@
 // receipt. The dialog sits beside the menu rather than inside it, because the
 // menu's popup unmounts when it closes.
 import { Dialog } from "@base-ui/react/dialog";
-import { Search } from "lucide-react";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { searchCommands } from "./command-actions";
@@ -45,8 +45,16 @@ import { useSidebarSections } from "./sidebar";
 import { openAssistantDraft } from "@/shared/assistant-draft";
 import { openApprovals } from "@/shared/approvals-drawer";
 import { openCreate } from "@/shared/create";
+import { menuItem, menuItemActive, menuLabel } from "@/ui/control-styles";
 import { useNavigate } from "@/ui/navigation";
 import { SheetHandle } from "@/ui/sheet-dialog";
+
+// The preset's command dialog: the dialog fill at 70% over a blurred,
+// saturated copy of the page, the 4xl corner and the faint ring the menus
+// wear. On a phone phone.css turns it into a sheet and keeps the top corners.
+const commandSurface =
+  "isolate overflow-hidden rounded-4xl bg-dialog-bg/70 text-dialog-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /** How long typing rests before the query goes to `search_tools`. */
 const SEARCH_DEBOUNCE_MS = 150;
@@ -193,12 +201,12 @@ function CommandPalette({
       data-testid="command-menu"
       data-sheet=""
       initialFocus={inputRef}
-      className="fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl"
+      className={`${commandSurface} fixed left-1/2 top-[10vh] z-50 flex max-h-[76dvh] w-[calc(100%-1.5rem)] max-w-xl -translate-x-1/2 flex-col`}
     >
       <SheetHandle />
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-        <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+      <div className="flex items-center gap-2.5 border-b border-foreground/5 px-4 py-3">
+        <MagnifyingGlassIcon aria-hidden="true" className="size-4 text-muted-foreground" />
         <input
           ref={inputRef}
           role="combobox"
@@ -256,7 +264,7 @@ function CommandPalette({
           id={listId}
           role="listbox"
           aria-label={t("commands.title")}
-          className="min-h-0 flex-1 overflow-y-auto p-2"
+          className="min-h-0 flex-1 overflow-y-auto p-1"
         >
           {groupsOf(ordered).map(({ group, items }) => (
             <div
@@ -267,11 +275,11 @@ function CommandPalette({
             >
               <div
                 id={`${listId}-g-${group}`}
-                className="flex items-baseline gap-2 px-3 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-muted-foreground"
+                className={`${menuLabel} flex items-baseline gap-2`}
               >
                 <span>{t(`commands.groups.${group}.label`)}</span>
                 {notes[group] === undefined ? null : (
-                  <span className="font-normal normal-case tracking-normal">
+                  <span className="font-normal">
                     {notes[group]}
                   </span>
                 )}
@@ -293,9 +301,7 @@ function CommandPalette({
                     onClick={() => {
                       open(c);
                     }}
-                    className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
-                      selected ? "bg-accent text-accent-foreground" : ""
-                    }`}
+                    className={`${menuItem} ${selected ? menuItemActive : ""}`}
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{c.label}</span>

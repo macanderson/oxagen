@@ -12,7 +12,11 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ProposalStatus } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  textareaBase,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -178,7 +182,7 @@ export function ProposalWrites({
                 required
                 maxLength={2000}
                 rows={3}
-                className={inputBase}
+                className={textareaBase}
               />
             </label>
           }

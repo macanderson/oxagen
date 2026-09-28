@@ -16,7 +16,7 @@
 // total. The page size and the columns shown are the person's saved choice
 // (`prefs.ts`), kept in a cookie the page reads on the server. The chips
 // filter the rows of the page, because parked comes from the approvals read.
-import { ArrowUpDown } from "lucide-react";
+import { ArrowsDownUpIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -52,7 +52,6 @@ import {
   buttonDanger,
   buttonPrimary,
   buttonSecondary,
-  inputBase,
   mono,
   panel,
   panelHeader,
@@ -62,6 +61,7 @@ import {
   statTerm,
   statTile,
   statValue,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
@@ -1021,7 +1021,7 @@ function PauseDialog({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            className={`${inputBase} resize-y max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:text-base`}
           />
           <p className="text-xs text-muted-foreground">
             {ledger ? command("ledgerReasonHelp") : t("note")}
@@ -1297,7 +1297,7 @@ export function FleetBoard({
                         className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         {label}
-                        <ArrowUpDown aria-hidden className="size-3" />
+                        <ArrowsDownUpIcon aria-hidden className="size-3" />
                       </button>
                     </th>
                   );

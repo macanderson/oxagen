@@ -15,7 +15,7 @@
 // classes. The version's measures are carried through unchanged: a measure is
 // a JSONPath into the tool's input, authored where the tool is declared or
 // imported, and this page has no safe way to write one.
-import { Check, Copy } from "lucide-react";
+import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
@@ -34,7 +34,12 @@ import {
   type ToolVersion,
 } from "@/data/contracts/tools";
 import { CodeBlock } from "@/ui/code-panel";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  inputBase,
+  mono,
+  textareaBase,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { useNavigate } from "@/ui/navigation";
@@ -225,7 +230,7 @@ function ClassificationForm({
               "\n",
             )}
             placeholder={t("classify.dataClassesPlaceholder")}
-            className={`${inputBase} ${mono}`}
+            className={`${textareaBase} ${mono}`}
           />
           <p className="text-xs text-muted-foreground">
             {t("classify.dataClassesHint")}
@@ -242,7 +247,7 @@ function ClassificationForm({
           rows={2}
           required
           maxLength={500}
-          className={inputBase}
+          className={textareaBase}
         />
         <p className="text-xs text-muted-foreground">
           {t("classify.reasonHint")}
@@ -295,9 +300,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         className="grid size-7 place-items-center rounded-md border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         {state === "copied" ? (
-          <Check aria-hidden="true" className="size-3.5" />
+          <CheckIcon aria-hidden="true" className="size-3.5" />
         ) : (
-          <Copy aria-hidden="true" className="size-3.5" />
+          <CopyIcon aria-hidden="true" className="size-3.5" />
         )}
       </button>
       <span role="status" className="text-[11px] text-muted-foreground">

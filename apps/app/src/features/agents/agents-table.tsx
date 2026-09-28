@@ -37,7 +37,11 @@
 // (`qa-chat`), and deregistering it stopped stella in the workspace (#4350).
 // Its actions cell holds a badge and no action; the agent's page keeps the
 // kill switch, which is how a person stops stella.
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowsDownUpIcon,
+  ArrowUpIcon,
+} from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState } from "react";
 import type { AgentPage } from "@/data/contracts/agents";
@@ -823,11 +827,11 @@ export function AgentsTable({
                       >
                         {column.label}
                         {sorted === "ascending" ? (
-                          <ArrowUp aria-hidden="true" className="size-3" />
+                          <ArrowUpIcon aria-hidden="true" className="size-3" />
                         ) : sorted === "descending" ? (
-                          <ArrowDown aria-hidden="true" className="size-3" />
+                          <ArrowDownIcon aria-hidden="true" className="size-3" />
                         ) : (
-                          <ArrowUpDown
+                          <ArrowsDownUpIcon
                             aria-hidden="true"
                             className="size-3 opacity-50"
                           />
