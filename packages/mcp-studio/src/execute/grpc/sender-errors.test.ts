@@ -190,6 +190,9 @@ describe("a response the method does not allow", () => {
     expect(expectError(result, "INTERNAL", 13, 1)).toBe(
       "a_intel.ledger.v1.Ledger/GetEntry ended with OK and sent no response message.",
     );
+    expect(result.exchanges).toEqual([
+      { request: { method: GET_ENTRY.method, message: { id: "e_1" } }, response: { code: "OK" } },
+    ]);
   });
 
   it("fails bytes that do not decode, and cancels the call", async () => {
@@ -198,6 +201,7 @@ describe("a response the method does not allow", () => {
     expect(expectError(result, "INTERNAL", 13, 1)).toMatch(
       /^The response does not decode as a_intel\.ledger\.v1\.Entry/,
     );
+    expect(result.exchanges).toEqual([]);
     expect(sent.cancel).toHaveBeenCalled();
   });
 
@@ -234,6 +238,7 @@ describe("a Transport that fails", () => {
     const fake = fakeTransport(() => Promise.reject(new TransportError(code, `The Transport said ${code}.`, false)));
     const result = await sender.send(GET_ENTRY, { id: "e_1" }, context(fake.transport));
     expect(expectError(result, title, undefined, 1)).toBe(`The Transport said ${code}.`);
+    expect(result.exchanges).toEqual([]);
     expect(fake.requests).toHaveLength(1);
   });
 
@@ -241,6 +246,7 @@ describe("a Transport that fails", () => {
     const fake = fakeTransport(() => Promise.reject(new TransportError("timeout", "The relay gave up.", true)));
     const result = await sender.send(GET_ENTRY, { id: "e_1" }, context(fake.transport));
     expect(expectError(result, "DEADLINE_EXCEEDED", 4, 1)).toBe("The relay gave up.");
+    expect(result.exchanges).toEqual([]);
   });
 
   it("returns a stream's items when the Transport times out", async () => {
@@ -255,6 +261,12 @@ describe("a Transport that fails", () => {
       context(returning(sent)),
     );
     expect(result).toMatchObject({ ok: true, attempts: 1, value: { items: [{ id: "e_1" }], truncated: true } });
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: LIST_ENTRIES.method, message: {} },
+        response: { code: "DEADLINE_EXCEEDED", messages: [expect.objectContaining({ id: "e_1" })] },
+      },
+    ]);
     expect(sent.cancel).toHaveBeenCalled();
   });
 
@@ -335,6 +347,12 @@ describe("a status the upstream sends", () => {
       ok: true,
       attempts: 1,
       value: { items: [expect.objectContaining({ id: "e_1" })], truncated: true },
+      exchanges: [
+        {
+          request: { method: LIST_ENTRIES.method, message: {} },
+          response: { code: "DEADLINE_EXCEEDED", message: "late", messages: [expect.objectContaining({ id: "e_1" })] },
+        },
+      ],
     });
   });
 
@@ -365,6 +383,12 @@ describe("a Transport that stalls", () => {
       context(returning(sent), { deadline_ms: 50 }),
     );
     expect(result).toMatchObject({ ok: true, value: { items: [{ id: "e_1" }], truncated: true } });
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: LIST_ENTRIES.method, message: {} },
+        response: { code: "DEADLINE_EXCEEDED", messages: [expect.objectContaining({ id: "e_1" })] },
+      },
+    ]);
   });
 
   it("cancels a call that opens after the deadline", async () => {
@@ -423,6 +447,7 @@ describe("a caller that cancels", () => {
       context(returning(sent), { signal: controller.signal }),
     );
     expect(expectError(result, "CANCELLED", 1, 1)).toBe("The call was cancelled before it finished.");
+    expect(result.exchanges).toEqual([]);
     expect(sent.cancel).toHaveBeenCalled();
   });
 
@@ -451,6 +476,12 @@ describe("a caller that cancels", () => {
     const started = Date.now();
     const result = await waiting.send(GET_ENTRY, { id: "e_1" }, context(fake.transport, { signal: controller.signal }));
     expectError(result, "CANCELLED", 1, 1);
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: GET_ENTRY.method, message: { id: "e_1" } },
+        response: { code: "UNAVAILABLE", message: "The ledger is restarting." },
+      },
+    ]);
     expect(fake.requests).toHaveLength(1);
     expect(Date.now() - started).toBeLessThan(2_000);
   });
@@ -476,6 +507,12 @@ describe("the stream byte cap", () => {
     const sent = response([entryBytes({ id: "e_1" }), entryBytes({ id: "e_2" }), entryBytes({ id: "e_3" })]);
     const result = await capped.send(LIST_ENTRIES, {}, context(returning(sent)));
     expect(result).toMatchObject({ ok: true, value: { items: [{ id: "e_1" }], truncated: true } });
+    expect(result.exchanges).toEqual([
+      {
+        request: { method: LIST_ENTRIES.method, message: {} },
+        response: { code: "CANCELLED", messages: [expect.objectContaining({ id: "e_1" })] },
+      },
+    ]);
     expect(sent.cancel).toHaveBeenCalled();
   });
 });

@@ -304,6 +304,124 @@ describe("installOne — registry install (empty endpointUrl)", () => {
     expect(capturedValues!.authKind).toBe("oauth");
     expect(res).toEqual({ id: "porg-registry-oauth", authKind: "oauth" });
   });
+
+  it("installs the streamable-http remote when the entry lists an sse remote first (ADR-211)", async () => {
+    // Review refuses HTTP+SSE, and the lock pins the streamable-http remote.
+    // deriveTransportTypes lists types in catalog order, so it names sse
+    // first here. The handler must take the URL and the transport from the
+    // streamable-http remote, not from the first remote or the first type.
+    mockRegistryQuery([fakeRegistry]);
+    mocks.listServers.mockResolvedValueOnce({
+      servers: [
+        {
+          ...fakeServerResponse,
+          server: {
+            ...fakeServerResponse.server,
+            remotes: [
+              { type: "sse", url: "https://mcp.example.com/sse" },
+              { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+            ],
+          },
+        },
+      ],
+    });
+    mocks.deriveTransportTypes.mockReturnValue(["sse", "streamable-http"]);
+
+    mockIconLookup();
+    let capturedValues: Record<string, unknown> | null = null;
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              capturedValues = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([
+                      { id: "porg-streamable", authKind: vals.authKind },
+                    ]),
+                }),
+              };
+            },
+          }),
+        }),
+    );
+
+    await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: {
+        name: "my-mcp-server",
+        endpointUrl: "", // empty → registry install
+        transport: "sse",
+        authKind: "none",
+      },
+    });
+
+    expect(capturedValues).not.toBeNull();
+    expect(capturedValues!.transport).toBe("streamable-http");
+    expect(capturedValues!.endpointUrl).toBe("https://mcp.example.com/mcp");
+  });
+
+  it("takes the transport from the same remote as the URL, not from a package type", async () => {
+    // An entry with a stdio package and one sse remote: deriveTransportTypes
+    // names stdio first. The URL comes from the remote, so the transport must
+    // too, or the row pairs a hosted URL with a local transport.
+    mockRegistryQuery([fakeRegistry]);
+    mocks.listServers.mockResolvedValueOnce({
+      servers: [
+        {
+          ...fakeServerResponse,
+          server: {
+            ...fakeServerResponse.server,
+            packages: [
+              {
+                registryType: "npm",
+                identifier: "my-mcp-server",
+                transport: { type: "stdio" },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    mocks.deriveTransportTypes.mockReturnValue(["stdio", "sse"]);
+
+    mockIconLookup();
+    let capturedValues: Record<string, unknown> | null = null;
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          insert: () => ({
+            values: (vals: Record<string, unknown>) => {
+              capturedValues = vals;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: () =>
+                    Promise.resolve([
+                      { id: "porg-same-remote", authKind: vals.authKind },
+                    ]),
+                }),
+              };
+            },
+          }),
+        }),
+    );
+
+    await installOne(ctx, {
+      pluginType: "mcp_server",
+      custom: {
+        name: "my-mcp-server",
+        endpointUrl: "", // empty → registry install
+        transport: "streamable-http",
+        authKind: "none",
+      },
+    });
+
+    expect(capturedValues).not.toBeNull();
+    expect(capturedValues!.transport).toBe("sse");
+    expect(capturedValues!.endpointUrl).toBe("https://mcp.example.com/mcp");
+  });
 });
 
 describe("installOne — truly-custom install (endpointUrl provided)", () => {

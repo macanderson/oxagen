@@ -252,7 +252,9 @@ export function serverColumns(server: ManifestServer): ServerColumns {
   let fallback: string;
   switch (source.type) {
     case "remote":
-      transportType = source.transport === "sse" ? "sse" : "streamable-http";
+      // server.toml's http is streamable HTTP, the only transport review
+      // accepts for a remote server (ADR-211).
+      transportType = "streamable-http";
       fallback = source.url;
       break;
     case "registry":
