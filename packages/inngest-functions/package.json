@@ -14,6 +14,7 @@
     "./client": "./src/inngest.ts",
     "./steering-sync-runner": "./src/lib/steering-sync-runner.ts",
     "./steering-repo-provision-runner": "./src/lib/steering-repo-provision-runner.ts",
+    "./steering-repo-health-runner": "./src/lib/steering-repo-health-runner.ts",
     "./run-fit-runner": "./src/lib/run-fit-runner.ts",
     "./memory-runner": "./src/lib/memory-runner.ts",
     "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts",

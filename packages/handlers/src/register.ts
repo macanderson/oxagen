@@ -6,6 +6,7 @@ import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
@@ -91,6 +92,23 @@ registerHandlersOnce("@oxagen/handlers", () => {
             },
         step,
       );
+    },
+  });
+  // The steering repo health jobs (lane S2, #4560) read and act through
+  // ./steering-repo/health, which @oxagen/inngest-functions cannot import.
+  setSteeringRepoHealthRunner({
+    sweepRequests: async () => {
+      const health = await import("./steering-repo/health");
+      return health.healthRequests(
+        await health.listHealthScopes(),
+        health.SWEEP_TRIGGER,
+      );
+    },
+    check: async (scope, trigger) => {
+      const outcome = await (
+        await import("./steering-repo/health")
+      ).refreshRepoHealth(scope, trigger);
+      return outcome === null ? null : { health: outcome.health };
     },
   });
   // The durable Model fit reading (#3893, ADR-201) reads the run the way the
@@ -1036,6 +1054,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.steering.deliveries"))
         .getSteeringDeliveriesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_steering_repo",
+    async () =>
+      (await import("./steering_repo.read"))
+        .getSteeringRepoHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repair_steering_repo",
+    async () =>
+      (await import("./steering_repo.repair"))
+        .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_steering_freshness",

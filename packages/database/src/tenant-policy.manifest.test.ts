@@ -272,7 +272,8 @@ describe("tenant policy manifest", () => {
     // 145 adds cost.finding_claims (ADR-208).
     // 146 adds workspace.operator_ranking_policy, the operator ranking's
     // pseudonym setting.
-    expect(POLICY_MANIFEST.length).toBe(146);
+    // 147 adds agent.steering_repo_health (S2, #4560, 2026-09-27).
+    expect(POLICY_MANIFEST.length).toBe(147);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

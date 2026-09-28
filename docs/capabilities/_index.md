@@ -447,6 +447,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [attach_gitlab_project](repository.gitlab.attach.md) | [repository.gitlab.attach.ts](../../packages/oxagen/src/contracts/repository.gitlab.attach.ts) | api |
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
 | [get_repository_tree](repository.tree.get.md) | [repository.tree.get.ts](../../packages/oxagen/src/contracts/repository.tree.get.ts) | api, mcp, cli |
+| [get_steering_repo](steering_repo.get.md) | [steering_repo.get.ts](../../packages/oxagen/src/contracts/steering_repo.get.ts) | api, mcp |
 | [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, cli |
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |
@@ -454,6 +455,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, cli |
 | [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
+| [repair_steering_repo](steering_repo.repair.md) | [steering_repo.repair.ts](../../packages/oxagen/src/contracts/steering_repo.repair.ts) | api, mcp |
 | [set_production_branch](repository.production_branch.set.md) | [repository.production_branch.set.ts](../../packages/oxagen/src/contracts/repository.production_branch.set.ts) | api, mcp, cli |
 | [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
 
