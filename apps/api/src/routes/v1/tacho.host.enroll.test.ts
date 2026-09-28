@@ -128,16 +128,17 @@ afterEach(() => {
 });
 
 describe("POST /v1/tacho/enroll rate limits", () => {
-  it("still enrols after 151 unauthenticated calls to another /v1/tacho path exhaust the shared credential bucket", async () => {
-    // 150 is the sum of the post-auth budgets (120 ingest + 30 control), so a
+  it("still enrols after 361 unauthenticated calls to another /v1/tacho path exhaust the shared credential bucket", async () => {
+    // 360 is the sum of the post-auth budgets (120 ingest, 120 recall, 30
+    // control, and 30 for each of three paths with their own bucket), so a
     // healthy enrolled key never meets this ceiling before its own.
     atMinute(1);
     const statuses: number[] = [];
-    for (let i = 0; i < 151; i++) {
+    for (let i = 0; i < 361; i++) {
       statuses.push((await request("/v1/tacho/events", {})).status);
     }
-    expect(statuses.slice(0, 150).every((s) => s === 401)).toBe(true);
-    expect(statuses[150]).toBe(429);
+    expect(statuses.slice(0, 360).every((s) => s === 401)).toBe(true);
+    expect(statuses[360]).toBe(429);
 
     const enrolled = await request(
       "/v1/tacho/enroll",
