@@ -14,6 +14,9 @@
 //     steering/import-oxagen-2, and so on. Each batch commits
 //     steering/imported/replaces.txt, which names each converted record's old
 //     id, so the stamp writes it as `replaces`.
+//   - A record whose record_id is missing or is not a record id waits for a
+//     person. The stamp refuses an imported record with no old id, and its
+//     runs could not follow it to the new file.
 //   - A v0.1 `rule` becomes a business-rule or a code-rule. A person chooses,
 //     so a rule with no choice waits, as does a constraint with no effect.
 //   - Each skill under .oxagen/skills/ becomes steering/skills/<lineage>/.
