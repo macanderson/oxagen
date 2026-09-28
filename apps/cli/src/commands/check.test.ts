@@ -356,7 +356,7 @@ describe("the report", () => {
     api.apiGetOrThrow.mockResolvedValue(published());
 
     const result = await runRaw(clone(), [], {}, { cacheDir: null });
-    const expected = direct(fixtureRepo(), fixtureRepo());
+    const expected = await direct(fixtureRepo(), fixtureRepo());
 
     expect(api.apiGetOrThrow).toHaveBeenCalledTimes(1);
     expect(api.apiGetOrThrow).toHaveBeenCalledWith(
