@@ -186,6 +186,47 @@ describe("createOrganizationAction", () => {
       }),
     );
   });
+
+  // The CLI consent page skips the welcome flow and lists only organizations
+  // that have a workspace, so an organization made on the way there gets the
+  // "Default" one, or the consent page sends you straight back here.
+  it("gives the organization a Default workspace and continues to a requested destination", async () => {
+    invoke.mockResolvedValue({
+      ...created,
+      workspace: { publicId: "ws_01", slug: "default" },
+    });
+    expect(
+      await createOrganizationAction(form, "/cli/authorize?state=abc"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/cli/authorize?state=abc" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      {
+        name: "Acme Robotics",
+        slug: "acme",
+        namespace: "acme",
+        workspace: { name: "Default", slug: "default" },
+      },
+      expect.objectContaining({ userId: "u-owner" }),
+    );
+  });
+
+  it("treats an off-site destination as none: no workspace, then Connect (negative)", async () => {
+    invoke.mockResolvedValue(created);
+    expect(
+      await createOrganizationAction(form, "//evil.example/cli/authorize"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/welcome/acme/new-workspace/connect" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      expect.objectContaining({ workspace: null }),
+      expect.anything(),
+    );
+  });
 });
 
 describe("registerAgent", () => {

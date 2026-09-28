@@ -137,18 +137,21 @@ describe("OrganizationForm", () => {
     expect(createOrganizationAction).not.toHaveBeenCalled();
   });
 
-  it("sends the derived address and the chosen namespace, with no workspace, then continues to Connect", async () => {
+  it("sends the derived address and the chosen namespace, with no workspace or destination, then continues to Connect", async () => {
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
       value: { to: CONNECT },
     });
     renderForm();
     await submit();
-    expect(createOrganizationAction).toHaveBeenCalledWith({
-      name: "Anderson Intelligence Corp.",
-      slug: "anderson-intelligence-corp",
-      namespace: "anders",
-    });
+    expect(createOrganizationAction).toHaveBeenCalledWith(
+      {
+        name: "Anderson Intelligence Corp.",
+        slug: "anderson-intelligence-corp",
+        namespace: "anders",
+      },
+      undefined,
+    );
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith(CONNECT);
     });
@@ -236,13 +239,20 @@ describe("OrganizationForm", () => {
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
   });
 
-  it("continues to the requested destination instead of Connect", async () => {
+  it("sends the requested destination and continues where the server answers", async () => {
+    // The server gives the organization a workspace and answers with the
+    // destination, because the CLI consent page lists only organizations that
+    // have one.
     createOrganizationAction.mockResolvedValueOnce({
       ok: true,
-      value: { to: CONNECT },
+      value: { to: "/cli/authorize?state=abc" },
     });
     renderForm({ destination: routes.cliAuthorize({ state: "abc" }) });
     await submit();
+    expect(createOrganizationAction).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: "anderson-intelligence-corp" }),
+      "/cli/authorize?state=abc",
+    );
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith("/cli/authorize?state=abc");
     });

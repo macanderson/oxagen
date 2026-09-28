@@ -8,6 +8,7 @@
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
 import {
+  DEFAULT_FIRST_WORKSPACE,
   organizationCreate,
   slugFromName,
 } from "@oxagen/oxagen/contracts/org.create";
@@ -16,7 +17,7 @@ import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireUser, requireViewer } from "@/server/viewer";
-import { routes, type SafePath } from "@/shared/safe-path";
+import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { AgentForm, type AgentFormValues } from "./agent-form";
 import { OrganizationForm, type OrganizationField } from "./org-form";
 
@@ -24,14 +25,23 @@ import { OrganizationForm, type OrganizationField } from "./org-form";
  * A field the form refuses is `invalid` with the field and its
  * `onboarding.errors` key as the code, and no capability runs. A taken address
  * is the handler's `conflict` with code `slug_taken`, a taken namespace the
- * same with `namespace_taken`. A created organization continues to the connect
- * step: a workspace needs a steering repo, and a steering repo needs a code
- * host, so the form names no workspace. It sends `workspace: null`, so
- * `create_org` makes none and the welcome flow asks for the first one by name
- * (#4582). Omitting the field would make "Default".
+ * same with `namespace_taken`.
+ *
+ * With no `destination`, a created organization continues to the connect step:
+ * a workspace needs a steering repo, and a steering repo needs a code host, so
+ * the form names no workspace. It sends `workspace: null`, so `create_org`
+ * makes none and the welcome flow asks for the first one by name (#4582).
+ *
+ * A `destination` (the CLI consent page) skips the welcome flow, so nothing
+ * would ever ask for that name. The organization gets `create_org`'s "Default"
+ * workspace instead, because the consent page lists only organizations that
+ * have a workspace and would send you back here. The destination comes from
+ * the client, so it is sanitized again here, and one that fails falls back to
+ * the connect step.
  */
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
+  destination?: string,
 ): Promise<ActionResult<{ to: SafePath }>> {
   const ctx = await requireUser(routes.newOrganization());
   const parsed = OrganizationForm.safeParse(input);
@@ -45,17 +55,24 @@ export async function createOrganizationAction(
     };
   }
   const { name, slug, namespace } = parsed.data;
+  const next = sanitizeNext(destination ?? null, routes.root());
+  const skipsWelcome = next !== routes.root();
   const result = await kernelWrite(ctx, organizationCreate, {
     name,
     slug,
     namespace,
-    workspace: null,
+    workspace: skipsWelcome ? DEFAULT_FIRST_WORKSPACE : null,
   });
-  // The gate's next step is Connect a code host, outside the app shell. The
-  // first workspace follows it, and Fleet opens once the first frame arrives.
-  return result.ok
-    ? { ok: true, value: { to: routes.welcomeConnect(result.value.slug) } }
-    : result;
+  if (!result.ok) return result;
+  // Otherwise the gate's next step is Connect a code host, outside the app
+  // shell. The first workspace follows it, and Fleet opens once the first
+  // frame arrives.
+  return {
+    ok: true,
+    value: {
+      to: skipsWelcome ? next : routes.welcomeConnect(result.value.slug),
+    },
+  };
 }
 
 /** The longest workspace name `create_workspace` takes. */
