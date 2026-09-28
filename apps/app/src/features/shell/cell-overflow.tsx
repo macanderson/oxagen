@@ -1,11 +1,12 @@
 "use client";
-// Text in a table cell never wraps: src/app/globals.css ends a long value with
-// an ellipsis, and this shows the whole value when a pointer rests on it or
-// focus lands in its cell. One tooltip serves every table on the page, as the
-// mockup's `#rtip` does (mockups/components/src/tooltip.mjs). It listens on the
+// Text that ends in an ellipsis shows its whole value in a hover card when a
+// pointer rests on it or focus lands on it. It covers every body cell of every
+// table, where src/app/globals.css keeps text on one line, and any element
+// marked `data-truncate` elsewhere. One card serves the page, as the mockup's
+// `#rtip` does (mockups/components/src/tooltip.mjs). It listens on the
 // document, so a table a page adds later needs nothing from the page.
-import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useRef, useState } from "react";
+import { HoverCard, HoverCardContent } from "@/ui/hover-card";
 
 /**
  * How long a pointer rests on a cut value before the whole value shows.
@@ -17,6 +18,12 @@ export const OPEN_DELAY_MS = 300;
 const SCAN_INTERVAL_MS = 200;
 
 const BODY_CELL = "tbody :is(td, th):not([colspan])";
+
+/**
+ * Marks truncated text outside a table. An empty value shows the element's own
+ * text; a value shows that instead, for text the element shortens itself.
+ */
+const TRUNCATE = "[data-truncate]";
 
 /** Marks a cell `markCutCells` made focusable, so it can give the stop back. */
 const CUT = "data-cell-cut";
@@ -72,17 +79,27 @@ function touchesTable(record: MutationRecord): boolean {
 
 /**
  * The element nearest `target`, up to and including its body cell, whose text
- * runs past its own box. Focus on a cut cell itself reads the whole cell. Null
- * when the target is outside a body cell, sits in a value with its own hover
- * card or title, or every value in its path fits.
+ * runs past its own box. Focus on a cut cell itself reads the whole cell. An
+ * element marked `data-truncate` counts when its own text is cut, in a table
+ * or not. Null when the target is in neither, sits in a value with its own
+ * hover card, or every value in its path fits. A value with a title shows
+ * nothing to a pointer, which the browser serves, but shows the card to focus,
+ * which the browser gives nothing (#4674).
  * @internal Exported for its component test.
  */
-export function clippedElement(target: EventTarget | null): HTMLElement | null {
+export function clippedElement(
+  target: EventTarget | null,
+  focus = false,
+): HTMLElement | null {
   if (!(target instanceof Element)) return null;
+  const marked = target.closest<HTMLElement>(TRUNCATE);
+  if (marked !== null) return isCut(marked) ? marked : null;
   const cell = target.closest(BODY_CELL);
   if (cell === null) return null;
-  // A value with its own hover card or title shows the whole value already.
-  const own = target.closest("[data-hover-card], [title]");
+  // A value with its own hover card shows the whole value already.
+  const own = target.closest(
+    focus ? "[data-hover-card]" : "[data-hover-card], [title]",
+  );
   if (own !== null && cell.contains(own)) return null;
   for (
     let node: Element | null = target;
@@ -108,6 +125,8 @@ export function clippedElement(target: EventTarget | null): HTMLElement | null {
  * innerText follows the layout; jsdom has none, so tests read textContent.
  */
 function wholeText(node: HTMLElement): string {
+  const given = node.getAttribute("data-truncate");
+  if (given !== null && given.trim() !== "") return given.trim();
   const text =
     typeof node.innerText === "string" ? node.innerText : node.textContent;
   return text
@@ -146,7 +165,7 @@ export function CellOverflow() {
       if (event.relatedTarget === null) show(null, 0);
     };
     const onFocusIn = (event: FocusEvent) => {
-      show(clippedElement(event.target), 0);
+      show(clippedElement(event.target, true), 0);
     };
     const onFocusOut = (event: FocusEvent) => {
       if (event.relatedTarget === null) show(null, 0);
@@ -217,7 +236,7 @@ export function CellOverflow() {
   }, []);
 
   return (
-    <Tooltip.Root
+    <HoverCard
       open={shown !== null}
       onOpenChange={(open) => {
         if (open) return;
@@ -225,23 +244,19 @@ export function CellOverflow() {
         setShown(null);
       }}
     >
-      <Tooltip.Portal>
-        <Tooltip.Positioner
-          anchor={shown?.anchor ?? null}
-          side="top"
-          align="start"
-          sideOffset={6}
-          collisionPadding={8}
-          className="z-50"
-        >
-          <Tooltip.Popup
-            role="tooltip"
-            className="pointer-events-none max-w-[min(34rem,calc(100vw-16px))] rounded-md bg-tooltip-bg px-2 py-[5px] font-mono text-[11px] leading-[1.4] break-words whitespace-pre-line text-tooltip-fg shadow-sm"
-          >
-            {shown?.text}
-          </Tooltip.Popup>
-        </Tooltip.Positioner>
-      </Tooltip.Portal>
-    </Tooltip.Root>
+      <HoverCardContent
+        anchor={shown?.anchor ?? null}
+        side="top"
+        align="start"
+        alignOffset={0}
+        sideOffset={6}
+        collisionPadding={8}
+        role="tooltip"
+        data-testid="whole-value"
+        className="pointer-events-none w-auto max-w-[min(34rem,calc(100vw-16px))] px-3 py-2 break-words whitespace-pre-line"
+      >
+        {shown?.text}
+      </HoverCardContent>
+    </HoverCard>
   );
 }

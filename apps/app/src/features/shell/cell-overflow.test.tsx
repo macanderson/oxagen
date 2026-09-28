@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The whole value of a table cell whose text ends in an ellipsis: a pointer
-// resting on it, or focus landing in its cell, shows the value in one tooltip,
-// and a value that fits shows nothing. jsdom has no layout, so each case sets
+// The whole value of text that ends in an ellipsis, in a table cell or marked
+// `data-truncate`: a pointer resting on it, or focus landing on it, shows the
+// value in one hover card, and a value that fits shows nothing. jsdom has no layout, so each case sets
 // the widths a browser would measure.
 import {
   cleanup,
@@ -21,6 +21,8 @@ import {
 
 const LONG =
   "Watches the release branch and cuts a tag when every required check passes";
+
+const GIVEN = "run_01J9Z3K4Q2W8XYV5T6R7S8P9M0";
 
 /** Gives `node` the widths a browser measures for text cut at `clientWidth`. */
 function measure(node: HTMLElement, scrollWidth: number, clientWidth: number) {
@@ -94,6 +96,12 @@ function page() {
         </tbody>
       </table>
       <p data-testid="outside">{LONG}</p>
+      <p data-truncate="" data-testid="marked">
+        {LONG}
+      </p>
+      <code data-truncate={GIVEN} data-testid="given">
+        run_01J9Z3K4
+      </code>
       <CellOverflow />
     </>,
   );
@@ -116,6 +124,16 @@ describe("CellOverflow", () => {
     fireEvent.pointerOver(description);
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(await screen.findByRole("tooltip")).toHaveTextContent(LONG);
+  });
+
+  it("shows the value an element marked outside a table gives", async () => {
+    page();
+    const given = screen.getByTestId("given");
+    measure(given, 640, 320);
+    fireEvent.pointerOver(given);
+    const card = await screen.findByRole("tooltip");
+    expect(card).toHaveTextContent(GIVEN);
+    expect(card).toHaveAttribute("data-slot", "hover-card-content");
   });
 
   it("shows nothing for a value that fits its cell", async () => {
@@ -206,6 +224,21 @@ describe("clippedElement", () => {
     measure(titled, 900, 300);
     expect(clippedElement(carded)).toBeNull();
     expect(clippedElement(titled)).toBeNull();
+  });
+
+  it("shows a titled value to focus, which the browser gives nothing", () => {
+    page();
+    const titled = screen.getByTestId("titled");
+    measure(titled, 900, 300);
+    expect(clippedElement(titled, true)).toBe(titled);
+  });
+
+  it("takes marked text outside a table only while it is cut", () => {
+    page();
+    const marked = screen.getByTestId("marked");
+    expect(clippedElement(marked)).toBeNull();
+    measure(marked, 900, 300);
+    expect(clippedElement(marked)).toBe(marked);
   });
 
   it("skips a cell that spans columns and text outside a table", () => {
