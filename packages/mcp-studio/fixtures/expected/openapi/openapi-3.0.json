@@ -1,0 +1,683 @@
+{
+  "auth": [
+    {
+      "in": "header",
+      "name": "X-API-Key",
+      "scheme": "api_key",
+      "type": "api_key"
+    }
+  ],
+  "document_hash": "sha256:a9bc7ec10af8ac42fd652ba4df7694a1394304636621bca8bdc77cfc0f12bfbb",
+  "environments": [
+    {
+      "url": "https://clinic.a-intel.com/api"
+    }
+  ],
+  "files": [],
+  "listed": [],
+  "notes": [
+    {
+      "message": "The document marks this operation deprecated.",
+      "tool": "list_pet_photos"
+    }
+  ],
+  "tools": [
+    {
+      "description": "List pets, twenty to a page.",
+      "inputSchema": {
+        "properties": {
+          "page": {
+            "default": 1,
+            "description": "The page to read, from 1.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_pets",
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "born_on": {
+                  "format": "date",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "name": {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                "owner": {
+                  "properties": {
+                    "email": {
+                      "format": "email",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "species": {
+                  "enum": [
+                    "cat",
+                    "dog",
+                    "rabbit"
+                  ],
+                  "type": "string"
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "species",
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "paging": {
+        "input": "page",
+        "items": "items",
+        "style": "page"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "listPets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "property": "page",
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "species",
+            "property": "species",
+            "required": false
+          }
+        ],
+        "path": "/pets",
+        "response": {
+          "media_type": "application/json",
+          "status": "200",
+          "wrap": "items"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Register a pet.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "owner": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "species"
+        ],
+        "type": "object"
+      },
+      "name": "create_pet",
+      "outputSchema": {
+        "properties": {
+          "born_on": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "owner": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "species",
+          "id"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "name",
+            "species",
+            "tag",
+            "owner"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "createPet",
+        "parameters": [],
+        "path": "/pets",
+        "response": {
+          "media_type": "application/json",
+          "status": "201"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Read one pet.",
+      "inputSchema": {
+        "properties": {
+          "petId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "petId"
+        ],
+        "type": "object"
+      },
+      "name": "get_pet",
+      "outputSchema": {
+        "properties": {
+          "born_on": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "owner": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "species",
+          "id"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getPet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "property": "petId",
+            "required": true
+          }
+        ],
+        "path": "/pets/{petId}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "annotations": {
+        "idempotentHint": true
+      },
+      "description": "Replace a pet's record.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "owner": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "petId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "petId",
+          "name",
+          "species"
+        ],
+        "type": "object"
+      },
+      "name": "replace_pet",
+      "outputSchema": {
+        "properties": {
+          "born_on": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "owner": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "species": {
+            "enum": [
+              "cat",
+              "dog",
+              "rabbit"
+            ],
+            "type": "string"
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "species",
+          "id"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "name",
+            "species",
+            "tag",
+            "owner"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "PUT",
+        "operation": "replacePet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "property": "petId",
+            "required": true
+          }
+        ],
+        "path": "/pets/{petId}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "annotations": {
+        "idempotentHint": true
+      },
+      "description": "Remove a pet.",
+      "inputSchema": {
+        "properties": {
+          "petId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "petId"
+        ],
+        "type": "object"
+      },
+      "name": "delete_pets",
+      "request": {
+        "kind": "http",
+        "method": "DELETE",
+        "operation": "DELETE /pets/{petId}",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "property": "petId",
+            "required": true
+          }
+        ],
+        "path": "/pets/{petId}",
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "deprecated": true,
+      "description": "List a pet's photos.",
+      "inputSchema": {
+        "properties": {
+          "petId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "petId"
+        ],
+        "type": "object"
+      },
+      "name": "list_pet_photos",
+      "outputSchema": {
+        "properties": {
+          "photos": {
+            "items": {
+              "format": "uri",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "listPetPhotos",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "property": "petId",
+            "required": true
+          }
+        ],
+        "path": "/pets/{petId}/photos",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "annotations": {
+        "idempotentHint": true
+      },
+      "description": "Rename an owner. The body's name is the new one.",
+      "inputSchema": {
+        "properties": {
+          "body": {
+            "properties": {
+              "email": {
+                "format": "email",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "name": {
+            "description": "The owner's current name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "type": "object"
+      },
+      "name": "rename_owner",
+      "outputSchema": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "property",
+          "media_type": "application/json",
+          "property": "body",
+          "required": true
+        },
+        "kind": "http",
+        "method": "PUT",
+        "operation": "renameOwner",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "property": "name",
+            "required": true
+          }
+        ],
+        "path": "/owners/{name}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    }
+  ]
+}

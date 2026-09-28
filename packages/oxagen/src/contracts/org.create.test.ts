@@ -57,10 +57,23 @@ describe("organization.create capability", () => {
     });
     expect(parsed.publicId).toBe("org_abc");
     expect(parsed.type).toBe("business");
-    expect(parsed.workspace.slug).toBe("core");
+    expect(parsed.workspace?.slug).toBe("core");
   });
 
-  it("rejects an output with no first workspace", () => {
+  it("parses an output with workspace: null", () => {
+    // create_org answers null when the caller sent `workspace: null` (#4582).
+    const parsed = organizationCreate.output.parse({
+      publicId: "org_abc",
+      name: "Acme",
+      slug: "acme",
+      type: "business",
+      createdAt: new Date().toISOString(),
+      workspace: null,
+    });
+    expect(parsed.workspace).toBeNull();
+  });
+
+  it("rejects an output that omits the workspace field", () => {
     expect(() =>
       organizationCreate.output.parse({
         publicId: "org_abc",
@@ -187,6 +200,17 @@ describe("organization.create capability", () => {
         workspace: { name: "Core", slug: "core" },
       });
       expect(parsed.workspace).toEqual({ name: "Core", slug: "core" });
+    });
+
+    it("keeps workspace: null, so create_org makes no workspace", () => {
+      // The web app sends null so its welcome flow names the first workspace
+      // (#4582). Only an omitted field gets the Default.
+      const parsed = organizationCreate.input.parse({
+        name: "Acme",
+        slug: "acme",
+        workspace: null,
+      });
+      expect(parsed.workspace).toBeNull();
     });
 
     it("applies the slug rules to the workspace slug", () => {

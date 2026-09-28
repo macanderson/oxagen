@@ -72,7 +72,11 @@ export type AgentReads = {
   spend: SourceRead<DataSource["spend"]["byGroup"]> | null;
   /** The steering manifests of recent runs; null on a tab that does not show them. */
   deliveries: SourceRead<DataSource["steering"]["deliveries"]> | null;
-  /** The open findings of the workspace; null off the Activity tab. */
+  /**
+   * The open findings of the workspace: the Activity tab lists the agent's,
+   * and the Overview reads its cache TTL recommendation from them. Null on
+   * every other tab.
+   */
   findings: SourceRead<DataSource["spend"]["findings"]> | null;
   /** The org and workspace ceilings above the agent; null off Permissions. */
   budgets: SourceRead<DataSource["spend"]["budgets"]> | null;
@@ -87,6 +91,7 @@ export type AgentReads = {
 
 const SPEND_TABS: ReadonlySet<AgentTab> = new Set(["overview", "activity"]);
 const DELIVERY_TABS: ReadonlySet<AgentTab> = new Set(["overview", "steering"]);
+const FINDINGS_TABS: ReadonlySet<AgentTab> = new Set(["overview", "activity"]);
 
 /** Everything the tab needs beyond the identity, read at once. */
 export async function readAgentTab(
@@ -123,7 +128,7 @@ export async function readAgentTab(
       ? source.spend.byGroup(ctx, "agent", period)
       : none,
     DELIVERY_TABS.has(tab) ? source.steering.deliveries(ctx) : none,
-    tab === "activity" ? source.spend.findings(ctx) : none,
+    FINDINGS_TABS.has(tab) ? source.spend.findings(ctx) : none,
     tab === "permissions" ? source.spend.budgets(ctx) : none,
     tab === "permissions" ? source.org.roles(ctx) : none,
     tab === "toolbelt" ? source.tools.toolbelts(ctx) : none,
