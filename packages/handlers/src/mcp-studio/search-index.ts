@@ -227,14 +227,21 @@ export async function embedderFor(target: EmbeddingTarget, scope: SearchScope): 
 /** One cache for every index in this process, keyed by workspace and target. */
 const cache = new VectorCache();
 
+/**
+ * The vectors every index in this process is embedding now, keyed like the
+ * cache. Publish's warm and a served search build separate indexes, so this
+ * map is what makes the second one wait for the first one's batch.
+ */
+const pending = new Map<string, Promise<Float32Array>>();
+
 /** Warnings from the index. Its fields carry an error's name and counts, never a key or a url. */
 export const searchIndexLog: SearchIndexLog = (message, fields) => {
   logger.warn(fields, message);
 };
 
-/** A workspace's index over an embedder, sharing the process's vector cache. */
+/** A workspace's index over an embedder, sharing the process's vector cache and pending vectors. */
 export function searchIndexOf(embedder: Embedder, scope: SearchScope, store: SearchIndexStore = postgresSearchStore(scope)): SearchIndex {
-  return new SearchIndex({ embedder, store, cache, namespace: scope.workspaceId, log: searchIndexLog });
+  return new SearchIndex({ embedder, store, cache, pending, namespace: scope.workspaceId, log: searchIndexLog });
 }
 
 /**

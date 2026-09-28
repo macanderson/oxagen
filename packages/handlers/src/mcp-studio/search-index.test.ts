@@ -327,6 +327,30 @@ describe("searchIndexOf and searchIndexLog", () => {
     expect(index.key).toBe("c".repeat(32));
   });
 
+  it("shares the process's pending vectors, so a search during a warm embeds no line twice", async () => {
+    const calls: string[] = [];
+    const embedderOf = () => ({
+      key: "e".repeat(32),
+      embed: (texts: readonly string[], purpose: string) => {
+        calls.push(purpose);
+        return new Promise<Float32Array[]>((resolve) => {
+          setTimeout(() => resolve(texts.map(() => new Float32Array([1, 0]))), 1);
+        });
+      },
+    });
+    const store = { read: () => Promise.resolve([]), write: () => Promise.resolve() };
+    const texts = ["shared_pending_one: The first line.", "shared_pending_two: The second line."];
+
+    const [embedded, found] = await Promise.all([
+      searchIndexOf(embedderOf(), SCOPE, store).warm(texts),
+      searchIndexOf(embedderOf(), SCOPE, store).vectors(texts),
+    ]);
+
+    expect(calls).toEqual(["document"]);
+    expect(embedded).toBe(2);
+    expect(found.size).toBe(2);
+  });
+
   it("logs the index's warnings with their fields", () => {
     searchIndexLog("The search index could not store new vectors.", { errorName: "Error", count: 2 });
 

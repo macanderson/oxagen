@@ -73,7 +73,7 @@ describe("withToolProjection", () => {
     expect(result.warnings.filter((w) => w.startsWith("The tool registry"))).toEqual([]);
   });
 
-  it("embeds the search entries of the bundle it projected, after the projection", async () => {
+  it("embeds the search entries of the bundle it projected, with its folders, after the projection", async () => {
     const order: string[] = [];
     mocks.project.mockImplementation(() => {
       order.push("project");
@@ -88,7 +88,7 @@ describe("withToolProjection", () => {
 
     if (result.status !== "published") throw new Error(`The publish ended ${result.status}.`);
     expect(mocks.warmSearch).toHaveBeenCalledTimes(1);
-    expect(mocks.warmSearch).toHaveBeenCalledWith(result.bundle);
+    expect(mocks.warmSearch).toHaveBeenCalledWith(result.bundle, { folders: FIXTURE_FOLDERS });
     expect(order).toEqual(["project", "warm"]);
   });
 

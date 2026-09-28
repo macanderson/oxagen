@@ -168,11 +168,25 @@ describe("warmSearch", () => {
     expect(mocks.info).not.toHaveBeenCalled();
   });
 
+  it("sweeps every row when the version has no server folder left", async () => {
+    mocks.sweep.mockResolvedValueOnce(4);
+
+    await warmSearch(bundle(null), { folders: [] });
+
+    expect(mocks.resolveWorkspace).toHaveBeenCalledWith("a-intel", "core-platform");
+    expect(mocks.readEmbeddingSettings).not.toHaveBeenCalled();
+    expect(mocks.embedderFor).not.toHaveBeenCalled();
+    expect(mocks.searchIndexOf).not.toHaveBeenCalled();
+    expect(mocks.sweep).toHaveBeenCalledWith(null);
+    expect(mocks.info).toHaveBeenCalledWith({ workspaceId: IDS.workspaceId, swept: 4 }, "Deleted the search vectors no search reads.");
+  });
+
   it.each([
-    ["an organization bundle", bundle(SEARCH_BILLING, { scope: "organization", workspace: undefined })],
-    ["a bundle whose tools did not compile", bundle(null)],
-  ])("skips %s", async (_case, skipped) => {
-    await warmSearch(skipped);
+    ["an organization bundle", bundle(SEARCH_BILLING, { scope: "organization", workspace: undefined }), {}],
+    ["a bundle whose tools did not compile, with no folder list", bundle(null), {}],
+    ["a bundle whose tools did not compile, with a folder left", bundle(null), { folders: ["billing"] }],
+  ])("skips %s", async (_case, skipped, options) => {
+    await warmSearch(skipped, options);
 
     expect(mocks.resolveWorkspace).not.toHaveBeenCalled();
     expect(mocks.postgresSearchStore).not.toHaveBeenCalled();

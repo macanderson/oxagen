@@ -249,6 +249,110 @@ describe("SearchIndex.warm", () => {
   });
 });
 
+describe("SearchIndex shared pending vectors", () => {
+  const slow = (text: string): Promise<number[]> =>
+    new Promise((resolve) => setTimeout(() => resolve(vectorOf(text)), 1));
+
+  it("embeds a line once when a search arrives during another index's warm", async () => {
+    const store = memoryStore();
+    const pending = new Map<string, Promise<Float32Array>>();
+    const warmEmbedder = fakeEmbedder(slow);
+    const searchEmbedder = fakeEmbedder(slow);
+    const warming = new SearchIndex({ embedder: warmEmbedder, store, pending, namespace: "ws-1" });
+    const searching = new SearchIndex({ embedder: searchEmbedder, store, pending, namespace: "ws-1" });
+
+    const [embedded, ranked] = await Promise.all([
+      warming.warm(ENTRIES.map(OPTIONS.text)),
+      searching.rank("refund", ENTRIES, { ...OPTIONS, limit: 1 }),
+    ]);
+
+    expect(embedded).toBe(4);
+    expect(ranked.map((entry) => entry.short)).toEqual(["create_refund"]);
+    expect(warmEmbedder.calls.map((call) => call.purpose)).toEqual(["document"]);
+    expect(searchEmbedder.calls.map((call) => call.purpose)).toEqual(["query"]);
+    expect(pending.size).toBe(0);
+  });
+
+  it("keeps one workspace's pending vectors apart from another's", async () => {
+    const pending = new Map<string, Promise<Float32Array>>();
+    const first = fakeEmbedder(slow);
+    const second = fakeEmbedder(slow);
+
+    await Promise.all([
+      new SearchIndex({ embedder: first, store: memoryStore(), pending, namespace: "ws-1" }).warm(["a"]),
+      new SearchIndex({ embedder: second, store: memoryStore(), pending, namespace: "ws-2" }).warm(["a"]),
+    ]);
+
+    expect(first.calls).toHaveLength(1);
+    expect(second.calls).toHaveLength(1);
+  });
+
+  it("embeds a query once for indexes that ask at the same time", async () => {
+    const pending = new Map<string, Promise<Float32Array>>();
+    const store = memoryStore();
+    await index(fakeEmbedder(vectorOf), store).warm(ENTRIES.map(OPTIONS.text));
+    const first = fakeEmbedder(slow);
+    const second = fakeEmbedder(slow);
+
+    const [a, b] = await Promise.all([
+      new SearchIndex({ embedder: first, store, pending, namespace: "ws-1" }).rank("refund", ENTRIES, { ...OPTIONS, limit: 1 }),
+      new SearchIndex({ embedder: second, store, pending, namespace: "ws-1" }).rank("refund", ENTRIES, { ...OPTIONS, limit: 1 }),
+    ]);
+
+    expect([...first.calls, ...second.calls].map((call) => call.purpose)).toEqual(["query"]);
+    expect(a).toEqual(b);
+    expect(pending.size).toBe(0);
+  });
+
+  it("fails every caller waiting on a failed query, then embeds it again", async () => {
+    const pending = new Map<string, Promise<Float32Array>>();
+    const store = memoryStore();
+    await index(fakeEmbedder(vectorOf), store).warm(ENTRIES.map(OPTIONS.text));
+    let fail = true;
+    const embedder: Embedder = {
+      key: "k".repeat(32),
+      embed: (texts, purpose) =>
+        new Promise((resolve, reject) =>
+          setTimeout(() => {
+            if (purpose === "query" && fail) reject(new SearchIndexError("unreachable", "The endpoint failed."));
+            else resolve(texts.map((text) => new Float32Array(vectorOf(text))));
+          }, 1),
+        ),
+    };
+    const search = new SearchIndex({ embedder, store, pending, namespace: "ws-1" });
+
+    const results = await Promise.allSettled([search.rank("refund", ENTRIES, OPTIONS), search.rank("refund", ENTRIES, OPTIONS)]);
+    fail = false;
+
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    expect(pending.size).toBe(0);
+    await expect(search.rank("refund", ENTRIES, { ...OPTIONS, limit: 1 })).resolves.toHaveLength(1);
+  });
+
+  it("leaves a pending entry that another call put in its place", async () => {
+    const pending = new Map<string, Promise<Float32Array>>();
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const embedder = fakeEmbedder(async (text) => {
+      await gate;
+      return vectorOf(text);
+    });
+    const search = new SearchIndex({ embedder, store: memoryStore(), pending, namespace: "ws-1" });
+    const running = search.vectors(["a"]);
+    await vi.waitFor(() => expect(pending.size).toBe(1));
+    const [key] = [...pending.keys()];
+    const other = Promise.resolve(new Float32Array([1]));
+    pending.set(key ?? "", other);
+
+    release?.();
+    await running;
+
+    expect(pending.get(key ?? "")).toBe(other);
+  });
+});
+
 describe("VectorCache", () => {
   it("drops the least recently used vector past its capacity", () => {
     const cache = new VectorCache(2);
