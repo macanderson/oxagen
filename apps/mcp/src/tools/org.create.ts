@@ -32,7 +32,7 @@ export const schema = {
     "Immutable agent-key namespace, 2-6 lowercase letters or digits; derived from the slug when omitted",
   ),
   workspace: organizationCreateInputBase.shape.workspace.describe(
-    "The first workspace ({ name, slug }); defaults to 'Default' at slug 'default'",
+    "The first workspace ({ name, slug }); defaults to 'Default' at slug 'default'. null creates none, and the org's first create_workspace becomes its first workspace",
   ),
 };
 

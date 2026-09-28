@@ -79,7 +79,7 @@ const created = {
   slug: "acme",
   type: "business",
   createdAt: "2026-09-15T00:00:00.000Z",
-  workspace: { publicId: "wrk_01", slug: "default" },
+  workspace: null,
 };
 
 beforeEach(() => {
@@ -163,8 +163,9 @@ describe("createOrganizationAction", () => {
   });
 
   // The form names no workspace: the first one is its own step once a code
-  // host is connected, because a workspace needs a steering repo (#4518).
-  it("creates the organization with its chosen namespace as the signed-in person and continues to Connect a code host", async () => {
+  // host is connected, because a workspace needs a steering repo (#4518). It
+  // sends `workspace: null`, since an omitted field makes "Default" (#4582).
+  it("creates the organization with its chosen namespace and no workspace as the signed-in person and continues to Connect a code host", async () => {
     invoke.mockResolvedValue(created);
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
@@ -172,12 +173,58 @@ describe("createOrganizationAction", () => {
     });
     expect(invoke).toHaveBeenCalledWith(
       "create_org",
-      { name: "Acme Robotics", slug: "acme", namespace: "acme" },
+      {
+        name: "Acme Robotics",
+        slug: "acme",
+        namespace: "acme",
+        workspace: null,
+      },
       expect.objectContaining({
         userId: "u-owner",
         orgId: "",
         workspaceId: "",
       }),
+    );
+  });
+
+  // The CLI consent page skips the welcome flow and lists only organizations
+  // that have a workspace, so an organization made on the way there gets the
+  // "Default" one, or the consent page sends you straight back here.
+  it("gives the organization a Default workspace and continues to a requested destination", async () => {
+    invoke.mockResolvedValue({
+      ...created,
+      workspace: { publicId: "ws_01", slug: "default" },
+    });
+    expect(
+      await createOrganizationAction(form, "/cli/authorize?state=abc"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/cli/authorize?state=abc" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      {
+        name: "Acme Robotics",
+        slug: "acme",
+        namespace: "acme",
+        workspace: { name: "Default", slug: "default" },
+      },
+      expect.objectContaining({ userId: "u-owner" }),
+    );
+  });
+
+  it("treats an off-site destination as none: no workspace, then Connect (negative)", async () => {
+    invoke.mockResolvedValue(created);
+    expect(
+      await createOrganizationAction(form, "//evil.example/cli/authorize"),
+    ).toEqual({
+      ok: true,
+      value: { to: "/welcome/acme/new-workspace/connect" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "create_org",
+      expect.objectContaining({ workspace: null }),
+      expect.anything(),
     );
   });
 });
