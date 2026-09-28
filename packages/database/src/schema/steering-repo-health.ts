@@ -10,7 +10,7 @@
 // who changed it and when, as the failed check and the banner list them.
 //
 // The migration that creates this table and its tenant policies is
-// 20260928013000_steering_repo_health.sql.
+// 20260928063000_steering_repo_health.sql.
 import {
   bigint,
   check,

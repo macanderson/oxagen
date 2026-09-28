@@ -4,11 +4,12 @@
 // follows the name, and the namespace follows the name until someone edits it.
 // `create_org` stores the chosen namespace verbatim or refuses it as taken.
 //
-// A created organization continues to Connect a code host, or to `destination`
-// when the page was given one (the CLI consent page). The first workspace
-// comes after Connect, because a workspace needs a steering repo. A refusal
-// the server names as a denial replaces the card with the gate's denied state,
-// inside the shell.
+// The form sends `destination` with the fields, and the server answers where to
+// go. With no destination that is Connect a code host, and the first workspace
+// comes after Connect, because a workspace needs a steering repo. With one (the
+// CLI consent page), the server gives the organization a "Default" workspace
+// and returns the destination. A refusal the server names as a denial replaces
+// the card with the gate's denied state, inside the shell.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -109,9 +110,9 @@ export function OrganizationForm({
     setErrors({});
     setPending(true);
     try {
-      const result = await createOrganizationAction(values);
+      const result = await createOrganizationAction(values, destination);
       if (result.ok) {
-        navigate.push(destination ?? result.value.to);
+        navigate.push(result.value.to);
         return;
       }
       if (result.reason === "denied") {
