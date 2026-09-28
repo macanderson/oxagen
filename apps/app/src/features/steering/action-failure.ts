@@ -55,8 +55,6 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("mergedOutsideOxagen");
           case "already_merged":
             return t("proposalMoved");
-          case "approval_required":
-            return t("approvalRequired");
           case "repository_unhealthy":
             return t("repositoryUnhealthy");
           case "too_many_files":

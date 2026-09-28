@@ -124,6 +124,7 @@ export function Providers({
               { label: t("columns.provider") },
               { label: t("columns.transport") },
               { label: t("columns.tools"), numeric: true },
+              { label: t("columns.weeklyPrice"), numeric: true },
               { label: t("columns.toolbelts") },
               { label: t("columns.agents") },
               { label: t("columns.health") },
