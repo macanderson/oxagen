@@ -1,5 +1,5 @@
 # Report a pull request whose CI runs keep getting cancelled before any
-# finishes (#3257, ADR-215).
+# finishes (#3257, ADR-218).
 #
 # pipeline.yml cancels a pull request's run in progress when a new push
 # arrives (ADR-046). The ruleset requires `checks` and `test`, and a

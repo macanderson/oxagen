@@ -37,7 +37,7 @@ ordinary supersession, so the outage raised no failure signal.
 a cancelled run satisfies neither. The same shape still reaches pull requests,
 whose runs this decision leaves on `cancel-in-progress`: a branch pushed
 faster than CI finishes gets only cancelled runs, and its required checks
-never conclude. ADR-215 records the detector that reports that state and why
+never conclude. ADR-218 records the detector that reports that state and why
 pull requests keep cancelling.
 
 ## Decision

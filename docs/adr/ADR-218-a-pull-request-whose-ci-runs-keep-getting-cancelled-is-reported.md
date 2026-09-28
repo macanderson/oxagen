@@ -1,4 +1,4 @@
-# ADR-215: A pull request whose CI runs keep getting cancelled is reported
+# ADR-218: A pull request whose CI runs keep getting cancelled is reported
 
 - **Status:** Accepted
 - **Date:** 2026-09-28

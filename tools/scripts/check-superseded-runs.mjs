@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Report a pull request whose CI runs keep getting cancelled by newer pushes
- * before any of them finishes (#3257, ADR-215).
+ * before any of them finishes (#3257, ADR-218).
  *
  * `pipeline.yml` groups a pull request's runs by branch and cancels the run in
  * progress when a new push arrives (ADR-046). The ruleset on `main` requires
@@ -124,7 +124,7 @@ export function supersededBody({ streak, capped = false, threshold = 3 }) {
     MARKER,
     `**${last} CI runs on this branch were cancelled by newer pushes before they finished.**`,
     "",
-    "The required `checks` and `test` did not conclude on any of them. A cancelled required check is not a pass, so neither can pass until a run finishes (ADR-215).",
+    "The required `checks` and `test` did not conclude on any of them. A cancelled required check is not a pass, so neither can pass until a run finishes (ADR-218).",
     "",
     "| Run | Commit | Created |",
     "|---|---|---|",
