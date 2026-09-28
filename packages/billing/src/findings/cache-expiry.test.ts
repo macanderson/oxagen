@@ -208,6 +208,27 @@ describe("idle cache rewrites", () => {
     expect(finding!.recommendation!.current).toBeUndefined();
   });
 
+  it("weighs a rewrite that wrote both classes at the 5-minute write price on both sides", () => {
+    const run = cacheRun();
+    const frames = fiveMinuteWalk(run, 600);
+    // The same 42,500 tokens as the 5-minute walk, split across both classes.
+    frames[2] = cacheFrame(run, 660, {
+      input_uncached: 100,
+      cache_write_5m: 2_500,
+      cache_write_1h: 40_000,
+    });
+    const finding = idle(detectFindings(cacheInput([{ run, frames }])));
+    expect(finding!.recommendation).toEqual({
+      setting: "cache_ttl",
+      value: "1h",
+    });
+    // The 5-minute walk's own comparison: 42,000 rewritten tokens avoided at
+    // $3.45 over the read, and $2.25 more on the other 42,500 tokens written.
+    expect(finding!.fix).toBe(
+      `Set the cache TTL for ${CACHE_AGENT} to 1 hour. Across 1 wait of 5 to 60 minutes, the 1-hour TTL would have cost $0.10 more on writes and would have avoided $0.14 in rewrites.`,
+    );
+  });
+
   it("recommends nothing when a request has no price for a write class", () => {
     const run = cacheRun();
     const frames = fiveMinuteWalk(run, 600);

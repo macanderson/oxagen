@@ -106,11 +106,17 @@ function inHourBand(step: CacheStep): boolean {
 }
 
 /**
- * Add one request to its agent's TTL comparison. The 1-hour TTL costs its
- * write price less the 5-minute write price on every token written, except
- * the rewrites it avoids. It avoids a rewrite on the 5-minute TTL after a gap
- * within the hour. On the 1-hour TTL, the same gap is a read the 5-minute TTL
- * would have written again.
+ * Add one request to its agent's TTL comparison. The comparison prices two
+ * settings in full: on the 5-minute TTL every token written pays the 5-minute
+ * write price, and on the 1-hour TTL every token written pays the 1-hour
+ * write price. A request that wrote both classes is priced the same way, so
+ * both sides count the same tokens.
+ *
+ * The 1-hour TTL costs its write price less the 5-minute write price on every
+ * token written, except the rewrites it avoids. It avoids a rewrite on the
+ * 5-minute TTL after a gap within the hour: those tokens are read at the read
+ * price in place of a 5-minute write. On the 1-hour TTL, the same gap is a
+ * read the 5-minute TTL would have written again.
  */
 function tally(t: TtlTally, step: CacheStep): void {
   const tokens = step.frame.classTokens;
@@ -127,9 +133,10 @@ function tally(t: TtlTally, step: CacheStep): void {
   }
   let avoidedTokens = 0;
   if (band && step.ttl === "5m" && isIdleRewrite(step)) {
-    // Every class is priced here, so the premium is too.
-    t.avoided += rewritePremium(step) ?? 0n;
-    avoidedTokens = Math.min(step.rewritten, tokens.cache_write_5m);
+    // The rewrite at the 5-minute write price, whatever classes the request
+    // wrote, so `extra` below counts the same tokens.
+    t.avoided += perMillion(step.rewritten, w5 - read);
+    avoidedTokens = step.rewritten;
     t.gaps += 1;
   } else if (
     band &&
