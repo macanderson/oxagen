@@ -64,9 +64,6 @@ vi.mock("./schema.versioning", () => ({
   publishDraft: state.business,
 }));
 vi.mock("./schema.pinned", () => ({ invalidatePinnedSchemaCache: vi.fn() }));
-vi.mock("./lib/onboarding", () => ({
-  assertWorkspaceNotProvisional: state.business,
-}));
 vi.mock("@oxagen/crypto", () => ({
   resolveIngestionCryptoAdapterForKeyId: state.business,
   decrypt: state.business,
