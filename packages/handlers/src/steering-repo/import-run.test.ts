@@ -14,7 +14,7 @@ import {
   IMPORT_WORKSPACE_BRANCH,
   type ImportAgent,
   type OxagenTreeConversion,
-} from "../steering_repo.import";
+} from "./convert";
 import {
   IMPORT_CLEANUP_BRANCH,
   IMPORT_LEASE_MS,

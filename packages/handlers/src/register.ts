@@ -1070,7 +1070,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "import_workspace_steering",
     async () =>
-      (await import("./steering_repo.import.run"))
+      (await import("./steering_repo.import"))
         .importWorkspaceSteeringHandler as CapabilityHandlerFn,
   );
   registerHandler(

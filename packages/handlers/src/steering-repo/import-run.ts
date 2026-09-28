@@ -44,7 +44,7 @@ import {
   type ImportBranch,
   type OxagenTreeConversion,
   type RuleKind,
-} from "../steering_repo.import";
+} from "./convert";
 import { isImportBranch } from "./stamp";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
