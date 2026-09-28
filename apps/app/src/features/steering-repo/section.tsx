@@ -2,13 +2,20 @@
 // workspace's steering repo and decides who may act. An owner or admin may
 // retry a failed step. Re-authorize returns the person to this page.
 import "server-only";
+import type { DataSource } from "@/data/ports";
 import { routes } from "@/shared/safe-path";
 import type { WsCtx } from "@/server/viewer";
 import { SteeringRepoCard } from "./card";
 import { readSteeringRepo } from "./read";
 
-export async function SteeringRepoSection({ ctx }: { ctx: WsCtx }) {
-  const read = await readSteeringRepo(ctx);
+export async function SteeringRepoSection({
+  ctx,
+  source,
+}: {
+  ctx: WsCtx;
+  source: DataSource;
+}) {
+  const read = await readSteeringRepo(source, ctx);
   return (
     <SteeringRepoCard
       org={ctx.orgSlug}

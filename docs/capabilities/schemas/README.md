@@ -169,6 +169,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_record
 - get_steering_deliveries
 - get_steering_freshness
+- get_steering_index
 - list_context_records
 - list_proposals
 - list_records

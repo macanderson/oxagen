@@ -658,10 +658,6 @@
     "steeringRepo": {
       "heading": "Steering repo",
       "loading": "Reading the steering repo…",
-      "unavailable": {
-        "body": "No capability answers the steering repo read yet, so this panel shows no state.",
-        "capability": "The read needs <code>{capability}</code>."
-      },
       "card": {
         "repository": "Repository",
         "notCreated": "Not created yet",
@@ -692,6 +688,7 @@
           "add_to_installation": "Oxagen app access",
           "write_first_commit": "First commit",
           "apply_settings": "Prescribed settings",
+          "register_webhook": "Change notifications",
           "publish_version": "First version",
           "bind_repository": "Workspace binding"
         },

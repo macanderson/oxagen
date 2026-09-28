@@ -1729,6 +1729,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_steering_index",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "get_steering_repo",
       "reads": [],

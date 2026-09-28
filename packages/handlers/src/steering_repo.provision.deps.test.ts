@@ -198,6 +198,7 @@ import {
   type SteeringRepoState,
   type SteeringRepository,
 } from "./steering_repo.provision";
+import { steeringHookToken } from "./lib/steering-hook";
 import { workspaceRepositoriesLock } from "./repository.binding-write";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
@@ -1223,6 +1224,43 @@ describe("steeringRepoProvisionDeps", () => {
         emailHtml: `<p><strong>${GITLAB_TITLE}</strong></p><p>${GITLAB_BODY}</p>`,
       });
       expect(mocks.dbCalls).toEqual([]);
+    });
+  });
+
+  describe("steeringHook", () => {
+    const HOOK_ENV = {
+      ...ENV,
+      BETTER_AUTH_SECRET: "a-steering-hook-secret-of-32-chars!",
+      NEXT_PUBLIC_API_URL: "https://api.example.test/",
+    };
+
+    it("names the workspace in the URL and binds the token to it and the project", () => {
+      expect(deps(HOOK_ENV).steeringHook(WORKSPACE, 4242)).toEqual({
+        url: `https://api.example.test/webhooks/gitlab/steering/workspace/${WS}`,
+        token: steeringHookToken(HOOK_ENV.BETTER_AUTH_SECRET, {
+          kind: "workspace",
+          scopeId: WS,
+          projectId: 4242,
+        }),
+      });
+      expect(mocks.dbCalls).toEqual([]);
+    });
+
+    it("names the organization for <org>/oxagen", () => {
+      expect(deps(HOOK_ENV).steeringHook(ORGANIZATION, 7)).toEqual({
+        url: `https://api.example.test/webhooks/gitlab/steering/organization/${ORG}`,
+        token: steeringHookToken(HOOK_ENV.BETTER_AUTH_SECRET, {
+          kind: "organization",
+          scopeId: ORG,
+          projectId: 7,
+        }),
+      });
+    });
+
+    it("refuses without the secret, so the step fails and retries", () => {
+      expect(() => deps(ENV).steeringHook(WORKSPACE, 4242)).toThrow(
+        /BETTER_AUTH_SECRET/,
+      );
     });
   });
 });

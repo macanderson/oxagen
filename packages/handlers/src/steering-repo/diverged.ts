@@ -270,6 +270,7 @@ interface GithubPull {
   number: number;
   state: string;
   head: { ref: string };
+  base: { ref: string };
 }
 
 interface GithubCheckRuns {
@@ -399,15 +400,33 @@ export async function githubDiverged(
   });
 }
 
+/**
+ * Find the open pull request from `branch` into main. Close every open pull
+ * request from `branch` into another branch, because Repair refuses to merge
+ * one and Oxagen opens a new one into main in its place.
+ */
 async function githubFindPull(
   t: GithubHistoryTarget,
   branch: string,
 ): Promise<number | null> {
+  const root = githubRoot(t);
   const res = await t.rest.request<GithubPull[]>(
     "GET",
-    `${githubRoot(t)}/pulls?state=open&head=${seg(`${t.repo.owner}:${branch}`)}`,
+    `${root}/pulls?state=open&head=${seg(`${t.repo.owner}:${branch}`)}`,
   );
-  return (res.data ?? []).find((pull) => pull.head.ref === branch)?.number ?? null;
+  let found: number | null = null;
+  for (const pull of res.data ?? []) {
+    if (pull.head.ref !== branch) continue;
+    if (pull.base.ref === STEERING_DEFAULT_BRANCH) {
+      if (found === null) found = pull.number;
+      continue;
+    }
+    // Close it first, so the branch never has two open pull requests.
+    await t.rest.request("PATCH", `${root}/pulls/${seg(pull.number)}`, {
+      state: "closed",
+    });
+  }
+  return found;
 }
 
 async function githubRevertPull(
@@ -425,7 +444,11 @@ async function githubRevertPull(
       undefined,
       [404],
     );
-    if (prev.data?.state === "open" && prev.data.head.ref === branch)
+    if (
+      prev.data?.state === "open" &&
+      prev.data.head.ref === branch &&
+      prev.data.base.ref === STEERING_DEFAULT_BRANCH
+    )
       return previous;
   }
   const found = await githubFindPull(t, branch);
@@ -468,7 +491,8 @@ async function githubHasRevertCheck(
 /**
  * Open, or find, the pull request that puts main back at `published`, and
  * close `previous` when it is a different one. Returns its number. A rerun
- * against an unchanged main writes nothing.
+ * against an unchanged main writes nothing. Oxagen closes a revert pull
+ * request someone retargeted away from main and opens a new one into main.
  */
 export async function githubOpenRevert(
   t: GithubHistoryTarget,
@@ -598,6 +622,7 @@ interface GitlabMergeRequest {
   iid: number;
   state: string;
   source_branch: string;
+  target_branch: string;
 }
 
 type GitlabAction =
@@ -810,17 +835,33 @@ async function gitlabWriteRevert(
   return need(res.data, "GitLab commit").id;
 }
 
+/**
+ * Find the open merge request from `branch` into main. Close every open merge
+ * request from `branch` into another branch, because Repair refuses to merge
+ * one and Oxagen opens a new one into main in its place.
+ */
 async function gitlabFindRequest(
   t: GitlabHistoryTarget,
   branch: string,
 ): Promise<number | null> {
+  const root = gitlabRoot(t);
   const res = await t.rest.request<GitlabMergeRequest[]>(
     "GET",
-    `${gitlabRoot(t)}/merge_requests?state=opened&source_branch=${seg(branch)}`,
+    `${root}/merge_requests?state=opened&source_branch=${seg(branch)}`,
   );
-  return (
-    (res.data ?? []).find((mr) => mr.source_branch === branch)?.iid ?? null
-  );
+  let found: number | null = null;
+  for (const mr of res.data ?? []) {
+    if (mr.source_branch !== branch) continue;
+    if (mr.target_branch === STEERING_DEFAULT_BRANCH) {
+      if (found === null) found = mr.iid;
+      continue;
+    }
+    // Close it first, so the branch never has two open merge requests.
+    await t.rest.request("PUT", `${root}/merge_requests/${seg(mr.iid)}`, {
+      state_event: "close",
+    });
+  }
+  return found;
 }
 
 async function gitlabRevertRequest(
@@ -838,7 +879,11 @@ async function gitlabRevertRequest(
       undefined,
       [404],
     );
-    if (prev.data?.state === "opened" && prev.data.source_branch === branch)
+    if (
+      prev.data?.state === "opened" &&
+      prev.data.source_branch === branch &&
+      prev.data.target_branch === STEERING_DEFAULT_BRANCH
+    )
       return previous;
   }
   const found = await gitlabFindRequest(t, branch);
@@ -868,7 +913,8 @@ async function gitlabRevertRequest(
 /**
  * Open, or find, the merge request that puts main back at `published`, and
  * close `previous` when it is a different one. Returns its iid. A rerun
- * against an unchanged main writes no commit.
+ * against an unchanged main writes no commit. Oxagen closes a revert merge
+ * request someone retargeted away from main and opens a new one into main.
  */
 export async function gitlabOpenRevert(
   t: GitlabHistoryTarget,

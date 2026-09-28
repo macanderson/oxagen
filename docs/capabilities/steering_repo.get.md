@@ -36,7 +36,7 @@ None. The org and workspace come from the capability context.
 | `health` | `healthy`, `drifted`, `disconnected`, `diverged`, or null | the settings health from the last health read, null before the first |
 | `differences` | array | each prescribed setting that differs: `setting`, `expected`, `actual`, `changedBy`, and `changedAt` |
 
-The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `publish_version`, and `bind_repository`.
+The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `register_webhook`, `publish_version`, and `bind_repository`.
 
 `expected` and `actual` are rendered as text: `unset` for a missing value, otherwise JSON cut at 120 characters.
 

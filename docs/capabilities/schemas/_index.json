@@ -1899,6 +1899,17 @@
       "consumes": []
     },
     {
+      "name": "get_steering_index",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_repo",
       "domain": "repository",
       "surfaces": [

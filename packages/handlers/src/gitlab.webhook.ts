@@ -139,7 +139,7 @@ export interface GitLabWebhookResult {
  * the payload leaves either out, so a payload shape this does not know still
  * asks for a sync rather than dropping one.
  */
-function pushesDefaultBranch(body: unknown): boolean {
+export function pushesDefaultBranch(body: unknown): boolean {
   const b = (body ?? {}) as {
     ref?: unknown;
     project?: { default_branch?: unknown } | null;

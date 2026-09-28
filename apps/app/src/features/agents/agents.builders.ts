@@ -667,6 +667,7 @@ export function agentsSource(reads: AgentReads) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

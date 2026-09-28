@@ -16,6 +16,7 @@
 //      registered yet. A refusal (the token's role is below Maintainer) is
 //      reported, not raised: steering works without the webhook.
 import { randomBytes } from "node:crypto";
+import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -79,7 +80,7 @@ export const gitlabAttachDeps: GitLabAttachDeps = {
   },
   newSecret: () => randomBytes(32).toString("base64url"),
   webhookUrl: (id) =>
-    `${(process.env["OXAGEN_API_URL"] ?? "https://api.oxagen.sh").replace(/\/+$/, "")}/webhooks/gitlab/${id}`,
+    `${apiPublicOrigin()}/webhooks/gitlab/${id}`,
 };
 
 function tokenRefused(reason: string, message: string): HandlerError {

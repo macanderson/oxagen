@@ -5646,10 +5646,6 @@ type Messages = {
     steeringRepo: {
       heading: string;
       loading: string;
-      unavailable: {
-        body: string;
-        capability: string;
-      };
       card: {
         repository: string;
         notCreated: string;
@@ -5680,6 +5676,7 @@ type Messages = {
           add_to_installation: string;
           write_first_commit: string;
           apply_settings: string;
+          register_webhook: string;
           publish_version: string;
           bind_repository: string;
         };
