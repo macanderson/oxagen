@@ -230,7 +230,9 @@ describe("the detector registry", () => {
       [["spend_with_no_outcome"], 8],
       [["cache_writes_never_read"], null],
       [["unpaged_results"], null],
+      [["standing_context"], null],
       [["model_class_fit"], null],
+      [["repeated_instructions"], null],
     ]);
   });
 

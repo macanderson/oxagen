@@ -13,6 +13,7 @@ import { cacheWritesNeverRead } from "./cache-writes-never-read";
 import { modelClassFit } from "./model-class-fit";
 import { recurringRuns } from "./recurring-runs";
 import { buildRunViews } from "./requests";
+import { repeatedInstructions } from "./repeated-instructions";
 import { repeats } from "./repeats";
 import {
   FINDINGS_MAX,
@@ -27,6 +28,7 @@ import {
 } from "./shared";
 import { spendWithNoOutcome } from "./spend-with-no-outcome";
 import { spinLoops } from "./spin-loops";
+import { standingContext } from "./standing-context";
 import { unpagedResults } from "./unpaged-results";
 
 export * from "./shared";
@@ -38,6 +40,23 @@ export {
   type ViewCall,
 } from "./requests";
 export { SPIN_LOOP_REPEATS, spinCalls } from "./spin-loops";
+export {
+  instructionProposals,
+  MIN_INSTRUCTION_RUNS,
+  MIN_WHOLE_PROMPT_RUNS,
+  PROPOSALS_PER_PASS,
+  promptRunsToPrice,
+  repeatsOf,
+  sentencesOf,
+} from "./repeated-instructions";
+export type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
+export {
+  instructionProposalOpener,
+  setInstructionProposalOpener,
+  type InstructionProposal,
+  type InstructionProposalOpener,
+  type InstructionProposalScope,
+} from "./proposal-opener";
 
 /** Every detector a pass runs, in the order it runs them. */
 export const DETECTORS: readonly Detector[] = [
@@ -47,7 +66,9 @@ export const DETECTORS: readonly Detector[] = [
   spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
+  standingContext,
   modelClassFit,
+  repeatedInstructions,
 ];
 
 /** The kinds the registered detectors write. */

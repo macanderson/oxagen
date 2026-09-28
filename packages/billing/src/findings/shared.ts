@@ -27,6 +27,7 @@ import {
   runInputPrice,
   type RunTotalsRecord,
 } from "../cost-rollup";
+import type { PromptRead } from "./prompts";
 import type { TokenCounts } from "../cost-rollup";
 import type { PriceEntry } from "../price-book";
 import type { OutcomeRow } from "../run-pr-outcomes";
@@ -355,6 +356,8 @@ export interface DetectInput {
    * cited but not covered.
    */
   frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
+  /** The window's operator prompts, for detector 6; absent when the store read none. */
+  prompts?: PromptRead;
   /**
    * Each wrapped run's first prompt on its own chain, by run public id. A run
    * absent here recorded no prompt in the window. A ledger run is never here.
@@ -421,6 +424,12 @@ export interface CallFrame {
 interface RunAcc {
   run: RunTotalsRecord;
   calls: number;
+  /**
+   * The cited items in this run the counterfactual priced. The measured and
+   * counterfactual sums below count only these, so prose that splits the
+   * sums reads the runs where this is above 0.
+   */
+  covered: number;
   measuredTokens: number;
   counterfactualTokens: number;
   measuredMicros: bigint;
@@ -508,6 +517,7 @@ export class Groups {
       acc = {
         run,
         calls: 0,
+        covered: 0,
         measuredTokens: 0,
         counterfactualTokens: 0,
         measuredMicros: 0n,
@@ -524,6 +534,7 @@ export class Groups {
     const basis = measure.basis === undefined ? run.costBasis : measure.basis;
     if (measure.micros === null || basis === null) return;
     group.covered += 1;
+    acc.covered += 1;
     group.basis = foldBasis(group.basis, basis);
     acc.measuredTokens += measure.measuredTokens;
     acc.counterfactualTokens += measure.counterfactualTokens;

@@ -139,6 +139,7 @@ function CostSections({
         metrics={metrics}
         prices={prices}
         byTool={rollup?.byTool ?? null}
+        standingContext={rollup?.standingContext ?? null}
       />
       <ToolCalls metrics={metrics} />
       <WaterfallPanel
