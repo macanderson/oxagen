@@ -264,6 +264,80 @@ describe("get_tacho_bundle skills", () => {
     expect(answer.bundle?.permissions).toEqual({ allow: [], deny: [], ask: [] });
   });
 
+  /** The fixture's skills a host receives, and a file of the first one's. */
+  async function firstSkillFile() {
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const whole = await createTachoBundleGetHandler({ published: port() })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    const lineages = (whole.bundle?.skills ?? []).map((skill) => skill.lineage);
+    // The fixture's workspace publishes two skills that every repository receives.
+    expect(lineages.length).toBeGreaterThanOrEqual(2);
+    const first = whole.bundle?.skills?.[0];
+    const record = (await fixtureDelivery())[first?.source ?? "workspace"]?.records.find(
+      (held) => held.kind === "skill" && held.lineage === first?.lineage,
+    );
+    if (first === undefined || record === undefined) {
+      throw new Error("The fixture publishes no skill.");
+    }
+    // An asset rather than SKILL.md, as a binary asset would fail.
+    const path =
+      record.files?.find((file) => file.path !== record.path)?.path ??
+      record.path;
+    return { lineages, lineage: first.lineage, source: first.source, path };
+  }
+
+  /** The fixture's port, with one file that fails while `broken.on` holds. */
+  function breaking(source: string, path: string) {
+    const broken = { on: true };
+    const published = port();
+    const read = published.readAsset;
+    published.readAsset = (from, bundle, file) => {
+      if (broken.on && from === source && file.path === path) {
+        published.reads += 1;
+        return Promise.reject(new Error(`${file.path} is not UTF-8`));
+      }
+      return read(from, bundle, file);
+    };
+    return { published, broken };
+  }
+
+  it("leaves out only the skill whose file cannot be read", async () => {
+    const { lineages, lineage, source, path } = await firstSkillFile();
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const { published } = breaking(source, path);
+    const answer = await createTachoBundleGetHandler({ published })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect((answer.bundle?.skills ?? []).map((skill) => skill.lineage)).toEqual(
+      lineages.filter((held) => held !== lineage),
+    );
+  });
+
+  it("reads a left-out skill again after ten minutes", async () => {
+    const { lineages, source, path } = await firstSkillFile();
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const { published, broken } = breaking(source, path);
+    const handler = createTachoBundleGetHandler({ published });
+    const first = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(first.bundle?.skills?.length).toBe(lineages.length - 1);
+    const reads = published.reads;
+    // Inside the ten minutes, the partial skills answer and nothing is read.
+    vi.setSystemTime(new Date(NOW.getTime() + 9 * 60 * 1000));
+    await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(published.reads).toBe(reads);
+    // The forge recovers, and the next poll after ten minutes reads it.
+    broken.on = false;
+    vi.setSystemTime(new Date(NOW.getTime() + 10 * 60 * 1000));
+    const later = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(published.reads).toBeGreaterThan(reads);
+    expect((later.bundle?.skills ?? []).map((skill) => skill.lineage)).toEqual(
+      lineages,
+    );
+  });
+
   it("reads a published version once and answers not_modified while it stands", async () => {
     mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
     const published = port();

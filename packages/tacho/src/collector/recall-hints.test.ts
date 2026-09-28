@@ -26,8 +26,10 @@ const REMOTE: RepositoryRemote = {
 
 const DIGESTS = [REMOTE.remote_digest, REMOTE.remote_digest_folded];
 
-function session(cwd: string | undefined = "/repo"): RecallHintsHolder {
-  return cwd === undefined ? {} : { cwd };
+/** A session in `cwd`; `null` for one whose directory is not known. */
+function session(cwd: string | null = "/repo"): RecallHintsHolder {
+  // `undefined` would take the default, so `null` stands for no directory.
+  return cwd === null ? {} : { cwd };
 }
 
 /** Lets every pending promise callback run. */
@@ -97,7 +99,7 @@ describe("noteRecallHints", () => {
   });
 
   it("drops a relative path when the session's directory is not known", () => {
-    const holder = session(undefined);
+    const holder = session(null);
     noteRecallHints(holder, "Read", { file_path: "src/a.ts" });
     noteRecallHints(holder, "Read", { file_path: "/repo/b.ts" });
     expect(holder.recallHints?.paths).toEqual(["/repo/b.ts"]);
@@ -180,7 +182,7 @@ describe("readRepository", () => {
 
   it("reads nothing for a session with no directory", () => {
     const read = vi.fn(async () => REMOTE);
-    expect(readRepository(session(undefined), read)).toBeUndefined();
+    expect(readRepository(session(null), read)).toBeUndefined();
     expect(read).not.toHaveBeenCalled();
   });
 });

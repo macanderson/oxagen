@@ -236,7 +236,7 @@ describe("lock with a registry package", () => {
     const source = registrySourceSchema.parse({ type: "registry", registry: REGISTRY, server: FILESYSTEM, version: "2026.8.1" });
     expect(() =>
       registryLockSource({ source, entry: packageEntry(), digest: undefined, server_version: undefined }),
-    ).toThrow(`${FILESYSTEM} 2026.8.1 lists no streamable-http or sse remote. Name source.machines to run its package.`);
+    ).toThrow(`${FILESYSTEM} 2026.8.1 lists no streamable-http remote. Name source.machines to run its package.`);
   });
 });
 
@@ -254,20 +254,30 @@ describe("lock with a registry remote", () => {
     });
   });
 
-  it("skips a remote type the gateway cannot use and pins an sse remote as sse", () => {
+  it("skips an sse remote and any other type the gateway cannot use, and pins the streamable-http remote", () => {
     const entry = remoteEntry([
-      { type: "websocket", url: "https://api.githubcopilot.com/ws/" },
       { type: "sse", url: "https://api.githubcopilot.com/sse/" },
+      { type: "websocket", url: "https://api.githubcopilot.com/ws/" },
+      { type: "streamable-http", url: "https://api.githubcopilot.com/mcp/" },
     ]);
     const source = registryLockSource({ source: githubSource(), entry, digest: undefined, server_version: undefined });
-    expect(source).toMatchObject({ url: "https://api.githubcopilot.com/sse/", transport: "sse" });
+    expect(source).toMatchObject({ url: "https://api.githubcopilot.com/mcp/", transport: "http" });
+  });
+
+  it("refuses an entry whose only remote is sse, and names streamable-http", () => {
+    const entry = remoteEntry([{ type: "sse", url: "https://api.githubcopilot.com/sse/" }]);
+    expect(() =>
+      registryLockSource({ source: githubSource(), entry, digest: undefined, server_version: undefined }),
+    ).toThrow(
+      `${GITHUB} 0.18.0 lists an sse remote and no streamable-http remote, and the gateway calls streamable-http only. Name source.machines to run its package.`,
+    );
   });
 
   it("refuses an entry whose only remote the gateway cannot use", () => {
     const entry = remoteEntry([{ type: "websocket", url: "https://api.githubcopilot.com/ws/" }]);
     expect(() =>
       registryLockSource({ source: githubSource(), entry, digest: undefined, server_version: undefined }),
-    ).toThrow(`${GITHUB} 0.18.0 lists no streamable-http or sse remote. Name source.machines to run its package.`);
+    ).toThrow(`${GITHUB} 0.18.0 lists no streamable-http remote. Name source.machines to run its package.`);
   });
 
   it("records the version the server reported", () => {

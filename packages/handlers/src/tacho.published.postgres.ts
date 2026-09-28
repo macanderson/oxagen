@@ -63,13 +63,19 @@ export interface PostgresTachoPublishedDeps {
   readConnection?: typeof readSteeringConnection;
   /** The handlers' logger when unset. */
   log?: PublishedLog;
-  /** How many file bodies, and how many governance readings, the process keeps. */
+  /** How many governance readings the process keeps. */
   cacheEntries?: number;
+  /** How many UTF-8 bytes of file bodies the process keeps. */
+  cacheBytes?: number;
 }
 
-// Recall reads every memory record on each prompt, so a workspace with more
-// records than this reads some of them from the forge on every prompt.
 const CACHE_ENTRIES = 256;
+
+// Recall reads every memory record on each prompt. 16 MiB holds about 8,000
+// records of 2 KiB, across every workspace this process serves. Past that, the
+// oldest bodies go first, and a recall that reads more than the budget in one
+// pass reads some of them from the forge on every prompt.
+const CACHE_BYTES = 16 * 1024 * 1024;
 
 /** Where a version this binding returned came from, so its files can be read. */
 interface Origin {
@@ -107,6 +113,42 @@ function recentlyUsed<V>(limit: number) {
 }
 
 /**
+ * A map of texts that keeps its most recently used entries within a UTF-8
+ * byte budget. A text larger than the whole budget is not kept.
+ */
+function recentlyUsedBytes(budget: number) {
+  const bound = Math.max(0, Math.floor(budget));
+  const entries = new Map<string, { text: string; bytes: number }>();
+  let total = 0;
+  const drop = (key: string) => {
+    const held = entries.get(key);
+    if (held === undefined) return;
+    entries.delete(key);
+    total -= held.bytes;
+  };
+  return {
+    get(key: string): string | undefined {
+      const held = entries.get(key);
+      if (held === undefined) return undefined;
+      entries.delete(key);
+      entries.set(key, held);
+      return held.text;
+    },
+    set(key: string, text: string): void {
+      drop(key);
+      const bytes = Buffer.byteLength(text, "utf8");
+      if (bytes > bound) return;
+      entries.set(key, { text, bytes });
+      total += bytes;
+      for (const oldest of entries.keys()) {
+        if (total <= bound) break;
+        drop(oldest);
+      }
+    },
+  };
+}
+
+/**
  * The key the publisher stores a bound repository's versions under, from the
  * database alone. steeringRepositoryKey reads only `provider` and `fullName`,
  * and both hosts' resolveRepository set `fullName` to the binding's approved
@@ -132,6 +174,22 @@ function gitBlobIdLike(blob: string, text: string): string {
     .update(`blob ${bytes.length}\0`)
     .update(bytes)
     .digest("hex");
+}
+
+const BOM = "\uFEFF";
+
+/**
+ * The body whose blob id is `blob`, from the text the host read, or null when
+ * none matches. GitHub's read keeps a leading byte order mark. GitLab's read
+ * decodes with Response.text(), which drops it, so a file that starts with one
+ * is tried again with the mark put back.
+ */
+function bodyMatching(blob: string, text: string): string | null {
+  if (gitBlobIdLike(blob, text) === blob) return text;
+  if (!text.startsWith(BOM) && gitBlobIdLike(blob, BOM + text) === blob) {
+    return BOM + text;
+  }
+  return null;
 }
 
 /** The `recall_unreviewed` a governance file puts in force, or off and why. */
@@ -180,7 +238,7 @@ export function createPostgresTachoPublished(
   const origins = new WeakMap<Bundle, Origin>();
   // File bodies by workspace and blob id. The workspace is in the key so one
   // tenant's read never answers another's, even for the same content.
-  const bodies = recentlyUsed<string>(deps.cacheEntries ?? CACHE_ENTRIES);
+  const bodies = recentlyUsedBytes(deps.cacheBytes ?? CACHE_BYTES);
   // Readings of recall_unreviewed by workspace, repository, and commit. A
   // commit's governance file never changes, so a reading holds until evicted.
   const readings = recentlyUsed<RecallUnreviewed>(
@@ -271,21 +329,23 @@ export function createPostgresTachoPublished(
       );
     }
     // The host reads a file as UTF-8 text, so the check refuses a binary file
-    // as well as a changed one: decoding already altered its bytes.
-    const actual = gitBlobIdLike(file.blob, text);
-    if (actual !== file.blob) {
+    // as well as a changed one: decoding already altered its bytes. A skill
+    // that ships a binary file is dropped from the session on its own, by
+    // get_tacho_bundle, and the other skills still arrive.
+    const body = bodyMatching(file.blob, text);
+    if (body === null) {
       throw new Error(
-        `${file.path} at ${bundle.commit} hashes to ${actual}, not to the blob ${file.blob} its version names.`,
+        `${file.path} at ${bundle.commit} hashes to ${gitBlobIdLike(file.blob, text)}, not to the blob ${file.blob} its version names.`,
       );
     }
-    bodies.set(cacheKey, text);
-    return text;
+    bodies.set(cacheKey, body);
+    return body;
   };
 
   return {
-    // A run's request manifest names the versions it received, but nothing
-    // reads those pins back yet. So a run reads the versions published now,
-    // like a call from outside a run.
+    // The version published now. A run's request manifest names the
+    // versions it received, but nothing reads those pins back yet, so the
+    // port's scope has a null run id and no run can read through it (#4447).
     published: async (scope) => {
       const current = await currentVersion({
         orgId: scope.orgId,

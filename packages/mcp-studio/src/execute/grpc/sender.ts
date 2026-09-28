@@ -14,7 +14,14 @@
 // UNAVAILABLE is retried up to 3 times, and only for a method the descriptor
 // set marks NO_SIDE_EFFECTS or IDEMPOTENT, since the upstream may have acted
 // on a call that failed. A stream that already sent an item is not retried.
+//
+// Every result carries the final attempt's exchange, which Try it saves as a
+// test. The exchange holds the request message in proto3 JSON, and the status
+// and messages that came back. The credential travels in the call metadata,
+// which the exchange leaves out. An attempt that got no status back records
+// nothing, except a stream cut by the deadline or by the Sender.
 import type { JsonObject, JsonValue } from "@bufbuild/protobuf";
+import type { RecordedExchange } from "../../contract/tests-files";
 import { MAX_ITEMS_LIMIT, MAX_RESULT_BYTES_LIMIT } from "../../contract/tools";
 import type { GrpcIdempotencyLevel, GrpcRequest } from "../../model/upstream-tool";
 import type { SendContext, SendError, Sender, SendResult, UpstreamArguments } from "../sender";
@@ -26,7 +33,14 @@ import {
   type Transport,
   type TransportErrorCode,
 } from "../transport";
-import { decodeResponse, encodeRequest, messageOf, resolveMethod, type ResolvedMethod } from "./descriptors";
+import {
+  decodeResponse,
+  encodeRequest,
+  messageOf,
+  requestJson,
+  resolveMethod,
+  type ResolvedMethod,
+} from "./descriptors";
 import { buildCredentials, buildTarget, RequestError, type CallCredentials } from "./request";
 import {
   STATUS_CANCELLED,
@@ -80,6 +94,13 @@ interface Settings {
   max_stream_bytes: number;
 }
 
+/**
+ * A gRPC send always returns its exchanges, so this type makes the field
+ * required. The shared SendResult leaves it optional for a Sender that sends
+ * nothing.
+ */
+type GrpcSendResult = SendResult & { exchanges: RecordedExchange[] };
+
 /** Build a grpc Sender. The options exist for tests. */
 export function createGrpcSender(options: GrpcSenderOptions = {}): Sender<"grpc"> {
   const settings: Settings = {
@@ -89,7 +110,7 @@ export function createGrpcSender(options: GrpcSenderOptions = {}): Sender<"grpc"
   return {
     kind: "grpc",
     // A Sender never rejects. The catch turns a defect into an error result.
-    send: async (template, args, context) => {
+    send: async (template, args, context): Promise<GrpcSendResult> => {
       try {
         return await send(template, args, context, settings);
       } catch (error) {
@@ -97,6 +118,7 @@ export function createGrpcSender(options: GrpcSenderOptions = {}): Sender<"grpc"
           ok: false,
           error: { title: "Internal error", detail: `The gRPC Sender failed: ${messageOf(error)}`, status: undefined },
           attempts: 0,
+          exchanges: [],
         };
       }
     },
@@ -110,38 +132,56 @@ interface Call {
   template: GrpcRequest;
   method: ResolvedMethod;
   request: Omit<GrpcTransportRequest, "deadline_ms" | "signal">;
+  /** The request message in proto3 JSON, as a recorded exchange holds it. */
+  recorded: JsonValue;
   deadline_ms: number;
   max_items: number;
 }
 
 type Prepared = { ok: true; call: Call } | { ok: false; error: SendError };
 
-/** One attempt's result. retryable means the upstream sent no item and reported UNAVAILABLE. */
-type Attempt = { ok: true; value: unknown } | { ok: false; error: SendError; retryable: boolean };
+/** How an attempt ended: the status code and message, and the messages read before it. */
+interface Ending {
+  code: number;
+  message: string;
+  items: JsonValue[];
+}
+
+/**
+ * One attempt's result. retryable means the upstream sent no item and
+ * reported UNAVAILABLE. ending is what the exchange records. Every value has
+ * one, and an error has one when a status came back.
+ */
+type Attempt =
+  | { ok: true; value: unknown; ending: Ending }
+  | { ok: false; error: SendError; retryable: boolean; ending: Ending | undefined };
 
 async function send(
   template: GrpcRequest,
   args: UpstreamArguments,
   context: SendContext,
   settings: Settings,
-): Promise<SendResult> {
+): Promise<GrpcSendResult> {
   const prepared = prepare(template, args, context);
-  if (!prepared.ok) return { ok: false, error: prepared.error, attempts: 0 };
+  if (!prepared.ok) return { ok: false, error: prepared.error, attempts: 0, exchanges: [] };
+  const { call } = prepared;
   const deadline = Date.now() + context.shaping.deadline_ms;
   // The level comes from the descriptor set, which resolveMethod checked the template against.
-  const retried = RETRIED_LEVELS.has(prepared.call.method.idempotency_level);
+  const retried = RETRIED_LEVELS.has(call.method.idempotency_level);
   for (let attempt = 1; ; attempt += 1) {
-    const result = await attemptCall(prepared.call, context, deadline, settings);
-    if (result.ok) return { ok: true, value: result.value, attempts: attempt };
+    const result = await attemptCall(call, context, deadline, settings);
+    // Like the HTTP Senders, a result records its final attempt.
+    const exchanges = exchangesFor(call, result.ending);
+    if (result.ok) return { ok: true, value: result.value, attempts: attempt, exchanges };
     if (!result.retryable || !retried || attempt >= MAX_ATTEMPTS) {
-      return { ok: false, error: result.error, attempts: attempt };
+      return { ok: false, error: result.error, attempts: attempt, exchanges };
     }
     const wait = settings.backoff_ms(attempt);
     // A retry that cannot start before the deadline would only fail again.
-    if (Date.now() + wait >= deadline) return { ok: false, error: result.error, attempts: attempt };
-    if (!(await sleep(wait, context.signal))) return { ok: false, error: CANCELLED, attempts: attempt };
+    if (Date.now() + wait >= deadline) return { ok: false, error: result.error, attempts: attempt, exchanges };
+    if (!(await sleep(wait, context.signal))) return { ok: false, error: CANCELLED, attempts: attempt, exchanges };
     // A timer can fire late, so check the deadline again after the wait.
-    if (Date.now() >= deadline) return { ok: false, error: result.error, attempts: attempt };
+    if (Date.now() >= deadline) return { ok: false, error: result.error, attempts: attempt, exchanges };
   }
 }
 
@@ -179,6 +219,8 @@ function prepare(template: GrpcRequest, args: UpstreamArguments, context: SendCo
       template,
       method,
       request: { ...request, message },
+      // Read back from the encoded bytes, so the recording holds what went upstream.
+      recorded: requestJson(method, message),
       deadline_ms: context.shaping.deadline_ms,
       max_items: template.streaming === "server" ? (context.shaping.max_items ?? MAX_ITEMS_LIMIT) : 1,
     },
@@ -249,7 +291,11 @@ async function read(response: GrpcTransportResponse, call: Call, clock: Clock, s
       // stream's last: the Sender stops reading, so it cannot tell.
       if (items.length >= call.max_items || bytes > settings.max_stream_bytes) {
         response.cancel();
-        return { ok: true, value: streamResult(items, true) };
+        // The Sender cancelled the stream, so the exchange records CANCELLED.
+        // A replay with the same max_items stops at the same message, before
+        // it reads the status.
+        const ending: Ending = { code: STATUS_CANCELLED, message: "", items };
+        return { ok: true, value: streamResult(items, true), ending };
       }
     }
   }
@@ -263,18 +309,23 @@ async function read(response: GrpcTransportResponse, call: Call, clock: Clock, s
 }
 
 function fromStatus(status: GrpcStatus, call: Call, items: JsonValue[]): Attempt {
+  const ending: Ending = { code: status.code, message: status.message, items };
   if (status.code === STATUS_OK) {
-    if (call.template.streaming === "server") return { ok: true, value: streamResult(items, false) };
+    if (call.template.streaming === "server") return { ok: true, value: streamResult(items, false), ending };
     const [value] = items;
     if (value === undefined) {
-      return failed(internal(`${call.template.method} ended with OK and sent no response message.`));
+      return failed(internal(`${call.template.method} ended with OK and sent no response message.`), ending);
     }
-    return { ok: true, value };
+    return { ok: true, value, ending };
   }
   const name = statusName(status.code);
   const detail = status.message === "" ? `The upstream returned ${name} with no message.` : status.message;
-  if (status.code === STATUS_DEADLINE_EXCEEDED) return deadlinePassed(call, items, detail);
-  return failed({ title: name, detail, status: status.code }, status.code === STATUS_UNAVAILABLE && items.length === 0);
+  if (status.code === STATUS_DEADLINE_EXCEEDED) return deadlinePassed(call, items, detail, ending);
+  return failed(
+    { title: name, detail, status: status.code },
+    ending,
+    status.code === STATUS_UNAVAILABLE && items.length === 0,
+  );
 }
 
 const TRANSPORT_TITLES: Record<Exclude<TransportErrorCode, "timeout" | "not_sent">, string> = {
@@ -296,6 +347,7 @@ function transportFailure(error: unknown, call: Call, items: JsonValue[]): Attem
       // The call never left, which gRPC reports as UNAVAILABLE.
       return failed(
         { title: statusName(STATUS_UNAVAILABLE), detail: error.message, status: STATUS_UNAVAILABLE },
+        undefined,
         items.length === 0,
       );
     default:
@@ -308,10 +360,18 @@ function stopped(stop: Stop, call: Call, items: JsonValue[]): Attempt {
   return deadlinePassed(call, items, `The call passed its deadline of ${call.deadline_ms} ms.`);
 }
 
-/** A stream returns what it read by the deadline. A unary call has nothing to return. */
-function deadlinePassed(call: Call, items: JsonValue[], detail: string): Attempt {
-  if (call.template.streaming === "server") return { ok: true, value: streamResult(items, true) };
-  return failed({ title: statusName(STATUS_DEADLINE_EXCEEDED), detail, status: STATUS_DEADLINE_EXCEEDED });
+/**
+ * A stream returns what it read by the deadline. A unary call has nothing to
+ * return. upstream is the status the upstream sent, when the deadline came
+ * from it and not from the Sender's clock or the Transport.
+ */
+function deadlinePassed(call: Call, items: JsonValue[], detail: string, upstream?: Ending): Attempt {
+  if (call.template.streaming === "server") {
+    // A replay of DEADLINE_EXCEEDED returns the same items, truncated.
+    const ending: Ending = upstream ?? { code: STATUS_DEADLINE_EXCEEDED, message: "", items };
+    return { ok: true, value: streamResult(items, true), ending };
+  }
+  return failed({ title: statusName(STATUS_DEADLINE_EXCEEDED), detail, status: STATUS_DEADLINE_EXCEEDED }, upstream);
 }
 
 function streamResult(items: JsonValue[], truncated: boolean): GrpcStreamResult {
@@ -322,8 +382,39 @@ function internal(detail: string): SendError {
   return { title: statusName(STATUS_INTERNAL), detail, status: STATUS_INTERNAL };
 }
 
-function failed(error: SendError, retryable = false): Attempt {
-  return { ok: false, error, retryable };
+function failed(error: SendError, ending?: Ending, retryable = false): Attempt {
+  return { ok: false, error, retryable, ending };
+}
+
+/**
+ * The exchange for one attempt: the request message and what came back. An
+ * attempt with no ending records nothing. The recorded call format holds each
+ * message as a JSON object, so a method whose request or response is a
+ * well-known type with a scalar JSON form, such as google.protobuf.StringValue,
+ * records nothing either.
+ */
+function exchangesFor(call: Call, ending: Ending | undefined): RecordedExchange[] {
+  const request = call.recorded;
+  if (ending === undefined || !isJsonObject(request)) return [];
+  const messages: JsonObject[] = [];
+  for (const item of ending.items) {
+    if (!isJsonObject(item)) return [];
+    messages.push(item);
+  }
+  return [
+    {
+      request: { method: call.template.method, message: request },
+      response: {
+        code: statusName(ending.code),
+        ...(ending.message === "" ? {} : { message: ending.message }),
+        ...(messages.length === 0 ? {} : { messages }),
+      },
+    },
+  ];
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Wait, or resolve false as soon as the signal aborts. */
