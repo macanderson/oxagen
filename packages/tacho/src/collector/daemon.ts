@@ -146,6 +146,7 @@ import {
 } from "./memory-capture/memory-reader";
 import { createMemoryUpload } from "./memory-capture/memory-upload";
 import { pushCredentialBasis } from "./push-basis";
+import { sessionSkills } from "./session-skills";
 import { issueRunToken } from "./credential-issuer";
 import { utcDay } from "./day-spend";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
@@ -566,6 +567,13 @@ async function initializeDaemon(
       process.stderr.write(`${new Date(now()).toISOString()} tachod ${line}\n`);
     });
   const timers: DaemonTimers = { ...DEFAULT_TIMERS, ...options.timers };
+  // The bundle's published skills, placed where each session's harness
+  // reads them and removed when it ends (`./session-skills`).
+  const skills = sessionSkills({
+    home: options.home ?? homedir(),
+    now: () => new Date(now()),
+    log,
+  });
   const exec = options.exec ?? defaultExec;
   // An injected synchronous `exec` still governs the git probes, so a test
   // that hands the daemon a fake git does not get a real one. Only a daemon
@@ -2266,6 +2274,7 @@ async function initializeDaemon(
             }),
           repositoryRemote: (cwd) => readRepositoryRemote(execAsync, cwd),
           cedar: loadCedarRuntime,
+          skills,
         },
         envelope.replay,
         envelope.harness,
@@ -3718,6 +3727,24 @@ async function initializeDaemon(
     };
   }
 
+  /**
+   * A session the sweep ended because its process is gone gets its skills
+   * removed here. That is the only end a Stella session has, because Stella
+   * sends no SessionEnd. A session sealed for going quiet may still be
+   * running, so its skills stay, and the TTL clears them if it never
+   * returns.
+   */
+  async function removeSweptSkills(
+    session: SessionRecord,
+    closedIdle: boolean,
+  ): Promise<void> {
+    if (closedIdle || session.customAgent !== undefined) return;
+    await skills.remove(
+      session.harness ?? "claude-code",
+      session.harnessSessionId,
+    );
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -3784,6 +3811,7 @@ async function initializeDaemon(
               continue;
             }
             registry.settleSwept(candidate);
+            await removeSweptSkills(candidate.record, candidate.closedIdle);
           }
           registry.forgetSealed(timers.walRetainMs);
           // A sealed session is kept for a week; what only a running chain

@@ -48,6 +48,7 @@ import {
   type SessionRegistry,
 } from "./registry";
 import type { RepositoryRemote } from "./git-facts";
+import type { SessionSkills } from "./session-skills";
 import {
   notePolicyDenial,
   notePrompt,
@@ -143,6 +144,13 @@ export interface HookHandlerDeps {
    * alone.
    */
   cedar?: () => Promise<CedarRuntime | null>;
+  /**
+   * The host's skills folders (`sessionSkills` in `./session-skills`). A
+   * live start writes the verified bundle's skills where the session's
+   * harness reads them, and the session's end removes them. Absent, as in
+   * `tacho-hook`, no hook touches a skills folder.
+   */
+  skills?: SessionSkills;
 }
 
 export interface HookReplay {
@@ -854,6 +862,40 @@ function promptText(input: HookInput): string | undefined {
   return typeof userInput === "string" ? userInput : undefined;
 }
 
+/**
+ * The harness whose skills folder a session reads, or undefined for a custom
+ * agent (`tacho hook --agent`), which reads none. The registry records a
+ * session with no harness as Claude Code's.
+ */
+function skillsHarness(record: SessionRecord): TachoHarness | undefined {
+  if (record.customAgent !== undefined) return undefined;
+  return record.harness ?? "claude-code";
+}
+
+/**
+ * Write the bundle's published skills for a starting session (#4458). Only a
+ * bundle whose signature the host verified places any, because the agent
+ * reads each skill as instructions.
+ */
+async function placeSessionSkills(
+  view: PolicyView,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+  env: Record<string, string | undefined>,
+): Promise<void> {
+  const skills = view.bundle.skills;
+  const harness = skillsHarness(record);
+  if (
+    deps.skills === undefined ||
+    harness === undefined ||
+    !view.verified ||
+    skills === undefined ||
+    skills.length === 0
+  )
+    return;
+  await deps.skills.place(harness, record.harnessSessionId, skills, env);
+}
+
 async function routeHook(
   raw: unknown,
   env: Record<string, string | undefined>,
@@ -1020,6 +1062,11 @@ async function routeHook(
           record,
         };
       }
+      // The skills go in place before the start is answered, so the harness
+      // finds them as the session begins. A replayed start reaches a session
+      // that has been running since, so it places nothing.
+      if (replay === undefined)
+        await placeSessionSkills(view, record, deps, env);
       // What the agent was shown at this start, sealed into its chain beside
       // the start event (ADR-093): the bundle's manifest, and every steer
       // delivered with the prefix. A bundle from a control plane that signs
@@ -1508,6 +1555,9 @@ async function routeHook(
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       deps.registry.seal(record);
+      const harness = skillsHarness(record);
+      if (deps.skills !== undefined && harness !== undefined)
+        await deps.skills.remove(harness, record.harnessSessionId, env);
       return { events, response: {}, record };
     }
 
