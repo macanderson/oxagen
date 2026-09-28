@@ -248,7 +248,7 @@ function remember(built: Map<string, BuiltFile>, name: string, file: BuiltFile):
  * files it imports, and every file those import publicly, followed through
  * further public imports.
  */
-class Visibility {
+export class Visibility {
   private readonly byName = new Map<string, FileDescriptorProto>();
   private readonly exported = new Map<string, Set<string>>();
 
@@ -264,17 +264,21 @@ class Visibility {
     return visible;
   }
 
-  /** A file and every file it re-exports through `import public`. Files come in import order, so this ends. */
+  /**
+   * A file and every file it re-exports through `import public`. The set is
+   * cached before the walk, so a cycle of public imports, which reflection
+   * can return before buildSet refuses it, ends.
+   */
   private exportedBy(name: string): Set<string> {
     const cached = this.exported.get(name);
     if (cached !== undefined) return cached;
     const out = new Set([name]);
+    this.exported.set(name, out);
     const file = this.byName.get(name);
     for (const index of file?.publicDependency ?? []) {
       const dependency = file?.dependency[index];
       if (dependency !== undefined) for (const each of this.exportedBy(dependency)) out.add(each);
     }
-    this.exported.set(name, out);
     return out;
   }
 }
