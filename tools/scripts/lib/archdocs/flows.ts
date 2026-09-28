@@ -1366,7 +1366,7 @@ export const flows: Flow[] = [
         label: "app · api · mcp · docs · stella · internal",
       },
       { from: "alb", to: "caddy", label: "HTTP" },
-      { from: "caddy", to: "app", label: "app.oxagen.sh" },
+      { from: "caddy", to: "app", label: "app.oxagen.sh · oxagen.app" },
       { from: "caddy", to: "api", label: "api.oxagen.sh" },
       { from: "caddy", to: "mcp", label: "mcp.oxagen.sh" },
       { from: "caddy", to: "docs", label: "docs.oxagen.sh" },
