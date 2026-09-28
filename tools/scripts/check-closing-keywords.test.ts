@@ -47,8 +47,25 @@ describe("findNegatedClosings", () => {
     expect(findNegatedClosings(body)).toEqual([]);
   });
 
-  it("passes a real close after an unrelated negation in another clause", () => {
-    expect(findNegatedClosings("Not a refactor, closes #7.")).toEqual([]);
+  it("flags a negation anywhere earlier in the sentence", () => {
+    const found = (text: string) =>
+      findNegatedClosings(text).map((f) => f.match);
+    expect(found("This does not, by itself, close #12.")).toEqual([
+      "close #12",
+    ]);
+    expect(found("Ships without a migration and fixes #8.")).toEqual([
+      "fixes #8",
+    ]);
+    // A real close that shares a sentence with an unrelated negation fails
+    // too. The message tells the author to give the close its own sentence.
+    expect(found("Not a refactor, closes #7.")).toEqual(["closes #7"]);
+  });
+
+  it("passes a close whose negation sits in an earlier sentence", () => {
+    expect(findNegatedClosings("Not a refactor. Closes #7.")).toEqual([]);
+    expect(findNegatedClosings("It does not touch the API!\nFixes #7")).toEqual(
+      [],
+    );
   });
 
   it("returns nothing for an empty or missing text", () => {
@@ -130,6 +147,15 @@ describe("findRefsCommitConflicts", () => {
     ]);
   });
 
+  it("reads every issue in a Refs list", () => {
+    expect(
+      findRefsCommitConflicts("Refs #1, #2 and macanderson/stella#3", [
+        commit("Closes #2"),
+        commit("Fixes macanderson/stella#3"),
+      ]).map((f) => f.match),
+    ).toEqual(["Closes #2", "Fixes macanderson/stella#3"]);
+  });
+
   it("passes when the commit only refs the issue too", () => {
     expect(findRefsCommitConflicts("Refs #1", [commit("Refs #1")])).toEqual([]);
   });
@@ -193,6 +219,7 @@ describe("formatClosingKeywords", () => {
     );
     expect(text).toContain("`Refs #N`");
     expect(text).toContain("backticks");
+    expect(text).toContain("give the close its");
     expect(text).not.toContain("Refs in the description");
   });
 

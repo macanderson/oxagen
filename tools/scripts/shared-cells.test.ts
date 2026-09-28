@@ -38,6 +38,8 @@ describe("shared cells (ADR-216)", () => {
       "apps/app/src/i18n/messages.d.ts",
       "packages/database/storage-manifest.json",
       "docs/capabilities/schemas/",
+      "_index.json",
+      "README.md",
       "ADR number",
     ]) {
       expect(paragraph, cell).toContain(cell);

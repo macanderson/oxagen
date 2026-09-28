@@ -142,8 +142,11 @@ that names an issue only with `Refs` while a commit message still says
 issue from the commit message.
 
 The check runs inside the reusable `dod-check.yml`, in the same job as the
-DoD verdict, and it shares `CLOSING_PATTERN`, `isNegated` and
-`withoutNonProse` with `scr-dod-check.mjs`. It follows this record's decision:
+DoD verdict, and it shares `CLOSING_PATTERN`, `NEGATION_WORDS` and
+`withoutNonProse` with `scr-dod-check.mjs`. It reads the whole sentence before
+a closing keyword for a negation, where the DoD verdict reads only the few words
+in the same clause, so "does not, by itself, close #12" fails the check. It
+follows this record's decision:
 one implementation in oxagen, reached by every repository that calls
 `dod-check.yml`, and floating on `main` with the DoD checker. No repository
 carries a copy. A sibling repository that grew its own closing-keyword script
