@@ -52,11 +52,17 @@ into the shared store. A local graph has to avoid that path.
    and the cloud copy of that commit hold the same nodes, edges, and IDs. The
    steps that need the whole workspace or a model (schema reads through
    sqlglot, domain grouping, and enrichment) do not run locally. Their facts
-   come from the newest cloud copy.
+   come from the cloud copy of the checkout's base: the newest commit on the
+   default branch that `HEAD` contains and that has a finished copy. The local
+   graph drops those facts for every file the checkout changed since its base
+   and marks them missing, so a renamed or deleted symbol never carries a
+   stale fact. The pin names the base. When no built commit is an ancestor of
+   `HEAD`, the local graph carries none of these facts and marks them missing.
 2. **The local graph lives only on the operator's machine.**
    `oxagen codegraph init` indexes the working tree as it is, uncommitted
-   changes included. The result is named by its pin: the `HEAD` commit plus a
-   SHA-256 digest of the changed paths and contents. It writes
+   changes included. The result is named by its pin: the `HEAD` commit, a
+   SHA-256 digest of the changed paths and contents, and the base commit its
+   cloud facts come from (decision 1). It writes
    `~/.oxagen/codegraph/<repo-id>/graph.db` and nothing else. No local build
    writes a cloud table, and the shared graph comes only from ADR-214's server
    builds. ADR-214 decision 1 stands: Oxagen keeps no graph of a feature
@@ -86,15 +92,22 @@ into the shared store. A local graph has to avoid that path.
 
    This amends ADR-194 decision 2 for the code graph alone. Every other
    embedding still goes to Voyage on the platform key.
-5. **The endpoint credential belongs to one workspace and is stored like a
-   model credential.** `set_model_credential` gains a `purpose`. With
-   `purpose: "embeddings"` it also takes a workspace, and the slot is keyed by
-   organization, workspace, and purpose. Two workspaces with different
-   endpoints hold two credentials. Setting one never replaces another
-   workspace's credential or the organization's language-model key. The row
-   sits in `org.model_credentials` under the same KMS envelope, which gains
-   `purpose` and a nullable `workspace_id`. Only an org Owner or Admin sets
-   it, and each change is audited as a security event, as today. The endpoint
+5. **The endpoint credential belongs to one workspace and one embedding
+   space, and is stored like a model credential.** `set_model_credential`
+   gains a `purpose`. With `purpose: "embeddings"` it also takes a workspace,
+   and the slot is keyed by organization, workspace, purpose, and embedding
+   space (decision 6). Two workspaces with different endpoints hold two
+   credentials. Setting one never replaces another workspace's credential or
+   the organization's language-model key. A copy embeds its queries in the
+   space it was built in, so a workspace that moves to a new endpoint gets a
+   new slot, which becomes its active one, and the old slot stays for the
+   copies decision 7 keeps. Rotating the key of the same endpoint and model
+   replaces the key in its slot. An Owner or Admin can delete an old slot.
+   Copies in that space then search by name and text, and their answers say
+   `embeddings: space_retired`. The row sits in `org.model_credentials` under
+   the same KMS envelope, which gains `purpose`, a nullable `workspace_id`,
+   and a nullable embedding space. Only an org Owner or Admin sets it, and
+   each change is audited as a security event, as today. The endpoint
    URL passes the same public-URL check as today's `baseUrl`. A loopback
    endpoint (`--embed-url http://127.0.0.1:11434/v1/embeddings`) is set only
    on the machine and is never stored in Oxagen.
@@ -160,9 +173,16 @@ into the shared store. A local graph has to avoid that path.
   one machine. They share the extraction crate and its IDs but no files, so the
   cost is a second index, not a second set of IDs. Whether Stella reads the
   Oxagen local graph instead is left to a later decision.
-- The workspace settings screen shows an "Enable embeddings" checkbox whose
-  help text names who bills for each release's embeddings. The code graph spec
-  holds the exact strings.
+- The workspace settings screen shows an "Enable embeddings" checkbox. Its
+  help text names who bills the embeddings and every build that generates
+  them: each commit on the default branch, each tagged release, each open PR,
+  and each local graph that uses the workspace's mode. The code graph spec
+  holds the exact strings. The release archive counts every build's tokens
+  toward the release that follows it, so a bill line can still name a
+  release.
+- A workspace that changes endpoints keeps one credential per old space
+  while it keeps copies built there. The settings screen lists each old slot
+  with the copies that use it.
 
 ## Alternatives considered
 
@@ -177,6 +197,12 @@ into the shared store. A local graph has to avoid that path.
 - **One embedding credential per organization.** Two workspaces with
   different endpoints would overwrite each other's key, and one of them would
   send its cards to the other's provider.
+- **Re-embed kept copies when a workspace changes endpoints.** Every kept tag
+  would pay the new provider again at each switch, and old copies would stay
+  unsearchable by meaning until the work finished.
+- **Take imported facts from the newest cloud copy.** A checkout behind the
+  default branch would show facts about symbols its own code renamed or
+  deleted, and its pin could not show the mismatch.
 - **Let a custom endpoint write into the Oxagen embedding space.** Vectors from
   two models cannot share an index or be compared. Separate spaces keep each
   index correct, and a workspace that switches back keeps its Voyage vectors.
