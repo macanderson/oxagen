@@ -6,7 +6,8 @@
  * `gitlab_steering` account:
  *   - a token that passes every check → 200 with the group, stored, and each
  *     scope that waits on GitLab gets its provision event again
- *   - each refusal GitLab's answers lead to → 422 with its code
+ *   - each refusal GitLab's answers lead to → 422 with its code, including a
+ *     personal, project or other group's token → gitlab_token_not_group
  *   - a 429 → 503, and any other GitLab failure → 502 with a status-only log
  *   - a body that is not JSON or fails the schema → 400, with no GitLab call
  *   - a member, or a caller with no user → 403
@@ -182,6 +183,8 @@ const TOKEN = "glpat-steering-test-token-0123456789";
 const GROUP_PATH = "acme/platform";
 const GROUP_ID = 55;
 const BOT_USER_ID = 777;
+/** The bot GitLab creates for an access token of the group GROUP_ID. */
+const BOT_USERNAME = `group_${GROUP_ID}_bot_5f2a9c`;
 
 /** What the Owner or Admin role check is asked for. */
 const STEERING_REQUIREMENT = { org: ["Owner", "Admin"] } as const;
@@ -213,7 +216,10 @@ const GOOD_REPLIES: GitlabReplies = {
       expires_at: "2027-01-31",
     },
   },
-  user: { status: 200, body: { id: BOT_USER_ID } },
+  user: {
+    status: 200,
+    body: { id: BOT_USER_ID, username: BOT_USERNAME, bot: true },
+  },
   group: { status: 200, body: { id: GROUP_ID, full_path: GROUP_PATH } },
   member: { status: 200, body: { access_level: 40 } },
 };
@@ -239,7 +245,7 @@ function routeGitlab(overrides: Partial<GitlabReplies> = {}) {
     let reply: GitlabReply;
     if (url.includes("/personal_access_tokens/self")) reply = replies.self;
     else if (url.endsWith("/api/v4/user")) reply = replies.user;
-    else if (url.includes("/members/all/")) reply = replies.member;
+    else if (url.includes("/members/")) reply = replies.member;
     else if (url.includes("/groups/")) reply = replies.group;
     else
       throw new Error(
@@ -414,7 +420,8 @@ describe("POST /v1/:org/connections/steering/gitlab", () => {
       `${GITLAB_API}/personal_access_tokens/self`,
       `${GITLAB_API}/user`,
       `${GITLAB_API}/groups/acme%2Fplatform?with_projects=false`,
-      `${GITLAB_API}/groups/${GROUP_ID}/members/all/${BOT_USER_ID}`,
+      // The direct membership: the group's own bot is a direct member.
+      `${GITLAB_API}/groups/${GROUP_ID}/members/${BOT_USER_ID}`,
     ]);
     for (const [, init] of calls) {
       expect(init.method).toBe("GET");
@@ -590,6 +597,85 @@ describe("POST /v1/:org/connections/steering/gitlab", () => {
       code: "gitlab_group_unreachable",
     },
     {
+      name: "the token is a personal access token",
+      replies: {
+        user: {
+          status: 200,
+          body: { id: BOT_USER_ID, username: "octo", bot: false },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "GitLab does not say whether the token's user is a bot",
+      replies: {
+        user: { status: 200, body: { id: BOT_USER_ID, username: BOT_USERNAME } },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "a person's username looks like a group bot's",
+      replies: {
+        user: {
+          status: 200,
+          body: { id: BOT_USER_ID, username: BOT_USERNAME, bot: false },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "the token is a project access token",
+      replies: {
+        user: {
+          status: 200,
+          body: { id: BOT_USER_ID, username: "project_9_bot_5f2a9c", bot: true },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "the token belongs to a parent group",
+      replies: {
+        user: {
+          status: 200,
+          body: {
+            id: BOT_USER_ID,
+            username: `group_${GROUP_ID - 1}_bot_5f2a9c`,
+            bot: true,
+          },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "the token belongs to a group whose id starts with this one's",
+      replies: {
+        user: {
+          status: 200,
+          body: {
+            id: BOT_USER_ID,
+            username: `group_${GROUP_ID}5_bot_5f2a9c`,
+            bot: true,
+          },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
+      name: "the token is a service account's",
+      replies: {
+        user: {
+          status: 200,
+          body: {
+            id: BOT_USER_ID,
+            username: `service_account_group_${GROUP_ID}_5f2a9c`,
+            bot: true,
+          },
+        },
+      },
+      code: "gitlab_token_not_group",
+    },
+    {
       name: "the token's role is Developer",
       replies: { member: { status: 200, body: { access_level: 30 } } },
       code: "gitlab_token_insufficient",
@@ -614,6 +700,48 @@ describe("POST /v1/:org/connections/steering/gitlab", () => {
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
     expect(loggedText()).not.toContain(TOKEN);
+  });
+
+  it("refuses a personal token by the group's name and reads no membership (negative)", async () => {
+    // A person's token with the api scope, whose person is a Maintainer of
+    // the group, passes every other check.
+    routeGitlab({
+      user: {
+        status: 200,
+        body: { id: BOT_USER_ID, username: "octo", bot: false },
+      },
+    });
+
+    const res = await postGitlab({ group: GROUP_PATH, token: TOKEN });
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as ErrorBody;
+    expect(body.error?.code).toBe("gitlab_token_not_group");
+    expect(body.error?.message).toBe(
+      `The token is not an access token of the group ${GROUP_PATH}. Create one under the group's Settings > Access tokens with the api scope and the Maintainer role.`,
+    );
+    const urls = (mocks.fetch.mock.calls as [string][]).map(([url]) => url);
+    expect(urls.some((url) => url.includes("/members/"))).toBe(false);
+  });
+
+  it("accepts a group bot named the way older GitLab versions name it", async () => {
+    routeGitlab({
+      user: {
+        status: 200,
+        body: { id: BOT_USER_ID, username: `group_${GROUP_ID}_bot`, bot: true },
+      },
+    });
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx, makeRowsTx([]), makeRowsTx([]));
+
+    const res = await postGitlab({ group: GROUP_PATH, token: TOKEN });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      group_id: GROUP_ID,
+      group_path: GROUP_PATH,
+    });
+    expect(mocks.encrypt).toHaveBeenCalledTimes(1);
   });
 
   it("answers 503 gitlab_rate_limited when GitLab limits requests", async () => {

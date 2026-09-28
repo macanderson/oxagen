@@ -11,6 +11,7 @@ import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeGitHub, REPO } from "../context.steering.test-support";
+import { remoteDigests } from "../lib/remote-digests";
 import { logger } from "../logger";
 import {
   ledgerRun,
@@ -1290,7 +1291,7 @@ function request(over: Partial<RecallRequest> = {}): RecallRequest {
     now: NOW,
     agent: AGENT,
     inApp: false,
-    repository: "github.com/a-intel/platform",
+    repositoryDigests: remoteDigests("github.com/a-intel/platform"),
     tools: [],
     paths: [],
     text: RECALLED,

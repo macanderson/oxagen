@@ -27,6 +27,7 @@ import {
   runInputPrice,
   type RunTotalsRecord,
 } from "../cost-rollup";
+import type { PromptRead } from "./prompts";
 import type { TokenCounts } from "../cost-rollup";
 import type { PriceEntry } from "../price-book";
 import type { OutcomeRow } from "../run-pr-outcomes";
@@ -355,6 +356,8 @@ export interface DetectInput {
    * cited but not covered.
    */
   frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
+  /** The window's operator prompts, for detector 6; absent when the store read none. */
+  prompts?: PromptRead;
   /**
    * Each wrapped run's first prompt on its own chain, by run public id. A run
    * absent here recorded no prompt in the window. A ledger run is never here.

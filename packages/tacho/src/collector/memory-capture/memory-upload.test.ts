@@ -8,6 +8,8 @@ import type { FetchLike } from "../../host/control-client";
 import type { LocalMemoryEntry } from "./memory-reader";
 import { createMemoryUpload, MEMORY_UPLOAD_PATH } from "./memory-upload";
 
+const HOST_ENROLLMENT_ID = "tch_0123456789abcdefghjkmn";
+
 const ENTRY: LocalMemoryEntry = {
   harness: "claude-code",
   path: "/home/dev/.claude/projects/-proj/memory/rule.md",
@@ -46,7 +48,11 @@ function plane(answers: Array<number | Error>) {
 
 function upload(
   fetch: FetchLike,
-  host = { api_url: "https://api.oxagen.test/", api_key: "oxk_host" },
+  host = {
+    api_url: "https://api.oxagen.test/",
+    api_key: "oxk_host",
+    host_enrollment_id: HOST_ENROLLMENT_ID,
+  },
 ) {
   const lines: string[] = [];
   const send = createMemoryUpload({
@@ -59,7 +65,7 @@ function upload(
 }
 
 describe("an upload", () => {
-  it("posts the entry as a local_gateway memory with the host key", async () => {
+  it("posts the host, harness, path, and statement with the host key", async () => {
     const { fetch, calls } = plane([201]);
     const { send, lines } = upload(fetch);
     await expect(send(ENTRY)).resolves.toBeUndefined();
@@ -71,13 +77,13 @@ describe("an upload", () => {
           Authorization: "Bearer oxk_host",
           "Content-Type": "application/json",
         },
+        // The contract is strict: the digest and the file time stay on
+        // the host, where the reader uses them to skip unchanged files.
         body: {
-          source: "local_gateway",
+          host_enrollment_id: HOST_ENROLLMENT_ID,
           harness: "claude-code",
           path: ENTRY.path,
           statement: "Use pnpm.",
-          contentDigest: ENTRY.contentDigest,
-          modifiedAt: "2026-09-20T12:00:00.000Z",
         },
       },
     ]);
@@ -147,7 +153,11 @@ describe("a failed upload", () => {
       });
     const lines: string[] = [];
     const send = createMemoryUpload({
-      host: () => ({ api_url: "https://api.oxagen.test", api_key: "k" }),
+      host: () => ({
+        api_url: "https://api.oxagen.test",
+        api_key: "k",
+        host_enrollment_id: HOST_ENROLLMENT_ID,
+      }),
       fetch,
       log: (line) => lines.push(line),
       timeoutMs: 5,

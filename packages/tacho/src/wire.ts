@@ -252,6 +252,16 @@ export const BUNDLE_FEATURE_UNBOUND_REPO = "unbound_repo" as const;
 export const BUNDLE_FEATURE_CEDAR = "cedar" as const;
 
 /**
+ * The host can parse `skills`, the skills the workspace's and the
+ * organization's published steering give a session, and places them where
+ * its harness reads user skills at session start (steering-repo-spec, Scope
+ * and binding). Gated for the same reason `gateway_tools` is: the bundle
+ * schema is strict, so a host built before the field would reject the whole
+ * mandate.
+ */
+export const BUNDLE_FEATURE_SKILLS = "skills" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -269,6 +279,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_STEER_NEXT_STEP,
   BUNDLE_FEATURE_UNBOUND_REPO,
   BUNDLE_FEATURE_CEDAR,
+  BUNDLE_FEATURE_SKILLS,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -799,6 +810,69 @@ export const cedarBundleSchema = z
 
 export type CedarBundle = z.output<typeof cedarBundleSchema>;
 
+/** The most skills one bundle carries. */
+export const BUNDLE_SKILLS_MAX = 128;
+
+/** The most files one skill carries besides SKILL.md (`FOLDER_FILES_MAX` in the steering repo). */
+export const BUNDLE_SKILL_FILES_MAX = 1000;
+
+/**
+ * The most characters the skills in one bundle carry, summed by
+ * `bundleSkillChars`. The control plane leaves out a skill that would pass
+ * it and says so in its log. The host refuses a bundle over it, as it
+ * refuses any bundle its schema does not read.
+ */
+export const BUNDLE_SKILLS_CHARS_MAX = 4 * 1024 * 1024;
+
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * One file of a skill besides SKILL.md, by its path inside the skill's
+ * folder. A text file travels as `utf8`. A file the steering repo stores as
+ * bytes travels as `base64`, so a binary asset reaches the harness unchanged.
+ */
+export const bundleSkillFileSchema = z
+  .object({
+    path: z.string().min(1).max(512),
+    encoding: z.enum(["utf8", "base64"]),
+    content: z.string(),
+  })
+  .strict()
+  .refine(
+    (file) =>
+      file.encoding === "utf8" ||
+      (file.content.length % 4 === 0 && BASE64_PATTERN.test(file.content)),
+    "base64 content",
+  );
+
+/**
+ * A skill as the bundle carries it: what session start writes into the
+ * folder where the harness reads user skills. `name` is the folder name and
+ * has the shape `SKILL_NAME_PATTERN` in `skills/place.ts` checks again
+ * before it writes.
+ */
+export const bundleSkillSchema = z
+  .object({
+    lineage: z.string().min(1).max(256),
+    name: z.string().regex(/^[a-z0-9-]{1,64}$/),
+    description: z.string().max(1024),
+    body: z.string(),
+    files: z.array(bundleSkillFileSchema).max(BUNDLE_SKILL_FILES_MAX),
+    source: z.enum(["organization", "workspace"]),
+    version: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type BundleSkill = z.output<typeof bundleSkillSchema>;
+export type BundleSkillFile = z.output<typeof bundleSkillFileSchema>;
+
+/** The characters one skill adds to a bundle, as `BUNDLE_SKILLS_CHARS_MAX` counts them. */
+export function bundleSkillChars(skill: BundleSkill): number {
+  let chars = skill.description.length + skill.body.length;
+  for (const file of skill.files) chars += file.path.length + file.content.length;
+  return chars;
+}
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -1052,6 +1126,25 @@ export const policyBundleSchema = z
      * `BUNDLE_FEATURE_CEDAR`.
      */
     cedar: cedarBundleSchema.optional(),
+    /**
+     * The skills the workspace's and the organization's published steering
+     * give a session on this host. Session start writes each one where the
+     * harness reads user skills, and session end removes it
+     * (`@oxagen/tacho/skills`). A skill scoped to repositories is not here,
+     * because the bundle is per host and a host runs sessions in many
+     * repositories. Absent means no skills. Emitted only to a host that
+     * advertised `BUNDLE_FEATURE_SKILLS`.
+     */
+    skills: z
+      .array(bundleSkillSchema)
+      .max(BUNDLE_SKILLS_MAX)
+      .refine(
+        (skills) =>
+          skills.reduce((sum, skill) => sum + bundleSkillChars(skill), 0) <=
+          BUNDLE_SKILLS_CHARS_MAX,
+        `at most ${BUNDLE_SKILLS_CHARS_MAX} characters of skills`,
+      )
+      .optional(),
     signature: z
       .object({
         key_id: z.string().min(1),

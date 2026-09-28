@@ -2086,6 +2086,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
       zod:
         specifier: 3.25.76
         version: 3.25.76

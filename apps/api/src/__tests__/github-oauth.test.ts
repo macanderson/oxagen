@@ -43,6 +43,8 @@
  * - GET /oauth/github/steering (the Oxagen Steering callback)
  *   - each unset key → 503; a bad, expired or wrongly purposed state → 400
  *   - stores the token as github_steering and resends each waiting scope
+ *   - keeps the installation the install leg named, only when the owner's
+ *     token lists it on a GitHub organization
  *
  * - GET /oauth/github/callback with a purpose state
  *   - an install state binds nothing and returns to return_to
@@ -76,6 +78,8 @@ const mocks = vi.hoisted(() => ({
   assertOrgRole: vi.fn(),
   // The provision event the steering connect sends again for each waiting scope
   startSteeringRepoProvision: vi.fn(),
+  // The write that keeps the installation the install leg named
+  keepSteeringConnection: vi.fn(),
   // Fetch
   fetch: vi.fn(),
 }));
@@ -202,6 +206,7 @@ vi.mock("@oxagen/handlers/steering_repo.provision", async (importOriginal) => {
   return {
     ...real,
     startSteeringRepoProvision: mocks.startSteeringRepoProvision,
+    keepSteeringConnection: mocks.keepSteeringConnection,
   };
 });
 
@@ -424,6 +429,7 @@ beforeEach(() => {
 
   // Provision: the send succeeds and the scope keeps provisioning.
   mocks.startSteeringRepoProvision.mockResolvedValue("provisioning");
+  mocks.keepSteeringConnection.mockResolvedValue(true);
 
   // Crypto: simple pass-through stubs
   mocks.createIngestionCryptoAdapter.mockReturnValue({
@@ -3318,6 +3324,29 @@ describe("GET /oauth/github/steering", () => {
     return `${APP_URL}${STEERING_RETURN_TO}?steering=error&code=${code}`;
   }
 
+  /** What GitHub answers for the owner's `/user/installations`. */
+  function mockInstallations(
+    installations: {
+      id: number;
+      account: { login: string; type: string };
+    }[],
+  ) {
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          installations: installations.map((i) => ({
+            ...i,
+            repository_selection: "selected",
+          })),
+        }),
+    });
+  }
+
+  const INSTALLATIONS_URL =
+    "https://api.github.com/user/installations?per_page=100";
+
   beforeEach(() => {
     mocks.requireEnv.mockReturnValue(STEERING_ENV);
   });
@@ -3513,6 +3542,10 @@ describe("GET /oauth/github/steering", () => {
     expect(tokenInit.body.get("client_secret")).toBe(STEERING_CLIENT_SECRET);
     expect(tokenInit.body.get("code")).toBe("steering-code");
     expect(mocks.fetch.mock.calls[1]?.[0]).toBe("https://api.github.com/user");
+    // No installation_id came back, so nothing lists installations and the
+    // job picks the connection itself.
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+    expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
 
     expect(mocks.encrypt).toHaveBeenCalledWith(
       "gho_steering_token",
@@ -3608,6 +3641,148 @@ describe("GET /oauth/github/steering", () => {
     expect(res.headers.get("location")).toBe(
       errorRedirect("provision_resend_failed"),
     );
+  });
+
+  it("keeps the installation the owner picked before it resends provisioning", async () => {
+    mockGithubExchange();
+    mockInstallations([
+      { id: 101, account: { login: "acme", type: "Organization" } },
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx, makeRowsTx([{ settings: {} }]), makeRowsTx([]));
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+    );
+    // The id was checked against the owner's own token, not taken on trust.
+    const [listUrl, listInit] = mocks.fetch.mock.calls[2] as [
+      string,
+      { method: string; headers: Record<string, string> },
+    ];
+    expect(listUrl).toBe(INSTALLATIONS_URL);
+    expect(listInit.method).toBe("GET");
+    expect(listInit.headers.Authorization).toBe("Bearer gho_steering_token");
+    // The owner reaches two organizations. The one they installed on is kept.
+    expect(mocks.keepSteeringConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.keepSteeringConnection).toHaveBeenCalledWith(TEST_ORG_ID, {
+      provider: "github",
+      installation_id: 202,
+      account_login: "globex",
+    });
+    // Stored before the resend, so pick_connection finds it and does not ask.
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledTimes(1);
+    const kept = mocks.keepSteeringConnection.mock.invocationCallOrder[0];
+    const sent = mocks.startSteeringRepoProvision.mock.invocationCallOrder[0];
+    expect(kept).toBeLessThan(sent as number);
+  });
+
+  it.each([
+    {
+      name: "an id the owner's token does not list",
+      installationId: "303",
+      reply: () =>
+        mockInstallations([
+          { id: 101, account: { login: "acme", type: "Organization" } },
+        ]),
+    },
+    {
+      name: "an installation on a personal account",
+      installationId: "202",
+      reply: () =>
+        mockInstallations([
+          { id: 202, account: { login: "octo", type: "User" } },
+        ]),
+    },
+    {
+      name: "a listing GitHub refuses",
+      installationId: "202",
+      reply: () => {
+        mocks.fetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: async () => JSON.stringify({ message: "Bad credentials" }),
+        });
+      },
+    },
+  ])(
+    "keeps no installation for $name and still connects (negative)",
+    async ({ installationId, reply }) => {
+      mockGithubExchange();
+      reply();
+      const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+      queueSystemDb(insert.tx, makeRowsTx([{ settings: {} }]), makeRowsTx([]));
+
+      const res = await steeringCallback({
+        code: "steering-code",
+        state: buildPurposeState(),
+        installation_id: installationId,
+        setup_action: "install",
+      });
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(
+        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      );
+      expect(mocks.fetch.mock.calls[2]?.[0]).toBe(INSTALLATIONS_URL);
+      expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
+      // The job still runs, and picks the connection as it did before.
+      expect(mocks.startSteeringRepoProvision).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["12abc", "0", "-5", "99999999999999999999"])(
+    "asks GitHub nothing about a malformed installation_id %s (negative)",
+    async (installationId) => {
+      mockGithubExchange();
+      const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+      queueSystemDb(insert.tx, makeRowsTx([]), makeRowsTx([]));
+
+      const res = await steeringCallback({
+        code: "steering-code",
+        state: buildPurposeState(),
+        installation_id: installationId,
+        setup_action: "install",
+      });
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(
+        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      );
+      expect(mocks.fetch).toHaveBeenCalledTimes(2);
+      expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
+    },
+  );
+
+  it("sends the person back with store_failed when keeping the installation throws", async () => {
+    mockGithubExchange();
+    mockInstallations([
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx);
+    mocks.keepSteeringConnection.mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(errorRedirect("store_failed"));
+    expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
   });
 });
 

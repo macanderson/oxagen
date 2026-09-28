@@ -1,0 +1,111 @@
+{
+  "name": "recall_tacho_memories",
+  "domain": "tacho",
+  "description": "Return the memories most relevant to one prompt on an enrolled Tacho host.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "repository_digests": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 8
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "maxItems": 64
+      },
+      "paths": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "maxItems": 64
+      },
+      "text": {
+        "type": "string",
+        "maxLength": 8000
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "repository_digests",
+      "tools",
+      "paths",
+      "text"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "record",
+                "memory"
+              ]
+            },
+            "statement": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "id",
+            "source",
+            "statement",
+            "score",
+            "tokens"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 5
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "additionalProperties": false
+  }
+}
