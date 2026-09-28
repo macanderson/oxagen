@@ -28,6 +28,8 @@ export interface ServedHost {
   publicId: string;
   /** The runtime's slug. Null when the host bound no runtime. */
   runtime: string | null;
+  /** The auth.users id of the person who enrolled the host. Null when the host records none. */
+  operator: string | null;
   /**
    * The workspace role, lowercased, that the person who enrolled the host
    * holds now. Null when the host records no enroller or the enroller holds
@@ -66,6 +68,7 @@ export async function resolveServedRun(ctx: CapabilityContext, sources: RunSourc
     sessionId: session === null ? null : sessionUuid,
     runtime: host.runtime,
     harness: session?.harness ?? null,
+    ...(host.operator === null ? {} : { operator: host.operator }),
     ...(host.operatorRole === null ? {} : { operatorRole: host.operatorRole }),
     machine: host.publicId,
     runPublicId: session?.publicId ?? null,
