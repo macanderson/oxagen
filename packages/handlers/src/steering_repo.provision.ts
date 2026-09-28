@@ -584,7 +584,7 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
  * the current token onto the same hook, so it also heals a rotated secret.
  *
  * GitLab answers 400 or 422 when it refuses the hook's URL, as GitLab.com
- * does for a localhost `OXAGEN_API_URL`. A retry gets the same answer, and
+ * does for a localhost API origin (`NEXT_PUBLIC_API_URL`). A retry gets the same answer, and
  * the repo works without the hook: the scheduled sweep finds the changes the
  * hook would have reported, only later. So a refused URL logs a warning and
  * the step finishes. A run after the URL is fixed registers the hook.

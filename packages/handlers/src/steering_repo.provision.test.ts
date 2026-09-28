@@ -90,7 +90,7 @@ function hookOf(
       scopeId: scope.kind === "workspace" ? scope.workspaceId : scope.orgId,
       projectId,
     },
-    { BETTER_AUTH_SECRET: secret, OXAGEN_API_URL: API_URL },
+    { BETTER_AUTH_SECRET: secret, NEXT_PUBLIC_API_URL: API_URL },
   );
 }
 

@@ -1231,7 +1231,7 @@ describe("steeringRepoProvisionDeps", () => {
     const HOOK_ENV = {
       ...ENV,
       BETTER_AUTH_SECRET: "a-steering-hook-secret-of-32-chars!",
-      OXAGEN_API_URL: "https://api.example.test/",
+      NEXT_PUBLIC_API_URL: "https://api.example.test/",
     };
 
     it("names the workspace in the URL and binds the token to it and the project", () => {

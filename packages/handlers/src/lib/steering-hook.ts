@@ -8,6 +8,7 @@
 // current token onto the hook. After the secret rotates, a GitLab steering
 // project's deliveries answer 401 until provisioning runs for it again.
 import { createHmac } from "node:crypto";
+import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { requireEnv } from "@oxagen/config/env";
 
 /** Separates this token from every other HMAC made with the same secret. */
@@ -79,12 +80,8 @@ export function steeringHookTarget(
     ["BETTER_AUTH_SECRET"] as const,
     env as NodeJS.ProcessEnv,
   );
-  const origin = (env["OXAGEN_API_URL"] ?? "https://api.oxagen.sh").replace(
-    /\/+$/,
-    "",
-  );
   return {
-    url: `${origin}${steeringHookPath(identity.kind, identity.scopeId)}`,
+    url: `${apiPublicOrigin(env)}${steeringHookPath(identity.kind, identity.scopeId)}`,
     token: steeringHookToken(BETTER_AUTH_SECRET, identity),
   };
 }

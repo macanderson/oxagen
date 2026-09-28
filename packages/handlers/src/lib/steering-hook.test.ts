@@ -70,15 +70,26 @@ describe("steeringHookToken", () => {
 });
 
 describe("steeringHookTarget", () => {
-  it("builds the URL from OXAGEN_API_URL without a trailing slash", () => {
+  it("builds the URL from NEXT_PUBLIC_API_URL without a trailing slash", () => {
     const target = steeringHookTarget(identity, {
       BETTER_AUTH_SECRET: SECRET,
-      OXAGEN_API_URL: "https://api.example.test//",
+      NEXT_PUBLIC_API_URL: "https://api.example.test//",
     });
     expect(target).toEqual({
       url: `https://api.example.test/webhooks/gitlab/steering/workspace/${WORKSPACE}`,
       token: steeringHookToken(SECRET, identity),
     });
+  });
+
+  it("prefers the service's NEXT_PUBLIC_API_URL over the CLI's OXAGEN_API_URL", () => {
+    const target = steeringHookTarget(identity, {
+      BETTER_AUTH_SECRET: SECRET,
+      NEXT_PUBLIC_API_URL: "https://api.isolated.example.test",
+      OXAGEN_API_URL: "https://api.oxagen.sh",
+    });
+    expect(target.url).toBe(
+      `https://api.isolated.example.test/webhooks/gitlab/steering/workspace/${WORKSPACE}`,
+    );
   });
 
   it("falls back to the production API origin", () => {
