@@ -42,7 +42,7 @@ describe("list_installation_repositories contract", () => {
     ).toEqual({ repositories: [], truncated: true });
   });
 
-  it("requires every field the picker and the bind both need", () => {
+  it("requires every field the link picker needs", () => {
     for (const key of Object.keys(REPO)) {
       const partial: Record<string, unknown> = { ...REPO };
       delete partial[key];

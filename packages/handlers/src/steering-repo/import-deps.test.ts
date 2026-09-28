@@ -112,10 +112,13 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withTenantDb: async (fn: (tx: unknown) => unknown) => fn(mocks.makeTx()),
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const __dbMock = {
+    ...(await importOriginal<typeof import("@oxagen/database")>()),
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(mocks.makeTx()),
+  };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
+});
 vi.mock("@oxagen/github", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/github")>()),
   createGitHubClient: mocks.createGitHubClient,

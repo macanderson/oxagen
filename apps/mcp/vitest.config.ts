@@ -95,6 +95,12 @@ export default defineConfig({
         "src/tools/plugin.registry.list.ts",
         "src/tools/plugin.registry.remove.ts",
         "src/tools/plugin.settings.set_auth_alerts.ts",
+        // served tools (lane M15)
+        "src/servers/call.ts",
+        "src/servers/list.ts",
+        "src/servers/names.ts",
+        "src/servers/search.ts",
+        "src/servers/snapshot.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {

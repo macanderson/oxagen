@@ -90,8 +90,9 @@ unless the ledger says which id it replaces.
   (`steering_import_provider_unsupported`) and a repository Oxagen can no
   longer reach (`steering_import_source_unreachable`). It also refuses a
   repository the workspace reads through a sources connection with no binding
-  (`steering_import_legacy_connection`). The owner binds that repository
-  first.
+  (`steering_import_legacy_connection`). #4616 removed the bind that let the
+  owner fix that, so such a workspace cannot import until #4684 gives it a
+  path.
 - When a rule needs a kind or a constraint needs an effect, the import answers
   `needs_choices` and changes nothing. The owner runs it again with
   `ruleKinds` and `constraintEffects`.

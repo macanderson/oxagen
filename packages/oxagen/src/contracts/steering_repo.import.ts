@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { recordEffectSchema } from "../steering-repo/record";
+import { recordEffectSchema } from "../steering-repo/record-effect";
 
 /** How the import ended. */
 export const STEERING_IMPORT_OUTCOMES = [

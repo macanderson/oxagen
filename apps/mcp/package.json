@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.13.0",
     "@clickhouse/client": "1.23.1",
     "@oxagen/agent": "workspace:*",
     "@oxagen/auth": "workspace:*",
@@ -21,10 +22,13 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
+    "@oxagen/mcp-studio": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/policy": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
+    "@oxagen/tenancy": "workspace:*",
     "ai": "7.0.111",
     "better-auth": "1.6.33",
     "drizzle-orm": "0.45.3",

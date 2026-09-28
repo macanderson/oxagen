@@ -199,8 +199,9 @@ describe("the GitHub seam", () => {
    * reports today (#3233 review, P1).
    *
    * An admin who renames or switches the repository's default branch on GitHub
-   * after the bind changes `getRepoInfo().defaultBranch` and nothing else: the
-   * binding is immutable and the settings page still names the approved ref.
+   * after the binding is written changes `getRepoInfo().defaultBranch` and
+   * nothing else: the binding is immutable and the settings page still names
+   * the approved ref.
    * If steering followed GitHub, every Context PR would be opened against,
    * compared against and merged into a branch no one approved — and
    * `assertProductionBase`, which compares a PR's base against this same
@@ -578,10 +579,9 @@ describe("the GitHub seam", () => {
 /**
  * Which repository the seam resolves as the workspace's main repo.
  *
- * `bind_main_repository` writes a binding head and a binding version; the
- * settings-path connection it binds through carries only the installation id
- * the install callback attached, never an owner/repo. A read that looked only
- * at `delivery_config` answered null right after a successful bind, and every
+ * The steering head and its binding version name the repository. The
+ * connection a head hangs from names no repository. A read that looked only
+ * at `delivery_config` answered null right after a head was written, and every
  * Context PR behaved as though no repository were connected.
  */
 describe("the workspace's main repository", () => {
@@ -686,7 +686,7 @@ describe("the workspace's main repository", () => {
     return counts;
   }
 
-  it("resolves the repository and the approved ref the bind recorded, on a connection that names none", async () => {
+  it("resolves the repository and the approved ref the binding recorded, on a connection that names none", async () => {
     db({
       bound: [
         {
@@ -755,8 +755,8 @@ describe("the workspace's main repository", () => {
    * connection that has been deleted, the join above yields nothing, and the
    * replacement connection the install callback inserted carries an
    * installation id and no owner/repo — so steering resolves null with a
-   * repository still bound. `bind_main_repository` on the SAME repository is
-   * what moves the head onto the live connection and brings the join back.
+   * repository still bound. No capability moves the head onto the live
+   * connection yet (#4637).
    */
   it("answers null when neither a binding nor a configured connection names a repository", async () => {
     db({

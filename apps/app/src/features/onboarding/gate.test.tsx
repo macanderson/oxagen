@@ -82,8 +82,8 @@ describe("OnboardingGate", () => {
     ]);
   });
 
-  // The provisional window is gone (#4518). A gate row that still carries one
-  // from before draws no banner and offers no bind.
+  // #4518 retired the provisional banner, and #4616 dropped the window from
+  // the gate read. The open gate draws neither the banner nor a bind button.
   it("draws no provisional banner while the gate is open (negative)", async () => {
     await renderGate({ state: { ok: true, value: onboardingGate() } });
     expect(screen.getByTestId("onboarding-rail")).toBeInTheDocument();
@@ -160,7 +160,6 @@ describe("OnboardingGate", () => {
         value: onboardingGate({
           step: "unlocked",
           workspace: null,
-          provisional: null,
         }),
       },
     });

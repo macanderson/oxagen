@@ -2287,12 +2287,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .onboardingFirstFrameGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "bind_main_repository",
-    async () =>
-      (await import("./repository.main.bind"))
-        .repositoryMainBindHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "link_repository",
     async () =>
       (await import("./repository.link"))

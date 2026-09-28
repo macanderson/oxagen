@@ -44,7 +44,7 @@ function runExternal(request: string): string | undefined {
 
 describe("xmcp bundler externals", () => {
   // Heavy SDKs this app loads only at runtime.
-  const heavy = ["pdf-lib", "inngest", "neo4j-driver", "stripe", "better-auth"];
+  const heavy = ["pdf-lib", "inngest", "neo4j-driver", "stripe", "better-auth", "@cedar-policy/cedar-wasm"];
 
   for (const pkg of heavy) {
     it(`externalizes ${pkg} as a runtime commonjs require`, () => {

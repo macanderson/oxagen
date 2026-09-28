@@ -481,7 +481,7 @@ async function advance(
       case "legacy":
         throw conflict(
           "steering_import_legacy_connection",
-          `The workspace reads ${head.fullName} through a sources connection with no binding. Bind it with bind_main_repository, then run the import.`,
+          `The workspace reads ${head.fullName} through a sources connection with no binding. The import reads only a bound repository, and Oxagen cannot bind a legacy connection, so this workspace cannot import yet.`,
         );
       case "none":
         state.source = null;

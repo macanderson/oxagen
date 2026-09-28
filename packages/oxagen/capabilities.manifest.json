@@ -4665,8 +4665,7 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true,
-        "app": true
+        "docs": true
       }
     },
     {
@@ -4774,22 +4773,6 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "bind_main_repository",
-      "file": "repository.main.bind.ts",
-      "domain": "repository",
-      "mode": "sync",
-      "surfaces": [
-        "api"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "unit": true,
         "docs": true,
         "app": true
       }

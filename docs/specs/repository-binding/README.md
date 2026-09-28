@@ -228,7 +228,6 @@ nothing.
 | `record_working_copy` | api, cli | The CLI's report of one checkout. |
 | `create_github_token` | api | Refuses the steering repo with `steering_repo_propose_only` (§2.2). |
 | `open_init_pr` | api, mcp, cli | Retired. It refuses with `conflict: init_pr_retired`. |
-| `bind_main_repository` | api | Writes a `steering` head with no steering PR. Refuses `main_repo_bound` when the workspace already has a different steering repo. Pending removal (§8). |
 | `attach_gitlab_project` | api | Attaches a GitLab project with a project access token (#3762). |
 
 `link_repository` and `unlink_repository` take an org Owner or Admin, or the
@@ -265,7 +264,7 @@ request.
   governance, and the list of linked repositories. Postgres mirrors it.
 - **Neo4j.** Unchanged. None of this is graph data.
 
-## 8. Pending S8 change
+## 8. S8 removal
 
-Issue #4616 removes `bind_main_repository`, the app's bind controls, and the
-provisional first workspace (ADR-065) once Mac approves.
+PR #4647 (issue #4616) removed `bind_main_repository`, the app's bind
+controls, and the provisional first workspace (ADR-065).

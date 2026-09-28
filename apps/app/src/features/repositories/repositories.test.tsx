@@ -39,7 +39,6 @@ import { phoneWidth } from "@/test/phone";
 const actions = vi.hoisted(() => ({
   readWorkspaceRepository: vi.fn(),
   listInstallationRepositories: vi.fn(),
-  bindWorkspaceRepository: vi.fn(),
   listGithubInstallations: vi.fn(),
   attachGithubInstallation: vi.fn(),
   readWorkspaceRepositories: vi.fn(),
@@ -911,14 +910,19 @@ describe("the repository dialog", () => {
     );
   });
 
-  it("carries the repair on a main repository whose connection was retired", async () => {
+  it("says steering is off for a steering repository whose connection was retired, and offers no repair", async () => {
     actions.readWorkspaceRepositories.mockResolvedValue({
       ok: true,
       value: { repositories: [{ ...MAIN, connectionLive: false }] },
     });
     const { user } = await loaded();
     const dialog = await openRepository(user, "acme/platform");
-    expect(await within(dialog).findByTestId("repository-setup")).toBeTruthy();
+    expect(
+      await within(dialog).findByTestId("repository-dialog-retired"),
+    ).toHaveTextContent(
+      "This steering repository's connection was retired, so steering is off.",
+    );
+    expect(within(dialog).queryByTestId("repository-setup")).toBeNull();
   });
 });
 
@@ -957,7 +961,7 @@ describe("the init wizard", () => {
     expect(
       within(wizard).getByTestId("init-wizard-role-note"),
     ).toHaveTextContent(
-      "acme/platform is already this workspace’s main repo, so this one is linked.",
+      "acme/docs-site is linked to this workspace.",
     );
     await user.click(within(wizard).getByTestId("init-wizard-next"));
 
@@ -1175,7 +1179,7 @@ describe("the init wizard", () => {
     expect(actions.openInitPullRequest).not.toHaveBeenCalled();
   });
 
-  it("binds the main repository first when the workspace has none, and says when the pull request already existed", async () => {
+  it("proposes a link as a steering PR when the workspace has no repository, and stops there", async () => {
     actions.readWorkspaceRepositories.mockResolvedValue({
       ok: true,
       value: { repositories: [] },
@@ -1199,60 +1203,38 @@ describe("the init wizard", () => {
     );
     expect(
       within(wizard).getByTestId("init-wizard-role-note"),
-    ).toHaveTextContent("acme/infra is this workspace’s main repo.");
+    ).toHaveTextContent(
+      "acme/infra is not linked yet, so the wizard opens a steering PR that links it and stops there.",
+    );
     for (let i = 0; i < 4; i += 1)
       await user.click(within(wizard).getByTestId("init-wizard-next"));
-    actions.bindWorkspaceRepository.mockResolvedValue({
-      ok: true,
-      value: BOUND_SETUP,
-    });
-    actions.readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: {
-        repositories: [
-          {
-            ...MAIN,
-            bindingId: "rpb_infra1",
-            name: "infra",
-            fullName: "acme/infra",
-            htmlUrl: "https://github.com/acme/infra",
-          },
-        ],
-      },
-    });
-    actions.openInitPullRequest.mockResolvedValue({
+    actions.linkWorkspaceRepository.mockResolvedValue({
       ok: true,
       value: {
         fullName: "acme/infra",
-        branch: "oxagen/init",
-        base: "main",
-        pullRequest: {
-          number: 3,
-          htmlUrl: "https://github.com/acme/infra/pull/3",
+        defaultRef: "main",
+        status: "proposed",
+        steeringPullRequest: {
+          number: 43,
+          url: "https://github.com/acme/platform/pull/43",
+          reused: false,
         },
-        files: [".oxagen/workspace.toml", ".oxagen/rules/governance.toml"],
-        reused: true,
       },
     });
     await user.click(within(wizard).getByTestId("init-wizard-open"));
     expect(
-      await within(wizard).findByTestId("init-wizard-opened"),
-    ).toHaveTextContent(
-      "acme/infra#3 already adds .oxagen/. Nothing new was pushed.",
-    );
-    expect(actions.bindWorkspaceRepository).toHaveBeenCalledWith(
+      await within(wizard).findByTestId("init-wizard-steering-pr"),
+    ).toHaveTextContent("Steering PR #43 adds acme/infra to workspace.toml.");
+    expect(actions.linkWorkspaceRepository).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       { owner: "acme", name: "infra" },
     );
-    expect(actions.openInitPullRequest.mock.calls[0]?.[2]).toMatchObject({
-      bindingId: "rpb_infra1",
-    });
-    const sent: unknown = actions.openInitPullRequest.mock.calls[0]?.[2];
-    expect(JSON.stringify(sent)).toContain('role = \\"main\\"');
+    expect(actions.setProductionBranch).not.toHaveBeenCalled();
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
   });
 
-  it("stops when binding the main repository is refused, and says so (negative)", async () => {
+  it("stops when the link is refused, and says so (negative)", async () => {
     actions.readWorkspaceRepositories.mockResolvedValue({
       ok: true,
       value: { repositories: [] },
@@ -1267,7 +1249,7 @@ describe("the init wizard", () => {
     });
     for (let i = 0; i < 4; i += 1)
       await user.click(within(wizard).getByTestId("init-wizard-next"));
-    actions.bindWorkspaceRepository.mockResolvedValue({
+    actions.linkWorkspaceRepository.mockResolvedValue({
       ok: false,
       reason: "conflict",
       code: "repository_linked_elsewhere",
