@@ -105,6 +105,9 @@ export async function replayCall(server: ManifestServer, call: RecordedCall): Pr
   if (tool === undefined) {
     return { status: "skipped", reason: `${call.tool} is not in tools.toml, so replay skips its recorded calls.` };
   }
+  // The compile check has no descriptor set for a gRPC server until importGrpc
+  // (lane M3) builds one from the folder's proto files, and the replay
+  // transport does not decode gRPC messages. #4627 carries that change.
   if (tool.request.kind === "grpc") return { status: "skipped", reason: "Replay does not run gRPC tools." };
   const name = replayEnvironment(server);
   if (name === undefined) return { status: "skipped", reason: `The server ${server.name} has no environment to replay in.` };
