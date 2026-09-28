@@ -123,8 +123,8 @@ into the shared store. A local graph has to avoid that path.
    its commit changed, so a burst of merges costs the files they changed, not
    a full build each. `at: "<sha>"` answers from that commit's copy and never
    from a later one. A commit whose build has not finished answers `building`.
-   The workspace-wide stages (schema reads through sqlglot, domain grouping,
-   and enrichment) run at most once every 5 minutes. Each copy names the run
+   The workspace stage, domain grouping, and enrichment run at most once
+   every 5 minutes. Each copy names the run
    of those stages it carries, as part of its freshness. A tag builds its
    exact commit, is keyed by tag so a newer commit cannot cancel it, and is
    kept forever. The release archive lists each tagged copy with the builds
@@ -139,8 +139,8 @@ into the shared store. A local graph has to avoid that path.
   harnesses, and the shared graph still changes only through server builds of
   the provider's commits.
 - The default branch builds once per commit. Each build reprocesses only the
-  files its commit changed, and the workspace-wide stages still run at most
-  once every 5 minutes.
+  files its commit changed, and the workspace stage, domain grouping, and
+  enrichment still run at most once every 5 minutes.
 - A laptop now runs builds. The local host runs one worker at low priority
   with a 2 GB memory limit by default, and it runs SCIP only when
   `init --scip` asks for it.
