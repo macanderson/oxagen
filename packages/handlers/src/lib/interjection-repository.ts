@@ -20,11 +20,11 @@
  * bound is still one the installation reaches. A miss in a listing that
  * stopped short is logged as a warning, since the repository may lie past it.
  */
-import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
 import type { GitHubInstallationRepositories } from "@oxagen/github";
 import { logger } from "../logger";
 import { resolveWorkspaceGithubInstallation } from "../repository.github-connection";
 import { githubInstallationRepositoriesDeps } from "../repository.installation.list";
+import { remoteDigests } from "./remote-digests";
 
 /**
  * Pages of 100 the search walks: 5,000 repositories. The picker's bound is
@@ -66,11 +66,10 @@ export const GITHUB_INTERJECTION_REPOSITORY_DEPS: InterjectionRepositoryDeps = {
 
 /**
  * The digests a host would compute for `github.com/<fullName>`: the
- * canonical form and the folded one.
+ * canonical form and the folded one, listed once when they are the same.
  */
 export function repositoryDigests(fullName: string): string[] {
-  const canonical = canonicalRemote(`github.com/${fullName}`);
-  return [digestBytes(canonical), digestBytes(foldedRemote(canonical))];
+  return remoteDigests(`github.com/${fullName}`);
 }
 
 /**

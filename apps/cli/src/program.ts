@@ -492,17 +492,17 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── repo: the workspace's repositories, one main and any number linked ──────
+  // ── repo: the workspace's repositories, one steering and any number linked ──
 
   const repoCmd = program
     .command("repo")
     .description(
-      "The workspace's repositories: one main repository, bound at creation, and the linked ones its agents work on",
+      "The workspace's repositories: one steering repository, which holds its steering record, and the linked ones its agents work on",
     );
   repoCmd
     .command("list")
     .description(
-      "Every repository the workspace binds, main first, with each one's approved default ref and binding id",
+      "Every repository the workspace binds, the steering repository first, with each one's approved default ref and binding id",
     )
     .option("--json", "Output JSON")
     .action(async (opts: { json?: boolean }) => {
@@ -512,7 +512,7 @@ export function buildProgram(): Command {
   repoCmd
     .command("link")
     .description(
-      "Link a GitHub repository the workspace's GitHub App installation reaches as a linked repository",
+      "Open the steering PR that links a GitHub repository the workspace's GitHub App installation reaches. The link follows the merge.",
     )
     .argument("<owner/name>", "The repository, as GitHub names it")
     .option("--json", "Output JSON")
@@ -523,7 +523,7 @@ export function buildProgram(): Command {
   repoCmd
     .command("unlink")
     .description(
-      "Unlink a linked repository by its binding id; the main repository is refused",
+      "Unlink a linked repository by its binding id. A repository workspace.toml lists is removed by a steering PR. The steering repository is refused.",
     )
     .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
     .option("--json", "Output JSON")
@@ -882,7 +882,7 @@ export function buildProgram(): Command {
     .option("--text <answer>", "A free-text answer to an agent's own question")
     .option(
       "--link",
-      "Bind the repository to this workspace. Org Owner or Admin, or workspace Owner",
+      "Open the steering PR that links the repository to this workspace. Org Owner or Admin, or workspace Owner",
     )
     .option(
       "--create <name>",

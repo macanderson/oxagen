@@ -5,7 +5,12 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Unlink a linked repository from the workspace (`unlink_repository`); the main repository is refused. Mounted on the org-scoped router; the role is checked in the handler. */
+/**
+ * Unlink a linked repository from the workspace (`unlink_repository`). The
+ * body's `status` says whether the link is gone or a steering PR removes it
+ * (ADR-212). The steering repository is refused. Mounted on the org-scoped
+ * router. The handler checks the role.
+ */
 export const repositoryUnlinkRoute = new Hono<AppEnv>();
 
 repositoryUnlinkRoute.post("/", async (c) => {

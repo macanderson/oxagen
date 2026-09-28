@@ -4254,7 +4254,7 @@
       "writes": []
     }
   ],
-  "contentHash": "80917e4982673cafe3fbcde012aa5062f2fc4bdb85262d78aabad9f6fa047c90",
+  "contentHash": "7b5875ba73c44eecf51249ca09a7c5b03a949af543e70b20b57089bb4c9fac32",
   "domains": [
     {
       "name": "agent",
@@ -23977,6 +23977,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "repository_unlinked",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         },
         {
           "name": "git_branch",

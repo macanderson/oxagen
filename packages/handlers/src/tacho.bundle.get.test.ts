@@ -7,8 +7,17 @@
 import { generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { policyBundleSchema } from "@oxagen/tacho";
 import { bundleSignerFromPem, verifyBundle } from "./lib/tacho-bundle-signing";
-import { tachoBundleGetHandler } from "./tacho.bundle.get";
+import {
+  fixtureDelivery,
+  readFixtureFile,
+} from "./steering.test-support";
+import {
+  createTachoBundleGetHandler,
+  tachoBundleGetHandler,
+} from "./tacho.bundle.get";
+import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
 
 const PEM = generateKeyPairSync("ed25519")
   .privateKey.export({ type: "pkcs8", format: "pem" })
@@ -173,5 +182,103 @@ describe("get_tacho_bundle freshness", () => {
       bundleEtagServed: etag,
       bundleVersionServed: 5,
     });
+  });
+});
+
+describe("get_tacho_bundle skills", () => {
+  const SKILLS_HOST = { bundleFeatures: ["skills"] };
+
+  type CountedPort = TachoPublished & { reads: number };
+
+  /** The fixture's published versions, counting each file read. */
+  function port(overrides: Partial<TachoPublished> = {}): CountedPort {
+    const counted: CountedPort = {
+      reads: 0,
+      published: () => fixtureDelivery(),
+      readAsset: (source, bundle, file) => {
+        counted.reads += 1;
+        return readFixtureFile(source, bundle, file);
+      },
+      recallUnreviewed: async () => "off",
+    };
+    return Object.assign(counted, overrides);
+  }
+
+  it("sends a host that parses skills the published skills, signed with the mandate", async () => {
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const handler = createTachoBundleGetHandler({ published: port() });
+    const answer = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    const skills = answer.bundle?.skills ?? [];
+    expect(skills.length).toBeGreaterThan(0);
+    expect(skills.every((skill) => skill.body.length > 0)).toBe(true);
+    // The fixture's workspace publishes version 21.
+    expect(skills.some((skill) => skill.source === "workspace" && skill.version === 21)).toBe(true);
+    expect(answer.bundle && policyBundleSchema.parse(answer.bundle).skills).toEqual(skills);
+    expect(
+      answer.bundle &&
+        verifyBundle(answer.bundle, bundleSignerFromPem(PEM).publicKeyPem),
+    ).toBe(true);
+    // The etag covers the skills, so a new published version reaches a host
+    // that polls with its etag.
+    expect(answer.etag).not.toBe(await currentEtag());
+  });
+
+  it("sends no skills to a host that did not advertise them, and reads nothing published", async () => {
+    mocks.host.mockReturnValue(hostRow());
+    const published = port({
+      published: async () => {
+        throw new Error("a host that did not ask should not cost a read");
+      },
+    });
+    const answer = await createTachoBundleGetHandler({ published })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect(answer.bundle).not.toBeNull();
+    expect(answer.bundle).not.toHaveProperty("skills");
+  });
+
+  it("sends no skills and keeps the etag when nothing has published", async () => {
+    const base = await currentEtag();
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const answer = await createTachoBundleGetHandler({
+      published: NOTHING_PUBLISHED,
+    })({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(answer.bundle).not.toHaveProperty("skills");
+    expect(answer.etag).toBe(base);
+  });
+
+  it("still sends the mandate when a published file cannot be read", async () => {
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const published = port({
+      readAsset: async (_source, _bundle, file) => {
+        throw new Error(`${file.path} is gone`);
+      },
+    });
+    const answer = await createTachoBundleGetHandler({ published })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect(answer.not_modified).toBe(false);
+    expect(answer.bundle).not.toHaveProperty("skills");
+    expect(answer.bundle?.permissions).toEqual({ allow: [], deny: [], ask: [] });
+  });
+
+  it("reads a published version once and answers not_modified while it stands", async () => {
+    mocks.host.mockReturnValue(hostRow(SKILLS_HOST));
+    const published = port();
+    const handler = createTachoBundleGetHandler({ published });
+    const first = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    const reads = published.reads;
+    expect(reads).toBeGreaterThan(0);
+    mocks.host.mockReturnValue(
+      hostRow({ ...SKILLS_HOST, bundleEtagServed: first.etag }),
+    );
+    const second = await handler(
+      { host_enrollment_id: HOST_PUBLIC, etag: first.etag },
+      MACHINE,
+    );
+    expect(second).toEqual({ not_modified: true, etag: first.etag, bundle: null });
+    expect(published.reads).toBe(reads);
   });
 });

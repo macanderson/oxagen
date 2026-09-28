@@ -23,6 +23,16 @@ export {
   MEMORY_STATEMENT_MAX_CHARS,
 } from "./memory-reader";
 export {
+  createMemoryRecall,
+  MEMORY_RECALL_PATH,
+  MEMORY_RECALL_TEXT_MAX_CHARS,
+  MEMORY_RECALL_TIMEOUT_MS,
+  type MemoryRecall,
+  type MemoryRecallDeps,
+  type MemoryRecallRequest,
+  type RecalledMemory,
+} from "./memory-recall";
+export {
   createMemoryUpload,
   MEMORY_UPLOAD_PATH,
   type MemoryUploadDeps,

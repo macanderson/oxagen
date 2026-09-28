@@ -27,6 +27,8 @@ const WORDS = {
     github_not_authorized: "githubNotAuthorized",
     installation_unreachable: "installationUnreachable",
     repository_not_installed: "repositoryNotInstalled",
+    main_repo_unbound: "mainRepoUnbound",
+    workspace_toml_unreadable: "workspaceTomlUnreadable",
   },
   invalid: {
     interjection_choice: "choice",
