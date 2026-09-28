@@ -102,6 +102,11 @@ export type AssistantQuestion = {
    * `cancel_assistant_turn` while it streams (#4164). Absent sends none.
    */
   turnId?: string;
+  /**
+   * The `gen_` ids of files uploaded for this message
+   * (`upload_assistant_attachment`, ADR-222). Absent or empty sends none.
+   */
+  attachments?: readonly string[];
 };
 
 /** A tool call the turn made, named by the capability it called. */
@@ -149,13 +154,34 @@ const isExhaustedCode = (code: string): code is ExhaustedCode =>
 const UNCLASSIFIED = "kernel_failure";
 
 /**
+ * The code a turn refused over its files carries (ADR-222). The refusal is
+ * `invalid` on the `attachments` field, and its code is the rule the files
+ * broke, so the composer can tell a model that cannot read them from a set
+ * that is too large.
+ */
+const ATTACHMENT_REFUSED = "attachment_refused";
+
+function attachmentRefusal(rule: string | undefined): AssistantRefusal {
+  return {
+    ok: false,
+    reason: "invalid",
+    code: rule ?? ATTACHMENT_REFUSED,
+    field: "attachments",
+  };
+}
+
+/**
  * A failure the route named after the stream opened, classified as the kernel
  * seam classifies the same code. The route names a handler refusal by its
  * reason, so `conversation_not_found` is the not-found it was on the seam.
  *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
-export function refusalOfCode(code: string | undefined): AssistantRefusal {
+export function refusalOfCode(
+  code: string | undefined,
+  rule?: string,
+): AssistantRefusal {
+  if (code === ATTACHMENT_REFUSED) return attachmentRefusal(rule);
   if (code === undefined) {
     return { ok: false, reason: "unavailable", code: UNCLASSIFIED };
   }
@@ -204,6 +230,13 @@ export function refusalOfResponse(
       : (error.reason ?? error.code ?? null);
   switch (status) {
     case 400:
+      if (
+        error !== null &&
+        typeof error !== "string" &&
+        error.code === ATTACHMENT_REFUSED
+      ) {
+        return attachmentRefusal(error.reason);
+      }
       return { ok: false, reason: "invalid", code: "invalid_input" };
     case 401:
       return { ok: false, reason: "denied", code: "unauthorized" };
@@ -284,7 +317,11 @@ const eventSchema = z.discriminatedUnion("type", [
     status: z.enum(["completed", "failed"]),
   }),
   parkedCardSchema.extend({ type: z.literal("approval-required") }),
-  z.object({ type: z.literal("error"), code: z.string().optional() }),
+  z.object({
+    type: z.literal("error"),
+    code: z.string().optional(),
+    reason: z.string().optional(),
+  }),
 ]);
 
 /** One SSE message: its `event:` name, or null for the default, and its data. */
@@ -374,6 +411,9 @@ export async function askAssistantStream(
         conversationId: question.conversationId,
         ...(question.turnId === undefined ? {} : { turnId: question.turnId }),
         content: question.content,
+        ...(question.attachments?.length
+          ? { attachments: question.attachments }
+          : {}),
         pageContext:
           question.route === null
             ? null
@@ -441,7 +481,7 @@ export async function askAssistantStream(
           }
           break;
         case "error":
-          failure ??= refusalOfCode(e.code);
+          failure ??= refusalOfCode(e.code, e.reason);
           break;
       }
     }

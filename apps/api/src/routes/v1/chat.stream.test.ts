@@ -524,7 +524,12 @@ describe("POST chat/stream — the turn on the wire", () => {
       mocks.invoke.mockImplementationOnce(failAfterPrepared(err));
       const { events, done } = await readSse(await post({ content: "hi" }));
       expect(events).toEqual([
-        { type: "error", message: (err as Error).message, code },
+        {
+          type: "error",
+          message: (err as Error).message,
+          code,
+          ...(code === "attachment_refused" ? { reason: "too_large" } : {}),
+        },
       ]);
       expect(done).toBe("[DONE]");
     },

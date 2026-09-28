@@ -7996,9 +7996,36 @@ type Messages = {
         sendHintModEnter: string;
         draftTooLong: string;
       };
+      attachments: {
+        add: string;
+        list: string;
+        remove: string;
+        uploading: string;
+        blocked: string;
+        kinds: {
+          image: string;
+          pdf: string;
+          csv: string;
+          json: string;
+          markdown: string;
+          text: string;
+          file: string;
+        };
+        problem: {
+          type: string;
+          size: string;
+          empty: string;
+          count: string;
+          total: string;
+          bytes: string;
+          upload: string;
+        };
+      };
       refused: {
         denied: string;
         invalid: string;
+        attachment: string;
+        attachmentModel: string;
         exhausted: string;
         noCredit: string;
         noCreditLink: string;

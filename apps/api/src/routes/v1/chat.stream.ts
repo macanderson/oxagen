@@ -234,10 +234,17 @@ chatStreamRoute.post("/", async (c) => {
         // produces one always rejects with the same failure and the client
         // would otherwise see it twice; only here does the failure still
         // carry its code.
+        const code = errorCode(err);
+        const reason = (err as { reason?: unknown } | null)?.reason;
         emit({
           type: "error",
           message: err instanceof Error ? err.message : "Stream error",
-          code: errorCode(err),
+          code,
+          // The composer words a model that cannot read the file apart from
+          // a file that breaks a size rule, so the rule travels with the code.
+          ...(code === ATTACHMENT_REFUSED_CODE && typeof reason === "string"
+            ? { reason }
+            : {}),
         });
         return "[DONE]";
       },
