@@ -9,6 +9,8 @@
  * it. A detector registers here with one line and keeps its own module.
  */
 import type { FindingKind } from "@oxagen/database/schema";
+import { cacheBusts } from "./cache-busts";
+import { idleCacheRewrites } from "./cache-expiry";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
 import { modelClassFit } from "./model-class-fit";
 import { buildRunViews } from "./requests";
@@ -45,6 +47,8 @@ export const DETECTORS: readonly Detector[] = [
   repeats,
   spendWithNoOutcome,
   cacheWritesNeverRead,
+  idleCacheRewrites,
+  cacheBusts,
   unpagedResults,
   standingContext,
   modelClassFit,
