@@ -161,6 +161,37 @@ describe("readRepository", () => {
     ]);
   });
 
+  it("reads the worktree the session writes in, not the checkout it started in", async () => {
+    // An agent in a git worktree keeps its `cwd` on the primary checkout and
+    // edits files by absolute path, so the directory it last wrote in names
+    // the worktree.
+    const worktree: RepositoryRemote = {
+      remote_digest: digestBytes("github.com/acme/widgets-fix"),
+      remote_digest_folded: digestBytes("github.com/acme/widgets-fix.folded"),
+      root: "/worktrees/repo/fix",
+    };
+    const read = vi.fn(async (dir: string) =>
+      dir.startsWith("/worktrees/") ? worktree : REMOTE,
+    );
+    const holder = session();
+    holder.workDir = "/worktrees/repo/fix/src";
+    noteRecallHints(holder, "Edit", {
+      file_path: "/worktrees/repo/fix/src/a.ts",
+    });
+    await readRepository(holder, read);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith("/worktrees/repo/fix/src");
+    expect(recallScope(holder)).toEqual({
+      repositoryDigests: [worktree.remote_digest, worktree.remote_digest_folded],
+      tools: ["Edit"],
+      paths: ["src/a.ts"],
+    });
+    // A write elsewhere in the worktree keeps the read it holds.
+    holder.workDir = "/worktrees/repo/fix/test";
+    await readRepository(holder, read);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
   it("settles a read that fails as no repository", async () => {
     const rejected = session();
     await expect(
