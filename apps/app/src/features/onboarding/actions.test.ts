@@ -79,7 +79,7 @@ const created = {
   slug: "acme",
   type: "business",
   createdAt: "2026-09-15T00:00:00.000Z",
-  workspace: { publicId: "wrk_01", slug: "default" },
+  workspace: null,
 };
 
 beforeEach(() => {
@@ -163,8 +163,9 @@ describe("createOrganizationAction", () => {
   });
 
   // The form names no workspace: the first one is its own step once a code
-  // host is connected, because a workspace needs a steering repo (#4518).
-  it("creates the organization with its chosen namespace as the signed-in person and continues to Connect a code host", async () => {
+  // host is connected, because a workspace needs a steering repo (#4518). It
+  // sends `workspace: null`, since an omitted field makes "Default" (#4582).
+  it("creates the organization with its chosen namespace and no workspace as the signed-in person and continues to Connect a code host", async () => {
     invoke.mockResolvedValue(created);
     expect(await createOrganizationAction(form)).toEqual({
       ok: true,
@@ -172,7 +173,12 @@ describe("createOrganizationAction", () => {
     });
     expect(invoke).toHaveBeenCalledWith(
       "create_org",
-      { name: "Acme Robotics", slug: "acme", namespace: "acme" },
+      {
+        name: "Acme Robotics",
+        slug: "acme",
+        namespace: "acme",
+        workspace: null,
+      },
       expect.objectContaining({
         userId: "u-owner",
         orgId: "",

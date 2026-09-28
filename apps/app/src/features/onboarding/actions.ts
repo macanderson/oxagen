@@ -26,7 +26,9 @@ import { OrganizationForm, type OrganizationField } from "./org-form";
  * is the handler's `conflict` with code `slug_taken`, a taken namespace the
  * same with `namespace_taken`. A created organization continues to the connect
  * step: a workspace needs a steering repo, and a steering repo needs a code
- * host, so the form names no workspace.
+ * host, so the form names no workspace. It sends `workspace: null`, so
+ * `create_org` makes none and the welcome flow asks for the first one by name
+ * (#4582). Omitting the field would make "Default".
  */
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
@@ -47,6 +49,7 @@ export async function createOrganizationAction(
     name,
     slug,
     namespace,
+    workspace: null,
   });
   // The gate's next step is Connect a code host, outside the app shell. The
   // first workspace follows it, and Fleet opens once the first frame arrives.

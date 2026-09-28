@@ -251,9 +251,12 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(org).toBeDefined();
     if (!org) return;
     orgId = org.id;
+    const first = out.workspace;
+    expect(first).not.toBeNull();
+    if (!first) return;
     const workspace = await withSystemDb((tx) =>
       tx.query.workspaces.findFirst({
-        where: eq(schema.workspaces.publicId, out.workspace.publicId),
+        where: eq(schema.workspaces.publicId, first.publicId),
       }),
     );
     expect(workspace).toBeDefined();
@@ -281,7 +284,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
     expect(state).toMatchObject({
       step: "wrap",
-      workspace: { id: out.workspace.publicId, slug: "core" },
+      workspace: { id: first.publicId, slug: "core" },
       provisional: { mainRepoBoundAt: null, detectedRepository: null },
     });
     expect(
