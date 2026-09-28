@@ -6,10 +6,11 @@
 // provisioned, and Continue goes on to Wrap an agent.
 //
 // **Which workspace.** The first live workspace the viewer holds a role in,
-// from `list_workspaces`. Until lane S8 lands, `create_organization` still
-// makes a Default workspace, so an organization made then arrives here with
-// one and sees its provisioning. After S8 it arrives with none and sees the
-// form. A failed read shows the form under an alert: `create_workspace`
+// from `list_workspaces`. The organization form sends `create_org`
+// `workspace: null` (#4582), so a new organization arrives here with no
+// workspace and sees the form. One made before that change arrives with its
+// Default workspace and sees its provisioning. A failed read shows the form
+// under an alert: `create_workspace`
 // refuses a taken name, so the form cannot make a second workspace by mistake
 // without the person seeing why.
 //

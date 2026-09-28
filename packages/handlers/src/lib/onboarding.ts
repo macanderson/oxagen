@@ -1,7 +1,8 @@
-// onboarding.ts — the writes on `org.onboarding_state` that other handlers
-// make in passing (#2967): `create_org` opens the gate, `ingest_tacho_events`
-// closes it on the first frame. The gate's own handlers (get, advance) and
-// `bind_main_repository` read and write the row directly.
+// onboarding.ts: the writes on `org.onboarding_state` that other handlers
+// make in passing (#2967). `create_org` opens the gate, `create_workspace`
+// fills in its workspace when `create_org` made none (#4582), and
+// `ingest_tacho_events` closes it on the first frame. The gate's own handlers
+// (get, advance) and `bind_main_repository` read and write the row directly.
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
 import { PROVISIONAL_DAYS } from "@oxagen/database/schema";
@@ -15,10 +16,14 @@ export function provisionalUntil(now: Date): Date {
   return new Date(now.getTime() + PROVISIONAL_DAYS * DAY_MS);
 }
 
-/** The gate's first row, written by `create_org` in its bootstrap transaction. */
+/**
+ * The gate's first row, written by `create_org` in its bootstrap transaction.
+ * `workspaceId` is null when `create_org` made no workspace, and
+ * `claimOnboardingGateWorkspace` fills it in later.
+ */
 export async function openOnboardingGate(
   tx: Tx,
-  args: { orgId: string; workspaceId: string; now: Date },
+  args: { orgId: string; workspaceId: string | null; now: Date },
 ): Promise<void> {
   await tx.insert(schema.onboardingState).values({
     orgId: args.orgId,
@@ -28,6 +33,31 @@ export async function openOnboardingGate(
     createdAt: args.now,
     updatedAt: args.now,
   });
+}
+
+/**
+ * Point a gate with no workspace at the organization's first workspace.
+ * `create_workspace` calls this in the transaction that makes the workspace.
+ * The UPDATE matches only while `workspace_id` is NULL, so the first
+ * workspace wins and a later one leaves the gate alone. An organization whose
+ * gate already names a workspace, or that has no gate row, is not touched.
+ * Returns whether this call filled it in.
+ */
+export async function claimOnboardingGateWorkspace(
+  tx: Tx,
+  args: { orgId: string; workspaceId: string; now: Date },
+): Promise<boolean> {
+  const claimed = await tx
+    .update(schema.onboardingState)
+    .set({ workspaceId: args.workspaceId, updatedAt: args.now })
+    .where(
+      and(
+        eq(schema.onboardingState.orgId, args.orgId),
+        isNull(schema.onboardingState.workspaceId),
+      ),
+    )
+    .returning({ orgId: schema.onboardingState.orgId });
+  return claimed.length > 0;
 }
 
 /**
