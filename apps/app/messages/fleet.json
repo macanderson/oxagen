@@ -173,8 +173,7 @@
       "sortBy": "Sort by {column}",
       "tokensUnsorted": "Runs are ordered on the server, which cannot order them by tokens yet.",
       "columns": {
-        "run": "Run",
-        "summary": "Summary",
+        "run": "Session name",
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
@@ -224,8 +223,7 @@
       "exportQueued": "Export bundle queued for {run}.",
       "exportFailed": "The export bundle for {run} was not queued. {reason}",
       "actionsColumn": "Actions",
-      "summaryNone": "No summary yet",
-      "summaryOff": "Summaries off",
+      "untitled": "Untitled session",
       "prFilter": {
         "label": "Filter by pull requests",
         "any": "All runs",

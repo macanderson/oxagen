@@ -631,8 +631,7 @@ describe("the Runs panel", () => {
       .getAllByRole("columnheader")
       .map((th) => th.textContent);
     expect(heads).toEqual([
-      "Run",
-      "Summary",
+      "Session name",
       "Agent",
       "Operator",
       "Status",
@@ -648,7 +647,7 @@ describe("the Runs panel", () => {
     ]);
   });
 
-  it("draws a row per run: id and task, agent and harness, operator, status, tier, replay, tokens, cost with its basis, frames", async () => {
+  it("draws a row per run: session name and id, agent and harness, operator, status, tier, replay, tokens, cost with its basis, frames", async () => {
     await loaded();
     const live = row("tse_live");
     expect(live).toHaveTextContent("Cut the 3.2 release branch");
@@ -694,7 +693,7 @@ describe("the Runs panel", () => {
 
   // A workspace that turned enrichment off shows no generated name anywhere
   // (the Run page's header reads the same fallback), so a row falls back to
-  // its task reference, and a run with neither shows only its id.
+  // its task reference, and a run with neither reads "Untitled session".
   it("keeps a run's recorded name when its workspace turned enrichment off", async () => {
     await renderFleet({
       runs: runPage([
@@ -711,7 +710,30 @@ describe("the Runs panel", () => {
     // Enrichment off stops Oxagen writing names; it never hides the one the
     // run carries, which for a wrapped session is its harness title.
     expect(row("tse_off")).toHaveTextContent("Cut the 3.2 release branch");
-    expect(row("tse_bare").querySelector("td")?.textContent).toBe("tse_bare");
+    // #4571: an id is never the label a person reads first. It stays on the
+    // line under the name, so the row can still be told apart and searched.
+    const bare = row("tse_bare");
+    expect(within(bare).getAllByRole("link")[0]).toHaveTextContent(
+      /^Untitled session$/,
+    );
+    expect(within(bare).getByTestId("row-id")).toHaveTextContent(/^tse_bare$/);
+  });
+
+  it("names a run by its session name, with its id on the line below (#4571)", async () => {
+    await loaded();
+    const live = row("tse_live");
+    const link = within(live).getByRole("link", {
+      name: "Cut the 3.2 release branch",
+    });
+    expect(link).toHaveAttribute("title", "Cut the 3.2 release branch");
+    expect(link.className).not.toContain("font-mono");
+    expect(within(live).getByTestId("row-id")).toHaveTextContent(
+      /^tse_live$/,
+    );
+    // The id is not a link of its own: one row, one way in.
+    expect(
+      within(live).queryByRole("link", { name: "tse_live" }),
+    ).toBeNull();
   });
 
   it("words Status as the design does, sealed or halted, with the outcome on hover", async () => {
@@ -841,7 +863,9 @@ describe("the Runs panel", () => {
       "data-touch-target",
     );
     expect(
-      within(row("tse_live")).getByRole("link", { name: "tse_live" }),
+      within(row("tse_live")).getByRole("link", {
+        name: "Cut the 3.2 release branch",
+      }),
     ).toHaveAttribute("data-touch-target");
     // The search box is 44px tall on a phone, as every other control is.
     expect(screen.getByRole("searchbox").className).toContain(
@@ -1684,9 +1708,9 @@ describe("list controls", () => {
     });
     const cost = screen.getByRole("button", { name: "Sort by Cost" });
     expect(cost.closest("th")).toHaveAttribute("aria-sort", "descending");
-    // Frames, Run, Pull requests and Lines have no single order in both
-    // stores, so their headers do not sort.
-    for (const column of ["Frames", "Run", "Lines"])
+    // Frames, Session name, Pull requests and Lines have no single order in
+    // both stores, so their headers do not sort.
+    for (const column of ["Frames", "Session name", "Lines"])
       expect(
         screen.queryByRole("button", { name: `Sort by ${column}` }),
       ).toBeNull();

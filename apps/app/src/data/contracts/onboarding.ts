@@ -31,7 +31,7 @@ const DetectedRepository = z.object({
 
 export const OnboardingGate = z.object({
   step: OnboardingStep,
-  /** The gate's workspace; null before an organization exists. */
+  /** The gate's workspace; null until the organization's first workspace exists (#4582). */
   workspace: z.object({ id: PublicId, slug: z.string().min(1) }).nullable(),
   /** Null until the first frame arrives, and for an organization that predates the gate. */
   firstFrameAt: Instant.nullable(),

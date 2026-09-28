@@ -159,6 +159,8 @@ describe("appendUserMessage", () => {
       conversationId: CONVERSATION.id,
       conversationPublicId: CONVERSATION.publicId,
       userMessageId: "msg-user",
+      // A continued conversation keeps its name, so the titler is not asked.
+      promptTitled: false,
     });
     expect(captured.inserts.map((i) => i.values.conversationId)).toEqual([
       CONVERSATION.id,
@@ -177,7 +179,8 @@ describe("appendUserMessage", () => {
       table: CONVERSATIONS,
       values: {
         userId: USER,
-        title: "what is live?",
+        title: "What is live",
+        titleSource: "prompt",
         status: "active",
         ...SCOPE,
       },
@@ -185,6 +188,7 @@ describe("appendUserMessage", () => {
     expect(out).toMatchObject({
       conversationId: "new-conversation",
       conversationPublicId: "cnv_new",
+      promptTitled: true,
     });
   });
 
@@ -192,10 +196,21 @@ describe("appendUserMessage", () => {
     const { tx, captured } = fakeTx([]);
     const question = {
       ...ask(null),
-      content: "  why did\n\nthe deploy\t fail?  ",
+      content: "  why did   the deploy\t fail?  ",
     };
     await appendUserMessage(tx, SCOPE, USER, question, "chat");
-    expect(captured.inserts[0]?.values.title).toBe("why did the deploy fail?");
+    expect(captured.inserts[0]?.values.title).toBe("Why did the deploy fail");
+    expect(captured.inserts[0]?.values.titleSource).toBe("prompt");
+  });
+
+  it("leaves the title and its source null for a question with no words (negative)", async () => {
+    const { tx, captured } = fakeTx([]);
+    const question = { ...ask(null), content: " ?! " };
+    const out = await appendUserMessage(tx, SCOPE, USER, question, "chat");
+    expect(captured.inserts[0]?.values.title).toBeNull();
+    expect(captured.inserts[0]?.values.titleSource).toBeNull();
+    // With no prompt title there is nothing for the titler to improve.
+    expect(out.promptTitled).toBe(false);
   });
 
   it("marks a continued conversation active when the question is written, before any reply", async () => {
@@ -245,31 +260,35 @@ describe("appendUserMessage", () => {
 });
 
 describe("conversationTitleFrom", () => {
-  it("keeps a question of 80 code points whole", () => {
-    const question = "a".repeat(80);
-    expect(conversationTitleFrom(question)).toBe(question);
+  it("names a pull request URL prompt after its verb and number", () => {
+    expect(
+      conversationTitleFrom(
+        "https://github.com/macanderson/oxagen/pull/123 fix conflicts",
+      ),
+    ).toBe("Fix conflicts on PR 123");
   });
 
-  it("cuts a longer question to 80 code points and ends it in an ellipsis", () => {
-    const title = conversationTitleFrom("b".repeat(100));
-    expect(title).toBe(`${"b".repeat(80)}…`);
-    expect(Array.from(title ?? "")).toHaveLength(81);
+  it("keeps a subject of 72 code points or fewer, cut on a word with no ellipsis", () => {
+    const title = conversationTitleFrom(`${"word ".repeat(30)}end`);
+    expect(title).toBe(`Word${" word".repeat(13)}`);
+    expect(Array.from(title ?? "").length).toBeLessThanOrEqual(72);
   });
 
-  it("cuts on a code point, so an emoji at the edge stays whole", () => {
-    // Each emoji is two UTF-16 units, so a cut by string length keeps 40.
-    const title = conversationTitleFrom("😀".repeat(90));
-    expect(title).toBe(`${"😀".repeat(80)}…`);
+  it("cuts on a code point, so an astral letter at the edge stays whole", () => {
+    // Each letter is two UTF-16 units, so a cut by string length keeps 36.
+    expect(conversationTitleFrom("𝒜".repeat(90))).toBe("𝒜".repeat(72));
   });
 
-  it("drops the space the cut leaves before the ellipsis", () => {
-    const title = conversationTitleFrom(`${"c".repeat(79)} ${"d".repeat(30)}`);
-    expect(title).toBe(`${"c".repeat(79)}…`);
+  it("reads the first line with words in it", () => {
+    expect(conversationTitleFrom("\n  deploy the api\nthen tell me")).toBe(
+      "Deploy the api",
+    );
   });
 
-  it("answers null for a question that is only whitespace", () => {
+  it("answers null for a question with no words in it", () => {
     expect(conversationTitleFrom(" \n\t ")).toBeNull();
     expect(conversationTitleFrom("")).toBeNull();
+    expect(conversationTitleFrom("?!")).toBeNull();
   });
 });
 

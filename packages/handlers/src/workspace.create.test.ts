@@ -50,6 +50,13 @@ const mocks = vi.hoisted(() => ({
     /** The creator an API key resolves to, or none. */
     keyCreator: "u_1" as string | null,
   },
+  /** Stands in for claimOnboardingGateWorkspace. Reports that no gate was open. */
+  claimGate: vi.fn(
+    async (
+      _tx: unknown,
+      _args: { orgId: string; workspaceId: string; now: Date },
+    ): Promise<boolean> => false,
+  ),
   emitSecurityEventAsync: vi.fn(
     async (_event: Record<string, unknown>): Promise<void> => undefined,
   ),
@@ -81,6 +88,13 @@ vi.mock("./logger", () => ({ logger: mocks.logger }));
 // requestSteeringRepoProvision imports the event client lazily. The mock
 // applies to that dynamic import too, so no test needs a live Inngest.
 vi.mock("./event-client", () => ({ eventClient: { send: mocks.send } }));
+
+// The gate claim runs against a real database in org.create.pg.test.ts. Here
+// it only shows which transaction it ran on and what it was given (#4582).
+vi.mock("./lib/onboarding", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/onboarding")>()),
+  claimOnboardingGateWorkspace: mocks.claimGate,
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -543,6 +557,20 @@ describe("createWorkspaceCreateHandler: the creating transaction", () => {
     const updateTx = mocks.txs[mocks.updates[0]?.txIndex ?? -1];
     expect(updateTx).toBeDefined();
     expect(txs.has(updateTx)).toBe(true);
+  });
+
+  it("claims an open onboarding gate for the new workspace on the creating transaction", async () => {
+    await handler(INPUT, CTX);
+    expect(mocks.claimGate).toHaveBeenCalledTimes(1);
+    const [claimTx, args] = mocks.claimGate.mock.calls[0] ?? [];
+    const updateTx = mocks.txs[mocks.updates[0]?.txIndex ?? -1];
+    expect(updateTx).toBeDefined();
+    expect(claimTx).toBe(updateTx);
+    expect(args).toEqual({
+      orgId: CTX.orgId,
+      workspaceId: WS_ROW.id,
+      now: expect.any(Date),
+    });
   });
 
   it("fails the create and starts no job when the settings write fails", async () => {

@@ -89,6 +89,31 @@ describe("Activity › runs", () => {
     expect(cells[3]).toHaveTextContent("not recorded");
     expect(cells[4]).toHaveTextContent("1,204");
   });
+
+  // #4571: a run is named by its session name, then its task reference,
+  // and never by its id. The id sits on the line below.
+  it("names each run by its session name, with its id below", () => {
+    renderActivity({
+      runs: readOk([
+        runRow(),
+        runRow({ id: "arun_task", name: null, taskRef: "ENG-4121" }),
+        runRow({ id: "arun_bare", name: null, taskRef: null }),
+      ]),
+    });
+    const [named, task, bare] = screen.getAllByTestId("agent-run");
+    if (named === undefined || task === undefined || bare === undefined)
+      throw new Error("runs not drawn");
+    expect(within(named).getByRole("link")).toHaveTextContent(
+      /^Cut the 3.2 release branch$/,
+    );
+    expect(within(task).getByRole("link")).toHaveTextContent(/^ENG-4121$/);
+    expect(within(bare).getByRole("link")).toHaveTextContent(
+      /^Untitled session$/,
+    );
+    expect(within(bare).getByTestId("agent-run-id")).toHaveTextContent(
+      /^arun_bare$/,
+    );
+  });
 });
 
 describe("Activity › token accounting", () => {

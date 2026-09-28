@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Runs panel's pull requests, lines changed, summary, pull-request filter
+// The Runs panel's pull requests, lines changed, pull-request filter
 // and saved columns, over a fake DataSource. Each case renders the whole
 // Fleet page as the route does, with an axe check after each.
 import {
@@ -269,7 +269,7 @@ describe("pull requests on a Fleet row", () => {
   });
 });
 
-describe("lines changed and the summary on a Fleet row", () => {
+describe("lines changed on a Fleet row", () => {
   it("shows the lines added and removed, and says git's figure is uncommitted", async () => {
     await renderFleet([
       runRow({
@@ -294,18 +294,13 @@ describe("lines changed and the summary on a Fleet row", () => {
     expect(rowOf("tse_nodiff")).toHaveTextContent("not recorded");
   });
 
-  it("shows the generated summary, and says when summaries are off", async () => {
-    await renderFleet([
-      runRow({ id: "arun_summary" }),
-      runRow({ id: "arun_off", enrichmentEnabled: false }),
-      runRow({ id: "arun_nosummary", summary: null }),
-    ]);
-    expect(
-      within(rowOf("arun_summary")).getByTestId("row-summary"),
-    ).toHaveTextContent("Cut release/3.2 from main");
-    expect(rowOf("arun_off")).toHaveTextContent("Summaries off");
-    expect(within(rowOf("arun_off")).queryByTestId("row-summary")).toBeNull();
-    expect(rowOf("arun_nosummary")).toHaveTextContent("No summary yet");
+  // #4571: the summary lives on the Run page, cut to three sentences. A
+  // table row carries the session name only.
+  it("draws no summary on a row", async () => {
+    await renderFleet([runRow({ id: "arun_summary" })]);
+    expect(rowOf("arun_summary")).not.toHaveTextContent(
+      "Cut release/3.2 from main",
+    );
   });
 
   // #3837: a header sorts only when the read can order the whole workspace
@@ -376,8 +371,10 @@ describe("saved columns", () => {
     await renderFleet([runRow({ id: "arun_1" })], {
       prefs: "v1|50|summary~tier~tokens",
     });
+    // A cookie saved before #4571 still names the retired Summary column.
+    // It is dropped, and the rest of the choice holds.
     expect(heads()).toEqual([
-      "Run",
+      "Session name",
       "Agent",
       "Operator",
       "Status",

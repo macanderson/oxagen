@@ -9,7 +9,9 @@
 //   2. The slug is unique in the org: the pre-check and the unique index's
 //      23505 both read as `conflict` / `slug_taken`.
 //   3. One transaction writes the workspace bootstrap and the first state of
-//      its `steering_repo` setting.
+//      its `steering_repo` setting. When `create_org` opened the onboarding
+//      gate with no workspace (the web app sends `workspace: null`), the same
+//      transaction points the gate at this one, the org's first (#4582).
 //   4. The handler sends `steering-repo/provision.requested` and returns. The
 //      durable job creates the private repository `oxagen-<slug>`, seeds it,
 //      applies the prescribed settings, publishes version 1, and binds it with
@@ -29,6 +31,7 @@ import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { claimOnboardingGateWorkspace } from "./lib/onboarding";
 import {
   initialSteeringRepoState,
   requestSteeringRepoProvision,
@@ -100,8 +103,9 @@ export function createWorkspaceCreateHandler(
     const now = new Date();
     const state = initialSteeringRepoState(now);
     let ws: Awaited<ReturnType<typeof bootstrapWorkspace>>;
+    let claimedGate: boolean;
     try {
-      ws = await withTenantDb(async (tx) => {
+      ({ ws, claimedGate } = await withTenantDb(async (tx) => {
         // Re-points the transaction's workspace GUC at the new workspace, so
         // the settings write below passes its `tenant_isolation` check.
         const created = await bootstrapWorkspace({
@@ -117,8 +121,13 @@ export function createWorkspaceCreateHandler(
             settings: settingsWithSteeringRepo(schema.workspaces.settings, state),
           })
           .where(eq(schema.workspaces.id, created.id));
-        return created;
-      });
+        const claimed = await claimOnboardingGateWorkspace(tx, {
+          orgId: ctx.orgId,
+          workspaceId: created.id,
+          now,
+        });
+        return { ws: created, claimedGate: claimed };
+      }));
     } catch (err) {
       if (isUniqueViolation(err)) {
         logger.warn(
@@ -148,6 +157,7 @@ export function createWorkspaceCreateHandler(
         orgId: ctx.orgId,
         slug: ws.slug,
         steeringRepo: status,
+        claimedOnboardingGate: claimedGate,
         surface: ctx.surface,
       },
       "workspace.create: workspace created, steering repo provisioning started",

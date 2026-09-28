@@ -78,7 +78,6 @@ import {
   DiffCell,
   PullRequestsCell,
   RowStatusBadge,
-  SummaryCell,
   TokensCell,
   TokensTile,
 } from "./run-cells";
@@ -239,10 +238,11 @@ function Tiles({
 
 // ── Cells ────────────────────────────────────────────────────────────────
 
-// A run's second line: its name (the harness title, else the generated one),
+// A run's session name: its name (the harness title, else the generated one),
 // else its task reference, the same fallback the Run page's header reads.
 // Turning enrichment off stops Oxagen generating names; it never hides the
-// title the harness recorded. A run with neither shows only its id.
+// title the harness recorded. A run with neither reads "Untitled session",
+// and its id sits on the line below either way.
 function runTitle(run: RunRow): string | null {
   return run.name ?? run.taskRef;
 }
@@ -467,21 +467,17 @@ function RunRowView({
                 event.stopPropagation();
               }}
               data-touch-target=""
-              className={`${mono} block truncate text-[12px] text-muted-foreground hover:text-foreground max-md:leading-[44px]`}
+              title={title ?? undefined}
+              className="block truncate text-[12.5px] text-foreground hover:underline max-md:leading-[44px]"
+            >
+              {title ?? t("untitled")}
+            </SafeLink>
+            <span
+              data-testid="row-id"
+              className={`${mono} block truncate text-[11px] text-dim`}
             >
               {run.id}
-            </SafeLink>
-            {title === null ? null : (
-              <span className="block text-[11.5px] text-dim" title={title}>
-                {title}
-              </span>
-            )}
-          </td>
-        );
-      case "summary":
-        return (
-          <td key={column} className={`${cell} min-w-56 max-w-80`}>
-            <SummaryCell run={run} />
+            </span>
           </td>
         );
       case "agent":
