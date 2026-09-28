@@ -6,6 +6,10 @@
 // Every figure comes from `runMetrics`, the one derivation the Cost and
 // Context tabs read too, so no two panels can disagree. A figure the record
 // does not carry reads "not recorded", never a zero.
+import {
+  clipSummary,
+  SUMMARY_MAX_CHARS,
+} from "@oxagen/oxagen/tacho/session-subject";
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
@@ -155,6 +159,17 @@ function Involved({
   );
 }
 
+/**
+ * The summary as the panel shows it (#4571). `run.enrich` stores at most
+ * `SUMMARY_MAX_CHARS`, notes included, so a longer summary was written
+ * before the cap and is cut to its first sentences here. A newer one is
+ * shown as stored, so the note that says an account is partial stays.
+ */
+function shownSummary(text: string): string {
+  if (Array.from(text).length <= SUMMARY_MAX_CHARS) return text;
+  return clipSummary(text) ?? text;
+}
+
 export function SummaryPanel({
   run,
   agent,
@@ -196,7 +211,7 @@ export function SummaryPanel({
           data-testid="generated-summary"
           className="mb-2.5 mt-3 max-w-[78ch] text-[15px] leading-[1.55] text-foreground"
         >
-          {summary.text}
+          {shownSummary(summary.text)}
         </p>
       )}
       {run.enrichmentError === undefined ? null : (

@@ -448,10 +448,19 @@ describe("list_findings for one run (#4001)", () => {
   });
 });
 
+/** Names each run in `names`, and leaves every other run unnamed. */
+function readRunNames(names: Record<string, string> = {}) {
+  return vi.fn(
+    async (_scope: unknown, ids: readonly string[]) =>
+      new Map<string, string | null>(ids.map((id) => [id, names[id] ?? null])),
+  );
+}
+
 describe("get_finding_evidence", () => {
   it("answers the stored arithmetic as money in the finding's currency", async () => {
     const handler = createFindingEvidenceHandler({
       read: async () => findingRow(),
+      readRunNames: readRunNames(),
     });
     const out = await handler({ findingId: FINDING_ID }, ctx());
     expect(out.evidence).toMatchObject({
@@ -462,8 +471,25 @@ describe("get_finding_evidence", () => {
     });
     expect(out.evidence.runs[0]).toMatchObject({
       runId: "tse_0000000000000000000001",
+      name: null,
       measured: { micros: "60000", currency: "USD" },
     });
+  });
+
+  it("names each itemised run by its session name (#4571)", async () => {
+    const names = readRunNames({
+      tse_0000000000000000000001: "Repair the login redirect",
+    });
+    const handler = createFindingEvidenceHandler({
+      read: async () => findingRow(),
+      readRunNames: names,
+    });
+    const out = await handler({ findingId: FINDING_ID }, ctx());
+    expect(names).toHaveBeenCalledWith({ orgId: ORG, workspaceId: WS }, [
+      "tse_0000000000000000000001",
+    ]);
+    expect(out.evidence.runs[0]?.name).toBe("Repair the login redirect");
+    expect(() => findingEvidenceGet.output.parse(out)).not.toThrow();
   });
 
   it("answers the setting the stored evidence names, and no key on a row that names none", async () => {
@@ -473,7 +499,10 @@ describe("get_finding_evidence", () => {
       current: "5m",
     };
     const row = findingRow({ citedFrames: evidence({ recommendation }) });
-    const handler = createFindingEvidenceHandler({ read: async () => row });
+    const handler = createFindingEvidenceHandler({
+      read: async () => row,
+      readRunNames: readRunNames(),
+    });
     const named = await handler({ findingId: FINDING_ID }, ctx());
     expect(named.finding.recommendation).toEqual(recommendation);
     const parsed = findingEvidenceGet.output.parse(named);
@@ -481,6 +510,7 @@ describe("get_finding_evidence", () => {
 
     const bareHandler = createFindingEvidenceHandler({
       read: async () => findingRow(),
+      readRunNames: readRunNames(),
     });
     const bare = await bareHandler({ findingId: FINDING_ID }, ctx());
     expect(bare.finding).not.toHaveProperty("recommendation");
@@ -488,7 +518,8 @@ describe("get_finding_evidence", () => {
 
   it("refuses an id with no finding in the workspace as not found", async () => {
     const read = vi.fn(async () => null);
-    const handler = createFindingEvidenceHandler({ read });
+    const names = readRunNames();
+    const handler = createFindingEvidenceHandler({ read, readRunNames: names });
     await expect(
       handler({ findingId: FINDING_ID }, ctx()),
     ).rejects.toMatchObject({
@@ -499,6 +530,7 @@ describe("get_finding_evidence", () => {
       { orgId: ORG, workspaceId: WS },
       FINDING_ID,
     );
+    expect(names).not.toHaveBeenCalled();
   });
 });
 

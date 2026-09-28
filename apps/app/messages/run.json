@@ -1192,6 +1192,7 @@
       "machineRecorded": "Recorded in this session: {facts}",
       "machineEnrollment": "Enrollment hostname and facts: {facts}",
       "eyebrow": "Run",
+      "untitled": "Untitled session",
       "task": "task {ref}",
       "effort": "effort",
       "notCaptured": "not captured",

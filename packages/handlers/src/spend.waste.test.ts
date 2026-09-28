@@ -6,9 +6,20 @@ import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const PERIOD = { from: "2026-09-01", to: "2026-09-30" };
 
-function harness(rows: RunTotalsRecord[]) {
+function harness(
+  rows: RunTotalsRecord[],
+  names: Record<string, string> = {},
+) {
   const readRunTotals = vi.fn(async () => rows);
-  return { handler: createSpendWasteHandler({ readRunTotals }), readRunTotals };
+  const readRunNames = vi.fn(
+    async (_scope: unknown, ids: readonly string[]) =>
+      new Map<string, string | null>(ids.map((id) => [id, names[id] ?? null])),
+  );
+  return {
+    handler: createSpendWasteHandler({ readRunTotals, readRunNames }),
+    readRunTotals,
+    readRunNames,
+  };
 }
 
 /** A run that wrote `wrote` cache tokens and read `read` back. */
@@ -84,7 +95,9 @@ describe("list_waste", () => {
       cacheWriteMicros: 600n,
       costBasis: "gateway_observed",
     });
-    const h = harness([small, large, pricedRun(600n), run()]);
+    const h = harness([small, large, pricedRun(600n), run()], {
+      [large.runId]: "Repair the login redirect",
+    });
     const out = await h.handler({ period: PERIOD }, ctx());
     expect(out.wasted).toEqual({
       micros: "700",
@@ -101,7 +114,15 @@ describe("list_waste", () => {
         wasted: { micros: "700", currency: "USD", basis: "mixed" },
         runs: 2,
         runIds: [large.runId, small.runId],
+        provingRuns: [
+          { runId: large.runId, name: "Repair the login redirect" },
+          { runId: small.runId, name: null },
+        ],
       },
+    ]);
+    expect(h.readRunNames).toHaveBeenCalledWith(SCOPE, [
+      large.runId,
+      small.runId,
     ]);
     expect(() => spendWasteList.output.parse(out)).not.toThrow();
   });
@@ -114,5 +135,7 @@ describe("list_waste", () => {
     const out = await h.handler({ period: PERIOD }, ctx());
     expect(out.causes[0]?.runs).toBe(12);
     expect(out.causes[0]?.runIds).toHaveLength(10);
+    expect(out.causes[0]?.provingRuns).toHaveLength(10);
+    expect(h.readRunNames.mock.calls[0]?.[1]).toHaveLength(10);
   });
 });

@@ -65,6 +65,7 @@ import {
 } from "@oxagen/oxagen/contracts/chat.message.execution";
 import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
+import { sessionSubject } from "@oxagen/oxagen/tacho/session-subject";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
@@ -87,6 +88,7 @@ import {
   type AssistantRunRecorder,
   type AssistantRunSurface,
 } from "./assistant-run";
+import { sendConversationOpened } from "./conversation-opened-event";
 import {
   DEFAULT_GOVERNED_TURN_MAX_STEPS,
   runGovernedTurn,
@@ -404,12 +406,28 @@ async function runPreparedTurn(
     runInTenantScope(scope, fn);
   // The conversation and the person's message, before anything else is
   // spent: a turn that fails after this leaves the question on the record.
-  const { conversationId, conversationPublicId, userMessageId, history } =
-    await inScope(() =>
-      withTenantDb((tx) =>
-        appendUserMessage(tx, scope, userId, request, p.request.surface),
-      ),
-    );
+  const {
+    conversationId,
+    conversationPublicId,
+    userMessageId,
+    history,
+    promptTitled,
+  } = await inScope(() =>
+    withTenantDb((tx) =>
+      appendUserMessage(tx, scope, userId, request, p.request.surface),
+    ),
+  );
+  // Sent after the commit, so the titler can read the row. Never throws.
+  if (promptTitled) {
+    await sendConversationOpened({
+      name: "chat/conversation.opened",
+      data: {
+        conversationId,
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+      },
+    });
+  }
   // The person's message names the turn everywhere: `token_usage`, the
   // approval rows' message id (which `resolve_approval` follows back to the
   // person who asked), the memory recall's execution ref.
@@ -949,24 +967,17 @@ type Scope = { orgId: string; workspaceId: string };
 /** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
 const CONVERSATION_PUBLIC_ID = /^cnv_/i;
 
-/** The most code points a title keeps from the first question. */
-const TITLE_MAX_CODE_POINTS = 80;
-
 /**
- * Name a new conversation after its first question. Runs of whitespace
- * collapse to one space, and a question past 80 code points is cut and ends
- * in an ellipsis. The cut counts code points, so it never splits an emoji or
- * other astral character. A question that is only whitespace leaves the
- * title null.
+ * Name a new conversation after its first question: a subject in sentence
+ * case of at most 72 code points, cut on a clause or a word with no ellipsis.
+ * A GitHub pull request URL reads as "PR 123". A question with no words in it
+ * leaves the title null. The fast model tier may improve the title after the
+ * turn commits; see `sendConversationOpened`.
  *
  * Exported for its own test.
  */
 export function conversationTitleFrom(question: string): string | null {
-  const text = question.replace(/\s+/g, " ").trim();
-  if (text === "") return null;
-  const codePoints = Array.from(text);
-  if (codePoints.length <= TITLE_MAX_CODE_POINTS) return text;
-  return `${codePoints.slice(0, TITLE_MAX_CODE_POINTS).join("").trimEnd()}…`;
+  return sessionSubject(question);
 }
 
 /**
@@ -1001,8 +1012,11 @@ export async function appendUserMessage(
   conversationPublicId: string;
   userMessageId: string;
   history: LoadedHistory;
+  /** True only for a new conversation named from its first question. */
+  promptTitled: boolean;
 }> {
   let conversation: { id: string; publicId: string };
+  let promptTitled = false;
   const named = request.conversationId;
   if (named) {
     const [existing] = await tx
@@ -1050,12 +1064,14 @@ export async function appendUserMessage(
       .returning({ id: schema.conversations.id });
     if (!bumped) throw new ConversationNotFoundError(named);
   } else {
+    const title = conversationTitleFrom(request.content);
     const [created] = await tx
       .insert(schema.conversations)
       .values({
         ...scope,
         userId,
-        title: conversationTitleFrom(request.content),
+        title,
+        titleSource: title === null ? null : "prompt",
         status: "active",
         createdById: userId,
         updatedById: userId,
@@ -1066,6 +1082,7 @@ export async function appendUserMessage(
       });
     if (!created) throw new Error("conversation insert returned no row");
     conversation = created;
+    promptTitled = title !== null;
   }
   const conversationId = conversation.id;
 
@@ -1097,6 +1114,7 @@ export async function appendUserMessage(
     conversationPublicId: conversation.publicId,
     userMessageId: userMessage.id,
     history,
+    promptTitled,
   };
 }
 

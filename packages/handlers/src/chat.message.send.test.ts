@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   txAsstMsgInsertReturning: vi.fn(),
   txUpdateSetWhere: vi.fn(),
   txFn: vi.fn(),
+  convInsertValues: vi.fn(),
+  sendConversationOpened: vi.fn(async () => undefined),
 }));
 
 // ── default mock return values ────────────────────────────────────────────────
@@ -34,9 +36,10 @@ mocks.txFn.mockImplementation(
         if (insertCount === 1) {
           // First insert: conversation row (new-conversation path)
           return {
-            values: (_vals: unknown) => ({
-              returning: mocks.txConvInsertReturning,
-            }),
+            values: (vals: unknown) => {
+              mocks.convInsertValues(vals);
+              return { returning: mocks.txConvInsertReturning };
+            },
           } as unknown;
         }
         if (insertCount === 2) {
@@ -88,6 +91,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+vi.mock("@oxagen/agent/runtime/conversation-opened-event", () => ({
+  sendConversationOpened: mocks.sendConversationOpened,
+}));
+
 import { chatMessageSendHandler } from "./chat.message.send";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -129,9 +136,10 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
             insertCount++;
             if (insertCount === 1) {
               return {
-                values: (_vals: unknown) => ({
-                  returning: mocks.txConvInsertReturning,
-                }),
+                values: (vals: unknown) => {
+                  mocks.convInsertValues(vals);
+                  return { returning: mocks.txConvInsertReturning };
+                },
               } as unknown;
             }
             if (insertCount === 2) {
@@ -227,6 +235,61 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
     expect(result.activeLeafMessageId).toBe("amsg_1");
   });
 
+  // ── conversation title ───────────────────────────────────────────────────
+
+  it("names a new conversation from its first message and asks the titler for a better one", async () => {
+    await chatMessageSendHandler(
+      {
+        ...BASE_INPUT,
+        conversationId: null,
+        content: "Why did the deploy fail last night?",
+      },
+      CTX,
+    );
+
+    expect(mocks.convInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Why did the deploy fail last night",
+        titleSource: "prompt",
+      }),
+    );
+    expect(mocks.sendConversationOpened).toHaveBeenCalledWith({
+      name: "chat/conversation.opened",
+      data: {
+        conversationId: "conv_1",
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+      },
+    });
+  });
+
+  it("names a pull request URL prompt after its verb and number", async () => {
+    await chatMessageSendHandler(
+      {
+        ...BASE_INPUT,
+        conversationId: null,
+        content: "https://github.com/macanderson/oxagen/pull/123 fix conflicts",
+      },
+      CTX,
+    );
+
+    expect(mocks.convInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Fix conflicts on PR 123" }),
+    );
+  });
+
+  it("leaves the title null and sends no event for a message with no words (negative)", async () => {
+    await chatMessageSendHandler(
+      { ...BASE_INPUT, conversationId: null, content: "?!" },
+      CTX,
+    );
+
+    expect(mocks.convInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ title: null, titleSource: null }),
+    );
+    expect(mocks.sendConversationOpened).not.toHaveBeenCalled();
+  });
+
   // ── existing-conversation path ───────────────────────────────────────────
 
   it("skips the conversation insert when an existing conversationId is provided", async () => {
@@ -275,6 +338,8 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
 
     // Conversation row must NOT have been inserted (txConvInsertReturning untouched)
     expect(mocks.txConvInsertReturning).not.toHaveBeenCalled();
+    // A continued conversation keeps its name, so the titler is not asked.
+    expect(mocks.sendConversationOpened).not.toHaveBeenCalled();
     // The provided conversationId passes through
     expect(result.conversationId).toBe("conv_existing");
     expect(result.userMessageId).toBe("umsg_1");
