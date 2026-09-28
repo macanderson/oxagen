@@ -30,6 +30,7 @@ export * from "./tools";
 export * from "./cms";
 export * from "./skills";
 export * from "./memory";
+export * from "./steering";
 export * from "./steering-repo-health";
 export * from "./machine-groups";
 
