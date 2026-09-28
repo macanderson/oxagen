@@ -58,8 +58,10 @@ does not survive a redirect.
 4. **One process answers on all three names.** `Caddyfile.alb` routes
    `oxagen.app`, `www.oxagen.app` and `app.oxagen.sh` to the app.
 5. **The app sends page visits to the canonical host.**
-   `canonicalHostRedirect` in `apps/app/src/shared/app-url.ts` reads the
-   canonical host from `NEXT_PUBLIC_APP_URL`. A GET or HEAD for a page on one
+   `canonicalHostRedirect` in `apps/app/src/shared/canonical-host.ts` reads the
+   canonical host from `NEXT_PUBLIC_APP_URL`. `redirectToCanonicalHost` sends
+   the redirect from `navigation.ts`, the one module that sends the app's
+   redirects (`apps/app/ARCHITECTURE.md` §3.8). A GET or HEAD for a page on one
    of the other two names moves to the same path and query there, before the
    session gate runs. Paths under `/api/` and `/.well-known/` answer on every
    name, and so does every other method. A redirect to `oxagen.app` is a 308

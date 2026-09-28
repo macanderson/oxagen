@@ -461,7 +461,7 @@ export function getAuthUser(): Promise<SessionUser | null>;
 
 **Replaces:** the `withSystemDb` reads in features (`create-organization.ts:59-140`, `invite-actions.ts:55-62`, `cli-authorize.ts:123-150`, `github-setup-queries.ts:33-100`), `data/adapters/live/onboarding.ts:18-60`, the duplicate `INVITATION_NOT_FOUND` (`invitations.ts:12`, `live/onboarding.ts:15`), and the fixture/live lookup switch (`server/scope.ts:34-36`).
 
-### 3.8 Navigation: every redirect has a typed target — `src/shared/{safe-path,loopback-uri,checkout-url,navigation}.ts` + `src/ui/navigation.ts`
+### 3.8 Navigation: every redirect has a typed target — `src/shared/{safe-path,loopback-uri,checkout-url,linear-authorization-url,canonical-host,navigation}.ts` + `src/ui/navigation.ts`
 
 ```ts
 // src/shared/safe-path.ts      — same-origin paths from user input
@@ -473,9 +473,17 @@ export const routes = { login(next?: SafePath), fleet(org, ws), run(org, ws, run
 export type LoopbackUri = Branded<string, "loopback-uri">;
 export function parseLoopbackUri(raw: string): LoopbackUri | null;                 // http://127.0.0.1:<port>/… or http://[::1]:<port>/… only
 
-// src/shared/checkout-url.ts   — the one external target
+// src/shared/checkout-url.ts   — the Stripe Checkout page
 export type ExternalCheckoutUrl = Branded<string, "checkout-url">;
 export function parseCheckoutUrl(raw: string): ExternalCheckoutUrl | null;         // https + host === "checkout.stripe.com" only
+
+// src/shared/linear-authorization-url.ts — Linear's OAuth consent page
+export type LinearAuthorizationUrl = Branded<string, "linear-authorization-url">;
+export function parseLinearAuthorizationUrl(raw: string): LinearAuthorizationUrl | null; // https://linear.app/oauth/authorize with S256 PKCE and a 43-character state only
+
+// src/shared/canonical-host.ts — the production app's canonical host (ADR-215)
+export type CanonicalHostUrl = Branded<string, "canonical-host-url">;
+export function canonicalHostRedirect(req: { method: string; host: string; pathname: string; search: string }): { url: CanonicalHostUrl; permanent: boolean } | null; // a GET or HEAD for a page on another production host; never /api/ or /.well-known/
 
 // src/shared/navigation.ts     — the only module that calls next/navigation redirect()
 export function redirectTo(path: SafePath): never;
@@ -483,6 +491,8 @@ export function permanentRedirectTo(path: SafePath): never;                    /
 export function redirectToLoopback(uri: LoopbackUri, q: { code: string; state: string } | { error: "access_denied"; state: string }): never;
 export function redirectToCheckout(url: ExternalCheckoutUrl): never;
 export function responseRedirect(req: Request, path: SafePath, status?: 307 | 308): NextResponse; // route handlers and proxy.ts; 308 for the App. F table
+export function redirectToLinearAuthorization(url: LinearAuthorizationUrl): never;
+export function redirectToCanonicalHost(target: { url: CanonicalHostUrl; permanent: boolean }): NextResponse; // proxy.ts; a 308 cached for an hour to oxagen.app, a 307 with no-store to any other host
 
 // src/ui/navigation.tsx        — the only useRouter importer, and the only file with a computed href/action
 export function useNavigate(): { replace(path: SafePath): void; push(path: SafePath): void };
@@ -606,7 +616,7 @@ Each invariant is one sentence with a named mechanism. Architecture tests live i
 | INV-10 | A trust value (cost basis, tier) comes from a contract field or is `null`, never a literal; `grade` and `verdict` join the list with the lane that first renders them (no rev1 view model carries either). | Arch test `trust-values.test.ts` (AST over `src/data/live/mappers/**`, name list `basis`, `tier`). |
 | INV-11 | Every view-model field named `id` or ending in `Id` is a `PublicId`. | Arch test `public-ids.test.ts` over every exported zod object in `src/data/contracts`, empty allowlist. |
 | INV-12 | All interface prose comes from `messages/*.json`, every `t()` key exists, and no catalog key goes unused. | Lint on `JSXText` with letters and literal `aria-label`/`title`/`placeholder`/`alt`; next-intl `AppConfig.Messages` augmentation from `src/i18n/messages.d.ts`, a generated file checked in CI against every `messages/*.json` (`catalogs.ts:1-8` loads the directory at runtime as `Record<string, unknown>`); arch test `catalog-used.test.ts`, which expands the two template families — `unrecorded.${section}` against `UNRECORDED`'s keys and `pages.${key}` against `REV1_ROUTES`' title keys — before reporting an unused key. |
-| INV-13 | Every redirect target is a `SafePath`, a `LoopbackUri` or an `ExternalCheckoutUrl`, and only `src/shared/navigation.ts` performs a redirect. | Brands minted only by `sanitizeNext`/route builders, `parseLoopbackUri`, `parseCheckoutUrl`. Lint bans `redirect`, `permanentRedirect`, `NextResponse.redirect`, `Response.redirect` outside `shared/navigation.ts`; `useRouter` outside `ui/navigation.ts`; `location.*` everywhere; computed `href`/`action` on `<a>`, `<Link>`, `<form>`. The Better Auth wrappers take `SafePath`. A probe per sink. |
+| INV-13 | Every redirect target is a `SafePath`, a `LoopbackUri`, an `ExternalCheckoutUrl`, a `LinearAuthorizationUrl` or a `CanonicalHostUrl`, and only `src/shared/navigation.ts` performs a redirect. | Brands minted only by `sanitizeNext`/route builders, `parseLoopbackUri`, `parseCheckoutUrl`, `parseLinearAuthorizationUrl`, `canonicalHostRedirect`. Lint bans `redirect`, `permanentRedirect`, `NextResponse.redirect`, `Response.redirect` outside `shared/navigation.ts`; `useRouter` outside `ui/navigation.ts`; `location.*` everywhere; computed `href`/`action` on `<a>`, `<Link>`, `<form>`. The Better Auth wrappers take `SafePath`. A probe per sink. |
 | INV-14 | A kernel refusal reaches the UI as `denied`, `pending_approval` (with its request id) or `exhausted` (with its code), never as an error page, `failed` or `unavailable`. | `classifyKernelFailure` is the only classifier, keyed on `code`; handlers throw `HandlerError` with a code (WL-22). Unit tests: one per row of the §3.2 table plus a structurally cloned error; no test for a code without a producer. Component test: the approval dialog renders `exhausted` for `gau_exhausted`, `billing_suspended` and `budget_exceeded` with the billing link (the one rev1 producer, §1.5). |
 | INV-15 | Unknown slugs, non-member orgs, non-member workspaces and the stream route for any of them return a 404 of the same kind (page → not-found page; API → `{code:"not_found"}`). | Unit tests `server/viewer-resolution.test.ts` and `features/run/stream.test.ts`. No e2e. |
 | INV-16 | Every export under `src/` is reachable from a production entry, except the retained UI explicitly registered by ADR-130, and every `package.json` dependency is imported. | `knip --production --strict` in the CI `checks` job; entries: route files, `src/proxy.ts`, `instrumentation.ts`, `next.config.ts`, `src/i18n/request.ts`; `ignore` as in the preamble. Shrink-only baseline emptied by WL-13. |

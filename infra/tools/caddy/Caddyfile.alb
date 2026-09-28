@@ -196,7 +196,7 @@
 		# The app is moving from app.oxagen.sh to oxagen.app (ADR-215), so all
 		# three names reach the same process. The app, not this file, sends a
 		# page visit on a name that is not canonical to the one that is
-		# (canonicalHostRedirect in apps/app/src/shared/app-url.ts). Its API
+		# (canonicalHostRedirect in apps/app/src/shared/canonical-host.ts). Its API
 		# paths keep answering on every name, for the clients that call them.
 		@app host app.oxagen.sh oxagen.app www.oxagen.app
 		handle @app {
