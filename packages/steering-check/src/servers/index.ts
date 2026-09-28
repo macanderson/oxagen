@@ -32,6 +32,7 @@ import {
   upstreamHash,
   type CompiledServer,
   type CompileIssue,
+  type DefinitionLock,
   type FileIssue,
   type LintContext,
   type Finding as LintFinding,
@@ -104,11 +105,21 @@ export const SERVER_READERS: ServerReaders = {
 
 // ── The lock ─────────────────────────────────────────────────────────────────
 
-/** The upstream tools a lock pins: a definition's tools as written, and an MCP tool through upstreamFromMcpTool. */
+const DEFINITION_SOURCES: ReadonlySet<string> = new Set(["openapi", "graphql", "grpc"]);
+
+/** A lock written from an OpenAPI, GraphQL, or gRPC definition. Its source type says so. */
+function isDefinitionLock(lock: McpToolsLock): lock is DefinitionLock {
+  return DEFINITION_SOURCES.has(lock.source.type);
+}
+
+/**
+ * The upstream tools a lock pins: a definition's tools as written, and an MCP
+ * tool through upstreamFromMcpTool. The lock's source picks the branch,
+ * because an `in` test on each entry left `request` typed as unknown.
+ */
 export function lockedUpstreamTools(lock: McpToolsLock): UpstreamTool[] {
-  return Object.values(lock.tools).map((entry) =>
-    "request" in entry.upstream ? entry.upstream : upstreamFromMcpTool(entry.upstream),
-  );
+  if (isDefinitionLock(lock)) return Object.values(lock.tools).map((entry) => entry.upstream);
+  return Object.values(lock.tools).map((entry) => upstreamFromMcpTool(entry.upstream));
 }
 
 /** OpenAPI's security schemes as the lock's source recorded them, or none. */
