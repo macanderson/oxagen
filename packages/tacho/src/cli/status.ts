@@ -574,7 +574,13 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     `Enrollment  ${h.agent_key} (${h.host_enrollment_id}) in ${h.organization_id}/${h.workspace_id}`,
   );
   deps.out(
-    `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}, mode ${h.mode}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
+    `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
+  );
+  // Its own line: the policy mode is not the tier above it (ADR-095). It
+  // governs permission rules only. The model proxy's allowlist and enforced
+  // budget refuse calls in either mode (`refusalFor` in model-proxy.ts).
+  deps.out(
+    `Policy      ${h.mode === "enforce" ? "enforce: a matching permission rule can deny a governed call or ask first" : "observe: a matching permission rule is recorded and the call goes ahead"}`,
   );
   deps.out(
     `Bundle      v${b.version} (${b.etag}) fetched ${b.age_s}s ago, expires ${b.expires_at}`,
