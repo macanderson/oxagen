@@ -13,6 +13,8 @@
   (tenant data planes), ADR-194 (every embedding is voyage-4-large on one
   platform key).
 
+> **Amended 2026-09-28 by [ADR-215](./ADR-215-the-code-graph-builds-on-the-operators-machine-and-a-workspace-may-name-its-embedding-endpoint.md) (proposed).** Decision 4 gains two more modes, embeddings off and the workspace's own endpoint. Decision 1 stands: the local code graph ADR-215 adds lives only on the operator's machine and never writes the shared graph.
+
 ## Context
 
 The workspace-graph boundary spec split code knowledge into two planes.

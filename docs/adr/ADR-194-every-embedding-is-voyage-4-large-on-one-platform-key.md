@@ -8,6 +8,8 @@
 - **Related:** issue #4148 (production embeddings refused), issue #2974
   (ingestion drops records when the embedding key is rejected).
 
+> **Amended 2026-09-28 by [ADR-215](./ADR-215-the-code-graph-builds-on-the-operators-machine-and-a-workspace-may-name-its-embedding-endpoint.md) (proposed).** For the code graph only, a workspace may send its embeddings to its own OpenAI-compatible endpoint, whose vectors form their own embedding space and are not billed by Oxagen. Every other embedding still follows decision 2.
+
 ## Context
 
 Oxagen embedded every text with `openai/text-embedding-3-small` through the

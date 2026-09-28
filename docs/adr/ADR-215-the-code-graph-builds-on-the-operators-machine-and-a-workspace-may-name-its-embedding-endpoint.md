@@ -1,0 +1,154 @@
+# ADR-215: The code graph builds on the operator's machine, and a workspace may name its embedding endpoint
+
+- **Status:** Proposed
+- **Date:** 2026-09-28
+- **Owners:** platform, knowledge, tacho
+- **Decided by:** Mac set the direction on 2026-09-28. This record awaits
+  acceptance.
+- **Amends:** ADR-214 decisions 1 and 4, and ADR-194 decision 2, for the code
+  graph only. ADR-016, whose local path returns under tachod.
+- **Related:** issue #4657, ADR-042 (tenant data planes), ADR-053 §2
+  (organization model keys), ADR-101 (four harnesses), ADR-187 (the gateways),
+  ADR-211 (no HTTP+SSE), and the code graph spec version 1.2
+  (`codegraph-spec.html` and `codegraph-build-plan.md` in
+  `macanderson/oxagen-roadmap`, branch `docs/codegraph-local-mcp`).
+
+## Context
+
+ADR-214 lets Oxagen build code graph copies of the default branch, tagged
+releases, and open PRs. Those copies answer questions about committed code. An
+operator in a checkout asks about the code in front of them: files not yet
+committed, and a branch no PR covers yet. The cloud copy cannot see that code,
+and ADR-214 keeps it that way on purpose. No client writes the shared graph,
+and Oxagen keeps no graph of a feature branch or a worktree.
+
+Mac asked for three additions on 2026-09-28:
+
+- An operator builds a code graph of their checkout with the `oxagen` CLI. It
+  is the MCP endpoint for code graph questions on that machine, it indexes
+  whatever the machine holds when it starts, and it writes local tables, not
+  cloud ones.
+- A workspace can store credentials and settings for its own embedding
+  provider. With no provider, the graph is not searchable by meaning.
+- An `enable_embeddings` switch whose help text says the workspace is billed
+  for the embeddings each release generates. Every merge commit to the default
+  branch is built by the same code, and every release keeps its own copy.
+
+ADR-194 decision 2 says an organization's own key never serves an embedding.
+ADR-214 decision 4 puts every code graph embedding on `voyage-4-large` on the
+platform key. ADR-016 wanted a live local graph, and its local daemon and cloud
+sync were retired on 2026-07-21, because the CLI pushed working-tree graphs
+into the shared store. A local graph has to avoid that path.
+
+## Decision
+
+1. **One pipeline, two hosts.** The code graph's steps are written against two
+   interfaces in `cg-core`: a `Store` for nodes, edges, vectors, and graph
+   files, and a `Queue` that runs steps, saves their output, and retries them.
+   The cloud host implements them with Postgres, S3, and Inngest. The local
+   host is the `codegraph` binary, which implements them with one SQLite file
+   per repo and a durable jobs table. Both call the extraction crate from
+   ADR-214 decision 6 at the same version, so a clean checkout's local graph
+   and the cloud copy of that commit hold the same nodes, edges, and IDs. The
+   steps that need the whole workspace or a model (schema reads through
+   sqlglot, domain grouping, and enrichment) do not run locally. Their facts
+   come from the newest cloud copy.
+2. **The local graph lives only on the operator's machine.**
+   `oxagen codegraph init` indexes the working tree as it is, uncommitted
+   changes included. The result is named by its pin: the `HEAD` commit plus a
+   SHA-256 digest of the changed paths and contents. It writes
+   `~/.oxagen/codegraph/<repo-id>/graph.db` and nothing else. No local build
+   writes a cloud table, and the shared graph comes only from ADR-214's server
+   builds. ADR-214 decision 1 stands: Oxagen keeps no graph of a feature
+   branch or a worktree, and the local graph is not a graph Oxagen keeps.
+3. **Tachod serves it.** Tachod supervises the `codegraph` binary as the MCP
+   server `codegraph`, over stdio or streamable HTTP on loopback, never
+   HTTP+SSE (ADR-211). An HTTP call carries the token in
+   `~/.oxagen/codegraph/token`, which is mode 0600. The server is the one code
+   graph endpoint on the machine. It answers from the local tables where it
+   can and sends every other question to the cloud query service as a governed
+   read under the operator's identity. Every answer names its source, `local`
+   or `cloud`. `init` writes the MCP entry for Claude Code, Codex, Cursor, and
+   Stella (ADR-101). This takes the place of ADR-016's CLI daemon. ADR-016's
+   cloud sync stays retired.
+4. **Embeddings have three modes, set per workspace in
+   `codegraph/embeddings.toml`.**
+   - **Off** (`enable_embeddings = false`), the default. Search matches names
+     and text, and nothing goes to an embedding provider.
+   - **Oxagen** (`provider = "oxagen"`). ADR-194 and ADR-214 decision 4 hold:
+     `voyage-4-large` at 1,024 dimensions on the platform key, billed per
+     token.
+   - **Your endpoint** (`provider = "custom"`). The workspace names an endpoint
+     that speaks the OpenAI embeddings API, a model, and a stored credential.
+     Oxagen bills no embedding tokens in this mode. The vectors form their own
+     embedding space, stored as `halfvec` up to 4,000 dimensions with one
+     partial HNSW index per space, and never mix with Voyage vectors.
+
+   This amends ADR-194 decision 2 for the code graph alone. Every other
+   embedding still goes to Voyage on the platform key.
+5. **The endpoint credential is stored like a model credential.**
+   `set_model_credential` gains a purpose, so an organization's embedding
+   endpoint and its language-model key are separate slots, and setting one
+   never replaces the other. The endpoint URL passes the same public-URL check
+   as today's `baseUrl`. A loopback endpoint (`--embed-url
+   http://127.0.0.1:11434/v1/embeddings`) is set only on the machine, is never
+   stored in Oxagen, and its vectors never leave the machine.
+6. **Cards are embedded once per organization.** Local and cloud builds send
+   cards through the code graph's embedding route. That route runs in the
+   code graph's query service until ADR-187 is accepted, then moves to the
+   cloud gateway. Before it calls a provider, it looks up each card hash in
+   the organization's `embeddings` table, so a card is embedded once per
+   embedding space, whichever machine or commit produced it. A build in the
+   custom mode with no stored credential still publishes, without vectors, and
+   marks the copy `embeddings: missing_credential`.
+7. **Every merge is covered, and every release is kept.** A merge to the
+   default branch starts a 5-minute window. A burst of merges builds once, from
+   the last merge, and each earlier merge resolves to that copy through its
+   valid range. A tag builds its exact commit with no window, is keyed by tag
+   so a newer commit cannot cancel it, and is kept forever. The release archive
+   lists each tagged copy with the builds since the last tag and the embedding
+   tokens they used. Every query takes an optional `at`: a commit, a tag, or a
+   PR number.
+
+## Consequences
+
+- An operator gets answers about uncommitted code from any of the four
+  harnesses, and the shared graph still changes only through server builds of
+  the provider's commits.
+- A laptop now runs builds. The local host runs one worker at low priority
+  with a 2 GB memory limit by default, and it runs SCIP only when
+  `init --scip` asks for it.
+- Any process running as the operator can read the token file and call the
+  local server. That is the same trust boundary as the checkout itself, and
+  the token never leaves the machine.
+- Local and cloud answers can differ. Every answer carries `source`, and a
+  local answer carries its pin, so a caller can tell which graph answered.
+- In the custom mode, the customer's provider sets the quality and retention
+  of embeddings. Oxagen stores the vectors and card hashes.
+- The `codegraph` binary ships the Stella extraction crate to customer
+  machines. ADR-214 records a commercial license for Oxagen to link that
+  crate. Whether the 2026-09-28 grant covers shipping it inside a binary that
+  customers run is Mac's question to answer. The local build host does not
+  ship until it is answered.
+- Stella's own index and the Oxagen local graph can both index one checkout on
+  one machine. They share the extraction crate and its IDs but no files, so the
+  cost is a second index, not a second set of IDs. Whether Stella reads the
+  Oxagen local graph instead is left to a later decision.
+- The workspace settings screen shows an "Enable embeddings" checkbox whose
+  help text names who bills for each release's embeddings. The code graph spec
+  holds the exact strings.
+
+## Alternatives considered
+
+- **Push local graphs to the cloud.** That is ADR-016's retired path, and it
+  brings back the July defects ADR-214 lists.
+- **Build locally with a separate, lighter pipeline.** Two pipelines drift. A
+  symbol would get one ID locally and another in the cloud, and no local answer
+  could be checked against a copy.
+- **Answer only from the cloud copy.** It cannot see uncommitted work.
+- **Let a custom endpoint write into the Oxagen embedding space.** Vectors from
+  two models cannot share an index or be compared. Separate spaces keep each
+  index correct, and a workspace that switches back keeps its Voyage vectors.
+- **Turn embeddings on by default.** Every workspace would pay for embeddings
+  it did not ask for. With embeddings off by default, a bill appears only after
+  someone checks the box and reads its help text.
