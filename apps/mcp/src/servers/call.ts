@@ -19,6 +19,7 @@ import {
   type MeterOutcome,
   type ServedAgent,
   type ServedPorts,
+  type ServedRoute,
 } from "./types";
 
 interface Answer {
@@ -77,11 +78,11 @@ export function unbuiltRoute(network: string): ServedRouteError | null {
   );
 }
 
-function transportFor(ports: ServedPorts, network: string): Transport | ServedRouteError {
-  const unbuilt = unbuiltRoute(network);
+function transportFor(ports: ServedPorts, route: ServedRoute): Transport | ServedRouteError {
+  const unbuilt = unbuiltRoute(route.network);
   if (unbuilt !== null) return unbuilt;
   try {
-    return ports.transport(network);
+    return ports.transport(route);
   } catch (error) {
     if (error instanceof ServedRouteError) return error;
     throw error;
@@ -195,7 +196,7 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
       "failed",
     );
   }
-  const transport = transportFor(ports, environment.network);
+  const transport = transportFor(ports, { network: environment.network, server, run: view.run });
   if (transport instanceof ServedRouteError) return refusal(transport.message, "failed");
 
   try {

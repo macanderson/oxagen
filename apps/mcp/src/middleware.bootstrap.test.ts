@@ -58,7 +58,7 @@ describe("mcp middleware startup wiring", () => {
     // xmcp exposes no lifecycle hook, so module scope is the only location
     // guaranteed to run on cold start. If a bootstrap call ever moved below
     // the exported middleware, it would run per-request (or not at all).
-    const exportIndex = source.indexOf("export default apiKeyAuthMiddleware");
+    const exportIndex = source.indexOf("const auth = apiKeyAuthMiddleware");
     expect(exportIndex).toBeGreaterThan(-1);
     for (const [call] of REQUIRED_STARTUP_CALLS) {
       expect(source.indexOf(call)).toBeLessThan(exportIndex);

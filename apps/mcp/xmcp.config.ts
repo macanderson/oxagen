@@ -69,6 +69,10 @@ const config: XmcpConfig = {
       "@clickhouse/client",
       "stripe",
       "better-auth",
+      // Cedar's evaluator (the served tools, lane M15). The served tools
+      // import its Node build by a literal name, and that build reads its
+      // .wasm file from its own directory, so the package stays on disk.
+      "@cedar-policy/cedar-wasm",
     ];
 
     // Function-based external: matches exact package names and sub-path imports

@@ -5,7 +5,7 @@
 // workspace's published steering version and calls them through the
 // executor. Everything that touches the database, the vault, or the network
 // is a port here, so list, call, and search run in tests with fakes.
-import type { CredentialSource, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
+import type { CredentialSource, ManifestServer, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
 import type { CedarRuntime, PolicyFile } from "@oxagen/policy";
 
 /** One agent from agents/<name>.toml (agent/v1), in the fields the gateway reads. */
@@ -20,6 +20,8 @@ export interface ServedAgent {
 export interface PublishedTools {
   /** The steering repository the version belongs to. */
   repository: string;
+  /** The workspace's slug. Policies name the workspace by it: Workspace::"finops". */
+  workspace: string;
   /** The published version number. */
   version: number;
   /** The compiled tool manifest. Null when the steering record imports no server. */
@@ -43,6 +45,17 @@ export interface ServedRun {
   harness: string | null;
   /** The operator's role, when Oxagen knows it. */
   operatorRole?: string;
+  /** The tacho.hosts public id of the machine the run is on. A local server runs there. */
+  machine: string | null;
+  /** The tacho session's public id (tse_...), which an approval records as its run. */
+  runPublicId: string | null;
+}
+
+/** Where one call goes: the environment's network, the server, and the run. */
+export interface ServedRoute {
+  network: string;
+  server: ManifestServer;
+  run: ServedRun;
 }
 
 /** The servers and tools a person switched off in Oxagen. */
@@ -125,7 +138,7 @@ export interface ServedPorts {
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */
-  transport(network: string): Transport;
+  transport(route: ServedRoute): Transport;
   meter(event: MeterEvent): Promise<void>;
   /** Cedar's evaluator, or null when it is not installed. */
   cedar(): Promise<CedarRuntime | null>;

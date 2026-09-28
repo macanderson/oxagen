@@ -20,6 +20,7 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { extractBearerToken } from "./context";
+import { servedToolsMiddleware } from "./servers/serve";
 
 // Refuse to boot if a production runtime disabled RLS enforcement, or if
 // TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
@@ -112,10 +113,15 @@ setSecurityEventEmitter((kernelEvent) => {
  * SECURITY: identity is derived solely from this validated credential — never
  * from client-controlled identity headers (`x-oxagen-org-id` & friends).
  */
-export default apiKeyAuthMiddleware({
+const auth = apiKeyAuthMiddleware({
   headerName: "authorization",
   validateApiKey: async (authHeader) => {
     if (typeof authHeader !== "string") return false;
     return extractBearerToken(authHeader) !== null;
   },
-}) satisfies Middleware;
+});
+
+// The served tools (lane M15) run after the auth gate. They add a run's
+// published tools to tools/list and answer a tools/call that names one.
+// Every other request reaches the transport untouched.
+export default [auth, servedToolsMiddleware] satisfies Middleware[];

@@ -125,7 +125,7 @@ export function compare(a: string, b: string): number {
 }
 
 /** Compile the published policies, or null when they do not compile. */
-export function compileDecider(published: PublishedTools, workspaceId: string, runtime: CedarRuntime, log: ServedLog): Decider | null {
+export function compileDecider(published: PublishedTools, runtime: CedarRuntime, log: ServedLog): Decider | null {
   const manifest = published.manifest ?? { servers: [] };
   const tools = cedarTools(manifest);
   if (tools.skipped.length > 0) {
@@ -136,7 +136,7 @@ export function compileDecider(published: PublishedTools, workspaceId: string, r
   }
   const result = compilePolicies(
     {
-      workspace: workspaceId,
+      workspace: published.workspace,
       policies: published.policies ?? [],
       agents: published.agents.map(({ name, operator, runtime: agentRuntime, harness }) => ({
         name,
@@ -172,7 +172,7 @@ function decider(
   const key = `${run.workspaceId}#${published.repository}#${published.version}`;
   const cached = cache.deciders.get(key);
   if (cached !== undefined) return cached;
-  const compiled = compileDecider(published, run.workspaceId, runtime, ports.log);
+  const compiled = compileDecider(published, runtime, ports.log);
   cache.deciders.set(key, compiled);
   return compiled;
 }
