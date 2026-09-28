@@ -2,7 +2,7 @@
 // shows: the newest one about the agent that names the cache TTL.
 import { describe, expect, it } from "vitest";
 import { cacheTtlOf } from "./cache-ttl";
-import type { SpendFinding, SpendFindings } from "./contracts/spend";
+import type { SpendFinding, SpendFindings } from "@/data/contracts/spend";
 
 const AGENT = "acme.core.release-bot";
 

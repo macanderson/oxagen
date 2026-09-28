@@ -13,7 +13,6 @@
 // than claiming there is nothing to change. The one exception is the cache
 // TTL, which the idle cache finding proposes from the request frames.
 import { useLocale, useTranslations } from "next-intl";
-import { type CacheTtlAdvice, cacheTtlOf } from "@/data/cache-ttl";
 import type {
   AgentDetail,
   IncidentPage,
@@ -27,6 +26,7 @@ import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { tamperOf } from "./agent-reads";
+import { type CacheTtlAdvice, cacheTtlOf } from "./cache-ttl";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";

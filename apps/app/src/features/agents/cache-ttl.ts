@@ -6,10 +6,10 @@
 import type { SpendFinding, SpendFindings } from "@/data/contracts/spend";
 
 /** The setting a TTL recommendation names; billing's `CACHE_TTL_SETTING`. */
-export const CACHE_TTL_SETTING = "cache_ttl";
+const CACHE_TTL_SETTING = "cache_ttl";
 
 /** The two TTLs the provider offers, as billing's `CacheTtl` spells them. */
-export type CacheTtl = "5m" | "1h";
+type CacheTtl = "5m" | "1h";
 
 /** One agent's TTL recommendation, with the finding that carries it. */
 export type CacheTtlAdvice = {
