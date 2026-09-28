@@ -32,6 +32,14 @@ commits merged after it were never deployed, because `deploy-web` and
 No run failed. An evicted run's conclusion is `cancelled`, which reads as
 ordinary supersession, so the outage raised no failure signal.
 
+**A `cancelled` conclusion on a required check is not a pass** (added
+2026-09-28, #3257). The ruleset on `main` requires `checks` and `test`, and
+a cancelled run satisfies neither. The same shape still reaches pull requests,
+whose runs this decision leaves on `cancel-in-progress`: a branch pushed
+faster than CI finishes gets only cancelled runs, and its required checks
+never conclude. ADR-215 records the detector that reports that state and why
+pull requests keep cancelling.
+
 ## Decision
 
 **A push to `main` gets a concurrency group of its own, keyed by commit.**

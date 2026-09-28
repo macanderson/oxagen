@@ -63,6 +63,10 @@ concurrency:
   # covered by anything. The per-commit group above is why that can no longer
   # happen on main; pull requests keep the old behaviour, where superseding is
   # what you want.
+  #
+  # A pull request branch pushed faster than its run finishes gets only
+  # cancelled runs, and a cancelled required check is not a pass.
+  # ci-superseded.yml reports that state on the pull request (ADR-215, #3257).
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
