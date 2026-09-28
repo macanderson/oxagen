@@ -5,7 +5,8 @@
 // selection set to depth 2. Subscriptions are listed and never become tools.
 // A field that follows the connection pattern gets paging.
 import type { ImportResult } from "../model/import-result";
-import { notBuiltAsync } from "../not-built";
+import { fromIntrospection, fromSdl } from "./load";
+import { toolsOf } from "./tools";
 
 /** An SDL file, or the result of an introspection query sent through the network route. */
 export type GraphqlInput =
@@ -20,6 +21,14 @@ export type GraphqlInput =
  * templates. With introspection input, files in the result holds the schema
  * printed as SDL, so a person can review it.
  */
-export function importGraphql(input: GraphqlInput): Promise<ImportResult> {
-  return notBuiltAsync("graphql", input);
+export async function importGraphql(input: GraphqlInput): Promise<ImportResult> {
+  const loaded = "sdl" in input ? fromSdl(input.sdl) : fromIntrospection(input.introspection);
+  return {
+    ...toolsOf(loaded.schema),
+    environments: [],
+    auth: [],
+    document_hash: loaded.document_hash,
+    files: loaded.files,
+    descriptor_set: undefined,
+  };
 }
