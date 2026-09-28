@@ -9,13 +9,15 @@
 //
 // Which rows move (the coordinator's rule for M13, #4478):
 //
-// - Every live, enabled, legacy row whose transport is streamable-http or sse
+// - Every live, enabled, legacy row whose transport is streamable-http
 //   moves. A plugin row whose install is disabled or deleted counts as
 //   disabled.
-// - A stdio row stays a legacy row. So does any other transport. Each is
-//   listed in every batch's PR body under "Servers not moved", with its name
-//   and the reason. So is a remote row migrate cannot write a valid folder
-//   for, such as a header row whose header name it cannot read.
+// - A stdio row stays a legacy row. So does an sse row, because review
+//   refuses the older HTTP+SSE transport (ADR-211), and so does any other
+//   transport. Each is listed in every batch's PR body under "Servers not
+//   moved", with its name and the reason. So is a remote row migrate cannot
+//   write a valid folder for, such as a header row whose header name it
+//   cannot read.
 // - A disabled row is skipped and not listed.
 // - A row that already names a folder is in an open or merged batch, and is
 //   skipped. When the caller passes the folders on the steering repo's main
@@ -484,7 +486,7 @@ function buildFolder(
     source: {
       type: "remote",
       url: server.endpointUrl,
-      transport: server.transportType === "sse" ? "sse" : "http",
+      transport: "http",
     },
     auth: auth.auth,
     exposure: { mode: "direct" },
@@ -534,22 +536,27 @@ function select(server: MigrationServer, existing: ReadonlySet<string> | null): 
   if (server.deletedAt !== null || server.origin !== "legacy") return { kind: "skip" };
   if (!server.enabled) return { kind: "skip" };
   if (server.orgListingId !== null && server.installActive !== true) return { kind: "skip" };
-  if (server.steeringName !== null) {
-    if (existing !== null && !existing.has(server.steeringName)) {
-      return { kind: "move", folder: server.steeringName };
-    }
+  // A row an earlier migration PR named moves again under that name when its
+  // folder never merged. It must still have a folder form: a row named before
+  // ADR-211 can be sse, and moving it would write its sse URL as http.
+  if (server.steeringName !== null && (existing === null || existing.has(server.steeringName))) {
     return { kind: "skip" };
   }
   const reason = unmovableReason(server);
-  return reason === null ? { kind: "move", folder: null } : { kind: "list", reason };
+  if (reason !== null) return { kind: "list", reason };
+  return { kind: "move", folder: server.steeringName };
 }
 
 /** Why a row's transport or endpoint has no server folder form, or null when it has one. */
 function unmovableReason(server: MigrationServer): string | null {
   if (!(MOVABLE_TRANSPORTS as readonly string[]).includes(server.transportType)) {
-    return server.transportType === "stdio"
-      ? "it runs as a local process (stdio), and a server folder's remote source reaches http and sse endpoints only."
-      : `its transport is ${server.transportType}, and a server folder's remote source reaches http and sse endpoints only.`;
+    if (server.transportType === "stdio") {
+      return "it runs as a local process (stdio), and a server folder's remote source reaches streamable-http endpoints only.";
+    }
+    if (server.transportType === "sse") {
+      return "its transport is sse, the older HTTP+SSE transport, and a server folder's remote source reaches streamable-http endpoints only (ADR-211).";
+    }
+    return `its transport is ${server.transportType}, and a server folder's remote source reaches streamable-http endpoints only.`;
   }
   try {
     const url = new URL(server.endpointUrl);

@@ -122,6 +122,21 @@ export function encodeRequest(method: ResolvedMethod, args: JsonObject): Uint8Ar
 }
 
 /**
+ * The encoded request message in its canonical proto3 JSON form, as a
+ * recorded call holds it. It reads the bytes that go upstream, so field
+ * names, enums, and 64-bit integers take one form whatever the arguments
+ * used. A field that holds its default value is not on the wire, so this
+ * leaves it out, unlike decodeResponse.
+ */
+export function requestJson(method: ResolvedMethod, bytes: Uint8Array): JsonValue {
+  try {
+    return toJson(method.input, fromBinary(method.input, bytes), { registry: method.registry });
+  } catch (error) {
+    throw new DescriptorError(`The request does not decode as ${method.input.typeName}: ${messageOf(error)}`);
+  }
+}
+
+/**
  * Decode one response message to JSON.
  *
  * Fields that hold their default value are written too (alwaysEmitImplicit),
