@@ -44,6 +44,8 @@ export const steeringRepoHealth = agentSchema.table(
     reason: text("reason"),
     // The last published commit, which a diverged repo reverts to.
     publishedSha: text("published_sha"),
+    // The version number of `published_sha`, when the host records it.
+    publishedVersion: integer("published_version"),
     // The pull request that reverts main to `published_sha`.
     revertPrNumber: integer("revert_pr_number"),
     // The health the workspace admins were last told about, so a state is

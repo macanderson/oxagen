@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS agent.steering_repo_health (
   differences jsonb NOT NULL DEFAULT '[]'::jsonb,
   reason text,
   published_sha text,
+  published_version integer,
   revert_pr_number integer,
   notified_health text NOT NULL DEFAULT 'healthy',
   posted_digest text,
