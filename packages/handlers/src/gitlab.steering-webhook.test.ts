@@ -253,6 +253,19 @@ describe("handleGitLabSteeringWebhook events", () => {
     expect(deps.requestHealthCheck).not.toHaveBeenCalled();
   });
 
+  it("asks the organization scope for nothing when a merge request merges", async () => {
+    const { deps, injected } = world(ORG_PROJECT);
+    const res = await handleGitLabSteeringWebhook(injected, {
+      scopeKind: "organization",
+      scopeId: ORG,
+      tokenHeader: tokenFor("organization", ORG),
+      body: mergeRequest("merged"),
+    });
+    expect(res).toEqual({ status: 202, outcome: "ignored_event" });
+    expect(deps.requestHealthCheck).not.toHaveBeenCalled();
+    expect(deps.requestSync).not.toHaveBeenCalled();
+  });
+
   it("ignores a merge request that has not merged", async () => {
     const { deps, injected } = world();
     for (const state of ["opened", "closed"] as const) {
@@ -342,6 +355,25 @@ describe("handleGitLabSteeringWebhook deliveries it ignores", () => {
     }
     expect(deps.requestHealthCheck).not.toHaveBeenCalled();
     expect(deps.requestSync).not.toHaveBeenCalled();
+  });
+
+  it("reads the project from target_project_id when the body names no other", async () => {
+    const { deps, injected } = world();
+    const onlyTarget = (projectId: number) => ({
+      object_kind: "merge_request",
+      object_attributes: { state: "merged", target_project_id: projectId },
+    });
+    const other = await handleGitLabSteeringWebhook(
+      injected,
+      workspaceRequest(onlyTarget(PROJECT + 1)),
+    );
+    expect(other.outcome).toBe("ignored_other_project");
+    expect(deps.requestSync).not.toHaveBeenCalled();
+    const mine = await handleGitLabSteeringWebhook(
+      injected,
+      workspaceRequest(onlyTarget(PROJECT)),
+    );
+    expect(mine.outcome).toBe("sync_requested");
   });
 
   it("reads a project id sent as a decimal string", async () => {

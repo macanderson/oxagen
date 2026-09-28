@@ -63,8 +63,9 @@ export type SteeringHookReason = "push" | "project" | "member";
 
 export interface GitLabSteeringWebhookDeps {
   /**
-   * The GitLab steering project the scope's `steering_repo` setting names, or
-   * null when there is no such scope or its steering repo is not on GitLab.
+   * The GitLab steering project the scope's `steering_repo` setting names.
+   * Null when there is no such scope, the workspace is archived, the
+   * organization is not active, or the steering repo is not on GitLab.
    */
   findSteeringProject(
     kind: SteeringHookScopeKind,
@@ -248,6 +249,8 @@ export function gitlabSteeringWebhookDeps(): GitLabSteeringWebhookDeps {
       // tenancy: webhook lookup with no tenant scope yet; filtered by the
       // scope id from the hook's URL, and the caller verifies the delivery's
       // token against the project this row names before anything else runs.
+      // Only an active organization counts. A hook left on a suspended or
+      // deleted organization's project finds nothing, so it starts no work.
       const row = await withSystemDb(async (tx) => {
         if (kind === "organization") {
           const [org] = await tx
@@ -256,7 +259,12 @@ export function gitlabSteeringWebhookDeps(): GitLabSteeringWebhookDeps {
               settings: schema.organizations.settings,
             })
             .from(schema.organizations)
-            .where(eq(schema.organizations.id, scopeId))
+            .where(
+              and(
+                eq(schema.organizations.id, scopeId),
+                eq(schema.organizations.status, "active"),
+              ),
+            )
             .limit(1);
           return org ? { ...org, workspaceId: null } : null;
         }
@@ -267,10 +275,15 @@ export function gitlabSteeringWebhookDeps(): GitLabSteeringWebhookDeps {
             settings: schema.workspaces.settings,
           })
           .from(schema.workspaces)
+          .innerJoin(
+            schema.organizations,
+            eq(schema.organizations.id, schema.workspaces.orgId),
+          )
           .where(
             and(
               eq(schema.workspaces.id, scopeId),
               isNull(schema.workspaces.archivedAt),
+              eq(schema.organizations.status, "active"),
             ),
           )
           .limit(1);

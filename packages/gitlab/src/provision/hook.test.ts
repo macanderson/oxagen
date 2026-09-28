@@ -90,6 +90,30 @@ describe("ensureSteeringHook", () => {
   });
 });
 
+describe("ensureSteeringHook when the API origin changes", () => {
+  it("moves the hook to the new origin and adds no second hook", async () => {
+    const fake = project();
+    await fake.rest().request("POST", HOOKS, {
+      url: "https://old-api.example/api/webhooks/gitlab",
+      token: "old-secret",
+      push_events: true,
+      merge_requests_events: true,
+      enable_ssl_verification: true,
+    });
+    const setup = fake.writes().length;
+    expect(await ensure(fake)).toEqual({ hook_id: 1, created: false });
+    expect(fake.writes().slice(setup)).toEqual([{ method: "PUT", path: `${HOOKS}/1` }]);
+    expect(fake.hooks(1)).toEqual([steeringHook(1)]);
+  });
+
+  it("skips a hook whose url does not parse", async () => {
+    const fake = project();
+    await fake.rest().request("POST", HOOKS, { url: "not a url", token: "odd" });
+    expect(await ensure(fake)).toEqual({ hook_id: 2, created: true });
+    expect(fake.hooks(1).map((h) => h.url)).toEqual(["not a url", HOOK_URL]);
+  });
+});
+
 describe("ensureSteeringHook after a failure", () => {
   it("reaches the clean state after the create fails before GitLab applies it", async () => {
     const fake = project();

@@ -1,13 +1,14 @@
 // The steering hook receiver's real lookup against a migrated database
 // (#4562): it finds a GitLab steering project from the scope's own
 // `steering_repo` setting, whatever the repo's status, and finds nothing for
-// a GitHub repo, an archived workspace, or an unknown id. Runs wherever
+// a GitHub repo, an archived workspace, an organization that is not active,
+// or an unknown id. Runs wherever
 // DATABASE_URL points at a migrated database, as CI's unit lanes do. A local
 // run without one is skipped, not red. Every row it writes is removed in
 // afterAll.
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { gitlabSteeringWebhookDeps } from "./gitlab.steering-webhook";
 import { requestSteeringSync } from "./context.steering.sync.request";
 
@@ -46,6 +47,16 @@ describe.skipIf(!enabled)("gitlabSteeringWebhookDeps against Postgres", () => {
     plainWorkspace,
   ];
   const tag = orgId.slice(0, 8);
+  // One organization per inactive status, each with a GitLab workspace.
+  const inactive = (["suspended", "deleted"] as const).map((status) => ({
+    status,
+    orgId: crypto.randomUUID(),
+    workspaceId: crypto.randomUUID(),
+  }));
+  const allWorkspaceIds = [
+    ...workspaceIds,
+    ...inactive.map((o) => o.workspaceId),
+  ];
   const deps = gitlabSteeringWebhookDeps();
 
   beforeAll(async () => {
@@ -94,6 +105,26 @@ describe.skipIf(!enabled)("gitlabSteeringWebhookDeps against Postgres", () => {
           namespace: "plain",
         },
       ]);
+      for (const [i, o] of inactive.entries()) {
+        const oTag = o.orgId.slice(0, 8);
+        await tx.insert(schema.organizations).values({
+          id: o.orgId,
+          name: `S8 steering hook ${o.status} ${oTag}`,
+          slug: `s8-hook-${o.status}-${oTag}`,
+          namespace: `i${i}${oTag.slice(0, 4)}`,
+          planType: "enterprise",
+          status: o.status,
+          settings: steeringRepo("gitlab", 7100 + i, "ready"),
+        });
+        await tx.insert(schema.workspaces).values({
+          id: o.workspaceId,
+          orgId: o.orgId,
+          name: "Core",
+          slug: "core",
+          namespace: "core",
+          settings: steeringRepo("gitlab", 7200 + i, "ready"),
+        });
+      }
     });
   });
 
@@ -101,13 +132,18 @@ describe.skipIf(!enabled)("gitlabSteeringWebhookDeps against Postgres", () => {
     await withSystemDb(async (tx) => {
       await tx
         .delete(schema.workspaceSlugHistory)
-        .where(inArray(schema.workspaceSlugHistory.workspaceId, workspaceIds));
+        .where(
+          inArray(schema.workspaceSlugHistory.workspaceId, allWorkspaceIds),
+        );
       await tx
         .delete(schema.workspaces)
-        .where(inArray(schema.workspaces.id, workspaceIds));
-      await tx
-        .delete(schema.organizations)
-        .where(eq(schema.organizations.id, orgId));
+        .where(inArray(schema.workspaces.id, allWorkspaceIds));
+      await tx.delete(schema.organizations).where(
+        inArray(schema.organizations.id, [
+          orgId,
+          ...inactive.map((o) => o.orgId),
+        ]),
+      );
     });
     await closeDatabase();
   });
@@ -133,6 +169,17 @@ describe.skipIf(!enabled)("gitlabSteeringWebhookDeps against Postgres", () => {
   it("finds nothing for a GitHub repo, an archived workspace or no repo", async () => {
     for (const id of [githubWorkspace, archivedWorkspace, plainWorkspace])
       await expect(deps.findSteeringProject("workspace", id)).resolves.toBeNull();
+  });
+
+  it("finds nothing for a suspended or deleted organization or its workspace", async () => {
+    for (const o of inactive) {
+      await expect(
+        deps.findSteeringProject("organization", o.orgId),
+      ).resolves.toBeNull();
+      await expect(
+        deps.findSteeringProject("workspace", o.workspaceId),
+      ).resolves.toBeNull();
+    }
   });
 
   it("finds nothing for an id of the other kind or an unknown id", async () => {

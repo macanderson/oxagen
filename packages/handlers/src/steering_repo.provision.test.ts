@@ -10,6 +10,7 @@ import {
   type FakeGithubOptions,
 } from "@oxagen/github/provision/testing";
 import {
+  GitLabApiError,
   type GitlabRest,
   type GitlabResponse,
   type SteeringGroup,
@@ -919,6 +920,88 @@ describe("a GitLab workspace", () => {
         enable_ssl_verification: true,
       },
     ]);
+  });
+});
+
+describe("a GitLab hook URL that GitLab refuses", () => {
+  it.each([400, 422])(
+    "finishes the run and logs a warning on a %i",
+    async (status) => {
+      const lab = gitlabFake();
+      const h = new Harness(null, lab);
+      lab.failNext({
+        method: "POST",
+        path: "/projects/1/hooks",
+        status,
+        message: "Invalid url given",
+        times: 3,
+      });
+
+      expect(await runUntilStopped(h.deps(), WS)).toBeNull();
+      expect(lab.hooks(1)).toEqual([]);
+      expect(h.state(WS)).toMatchObject({
+        status: "ready",
+        step: "bind_repository",
+        failed_step: null,
+        error: null,
+      });
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: WS.orgId,
+          scope: "workspace",
+          projectId: 1,
+          url: hookOf(WS, 1).url,
+        }),
+        expect.stringContaining("refused the steering hook's URL"),
+      );
+    },
+  );
+
+  it("registers the hook on a run after GitLab accepts the URL", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    lab.failNext({ method: "POST", path: "/projects/1/hooks", status: 422 });
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(lab.hooks(1)).toEqual([]);
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(lab.hooks(1)).toEqual([
+      expect.objectContaining({ id: 1, ...hookOf(WS, 1) }),
+    ]);
+  });
+
+  it("still fails the step on a 403, which is not a refused URL", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    lab.failNext({ method: "POST", path: "/projects/1/hooks", status: 403 });
+
+    const err = await runUntilStopped(h.deps(), WS);
+    expect(err).toBeInstanceOf(GitLabApiError);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "register_webhook",
+      error: { code: "step_failed" },
+    });
+  });
+
+  it("fails the step when the hook's secret is missing", async () => {
+    const lab = gitlabFake();
+    const h = new Harness(null, lab);
+    const deps: ProvisionDeps = {
+      ...h.deps(),
+      steeringHook: () => {
+        throw new Error("BETTER_AUTH_SECRET is not set");
+      },
+    };
+
+    const err = await runUntilStopped(deps, WS);
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "register_webhook",
+      error: { code: "step_failed", message: "BETTER_AUTH_SECRET is not set" },
+    });
+    expect(lab.hooks(1)).toEqual([]);
   });
 });
 

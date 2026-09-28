@@ -14,7 +14,9 @@
 //   4. write_first_commit   S0's templates, committed to main.
 //   5. apply_settings       The prescribed settings, read back and compared.
 //   6. register_webhook     GitLab only. A project hook that sends push and
-//                           merge request events to Oxagen (#4562).
+//                           merge request events to Oxagen (#4562). A URL
+//                           GitLab refuses logs a warning and does not stop
+//                           the run.
 //   7. publish_version      Version 1, recorded as a deployment to `steering`.
 //   8. bind_repository      Workspace only. A binding head with role steering.
 //
@@ -580,6 +582,12 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
  * Register the hook that tells Oxagen about pushes and merges on a GitLab
  * steering project. A GitHub steering repo skips this step. A rerun writes
  * the current token onto the same hook, so it also heals a rotated secret.
+ *
+ * GitLab answers 400 or 422 when it refuses the hook's URL, as GitLab.com
+ * does for a localhost `OXAGEN_API_URL`. A retry gets the same answer, and
+ * the repo works without the hook: the scheduled sweep finds the changes the
+ * hook would have reported, only later. So a refused URL logs a warning and
+ * the step finishes. A run after the URL is fixed registers the hook.
  */
 async function registerWebhook(ctx: StepContext): Promise<void> {
   const connection = requireConnection(ctx);
@@ -587,7 +595,25 @@ async function registerWebhook(ctx: StepContext): Promise<void> {
   const repository = requireRepository(ctx);
   const rest = await requireGitlab(ctx, connection);
   const { url, token } = ctx.deps.steeringHook(ctx.scope, repository.id);
-  await gl.ensureSteeringHook(rest, { project_id: repository.id, url, token });
+  try {
+    await gl.ensureSteeringHook(rest, { project_id: repository.id, url, token });
+  } catch (err) {
+    if (
+      !(err instanceof gl.GitLabApiError) ||
+      (err.status !== 400 && err.status !== 422)
+    )
+      throw err;
+    logger.warn(
+      {
+        orgId: ctx.scope.orgId,
+        scope: ctx.scope.kind,
+        projectId: repository.id,
+        url,
+        err: err.message,
+      },
+      "steering_repo.provision: GitLab refused the steering hook's URL; the scheduled sweep reports changes until a run registers the hook",
+    );
+  }
 }
 
 async function publishVersion(ctx: StepContext): Promise<void> {

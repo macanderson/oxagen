@@ -114,6 +114,25 @@ describe("the provisioning steps", () => {
     ]);
   });
 
+  it("marks the hook step failed on GitLab", () => {
+    expect(
+      states({
+        status: "failed",
+        step: "apply_settings",
+        failedStep: "register_webhook",
+        provider: "gitlab",
+      }),
+    ).toEqual([
+      ["pick_connection", "done"],
+      ["create_repository", "done"],
+      ["write_first_commit", "done"],
+      ["apply_settings", "done"],
+      ["register_webhook", "failed"],
+      ["publish_version", "waiting"],
+      ["bind_repository", "waiting"],
+    ]);
+  });
+
   it("keeps the installation step while no connection is picked, as GitHub is the default host", () => {
     expect(
       states({
