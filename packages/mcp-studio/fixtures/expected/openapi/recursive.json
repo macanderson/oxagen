@@ -1,0 +1,1358 @@
+{
+  "auth": [],
+  "document_hash": "sha256:8617080877dc7dca82c2cf8dbeb0ffe589ec73b0dbc79f571933cb941689e466",
+  "environments": [
+    {
+      "url": "https://catalog.a-intel.com"
+    }
+  ],
+  "files": [],
+  "listed": [],
+  "notes": [
+    {
+      "message": "Import cut the recursive schema Category at depth 4.",
+      "tool": "get_category"
+    },
+    {
+      "message": "Import cut the recursive schema Employee at depth 4.",
+      "tool": "get_employee"
+    },
+    {
+      "message": "Import cut the recursive schema Category at depth 4.",
+      "tool": "create_tree"
+    }
+  ],
+  "tools": [
+    {
+      "description": "Read a category with its parent and children.",
+      "inputSchema": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_category",
+      "outputSchema": {
+        "properties": {
+          "children": {
+            "items": {
+              "properties": {
+                "children": {
+                  "items": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "properties": {
+                            "children": {
+                              "items": {
+                                "description": "Cut at depth 4: Category refers to itself.",
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "parent": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "properties": {
+              "children": {
+                "items": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "properties": {
+                  "children": {
+                    "items": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "description": "Cut at depth 4: Category refers to itself.",
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getCategory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "property": "id",
+            "required": true
+          }
+        ],
+        "path": "/categories/{id}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        }
+      }
+    },
+    {
+      "description": "Read an employee and their manager.",
+      "inputSchema": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "get_employee",
+      "outputSchema": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "manager": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "manager": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "manager": {
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "manager": {
+                        "properties": {
+                          "reports": {
+                            "items": {
+                              "description": "Cut at depth 4: Employee refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "reports": {
+                        "items": {
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "manager": {
+                              "properties": {
+                                "reports": {
+                                  "items": {
+                                    "description": "Cut at depth 4: Employee refers to itself.",
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "reports": {
+                    "items": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "manager": {
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "manager": {
+                              "properties": {
+                                "reports": {
+                                  "items": {
+                                    "description": "Cut at depth 4: Employee refers to itself.",
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "reports": {
+                              "items": {
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "manager": {
+                                    "properties": {
+                                      "reports": {
+                                        "items": {
+                                          "description": "Cut at depth 4: Employee refers to itself.",
+                                          "type": "object"
+                                        },
+                                        "type": "array"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reports": {
+                "items": {
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "manager": {
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "manager": {
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "manager": {
+                              "properties": {
+                                "reports": {
+                                  "items": {
+                                    "description": "Cut at depth 4: Employee refers to itself.",
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "reports": {
+                              "items": {
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "manager": {
+                                    "properties": {
+                                      "reports": {
+                                        "items": {
+                                          "description": "Cut at depth 4: Employee refers to itself.",
+                                          "type": "object"
+                                        },
+                                        "type": "array"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "reports": {
+                          "items": {
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "manager": {
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "manager": {
+                                    "properties": {
+                                      "reports": {
+                                        "items": {
+                                          "description": "Cut at depth 4: Employee refers to itself.",
+                                          "type": "object"
+                                        },
+                                        "type": "array"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "reports": {
+                                    "items": {
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "manager": {
+                                          "properties": {
+                                            "reports": {
+                                              "items": {
+                                                "description": "Cut at depth 4: Employee refers to itself.",
+                                                "type": "object"
+                                              },
+                                              "type": "array"
+                                            }
+                                          },
+                                          "type": "object"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getEmployee",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "property": "id",
+            "required": true
+          }
+        ],
+        "path": "/employees/{id}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        }
+      }
+    },
+    {
+      "description": "Create a category tree from a nested body.",
+      "inputSchema": {
+        "properties": {
+          "children": {
+            "items": {
+              "properties": {
+                "children": {
+                  "items": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "properties": {
+                            "children": {
+                              "items": {
+                                "description": "Cut at depth 4: Category refers to itself.",
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "parent": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "properties": {
+              "children": {
+                "items": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "properties": {
+                  "children": {
+                    "items": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "description": "Cut at depth 4: Category refers to itself.",
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "create_tree",
+      "outputSchema": {
+        "properties": {
+          "children": {
+            "items": {
+              "properties": {
+                "children": {
+                  "items": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "properties": {
+                            "children": {
+                              "items": {
+                                "description": "Cut at depth 4: Category refers to itself.",
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "parent": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "properties": {
+              "children": {
+                "items": {
+                  "properties": {
+                    "children": {
+                      "items": {
+                        "properties": {
+                          "children": {
+                            "items": {
+                              "description": "Cut at depth 4: Category refers to itself.",
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "parent": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "parent": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "properties": {
+                  "children": {
+                    "items": {
+                      "properties": {
+                        "children": {
+                          "items": {
+                            "description": "Cut at depth 4: Category refers to itself.",
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parent": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "properties": {
+                      "children": {
+                        "items": {
+                          "description": "Cut at depth 4: Category refers to itself.",
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "parent": {
+                        "description": "Cut at depth 4: Category refers to itself.",
+                        "type": "object"
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "id",
+            "name",
+            "parent",
+            "children"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "createTree",
+        "parameters": [],
+        "path": "/trees",
+        "response": {
+          "media_type": "application/json",
+          "status": "201"
+        }
+      }
+    }
+  ]
+}
