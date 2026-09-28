@@ -491,9 +491,8 @@ export const assistantModelKeys = orgSchema.table(
 // is known for it, and every reader treats the missing row as an open gate.
 // `workspace_id` is null when `create_org` made no workspace (`workspace:
 // null`), and the organization's first `create_workspace` fills it (#4582).
-// #4616 dropped the provisional window (`provisional_until`,
-// `main_repo_bound_at`), which only `bind_main_repository` closed.
-// Org-only RLS.
+// #4616 removed the provisional window, which only `bind_main_repository`
+// closed. Its two columns stay until #4667 drops them. Org-only RLS.
 
 export const onboardingState = orgSchema.table(
   "onboarding_state",
@@ -511,6 +510,20 @@ export const onboardingState = orgSchema.table(
     }),
     // The public id of the run the first frame opened (`tse_…`), the row Fleet reads.
     firstRunId: text("first_run_id"),
+    // No code reads or writes these two since #4616. They stay so the nodes
+    // on the previous release keep working while `migration-gate` applies
+    // ahead of `deploy-node`. The default gives a row the new code inserts
+    // the value an old node's `get_onboarding_state` reads. #4667 drops both.
+    provisionalUntil: timestamp("provisional_until", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .default(sql`now() + interval '14 days'`),
+    mainRepoBoundAt: timestamp("main_repo_bound_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     // The git remote the enrolling host reported: `{ provider, owner, name }`.
     // Written once by enroll_host while the gate is open. Null until a host
     // reports one. No reader reads it since #4616 removed the bind it fed.

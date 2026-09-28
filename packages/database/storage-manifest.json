@@ -4283,7 +4283,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1c49e94cf415e2357f619c4fde056c1591bfcf959ad436fa124ba4c16718466b",
+  "contentHash": "2cef931385704e8755a47a442c662377145e2fb1b9a5477b5cd2fb64943918a9",
   "domains": [
     {
       "name": "agent",
@@ -20055,6 +20055,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "provisional_until",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "main_repo_bound_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
         },
         {
           "name": "detected_repository",

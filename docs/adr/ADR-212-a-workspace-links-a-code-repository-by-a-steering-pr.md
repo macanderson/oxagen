@@ -114,8 +114,10 @@ checkout cannot name a workspace.
   controls, and the init wizard's bind step. The steering repo job's bind step is now the only
   writer of a `steering` head, and a steering PR is the only way to write a
   `linked` head. The onboarding gate's provisional window (ADR-065) went with
-  it: the `provisional` field of `get_onboarding_state`, `PROVISIONAL_DAYS`,
-  and the `provisional_until` and `main_repo_bound_at` columns. The Shared
+  it: the `provisional` field of `get_onboarding_state` and `PROVISIONAL_DAYS`.
+  No code reads the `provisional_until` and `main_repo_bound_at` columns.
+  They stay for one release because `migration-gate` applies before
+  `deploy-node`, and #4667 drops them. The Shared
   contract section of the steering-repo spec is unchanged: the `main` role
   enum and the `main_repo_*` reason codes stay.
 - The provisional window refuses nothing. `publish_context_record` used to
