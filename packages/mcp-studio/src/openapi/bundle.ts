@@ -3,8 +3,10 @@
 // The walk starts at the entry and copies it. Each $ref to another file is
 // replaced by the value it points at, the first time import meets it. Every
 // later $ref to the same value points at that first copy, so a cycle across
-// files ends at a local $ref instead of recursing. A $ref into the entry
-// becomes a local `#/` ref. Import never reads a disk or fetches a URL:
+// files ends at a local $ref instead of recursing. A $ref with other keys
+// beside it merges them into its copy, so only a copy made at a bare $ref is
+// reused: a later $ref must not inherit another site's keys. A $ref into the
+// entry becomes a local `#/` ref. Import never reads a disk or fetches a URL:
 // ref-path.ts resolves every ref against the files it was given.
 //
 // A Swagger 2.0 document is converted after the bundle, and the converter
@@ -95,7 +97,10 @@ export interface Bundle {
 
 class Bundler {
   private readonly budget = new NodeBudget(PARSED_NODES_MAX, "The bundled document");
+  /** Where each value's first copy made at a bare $ref sits, so a later $ref can point at it. */
   private readonly placed = new Map<string, string>();
+  /** Where each value the walk is copying at a $ref with other keys sits, for a cycle with no bare copy to end at. */
+  private readonly decorated = new Map<string, string>();
   /** Values the walk is inside now. A $ref to one of them closes a cycle. */
   private readonly active = new Set<string>();
   private readonly path: string[] = [];
@@ -161,9 +166,15 @@ class Bundler {
     if (target.file === this.entry) return { $ref: fragment, ...siblings };
 
     const key = `${target.file}${fragment}`;
+    const bare = Object.keys(siblings).length === 0;
     if (this.reuse) {
       const placed = this.placed.get(key);
       if (placed !== undefined) return { $ref: placed, ...siblings };
+      // A cycle back into a copy with other keys. A bare $ref copies the value
+      // again below and becomes the copy later $refs reuse. A $ref with keys of
+      // its own would copy forever, so it points at the outer copy, keys and all.
+      const outer = this.decorated.get(key);
+      if (outer !== undefined && !bare) return { $ref: outer, ...siblings };
     } else if (this.active.has(key)) {
       return { $ref: pointerFragment(["definitions", this.cycleName(key, target.tokens, target.file)]), ...siblings };
     }
@@ -176,7 +187,10 @@ class Bundler {
         { ref },
       );
     }
-    if (this.reuse) this.placed.set(key, pointerFragment(this.path));
+    const here = pointerFragment(this.path);
+    const opened = this.reuse && !bare;
+    if (this.reuse && bare) this.placed.set(key, here);
+    if (opened) this.decorated.set(key, here);
     this.inlined = true;
     this.active.add(key);
     let copy: unknown;
@@ -184,6 +198,7 @@ class Bundler {
       copy = this.walk(found.value, target.file, false, depth);
     } finally {
       this.active.delete(key);
+      if (opened) this.decorated.delete(key);
     }
     const name = this.cycleNames.get(key);
     if (name !== undefined && !this.definitions.has(name)) this.definitions.set(name, copy);
@@ -217,9 +232,9 @@ class Bundler {
 
 /**
  * The entry with every value from another file copied in. With `reuse`, a
- * second $ref to a value points at its first copy. Without it, the value is
- * copied again, and a $ref that closes a cycle points at a copy under
- * `definitions`.
+ * later $ref to a value points at its first copy made at a bare $ref.
+ * Without it, the value is copied again, and a $ref that closes a cycle
+ * points at a copy under `definitions`.
  */
 export function bundle(files: ParsedFiles, entry: string, reuse = true): Bundle {
   const bundler = new Bundler(files, entry, reuse);
