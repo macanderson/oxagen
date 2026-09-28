@@ -782,12 +782,14 @@ describe("readRepositoryRemote (#3941)", () => {
       "remote get-url origin":
         "https://x-access-token:ghs_secret@github.com/Acme/Widgets.git\n",
       "rev-parse HEAD": "b".repeat(40) + "\n",
+      "rev-parse --show-toplevel": "/repo\n",
     });
-    expect(await readRepositoryRemote(exec, "/repo")).toEqual({
+    expect(await readRepositoryRemote(exec, "/repo/src")).toEqual({
       remote_digest: digestBytes("github.com/Acme/Widgets"),
       remote_digest_folded: digestBytes("github.com/acme/widgets"),
       name: "Widgets",
       head_sha: "b".repeat(40),
+      root: "/repo",
     });
   });
 
@@ -802,6 +804,8 @@ describe("readRepositoryRemote (#3941)", () => {
     expect(remote?.remote_digest_folded).toBe(remote?.remote_digest);
     // A repository with no commit yet still names its remote.
     expect(remote).not.toHaveProperty("head_sha");
+    // A root git would not name is left off, not guessed from the directory.
+    expect(remote).not.toHaveProperty("root");
   });
 
   it("answers undefined for a directory with no origin (negative)", async () => {
