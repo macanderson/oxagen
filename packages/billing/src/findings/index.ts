@@ -13,6 +13,7 @@ import { cacheBusts } from "./cache-busts";
 import { idleCacheRewrites } from "./cache-expiry";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
 import { modelClassFit } from "./model-class-fit";
+import { recurringRuns } from "./recurring-runs";
 import { buildRunViews } from "./requests";
 import { repeatedInstructions } from "./repeated-instructions";
 import { repeats } from "./repeats";
@@ -63,6 +64,7 @@ export {
 export const DETECTORS: readonly Detector[] = [
   spinLoops,
   repeats,
+  recurringRuns,
   spendWithNoOutcome,
   cacheWritesNeverRead,
   idleCacheRewrites,

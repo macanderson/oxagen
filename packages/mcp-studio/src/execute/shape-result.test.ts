@@ -183,26 +183,54 @@ describe("shapeValue", () => {
 
   it("keeps the longest head of the list that fits, and says how to get whole pages", () => {
     const value = listOf(10);
-    // 26 + 14n bytes for n items, so 5 items fit in 100 bytes and 6 do not.
+    // 26 + 14n bytes of text for n items, and the same again as structuredContent,
+    // so 5 items fit in 200 bytes and 6 do not.
     expect(byteLength(JSON.stringify(listOf(5)))).toBe(96);
     expect(byteLength(JSON.stringify(listOf(6)))).toBe(110);
-    const result = shapeValue(value, rules({ max_result_bytes: 100 }, CURSOR), ["The paging note."]);
+    const result = shapeValue(value, rules({ max_result_bytes: 200 }, CURSOR), ["The paging note."]);
     expect(result.structuredContent).toEqual(listOf(5));
     expect(texts(result)).toEqual([
       JSON.stringify(listOf(5)),
       "The paging note.",
-      "The result holds the first 5 of 10 items, cut to fit the 100-byte limit. " +
+      "The result holds the first 5 of 10 items, cut to fit the 200-byte limit. " +
         "Set limit lower to get whole pages, and page with starting_after.",
     ]);
   });
 
   it("cuts the list to no items when only that fits", () => {
-    const result = shapeValue(listOf(3), rules({ max_result_bytes: 30 }, CURSOR), []);
+    // No items take 27 bytes of text and 27 of structuredContent, and one item takes 40 of each.
+    const result = shapeValue(listOf(3), rules({ max_result_bytes: 60 }, CURSOR), []);
     expect(result.structuredContent).toEqual(listOf(0));
     expect(texts(result)[1]).toBe(
-      "The result holds the first 0 of 3 items, cut to fit the 30-byte limit. " +
+      "The result holds the first 0 of 3 items, cut to fit the 60-byte limit. " +
         "Set limit lower to get whole pages, and page with starting_after.",
     );
+  });
+
+  it("counts structuredContent against the cap, and drops it as the MCP path does", () => {
+    const value = { blob: "x".repeat(30) };
+    const text = JSON.stringify(value);
+    // The text alone fits in 50 bytes, but the text and structuredContent together take 82.
+    expect(byteLength(text)).toBe(41);
+    const capped = rules({ max_result_bytes: 50 });
+    expect(shapeValue(value, capped, [])).toEqual({ content: [{ type: "text", text }] });
+    // The MCP path counts the same 82 bytes, drops structuredContent, and keeps the whole text.
+    const mcp = shapeToolResult({ content: [{ type: "text", text }], structuredContent: value }, capped, []);
+    expect(mcp.structuredContent).toBeUndefined();
+    expect(texts(mcp)[0]).toBe(text);
+  });
+
+  it("cuts the list until the text and structuredContent together fit", () => {
+    // Three items take 68 bytes of text, which fits in 100 bytes alone but not with structuredContent.
+    expect(byteLength(JSON.stringify(listOf(3)))).toBe(68);
+    const result = shapeValue(listOf(3), rules({ max_result_bytes: 100 }, CURSOR), []);
+    expect(result.structuredContent).toEqual(listOf(1));
+    expect(texts(result)).toEqual([
+      JSON.stringify(listOf(1)),
+      "The result holds the first 1 of 3 items, cut to fit the 100-byte limit. " +
+        "Set limit lower to get whole pages, and page with starting_after.",
+    ]);
+    expect(byteLength(JSON.stringify(listOf(1))) + byteLength(JSON.stringify(result.structuredContent))).toBeLessThanOrEqual(100);
   });
 
   it("cuts the text and drops structuredContent when no list can be cut to fit", () => {

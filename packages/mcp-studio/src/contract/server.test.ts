@@ -12,6 +12,7 @@ import {
   templateVariables,
   type McpServer,
 } from "./server";
+import { SSE_REFUSAL } from "./primitives";
 
 interface Issue {
   path: string;
@@ -166,12 +167,28 @@ describe("valid servers", () => {
     ],
     [
       "a remote server with no auth",
-      server({ type: "remote", url: "https://mcp.example.com", transport: "sse" }, { auth: { mode: "none" } }),
+      server({ type: "remote", url: "https://mcp.example.com", transport: "http" }, { auth: { mode: "none" } }),
     ],
   ];
 
   it.each(cases)("reads %s", (_label, value) => {
     expect(issues(value)).toStrictEqual([]);
+  });
+});
+
+describe("remote transport", () => {
+  const remote = (transport: unknown) =>
+    server({ type: "remote", url: "https://mcp.example.com/sse", transport }, { auth: { mode: "none" } });
+
+  it("refuses sse and names streamable-http", () => {
+    expect(issues(remote("sse"))).toStrictEqual([{ path: "source.transport", message: SSE_REFUSAL }]);
+    expect(SSE_REFUSAL).toContain("streamable-http");
+  });
+
+  it("keeps zod's message for any other value", () => {
+    expect(issues(remote("streamable-http"))).toStrictEqual([
+      { path: "source.transport", message: "Invalid enum value. Expected 'http', received 'streamable-http'" },
+    ]);
   });
 });
 
