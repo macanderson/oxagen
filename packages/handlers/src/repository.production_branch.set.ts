@@ -38,7 +38,7 @@ import {
   type WorkspaceGithub,
 } from "./repository.bound";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
-import { workspaceRepositoriesLock } from "./repository.main.bind";
+import { workspaceRepositoriesLock } from "./repository.binding-write";
 
 type Scope = { orgId: string; workspaceId: string };
 

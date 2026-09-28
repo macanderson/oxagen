@@ -2,7 +2,7 @@
 
 Connect one gitlab.com project to the workspace with a project access token (#3762).
 
-A GitLab token is not a GitHub App installation, so GitLab has its own connect step. `bind_main_repository` with `{ provider: "gitlab", projectPath }` then binds the project this call connected, and every Context PR, check and merge on it goes through the token stored here.
+A GitLab token is not a GitHub App installation, so GitLab has its own connect step. Every steering PR, check and merge on the project this call connects goes through the token stored here.
 
 The call proves three things before it stores anything:
 
@@ -27,7 +27,7 @@ Self-managed GitLab is not supported. Every call goes to gitlab.com until a host
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/repository/gitlab/attach` → 200
-- App: Repositories page, the GitLab project form ("Connect and bind"), which calls this and then `bind_main_repository`
+- App: none since #4616 removed the GitLab project form. #4636 tracks a settings path
 - MCP: none. A token must not pass through an MCP client's transcript
 - CLI: none
 - Authentication: session; org Owner or Admin, checked by the handler (INV-29)
@@ -46,9 +46,9 @@ Self-managed GitLab is not supported. Every call goes to gitlab.com until a host
 | Field | Type | Description |
 |---|---|---|
 | `connectionId` | string | `con_…`, the workspace's GitLab connection for the project |
-| `projectId` | string | GitLab's numeric project id, which the binding pins |
+| `projectId` | string | GitLab's numeric project id, which a repository binding pins |
 | `fullName` | string | `group/sub/project` as GitLab reports it |
-| `defaultRef` | string | the project's default branch, which a bind approves |
+| `defaultRef` | string | the project's default branch, as GitLab reports it |
 | `tokenExpiresAt` | string \| null | when GitLab expires the token |
 | `rotated` | boolean | true when this call replaced the token on an existing connection |
 | `webhook.status` | `registered` \| `refused` \| `unchanged` | whether GitLab now delivers merge request events |

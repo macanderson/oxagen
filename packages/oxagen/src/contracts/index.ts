@@ -95,7 +95,6 @@ import { tachoHostEnroll } from "./tacho.host.enroll";
 import { onboardingStateGet } from "./onboarding.state.get";
 import { onboardingAdvance } from "./onboarding.advance";
 import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
-import { repositoryMainBind } from "./repository.main.bind";
 import { repositoryMainGet } from "./repository.main.get";
 import { repositoryLink } from "./repository.link";
 import { repositoryUnlink } from "./repository.unlink";
@@ -499,6 +498,14 @@ export {
   workingCopySymlinksSchema,
   workingCopyEventSchema,
 } from "./repository.working_copy.shared";
+// How GitHub names an account and a repository, and a binding's public id,
+// shared by the repository contracts. Not a capability, so exported here to
+// satisfy the file-coverage guard.
+export {
+  githubOwnerSchema,
+  githubRepositoryNameSchema,
+  repositoryBindingIdSchema,
+} from "./repository.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -784,7 +791,6 @@ export {
   onboardingStateGet,
   onboardingAdvance,
   onboardingFirstFrameGet,
-  repositoryMainBind,
   repositoryMainGet,
   repositoryLink,
   repositoryUnlink,
@@ -1209,7 +1215,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   onboardingStateGet,
   onboardingAdvance,
   onboardingFirstFrameGet,
-  repositoryMainBind,
   repositoryMainGet,
   repositoryLink,
   repositoryUnlink,

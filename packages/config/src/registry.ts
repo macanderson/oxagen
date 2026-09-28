@@ -678,9 +678,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "github",
     description:
       "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page. " +
-      "Also required in-process by app: repository.main.bind.ts and " +
-      "repository.installation.list.ts mint installation tokens directly " +
-      "when invoked from the Workspace settings dialog, not only from api/mcp.",
+      "Also required in-process by app: repository.binding-write.ts (behind " +
+      "link_repository) and repository.installation.list.ts mint installation " +
+      "tokens directly when the app invokes them, not only from api/mcp.",
     secret: false,
     clientExposed: false,
     services: ["api", "mcp", "app"],
@@ -1990,10 +1990,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS). " +
       "Also read in-process by app and mcp: resolveGitHubToken's " +
       "stored-OAuth-token path (packages/github/src/workspace-token.ts) " +
-      "decrypts through resolveIngestionCryptoAdapterForKeyId whenever " +
-      "repository.main.bind.ts or repository.installation.list.ts falls back " +
-      "off the installation-token path, and resolveWorkspaceGithubUserToken " +
-      "opens the stored token that backs the list_github_installations tool.",
+      "decrypts through resolveIngestionCryptoAdapterForKeyId whenever it " +
+      "falls back off the installation-token path, and " +
+      "resolveWorkspaceGithubUserToken opens the stored token that backs the " +
+      "list_github_installations tool.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -2399,6 +2399,57 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "app",
+  },
+  PR_NUMBER: {
+    group: "Operator scripts",
+    description:
+      "The pull request check-superseded-runs.mjs reports on. ci-superseded.yml sets it from the triggering run's pull request, or from the pr input on a manual dispatch.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  HEAD_REPO: {
+    group: "Operator scripts",
+    description:
+      "The head repository (owner/name) of the CI run check-superseded-runs.mjs was triggered by. It finds the pull request from this and HEAD_BRANCH when PR_NUMBER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  HEAD_BRANCH: {
+    group: "Operator scripts",
+    description:
+      "The head branch of the CI run check-superseded-runs.mjs was triggered by. It finds the pull request from this and HEAD_REPO when PR_NUMBER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  DRY_RUN: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to make check-superseded-runs.mjs print what it would post instead of posting it. ci-superseded.yml sets it on a manual dispatch with dry_run.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  CI_SUPERSEDED_THRESHOLD: {
+    group: "Operator scripts",
+    description:
+      "How many superseded CI runs in a row make check-superseded-runs.mjs report a pull request. A repository variable in ci-superseded.yml. Unset or below 2 reads as 3.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "3",
   },
   SCR_OWNER: {
     group: "Operator scripts",

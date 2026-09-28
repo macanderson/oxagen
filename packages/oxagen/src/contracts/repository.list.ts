@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 
 export const repositoryRole = z.enum(["main", "linked"]);
 
@@ -63,7 +63,7 @@ export const repositoryList = registerCapability({
       repositories: z.array(
         z
           .object({
-            bindingId: repositoryMainBind.output.shape.bindingId,
+            bindingId: repositoryBindingIdSchema,
             role: repositoryRole,
             /** The host: a GitHub repository or a gitlab.com project. */
             provider: z.enum(["github", "gitlab"]),

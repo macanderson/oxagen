@@ -2,7 +2,7 @@
 // read from the workspace's GitHub source connection (#2967).
 //
 // One implementation, shared by every repository capability that needs it:
-// `bind_main_repository` mints an installation token with it,
+// `link_repository` mints an installation token with it,
 // `list_installation_repositories` lists what that token can reach, and
 // `get_main_repository` reports whether there is one at all. The caller never
 // names an installation on any of the three — an installation id a caller
@@ -66,8 +66,8 @@ export async function orgGithubOauthAccountId(
  * the purge job that runs later, so `deleted_at IS NULL` alone does not mean
  * live. Without this, a person who deleted their GitHub connection would still
  * see it reported as connected, and `list_installation_repositories` and
- * `bind_main_repository` would go on minting installation tokens through it —
- * "revoking the connection stops the token minting" has to hold from the
+ * `link_repository` would go on minting installation tokens through it.
+ * "Revoking the connection stops the token minting" has to hold from the
  * moment of the revoke, not from whenever the purge catches up.
  */
 const RETIRED_STATUSES = ["deleting", "deleted"] as const;
@@ -155,8 +155,8 @@ export function installationIdOf(deliveryConfig: unknown): string | null {
 
 /**
  * The workspace's GitHub connection carrying an installation, or null when it
- * has none — which is exactly the state `bind_main_repository` and
- * `list_installation_repositories` refuse as `conflict: github_not_connected`.
+ * has none. `link_repository` and `list_installation_repositories` refuse
+ * that state as `conflict: github_not_connected`.
  *
  * A workspace may hold several GitHub connections (the legacy sources wizard
  * creates one per connect attempt). Rows are read newest-first by `created_at`
@@ -217,17 +217,18 @@ export async function resolveWorkspaceGithubInstallation(scope: {
  * Merge, never replace: a connection the legacy sources wizard configured
  * carries operational keys (owner/repo/defaultBranch, syncDepthDays) the
  * resync path reads. Status is left alone on an update, because a workspace
- * that has already bound a repository is `connected` and choosing an
+ * that has already linked a repository is `connected` and choosing an
  * installation again is not a reason to demote it. The OAuth account link
  * follows the same rule: written on insert, filled in on an update that finds
  * it null, and never repointed when a row already names one.
  *
- * That link is not decoration. `bind_main_repository` promotes this row to
- * `connected`, which is the status `source_connections_poll_due_partial_idx`
- * claims, so the ingestion poll scheduler picks it up — and with no
- * `oauth_account_id` and no per-connection credential, `resolveConnectionAuth`
- * answers `no_usable_credential` on every poll and degrades the connection's
- * health, while the settings dialog shows a workspace that works. The install
+ * That link is not decoration. `writeLinkedHead` promotes this row to
+ * `connected` when the steering sync writes a linked head on it. That is the
+ * status `source_connections_poll_due_partial_idx` claims, so the ingestion
+ * poll scheduler picks it up. With no `oauth_account_id` and no
+ * per-connection credential, `resolveConnectionAuth` answers
+ * `no_usable_credential` on every poll and degrades the connection's health,
+ * while the settings dialog shows a workspace that works. The install
  * callback's own attach (apps/api/src/routes/v1/github-oauth.ts) has always
  * written it; this is the other door to the same row, and a door that writes
  * the same row less completely is the defect, not a variant.
@@ -236,8 +237,9 @@ export async function resolveWorkspaceGithubInstallation(scope: {
  * rather than `connected`: `status = 'connected'` is precisely what the
  * ingestion poll scheduler claims, so marking it connected here would enrol a
  * workspace with no record-type mappings into the sync loop.
- * `bind_main_repository` promotes it when it binds a repository, and all the
- * repository reads match on the installation id rather than the status.
+ * `writeLinkedHead` promotes it when the steering sync writes a linked head on
+ * it, and the repository capabilities match on the installation id, not the
+ * status.
  *
  * The row it writes is the row {@link resolveWorkspaceGithubInstallation}
  * reads, because both go through {@link workspaceGithubConnectionFilter} and
@@ -296,9 +298,10 @@ export async function attachWorkspaceGithubInstallation(args: {
     }
 
     // A connection with no `oauth_account_id` is a connection nothing can
-    // authenticate. `bind_main_repository` promotes this row to `connected`,
-    // which is exactly what `source_connections_poll_due_partial_idx` claims,
-    // and `resolveConnectionAuth` then finds neither a linked account nor a
+    // authenticate. `writeLinkedHead` promotes this row to `connected` when the
+    // steering sync writes a linked head on it. That status is what
+    // `source_connections_poll_due_partial_idx` claims, and
+    // `resolveConnectionAuth` then finds neither a linked account nor a
     // per-connection credential — so every scheduled poll records
     // `no_usable_credential` and degrades the connection's health, for a
     // workspace whose GitHub is working perfectly from the dialog. The OAuth

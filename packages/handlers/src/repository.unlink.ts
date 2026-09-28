@@ -43,7 +43,7 @@ import {
   type RepositorySteeringHost,
   workspaceTomlUnreadable,
 } from "./repository.link";
-import { workspaceRepositoriesLock } from "./repository.main.bind";
+import { workspaceRepositoriesLock } from "./repository.binding-write";
 import {
   openSteeringPullRequest,
   workspaceTomlBranch,

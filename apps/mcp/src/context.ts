@@ -35,13 +35,19 @@
  *
  * The second is worth being explicit about, because it is a header that ends
  * up in a durable record. It names the CALLER'S OWN chain and nothing else —
- * it cannot widen a scope, select an org, workspace or host, or reach any
- * authorisation decision. `machineKeyDenial` records it only when the key it
- * arrived with has scope purpose `tacho_gateway_v1`, and files it against the
- * host that key is bound to; on every other credential it is carried and never
- * read. So the value is attested by whoever holds the gateway credential, which
- * is the daemon, which is exactly the party whose gateway use is being
- * recorded.
+ * it cannot widen a scope, select an org, workspace or host, or set the
+ * operator role a policy decision reads. `machineKeyDenial` records it only
+ * when the key it arrived with has scope purpose `tacho_gateway_v1`, and files
+ * it against the host that key is bound to; on every other credential it is
+ * carried and never read. So the value is attested by whoever holds the
+ * gateway credential, which is the daemon, which is exactly the party whose
+ * gateway use is being recorded.
+ *
+ * The served tools (`servers/run.ts`) read one more thing through it: the
+ * harness of the named session, which picks the agent file when several share
+ * the host's runtime. They look only among the sessions of the key's own host,
+ * whose harness that host's daemon reported, and they read the operator role
+ * from the key's host, not from the session.
  *
  * `buildContext` is the single auth entrypoint for xmcp tools: each tool calls
  * `await buildContext(headers())`. It throws `McpUnauthorizedError` on any auth

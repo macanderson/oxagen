@@ -119,7 +119,7 @@ function ownerOf(row: GithubConnectionRow): string | null {
  * Which of the workspace's connected GitHub sources, newest first, reads a
  * repository of `owner`. A source that names the owner wins. Next comes the
  * newest source that names no owner and carries a credential: the sources
- * `workspace.create` and `bind_main_repository` make record only the
+ * the install callback and `attach_github_installation` write record only the
  * installation, whose account is the owner, and GitHub answers 404 when the
  * installation cannot see the repository. A source that names another owner
  * reads another account, so it is never tried. Null when none fits.

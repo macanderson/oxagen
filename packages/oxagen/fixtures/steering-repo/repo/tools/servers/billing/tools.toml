@@ -40,6 +40,7 @@ description = "List the refunds of one charge."
 risk = "low"
 side_effect = "read"
 egress = "org_tenant"
+select = ["items[].id", "items[].amount", "items[].status"]
 
 [tools.cancel_refund]
 operation = "cancelRefund"

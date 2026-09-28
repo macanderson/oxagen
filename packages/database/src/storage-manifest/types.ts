@@ -4,12 +4,17 @@
 // lives across the four stores (Postgres, ClickHouse, Neo4j, blob) plus the
 // capabilities that operate on each table. See ADR-031. This file defines the
 // serialized shape; the generator in ./generate.ts assembles it and
-// ./canonical-json.ts renders it to byte-stable JSON + a sha256 content hash.
+// ./canonical-json.ts renders it to byte-stable JSON.
 //
 // Determinism is a hard requirement: no timestamps, stable key ordering, and
-// the same committed inputs must always produce byte-identical output. The
-// contentHash is a sha256 over the canonical JSON body with the hash field
-// itself excluded.
+// the same committed inputs must always produce byte-identical output.
+//
+// The shape holds no value derived from the whole table or capability set
+// (ADR-216, amending ADR-031's shape). The content hash is
+// `contentHashOf(manifest)`, a sha256 over the canonical JSON, and a store's
+// table count is the length of its tables. Both are computed where they are
+// read, because a committed copy of either is a line every table- or
+// capability-adding branch rewrites, and two such branches always conflicted.
 
 /** The four storage backends the platform spans. */
 export type StoreKind = "postgres" | "clickhouse" | "neo4j" | "blob";
@@ -91,8 +96,6 @@ export interface ManifestStore {
   purpose: string;
   /** Domains that have at least one table in this store, sorted. */
   domains: string[];
-  /** Count of tables this store holds. */
-  tableCount: number;
 }
 
 /** A platform domain and the stores/tables that realize it. */
@@ -126,8 +129,6 @@ export interface ManifestCapability {
 export interface StorageManifest {
   /** Manifest schema version — bump on any breaking shape change. */
   version: number;
-  /** sha256 of the canonical JSON body with this field excluded. */
-  contentHash: string;
   stores: ManifestStore[];
   domains: ManifestDomain[];
   tables: ManifestTable[];
