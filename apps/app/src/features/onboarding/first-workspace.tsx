@@ -3,7 +3,9 @@
 // repo: `create_workspace` starts the repo's provisioning in the same write.
 // So the step has two faces. With no workspace it asks for a name, and nothing
 // else. Once one exists it shows that workspace's steering repo being
-// provisioned, and Continue goes on to Wrap an agent.
+// provisioned, and Continue goes on to Wrap an agent. When the steering repo
+// read fails, the step says who was denied what, or which code the control
+// plane answered, and Continue still goes on.
 //
 // **Which workspace.** The first live workspace the viewer holds a role in,
 // from `list_workspaces`. The organization form sends `create_org`
@@ -27,7 +29,6 @@ import {
   readSteeringRepo,
   SteeringRepoProvisioning,
   type SteeringRepoRead,
-  SteeringRepoUnavailable,
 } from "@/features/steering-repo";
 import { getAuthUser } from "@/server/session";
 import { type OrgCtx, requireViewer } from "@/server/viewer";
@@ -35,6 +36,7 @@ import { routes } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, panel } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink } from "@/ui/navigation";
+import { ReadFailure } from "@/ui/read-failure";
 import { mayOnboard, signedInToOrg } from "./roles";
 import { FirstWorkspaceForm } from "./ui/first-workspace-form";
 import { GateFooter, GateHeader, GateShell } from "./ui/gate-shell";
@@ -104,6 +106,7 @@ function ProvisionStep({
   steering: SteeringRepoRead;
 }) {
   const t = useTranslations("onboarding.welcome.workspace");
+  const steeringRepo = useTranslations("repositories.steeringRepo");
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <GateHeader
@@ -121,7 +124,10 @@ function ProvisionStep({
           returnTo={routes.welcomeFirstWorkspace(org)}
         />
       ) : (
-        <SteeringRepoUnavailable capability={steering.capability} />
+        <ReadFailure
+          read={steering.failure}
+          section={steeringRepo("heading")}
+        />
       )}
       <GateFooter
         start={
@@ -185,7 +191,7 @@ export async function WelcomeFirstWorkspace({
       <CreateStep org={org} result={result} failed={failureOf(read)} />,
     );
   const wsCtx = await requireViewer(org, workspace.slug);
-  const steering = await readSteeringRepo(wsCtx);
+  const steering = await readSteeringRepo(source, wsCtx);
   return shell(
     <ProvisionStep
       org={org}

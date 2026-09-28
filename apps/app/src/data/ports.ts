@@ -119,6 +119,7 @@ import type {
   SteeringDeliveries,
   SteeringHub,
 } from "./contracts/steering";
+import type { SteeringRepo } from "./contracts/steering-repo";
 import type {
   ApprovalRuleSet,
   ConnectionList,
@@ -665,6 +666,17 @@ export interface DataSource {
      * disk panel; `unbound` when no main repository is bound.
      */
     tree(ctx: WsCtx): Promise<Read<OxagenTree>>;
+  };
+  /**
+   * get_steering_repo on the workspace (noBillingGate; every workspace role,
+   * lane S2, #4560): the steering repo's provisioning, its repository, its
+   * published version, and its settings health. Caller:
+   * features/steering-repo/read.ts, for the Repositories page's card, the
+   * health banner the workspace layout mounts, and onboarding's first
+   * workspace step.
+   */
+  steeringRepo: {
+    get(ctx: WsCtx): Promise<Read<SteeringRepo>>;
   };
   /**
    * The Tools page's six reads on the workspace (#2958), each role-checked in
