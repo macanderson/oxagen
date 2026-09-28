@@ -198,6 +198,21 @@ describe("get_repository_tree", () => {
     ).rejects.toThrow("502");
   });
 
+  it("names the bound head's connection, so a steering repository reads through its own app", async () => {
+    const client = vi.fn(async () => fakeGithub());
+    const h = createRepositoryTreeGetHandler({
+      github: { client },
+      readBound: async () => ({ ...BOUND, connectionId: "steering-conn" }),
+      now: () => NOW,
+    });
+    const ctx = makeCTX();
+    await h({ bindingId: "rpb_0a1b" }, ctx);
+    expect(client).toHaveBeenCalledWith(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "steering-conn",
+    );
+  });
+
   it("passes the not-linked refusal from the read through", async () => {
     const h = createRepositoryTreeGetHandler({
       github: { client: async () => fakeGithub() },

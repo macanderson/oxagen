@@ -2,7 +2,8 @@
 // The Run page for a run whose host held the loop on a repository question
 // (#3941, spec pages/run-interjection.md), rendered through `Run` over a fake
 // DataSource: the waiting question with both paths, a link answer and a
-// create answer sent from the page, each refusal the handler can give, the
+// create answer sent from the page, the steering PR a link answer opens
+// (ADR-212), each refusal the handler can give, the
 // Send button disabled with its reason, the window that ran out, and the
 // question once it is answered or timed out. Every state gets an axe check.
 //
@@ -191,7 +192,17 @@ function forceSubmit(): void {
   fireEvent.submit(form);
 }
 
-/** What `answer_interjection` answers for a link to core-platform. */
+/** The steering PR a link answer opened on core-platform's steering repository. */
+const STEERING_PR = {
+  number: 12,
+  url: "https://github.com/acme/control/pull/12",
+  reused: false,
+};
+
+/**
+ * What `answer_interjection` answers for a link to core-platform. A link binds
+ * nothing at once (ADR-212): the steering PR carries it until it merges.
+ */
 const LINKED = {
   interjectionId: "inj_7w2k9d",
   runId: "tse_7k2m9q",
@@ -199,7 +210,11 @@ const LINKED = {
   commandIds: ["tcm_5h2j8k"],
   receiptId: RECEIPT,
   path: "link",
-  repository: { bindingId: "rpb_3n6q1s", fullName: "acme/edge-proxy" },
+  repository: {
+    fullName: "acme/edge-proxy",
+    bindingId: null,
+    steeringPullRequest: STEERING_PR,
+  },
   workspace: null,
 };
 
@@ -207,6 +222,7 @@ const LINKED = {
 const CREATED = {
   ...LINKED,
   path: "create",
+  repository: null,
   workspace: { publicId: "wsp_8c1v4b", slug: "edge-proxy-2" },
 };
 
@@ -254,7 +270,7 @@ describe("the waiting question", () => {
 
     // Both pick cards, each with its description and its consequence lines.
     expect(screen.getByTestId("interjection-pick-link")).toHaveTextContent(
-      "Link it to core-platformBecomes a linked repository of core-platform.",
+      "Link it to core-platformOxagen opens a steering PR that links it to core-platform.",
     );
     expect(linesOf("link")).toEqual([
       ["gain", "+Gains Uses the skills configuration skl_v7."],
@@ -455,12 +471,73 @@ describe("sending an answer", () => {
     const receipt = await screen.findByTestId("interjection-receipt");
     expect(receipt).toHaveAttribute("role", "status");
     expect(receipt).toHaveTextContent(
-      `Answer recorded. Receipt ${RECEIPT}.Linked acme/edge-proxy to core-platform.`,
+      `Answer recorded. Receipt ${RECEIPT}.Steering PR #12 adds acme/edge-proxy to core-platform.Merge the steering PR to finish linking.`,
     );
+    expect(
+      within(receipt).getByTestId("interjection-receipt-pr"),
+    ).toHaveAttribute("href", "https://github.com/acme/control/pull/12");
     expect(screen.queryByTestId("interjection-send")).toBeNull();
     expect(refresh).toHaveBeenCalledTimes(1);
     await expectNoAxe(container);
   });
+
+  const LINK_RECEIPTS = [
+    {
+      name: "a steering PR that was already open",
+      repository: {
+        fullName: "acme/edge-proxy",
+        bindingId: null,
+        steeringPullRequest: { ...STEERING_PR, reused: true },
+      },
+      text: "Steering PR #12 already adds acme/edge-proxy to core-platform.Merge the steering PR to finish linking.",
+      link: true,
+    },
+    {
+      name: "a steering record that lists the repository already",
+      repository: {
+        fullName: "acme/edge-proxy",
+        bindingId: null,
+        steeringPullRequest: null,
+      },
+      text: "The steering record of core-platform lists acme/edge-proxy already. The next steering sync links it.",
+      link: false,
+    },
+    {
+      name: "a repository linked already",
+      repository: {
+        fullName: "acme/edge-proxy",
+        bindingId: "rpb_3n6q1s",
+        steeringPullRequest: null,
+      },
+      text: "acme/edge-proxy is linked to core-platform already.",
+      link: false,
+    },
+  ];
+
+  it.each(LINK_RECEIPTS)(
+    "names what a link answer did for $name",
+    async ({ repository, text, link }) => {
+      answerInterjection.mockResolvedValue({
+        ok: true,
+        value: { ...LINKED, repository },
+      });
+      const user = userEvent.setup();
+      const { container } = await renderHeld();
+      await user.click(screen.getByTestId("interjection-pick-link"));
+      await user.click(screen.getByTestId("interjection-send"));
+      const receipt = await screen.findByTestId("interjection-receipt");
+      expect(receipt).toHaveTextContent(
+        `Answer recorded. Receipt ${RECEIPT}.${text}`,
+      );
+      expect(
+        within(receipt).queryByTestId("interjection-receipt-pr") !== null,
+      ).toBe(link);
+      if (!link)
+        expect(receipt).not.toHaveTextContent("Merge the steering PR");
+      expect(refresh).toHaveBeenCalledTimes(1);
+      await expectNoAxe(container);
+    },
+  );
 
   it("sends a create answer under the name and slug the person typed, and names the new workspace", async () => {
     answerInterjection.mockResolvedValue({ ok: true, value: CREATED });
@@ -552,6 +629,20 @@ describe("sending an answer", () => {
         code: "repository_not_installed",
       },
       text: "The GitHub App installation cannot see this repository.",
+    },
+    {
+      name: "a workspace with no steering repository",
+      failure: { ok: false, reason: "conflict", code: "main_repo_unbound" },
+      text: "This workspace has no steering repository yet, so Oxagen has nowhere to open the steering PR. Set one up first.",
+    },
+    {
+      name: "a workspace.toml that is present but unreadable",
+      failure: {
+        ok: false,
+        reason: "conflict",
+        code: "workspace_toml_unreadable",
+      },
+      text: "The steering repository’s workspace.toml is present but unreadable. It must read as workspace/v1. Fix the file, then answer again.",
     },
     {
       name: "a choice the action refuses",

@@ -1,4 +1,4 @@
-h1:edu3PIe0jkpmXxdZbOlxLZLQf4Uu3Ow/w1clLGnbZLM=
+h1:342NgePH23BOZHW1t0N0umphPbFJLI8ymF1oZOMAUv0=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -228,4 +228,5 @@ h1:edu3PIe0jkpmXxdZbOlxLZLQf4Uu3Ow/w1clLGnbZLM=
 20260927185600_repository_binding_heads_main_to_steering.sql h1:StovFkz1m/vV84JJox/DWbBbILm7n8rDAHd7bypSIIg=
 20260927194500_steering_versions.sql h1:/XiZQt5eHB2+IvwHW/p7gWwv0j7JwVk++mHsk/Rt7+c=
 20260927200000_operator_ranking_policy.sql h1:ldBiiKr916RpgcUmI9slhobmkkCvG5GHHISeQL8ZAhM=
-20260928013000_conversation_title_source.sql h1:i2scTLZ6SuywZiyinvIzzJi16fd1NXoWtvcZbrC5F9g=
+20260928001500_tacho_sessions_repository_unlinked.sql h1:wAMwaRRUEqQvT1GL1H1A+wKrfubOcC3U64i5pegPATw=
+20260928013000_conversation_title_source.sql h1:5I/QmdPylmOh9iEyxYFxHtcb2zTxjv7sgKaUYsiM+IM=

@@ -360,7 +360,6 @@ function AgentView({
               ws={place.ws}
               interjectionId={row.id}
               body={row.body}
-              repository={row.repository}
               canAnswer={canAnswer}
               closedAt={stage === "closed" ? clock(row.expiresAt) : null}
             />
