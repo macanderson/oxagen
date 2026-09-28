@@ -748,6 +748,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
+  // A file attached to an in-app assistant message (#4690, ADR-221).
+  registerHandler(
+    "upload_assistant_attachment",
+    async () =>
+      (await import("./assistant.attachment.upload"))
+        .assistantAttachmentUploadHandler as CapabilityHandlerFn,
+  );
   // A person's verdict on an assistant reply (#4169). The turn itself is
   // `ask_assistant`, bound in @oxagen/agent; the verdict needs none of the
   // agent runtime, so it binds here.
