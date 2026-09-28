@@ -17,6 +17,7 @@ import { shell } from "./shell";
 import { skills } from "./skills";
 import { spend } from "./spend";
 import { steering } from "./steering";
+import { steeringRepo } from "./steering-repo";
 import { tools } from "./tools";
 
 export const liveSource: DataSource = {
@@ -35,6 +36,7 @@ export const liveSource: DataSource = {
   audit,
   skills,
   steering,
+  steeringRepo,
   tools,
   runtimes,
 };

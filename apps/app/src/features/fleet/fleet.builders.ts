@@ -330,6 +330,7 @@ export function fleetSource(reads: FleetReads) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

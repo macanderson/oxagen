@@ -2,7 +2,7 @@
   "repositories": {
     "mainRepository": {
       "heading": "GitHub connection and main repository",
-      "about": "The main repository is where this workspace keeps .oxagen/: its published steering records, the promotion ledger, and every agent definition. A workspace has one. Until it is bound the workspace is provisional: runs are still recorded and spend still counts, but steering and agent definitions stay off.",
+      "about": "The main repository is where this workspace keeps .oxagen/: its published steering records, the promotion ledger, and every agent definition. A workspace has one. Nothing waits on it: runs are recorded, spend counts, and a published record steers this workspace's agents whether a repository is bound or not.",
       "loading": "Reading this workspace's main repository…",
       "connected": "Returned from GitHub. The installation is attached to this workspace.",
       "installRefused": "Returned from GitHub, but that installation could not be verified, so nothing was attached. Install the App again from this workspace and approve it on the account that owns the repository.",
@@ -658,10 +658,6 @@
     "steeringRepo": {
       "heading": "Steering repo",
       "loading": "Reading the steering repo…",
-      "unavailable": {
-        "body": "No capability answers the steering repo read yet, so this panel shows no state.",
-        "capability": "The read needs <code>{capability}</code>."
-      },
       "card": {
         "repository": "Repository",
         "notCreated": "Not created yet",
