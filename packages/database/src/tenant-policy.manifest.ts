@@ -243,6 +243,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.tool_snapshots", policyClass: "standard" },
   // The credential broker's grant log (#2958): orgScopeMixin → standard.
   { table: "mcp.credential_grants", policyClass: "standard" },
+  // The last tool discovery of each steering server (M10, #4682).
+  { table: "mcp.server_discoveries", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
