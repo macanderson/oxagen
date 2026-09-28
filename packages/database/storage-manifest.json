@@ -4303,7 +4303,6 @@
       "writes": []
     }
   ],
-  "contentHash": "aac98319f3d1141c69f8673158176fdb6f00c7c3c152eac1b47840a461a30144",
   "domains": [
     {
       "name": "agent",
@@ -4786,8 +4785,7 @@
         "workspace"
       ],
       "kind": "postgres",
-      "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 171
+      "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state."
     },
     {
       "domains": [
@@ -4798,8 +4796,7 @@
         "telemetry"
       ],
       "kind": "clickhouse",
-      "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry.",
-      "tableCount": 12
+      "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry."
     },
     {
       "domains": [
@@ -4814,16 +4811,14 @@
         "workspace"
       ],
       "kind": "neo4j",
-      "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 29
+      "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval."
     },
     {
       "domains": [
         "content"
       ],
       "kind": "blob",
-      "purpose": "Binary assets — avatars, generated media, uploads; the Postgres row (URL + metadata) is source of truth.",
-      "tableCount": 4
+      "purpose": "Binary assets — avatars, generated media, uploads; the Postgres row (URL + metadata) is source of truth."
     }
   ],
   "tables": [
@@ -25962,5 +25957,5 @@
       "tenantScoped": true
     }
   ],
-  "version": 1
+  "version": 2
 }

@@ -181,7 +181,7 @@ const REFS_PATTERN = new RegExp(
 // this excludes. `check-closing-keywords.mjs` covers the hazard itself. It
 // fails the PR over the negated phrasing, so the author rewrites the sentence
 // before GitHub can act on it (#3680).
-const NEGATION_WORDS = new Set([
+export const NEGATION_WORDS = new Set([
   "not",
   "never",
   "cannot",

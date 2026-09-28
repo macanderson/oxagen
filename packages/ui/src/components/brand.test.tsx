@@ -23,6 +23,7 @@ import {
 } from "./brand";
 import * as brand from "./brand";
 import { BRAND_GOLD, OXAGEN, STELLA } from "./brand-marks.generated";
+import houseTokens from "../styles/house-tokens.json";
 
 afterEach(cleanup);
 
@@ -119,6 +120,52 @@ describe("OxagenIcon — the hive, two colours", () => {
     expect(container.querySelector("g")?.getAttribute("transform")).toBe(
       OXAGEN.icon.transform,
     );
+  });
+});
+
+// #3074: the kit's two-colour rule holds in both themes. The outline takes
+// `currentColor` through `text-foreground`, so it follows the theme; the two
+// lit cells keep the metal and the kit's half strength, so they never flip.
+describe.each(["light", "dark"])("OxagenIcon in the %s theme", (theme) => {
+  const renderIn = () =>
+    render(
+      <div className={theme} data-theme={theme}>
+        <OxagenIcon />
+      </div>,
+    );
+
+  it("outlines in the surface's ink and follows the theme's foreground", () => {
+    const { container, getByRole } = renderIn();
+    expect(getByRole("img").getAttribute("class")).toContain(
+      "text-foreground",
+    );
+    const outlines = [...container.querySelectorAll("path")].filter(
+      (p) => p.getAttribute("stroke") === "currentColor",
+    );
+    expect(outlines).toHaveLength(
+      houseTokens.icons.oxagen.cells.filter((c) => c.kind === "ink").length,
+    );
+  });
+
+  it("lights the kit's two cells in its gold, one at its half strength", () => {
+    const { container } = renderIn();
+    const lit = [...container.querySelectorAll("path")].filter(
+      (p) => p.getAttribute("fill") === houseTokens.tokens.gold,
+    );
+    expect(houseTokens.icons.oxagen.colours).toBe(2);
+    expect(lit).toHaveLength(2);
+    expect(lit.map((p) => p.getAttribute("opacity"))).toContain(
+      String(houseTokens.icons.oxagen.half),
+    );
+  });
+
+  it("renders the same markup as the other theme, so nothing flips but the ink", () => {
+    const { container } = renderIn();
+    const svg = container.querySelector("svg")?.outerHTML;
+    cleanup();
+    const other = render(<OxagenIcon />).container.querySelector("svg")
+      ?.outerHTML;
+    expect(svg).toBe(other);
   });
 });
 

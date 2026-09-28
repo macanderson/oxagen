@@ -47,8 +47,26 @@ export default defineConfig({
     ],
     // Architecture probes are inputs to src/test/arch, never suites of their own.
     exclude: [...configDefaults.exclude, "src/test/arch/probes/**"],
+    // A second, distinct way this job has failed for no fault in the code
+    // (#3431), not explained by the worker timeouts above. On 2026-09-19 the
+    // report counted about 80 files from the retired app's
+    // `[orgSlug]/[workspaceSlug]` routes at 0% and failed the 90% floor while
+    // all 4641 tests passed. Neither the timeouts nor a shared raw directory
+    // explains it: @vitest/coverage-v8 writes this package's raw data under
+    // `<reportsDirectory>/.tmp`, resolved from this package's root, and
+    // `allowExternal` is off, so another package's files cannot enter the
+    // report through the config. CI now runs this package in its own `unit`
+    // lane as well. The channel was not reproduced. The guard is
+    // `tools/scripts/check-coverage-scope.mjs`, which fails when this report
+    // names a file outside `src` or a file that is not on disk. It reads the
+    // `json` reporter's `coverage/coverage-final.json`, so the reporters and
+    // directory are pinned here, and `reportOnFailure` writes the report even
+    // when a test fails, so the guard always has one to read.
     coverage: {
       provider: "v8",
+      reporter: ["text", "html", "clover", "json"],
+      reportsDirectory: "./coverage",
+      reportOnFailure: true,
       include: ["src/**/*.ts", "src/**/*.tsx"],
       exclude: [
         "src/**/*.test.ts",

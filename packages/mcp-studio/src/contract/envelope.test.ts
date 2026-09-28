@@ -24,6 +24,7 @@ function pathsAndMessages(result: ParseOutcome): { path: string; message: string
 const relayEnvelope = {
   schema: "relay-envelope/v1",
   relay: "billing-vpc",
+  workspace: "wrk_3hs7vd1qkp9mxe2nt5ga8r",
   nonce: "q8Zt3rXy1mB9nVc2LwPa7s",
   issued_at: "2026-09-26T12:00:00Z",
   expires_at: "2026-09-26T12:00:05Z",
@@ -69,6 +70,44 @@ describe("relay-envelope/v1", () => {
       },
     };
     expect(relayEnvelopeSchema.safeParse(grpc).success).toBe(true);
+  });
+
+  it("refuses an envelope that names no workspace", () => {
+    const { workspace: _workspace, ...unbound } = relayEnvelope;
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(unbound))).toStrictEqual([
+      { path: "workspace", message: "Required" },
+    ]);
+  });
+
+  it.each([
+    ["no prefix", "billing"],
+    ["capitals", "WRK_3HS7VD1QKP9MXE2NT5GA8R"],
+    ["no suffix", "wrk_"],
+    ["a short suffix", "wrk_3hs7vd1qkp9mxe2nt5ga8"],
+    ["a long suffix", "wrk_3hs7vd1qkp9mxe2nt5ga8rr"],
+    ["a hyphen", "wrk_3hs7vd1qkp9mxe2nt5ga-r"],
+    ["an i", "wrk_3hs7vd1qkp9mxe2it5ga8r"],
+    ["an l", "wrk_3hs7vd1qkp9mxe2lt5ga8r"],
+    ["an o", "wrk_3hs7vd1qkp9mxe2ot5ga8r"],
+    ["a u", "wrk_3hs7vd1qkp9mxe2ut5ga8r"],
+  ])("refuses a workspace id with %s", (_label, workspace) => {
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse({ ...relayEnvelope, workspace }))).toStrictEqual([
+      { path: "workspace", message: "a workspace id is wrk_ and 22 lowercase Crockford base32 characters" },
+    ]);
+  });
+
+  it("accepts each of the 32 characters a workspace id suffix can hold", () => {
+    const alphabet = "0123456789abcdefghjkmnpqrstvwxyz";
+    for (const char of alphabet) {
+      const workspace = `wrk_${char.repeat(22)}`;
+      expect(relayEnvelopeSchema.safeParse({ ...relayEnvelope, workspace }).success).toBe(true);
+    }
+  });
+
+  it("signs the workspace, so an envelope cannot move to another workspace", () => {
+    const moved = { ...relayEnvelope, workspace: "wrk_0a1b2c3d4e5f6g7h8j9k0m" };
+    expect(relayEnvelopeSchema.safeParse(moved).success).toBe(true);
+    expect(envelopeSigningBytes(moved)).not.toEqual(envelopeSigningBytes(relayEnvelope));
   });
 
   it("refuses a target with no scheme or a scheme other than https and http", () => {
