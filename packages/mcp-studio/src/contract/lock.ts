@@ -15,7 +15,7 @@ import { securitySchemeSchema } from "../model/security-scheme";
 import { upstreamToolSchema } from "../model/upstream-tool";
 import { allowedOnlyWith, dependentRequired, withChecks, type CustomCheck } from "./checks";
 import { lockedMcpToolSchema } from "./mcp-tool";
-import { httpUrlSchema, serverNameSchema, toolKeySchema } from "./primitives";
+import { httpUrlSchema, remoteTransportSchema, serverNameSchema, toolKeySchema } from "./primitives";
 import {
   DEFINITION_FROMS,
   definitionLocationChecks,
@@ -106,10 +106,11 @@ export const registryLockSourceSchema = withChecks(
       server: z.string().min(3).max(200),
       version: z.string().min(1).max(64),
       url: httpUrlSchema.optional().describe("The endpoint the catalog entry named, for a remote entry."),
-      transport: z
-        .enum(["http", "sse"])
+      transport: remoteTransportSchema
         .optional()
-        .describe("How the catalog entry reaches url: http (the catalog's streamable-http) or sse."),
+        .describe(
+          "How the catalog entry reaches url: http, the catalog's streamable-http. The lock pins no sse remote (ADR-211).",
+        ),
       package: registryLockPackageSchema
         .optional()
         .describe("The package the local gateway runs, when server.toml names machines."),
