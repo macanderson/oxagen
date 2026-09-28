@@ -743,6 +743,44 @@ describe("compile resolves auth", () => {
     expect(compiled.auth).toStrictEqual({ mode: "service", scheme: "acme_key", apply: scheme });
   });
 
+  /** An OpenAPI server whose auth.scheme names a mutual TLS scheme, with these environments. */
+  function mutualTls(environments: Record<string, Record<string, unknown>>): CompileInput {
+    const openapi = server({
+      ...definitionServer("openapi"),
+      auth: { mode: "service", scheme: "mtls", credential: "oxagen:credential/acme" },
+      environments,
+    });
+    return input({ server: openapi, tools: none, upstream: [], security_schemes: { mtls: { type: "mutual_tls" } } });
+  }
+
+  it("applies a mutual TLS scheme when every environment routes through a relay", () => {
+    const compiled = compile(
+      mutualTls({
+        test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+        live: { url: "https://api.acme.example/v1", network: "relay:acme-west" },
+      }),
+    );
+    expect(compiled.auth).toStrictEqual({ mode: "service", scheme: "mtls", apply: { type: "mutual_tls" } });
+  });
+
+  it("refuses a mutual TLS scheme when one environment routes over cloud, and names that one", () => {
+    expect(
+      issues(
+        mutualTls({
+          test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+          live: { url: "https://api.acme.example/v1", network: "cloud" },
+        }),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.scheme",
+        message:
+          "auth.scheme mtls is mutual TLS, which only a relay that holds the client certificate can present. Environment live routes over cloud. Set each environment's network to relay:<name>.",
+      },
+    ]);
+  });
+
   it("applies nothing for mode none, or for a server with no auth", () => {
     expect(compile(input({ server: server(definitionServer("openapi")), tools: none, upstream: [] })).auth).toBeNull();
     const local = { ...REMOTE, auth: undefined, source: { type: "local", command: "acme-mcp", machines: ["dev-laptops"] } };
@@ -766,12 +804,12 @@ describe("compile resolves auth", () => {
       message: "auth.scheme acme_key is not a security scheme the OpenAPI document declares.",
     },
     {
-      label: "a mutual TLS scheme",
+      label: "a mutual TLS scheme on the cloud route",
       openapi: true,
       scheme: "mtls",
       schemes: { mtls: { type: "mutual_tls" } },
       message:
-        "auth.scheme mtls is mutual TLS, which compile cannot apply. Route the server through a relay that holds the client certificate.",
+        "auth.scheme mtls is mutual TLS, which only a relay that holds the client certificate can present. Environment prod routes over cloud. Set each environment's network to relay:<name>.",
     },
     {
       label: "a scheme that is not built in",
