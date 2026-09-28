@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 // The four list controls: search narrows, a filter narrows, a sort reorders,
-// Rows pages, and the pager steps and stops at each end.
-import { cleanup, render, screen } from "@testing-library/react";
+// Rows per page, under the rows, pages, and the pager steps and stops at each
+// end.
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -15,7 +22,7 @@ import {
 
 type Row = { name: string; role: string };
 
-const ROWS: Row[] = Array.from({ length: 12 }, (_, i) => ({
+const ROWS: Row[] = Array.from({ length: 30 }, (_, i) => ({
   name: `repo-${String(i + 1).padStart(2, "0")}`,
   role: i === 0 ? "main" : "linked",
 }));
@@ -56,15 +63,16 @@ function Harness() {
         sorts={SORTS}
         filters={FILTERS}
         allLabel={(column) => `All · ${column}`}
-        rowsLabel="Rows"
       />
-      <ul>
+      <ul data-testid="rows">
         {list.shown.map((row) => (
           <li key={row.name}>{row.name}</li>
         ))}
       </ul>
       <ListPager
         list={list}
+        label="Pages"
+        rowsLabel="Rows per page"
         range={(from, to, total) =>
           `${String(from)}–${String(to)} of ${String(total)}`
         }
@@ -75,7 +83,10 @@ function Harness() {
   );
 }
 
-const shown = () => screen.getAllByRole("listitem").map((li) => li.textContent);
+const shown = () =>
+  within(screen.getByTestId("rows"))
+    .queryAllByRole("listitem")
+    .map((li) => li.textContent);
 
 afterEach(async () => {
   try {
@@ -86,19 +97,25 @@ afterEach(async () => {
 });
 
 describe("the list controls", () => {
-  it("shows ten rows and the range, and pages to the rest", async () => {
+  it("shows 25 rows and the range, and pages to the rest", async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    expect(shown()).toHaveLength(10);
-    expect(screen.getByText("1–10 of 12")).toBeDefined();
+    expect(shown()).toHaveLength(25);
+    expect(screen.getByText("1–25 of 30")).toBeDefined();
     expect(
       screen
         .getByRole("button", { name: "Previous page" })
         .hasAttribute("disabled"),
     ).toBe(true);
     await user.click(screen.getByRole("button", { name: "Next page" }));
-    expect(shown()).toEqual(["repo-11", "repo-12"]);
-    expect(screen.getByText("11–12 of 12")).toBeDefined();
+    expect(shown()).toEqual([
+      "repo-26",
+      "repo-27",
+      "repo-28",
+      "repo-29",
+      "repo-30",
+    ]);
+    expect(screen.getByText("26–30 of 30")).toBeDefined();
     expect(
       screen
         .getByRole("button", { name: "Next page" })
@@ -110,29 +127,39 @@ describe("the list controls", () => {
     const user = userEvent.setup();
     render(<Harness />);
     await user.click(screen.getByRole("button", { name: "Next page" }));
-    await user.type(screen.getByLabelText("Search this list"), "repo-1");
-    expect(shown()).toEqual(["repo-10", "repo-11", "repo-12"]);
+    await user.type(screen.getByLabelText("Search this list"), "repo-3");
+    expect(shown()).toEqual(["repo-30"]);
     await user.clear(screen.getByLabelText("Search this list"));
     await user.selectOptions(screen.getByLabelText("All · Role"), "main");
     expect(shown()).toEqual(["repo-01"]);
     await user.selectOptions(screen.getByLabelText("All · Role"), "");
     await user.selectOptions(screen.getByLabelText("Sort"), "za");
-    expect(shown()[0]).toBe("repo-12");
+    expect(shown()[0]).toBe("repo-30");
   });
 
-  it("widens the page with Rows", async () => {
+  it("puts Rows per page in the pager, not the bar", async () => {
     const user = userEvent.setup();
-    render(<Harness />);
-    await user.selectOptions(screen.getByLabelText("Rows"), "25");
-    expect(shown()).toHaveLength(12);
-    expect(screen.getByText("1–12 of 12")).toBeDefined();
+    const { container } = render(<Harness />);
+    const bar = container.querySelector("[data-list-bar]");
+    expect(bar?.querySelector('[role="combobox"]')).toBeNull();
+    const pager = container.querySelector("[data-rows-pager]");
+    const rows = within(pager as HTMLElement).getByRole("combobox", {
+      name: "Rows per page",
+    });
+    expect(rows.textContent).toContain("25");
+    await user.click(rows);
+    await user.click(await screen.findByRole("option", { name: "10" }));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(10);
+    });
+    expect(screen.getByText("1–10 of 30")).toBeDefined();
   });
 
   it("reads 0–0 of 0 when nothing matches", async () => {
     const user = userEvent.setup();
     render(<Harness />);
     await user.type(screen.getByLabelText("Search this list"), "nothing");
-    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(shown()).toHaveLength(0);
     expect(screen.getByText("0–0 of 0")).toBeDefined();
   });
 });

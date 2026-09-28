@@ -4841,6 +4841,7 @@ type Messages = {
         za: string;
       };
       rows: string;
+      pager: string;
       nothing: string;
       range: string;
       previous: string;
@@ -5110,6 +5111,7 @@ type Messages = {
       search: string;
       all: string;
       rows: string;
+      pager: string;
       range: string;
       previous: string;
       next: string;

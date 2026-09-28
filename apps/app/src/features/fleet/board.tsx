@@ -1207,8 +1207,6 @@ export function FleetBoard({
           onList={(next) => {
             readList(next);
           }}
-          pageSize={prefs.pageSize}
-          onPageSize={changePageSize}
           pullRequests={pullRequests}
           onPullRequests={changeFilter}
           onColumns={() => {
@@ -1343,6 +1341,7 @@ export function FleetBoard({
         <RunsPager
           list={list}
           pageSize={prefs.pageSize}
+          onPageSize={changePageSize}
           rows={runs.length}
           {...(total === undefined ? {} : { total })}
           {...(totalBound === undefined ? {} : { totalBound })}
