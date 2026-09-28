@@ -150,3 +150,40 @@ describe("apps/app keeps the report this guard reads", () => {
     }
   });
 });
+
+describe("CI runs the guard", () => {
+  const pipeline = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../.github/workflows/pipeline.yml",
+    ),
+    "utf8",
+  );
+  // The `unit` job: from its key to the next two-space job key, comments
+  // dropped, so a comment naming the script cannot stand in for the step.
+  const lines = pipeline.split("\n");
+  const start = lines.indexOf("  unit:");
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^ {2}[A-Za-z][\w-]*:\s*$/.test(l));
+  const unit = (end === -1 ? rest : rest.slice(0, end)).filter(
+    (l) => !/^\s*#/.test(l),
+  );
+
+  const GUARD = "run: node tools/scripts/check-coverage-scope.mjs apps/app";
+  const is = (text: string) => (l: string) => l.trim() === text;
+
+  it("runs it in the app lane, after the thresholds, even when they fail", () => {
+    expect(start).toBeGreaterThan(-1);
+    const run = unit.findIndex(is(GUARD));
+    expect(run).toBeGreaterThan(-1);
+    const thresholds = unit.findIndex(is("- name: Coverage thresholds"));
+    expect(thresholds).toBeGreaterThan(-1);
+    expect(run).toBeGreaterThan(thresholds);
+    // The step's own `if:` sits between its `- name:` and its `run:`.
+    let stepStart = run;
+    while (stepStart > 0 && !/^\s+- /.test(unit[stepStart] ?? "")) stepStart--;
+    const condition = unit.slice(stepStart, run).join("\n");
+    expect(condition).toContain("!cancelled()");
+    expect(condition).toContain("matrix.lane == 'app'");
+  });
+});

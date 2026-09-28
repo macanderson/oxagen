@@ -25,9 +25,8 @@ const APP = "/repo/apps/app";
 const APP_PKG = { scripts: { typecheck: "next typegen && tsc --noEmit" } };
 const PLAIN_PKG = { scripts: { typecheck: "tsc --noEmit" } };
 
-const fs = (paths: string[], dirs: Record<string, string[]> = {}) => ({
-  exists: (p: string) => paths.includes(p) || p in dirs,
-  readdir: (p: string) => dirs[p] ?? [],
+const fs = (paths: string[]) => ({
+  exists: (p: string) => paths.includes(p),
 });
 
 describe("which packages get route types", () => {
@@ -72,35 +71,41 @@ describe("needsTypegen", () => {
 });
 
 describe("generatedDeclarations", () => {
-  it("adds next-env.d.ts and the .d.ts files directly under .next/types", () => {
-    const io = fs([`${APP}/next-env.d.ts`], {
-      [`${APP}/.next/types`]: [
-        "validator.ts",
-        "routes.d.ts",
-        "cache-life.d.ts",
-        "app",
-      ],
-    });
-    expect(generatedDeclarations(APP, APP_PKG, io)).toEqual([
+  // Everything `next typegen` writes for apps/app, with typedRoutes on.
+  const typegenOutput = [
+    `${APP}/next-env.d.ts`,
+    `${APP}/.next/types/routes.d.ts`,
+    `${APP}/.next/types/link.d.ts`,
+    `${APP}/.next/types/cache-life.d.ts`,
+    `${APP}/.next/types/validator.ts`,
+  ];
+
+  it("adds next-env.d.ts and routes.d.ts, what the package's program loads", () => {
+    expect(generatedDeclarations(APP, APP_PKG, fs(typegenOutput))).toEqual([
       "next-env.d.ts",
-      ".next/types/cache-life.d.ts",
-      ".next/types/routes.d.ts",
+      ROUTE_TYPES,
     ]);
   });
 
-  it("leaves out validator.ts, which would typecheck every route", () => {
-    const io = fs([], {
-      [`${APP}/.next/types`]: ["validator.ts", "routes.d.ts"],
-    });
-    expect(generatedDeclarations(APP, APP_PKG, io)).not.toContain(
-      ".next/types/validator.ts",
-    );
+  it("leaves out every other generated file, so the check is not stricter than CI's", () => {
+    // validator.ts imports every route and link.d.ts narrows every href. The
+    // package's tsconfig excludes .next, so its own typecheck loads neither.
+    const added = generatedDeclarations(APP, APP_PKG, fs(typegenOutput));
+    expect(added).not.toContain(".next/types/validator.ts");
+    expect(added).not.toContain(".next/types/link.d.ts");
+    expect(added).not.toContain(".next/types/cache-life.d.ts");
+  });
+
+  it("adds routes.d.ts alone when next-env.d.ts was not written", () => {
+    const io = fs([`${APP}/${ROUTE_TYPES}`]);
+    expect(generatedDeclarations(APP, APP_PKG, io)).toEqual([ROUTE_TYPES]);
   });
 
   it("adds nothing for a package that does not generate route types", () => {
-    const io = fs(["/repo/apps/docs/next-env.d.ts"], {
-      "/repo/apps/docs/.next/types": ["routes.d.ts"],
-    });
+    const io = fs([
+      "/repo/apps/docs/next-env.d.ts",
+      `/repo/apps/docs/${ROUTE_TYPES}`,
+    ]);
     expect(generatedDeclarations("/repo/apps/docs", PLAIN_PKG, io)).toEqual([]);
   });
 

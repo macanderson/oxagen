@@ -65,6 +65,9 @@ describe("Biome formatting is checked (#4055)", () => {
   it("format:check checks the whole tree and names the fix", () => {
     expect(scripts["format:check"]).toMatch(/^biome format \. /);
     expect(scripts["format:check"]).not.toContain("--write");
+    // Biome stops listing files after 20 by default, so a failure with more
+    // drifted files than that would not name them all.
+    expect(scripts["format:check"]).toContain("--max-diagnostics=none");
     expect(scripts["format:check"]).toContain("pnpm format");
     // The fallback must still fail the script after printing the fix.
     expect(scripts["format:check"]).toMatch(/exit 1\)$/);

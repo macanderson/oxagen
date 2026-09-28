@@ -22,7 +22,7 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "format": "biome format --write .",
-    "format:check": "biome format . || (echo 'Biome found unformatted files, listed above. Run pnpm format and commit the result.' >&2; exit 1)",
+    "format:check": "biome format . --max-diagnostics=none || (echo 'Biome found unformatted files, listed above. Run pnpm format and commit the result.' >&2; exit 1)",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test:unit",
     "test:coverage": "turbo run test:coverage",

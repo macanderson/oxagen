@@ -183,12 +183,14 @@ const swept: [string, string][] = [
     `lefthook ${r.hook}/${r.command}`,
     r.run,
   ]),
-  ...Object.keys(scripts)
+  // Object.entries, not Object.keys: under noUncheckedIndexedAccess,
+  // `scripts[name]` reads as `string | undefined` and the tuple refuses it.
+  ...Object.entries(scripts)
     .filter(
-      (name) =>
+      ([name]) =>
         name.startsWith("check:") || name === "gate" || name === "gate:full",
     )
-    .map((name): [string, string] => [`pnpm ${name}`, scripts[name]]),
+    .map(([name, command]): [string, string] => [`pnpm ${name}`, command]),
 ];
 
 function importsOf(command: string) {
@@ -211,9 +213,7 @@ describe("root scripts declare what they import (#3403)", () => {
   });
 
   it("reaches the imports that broke the filtered install", () => {
-    const all = new Set(
-      swept.flatMap(([, command]) => [...importsOf(command).keys()]),
-    );
+    const all = swept.flatMap(([, command]) => [...importsOf(command).keys()]);
     expect(all).toContain("@oxagen/oxagen");
     expect(all).toContain("@oxagen/config");
   });
@@ -231,8 +231,9 @@ describe("root scripts declare what they import (#3403)", () => {
   it("routes every pre-push root script through the preflight", () => {
     for (const r of runs.filter((x) => x.hook === "pre-push")) {
       const script = /\bpnpm (?:run )?([\w:-]+)\s*$/.exec(r.run)?.[1];
-      if (!script || scripts[script] === undefined) continue;
-      if (entriesOf(scripts[script], scripts).length === 0) continue;
+      const command = script === undefined ? undefined : scripts[script];
+      if (!script || command === undefined) continue;
+      if (entriesOf(command, scripts).length === 0) continue;
       expect(r.run, `pre-push/${r.command}`).toBe(
         `node tools/scripts/hook-preflight.mjs ${script} && pnpm ${script}`,
       );

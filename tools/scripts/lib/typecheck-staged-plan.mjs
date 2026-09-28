@@ -51,26 +51,26 @@ export function needsTypegen(pkgDir, pkgJson, exists) {
  * the package. `apps/app/tsconfig.json` excludes `.next`, and the temp
  * config's `include` inherits that `exclude`, so its `**\/*.d.ts` pattern never
  * reaches `.next/types`. Files named in `files` are not subject to `exclude`,
- * so they go there. Only the `.d.ts` files directly under `.next/types` are
- * taken: `validator.ts` beside them imports every route, and adding it would
- * typecheck the whole app on every commit.
+ * so they go there.
+ *
+ * Only `next-env.d.ts` and `routes.d.ts` are taken, because the package's
+ * real program loads no more than that: the same `exclude` hides `.next` from
+ * its `include`, and `next-env.d.ts` imports `routes.d.ts`. The staged program
+ * must not be stricter than CI's, or it refuses a commit CI would accept and
+ * the way past it is `--no-verify`. So every other file `next typegen` writes
+ * stays out. `validator.ts` imports every route and would typecheck the whole
+ * app on every commit. `link.d.ts`, written because `typedRoutes` is on,
+ * narrows every `href` to the union of known routes.
  *
  * @param {string} pkgDir
  * @param {{ scripts?: Record<string, string> }} pkgJson
- * @param {{ exists: (p: string) => boolean, readdir: (p: string) => string[] }} io
+ * @param {{ exists: (p: string) => boolean }} io
  * @returns {string[]}
  */
-export function generatedDeclarations(pkgDir, pkgJson, { exists, readdir }) {
+export function generatedDeclarations(pkgDir, pkgJson, { exists }) {
   if (!runsNextTypegen(pkgJson)) return [];
-  const out = [];
-  if (exists(join(pkgDir, "next-env.d.ts"))) out.push("next-env.d.ts");
-  const typesDir = join(pkgDir, ".next", "types");
-  if (exists(typesDir)) {
-    for (const name of readdir(typesDir).sort()) {
-      if (name.endsWith(".d.ts")) out.push(`.next/types/${name}`);
-    }
-  }
-  return out;
+  const candidates = ["next-env.d.ts", ROUTE_TYPES];
+  return candidates.filter((file) => exists(join(pkgDir, file)));
 }
 
 /**

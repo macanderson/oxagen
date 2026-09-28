@@ -169,7 +169,8 @@ describe("preflight on a script file", () => {
   const FILE = "tools/scripts/typecheck-staged.mjs";
   const files = {
     ...SOURCES,
-    [FILE]: 'import ts from "typescript";\nimport { plan } from "./lib/plan.mjs";\n',
+    [FILE]:
+      'import ts from "typescript";\nimport { plan } from "./lib/plan.mjs";\n',
     "tools/scripts/lib/plan.mjs": 'import { join } from "node:path";\n',
   };
 

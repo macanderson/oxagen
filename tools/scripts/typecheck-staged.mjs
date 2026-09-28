@@ -29,15 +29,15 @@
 // owning package's `typecheck` script runs `next typegen` (today only
 // `apps/app`) and `.next/types/routes.d.ts` is missing, it runs
 // `pnpm exec next typegen` in that package once, then adds `next-env.d.ts` and
-// the `.d.ts` files directly under `.next/types` to the temp config's `files`
-// (the package's `exclude` hides `.next` from `include`). It never regenerates
+// `.next/types/routes.d.ts` to the temp config's `files` (the package's
+// `exclude` hides `.next` from `include`), and no other generated file, so the
+// staged program is never stricter than the package's own. It never regenerates
 // types that are already there, and it generates nothing when no staged file
 // belongs to such a package. Route files are then checked like any other
 // staged file, so a real type error in one still fails the commit. The
 // decisions live in `tools/scripts/lib/typecheck-staged-plan.mjs`.
 import {
   existsSync,
-  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -157,7 +157,6 @@ for (const [tsconfig, absFiles] of groups) {
   const tempPath = join(pkgDir, `tsconfig.staged-${process.pid}.json`);
   const declarations = generatedDeclarations(pkgDir, pkgJson, {
     exists: existsSync,
-    readdir: (dir) => readdirSync(dir),
   });
   writeFileSync(
     tempPath,
