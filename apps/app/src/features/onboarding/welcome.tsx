@@ -10,21 +10,21 @@
 // wrap (Claude Code, Codex, Cursor or Stella). A workspace with none shows the no-agent
 // panel, which names the gap rather than inventing a key.
 //
-// **Who may.** Every write on these steps — `create_enrollment_token`,
-// `advance_onboarding`, `bind_main_repository` — admits an org Owner or Admin
-// in its handler (INV-29). The page checks the same role before it reads, so a
-// member without it sees the gate's denied state instead of controls that
-// would all be refused.
+// **Who may.** Every write on these steps (`create_enrollment_token` and
+// `advance_onboarding`) admits an org Owner or Admin in its handler (INV-29).
+// The page checks the same role before it reads (./roles), so a member without
+// it sees the gate's denied state instead of controls that would all be
+// refused.
 import "server-only";
 import { notFound } from "next/navigation";
 import type { AgentDetail } from "@/data/contracts/agents";
-import type { OnboardingGate } from "@/data/contracts/onboarding";
 import type { DataSource } from "@/data/ports";
 import { getAuthUser } from "@/server/session";
 import type { WsCtx } from "@/server/viewer";
 import type { ReactNode } from "react";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { AuthShell } from "@/ui/auth-shell";
+import { mayOnboard, signedInToWorkspace } from "./roles";
 import { GateShell, type GateStepId } from "./ui/gate-shell";
 import { GateDenied, GateSkeleton } from "./ui/gate-states";
 import { InstallerScreens } from "./ui/installer";
@@ -47,19 +47,16 @@ const SILENT_HOST_SECONDS = 90;
 /** The harnesses a host installer wraps; the others enrol through the SDK. */
 const HOST_HARNESSES = new Set(["claude-code", "codex", "cursor", "stella"]);
 
-const ONBOARDING_ROLES = new Set(["owner", "admin"]);
-
 type Step = Exclude<GateStepId, "organization">;
 
 function place(ctx: WsCtx) {
   return { org: ctx.orgSlug, ws: ctx.wsSlug };
 }
 
-function signedIn(ctx: WsCtx, name: string | null, email: string | null) {
-  return `${name || email || "—"} · workspace.${ctx.wsRole} · ${ctx.wsSlug}`;
-}
-
-/** The done steps' targets: the organization form, and Wrap for the same agent. */
+/**
+ * The done steps' targets: the organization form, Connect, the first
+ * workspace, and Wrap for the same agent.
+ */
 function backLinks(
   ctx: WsCtx,
   agent: string | null,
@@ -67,6 +64,8 @@ function backLinks(
   const { org, ws } = place(ctx);
   return {
     organization: routes.newOrganization(),
+    connect: routes.welcomeConnect(org),
+    workspace: routes.welcomeFirstWorkspace(org),
     wrap: routes.welcome(
       org,
       ws,
@@ -77,10 +76,10 @@ function backLinks(
 }
 
 /** The permission each step's write needs, as the design's Permissions name it. */
-function permissionFor(step: Step, ctx: WsCtx): string {
+function permissionFor(step: "wrap" | "run", ctx: WsCtx): string {
   return step === "wrap"
     ? `enrollment.create on ${ctx.wsSlug}`
-    : `repo.bind on ${ctx.wsSlug}`;
+    : `onboarding.advance on ${ctx.wsSlug}`;
 }
 
 /**
@@ -189,12 +188,12 @@ export async function WelcomeWrap({
       {body}
     </GateShell>
   );
-  if (!ONBOARDING_ROLES.has(ctx.orgRole))
+  if (!mayOnboard(ctx))
     return shell(
       <GateDenied
         org={ctx.orgName}
         permission={permissionFor("wrap", ctx)}
-        signedIn={signedIn(ctx, user?.name ?? null, email)}
+        signedIn={signedInToWorkspace(ctx, user?.name ?? null, email)}
         back={routes.fleet(org, ws)}
       />,
     );
@@ -209,7 +208,7 @@ export async function WelcomeWrap({
       ws={ws}
       agent={wrapped}
       gated={gate.ok && gate.value.step !== "unlocked"}
-      back={routes.newOrganization()}
+      back={routes.welcomeFirstWorkspace(org)}
       cancel={routes.fleet(org, ws)}
       register={routes.register(org, ws, "name")}
       next={routes.welcome(
@@ -220,23 +219,6 @@ export async function WelcomeWrap({
       )}
     />,
   );
-}
-
-const DAY_MS = 86_400_000;
-
-/** The provisional window and the repository the enrolling host reported. */
-function repositoryOf(gate: OnboardingGate | null, now: number) {
-  const provisional = gate?.provisional ?? null;
-  if (provisional === null) return null;
-  return {
-    detected: provisional.detectedRepository,
-    until: provisional.until,
-    daysLeft: Math.max(
-      0,
-      Math.ceil((Date.parse(provisional.until) - now) / DAY_MS),
-    ),
-    boundAt: provisional.mainRepoBoundAt,
-  };
 }
 
 export async function WelcomeRun({
@@ -267,25 +249,18 @@ export async function WelcomeRun({
       {body}
     </GateShell>
   );
-  if (!ONBOARDING_ROLES.has(ctx.orgRole))
+  if (!mayOnboard(ctx))
     return shell(
       <GateDenied
         org={ctx.orgName}
         permission={permissionFor("run", ctx)}
-        signedIn={signedIn(ctx, user?.name ?? null, email)}
+        signedIn={signedInToWorkspace(ctx, user?.name ?? null, email)}
         back={routes.fleet(org, ws)}
       />,
     );
-  const [detail, gateRead] = await Promise.all([
-    resolveAgent(ctx, source, agent),
-    source.onboarding.state(ctx),
-  ]);
-  const gate = gateRead.ok ? gateRead.value : null;
+  const detail = await resolveAgent(ctx, source, agent);
   const wrapped = detail === null ? null : facts(detail);
   const common = {
-    org,
-    ws,
-    workspace: ctx.wsSlug,
     fleet: routes.fleet(org, ws),
     back: routes.welcome(
       org,
@@ -300,7 +275,6 @@ export async function WelcomeRun({
       wrapped === null ? undefined : { agent: wrapped.id },
     ),
     register: routes.register(org, ws, "name"),
-    repository: repositoryOf(gate, now),
     pollRevision,
   };
   if (wrapped === null)

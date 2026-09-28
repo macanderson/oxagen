@@ -2113,6 +2113,21 @@
       }
     },
     {
+      "name": "merge_pr_without_review",
+      "file": "context.pr.merge_without_review.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "open_context_pr",
       "file": "context.pr.open.ts",
       "domain": "context",
@@ -6196,6 +6211,38 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "file": "spend.operator_pseudonyms.set.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_operator_ranking",
+      "file": "spend.operator_ranking.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true,
         "app": true

@@ -1072,6 +1072,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .mergeContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "merge_pr_without_review",
+    async () =>
+      (await import("./context.pr.merge_without_review"))
+        .mergePrWithoutReviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_governance_mode",
     async () =>
       (await import("./context.governance_mode.set"))
@@ -1693,6 +1699,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_waste",
     async () =>
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_operator_ranking",
+    async () =>
+      (await import("./spend.operator_ranking"))
+        .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_operator_pseudonyms",
+    async () =>
+      (await import("./spend.operator_pseudonyms.set"))
+        .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_clone_draft",

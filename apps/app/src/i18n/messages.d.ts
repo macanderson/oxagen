@@ -3111,10 +3111,6 @@ type Messages = {
       orgNameTooLong: string;
       slugInvalid: string;
       slugReserved: string;
-      workspaceNameRequired: string;
-      workspaceNameTooLong: string;
-      workspaceSlugInvalid: string;
-      workspaceSlugReserved: string;
       slugTaken: string;
       agentSlugInvalid: string;
       agentNameRequired: string;
@@ -3136,16 +3132,6 @@ type Messages = {
       addressHint: string;
       namespace: string;
       namespaceHint: string;
-      workspaceTitle: string;
-      workspaceName: string;
-      governance: string;
-      governanceModes: {
-        solo: string;
-        team: string;
-        regulated: string;
-      };
-      governanceNotBacked: string;
-      workspaceHint: string;
       creates: string;
       cancel: string;
       submit: string;
@@ -3158,6 +3144,8 @@ type Messages = {
         railLabel: string;
         steps: {
           organization: string;
+          connect: string;
+          workspace: string;
           wrap: string;
           run: string;
         };
@@ -3183,6 +3171,65 @@ type Messages = {
         dialogBody: string;
         dialogNotBacked: string;
         close: string;
+      };
+      connect: {
+        pageTitle: string;
+        eyebrow: string;
+        title: string;
+        lead: string;
+        github: {
+          heading: string;
+          steeringName: string;
+          steeringBody: string;
+          steeringInstall: string;
+          oxagenName: string;
+          oxagenBody: string;
+          oxagenInstall: string;
+        };
+        gitlab: {
+          heading: string;
+          groupLabel: string;
+          tokenLabel: string;
+          hint: string;
+          submit: string;
+          pending: string;
+          errors: {
+            tokenInvalid: string;
+            groupUnreachable: string;
+            tokenInsufficient: string;
+            forbidden: string;
+            badInput: string;
+            failed: string;
+          };
+        };
+        continue: string;
+      };
+      workspace: {
+        pageTitle: string;
+        eyebrow: string;
+        title: string;
+        titleExisting: string;
+        lead: string;
+        leadExisting: string;
+        readFailed: string;
+        nameLabel: string;
+        create: string;
+        pending: string;
+        errors: {
+          nameRequired: string;
+          nameTooLong: string;
+          nameInvalid: string;
+          slugTaken: string;
+          denied: string;
+          failed: string;
+        };
+        back: string;
+        continue: string;
+      };
+      steeringResult: {
+        connected: string;
+        error: string;
+        errorNoCode: string;
       };
       wrap: {
         eyebrow: string;
@@ -3294,29 +3341,6 @@ type Messages = {
         errorRequest: string;
         checkAgain: string;
         checkedAgain: string;
-        repo: {
-          detectedTitle: string;
-          reported: string;
-          remote: string;
-          remoteBody: string;
-          bind: string;
-          binding: string;
-          bindBody: string;
-          skip: string;
-          skipBody: string;
-          boundTitle: string;
-          bound: string;
-          branch: string;
-          appInstalled: string;
-          boundBody: string;
-          boundToast: string;
-          skippedTitle: string;
-          provisional: string;
-          skippedBody: string;
-          bindNow: string;
-          noneTitle: string;
-          noneBody: string;
-        };
       };
       installer: {
         title: string;
@@ -3381,11 +3405,15 @@ type Messages = {
       railLabel: string;
       steps: {
         organization: string;
+        connect: string;
+        workspace: string;
         wrap: string;
         run: string;
       };
       subs: {
         organization: string;
+        connect: string;
+        workspace: string;
         wrap: string;
         run: string;
       };
@@ -3393,14 +3421,6 @@ type Messages = {
         done: string;
         current: string;
         todo: string;
-      };
-      provisional: {
-        badge: string;
-        title: string;
-        body: string;
-        detected: string;
-        binding: string;
-        noRepository: string;
       };
       firstRun: {
         badge: string;
@@ -3598,9 +3618,6 @@ type Messages = {
         gateNotFound: string;
         alreadyUnlocked: string;
         firstFrameRequired: string;
-        githubNotConnected: string;
-        repositoryNotInstalled: string;
-        mainRepoBound: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
@@ -3691,26 +3708,31 @@ type Messages = {
       fields: {
         name: string;
         mainRepo: string;
-        mainRepoHint: string;
         productionBranch: string;
         productionBranchHint: string;
-        productionBranchCreateHint: string;
         retention: string;
         retentionHint: string;
         mainRepoFixed: string;
         namespace: string;
         namespaceHint: string;
-        namespaceCreateHint: string;
-        mainRepoSelectHint: string;
-        mainRepoChoose: string;
-        branchDefault: string;
-        branchPick: string;
       };
       createWorkspace: {
         open: string;
         title: string;
         confirm: string;
         pending: string;
+        done: {
+          close: string;
+          workspace: string;
+          steeringRepo: string;
+          openRepositories: string;
+          status: {
+            provisioning: string;
+            ready: string;
+            failed: string;
+            blocked: string;
+          };
+        };
       };
       editWorkspace: {
         open: string;
@@ -3742,7 +3764,6 @@ type Messages = {
           refused: string;
           close: string;
         };
-        createHint: string;
       };
       archiveWorkspace: {
         open: string;
@@ -3791,12 +3812,6 @@ type Messages = {
         targetNotMember: string;
         roleNotGrantable: string;
         insufficientRole: string;
-        githubNotAuthorized: string;
-        installationUnreachable: string;
-        repositoryNotInstalled: string;
-        mainRepoClaimed: string;
-        repositoryLinkedElsewhere: string;
-        repositoryUnparsable: string;
         ssoProviderNotFound: string;
         ssoRequiresEnterprise: string;
         scimTokenExists: string;
@@ -4035,6 +4050,9 @@ type Messages = {
         permissions: string;
         selected: string;
         readOnly: string;
+        mergeWithoutReview: string;
+        mergeWithoutReviewHint: string;
+        mergeWithoutReviewUnavailable: string;
         holders: string;
         governed: string;
         create: string;
@@ -5064,6 +5082,7 @@ type Messages = {
       gitlabCredentialRejected: string;
       gitlabNotConnected: string;
       repositoryHostUnsupported: string;
+      toolNotRegistered: string;
     };
     page: {
       title: string;
@@ -5597,6 +5616,99 @@ type Messages = {
         link: string;
       };
     };
+    drift: {
+      heading: string;
+      notBacked: string;
+      detected: string;
+      promote: string;
+      promoting: string;
+      promoted: string;
+    };
+    steeringRepo: {
+      heading: string;
+      loading: string;
+      unavailable: {
+        body: string;
+        capability: string;
+      };
+      card: {
+        repository: string;
+        notCreated: string;
+        version: string;
+        notPublished: string;
+        versionNumber: string;
+        health: string;
+      };
+      health: {
+        healthy: string;
+        drifted: string;
+        disconnected: string;
+        diverged: string;
+        unknown: string;
+      };
+      healthNote: {
+        healthy: string;
+        drifted: string;
+        disconnected: string;
+        diverged: string;
+        unknown: string;
+      };
+      provisioning: {
+        stepsLabel: string;
+        steps: {
+          pick_connection: string;
+          create_repository: string;
+          add_to_installation: string;
+          write_first_commit: string;
+          apply_settings: string;
+          publish_version: string;
+          bind_repository: string;
+        };
+        state: {
+          done: string;
+          running: string;
+          failed: string;
+          blocked: string;
+          waiting: string;
+        };
+        retry: string;
+        retrying: string;
+        ready: string;
+      };
+      reauthorize: {
+        heading: string;
+        body: string;
+        action: string;
+      };
+      banner: {
+        heading: {
+          drifted: string;
+          disconnected: string;
+          diverged: string;
+        };
+        body: string;
+        differencesLabel: string;
+        columns: {
+          setting: string;
+          expected: string;
+          actual: string;
+          changed: string;
+        };
+        changedByAt: string;
+        changedUnknown: string;
+        repair: string;
+        repairing: string;
+        reverting: string;
+      };
+      failure: {
+        denied: string;
+        invalid: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+        toolNotRegistered: string;
+      };
+    };
   };
   run: {
     notRecorded: string;
@@ -6111,11 +6223,18 @@ type Messages = {
         byCalls: string;
         byCost: string;
         resultsTitle: string;
+        standingTitle: string;
+        sources: {
+          toolDefinitions: string;
+          steering: string;
+          contextFrames: string;
+        };
         noTools: string;
         toolsNotRead: string;
         unnamedTool: string;
         note: string;
         noteWithResults: string;
+        noteWithStanding: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -8869,6 +8988,44 @@ type Messages = {
         selfReported: string;
       };
     };
+    ranking: {
+      title: string;
+      note: string;
+      managersOnly: string;
+      empty: string;
+      mixedCurrency: string;
+      unnamed: string;
+      unattributed: string;
+      total: string;
+      hidden: string;
+      hiddenNote: string;
+      runsBehind: string;
+      definitionsTitle: string;
+      columns: {
+        rank: string;
+        operator: string;
+        unproductive: string;
+        shareOfTotal: string;
+        unproductiveShare: string;
+        runs: string;
+        runsBehind: string;
+      };
+      definitions: {
+        unproductive: string;
+        shareOfTotal: string;
+        unproductiveShare: string;
+        runs: string;
+      };
+      pseudonyms: {
+        on: string;
+        off: string;
+        turnOn: string;
+        turnOff: string;
+        saving: string;
+        denied: string;
+        failed: string;
+      };
+    };
     toolChart: {
       metric: {
         cumulative: string;
@@ -9402,6 +9559,7 @@ type Messages = {
         headUnknown: string;
         path: string;
         governance: string;
+        approvals: string;
       };
       checks: {
         title: string;
@@ -9434,6 +9592,16 @@ type Messages = {
         at: string;
         promotion: string;
         record: string;
+      };
+      drift: {
+        title: string;
+      };
+      memory: {
+        title: string;
+        notBacked: string;
+        memories: string;
+        unknownAgent: string;
+        evidence: string;
       };
     };
     actions: {
@@ -9469,6 +9637,8 @@ type Messages = {
         governanceUnreadable: string;
         repositoryMissing: string;
         checksNotPassed: string;
+        approvalRequired: string;
+        approvalsNotHeadBound: string;
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
@@ -9481,6 +9651,32 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        repositoryUnhealthy: string;
+        tooManyFiles: string;
+        versionMismatch: string;
+        recordFileMissing: string;
+        productionBranchMissing: string;
+        productionBranchMoving: string;
+        checksFailed: string;
+        toolNotRegistered: string;
+      };
+      approve: {
+        confirm: string;
+        pending: string;
+      };
+      mergeWithoutReview: {
+        confirm: string;
+        pending: string;
+      };
+      restore: {
+        confirm: string;
+        pending: string;
+      };
+      drop: {
+        confirm: string;
+        label: string;
+        pending: string;
+        dropped: string;
       };
     };
     create: {
@@ -10398,6 +10594,7 @@ type Messages = {
         provider: string;
         transport: string;
         tools: string;
+        weeklyPrice: string;
         toolbelts: string;
         agents: string;
         health: string;
@@ -10406,6 +10603,11 @@ type Messages = {
         lastImport: string;
         actions: string;
       };
+      weeklyAbsent: string;
+      weeklyUnpriced: string;
+      weeklyTokenCount: string;
+      weeklyTokens: string;
+      weeklyTitle: string;
       transportNote: string;
       open: string;
       openNamed: string;

@@ -1,9 +1,11 @@
 // Typed onboarding values for the gate and register component tests
-// (ARCHITECTURE.md §5): a gate row, a first-frame read, and a DataSource that
-// answers the onboarding and agents reads with what a test hands it.
+// (ARCHITECTURE.md §5): a gate row, a first-frame read, a workspace list, and a
+// DataSource that answers the onboarding, agents, and workspace reads with
+// what a test hands it.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
+import type { Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { RunChain, RunDetail } from "@/data/contracts/run";
 import type { RunPage } from "@/data/contracts/runs";
 import type { NamedRuntimeList } from "@/data/contracts/runtimes";
@@ -90,8 +92,34 @@ export function runsPage(
   };
 }
 
+/**
+ * The organization's workspace list, as `list_workspaces` answers it, holding
+ * one row per workspace given, oldest first.
+ */
+export function workspaceList(
+  workspaces: Partial<Workspace>[] = [],
+): Read<WorkspaceList> {
+  return readOk({
+    orgId: "org_acme",
+    orgAvatarUrl: null,
+    workspaces: workspaces.map((overrides, index) => ({
+      id: `wrk_${String(index + 1)}`,
+      slug: `workspace-${String(index + 1)}`,
+      namespace: `ws${String(index + 1)}`,
+      name: `Workspace ${String(index + 1)}`,
+      avatarUrl: null,
+      role: "owner",
+      archivedAt: null,
+      costCenter: null,
+      ...overrides,
+    })),
+  });
+}
+
 type Reads = {
   state?: Read<OnboardingGate>;
+  /** `list_workspaces`, which the first workspace step reads. */
+  workspaces?: Read<WorkspaceList>;
   firstFrame?: Read<FirstFrame>;
   agent?: Read<AgentDetail>;
   /** The newest runs page, which the gate reads for the first-run banner. */
@@ -154,6 +182,7 @@ type Calls = {
   runs: Parameters<DataSource["runs"]["list"]>[];
   run: Parameters<DataSource["runs"]["get"]>[];
   chain: Parameters<DataSource["runs"]["chain"]>[];
+  workspaces: Parameters<DataSource["org"]["workspaces"]>[];
 };
 
 /** A DataSource that answers the reads a test hands it and refuses every other port. */
@@ -168,6 +197,7 @@ export function onboardingSource(reads: Reads): {
     runs: [],
     run: [],
     chain: [],
+    workspaces: [],
   };
   const refuse = (port: string) => () => {
     throw new Error(`${port} is not part of this test`);
@@ -278,6 +308,7 @@ export function onboardingSource(reads: Reads): {
       findings: refuse("spend.findings"),
       findingEvidence: refuse("spend.findingEvidence"),
       priceBook: refuse("spend.priceBook"),
+      operatorRanking: refuse("spend.operatorRanking"),
       unpricedModels: refuse("spend.unpricedModels"),
     },
     audit: {
@@ -289,7 +320,10 @@ export function onboardingSource(reads: Reads): {
     org: {
       members: refuse("org.members"),
       roles: refuse("org.roles"),
-      workspaces: refuse("org.workspaces"),
+      workspaces: (...args: Parameters<DataSource["org"]["workspaces"]>) => {
+        calls.workspaces.push(args);
+        return Promise.resolve(answer(reads.workspaces, "org.workspaces"));
+      },
       apiKeys: refuse("org.apiKeys"),
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),

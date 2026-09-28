@@ -903,7 +903,7 @@ describe("steeringRepoProvisionDeps", () => {
       ).resolves.toBe("rpb_new");
 
       expect(mocks.dbCalls).toEqual(["tenant"]);
-      expect(mocks.chains).toHaveLength(6);
+      expect(mocks.chains).toHaveLength(5);
       for (const c of mocks.chains) {
         expect(c.via).toBe("tenant");
         expect(c.scope).toMatchObject({ orgId: ORG, workspaceId: WS });
@@ -915,27 +915,7 @@ describe("steeringRepoProvisionDeps", () => {
         render(workspaceRepositoriesLock(WS)),
       );
 
-      const demote = chain(1);
-      expect(methods(demote)).toEqual(["update", "set", "where", "returning"]);
-      expect(argOf(demote, "update")).toBe(schema.repositoryBindingHeads);
-      expect(argOf(demote, "set")).toStrictEqual({
-        role: "linked",
-        updatedAt: expect.any(Date),
-      });
-      expect(render(argOf(demote, "where"))).toEqual(
-        render(
-          and(
-            eq(schema.repositoryBindingHeads.orgId, ORG),
-            eq(schema.repositoryBindingHeads.workspaceId, WS),
-            eq(schema.repositoryBindingHeads.role, "main"),
-          ),
-        ),
-      );
-      expect(argOf(demote, "returning")).toEqual({
-        id: schema.repositoryBindingHeads.id,
-      });
-
-      const steering = chain(2);
+      const steering = chain(1);
       expect(methods(steering)).toEqual(["select", "from", "where"]);
       expect(argOf(steering, "select")).toEqual({
         provider: schema.repositoryBindingHeads.provider,
@@ -952,7 +932,7 @@ describe("steeringRepoProvisionDeps", () => {
         ),
       );
 
-      const find = chain(3);
+      const find = chain(2);
       expect(methods(find)).toEqual(["select", "from", "where", "limit"]);
       expect(argOf(find, "select")).toEqual({
         id: schema.sourceConnections.id,
@@ -963,7 +943,7 @@ describe("steeringRepoProvisionDeps", () => {
       );
       expect(argOf(find, "limit")).toBe(1);
 
-      const insert = chain(4);
+      const insert = chain(3);
       expect(methods(insert)).toEqual(["insert", "values", "returning"]);
       expect(argOf(insert, "insert")).toBe(schema.sourceConnections);
       const values = argOf(insert, "values") as {
@@ -985,14 +965,11 @@ describe("steeringRepoProvisionDeps", () => {
         updatedById: ACTOR,
       });
       expect(values.updatedAt).toBe(values.createdAt);
-      expect((argOf(demote, "set") as { updatedAt: Date }).updatedAt).toBe(
-        values.createdAt,
-      );
       expect(argOf(insert, "returning")).toEqual({
         id: schema.sourceConnections.id,
       });
 
-      const head = chain(5);
+      const head = chain(4);
       expect(methods(head)).toEqual([
         "select",
         "from",
@@ -1053,10 +1030,10 @@ describe("steeringRepoProvisionDeps", () => {
           default_branch: "main",
         }),
       ).resolves.toBe("rpb_new");
-      expect(render(argOf(chain(3), "where"))).toEqual(
+      expect(render(argOf(chain(2), "where"))).toEqual(
         connectionFilter(GITLAB_STEERING_PROVIDER),
       );
-      expect(argOf(chain(4), "values")).toMatchObject({
+      expect(argOf(chain(3), "values")).toMatchObject({
         connectorId: GITLAB_STEERING_PROVIDER,
         displayName: "GitLab steering",
         authScheme: "group_access_token",
@@ -1086,12 +1063,11 @@ describe("steeringRepoProvisionDeps", () => {
       ).resolves.toBe("rpb_existing");
       expect(mocks.chains.map((c) => c.op)).toEqual([
         "execute",
-        "update",
         "select",
         "select",
         "select",
       ]);
-      expect(render(argOf(chain(4), "where"))).toEqual(
+      expect(render(argOf(chain(3), "where"))).toEqual(
         render(
           and(
             eq(schema.repositoryBindingHeads.connectionId, CONN),
@@ -1113,7 +1089,6 @@ describe("steeringRepoProvisionDeps", () => {
       ).resolves.toBe("rpb_new");
       expect(mocks.chains.map((c) => c.op)).toEqual([
         "execute",
-        "update",
         "select",
         "select",
         "select",
@@ -1136,30 +1111,6 @@ describe("steeringRepoProvisionDeps", () => {
       expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
     });
 
-    it("demotes the workspace's main head to linked and still binds the steering repo", async () => {
-      mocks.updateResults.push([{ id: "head-main" }]);
-      mocks.results.push([], [{ id: CONN }], []);
-      await expect(
-        deps().bind(WORKSPACE, {
-          connection: GITHUB,
-          repository: REPOSITORY,
-          default_branch: "main",
-        }),
-      ).resolves.toBe("rpb_new");
-      expect(mocks.chains.map((c) => c.op)).toEqual([
-        "execute",
-        "update",
-        "select",
-        "select",
-        "select",
-      ]);
-      expect(argOf(chain(1), "set")).toMatchObject({ role: "linked" });
-      expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
-      expect(mocks.writeRepositoryHead.mock.calls[0]?.[1]).toMatchObject({
-        role: "steering",
-      });
-    });
-
     it("stops when the workspace already has a steering head for another repository", async () => {
       mocks.results.push([
         { provider: "github", providerRepositoryId: "777" },
@@ -1174,11 +1125,7 @@ describe("steeringRepoProvisionDeps", () => {
         code: "steering_repo_already_bound",
         message: `Workspace ${WS} already has a steering repository, so this job does not bind acme/oxagen-platform as a second one.`,
       });
-      expect(mocks.chains.map((c) => c.op)).toEqual([
-        "execute",
-        "update",
-        "select",
-      ]);
+      expect(mocks.chains.map((c) => c.op)).toEqual(["execute", "select"]);
       expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
     });
 

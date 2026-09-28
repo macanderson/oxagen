@@ -10,12 +10,19 @@
 // proposal is published and cannot be dismissed; retirement is its own
 // Context PR and is outside this release. The `rejected` write applies only
 // to a proposal still short of `merged`, so a merge that published while
-// GitHub was being called keeps its proposal.
+// GitHub was being called keeps its proposal. A proposal a merge from Oxagen
+// has claimed is refused with merge_in_progress before the host is touched,
+// so a dismissal never closes a PR the host is merging (#4504).
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import {
+  claimCutoff,
+  mergeClaimed,
+  mergeInProgress,
+} from "./context.steering.store";
 import { bodyNamesProposal } from "./context.steering.view";
 
 const DISMISSABLE: readonly ProposalStatus[] = [
@@ -54,6 +61,8 @@ export function createDismissProposalHandler(
     if (row.status === "rejected") {
       return { proposalId: row.publicId, status: "rejected" };
     }
+    if (mergeClaimed(row, deps.now()))
+      throw mergeInProgress(row.publicId, row.mergeClaimedAt);
     // Without a PR number the branch is this proposal's only while no other
     // proposal on the lineage has recorded a PR on it, and a PR found on it
     // only when its body names this proposal.
@@ -93,6 +102,9 @@ export function createDismissProposalHandler(
           updatedById: actingUserId,
         },
         DISMISSABLE,
+        // A merge that claimed the proposal while the host was being called
+        // keeps it: the write refuses with merge_in_progress.
+        { noClaimSince: claimCutoff(deps.now()) },
       );
     } catch (err) {
       // Another dismissal landed first; this one answers as it did.

@@ -122,6 +122,8 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { spendOperatorRanking } from "./spend.operator_ranking";
+import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -301,6 +303,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -824,6 +827,8 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -953,6 +958,7 @@ export {
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1241,6 +1247,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1369,6 +1377,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

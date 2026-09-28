@@ -1,8 +1,13 @@
-// The Context PR panel (#2961; spec §10.3; ADR-061): one proposal's pull
+// The steering PR panel (#2961; spec §10.3; ADR-061): one proposal's pull
 // request as the state machine proposed → pull request open → checks running →
 // checks passed or failed → merged, the six checks in the order they run, the
 // pull request body, what merge will do, and the merge itself, which stays
 // disabled until every check has passed. Merge is the publication.
+//
+// Under the team and regulated modes the panel also offers Approve, and Merge
+// without review to an owner while no one has approved (#4518). A check
+// finding on a managed block shows the drift and a Restore block button. A PR
+// on a `memory/` branch lists its records, each with a Drop button.
 import { useLocale, useTranslations } from "next-intl";
 import type { ContextPr, ProposalStatus } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
@@ -10,11 +15,38 @@ import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { linkText, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { PullRequestLink } from "@/ui/navigation";
+import { type MemoryPrRecord, MemoryPrReview } from "./memory-pr-review";
+import { NotBacked } from "./not-backed";
 import { SteeringReadFailure } from "./read-failure";
 import { Fact, Facts, Section, useDate } from "./section";
 import { ProposalStatusBadge } from "./status";
 import type { SteeringAt } from "./view";
-import { MergeContextPr, ProposalWrites } from "./write-controls";
+import {
+  ApproveContextPr,
+  MergeContextPr,
+  MergeWithoutReview,
+  ProposalWrites,
+  RestoreManagedBlock,
+} from "./write-controls";
+
+/** One finding a check left on the steering PR's head. */
+type SteeringPrFinding = {
+  /** The rule that fired; `managed-block` is a drifted managed block. */
+  rule: string;
+  path: string;
+  message: string;
+};
+
+/** The drifted managed blocks among the findings, one per file. */
+function driftOf(findings: readonly SteeringPrFinding[]): SteeringPrFinding[] {
+  const drift: SteeringPrFinding[] = [];
+  for (const finding of findings) {
+    if (finding.rule !== "managed-block") continue;
+    if (drift.some((seen) => seen.path === finding.path)) continue;
+    drift.push(finding);
+  }
+  return drift;
+}
 
 const STEPS = [
   "proposed",
@@ -106,9 +138,21 @@ function Checks({ checks }: { checks: ContextPr["checks"] }) {
 export function ContextPrPanel({
   at,
   read,
+  approvals,
+  findings,
+  memoryRecords,
+  canMergeWithoutReview = false,
 }: {
   at: SteeringAt;
   read: Read<ContextPr>;
+  /** The approvals the PR's head holds, when the read carries them. Unknown counts as none. */
+  approvals?: number;
+  /** The findings the checks left, when the read carries them. */
+  findings?: readonly SteeringPrFinding[];
+  /** A memory PR's records, from list_memory_pr_records (#4518). */
+  memoryRecords?: readonly MemoryPrRecord[];
+  /** The viewer is an owner, or holds `pr.merge_without_review`. */
+  canMergeWithoutReview?: boolean;
 }) {
   const t = useTranslations("steering.pr");
   const locale = useLocale();
@@ -127,6 +171,13 @@ export function ContextPrPanel({
   const mode =
     governanceMode === null ? t("modeUnread") : t(`modes.${governanceMode}`);
   const open = status !== "merged" && status !== "rejected";
+  // Solo merges on the checks alone. Team and regulated need an approval
+  // from a member other than the author, or an owner's merge without one.
+  const reviewed = governanceMode === "team" || governanceMode === "regulated";
+  const unapproved = (approvals ?? 0) === 0;
+  const drift = open && pr !== null ? driftOf(findings ?? []) : [];
+  const memoryBranch =
+    open && pr !== null && pr.branch.startsWith("memory/") ? pr.branch : null;
   return (
     <Section
       id="steering-pr"
@@ -174,8 +225,53 @@ export function ContextPrPanel({
         <Fact name="governance" term={t("facts.governance")}>
           {mode}
         </Fact>
+        {approvals === undefined ? null : (
+          <Fact name="approvals" term={t("facts.approvals")}>
+            {formatCount(approvals, locale)}
+          </Fact>
+        )}
       </Facts>
       {value.checks.length === 0 ? null : <Checks checks={value.checks} />}
+      {drift.map((finding) => (
+        <div
+          key={finding.path}
+          data-drift={finding.path}
+          className="flex flex-col gap-2 rounded-md border border-border p-3"
+        >
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("drift.title", { path: finding.path })}
+          </h3>
+          {finding.message === "" ? null : (
+            <p className="text-sm text-muted-foreground">{finding.message}</p>
+          )}
+          <RestoreManagedBlock
+            org={at.org}
+            ws={at.ws}
+            proposalId={value.proposalId}
+            path={finding.path}
+          />
+        </div>
+      ))}
+      {memoryBranch === null ? null : (
+        <div data-memory-pr="" className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            {t("memory.title")}
+          </h3>
+          {memoryRecords === undefined ? (
+            <NotBacked
+              what={t("memory.notBacked")}
+              issue={0}
+              testId="memory-pr-records-not-backed"
+            />
+          ) : (
+            <MemoryPrReview
+              at={at}
+              branch={memoryBranch}
+              records={memoryRecords}
+            />
+          )}
+        </div>
+      )}
       {value.body === null ? null : (
         <details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground">
@@ -229,12 +325,27 @@ export function ContextPrPanel({
       ) : null}
       {open ? (
         <div className="flex flex-wrap items-start gap-3">
+          {reviewed && pr !== null ? (
+            <ApproveContextPr
+              org={at.org}
+              ws={at.ws}
+              proposalId={value.proposalId}
+            />
+          ) : null}
           <MergeContextPr
             org={at.org}
             ws={at.ws}
             proposalId={value.proposalId}
             blocked={status !== "checks_passed"}
           />
+          {reviewed && canMergeWithoutReview && unapproved ? (
+            <MergeWithoutReview
+              org={at.org}
+              ws={at.ws}
+              proposalId={value.proposalId}
+              blocked={status !== "checks_passed"}
+            />
+          ) : null}
           <ProposalWrites
             org={at.org}
             ws={at.ws}

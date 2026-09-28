@@ -194,10 +194,19 @@ jobs:
       - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # PRs run only the AFFECTED subset (diffed against origin/main) for
-          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
-          # empty so `turbo run` executes every workspace project.
+          # PRs run only the AFFECTED subset for fast feedback, diffed against
+          # the PR's base commit (github.event.pull_request.base.sha). The
+          # event payload fixes that commit, so a merge to main cannot move it.
+          # The filter used to diff against the live tip of origin/main. When a
+          # PR merged before this job started, main already held its changes,
+          # turbo selected no package, and the job passed without running a
+          # test (#4520).
+          #
+          # Push to main and the merge queue run the FULL gate: TURBO_FILTER
+          # stays empty so `turbo run` executes every workspace project. ADR-147
+          # keeps merge_group unfiltered.
           #
           # main is the authoritative complete-suite gate. Affected-filtering on
           # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
@@ -208,8 +217,14 @@ jobs:
           # main closes that drift. See CLAUDE.md operating mode +
           # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
+            # fetch-depth: 0 already holds the base commit. The fetch covers a
+            # shallow checkout.
+            git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+            # The filter no longer reads origin/main, but db:lint-migrations
+            # and the stale merge base check below still do.
             git fetch origin main --no-tags
-            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
+            echo "Turbo selects packages changed since the PR's base commit $BASE_SHA."
+            echo "TURBO_FILTER=--filter=...[$BASE_SHA]" >> "$GITHUB_ENV"
           else
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
@@ -220,7 +235,7 @@ jobs:
 
       - name: Lint and typecheck
         run: |
-          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
           # --concurrency=3: turbo's default (10) fans out parallel tsc/eslint
           # processes far beyond the 2-core runner's memory; repeated exit-137
           # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
@@ -254,7 +269,7 @@ jobs:
         run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders && pnpm docs:architecture:check
 
       # Unconditional, and that is the whole point. The affected-package gate
-      # (`turbo … --filter=…[origin/main]`) selects a package only when it or one
+      # (`turbo … --filter=…[<base sha>]`) selects a package only when it or one
       # of its dependencies changed, and @oxagen/compliance declares no
       # dependency on @oxagen/handlers — deliberately, to keep it a leaf. So a PR
       # touching ONLY packages/handlers never ran the one guard that checks a
@@ -362,12 +377,16 @@ jobs:
       - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Same rule as the unit and e2e jobs: a PR builds the packages
-          # affected since origin/main, and a push to main builds everything.
+          # Same rule as the checks, unit, and e2e jobs: a PR builds the
+          # packages affected since its base commit, and push to main and the
+          # merge queue build everything. The checks job's step says why the
+          # base is the PR's base commit and not origin/main (#4520).
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
+            git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+            echo "Turbo selects packages changed since the PR's base commit $BASE_SHA."
+            echo "TURBO_FILTER=--filter=...[$BASE_SHA]" >> "$GITHUB_ENV"
           else
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
@@ -380,7 +399,7 @@ jobs:
         env:
           LANE: ${{ matrix.lane }}
         run: |
-          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
           # Turbo unions its --filter flags, so a lane cannot intersect
           # $TURBO_FILTER with its own package on the command line. A
           # single-app lane asks a dry run whether the filter selects its
@@ -483,10 +502,13 @@ jobs:
       - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # PRs run only the AFFECTED subset (diffed against origin/main) for
-          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
-          # empty so `turbo run` executes every workspace project.
+          # PRs run only the AFFECTED subset for fast feedback, diffed against
+          # the PR's base commit, not the live tip of origin/main. The checks
+          # job's step has the reason (#4520). Push to main and the merge queue
+          # run the FULL gate: TURBO_FILTER stays empty so `turbo run` executes
+          # every workspace project. ADR-147 keeps merge_group unfiltered.
           #
           # main is the authoritative complete-suite gate. Affected-filtering on
           # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
@@ -497,8 +519,9 @@ jobs:
           # main closes that drift. See CLAUDE.md operating mode +
           # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
+            git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+            echo "Turbo selects packages changed since the PR's base commit $BASE_SHA."
+            echo "TURBO_FILTER=--filter=...[$BASE_SHA]" >> "$GITHUB_ENV"
           else
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
@@ -715,10 +738,13 @@ jobs:
       - name: Compute turbo filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # PRs run only the AFFECTED subset (diffed against origin/main) for
-          # fast feedback. Push-to-main runs the FULL gate: TURBO_FILTER stays
-          # empty so `turbo run` executes every workspace project.
+          # PRs run only the AFFECTED subset for fast feedback, diffed against
+          # the PR's base commit, not the live tip of origin/main. The checks
+          # job's step has the reason (#4520). Push to main and the merge queue
+          # run the FULL gate: TURBO_FILTER stays empty so `turbo run` executes
+          # every workspace project. ADR-147 keeps merge_group unfiltered.
           #
           # main is the authoritative complete-suite gate. Affected-filtering on
           # main (the old `...[$EVENT_BEFORE]` behaviour) let a package's stale
@@ -729,8 +755,9 @@ jobs:
           # main closes that drift. See CLAUDE.md operating mode +
           # e2e-affected-detection-masks-drift.
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git fetch origin main --no-tags
-            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
+            git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+            echo "Turbo selects packages changed since the PR's base commit $BASE_SHA."
+            echo "TURBO_FILTER=--filter=...[$BASE_SHA]" >> "$GITHUB_ENV"
           else
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
@@ -754,7 +781,7 @@ jobs:
 
       - name: Build
         run: |
-          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
           # apps/app only. It is the one package with a test:e2e script, and
           # Playwright's webServer serves only it. Every other app's build is
           # gated by the `build` job's lanes, so building them here too spent
@@ -826,7 +853,7 @@ jobs:
       - name: E2E tests
         timeout-minutes: 20
         run: |
-          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
           pnpm turbo run test:e2e $TURBO_FILTER --log-order=stream
 
       # Names any process the web server left behind. Playwright kills the

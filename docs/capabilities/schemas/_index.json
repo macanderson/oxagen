@@ -1,5 +1,5 @@
 {
-  "generatedCount": 404,
+  "generatedCount": 407,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1494,6 +1494,16 @@
       "consumes": []
     },
     {
+      "name": "get_operator_ranking",
+      "domain": "spend",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_org_settings",
       "domain": "org",
       "surfaces": [
@@ -2936,6 +2946,16 @@
       "consumes": []
     },
     {
+      "name": "merge_pr_without_review",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "move_agent",
       "domain": "agent",
       "surfaces": [
@@ -3909,6 +3929,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

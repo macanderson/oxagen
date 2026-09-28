@@ -106,6 +106,7 @@ import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -143,6 +144,8 @@ import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
+import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
@@ -236,6 +239,7 @@ import { contextPrOpenRoute } from "./context.pr.open";
 import { skillProposeRoute } from "./skill.propose";
 import { contextPrGetRoute } from "./context.pr.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
+import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -253,6 +257,8 @@ import { costCenterDeleteRoute } from "./cost_center.delete";
 import { costCenterSetRoute } from "./cost_center.set";
 import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
+import { spendOperatorRankingRoute } from "./spend.operator_ranking";
+import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
 import { findingFixRecordRoute } from "./finding.fix.record";
@@ -506,6 +512,15 @@ const ROUTES: ThinRoute[] = [
     route: contextPrMergeRoute as unknown as Hono<never>,
     method: "POST",
     capability: contextPrMerge.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
+  {
+    file: "context.pr.merge_without_review",
+    route: contextPrMergeWithoutReviewRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrMergeWithoutReview.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
     status: 200,
@@ -1653,6 +1668,26 @@ const ROUTES: ThinRoute[] = [
     capability: spendWasteList.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-02-30", to: "2026-03-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.operator_ranking",
+    route: spendOperatorRankingRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendOperatorRanking.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.operator_pseudonyms.set",
+    route: spendOperatorPseudonymsSetRoute as unknown as Hono<never>,
+    method: "PUT",
+    capability: spendOperatorPseudonymsSet.name,
+    body: { enabled: true },
+    invalidBody: { enabled: "yes" },
     jsonGuard: true,
     status: 200,
   },
