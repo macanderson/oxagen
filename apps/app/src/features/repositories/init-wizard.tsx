@@ -686,7 +686,9 @@ function PermissionTable() {
               <td className={`${cell} ${mono}`}>
                 {t(`rows.${permission}.level`)}
               </td>
-              <td className={`${cell} text-muted-foreground`}>
+              <td
+                className={`${cell} text-muted-foreground [--cell-max:32rem]`}
+              >
                 {t(`rows.${permission}.for`)}
               </td>
             </tr>

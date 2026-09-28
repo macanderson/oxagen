@@ -44,7 +44,7 @@ type Member = MemberList["members"][number];
 
 function PersonCell({ member }: { member: Member }) {
   return (
-    <div className="flex items-start gap-2.5">
+    <div className="flex min-w-0 items-start gap-2.5">
       <Avatar
         value={member.avatarUrl}
         initials={initialsOf(member.name ?? member.email)}
@@ -52,10 +52,12 @@ function PersonCell({ member }: { member: Member }) {
         testId="member-avatar"
       />
       <div className="min-w-0">
-        <div className="font-semibold text-foreground">
+        <div className="font-semibold text-foreground md:truncate">
           {member.name ?? member.email}
         </div>
-        <div className={`${mono} text-[11px] text-dim`}>{member.email}</div>
+        <div className={`${mono} text-[11px] text-dim md:truncate`}>
+          {member.email}
+        </div>
       </div>
     </div>
   );

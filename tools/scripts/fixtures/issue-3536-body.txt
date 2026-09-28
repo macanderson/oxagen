@@ -1,0 +1,51 @@
+## In plain language
+
+The Skills page must show counts and rows from the same data. If it shows only part of a skill's supported-tool list, it must say how many names were left out.
+
+## Why these fixes belong together
+
+Both reports affect the same Skills page response and how the page explains it. One fixes the counts at their source, and the other makes the display honest about its limit.
+
+This replaces #3107, #3434. The reports are being combined at the maintainer's request. No fix is claimed by this change.
+
+## Definition of done
+
+### Bug from #3107
+
+- [ ] Skill totals and rows come from one consistent database view, even when new session data arrives during the read.
+
+Original completion checks from #3107:
+
+- [ ] In `packages/handlers/src/skill.list.ts`, `SkillQueries.totals` and `SkillQueries.names` (or whatever replaces them) read from one snapshot: fold both queries into one `withTenantDb` call, or compute both in a single CTE-based statement
+- [ ] If the two statements stay separate within one transaction, the isolation level is set explicitly (for example `repeatable read`), so `read committed`'s default per-statement snapshot cannot bring the bug back
+- [ ] A test proves the fix: a session is committed between the two reads (mirroring the stubbed reproduction above) and the response still adds up. This test fails on `main` today and passes after the fix
+- [ ] `packages/handlers/src/skill.list.test.ts` and `skill.list.pg.test.ts` are updated for the new single-snapshot read path and interface shape
+- [ ] The fix stays inside `packages/handlers/src/skill.list.ts` and its tests: no new package, and the file does not grow into an oversized, do-everything file as a result
+- [ ] No contract or docs change needed: confirm `docs/capabilities/skill.list.md` still matches the (unchanged) output shape
+
+### Bug from #3434
+
+- [ ] A skill with more than 20 supported coding-tool names shows how many names were left out. A shorter list shows no extra-count notice.
+
+Original completion checks from #3434:
+
+- [ ] `apps/app/src/features/skills/sections.tsx` shows the omitted count (for example "+N more", from `harnessCount - harnesses.length`) when `harnessCount > harnesses.length`.
+- [ ] The label for that indicator is added to the app's message catalogues and `messages.d.ts` is regenerated (`pnpm --filter @oxagen/app gen:messages`).
+- [ ] `apps/app/src/features/skills/skills.test.tsx` covers a skill with more than 20 harnesses and asserts the indicator, plus a skill at or under the cap with no indicator.
+
+### Final checks
+
+- [ ] Every bug and completion check above is verified. Keep any item already fixed on main and prove it still passes.
+- [ ] The pull request lists the tests and completed CI checks that prove the fixes.
+- [ ] Update the affected docs and app text to match the final behavior.
+
+## Source reports and evidence
+
+The closed source reports retain the exact review findings, file paths, examples, and history:
+
+- [#3107: P2 · kernel/Skills · Keep the skill count and list based on the same data](https://github.com/macanderson/oxagen/issues/3107)
+- [#3434: P3 · app/Skills · Say when more coding tools are supported than the page shows](https://github.com/macanderson/oxagen/issues/3434)
+
+## Planning
+
+Priority: P2, preserving the highest current source priority. Size: S. Estimate: 4 agent hours. Model tier: large. These are planning estimates, not measured build times.

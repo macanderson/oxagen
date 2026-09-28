@@ -184,6 +184,12 @@ importers:
       '@eslint/js':
         specifier: 9.39.5
         version: 9.39.5
+      '@oxagen/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:packages/oxagen
       '@types/node':
         specifier: 25.9.8
         version: 25.9.8
@@ -196,6 +202,9 @@ importers:
       inngest-cli:
         specifier: 1.45.1
         version: 1.45.1(encoding@0.1.13)(supports-color@8.1.1)
+      kleur:
+        specifier: 4.1.5
+        version: 4.1.5
       lefthook:
         specifier: latest
         version: 2.1.14

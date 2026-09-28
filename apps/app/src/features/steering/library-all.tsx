@@ -124,14 +124,17 @@ export function LibraryAll({
       },
       node: (
         <tr key={row.id} data-lineage={row.lineage}>
-          <td className={`${cell} max-w-[54ch]`}>
-            <b data-term="label" className="block font-medium text-foreground">
+          <td className={`${cell} [--cell-max:32rem]`}>
+            <b
+              data-term="label"
+              className="block font-medium text-foreground md:truncate"
+            >
               {row.label ?? row.title}
             </b>
             {row.statement === null ? null : (
               <span
                 data-term="statement"
-                className="block text-[12.5px] text-muted-foreground"
+                className="block text-[12.5px] text-muted-foreground md:truncate"
               >
                 {row.statement}
               </span>
@@ -161,7 +164,7 @@ export function LibraryAll({
             {row.sharingScope}
             {row.sharingScope === "repository" ? (
               <span
-                className="block text-[12px] text-muted-foreground"
+                className="block text-[12px] text-muted-foreground md:truncate"
                 title={t("scopeTargetTitle", { issue })}
                 data-scope-target="not-recorded"
               >
@@ -186,9 +189,7 @@ export function LibraryAll({
               {t("notRecorded")}
             </span>
           </td>
-          <td
-            className={`${cell} max-w-[34ch] break-all font-mono text-[11px]`}
-          >
+          <td className={`${cell} font-mono text-[11px]`}>
             {source ?? (
               <span className="font-sans text-muted-foreground">
                 {t("sourceNone")}
