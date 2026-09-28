@@ -241,7 +241,7 @@ export async function approveContextPr(
 /**
  * Merge a steering PR that holds no approval. The merge queue allows this to
  * an org or workspace owner, or to a member holding
- * `pr.merge_without_review`. It takes the same input as merge_context_pr.
+ * `merge_pr_without_review`. It takes the same input as merge_context_pr.
  */
 export async function mergePrWithoutReview(
   org: string,
