@@ -249,8 +249,13 @@ export interface RecallRequest {
   agent: string | null;
   /** True for Oxagen's in-app agent, which receives no workspace memories. */
   inApp: boolean;
-  /** The code repository the run works in, as <host>/<owner>/<name>. */
-  repository: string | null;
+  /**
+   * The digests of the code repository the request runs in, as a Tacho host
+   * computes them from its remote (`remoteDigests` in lib/remote-digests).
+   * The host sends digests, so the repository's owner and name stay on the
+   * machine. Empty when the repository is unknown.
+   */
+  repositoryDigests: readonly string[];
   /** The tools on the run's toolbelt, as <server>__<tool>. */
   tools: string[];
   /** The paths the request names. */

@@ -196,19 +196,43 @@ export type WorkspaceRepositories = {
   repositories: BoundRepositoryRow[];
 };
 
-/** What a link settled, so the section can name the repository it now binds. */
-export type LinkedRepository = {
-  bindingId: string;
-  fullName: string;
-  defaultRef: string;
-  linkedAt: string;
+/**
+ * A steering PR a link or an unlink opened on the steering repository
+ * (ADR-212). `reused` is true when a PR for the same change was already open.
+ */
+export type SteeringPullRequest = {
+  number: number;
+  url: string;
+  reused: boolean;
 };
 
-/** What an unlink settled: the repository that left the workspace's view. */
+/**
+ * What a link proposed. A link binds nothing at once: `proposed` carries the
+ * steering PR that adds the repository to `workspace.toml`, and the binding
+ * follows its merge. `listed` means `workspace.toml` lists the repository
+ * already, so the next steering sync links it and no PR was opened.
+ */
+export type LinkedRepository = {
+  fullName: string;
+  defaultRef: string;
+  status: "proposed" | "listed";
+  /** Null when `status` is `listed`. */
+  steeringPullRequest: SteeringPullRequest | null;
+};
+
+/**
+ * What an unlink did. `unlinked` removed a link that predates the steering
+ * record at once. `proposed` carries the steering PR that removes the
+ * repository from `workspace.toml`, and the link stays until it merges.
+ */
 export type UnlinkedRepository = {
   bindingId: string;
   fullName: string;
-  unlinkedAt: string;
+  status: "unlinked" | "proposed";
+  /** Null while a steering PR is open. */
+  unlinkedAt: string | null;
+  /** Null when `status` is `unlinked`. */
+  steeringPullRequest: SteeringPullRequest | null;
 };
 
 /** The governance mode `.oxagen/rules/governance.toml` declares, as read. */

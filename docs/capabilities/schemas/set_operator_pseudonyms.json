@@ -1,0 +1,43 @@
+{
+  "name": "set_operator_pseudonyms",
+  "domain": "spend",
+  "description": "Turn the workspace's operator pseudonyms on or off. With them on, the operator ranking shows a stable pseudonym in place of each name, keeps the ranks and the unproductive spend, and withholds each operator's unproductive share, run count, and runs. Org Owner or Admin only.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "enabled"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pseudonyms": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "pseudonyms"
+    ],
+    "additionalProperties": false
+  }
+}

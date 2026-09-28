@@ -15,10 +15,11 @@
  * first commit and apply branch protection.
  *
  * The route checks the token before storing it: GitLab must accept it, it
- * must carry the `api` scope, it must see the group, and its user must hold
- * Maintainer or higher there. A refusal answers 422 with
- * `gitlab_token_invalid`, `gitlab_group_unreachable` or
- * `gitlab_token_insufficient`. The token is never logged or echoed.
+ * must carry the `api` scope, it must see the group, it must be that group's
+ * own access token, and its user must hold Maintainer or higher there. A
+ * refusal answers 422 with `gitlab_token_invalid`, `gitlab_group_unreachable`,
+ * `gitlab_token_not_group` or `gitlab_token_insufficient`. The token is never
+ * logged or echoed.
  */
 import { Hono } from "hono";
 import { z } from "zod";
@@ -79,6 +80,9 @@ interface MemberBody {
 
 interface UserBody {
   id?: number;
+  username?: string;
+  /** True for the bot user behind a group, project or service account token. */
+  bot?: boolean;
 }
 
 /** GitLab refused the token outright (401). */
@@ -140,9 +144,23 @@ type Refusal = {
   code:
     | "gitlab_token_invalid"
     | "gitlab_group_unreachable"
+    | "gitlab_token_not_group"
     | "gitlab_token_insufficient";
   message: string;
 };
+
+/**
+ * Whether `user` is the bot user of an access token created in the group
+ * `groupId`. GitLab names that bot `group_<id>_bot_<random>`, and older
+ * GitLab versions name it `group_<id>_bot`. A personal access token's user is
+ * a person, so `bot` is false. A project token's bot is named
+ * `project_<id>_bot`, and a parent group's bot carries the parent's id.
+ */
+function isGroupTokenBot(user: UserBody, groupId: number): boolean {
+  if (user.bot !== true || typeof user.username !== "string") return false;
+  const prefix = `group_${groupId}_bot`;
+  return user.username === prefix || user.username.startsWith(`${prefix}_`);
+}
 
 /** A token that passed every check. */
 interface VerifiedGroupToken {
@@ -209,7 +227,9 @@ async function verifyGroupToken(
   // For a group access token, the user is the token's bot.
   const user = await gitlabGet<UserBody>(token, "/user", []);
   const userId = user?.id;
-  if (typeof userId !== "number") throw new GitlabUnavailable(200);
+  if (user === null || typeof userId !== "number") {
+    throw new GitlabUnavailable(200);
+  }
 
   const found = await gitlabGet<GroupBody>(
     token,
@@ -228,9 +248,24 @@ async function verifyGroupToken(
     };
   }
 
+  // A personal token with the api scope passes every other check and reaches
+  // every group its person belongs to. Only the group's own token is scoped to
+  // the one group, so refuse any other.
+  if (!isGroupTokenBot(user, groupId)) {
+    return {
+      ok: false,
+      refusal: {
+        code: "gitlab_token_not_group",
+        message: `The token is not an access token of the group ${groupPath}. Create one under the group's Settings > Access tokens with the api scope and the Maintainer role.`,
+      },
+    };
+  }
+
+  // The group's bot is a direct member of its own group, so the direct
+  // membership carries its role.
   const member = await gitlabGet<MemberBody>(
     token,
-    `/groups/${groupId}/members/all/${userId}`,
+    `/groups/${groupId}/members/${userId}`,
     [403, 404],
   );
   const level = member?.access_level;

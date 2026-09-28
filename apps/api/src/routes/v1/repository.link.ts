@@ -5,7 +5,12 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
-/** Link a repository to the workspace as a linked (not main) repository (`link_repository`). Mounted on the org-scoped router; the role is checked in the handler. */
+/**
+ * Propose linking a repository to the workspace (`link_repository`). The
+ * handler opens a steering PR, and the link follows its merge (ADR-212), so
+ * the route answers 202 Accepted. Mounted on the org-scoped router. The
+ * handler checks the role.
+ */
 export const repositoryLinkRoute = new Hono<AppEnv>();
 
 repositoryLinkRoute.post("/", async (c) => {
@@ -21,5 +26,5 @@ repositoryLinkRoute.post("/", async (c) => {
   const output = await invoke(repositoryLink.name, input, ctx, {
     surface: "api",
   });
-  return c.json(output, 201);
+  return c.json(output, 202);
 });

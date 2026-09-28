@@ -1,9 +1,12 @@
+import type { Tx } from "@oxagen/database";
+import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
 import { tachoEventsColumns } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   capturedDiffOf,
   checkoutOf,
   foldProvisionalContexts,
+  linkedRepositoryDigestsIn,
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
@@ -598,5 +601,53 @@ describe("a run's effort and where it was read (#3891)", () => {
       effort: null,
       effortSource: null,
     });
+  });
+});
+
+// ADR-212: ingest stamps `repository_unlinked` from these digests. They must
+// match the session's `git_remote_digest`, which the host computes with
+// `canonicalRemote` and keeps the remote's case.
+describe("linkedRepositoryDigestsIn", () => {
+  const scope = { orgId: "org-1", workspaceId: "ws-1" };
+  function txAnswering(read: () => Promise<unknown[]>) {
+    const chain = {
+      from: () => chain,
+      innerJoin: () => chain,
+      where: read,
+    };
+    const savepoint = { select: () => chain };
+    const transaction = vi.fn(
+      (fn: (savepoint: unknown) => Promise<unknown>) => fn(savepoint),
+    );
+    return { tx: { transaction } as unknown as Tx, transaction };
+  }
+
+  it("digests every head in the workspace, GitLab ones too, in the host's case and folded", async () => {
+    const { tx, transaction } = txAnswering(async () => [
+      { provider: "github", fullName: "Acme/Platform" },
+      { provider: "gitlab", fullName: "group/sub/api" },
+    ]);
+    const digests = await linkedRepositoryDigestsIn(tx, scope);
+    const github = canonicalRemote("github.com/Acme/Platform");
+    const gitlab = canonicalRemote("gitlab.com/group/sub/api");
+    expect(digests.has(digestBytes(github))).toBe(true);
+    expect(digests.has(digestBytes(foldedRemote(github)))).toBe(true);
+    expect(digests.has(digestBytes(gitlab))).toBe(true);
+    // The read runs in one savepoint on the caller's transaction.
+    expect(transaction).toHaveBeenCalledOnce();
+  });
+
+  it("answers no digest for a workspace with no linked repository (negative)", async () => {
+    const { tx } = txAnswering(async () => []);
+    expect(await linkedRepositoryDigestsIn(tx, scope)).toEqual(new Set());
+  });
+
+  it("rejects when the read fails, so the caller logs it and opens the session unflagged (negative)", async () => {
+    const { tx } = txAnswering(() =>
+      Promise.reject(new Error("canceling statement due to statement timeout")),
+    );
+    await expect(linkedRepositoryDigestsIn(tx, scope)).rejects.toThrow(
+      "statement timeout",
+    );
   });
 });

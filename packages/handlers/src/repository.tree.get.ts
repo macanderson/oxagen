@@ -5,7 +5,8 @@
 //   1. The bound repository by its binding id, in this workspace
 //      (`not_found: repository_not_linked`).
 //   2. A client for the workspace's installation
-//      (`conflict: github_not_connected`).
+//      (`conflict: github_not_connected`). A steering repository on a
+//      `github_steering` connection reads through the Oxagen Steering app.
 //   3. The repository as GitHub reports it now, for its default branch; one
 //      the installation cannot see, and one whose immutable id is no longer
 //      the bound one, are both `not_found: repository_not_installed`.
@@ -64,7 +65,11 @@ export function createRepositoryTreeGetHandler(
   return async (input, ctx): Promise<RepositoryTreeGetOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const bound = await deps.readBound(scope, input.bindingId);
-    const gh = await requireWorkspaceGithub(deps.github, scope);
+    const gh = await requireWorkspaceGithub(
+      deps.github,
+      scope,
+      bound.connectionId,
+    );
     const at = { owner: bound.owner, repo: bound.name };
 
     // The repository GitHub holds at these coordinates, and that it is still

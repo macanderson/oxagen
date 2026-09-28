@@ -199,6 +199,26 @@ describe("set_production_branch", () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it("names the bound head's connection, so a steering repository reads through its own app", async () => {
+    const client = vi.fn(async () => fakeGithub());
+    const handler = createProductionBranchSetHandler({
+      github: { client },
+      readBound: async () => ({ ...BOUND, connectionId: "steering-conn" }),
+      write: async () => ({
+        bindingId: "rpb_0a1c",
+        previousBranch: "main",
+        changed: true,
+      }),
+      now: () => NOW,
+    });
+    const ctx = makeCTX();
+    await handler({ bindingId: "rpb_0a1b", branch: "release" }, ctx);
+    expect(client).toHaveBeenCalledWith(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "steering-conn",
+    );
+  });
+
   it("refuses with github_not_connected when no installation is attached", async () => {
     const { handler } = setup({ client: null });
     await expect(

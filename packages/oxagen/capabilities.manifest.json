@@ -2124,7 +2124,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -6217,6 +6218,38 @@
       }
     },
     {
+      "name": "set_operator_pseudonyms",
+      "file": "spend.operator_pseudonyms.set.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_operator_ranking",
+      "file": "spend.operator_ranking.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_statement",
       "file": "spend.statement.export.ts",
       "domain": "spend",
@@ -6514,6 +6547,36 @@
       "surfaces": [],
       "layers": {
         "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "ingest_tacho_memories",
+      "file": "tacho.memories.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "recall_tacho_memories",
+      "file": "tacho.memories.recall.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true
       }

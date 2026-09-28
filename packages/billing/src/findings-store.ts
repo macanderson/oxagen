@@ -37,23 +37,28 @@ import {
 } from "./cost-rollup";
 import { runPriceSlice, runTotalsRowToRecord } from "./cost-rollup-store";
 import {
+  type ClaimRow,
   countClaims,
   detectFindings,
   FINDINGS_WINDOW_DAYS,
+  instructionProposals,
   microsOf,
   runsWithRepeats,
   type DetectReads,
   type FindingDraft,
+  type InstructionProposal,
   type FrameClassPrice,
   type FrameClassPrices,
   type FrameContextPart,
   type FrameCoverage,
   type PricedRequestFrame,
+  type PromptRead,
   type RunCompaction,
   type RunFirstPrompt,
   type ToolCallObservation,
   type UnproductiveSpend,
 } from "./findings";
+import { openInstructionProposals, readRunPrompts } from "./findings-prompts";
 import {
   readCompactions,
   readFileChanges,
@@ -124,6 +129,21 @@ interface FindingsPassDeps {
   ) => Promise<Map<string, PricedRequestFrame[]>>;
   /** Per fingerprint, the latest decision on it. */
   readDecisions: (scope: FindingsScope) => Promise<Map<string, Date>>;
+  /**
+   * The window's operator prompts for the named runs, and the frames that
+   * price them (detector 6); absent, the pass reads none.
+   */
+  readPrompts?: (
+    scope: FindingsScope,
+    window: { start: Date; end: Date },
+    runIdBySession: ReadonlyMap<string, string>,
+    runIds: ReadonlySet<string>,
+  ) => Promise<PromptRead | undefined>;
+  /** Opens a steering record proposal per repeated instruction; absent, the pass opens none. */
+  openProposals?: (
+    scope: FindingsScope,
+    proposals: readonly InstructionProposal[],
+  ) => Promise<void>;
   /**
    * Each run's frame source, by run public id. Without it, a wrapped run's
    * source is its root and the chains its tool calls name, and a ledger run
@@ -775,26 +795,30 @@ async function writeClaims(
       .onConflictDoNothing();
 }
 
+/** One claimed frame as the unproductive spend readers select it. */
+export type UnproductiveClaim = ClaimRow & { currency: string };
+
 /**
- * The unproductive spend headline over a window, and each operator's share
- * of it (ADR-208). It adds the frames that open and applied findings claim
- * and that ran in the window. A frame counts once, under the first detector
- * in counting order that claims it, so the operator totals sum to the
- * headline. A dismissed finding's claims do not count. The org and workspace
- * predicates hold on a tenant or a system transaction alike.
+ * The claims behind the unproductive spend headline over a window (ADR-208):
+ * the frames that open and applied findings claim and that ran in the window.
+ * A dismissed finding's claims do not count. The org and workspace predicates
+ * hold on a tenant or a system transaction alike. `countClaims` turns the
+ * rows into the headline, and the operator ranking reads the same rows for
+ * its runs, so the two agree.
  */
-export async function readUnproductiveSpend(
+export async function readUnproductiveClaims(
   tx: Tx,
   scope: FindingsScope,
   window: { start: Date; end: Date },
-): Promise<UnproductiveSpend> {
-  const rows = await tx
+): Promise<UnproductiveClaim[]> {
+  return tx
     .select({
       detector: claims.detector,
       runId: claims.runId,
       frameKey: claims.frameKey,
       operatorKey: claims.operatorKey,
       costMicros: claims.costMicros,
+      currency: claims.currency,
     })
     .from(claims)
     .innerJoin(findings, eq(findings.id, claims.findingId))
@@ -809,7 +833,20 @@ export async function readUnproductiveSpend(
         inArray(findings.status, ["open", "applied"]),
       ),
     );
-  return countClaims(rows);
+}
+
+/**
+ * The unproductive spend headline over a window, and each operator's share
+ * of it (ADR-208). It adds the frames `readUnproductiveClaims` returns. A
+ * frame counts once, under the first detector in counting order that claims
+ * it, so the operator totals sum to the headline.
+ */
+export async function readUnproductiveSpend(
+  tx: Tx,
+  scope: FindingsScope,
+  window: { start: Date; end: Date },
+): Promise<UnproductiveSpend> {
+  return countClaims(await readUnproductiveClaims(tx, scope, window));
 }
 
 const productionDeps: FindingsPassDeps = {
@@ -825,6 +862,9 @@ const productionDeps: FindingsPassDeps = {
   readCompactions,
   readOutcomes,
   write: writeFindings,
+  readPrompts: (scope, window, runIdBySession, runIds) =>
+    readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
+  openProposals: openInstructionProposals,
 };
 
 /**
@@ -832,8 +872,9 @@ const productionDeps: FindingsPassDeps = {
  * the tool calls, and each run's first prompt, file changes, compactions, and
  * outcomes; read and price the model-call frames of up to
  * `FRAME_RUNS_READ_MAX` runs; detect; and replace the open findings and their
- * claims. Throws when a store is degraded: the job retries rather than
- * writing findings from missing frames.
+ * claims. The pass also reads the window's operator prompts and opens a
+ * proposal for each instruction repeated across runs. Throws when a store is
+ * degraded: the job retries rather than writing findings from missing frames.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
@@ -879,6 +920,11 @@ export async function runFindingsPass(
     reads.length === 0
       ? new Map<string, PricedRequestFrame[]>()
       : await deps.readFrames(scope, reads);
+  // A workspace with no runs in the window has no prompt to read.
+  const prompts =
+    runIds.size === 0
+      ? undefined
+      : await deps.readPrompts?.(scope, { start, end }, runIdBySession, runIds);
   const input: DetectReads = {
     window: { start, end },
     toolWindowStart: toolWindowStart(start, rows, TOOL_CALL_READ_MAX),
@@ -891,9 +937,12 @@ export async function runFindingsPass(
     compactions,
     outcomes,
     frameCoverage: coverage,
+    ...(prompts ? { prompts } : {}),
   };
   const drafts = detectFindings(input);
-  return { findings: await deps.write(scope, end, decidedSince, drafts) };
+  const written = await deps.write(scope, end, decidedSince, drafts);
+  await deps.openProposals?.(scope, instructionProposals(prompts, runs));
+  return { findings: written };
 }
 
 /**

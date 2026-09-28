@@ -1,5 +1,5 @@
 {
-  "generatedCount": 405,
+  "generatedCount": 407,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1494,6 +1494,16 @@
       "consumes": []
     },
     {
+      "name": "get_operator_ranking",
+      "domain": "spend",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_org_settings",
       "domain": "org",
       "surfaces": [
@@ -2061,6 +2071,16 @@
     },
     {
       "name": "ingest_tacho_events",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ingest_tacho_memories",
       "domain": "tacho",
       "surfaces": [
         "api"
@@ -3259,6 +3279,16 @@
       "consumes": []
     },
     {
+      "name": "recall_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "recommend_schema",
       "domain": "schema",
       "surfaces": [
@@ -3919,6 +3949,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

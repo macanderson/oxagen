@@ -1,0 +1,67 @@
+{
+  "name": "ingest_tacho_memories",
+  "domain": "tacho",
+  "description": "Store one memory a harness wrote on an enrolled Tacho host, for the curator to review.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "harness": {
+        "type": "string",
+        "enum": [
+          "claude-code",
+          "codex",
+          "cursor",
+          "stella",
+          "claude-desktop"
+        ]
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      },
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The memory file's body without its frontmatter, trimmed."
+      }
+    },
+    "required": [
+      "host_enrollment_id",
+      "harness",
+      "path",
+      "statement"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "stored": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "stored"
+    ],
+    "additionalProperties": false
+  }
+}
