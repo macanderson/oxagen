@@ -128,18 +128,19 @@ afterEach(() => {
 });
 
 describe("POST /v1/tacho/enroll rate limits", () => {
-  it("still enrols after 361 unauthenticated calls to another /v1/tacho path exhaust the shared credential bucket", async () => {
-    // 360 is the sum of the post-auth budgets (120 ingest, 120 recall, 30
-    // control, and 30 each for the GitHub credential, the contained launch,
-    // and the memory upload), so a healthy enrolled key never meets this
-    // ceiling before its own.
+  it("still enrols after unauthenticated calls to another /v1/tacho path exhaust the shared credential bucket", async () => {
+    // The credential ceiling is the sum of the post-auth budgets, so a healthy
+    // enrolled key never meets it before its own: 120 ingest + 120 recall +
+    // 30 each for the control pair, the GitHub credential, the contained
+    // launch and the memory upload. Change this with the constants in app.ts.
+    const ceiling = 120 + 120 + 30 * 4;
     atMinute(1);
     const statuses: number[] = [];
-    for (let i = 0; i < 361; i++) {
+    for (let i = 0; i <= ceiling; i++) {
       statuses.push((await request("/v1/tacho/events", {})).status);
     }
-    expect(statuses.slice(0, 360).every((s) => s === 401)).toBe(true);
-    expect(statuses[360]).toBe(429);
+    expect(statuses.slice(0, ceiling).every((s) => s === 401)).toBe(true);
+    expect(statuses[ceiling]).toBe(429);
 
     const enrolled = await request(
       "/v1/tacho/enroll",
