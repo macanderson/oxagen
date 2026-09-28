@@ -268,9 +268,45 @@
   color: var(--dim);
 }
 
-[data-shell-page] table tbody :is(td, th) {
+/* `:where` keeps this rule under the phone's card padding in src/ui/phone.css,
+   which it used to outrank. */
+:where([data-shell-page]) table tbody :is(td, th) {
   padding: 9px 12px;
   vertical-align: middle;
+}
+
+/* Text in a table never wraps (#4665). A body value wider than its column
+   ends in an ellipsis, and features/shell/cell-overflow.tsx shows the whole
+   value on hover or focus. A cell can raise its cap with `--cell-max`. The
+   rules cover every table, in a page or a dialog. They are unlayered, so they
+   win over a `whitespace-normal` or `flex-wrap` utility inside a cell. A cell
+   that spans columns holds an empty state, a group heading, or a total, so it
+   keeps its own layout. A `pre` keeps its line breaks and scrolls sideways
+   instead. The phone's card layout (src/ui/phone.css) keeps its own rules
+   below the md breakpoint. */
+@media (width >= 48rem) {
+  table thead th {
+    white-space: nowrap;
+  }
+
+  table tbody :is(td, th):not([colspan]) {
+    max-width: var(--cell-max, 20rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  table tbody :is(td, th):not([colspan]) :not(textarea, pre, pre *) {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+
+  /* A cut cell with nothing focusable in it takes a keyboard stop
+     (features/shell/cell-overflow.tsx), and shows where focus is. */
+  table tbody [data-cell-cut]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
 }
 
 @media (width < 48rem) {

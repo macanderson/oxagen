@@ -102,7 +102,10 @@ function DecidedBy({ source }: { source: string | null }) {
   const t = useTranslations("run.policy");
   const copy = source === null ? undefined : sourceCopy(source);
   return (
-    <span data-testid="policy-decided-by" className="text-[11px] text-dim">
+    <span
+      data-testid="policy-decided-by"
+      className="max-w-full text-[11px] text-dim md:truncate"
+    >
       {source === null
         ? t("decidedByUnrecorded")
         : t("decidedBy", {
@@ -140,7 +143,7 @@ function ruleMandate(rule: string): string | null {
   return MANDATE_RULE.exec(rule)?.[1] ?? null;
 }
 
-const listedLine = `${mono} text-foreground [overflow-wrap:anywhere]`;
+const listedLine = `${mono} text-foreground md:truncate`;
 
 /**
  * Words the record holds for a decision, one per line in mono: the rules that
@@ -179,7 +182,7 @@ function Listed({
           <SafeLink
             key={key}
             to={routes.mandate(place.org, place.ws, mandate)}
-            className={`${mono} ${linkText} [overflow-wrap:anywhere]`}
+            className={`${mono} ${linkText} md:truncate`}
           >
             {item}
           </SafeLink>
@@ -212,9 +215,9 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
         {call === null ? (
           <NoValue />
         ) : (
-          <span className={`${mono} text-foreground`}>{call}</span>
+          <span className={`${mono} text-foreground md:truncate`}>{call}</span>
         )}
-        <span className={`${mono} text-[11px] text-dim`}>
+        <span className={`${mono} text-[11px] text-dim md:truncate`}>
           {decision?.type ?? entry.type}
         </span>
       </span>,

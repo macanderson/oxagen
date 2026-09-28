@@ -47,10 +47,13 @@ function MovementState({ kind }: { kind: MandateMovement }) {
   return (
     <span
       data-state={kind}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
     >
-      <span aria-hidden="true" className={`size-2 rounded-full ${DOT[kind]}`} />
-      {t(kind)}
+      <span
+        aria-hidden="true"
+        className={`size-2 shrink-0 rounded-full ${DOT[kind]}`}
+      />
+      <span className="min-w-0 md:truncate">{t(kind)}</span>
     </span>
   );
 }
@@ -203,7 +206,7 @@ export function MandateLedger({
                 </td>
                 <td className={cell}>
                   <span className={mono}>{row.measure}</span>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground md:truncate">
                     {row.periodKey}
                   </div>
                 </td>
@@ -219,7 +222,7 @@ export function MandateLedger({
                       {t("notRecorded")}
                     </span>
                   ) : (
-                    <span className={`${mono} break-all text-xs`}>
+                    <span className={`${mono} text-xs`}>
                       {row.externalEffectRef}
                     </span>
                   )}
