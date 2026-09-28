@@ -65,12 +65,14 @@ export interface RepairHost {
    * carries the `Oxagen-Revert-To` trailer, and the next health read trusts
    * a commit with that trailer as Oxagen's. Anyone who can push to the
    * repository can also push to the revert branch, so the branch name proves
-   * nothing about its content. Before it merges, the host reads the head
-   * commit again. It refuses unless the head holds the files of the published
-   * commit and has exactly one parent, the current head of main. The merge
-   * names the head it checked, so a push after the check makes the host
-   * refuse the merge. A refusal makes `repair` read the health again, and
-   * that read writes a new revert commit on the branch (./diverged.ts).
+   * nothing about its content. A collaborator can also retarget the pull
+   * request, so the host refuses one whose base branch is not main. Before it
+   * merges, the host reads the head commit again. It refuses unless the head
+   * holds the files of the published commit and has exactly one parent, the
+   * current head of main. The merge names the head it checked, so a push
+   * after the check makes the host refuse the merge. A refusal makes `repair`
+   * read the health again, and that read writes a new revert commit on the
+   * branch (./diverged.ts).
    */
   mergeRevert(number: number, published: PublishedCommit): Promise<RevertMerge>;
 }
@@ -80,6 +82,14 @@ function otherFiles(published: PublishedCommit): RevertMerge {
   return {
     kind: "refused",
     message: `Its branch does not hold the files of the published commit ${published.sha.slice(0, 7)}.`,
+  };
+}
+
+/** The refusal for a revert pull request someone retargeted away from main. */
+function otherBase(branch: string): RevertMerge {
+  return {
+    kind: "refused",
+    message: `Its pull request targets ${branch}, not ${STEERING_DEFAULT_BRANCH}.`,
   };
 }
 
@@ -229,6 +239,7 @@ interface GithubPull {
   state: string;
   merged?: boolean;
   head: { ref: string; sha: string };
+  base: { ref: string };
 }
 
 interface GithubGitCommit {
@@ -279,6 +290,9 @@ export function githubRepairHost(input: GithubRepairInput): RepairHost {
       );
       if (pull.data === null || pull.data.state !== "open" || !isRevertBranch(pull.data.head.ref))
         return { kind: "gone" };
+      // The merge lands on the pull request's base, so it must still be main.
+      if (pull.data.base.ref !== STEERING_DEFAULT_BRANCH)
+        return otherBase(pull.data.base.ref);
       // Check the head before the merge, as the doc comment on RepairHost says.
       const head = pull.data.head.sha;
       const commit = await r.request<GithubGitCommit>(
@@ -330,6 +344,7 @@ interface GitlabMergeRequest {
   state: string;
   sha: string;
   source_branch: string;
+  target_branch: string;
 }
 
 interface GitlabCompare {
@@ -383,6 +398,9 @@ export function gitlabRepairHost(input: GitlabRepairInput): RepairHost {
         !isRevertBranch(request.data.source_branch)
       )
         return { kind: "gone" };
+      // The merge lands on the target branch, so it must still be main.
+      if (request.data.target_branch !== STEERING_DEFAULT_BRANCH)
+        return otherBase(request.data.target_branch);
       // Check the head before the merge, as the doc comment on RepairHost says.
       const head = request.data.sha;
       // An empty diff from the published commit means the head holds its files.

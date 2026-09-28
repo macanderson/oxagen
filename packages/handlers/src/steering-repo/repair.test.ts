@@ -65,6 +65,7 @@ const MAIN = "e5".repeat(20);
 const OTHER = "0c".repeat(20);
 const FILES_REFUSED = "Its branch does not hold the files of the published commit a1a1a1a.";
 const OFF_MAIN_REFUSED = "Its branch is not one commit on top of the current main.";
+const OTHER_BASE_REFUSED = "Its pull request targets release, not main.";
 
 function located(
   provider: "github" | "gitlab",
@@ -457,7 +458,12 @@ describe("githubRepairHost.mergeRevert", () => {
   const PUBLISHED_COMMIT = `GET ${ROOT}/git/commits/${PUBLISHED.sha}`;
   const MAIN_BRANCH = `GET ${ROOT}/branches/main`;
   const TREE = "f6".repeat(20);
-  const OPEN_REVERT = { number: 12, state: "open", head: { ref: REVERT_REF, sha: HEAD } };
+  const OPEN_REVERT = {
+    number: 12,
+    state: "open",
+    head: { ref: REVERT_REF, sha: HEAD },
+    base: { ref: "main" },
+  };
 
   function headCommit(tree: string, parents: string[]) {
     return ok({ sha: HEAD, tree: { sha: tree }, parents: parents.map((sha) => ({ sha })) });
@@ -486,6 +492,7 @@ describe("githubRepairHost.mergeRevert", () => {
       [MERGE]: ok({ merged: true }),
     });
 
+    expect(OPEN_REVERT.base.ref).toBe("main");
     expect(await host.mergeRevert(12, PUBLISHED)).toEqual({ kind: "merged" });
     expect(s.sent(HEAD_COMMIT)).toHaveLength(1);
     expect(s.sent(PUBLISHED_COMMIT)).toHaveLength(1);
@@ -539,6 +546,21 @@ describe("githubRepairHost.mergeRevert", () => {
       kind: "refused",
       message: "GitHub answered 200.",
     });
+  });
+
+  it("refuses a pull request retargeted away from main and merges nothing", async () => {
+    const { s, host } = scripted({
+      [PULL]: ok({ ...OPEN_REVERT, base: { ref: "release" } }),
+      ...CHECKED,
+      [MERGE]: ok({ merged: true }),
+    });
+
+    expect(await host.mergeRevert(12, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: OTHER_BASE_REFUSED,
+    });
+    expect(s.sent(HEAD_COMMIT)).toHaveLength(0);
+    expect(s.writes()).toEqual([]);
   });
 
   it("refuses a head whose files differ from the published commit and merges nothing", async () => {
@@ -634,7 +656,13 @@ describe("gitlabRepairHost.mergeRevert", () => {
   const COMPARE = `GET /projects/1/repository/compare?from=${PUBLISHED.sha}&to=${HEAD}&straight=true`;
   const HEAD_COMMIT = `GET /projects/1/repository/commits/${HEAD}`;
   const MAIN_BRANCH = "GET /projects/1/repository/branches/main";
-  const OPEN_REVERT = { iid: 3, state: "opened", sha: HEAD, source_branch: REVERT_REF };
+  const OPEN_REVERT = {
+    iid: 3,
+    state: "opened",
+    sha: HEAD,
+    source_branch: REVERT_REF,
+    target_branch: "main",
+  };
 
   function headCommit(parents: string[]) {
     return ok({ id: HEAD, message: revertMessage(PUBLISHED), parent_ids: parents });
@@ -663,6 +691,7 @@ describe("gitlabRepairHost.mergeRevert", () => {
       [MERGE]: ok({ state: "merged" }),
     });
 
+    expect(OPEN_REVERT.target_branch).toBe("main");
     expect(await host.mergeRevert(3, PUBLISHED)).toEqual({ kind: "merged" });
     expect(s.sent(COMPARE)).toHaveLength(1);
     expect(s.sent(HEAD_COMMIT)).toHaveLength(1);
@@ -716,6 +745,21 @@ describe("gitlabRepairHost.mergeRevert", () => {
       kind: "refused",
       message: "GitLab answered 200.",
     });
+  });
+
+  it("refuses a merge request retargeted away from main and merges nothing", async () => {
+    const { s, host } = scripted({
+      [REQUEST]: ok({ ...OPEN_REVERT, target_branch: "release" }),
+      ...CHECKED,
+      [MERGE]: ok({ state: "merged" }),
+    });
+
+    expect(await host.mergeRevert(3, PUBLISHED)).toEqual({
+      kind: "refused",
+      message: OTHER_BASE_REFUSED,
+    });
+    expect(s.sent(COMPARE)).toHaveLength(0);
+    expect(s.writes()).toEqual([]);
   });
 
   it.each([
