@@ -81,6 +81,7 @@ interface Setup {
   /** The handle the host resolves. REPO when unset. */
   repo?: SteeringRepository;
   cacheEntries?: number;
+  cacheBytes?: number;
 }
 
 function setup(options: Setup = {}) {
@@ -118,6 +119,7 @@ function setup(options: Setup = {}) {
     host: { resolveRepository, readFile },
     log: { warn },
     cacheEntries: options.cacheEntries,
+    cacheBytes: options.cacheBytes,
   });
   return {
     published,
@@ -363,13 +365,14 @@ describe("readAsset", () => {
     expect(t.readFile).not.toHaveBeenCalled();
   });
 
-  it("keeps only the most recently used bodies", async () => {
+  it("keeps only the most recently used bodies within its byte budget", async () => {
     const A = "memory/a.md";
     const B = "memory/b.md";
     const C = "memory/c.md";
     const t = setup({
       files: Object.fromEntries([A, B, C].map((path) => [at(COMMIT, path), `${path}\n`])),
-      cacheEntries: 2,
+      // Each body is 12 bytes, so the budget holds two of them.
+      cacheBytes: 24,
     });
     const bundle = await workspaceVersion(t.published);
     for (const path of [A, B, A, C, A, B]) {
@@ -380,6 +383,47 @@ describe("readAsset", () => {
     }
     // A is read again before C arrives, so C evicts B, and A stays.
     expect(t.readFile.mock.calls.map(([, path]) => path)).toEqual([A, B, C, B]);
+  });
+
+  it("keeps no body larger than the whole budget", async () => {
+    const t = setup({
+      files: { [at(COMMIT, MEMORY)]: TEXT },
+      cacheBytes: Buffer.byteLength(TEXT) - 1,
+    });
+    const bundle = await workspaceVersion(t.published);
+    const file = { path: MEMORY, blob: gitBlobId(TEXT) };
+    await t.published.readAsset("workspace", bundle, file);
+    await expect(
+      t.published.readAsset("workspace", bundle, file),
+    ).resolves.toBe(TEXT);
+    expect(t.readFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("puts back a byte order mark the host dropped, so the blob still matches", async () => {
+    const BOM = "\uFEFF";
+    // GitLab's read decodes with Response.text(), which drops a leading mark.
+    const t = setup({ files: { [at(COMMIT, MEMORY)]: TEXT } });
+    const bundle = await workspaceVersion(t.published);
+    const file = { path: MEMORY, blob: gitBlobId(BOM + TEXT) };
+    await expect(
+      t.published.readAsset("workspace", bundle, file),
+    ).resolves.toBe(BOM + TEXT);
+    await expect(
+      t.published.readAsset("workspace", bundle, file),
+    ).resolves.toBe(BOM + TEXT);
+    expect(t.readFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a byte order mark the host returned", async () => {
+    const BOM = "\uFEFF";
+    const t = setup({ files: { [at(COMMIT, MEMORY)]: BOM + TEXT } });
+    const bundle = await workspaceVersion(t.published);
+    await expect(
+      t.published.readAsset("workspace", bundle, {
+        path: MEMORY,
+        blob: gitBlobId(BOM + TEXT),
+      }),
+    ).resolves.toBe(BOM + TEXT);
   });
 
   it("never answers one workspace's read from another's body", async () => {

@@ -5,10 +5,10 @@
 // Stella alike. The handler checks the host key the way every Tacho control
 // call does, then asks that the key's creator still holds a role the contract
 // grants. It reads the memory records from the workspace's and the
-// organization's published steering through the same port as the skills, so
-// binding the version store (#4550) changes nothing here. `recallMemories`
-// ranks them with the waiting memories governance allows and stamps each
-// record it serves.
+// organization's published steering through the same port as the skills,
+// bound to the Postgres version store (#4550). `recallMemories` ranks them
+// with the waiting memories governance allows and stamps each record it
+// serves.
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import {
   tachoMemoriesRecall,
@@ -32,7 +32,10 @@ import type {
   RecallItem,
   RecallRequest,
 } from "./memory/types";
-import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
+import {
+  type TachoPublished,
+  VERSION_STORE_PUBLISHED,
+} from "./tacho.published";
 
 const CAPABILITY = "recall_tacho_memories";
 
@@ -52,13 +55,12 @@ export interface TachoMemoriesRecallDeps {
 }
 
 /**
- * The memory runner and its Postgres store, loaded on the first call so the
- * handler module stays light for the route that lazy-loads it. Until #4550
- * binds the version store, nothing has published, so recall serves waiting
- * memories only.
+ * The published versions in the Postgres version store, and the memory runner
+ * and its Postgres store. Each loads on the first call, so the handler module
+ * stays light for the route that lazy-loads it.
  */
 export const defaultTachoMemoriesRecallDeps: TachoMemoriesRecallDeps = {
-  published: NOTHING_PUBLISHED,
+  published: VERSION_STORE_PUBLISHED,
   async recall(scope, request, records) {
     const [{ recallMemories }, { postgresMemoryStore }] = await Promise.all([
       import("./memory/runner"),

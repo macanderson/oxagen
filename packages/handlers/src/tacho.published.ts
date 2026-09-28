@@ -6,10 +6,14 @@
 // against one prompt. Both read it through this port, so the version store
 // that holds bundle/v1 binds in one place.
 //
-// Until that store is bound (#4550), `NOTHING_PUBLISHED` answers: no version
-// published, no asset readable, and unreviewed memories off. Off is the safe
-// reading of a governance file Oxagen cannot see, because a workspace in
-// `regulated` mode turns unreviewed recall off whatever else it sets.
+// `VERSION_STORE_PUBLISHED` binds the port to the Postgres version store that
+// publish() writes (#4550), and both routes use it by default. It loads that
+// binding on first use, so importing a handler opens no database client.
+//
+// `NOTHING_PUBLISHED` answers as if nothing had published: no version, no
+// asset readable, and unreviewed memories off. Off is the safe reading of a
+// governance file Oxagen cannot see, because a workspace in `regulated` mode
+// turns unreviewed recall off whatever else it sets.
 import type { GovernanceSettings } from "@oxagen/oxagen/steering-repo/governance";
 import type { ReadAsset } from "@oxagen/steering-bundle/session";
 import type { ReadPublished } from "./steering.search";
@@ -36,4 +40,15 @@ export const NOTHING_PUBLISHED: TachoPublished = {
     );
   },
   recallUnreviewed: async () => "off",
+};
+
+const bound = () =>
+  import("./tacho.published.postgres").then((m) => m.postgresTachoPublished);
+
+/** The port bound to the Postgres version store, loaded on first use. */
+export const VERSION_STORE_PUBLISHED: TachoPublished = {
+  published: async (scope) => (await bound()).published(scope),
+  readAsset: async (source, bundle, file) =>
+    (await bound()).readAsset(source, bundle, file),
+  recallUnreviewed: async (scope) => (await bound()).recallUnreviewed(scope),
 };

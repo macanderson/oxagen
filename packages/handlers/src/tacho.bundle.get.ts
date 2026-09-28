@@ -1,6 +1,8 @@
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { tachoBundleGet } from "@oxagen/oxagen/contracts/tacho.bundle.get";
 import { schema, withTenantDb } from "@oxagen/database";
+import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
+import type { BundleSource, Delivery } from "@oxagen/steering-bundle";
 import { runSkills } from "@oxagen/steering-bundle/session";
 import {
   BUNDLE_FEATURE_SKILLS,
@@ -25,20 +27,36 @@ import {
 } from "./lib/tacho-host";
 import { readWorkspaceSteering } from "./lib/tacho-steering";
 import { logger } from "./logger";
-import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
+import {
+  type TachoPublished,
+  VERSION_STORE_PUBLISHED,
+} from "./tacho.published";
 
 export interface TachoBundleGetDeps {
   /** The workspace's and the organization's published steering, for the skills. */
   published: TachoPublished;
 }
 
-/** Until #4550 binds the version store, nothing has published, so no bundle carries skills. */
+/** The skills come from the versions the Postgres version store holds (#4550). */
 export const defaultTachoBundleGetDeps: TachoBundleGetDeps = {
-  published: NOTHING_PUBLISHED,
+  published: VERSION_STORE_PUBLISHED,
 };
 
 /** How many published pairs the skills cache holds before it drops the oldest. */
 const SKILLS_CACHE_MAX = 256;
+
+/**
+ * How long skills read with a skill left out are kept. A forge error may pass,
+ * so the left-out skill is tried again after this. A file that never reads,
+ * such as a binary asset, costs one forge read per ten minutes.
+ */
+const SKILLS_PARTIAL_TTL_MS = 10 * 60 * 1000;
+
+interface CachedSkills {
+  skills: BundleSkill[];
+  /** When a read that left a skill out stops answering, in epoch milliseconds. */
+  expiresAt?: number;
+}
 
 type HostRow = Awaited<ReturnType<typeof resolveEnrolledHost>>;
 
@@ -54,7 +72,7 @@ type HostRow = Awaited<ReturnType<typeof resolveEnrolledHost>>;
  */
 async function hostSkills(
   published: TachoPublished,
-  cache: Map<string, BundleSkill[]>,
+  cache: Map<string, CachedSkills>,
   ctx: CapabilityContext,
   host: HostRow,
 ): Promise<BundleSkill[] | undefined> {
@@ -74,21 +92,28 @@ async function hostSkills(
       `${delivery.workspace?.commit ?? "-"}@${delivery.workspace?.version ?? 0}`,
       `${delivery.organization?.commit ?? "-"}@${delivery.organization?.version ?? 0}`,
     ].join("|");
-    let skills = cache.get(key);
-    if (skills === undefined) {
+    let cached = cache.get(key);
+    if (cached?.expiresAt !== undefined && cached.expiresAt <= Date.now()) {
+      cache.delete(key);
+      cached = undefined;
+    }
+    if (cached === undefined) {
+      const read = await readSkills(published, delivery, ctx);
       // A skill scoped to repositories is left out: the bundle is per host,
       // and a host runs sessions in many repositories.
-      skills = fitSkills(
-        await runSkills(delivery, null, published.readAsset),
-        ctx,
-      );
+      cached = {
+        skills: fitSkills(read.chosen, ctx),
+        ...(read.partial
+          ? { expiresAt: Date.now() + SKILLS_PARTIAL_TTL_MS }
+          : {}),
+      };
       if (cache.size >= SKILLS_CACHE_MAX) {
         const oldest = cache.keys().next().value;
         if (oldest !== undefined) cache.delete(oldest);
       }
-      cache.set(key, skills);
+      cache.set(key, cached);
     }
-    return skills.length === 0 ? undefined : skills;
+    return cached.skills.length === 0 ? undefined : cached.skills;
   } catch (error) {
     logger.warn(
       {
@@ -100,6 +125,99 @@ async function hostSkills(
     );
     return undefined;
   }
+}
+
+/**
+ * The published skills, with each skill whose files cannot be read left out.
+ *
+ * `runSkills` reads each skill's files in turn and throws on the first one it
+ * cannot read or parse. The file it last asked for names the skill that
+ * failed, so that skill is left out, logged, and the rest read again. Every
+ * read goes to the version object `published` returned, because the port
+ * finds a version's repository by that object.
+ */
+async function readSkills(
+  published: TachoPublished,
+  delivery: Delivery,
+  ctx: CapabilityContext,
+): Promise<{
+  chosen: Awaited<ReturnType<typeof runSkills>>;
+  partial: boolean;
+}> {
+  const dropped = new Set<string>();
+  for (;;) {
+    // `runSkills` reads one file at a time, so one holder tracks the last read.
+    const last: { source?: BundleSource; path?: string } = {};
+    try {
+      const chosen = await runSkills(
+        withoutSkills(delivery, dropped),
+        null,
+        (source, _copy, file) => {
+          last.source = source;
+          last.path = file.path;
+          const bundle = delivery[source];
+          if (bundle === null) {
+            throw new Error(`No ${source} version holds ${file.path}.`);
+          }
+          return published.readAsset(source, bundle, file);
+        },
+      );
+      return { chosen, partial: dropped.size > 0 };
+    } catch (error) {
+      const failed =
+        last.source === undefined || last.path === undefined
+          ? []
+          : skillsReading(delivery[last.source], last.path).filter(
+              (lineage) => !dropped.has(lineage),
+            );
+      if (failed.length === 0) throw error;
+      for (const lineage of failed) {
+        dropped.add(lineage);
+        logger.warn(
+          {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            lineage,
+            path: last.path,
+            err: error instanceof Error ? error.message : String(error),
+          },
+          "get_tacho_bundle: the skill was left out, because one of its files could not be read",
+        );
+      }
+    }
+  }
+}
+
+/** The lineages of the skills in `bundle` that read `path`. */
+function skillsReading(bundle: Bundle | null, path: string): string[] {
+  if (bundle === null) return [];
+  return bundle.records
+    .filter(
+      (record) =>
+        record.kind === "skill" &&
+        (record.path === path ||
+          (record.files ?? []).some((file) => file.path === path)),
+    )
+    .map((record) => record.lineage);
+}
+
+/** The delivery with the skills of `lineages` removed from both versions. */
+function withoutSkills(delivery: Delivery, lineages: Set<string>): Delivery {
+  if (lineages.size === 0) return delivery;
+  const keep = (bundle: Bundle | null): Bundle | null =>
+    bundle === null
+      ? null
+      : {
+          ...bundle,
+          records: bundle.records.filter(
+            (record) => record.kind !== "skill" || !lineages.has(record.lineage),
+          ),
+        };
+  return {
+    ...delivery,
+    workspace: keep(delivery.workspace),
+    organization: keep(delivery.organization),
+  };
 }
 
 /** The skills that fit the bundle, in the order `runSkills` gives them. */
@@ -145,7 +263,7 @@ function fitSkills(
 export function createTachoBundleGetHandler(
   deps: TachoBundleGetDeps,
 ): CapabilityHandler<typeof tachoBundleGet> {
-  const skillsCache = new Map<string, BundleSkill[]>();
+  const skillsCache = new Map<string, CachedSkills>();
   return async (input, ctx) => {
     const now = new Date();
     const signer = requireBundleSigner("get_tacho_bundle");
