@@ -218,9 +218,14 @@
             "additionalProperties": true,
             "properties": {
               "@type": {
+                "description": "The type URL of the packed message, such as type.googleapis.com/acme.v1.Money. It must name a message the service's .proto files define.",
+                "pattern": "^(.*/)?[^/]+$",
                 "type": "string"
               }
             },
+            "required": [
+              "@type"
+            ],
             "type": "object"
           },
           "invoiceId": {

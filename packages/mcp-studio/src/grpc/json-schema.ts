@@ -12,7 +12,15 @@
 //   be a number the definition does not name, sent by a newer server.
 // - A well-known type takes its own JSON form. A Timestamp is an RFC 3339
 //   string, a Duration is a string such as "1.5s", and an Any is an object
-//   with an @type URL.
+//   with an @type URL. A request's Any must carry an @type that ends in a
+//   type name, because fromJson refuses one that is missing or empty. A
+//   response's Any can be {}, as toJson writes an empty Any.
+// - A map is an object keyed by the key's JSON form. In a request, an
+//   integer key must be a decimal integer and a bool key must be "true" or
+//   "false", so the schema refuses a key fromJson cannot read. That is
+//   stricter than fromJson, which also reads "0x10" as an int32 key. The
+//   encoder still checks each key's range. A response's keys are not
+//   constrained, because toJson writes them.
 // - A oneof allows at most one of its fields.
 // - A response requires each field toJson always writes: the fields with
 //   implicit presence (lists and maps among them) and proto2 required fields.
@@ -44,6 +52,7 @@ export type JsonSchema = {
   contentEncoding?: string;
   items?: JsonSchema;
   properties?: Record<string, JsonSchema>;
+  patternProperties?: Record<string, JsonSchema>;
   required?: string[];
   additionalProperties?: boolean | JsonSchema;
   oneOf?: JsonSchema[];
@@ -91,14 +100,66 @@ function scalarSchema(scalar: ScalarType): JsonSchema {
 }
 
 /**
+ * A type URL that ends in a type name. fromJson reads the name after the
+ * last slash and refuses an Any whose name is empty.
+ */
+const TYPE_URL_PATTERN = "^(.*/)?[^/]+$";
+
+/**
+ * An Any's JSON form. A request's Any needs an @type, because fromJson
+ * refuses a non-empty Any without one. It also accepts {}, but an empty Any
+ * says nothing that leaving the field out does not. A response's Any can
+ * be {}.
+ */
+function anySchema(direction: Direction): JsonSchema {
+  if (direction === "output") {
+    return { type: "object", properties: { "@type": { type: "string" } }, additionalProperties: true };
+  }
+  const typeUrl: JsonSchema = {
+    type: "string",
+    pattern: TYPE_URL_PATTERN,
+    description:
+      "The type URL of the packed message, such as type.googleapis.com/acme.v1.Money. " +
+      "It must name a message the service's .proto files define.",
+  };
+  return { type: "object", properties: { "@type": typeUrl }, required: ["@type"], additionalProperties: true };
+}
+
+/**
+ * The pattern a request's map key must match, by the key's type, or
+ * undefined for a string key. A decimal integer is the form toJson writes,
+ * and the encoder checks its range.
+ */
+function mapKeyPattern(key: ScalarType): string | undefined {
+  switch (key) {
+    case ScalarType.INT32:
+    case ScalarType.SINT32:
+    case ScalarType.SFIXED32:
+    case ScalarType.INT64:
+    case ScalarType.SINT64:
+    case ScalarType.SFIXED64:
+      return "^-?[0-9]+$";
+    case ScalarType.UINT32:
+    case ScalarType.FIXED32:
+    case ScalarType.UINT64:
+    case ScalarType.FIXED64:
+      return "^[0-9]+$";
+    case ScalarType.BOOL:
+      return "^(true|false)$";
+    default:
+      return undefined;
+  }
+}
+
+/**
  * The JSON form of a well-known type that has its own, or undefined for a
  * message that maps field by field. google.protobuf.Empty has no fields, so
  * it maps as an ordinary message to an empty object.
  */
-function wellKnownSchema(desc: DescMessage): JsonSchema | undefined {
+function wellKnownSchema(desc: DescMessage, direction: Direction): JsonSchema | undefined {
   switch (desc.typeName) {
     case "google.protobuf.Any":
-      return { type: "object", properties: { "@type": { type: "string" } }, additionalProperties: true };
+      return anySchema(direction);
     case "google.protobuf.Timestamp":
       return { type: "string", format: "date-time" };
     case "google.protobuf.Duration":
@@ -173,7 +234,7 @@ export class SchemaBuilder {
   /** The whole JSON form of a message. The description is the message's leading comment. */
   messageSchema(desc: DescMessage, direction: Direction, depth: number): JsonSchema {
     this.spend();
-    const known = wellKnownSchema(desc);
+    const known = wellKnownSchema(desc, direction);
     if (known !== undefined) return known;
     const name = desc.typeName;
     if (depth > DEPTH_MAX) {
@@ -229,8 +290,13 @@ export class SchemaBuilder {
     switch (field.fieldKind) {
       case "list":
         return { type: "array", items: this.valueSchema(field, direction, depth) };
-      case "map":
-        return { type: "object", additionalProperties: this.valueSchema(field, direction, depth) };
+      case "map": {
+        const value = this.valueSchema(field, direction, depth);
+        const key = direction === "input" ? mapKeyPattern(field.mapKey) : undefined;
+        if (key === undefined) return { type: "object", additionalProperties: value };
+        // validate.ts checks patternProperties but not propertyNames, so this is the form that refuses a bad key.
+        return { type: "object", patternProperties: { [key]: value }, additionalProperties: false };
+      }
       default:
         return this.valueSchema(field, direction, depth);
     }
