@@ -56,7 +56,7 @@ export const repositoryGitlabAttach = registerCapability({
     "Connect a gitlab.com project to the workspace with a project access token scoped to that project. The token is verified, encrypted and never returned; a project webhook for merge request events is registered when the token's role allows it. Connecting the same project again rotates the token.",
   mode: "sync",
   surfaces: ["api"],
-  layers: ["schema", "api", "unit", "docs", "app"],
+  layers: ["schema", "api", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
@@ -81,7 +81,7 @@ export const repositoryGitlabAttach = registerCapability({
       projectId: z.string().regex(/^[1-9]\d{0,19}$/),
       /** `group/sub/project` as GitLab reports it. */
       fullName: z.string().min(1),
-      /** The project's default branch, which a bind approves. */
+      /** The project's default branch, as GitLab reports it. */
       defaultRef: z.string().min(1),
       /** When GitLab expires the token, or null when it never does. */
       tokenExpiresAt: z.string().nullable(),

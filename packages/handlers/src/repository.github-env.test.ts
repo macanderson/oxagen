@@ -141,7 +141,7 @@ interface FlowEntry {
 /**
  * The capabilities whose handlers read these credentials.
  *
- * `bind_main_repository` and `list_installation_repositories` mint installation
+ * `link_repository` and `list_installation_repositories` mint installation
  * tokens from `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY`, which are two of
  * `REQUIRED_GITHUB_APP_ENV`'s six — but they do not read the constant, and the
  * constant is the unit this test holds, so listing them here would over-claim

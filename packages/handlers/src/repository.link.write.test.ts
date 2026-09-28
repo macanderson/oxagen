@@ -20,7 +20,7 @@ import {
   resolveLinkTarget,
   writeLinkedHead,
 } from "./repository.link.write";
-import type { MainRepositoryDeps } from "./repository.main.bind";
+import type { MainRepositoryDeps } from "./repository.binding-write";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
@@ -171,10 +171,12 @@ function armSystemDb(
 
 interface Tenant {
   tx: Tx;
-  /** "lock", "read" and "write", in the order the writer reached them. */
+  /** "lock", "read", "write" and "promote", in the order the writer reached them. */
   events: string[];
   locks: SQL[];
   reads: SQL[];
+  /** Each connection status update: the table, the values, and the filter. */
+  updates: { table: unknown; values: Record<string, unknown>; where: SQL }[];
 }
 
 /**
@@ -185,12 +187,22 @@ function armTenant(heads: HeadRow[]): Tenant {
   const events: string[] = [];
   const locks: SQL[] = [];
   const reads: SQL[] = [];
+  const updates: Tenant["updates"] = [];
   const fake = {
     execute: async (query: SQL) => {
       events.push("lock");
       locks.push(query);
       return [];
     },
+    update: (table: unknown) => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async (where: SQL) => {
+          events.push("promote");
+          updates.push({ table, values, where });
+          return [];
+        },
+      }),
+    }),
     select: () => ({
       from: (table: unknown) => ({
         where: async (where: SQL) => {
@@ -211,7 +223,7 @@ function armTenant(heads: HeadRow[]): Tenant {
     events.push("write");
     return { bindingPublicId: "rpb_new" };
   });
-  return { tx, events, locks, reads };
+  return { tx, events, locks, reads, updates };
 }
 
 function deps() {
@@ -350,10 +362,24 @@ describe("resolveLinkTarget", () => {
 describe("writeLinkedHead", () => {
   const ARGS = { userId: "user_1", now: NOW };
 
-  it("takes the workspace lock, reads the heads, then writes the head", async () => {
+  it("takes the workspace lock, reads the heads, writes the head, then promotes the connection", async () => {
     const tenant = armTenant([STEERING_HEAD]);
     await writeLinkedHead(SCOPE, TARGET, ARGS);
-    expect(tenant.events).toEqual(["lock", "read", "write"]);
+    expect(tenant.events).toEqual(["lock", "read", "write", "promote"]);
+  });
+
+  it("moves the connection to connected only while it is pending_setup", async () => {
+    const tenant = armTenant([STEERING_HEAD]);
+    await writeLinkedHead(SCOPE, TARGET, ARGS);
+    expect(tenant.updates).toHaveLength(1);
+    const [update] = tenant.updates;
+    if (!update) throw new Error("the writer updated no connection");
+    expect(update.table).toBe(schema.sourceConnections);
+    expect(update.values).toEqual({ status: "connected", updatedAt: NOW });
+    expect(dialect.sqlToQuery(update.where).params).toEqual([
+      "conn-uuid",
+      "pending_setup",
+    ]);
   });
 
   it("takes the same lock as every other writer of this workspace's heads", async () => {

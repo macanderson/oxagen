@@ -64,19 +64,10 @@
     "attach_github_installation": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cUse this installation\u201d on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and steering repository \u2014 \u201cUse this installation\u201d on the picked GitHub account (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
-    },
-    "attach_gitlab_project": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories › main repository: “Connect and bind” in the GitLab project form, and the same form repairing a GitLab binding whose token was revoked (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
-      "testid": "workspace-gitlab-connect",
-      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "session_012RZnK27nmESrihQgUhwwFk"
     },
     "authorize_cli": {
       "route": "/cli/authorize",
@@ -85,14 +76,6 @@
       "proof": "apps/app/src/features/auth/cli-consent.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
-    },
-    "bind_main_repository": {
-      "route": "/[org]/[ws]/repositories",
-      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cBind as main repo\u201d on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
-      "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page"
     },
     "bisect_runs": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -474,7 +457,7 @@
     "get_main_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a GitHub connection and main repository \u2014 the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and steering repository \u2014 the panel every visit reads (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -825,7 +808,7 @@
     "list_github_installations": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a GitHub connection and main repository \u2014 the installation picker, shown when GitHub is authorized and no installation is attached (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and steering repository \u2014 the installation picker, shown when the workspace has no steering repository or its GitHub connection was retired (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -849,7 +832,7 @@
     "list_installation_repositories": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
+      "entry": "Repositories \u203a the Not linked table of repositories the installation reaches (features/repositories/repositories.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"

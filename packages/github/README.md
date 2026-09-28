@@ -16,8 +16,8 @@
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | `resolveGitHubToken(ctx)` | export | `packages/github/src/workspace-token.ts` | `packages/handlers/src/lib/github-token.ts` and `packages/handlers/src/lib/run-work-prs.ts` |
-| `getInstallationToken`, `createAppInstallationToken`, `revokeInstallationToken` | export | `packages/github/src/app-auth.ts` | `resolveGitHubToken`, `packages/handlers/src/repository.main.bind.ts`, and `packages/handlers/src/tacho.github_token.issue.ts` |
-| `createGitHubClient` | export | `packages/github/src/fetch-client.ts` | `packages/handlers/src/repo.ci.status.ts`, `repository.main.bind.ts`, and other repository handlers |
+| `getInstallationToken`, `createAppInstallationToken`, `revokeInstallationToken` | export | `packages/github/src/app-auth.ts` | `resolveGitHubToken`, `packages/handlers/src/repository.binding-write.ts`, and `packages/handlers/src/tacho.github_token.issue.ts` |
+| `createGitHubClient` | export | `packages/github/src/fetch-client.ts` | `packages/handlers/src/repo.ci.status.ts`, `repository.binding-write.ts`, and other repository handlers |
 | `mintInstallState`, `verifyInstallState`, `buildInstallAuthUrl` | boundary | `packages/github/src/install-url.ts` | `apps/api/src/routes/v1/github-oauth.ts`, which verifies the signed state on the callback |
 | `GitHubWorkspaceScope` | port | `packages/github/src/workspace-token.ts` | Any `CapabilityContext` satisfies it structurally, so this package needs no `@oxagen/oxagen` dependency |
 

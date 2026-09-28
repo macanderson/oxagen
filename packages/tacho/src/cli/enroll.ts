@@ -327,7 +327,7 @@ async function callTokenEnrollment(
   return tokenEnrollmentResponseSchema.parse(JSON.parse(text));
 }
 
-/** The git remote of the working directory, for the gate's "Repository detected" offer; undefined outside a repository. */
+/** The git remote of the working directory, which the gate records as `detected_repository`. Undefined outside a repository. */
 function repositoryRemote(deps: CliDeps): string | undefined {
   const result = deps.exec("git", ["config", "--get", "remote.origin.url"]);
   const remote = result.status === 0 ? result.stdout.trim() : "";
