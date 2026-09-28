@@ -241,8 +241,32 @@ describe("the request", () => {
       () => reply(200, {}),
       { auth, credential: { type: "api_key", value: "sess_1" } },
     );
-    expect(header(only(requests), "cookie")).toBe("theme=dark; ids=1,2; session=sess_1");
+    expect(header(only(requests), "cookie")).toBe("theme=dark; ids=1; ids=2; session=sess_1");
     expect(result.exchanges?.[0]?.request).toEqual({ method: "GET", path: "/things" });
+  });
+
+  it("serializes cookie parameters by the form style, exploded unless explode is false", async () => {
+    const cookie = (p: HttpParameter, value: unknown): Promise<string | undefined> =>
+      built(operation({ parameters: [p] }), { c: value }).then((r) => header(r, "cookie"));
+    expect(await cookie(param("c", "cookie"), "blue")).toBe("c=blue");
+    expect(await cookie(param("c", "cookie"), ["blue", "black"])).toBe("c=blue; c=black");
+    expect(await cookie(param("c", "cookie"), { R: 100, G: 200 })).toBe("R=100; G=200");
+    expect(await cookie(param("c", "cookie", { explode: true }), ["blue", "black"])).toBe("c=blue; c=black");
+    expect(await cookie(param("c", "cookie", { explode: false }), "blue")).toBe("c=blue");
+    expect(await cookie(param("c", "cookie", { explode: false }), ["blue", "black"])).toBe("c=blue,black");
+    expect(await cookie(param("c", "cookie", { explode: false }), { R: 100, G: 200 })).toBe("c=R,100,G,200");
+    expect(await cookie(param("c", "cookie"), [])).toBeUndefined();
+  });
+
+  it("sends no parameter cookie that takes the API key cookie's name", async () => {
+    const auth: ManifestAuth = { mode: "service", scheme: "key", apply: { type: "api_key", in: "cookie", name: "session" } };
+    const { requests } = await send(
+      operation({ parameters: [param("prefs", "cookie")] }),
+      { prefs: { lang: "en", session: "forged" } },
+      () => reply(200, {}),
+      { auth, credential: { type: "api_key", value: "sess_1" } },
+    );
+    expect(header(only(requests), "cookie")).toBe("lang=en; session=sess_1");
   });
 
   it("sends form and text bodies", async () => {
@@ -342,6 +366,12 @@ describe("a request that cannot be built", () => {
     );
     expect(await refused(operation({ parameters: [param("c", "cookie")] }), { c: "a;b" }, "Invalid arguments")).toContain(
       "semicolon",
+    );
+    expect(await refused(operation({ parameters: [param("c", "cookie")] }), { c: ["a", "b;x=1"] }, "Invalid arguments")).toContain(
+      "semicolon",
+    );
+    expect(await refused(operation({ parameters: [param("c", "cookie")] }), { c: { "x=y; z": "1" } }, "Invalid arguments")).toContain(
+      "token",
     );
   });
 

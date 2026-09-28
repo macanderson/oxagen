@@ -44,10 +44,9 @@
             "transport": {
               "type": "string",
               "enum": [
-                "http",
-                "sse"
+                "http"
               ],
-              "description": "http (streamable HTTP) or sse, which today's connect flow still offers."
+              "description": "http, MCP's streamable HTTP transport. Review refuses sse, the older HTTP+SSE transport (ADR-211)."
             },
             "network": {
               "type": "string",
