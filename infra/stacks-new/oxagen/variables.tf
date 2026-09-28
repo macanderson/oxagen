@@ -77,11 +77,11 @@ variable "vanity_domains" {
   default = {
     "oxagen.app" = {
       redirect_to = "https://app.oxagen.sh/"
-      delegated   = false
+      delegated   = true
     }
     "oxagen.dev" = {
       redirect_to = "https://docs.oxagen.sh/"
-      delegated   = false
+      delegated   = true
     }
   }
 }

@@ -115,7 +115,6 @@ type Messages = {
       tableLabel: string;
       columns: {
         agent: string;
-        purpose: string;
         owner: string;
         steering: string;
         toolbelt: string;
