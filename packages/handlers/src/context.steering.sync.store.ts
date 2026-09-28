@@ -11,7 +11,18 @@ import {
 } from "@oxagen/database";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { STELLA_ARCHIVE_AFTER_DAYS_SETTING } from "@oxagen/oxagen/steering-repo/workspace";
-import { and, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  max,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import {
   appendPromotion,
@@ -96,13 +107,19 @@ export interface SyncStore {
   openProposals(scope: Scope): Promise<ProposalRow[]>;
   /**
    * Record a Context PR the host merged: the proposal points at its lineage's
-   * record and newest promotion. False when the lineage has no active record
-   * or the proposal already left the open states.
+   * record and newest promotion. False when the lineage has no active record,
+   * the proposal already left the open states, or a merge claimed it after
+   * `noClaimSince` and is still landing it (#4504).
    */
   linkMergedProposal(
     scope: Scope,
     proposalId: string,
-    args: { lineageId: string; mergedCommit: string; mergedAt: Date },
+    args: {
+      lineageId: string;
+      mergedCommit: string;
+      mergedAt: Date;
+      noClaimSince: Date;
+    },
   ): Promise<boolean>;
   /**
    * Write the settings workspace.toml sets into `workspaces.settings`. A null
@@ -455,12 +472,17 @@ export const postgresSyncStore: SyncStore = {
           mergedByUserId: null,
           publishedRecordId: record.id,
           promotionEventId: promotion.id,
+          mergeClaimedAt: null,
           updatedAt: sql`now()`,
         })
         .where(
           and(
             eq(schema.contextProposals.id, proposalId),
             inArray(schema.contextProposals.status, [...OPEN_PR]),
+            or(
+              isNull(schema.contextProposals.mergeClaimedAt),
+              lte(schema.contextProposals.mergeClaimedAt, args.noClaimSince),
+            ),
           ),
         )
         .returning({ id: schema.contextProposals.id });

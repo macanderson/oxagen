@@ -29,6 +29,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lte,
   max,
   or,
   sql,
@@ -88,8 +89,20 @@ type ProposalPatch = Partial<
     | "dismissedAt"
     | "dismissedReason"
     | "updatedById"
+    | "mergeClaimedAt"
   >
 >;
+
+/**
+ * Guards on a proposal write, beyond its status. `headSha` ties the write to
+ * the checks that ran on that head. `noClaimSince` refuses a proposal a merge
+ * claimed after that instant (see MERGE_CLAIM_SECONDS), so nothing else moves
+ * it while the merge lands.
+ */
+export interface ProposalGuard {
+  headSha?: string;
+  noClaimSince?: Date;
+}
 
 export type PublishedRecordRow = Omit<
   typeof schema.contextRecords.$inferSelect,
@@ -206,15 +219,17 @@ export interface SteeringStore {
   ): Promise<{ rows: ProposalRow[]; total: number }>;
   /**
    * Apply the patch only while the proposal's status is one of `from` and,
-   * with `guard`, its head is still `guard.headSha`; a proposal another call
-   * moved on is left as it is and the write throws `conflict` with the reason
-   * `proposal_<its status>`, or `head_moved` when only the head differs.
+   * with `guard`, its head is still `guard.headSha` and no merge claimed it
+   * after `guard.noClaimSince`. A proposal another call moved on is left as
+   * it is, and the write throws `conflict` with the reason
+   * `proposal_<its status>`. It throws `head_moved` when only the head
+   * differs, and `merge_in_progress` when only a merge's claim stands.
    */
   updateProposal(
     id: string,
     patch: ProposalPatch,
     from: readonly ProposalStatus[],
-    guard?: { headSha: string },
+    guard?: ProposalGuard,
   ): Promise<ProposalRow>;
 
   listRecords(
@@ -326,6 +341,48 @@ export function headMoved(
   });
 }
 
+/**
+ * How long a merge's claim on a proposal stands (#4504). `merge_context_pr`
+ * claims the proposal before it stamps the pull request, and clears the claim
+ * when it publishes or when the host did not merge. Until then a check rerun,
+ * a dismissal, and the repository sync leave the proposal alone, so the merge
+ * can move it to `merged` once the host has merged. A merge that crashed
+ * holds the claim until it lapses: ten minutes is well past the longest land
+ * the queue makes, and short enough for a person to retry the same day.
+ */
+export const MERGE_CLAIM_SECONDS = 600;
+
+/** The instant before which a merge's claim has lapsed. */
+export function claimCutoff(now: Date): Date {
+  return new Date(now.getTime() - MERGE_CLAIM_SECONDS * 1000);
+}
+
+/** True while a merge's claim on the proposal stands at `now`. */
+export function mergeClaimed(
+  row: Pick<ProposalRow, "mergeClaimedAt">,
+  now: Date,
+): boolean {
+  return (
+    row.mergeClaimedAt !== null &&
+    row.mergeClaimedAt.getTime() > claimCutoff(now).getTime()
+  );
+}
+
+/** A write found the proposal claimed by a merge that is still landing. */
+export function mergeInProgress(
+  publicId: string,
+  claimedAt: Date | null,
+): HandlerError {
+  const lapses = claimedAt
+    ? new Date(claimedAt.getTime() + MERGE_CLAIM_SECONDS * 1000).toISOString()
+    : "ten minutes after the merge started";
+  return new HandlerError({
+    code: "conflict",
+    reason: "merge_in_progress",
+    message: `Proposal ${publicId} is being merged. Try again when the merge finishes. If the merge failed, try again after ${lapses}.`,
+  });
+}
+
 /** The publication found the proposal past `checks_passed`. */
 export function alreadyMerged(proposalPublicId: string): HandlerError {
   return new HandlerError({
@@ -333,6 +390,32 @@ export function alreadyMerged(proposalPublicId: string): HandlerError {
     reason: "already_merged",
     message: `${proposalPublicId} was published by another call`,
   });
+}
+
+/**
+ * Why a guarded proposal write matched no row, from the row as it now reads.
+ * The status comes first, then the head, then a merge's claim. The memory
+ * store in the tests answers through this too, so both stores refuse alike.
+ */
+export function refusedWrite(
+  current: Pick<
+    ProposalRow,
+    "publicId" | "status" | "headSha" | "mergeClaimedAt"
+  >,
+  from: readonly ProposalStatus[],
+  guard: ProposalGuard | undefined,
+): HandlerError {
+  if (!from.includes(current.status as ProposalStatus))
+    return proposalMoved(current.publicId, current.status);
+  if (guard?.headSha !== undefined && current.headSha !== guard.headSha)
+    return headMoved(current.publicId, current.headSha, guard.headSha);
+  if (
+    guard?.noClaimSince !== undefined &&
+    current.mergeClaimedAt !== null &&
+    current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime()
+  )
+    return mergeInProgress(current.publicId, current.mergeClaimedAt);
+  return proposalMoved(current.publicId, current.status);
 }
 
 const asChecks = (v: unknown): CheckResult[] =>
@@ -508,6 +591,7 @@ export const postgresSteeringStore: SteeringStore = {
 
   async updateProposal(id, patch, from, guard) {
     return withTenantDb(async (tx) => {
+      const claimCol = schema.contextProposals.mergeClaimedAt;
       const [row] = await tx
         .update(schema.contextProposals)
         .set({ ...patch, updatedAt: sql`now()` })
@@ -515,8 +599,11 @@ export const postgresSteeringStore: SteeringStore = {
           and(
             eq(schema.contextProposals.id, id),
             inArray(schema.contextProposals.status, [...from]),
-            guard
+            guard?.headSha !== undefined
               ? eq(schema.contextProposals.headSha, guard.headSha)
+              : undefined,
+            guard?.noClaimSince !== undefined
+              ? or(isNull(claimCol), lte(claimCol, guard.noClaimSince))
               : undefined,
           ),
         )
@@ -527,6 +614,7 @@ export const postgresSteeringStore: SteeringStore = {
           publicId: schema.contextProposals.publicId,
           status: schema.contextProposals.status,
           headSha: schema.contextProposals.headSha,
+          mergeClaimedAt: claimCol,
         })
         .from(schema.contextProposals)
         .where(eq(schema.contextProposals.id, id))
@@ -535,13 +623,7 @@ export const postgresSteeringStore: SteeringStore = {
         throw new Error(
           `[context.steering] proposal ${id} vanished during update`,
         );
-      if (
-        guard &&
-        from.includes(current.status as ProposalStatus) &&
-        current.headSha !== guard.headSha
-      )
-        throw headMoved(current.publicId, current.headSha, guard.headSha);
-      throw proposalMoved(current.publicId, current.status);
+      throw refusedWrite(current, from, guard);
     });
   },
 
@@ -1088,6 +1170,7 @@ export const postgresSteeringStore: SteeringStore = {
           mergedByUserId: input.mergedByUserId,
           publishedRecordId: recordId,
           promotionEventId: promotion.id,
+          mergeClaimedAt: null,
           updatedById: input.mergedByUserId ?? undefined,
           updatedAt: input.mergedAt,
         })

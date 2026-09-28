@@ -26,23 +26,47 @@
 // promotion event to the hash-chained ledger, calls publish(), records the
 // publish as a deployment to the steering environment, and emits
 // `steering.published`. In a steering repo the Oxagen-Version trailer is the
-// version publish() assigns next, read from its own version store. When
-// publish() assigns another version, the merge is refused after it lands.
+// version publish() assigns next, read from its own version store. The merge
+// holds that store's lock from the read through publish(), across every
+// process, so a repository sync cannot publish in between and take the
+// number. A lock another publish holds for over a minute refuses
+// `publish_in_progress` before anything is claimed or merged. When publish()
+// still assigns another version, the merge's hold lapsed, and the merge is
+// refused after it lands.
 // A resumed merge whose commit S5 already published keeps that version and
-// is not published again. In a legacy repository the version is the ledger
-// length plus one.
+// is not published again. A resumed merge whose commit S5 never published,
+// on a production branch that has since moved past it, is refused
+// `version_superseded` before the registry changes: publish() would answer
+// stale, and the repository sync publishes the production branch instead.
+// The deployment is recorded only for a version publish() made live. In a
+// legacy repository the version is the ledger length plus one.
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
-// One window stays open: a crash after the stamp merged and before the row
-// moved to the stamp commit leaves the row at the checked head. The next call
-// reads a merged PR at another head and refuses `merged_outside_oxagen`, which
-// asks the repository sync to publish the merge from the production branch.
-import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
+// Before it lands the PR, the merge claims the proposal (merge_claimed_at).
+// While the claim stands, a check rerun, a dismissal, and another merge are
+// refused `merge_in_progress`, and the repository sync leaves the proposal
+// alone. The stamp commit is the PR's head until the host merges it, so any
+// of those would otherwise read a moved head and strand a proposal the host
+// has merged (#4504). The publication clears the claim. A landing that fails
+// before the host merged releases it. A landing that fails after the host
+// merged keeps it, and a retry resumes the merge. A claim a crash left behind
+// lapses after MERGE_CLAIM_SECONDS.
+//
+// One window stays open: a crash or a timeout after the stamp merged and
+// before the row moved to the stamp commit leaves the row at the checked
+// head. Once the claim lapses, the next call reads a merged PR at another
+// head and refuses `merged_outside_oxagen`, which asks the repository sync to
+// publish the merge from the production branch.
+import {
+  HandlerError,
+  isHandlerError,
+  type CapabilityHandler,
+} from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
-import type { PublishResult, VersionStore } from "@oxagen/steering-bundle";
+import type { PublishResult } from "@oxagen/steering-bundle";
 import { recheckContextPr } from "./context.pr.open";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { holdsCapability } from "./lib/capability-holder";
@@ -50,11 +74,18 @@ import {
   assertProductionBase,
   assertSameHost,
   refuseMergedOnHost,
+  type SteeringHost,
   type SteeringRepository,
 } from "./context.steering.github";
 import { mergeRefusal } from "./context.steering.policy";
-import type { ProposalRow } from "./context.steering.store";
+import {
+  claimCutoff,
+  mergeClaimed,
+  mergeInProgress,
+  type ProposalRow,
+} from "./context.steering.store";
 import { logger } from "./logger";
+import { withToolProjection } from "./mcp-studio/publish-deps";
 import { sha256Hex } from "./registry-digest";
 import {
   assertHealthy,
@@ -64,22 +95,15 @@ import {
   readSteeringLayout,
   recordPublishDeployment,
 } from "./steering-repo/merge-queue";
+import {
+  type HeldPublish,
+  type SteeringPublisher,
+  steeringPublisher,
+} from "./steering-repo/publisher";
+
+export type { SteeringPublisher } from "./steering-repo/publisher";
 
 type Scope = { orgId: string; workspaceId: string };
-
-/**
- * S5's publish() and the version store it assigns versions from. Both must
- * be bound to the same store: the merge reads the next version from `store`
- * and checks that publish() assigned that version.
- */
-export interface SteeringPublisher {
-  /** The key the store and publish() use for this repository. */
-  repository: (repo: SteeringRepository) => string;
-  /** The version store publish() assigns versions from. */
-  store: Pick<VersionStore, "current" | "highestVersion">;
-  /** S5's publish() at `commit`, bound to `store` and the repository. */
-  publish: (repo: SteeringRepository, commit: string) => Promise<PublishResult>;
-}
 
 /**
  * The parts of a merge other lanes supply. Each has a default until its lane
@@ -97,13 +121,15 @@ export interface MergeSeams {
    */
   nextVersion?: (scope: Scope) => Promise<number>;
   /**
-   * Publish the steering repo at the merge commit (S5). Called in a steering
-   * repo only: a legacy repository is the main code repository, which S5's
-   * sync never publishes. A thrown error, a refusal, or a stale commit is
-   * logged and the merge stands. A version other than the one in the
-   * Oxagen-Version trailer refuses the call.
+   * The publisher for the workspace's steering repo (S5), built per call from
+   * the workspace and its host. Called in a steering repo only: a legacy
+   * repository is the main code repository, which S5's sync never publishes.
+   * The merge runs from its version read through publish() inside the
+   * publisher's withLock. A thrown error, a refusal, or a stale commit is
+   * logged, the merge stands, and no deployment is recorded. A version other
+   * than the one in the Oxagen-Version trailer refuses the call.
    */
-  publisher?: SteeringPublisher;
+  publisher?: (scope: Scope, host: SteeringHost) => SteeringPublisher;
 }
 
 /** A proposal row whose pull request is recorded, so it can merge. */
@@ -225,6 +251,15 @@ export function createMergeContextPrHandler(
 
       // The commit the checks ran on is the only one that merges.
       const pr = await deps.github.getPullRequest(repo, prNumber);
+      // Another call is landing this PR. Its stamp commit is the PR's head
+      // until the host merges it, and the row moves to that commit only once
+      // it has, so the head check below would misread either.
+      if (
+        mergeClaimed(recorded, deps.now()) &&
+        (!pr.merged || pr.headSha !== recorded.headSha)
+      ) {
+        throw mergeInProgress(recorded.publicId, recorded.mergeClaimedAt);
+      }
       if (pr.headSha !== recorded.headSha) {
         // Merged on the host after the head moved: running the checks again
         // cannot help, because a merged pull request's head never moves again.
@@ -240,139 +275,168 @@ export function createMergeContextPrHandler(
       let body = await readBody(deps, repo, path, recorded.headSha);
       // Only a steering repo publishes. Its trailer carries the version
       // publish() assigns, read from the store it assigns versions from.
-      const publisher = layout.layout === "steering" ? seams.publisher : null;
-      const mergedAs = pr.merged ? pr.mergeCommitSha : null;
-      const steering = publisher
-        ? await steeringVersion(publisher, repo, mergedAs)
-        : null;
-      const version = steering ? steering.version : await nextVersion(scope);
+      const publisher =
+        layout.layout === "steering" && seams.publisher
+          ? seams.publisher(scope, deps.github)
+          : null;
+      // The store's lock holds from the version read through publish(), so
+      // no other publish can take the version the trailer names (#4550).
+      const outcome = await underPublishLock(publisher, repo, async (held) => {
+        const mergedAs = pr.merged ? pr.mergeCommitSha : null;
+        const steering = publisher
+          ? await steeringVersion(publisher, deps, scope, repo, row, mergedAs)
+          : null;
+        const version = steering ? steering.version : await nextVersion(scope);
 
-      let commitSha: string;
-      let attempts = 0;
-      // The publication is stamped with the instant the commit landed on the
-      // production branch, not this call's clock. They differ on a retry, and
-      // the difference matters: `latestPublication` picks the newest
-      // `published_at` as the commit a checkout must reach, and the retry
-      // below can run after a later PR has published. Stamped with `now()`,
-      // the earlier merge sorted newest, and a checkout at that earlier
-      // commit read as current while it lacked the later record.
-      //
-      // The branch that performs the merge needs the same instant for the
-      // same reason. Two Context PRs merging at once are two calls to the
-      // host, and it can land A before B while A's response comes back after
-      // B's; a local clock then stamps A newer than the commit that descends
-      // from it, and `latestPublication` names an ancestor as the tip a
-      // checkout must reach. So the pull request is read again after the
-      // merge and stamped with the instant the host recorded.
-      let mergedAt: Date;
-      if (pr.merged) {
-        // The host merged it on an earlier call whose publication did not land.
-        if (!pr.mergeCommitSha) {
-          throw new HandlerError({
-            code: "conflict",
-            reason: "github_refused",
-            message: `${row.prUrl} is merged with no merge commit`,
-          });
-        }
-        commitSha = pr.mergeCommitSha;
-        mergedAt = requireMergedAt(pr.mergedAt, row.prUrl);
-      } else {
-        const landed = await landSteeringPr({
-          host: deps.github,
-          repo,
-          number: prNumber,
-          branch,
-          checkedHead: recorded.headSha,
-          checks: passedChecks(row),
-          layout,
-          // Approvals count at the head the author pushed and at each merge
-          // the queue makes on top of it. landSteeringPr reads them again
-          // after each update.
-          approve: (heads) =>
-            mergeApproval({
-              host: deps.github,
-              repo,
-              number: prNumber,
-              mode,
-              heads,
-              authorUserId: recorded.createdById,
-              merger,
-              isMember: async (uid) => {
-                const roles = await roleOf(uid);
-                return (
-                  roles.workspaceRole !== null ||
-                  roles.orgRole === "Owner" ||
-                  roles.orgRole === "Admin"
-                );
-              },
-              holdsMergeWithoutReview: () =>
-                holdsMergeWithoutReview(scope, userId),
-            }),
-          mergedBy: userId,
-          commitTitle: `steering: publish ${row.lineageId} (#${prNumber})`,
-          version,
-          now: deps.now,
-          recheck: async (head) => {
-            row = await recheckContextPr(deps, {
-              scope,
-              repo,
-              row,
-              layout,
-              path,
-              branch,
-              from: row.headSha ?? recorded.headSha,
-              to: head,
-              updatedById: userId,
+        let commitSha: string;
+        let attempts = 0;
+        // The publication is stamped with the instant the commit landed on the
+        // production branch, not this call's clock. They differ on a retry, and
+        // the difference matters: `latestPublication` picks the newest
+        // `published_at` as the commit a checkout must reach, and the retry
+        // below can run after a later PR has published. Stamped with `now()`,
+        // the earlier merge sorted newest, and a checkout at that earlier
+        // commit read as current while it lacked the later record.
+        //
+        // The branch that performs the merge needs the same instant for the
+        // same reason. Two Context PRs merging at once are two calls to the
+        // host, and it can land A before B while A's response comes back after
+        // B's; a local clock then stamps A newer than the commit that descends
+        // from it, and `latestPublication` names an ancestor as the tip a
+        // checkout must reach. So the pull request is read again after the
+        // merge and stamped with the instant the host recorded.
+        let mergedAt: Date;
+        if (pr.merged) {
+          // The host merged it on an earlier call whose publication did not
+          // land.
+          if (!pr.mergeCommitSha) {
+            throw new HandlerError({
+              code: "conflict",
+              reason: "github_refused",
+              message: `${row.prUrl} is merged with no merge commit`,
             });
-            return {
-              ok: row.status === "checks_passed",
-              checks: passedChecks(row),
-            };
-          },
-        });
-        commitSha = landed.commitSha;
-        attempts = landed.attempts;
-        if (landed.mergedHead !== row.headSha) {
-          // The stamp commit merged: the row follows it, so the next call
-          // reads a merged PR at the head the row names.
+          }
+          commitSha = pr.mergeCommitSha;
+          mergedAt = requireMergedAt(pr.mergedAt, row.prUrl);
+        } else {
+          // Claim the proposal before the stamp moves the PR's head. The write
+          // refuses a claim another call holds.
           row = await deps.store.updateProposal(
             row.id,
-            { headSha: landed.mergedHead },
+            { mergeClaimedAt: deps.now() },
             ["checks_passed"],
-            { headSha: landed.checkedHead },
+            {
+              headSha: recorded.headSha,
+              noClaimSince: claimCutoff(deps.now()),
+            },
+          );
+          const landed = await landSteeringPr({
+            host: deps.github,
+            repo,
+            number: prNumber,
+            branch,
+            checkedHead: recorded.headSha,
+            checks: passedChecks(row),
+            layout,
+            // Approvals count at the head the author pushed and at each merge
+            // the queue makes on top of it. landSteeringPr reads them again
+            // after each update.
+            approve: (heads) =>
+              mergeApproval({
+                host: deps.github,
+                repo,
+                number: prNumber,
+                mode,
+                heads,
+                authorUserId: recorded.createdById,
+                merger,
+                isMember: async (uid) => {
+                  const roles = await roleOf(uid);
+                  return (
+                    roles.workspaceRole !== null ||
+                    roles.orgRole === "Owner" ||
+                    roles.orgRole === "Admin"
+                  );
+                },
+                holdsMergeWithoutReview: () =>
+                  holdsMergeWithoutReview(scope, userId),
+              }),
+            mergedBy: userId,
+            commitTitle: `steering: publish ${row.lineageId} (#${prNumber})`,
+            version,
+            now: deps.now,
+            recheck: async (head) => {
+              row = await recheckContextPr(deps, {
+                scope,
+                repo,
+                row,
+                layout,
+                path,
+                branch,
+                from: row.headSha ?? recorded.headSha,
+                to: head,
+                updatedById: userId,
+              });
+              return {
+                ok: row.status === "checks_passed",
+                checks: passedChecks(row),
+              };
+            },
+          }).catch(async (err: unknown) => {
+            await releaseUnmergedClaim(deps, repo, prNumber, row);
+            throw err;
+          });
+          commitSha = landed.commitSha;
+          attempts = landed.attempts;
+          if (landed.mergedHead !== row.headSha) {
+            // The stamp commit merged: the row follows it, so the next call
+            // reads a merged PR at the head the row names.
+            row = await deps.store.updateProposal(
+              row.id,
+              { headSha: landed.mergedHead },
+              ["checks_passed"],
+              { headSha: landed.checkedHead },
+            );
+          }
+          if (landed.mergedHead !== recorded.headSha) {
+            // A re-check or a stamp moved the head: the registry holds the
+            // bytes the production branch now holds.
+            body = await readBody(deps, repo, path, landed.mergedHead);
+          }
+          mergedAt = requireMergedAt(
+            await mergedAtOnGitHub(deps, repo, prNumber),
+            row.prUrl,
           );
         }
-        if (landed.mergedHead !== recorded.headSha) {
-          // A re-check or a stamp moved the head: the registry holds the
-          // bytes the production branch now holds.
-          body = await readBody(deps, repo, path, landed.mergedHead);
-        }
-        mergedAt = requireMergedAt(
-          await mergedAtOnGitHub(deps, repo, prNumber),
-          row.prUrl,
-        );
-      }
-      await deps.github.deleteBranch(repo, branch);
-      const result = await deps.store.publishMerge({
-        scope,
-        proposal: row,
-        body,
-        checksum: sha256Hex(body),
-        commitSha,
-        path,
-        mergedAt,
-        mergedByUserId: userId,
-        policyVersion: `governance:${mode}`,
+        await deps.github.deleteBranch(repo, branch);
+        const result = await deps.store.publishMerge({
+          scope,
+          proposal: row,
+          body,
+          checksum: sha256Hex(body),
+          commitSha,
+          path,
+          mergedAt,
+          mergedByUserId: userId,
+          policyVersion: `governance:${mode}`,
+        });
+        // S5 already published a resumed merge whose version it holds. Any
+        // other steering merge is live only once publish() says so, and a
+        // deployment names only a version that went live.
+        const live =
+          !held ||
+          steering?.published === true ||
+          (await publishSteering(held, repo, commitSha, version));
+        return { commitSha, attempts, version, result, live };
       });
-      // S5 already published a resumed merge whose version it holds.
-      if (publisher && !steering?.published) {
-        await publishSteering(publisher, repo, commitSha, version);
-      }
-      const deploymentUrl = await recordPublishDeployment(deps.github, repo, {
-        sha: commitSha,
-        version,
-        number: prNumber,
-      });
+      const { commitSha, attempts, version, result, live } = outcome;
+      const deploymentUrl = live
+        ? await recordPublishDeployment(deps.github, repo, {
+            sha: commitSha,
+            version,
+            number: prNumber,
+          })
+        : null;
 
       deps.emit({
         eventType: "steering.published",
@@ -446,58 +510,206 @@ async function readBody(
 /**
  * The version a steering merge becomes. A resumed merge whose commit S5
  * already published keeps that version, so the retry neither publishes again
- * nor refuses the version S5 assigned between the two calls. Any other merge
- * takes the version publish() assigns next: one past the highest in its
- * store.
+ * nor refuses the version S5 assigned between the two calls. The lookup is by
+ * commit, not by the published version, so a later merge published since
+ * does not hide it. Any other merge takes the version publish() assigns next:
+ * one past the highest in its store. The caller holds the store's lock until
+ * publish() returns, so no other publish takes that number first.
+ *
+ * A resumed merge S5 never published is refused when the production branch
+ * has moved past it. publish() would answer stale, so the version in its
+ * trailer never goes live, and a later merge may already hold that number.
+ * The refusal comes before the registry changes, and the repository sync
+ * publishes the production branch, which holds this merge, instead.
  */
 async function steeringVersion(
   publisher: SteeringPublisher,
+  deps: SteeringDeps,
+  scope: Scope,
   repo: SteeringRepository,
+  row: Pick<ProposalRow, "id" | "publicId" | "prUrl" | "mergeClaimedAt">,
   mergedAs: string | null,
 ): Promise<{ version: number; published: boolean }> {
   const repository = publisher.repository(repo);
   if (mergedAs) {
-    const current = await publisher.store.current(repository);
-    if (current?.commit === mergedAs) {
-      return { version: current.version, published: true };
+    const stored = await publisher.store.versionAt(repository, mergedAs);
+    if (stored?.published) {
+      return { version: stored.version, published: true };
+    }
+    const head = await deps.github.branchHead(repo, repo.defaultBranch);
+    if (head !== mergedAs) {
+      // The sync links this merge, so an earlier call's claim must not hold
+      // it off.
+      if (row.mergeClaimedAt !== null) await releaseClaim(deps, row);
+      await requestSync(deps, scope, row);
+      throw new HandlerError({
+        code: "conflict",
+        reason: "version_superseded",
+        message: `${row.prUrl ?? row.publicId} merged at ${mergedAs}, and ${repo.fullName}'s production branch ${repo.defaultBranch} has moved on to ${head ?? "no commit"} since. Oxagen is reading the production branch now, and this proposal shows what it published within a minute.`,
+      });
+    }
+    if (stored) {
+      // put() stored this commit and setPublished() did not switch to it.
+      // publish() assigns the next number now, so the version that goes live
+      // is one past the trailer on the merge commit.
+      logger.warn(
+        { repository, commit: mergedAs, stored: stored.version },
+        "context.pr.merge: resuming a merge whose version was stored and never published; the version that goes live differs from its trailer",
+      );
     }
   }
   const highest = await publisher.store.highestVersion(repository);
   return { version: highest + 1, published: false };
 }
 
+/** The statuses a claimed proposal can hold before it merges. */
+const CLAIMABLE = [
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+] as const;
+
 /**
- * Call publish() after the registry holds the merge, and check that it
- * assigned the version in the Oxagen-Version trailer.
+ * Clear a proposal's merge claim. A failure is logged and not thrown, so the
+ * error that led here reaches the caller. The claim then lapses after
+ * MERGE_CLAIM_SECONDS.
+ */
+async function releaseClaim(
+  deps: SteeringDeps,
+  row: Pick<ProposalRow, "id" | "publicId">,
+): Promise<void> {
+  try {
+    await deps.store.updateProposal(row.id, { mergeClaimedAt: null }, [
+      ...CLAIMABLE,
+    ]);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId },
+      "context.pr.merge: could not release the merge claim; it lapses in ten minutes",
+    );
+  }
+}
+
+/**
+ * After a landing failed, release the claim unless the host merged the PR.
+ * A merged PR keeps the claim, so the sync leaves the proposal to a retry of
+ * this merge until the claim lapses. A failed read keeps it too, and is
+ * logged, so the landing's own error reaches the caller.
+ */
+async function releaseUnmergedClaim(
+  deps: SteeringDeps,
+  repo: SteeringRepository,
+  prNumber: number,
+  row: Pick<ProposalRow, "id" | "publicId">,
+): Promise<void> {
+  let merged: boolean;
+  try {
+    merged = (await deps.github.getPullRequest(repo, prNumber)).merged;
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId, pr: prNumber },
+      "context.pr.merge: the landing failed and the pull request could not be read, so the merge claim stays; it lapses in ten minutes",
+    );
+    return;
+  }
+  if (merged) {
+    logger.warn(
+      { proposal: row.publicId, pr: prNumber },
+      "context.pr.merge: the host merged the pull request, but the landing failed; the merge claim stays until a retry publishes it or the claim lapses in ten minutes",
+    );
+    return;
+  }
+  await releaseClaim(deps, row);
+}
+
+/** Ask for the repository sync, and log a request that fails. */
+async function requestSync(
+  deps: SteeringDeps,
+  scope: Scope,
+  row: { publicId: string },
+): Promise<void> {
+  try {
+    await deps.requestSync?.(scope);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId },
+      "context.pr.merge: could not request a sync for a superseded merge; the scheduled sweep runs it",
+    );
+  }
+}
+
+/**
+ * Run `work` under the publisher's lock, or without one when nothing
+ * publishes. A lock another publish held for over a minute is refused before
+ * `work` starts, so nothing was claimed or merged, and the refusal says to
+ * merge again. An error `work` throws passes through unchanged.
+ */
+async function underPublishLock<T>(
+  publisher: SteeringPublisher | null,
+  repo: SteeringRepository,
+  work: (held: HeldPublish | null) => Promise<T>,
+): Promise<T> {
+  if (!publisher) return work(null);
+  let entered = false;
+  try {
+    return await publisher.withLock(repo, (held) => {
+      entered = true;
+      return work(held);
+    });
+  } catch (err) {
+    if (
+      !entered &&
+      isHandlerError(err) &&
+      err.reason === "publish_in_progress"
+    ) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "publish_in_progress",
+        message: `Another publish of ${repo.fullName} is running, so nothing merged. Merge again in a minute.`,
+      });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Call publish() after the registry holds the merge, under the lock the merge
+ * took before it read the version, and check that it assigned the version in
+ * the Oxagen-Version trailer. True when that version is live: publish()
+ * published it, or found the commit already published.
  *
  * The merge has landed and the row is merged, so nothing here can be retried
  * through this capability. A thrown error, a refusal, or a stale commit is
- * logged for the publish lane's own retry. A different version is refused
- * before the deployment and `steering.published` repeat the wrong number; a
- * retry then refuses `already_merged`, so the trailer is corrected by hand.
+ * logged for the repository sync to publish the production branch, and
+ * answers false so no deployment names a version that never went live. A
+ * different version means the merge's hold on the lock lapsed and another
+ * publish took the number. It is refused before the deployment and
+ * `steering.published` repeat the wrong number. A retry then refuses
+ * `already_merged`, so the trailer is corrected by hand.
  */
 async function publishSteering(
-  publisher: SteeringPublisher,
+  publish: HeldPublish,
   repo: SteeringRepository,
   commit: string,
   version: number,
-): Promise<void> {
+): Promise<boolean> {
   let result: PublishResult;
   try {
-    result = await publisher.publish(repo, commit);
+    result = await publish(commit);
   } catch (err) {
     logger.warn(
       { err, repository: repo.fullName, commit, version },
       "context.pr.merge: merged and recorded, but publish() failed",
     );
-    return;
+    return false;
   }
   if (result.status === "refused" || result.status === "stale") {
     logger.warn(
       { repository: repo.fullName, commit, version, result },
       `context.pr.merge: merged and recorded, but publish() answered ${result.status}`,
     );
-    return;
+    return false;
   }
   if (result.version !== version) {
     throw new HandlerError({
@@ -506,6 +718,7 @@ async function publishSteering(
       message: `${repo.fullName} merged ${commit} with Oxagen-Version: ${version}, but publish() assigned version ${result.version}. The merge and its record stand. Correct the published version before the next merge.`,
     });
   }
+  return true;
 }
 
 /**
@@ -566,6 +779,10 @@ async function mergedAtOnGitHub(
 export const productionMergeSeams: MergeSeams = {
   holdsMergeWithoutReview: (scope, userId) =>
     holdsCapability(contextPrMergeWithoutReview, scope, userId),
+  // Each workspace publishes through its own version store and host, and
+  // each version writes the workspace's tool registry (M13).
+  publisher: (scope, host) =>
+    steeringPublisher({ scope, host, extend: withToolProjection }),
 };
 
 export const mergeContextPrHandler = createMergeContextPrHandler(
