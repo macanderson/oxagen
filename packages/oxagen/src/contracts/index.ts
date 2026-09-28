@@ -289,6 +289,9 @@ import { toolClassificationSchema } from "./tool.classification";
 import { toolVersionList } from "./tool.version.list";
 import { toolClassificationSet } from "./tool.classification.set";
 import { toolImport } from "./tool.import";
+import { toolStudioDraftSave } from "./tool.studio.draft.save";
+import { toolStudioDraftGet } from "./tool.studio.draft.get";
+import { toolStudioReviewOpen } from "./tool.studio.review.open";
 import { credentialGrantList } from "./credential.grant.list";
 import { killSwitchSet } from "./kill_switch.set";
 import { killSwitchList } from "./kill_switch.list";
@@ -953,6 +956,9 @@ export {
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDraftSave,
+  toolStudioDraftGet,
+  toolStudioReviewOpen,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
@@ -1377,6 +1383,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDraftSave,
+  toolStudioDraftGet,
+  toolStudioReviewOpen,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
