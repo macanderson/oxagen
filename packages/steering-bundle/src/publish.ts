@@ -39,6 +39,12 @@ export interface PublishedPointer {
   ledger: Bundle["ledger"];
 }
 
+/** A stored version's number, and whether it was ever the published one. */
+export interface StoredVersion {
+  version: number;
+  published: boolean;
+}
+
 /** Where published versions live. Keyed by the steering repo or the organization repo. */
 export interface VersionStore {
   /** Runs `fn` while no other publish of the repository runs. */
@@ -47,6 +53,12 @@ export interface VersionStore {
   current(repository: string): Promise<Bundle | null>;
   /** The highest number ever stored for the repository, published or not, or 0. */
   highestVersion(repository: string): Promise<number>;
+  /**
+   * The newest version stored from `commit`, and whether it was ever made the
+   * published one. Null when no version was built from the commit. A merge
+   * that resumes after its publish reads this to learn the number it got.
+   */
+  versionAt(repository: string, commit: string): Promise<StoredVersion | null>;
   /** Keep a built version. This does not publish it. */
   put(bundle: Bundle): Promise<void>;
   /** Make a stored version the published one, in one write. */
@@ -225,6 +237,9 @@ export function memoryVersionStore(): VersionStore & {
 } {
   const versions = new Map<string, Bundle[]>();
   const published = new Map<string, PublishedPointer>();
+  // Every version setPublished ever named, as `<repository>#<version>`. A
+  // bundle's published_at is stamped at build time, so it cannot tell.
+  const named = new Set<string>();
   const locks = new Map<string, Promise<unknown>>();
   return {
     versions,
@@ -253,6 +268,12 @@ export function memoryVersionStore(): VersionStore & {
       const stored = versions.get(repository) ?? [];
       return Promise.resolve(stored.reduce((high, entry) => Math.max(high, entry.version), 0));
     },
+    versionAt(repository, commit) {
+      const built = (versions.get(repository) ?? []).filter((entry) => entry.commit === commit);
+      if (built.length === 0) return Promise.resolve(null);
+      const version = built.reduce((high, entry) => Math.max(high, entry.version), 0);
+      return Promise.resolve({ version, published: named.has(`${repository}#${version}`) });
+    },
     put(bundle) {
       const stored = versions.get(bundle.repository) ?? [];
       if (stored.some((entry) => entry.version === bundle.version)) {
@@ -265,6 +286,7 @@ export function memoryVersionStore(): VersionStore & {
     },
     setPublished(repository, pointer) {
       published.set(repository, pointer);
+      named.add(`${repository}#${pointer.version}`);
       return Promise.resolve();
     },
   };
