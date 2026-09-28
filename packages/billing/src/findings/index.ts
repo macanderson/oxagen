@@ -11,6 +11,7 @@
 import type { FindingKind } from "@oxagen/database/schema";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
 import { modelClassFit } from "./model-class-fit";
+import { recurringRuns } from "./recurring-runs";
 import { buildRunViews } from "./requests";
 import { repeats } from "./repeats";
 import {
@@ -42,6 +43,7 @@ export { SPIN_LOOP_REPEATS, spinCalls } from "./spin-loops";
 export const DETECTORS: readonly Detector[] = [
   spinLoops,
   repeats,
+  recurringRuns,
   spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
