@@ -39,7 +39,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { gatewayText, serviceStatusText } from "./tacho-status";
+import { gatewayText, policyText, serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   checkLiveSession,
@@ -1749,9 +1749,14 @@ export function App() {
           </dd>
           <dt>Status</dt>
           <dd>
-            {host.host_status}, {host.bundle.mode} mode
-            {host.managed ? ", managed" : ""} · bundle v{host.bundle.version}{" "}
-            fetched {ago(host.bundle_fetched_at)}
+            {host.host_status}
+            {host.managed ? ", managed" : ""}
+          </dd>
+          <dt>Policy</dt>
+          <dd>{policyText(host.bundle.mode)}</dd>
+          <dt>Bundle</dt>
+          <dd>
+            v{host.bundle.version}, fetched {ago(host.bundle_fetched_at)}
           </dd>
           <dt>Collector</dt>
           <dd>

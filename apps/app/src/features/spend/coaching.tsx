@@ -3,10 +3,16 @@
 // No contract answers it yet (`list_coaching`, #2962), and the signals it reads
 // (tool definition, context frame and steering tokens, retries, prompts per
 // session) are not on the rollup either, so the tab names what it will show
-// and what is missing rather than inventing an item. Nothing here changes an
-// agent by itself.
+// and what is missing rather than inventing an item. Each operator signal
+// links to the operator ranking on the By operator tab (D15), where a manager
+// sees whose unproductive spend it would move. Nothing here changes an agent
+// by itself.
 import { useTranslations } from "next-intl";
+import { routes } from "@/shared/safe-path";
+import { linkText } from "@/ui/control-styles";
+import { SafeLink } from "@/ui/navigation";
 import { NotBackedPanel } from "./not-backed";
+import type { SpendAt } from "./view";
 
 const AGENT_SIGNALS = [
   "narrowBelt",
@@ -27,8 +33,9 @@ const OPERATOR_SIGNALS = [
   "selfReported",
 ] as const;
 
-export function CoachingSection() {
+export function CoachingSection({ at }: { at: SpendAt }) {
   const t = useTranslations("spend.coaching");
+  const ranking = routes.spend(at.org, at.ws, { tab: "operator" });
   return (
     <NotBackedPanel id="spend-coaching" title={t("title")} gap="rollup">
       {t("notBacked")}
@@ -44,9 +51,14 @@ export function CoachingSection() {
         <span className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{t("operators")}</span>
           {OPERATOR_SIGNALS.map((signal) => (
-            <span key={signal} data-signal={signal}>
+            <SafeLink
+              key={signal}
+              to={ranking}
+              data-signal={signal}
+              className={linkText}
+            >
               {t(`operatorSignals.${signal}`)}
-            </span>
+            </SafeLink>
           ))}
         </span>
       </span>

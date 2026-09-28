@@ -95,6 +95,7 @@ import type {
   DayRange,
   FleetSpend,
   GatewayPolicy,
+  OperatorRanking,
   PriceBook,
   SpendBudgets,
   SpendDrill,
@@ -470,6 +471,15 @@ export interface DataSource {
     ): Promise<Read<SpendDrill>>;
     /** list_waste */
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
+    /**
+     * get_operator_ranking (D15): operators by unproductive spend, for a
+     * manager. Caller: features/spend/spend.tsx on the operator tab, which
+     * reads it only for an org Owner or Admin.
+     */
+    operatorRanking(
+      ctx: WsCtx,
+      period: DayRange,
+    ): Promise<Read<OperatorRanking>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
     /**

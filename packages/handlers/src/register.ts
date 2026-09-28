@@ -1693,6 +1693,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_operator_ranking",
+    async () =>
+      (await import("./spend.operator_ranking"))
+        .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_operator_pseudonyms",
+    async () =>
+      (await import("./spend.operator_pseudonyms.set"))
+        .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_clone_draft",
     async () =>
       (await import("./configuration.clone.get"))

@@ -1358,6 +1358,15 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_operator_ranking",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "get_org_settings",
       "reads": [],
@@ -3570,6 +3579,15 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "set_operator_pseudonyms",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "set_org_billing_terms",
       "reads": [],
@@ -4236,7 +4254,7 @@
       "writes": []
     }
   ],
-  "contentHash": "952df88179e42fc4c9718a79357ecfb8b1dad5c3f6068c08dc62458f96f59c15",
+  "contentHash": "7b5875ba73c44eecf51249ca09a7c5b03a949af543e70b20b57089bb4c9fac32",
   "domains": [
     {
       "name": "agent",
@@ -4678,6 +4696,7 @@
       "tables": [
         "neo4j:Workspace",
         "postgres:workspace.no_progress_policy",
+        "postgres:workspace.operator_ranking_policy",
         "postgres:workspace.routing_policy",
         "postgres:workspace.tacho_session_policy",
         "postgres:workspace.workspace_budget_policy",
@@ -4718,7 +4737,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 169
+      "tableCount": 170
     },
     {
       "domains": [
@@ -25174,6 +25193,64 @@
       "domain": "workspace",
       "id": "postgres:workspace.no_progress_policy",
       "name": "no_progress_policy",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "pseudonyms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "pseudonym_salt",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "workspace",
+      "id": "postgres:workspace.operator_ranking_policy",
+      "name": "operator_ranking_policy",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
