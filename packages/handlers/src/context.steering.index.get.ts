@@ -18,13 +18,17 @@ import type {
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import type { ReadPublished } from "./steering.search";
+import type { TachoPublished } from "./tacho.published";
 
 type Scope = { orgId: string; workspaceId: string };
 
 export interface SteeringIndexGetDeps {
-  /** The workspace's and the organization's published versions. */
-  published: ReadPublished;
+  /**
+   * The workspace's and the organization's versions published now. The port
+   * takes a scope with a null run id, because a check reads for a repo, not
+   * for a run.
+   */
+  published: TachoPublished["published"];
   /** The names the references check resolves against. */
   readContext: (scope: Scope) => Promise<SteeringCheckContext>;
 }

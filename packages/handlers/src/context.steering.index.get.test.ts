@@ -27,7 +27,7 @@ import {
   createSteeringIndexGetHandler,
   readCheckContext,
 } from "./context.steering.index.get";
-import type { SteeringScope } from "./steering.search";
+import type { HostScope } from "./tacho.published";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const EMPTY_CONTEXT: SteeringCheckContext = {
@@ -77,7 +77,7 @@ describe("get_steering_index handler", () => {
   });
 
   it("reads the version published now for the caller's workspace", async () => {
-    const scopes: SteeringScope[] = [];
+    const scopes: HostScope[] = [];
     const contextScopes: unknown[] = [];
     const handler = createSteeringIndexGetHandler({
       published: async (scope) => {
