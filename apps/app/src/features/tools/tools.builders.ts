@@ -455,6 +455,7 @@ export function toolsSource(reads: ToolsReads) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: (ctx, q) => {
         calls.versions.push([ctx, q]);

@@ -242,6 +242,7 @@ export function runtimesSource(reads: {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

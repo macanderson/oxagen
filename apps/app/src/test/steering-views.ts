@@ -469,6 +469,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         return Promise.resolve(reads.tree);
       },
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,
