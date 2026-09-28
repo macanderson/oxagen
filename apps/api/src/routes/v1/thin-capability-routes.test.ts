@@ -117,7 +117,6 @@ import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
 import { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
 import { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
-import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
@@ -295,7 +294,6 @@ import { userPreferencesSetRoute } from "./user.preferences.set";
 import { onboardingAdvanceRoute } from "./onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./onboarding.first_frame.get";
 import { onboardingStateGetRoute } from "./onboarding.state.get";
-import { repositoryMainBindRoute } from "./repository.main.bind";
 import { repositoryLinkRoute } from "./repository.link";
 import { repositoryUnlinkRoute } from "./repository.unlink";
 import { repositoryListRoute } from "./repository.list";
@@ -1454,15 +1452,6 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { agentId: "agt_0123456789", waitMs: 0 },
     invalidBody: { agentId: "not-an-agent" },
     status: 200,
-  },
-  {
-    file: "repository.main.bind",
-    route: repositoryMainBindRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: repositoryMainBind.name,
-    body: { owner: "acme", name: "widgets" },
-    invalidBody: { owner: "acme", name: "wid gets" },
-    status: 201,
   },
   {
     file: "repository.link",

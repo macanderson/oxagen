@@ -2,12 +2,14 @@
 // seam classified the refusal and put the handler's reason in `code` (§3.2);
 // every reason `get_main_repository`, `list_installation_repositories`,
 // `list_github_installations`, `attach_github_installation`,
-// `bind_main_repository`, `list_repositories`, `link_repository`,
-// `unlink_repository`, `get_repository_tree`, `set_production_branch` and
-// `open_init_pr` can give has its own sentence, and any other code is printed
-// as recorded rather than collapsed into "something went wrong". A write the
-// platform has not registered yet (`tool_not_registered`) names the
-// capability when the caller passes it.
+// `list_repositories`, `link_repository`, `unlink_repository`,
+// `get_repository_tree`, `set_production_branch` and `open_init_pr` can give
+// has its own sentence, and any other code is printed as recorded rather than
+// collapsed into "something went wrong". Link and unlink still answer with
+// most `main_repo_*` codes. No handler has raised `main_repo_bound` since
+// #4616 removed the bind, and its sentence stays until that code is retired.
+// A write the platform has not registered yet (`tool_not_registered`) names
+// the capability when the caller passes it.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 

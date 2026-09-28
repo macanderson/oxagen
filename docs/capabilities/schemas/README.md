@@ -367,7 +367,6 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - attach_github_installation
 - attach_gitlab_project
-- bind_main_repository
 - get_main_repository
 - get_repository_tree
 - get_steering_repo

@@ -1,13 +1,13 @@
 // The Repositories page's view models (MC spec §10.1, §10.2, §11.4): the
-// workspace's main repository, whether a GitHub App installation is attached,
-// the set of repositories that installation reaches, what each bound
+// workspace's steering repository, whether a GitHub App installation is
+// attached, the set of repositories that installation reaches, what each bound
 // repository holds under `.oxagen/`, and the pull requests Oxagen has open.
 //
-// The main repo is where `.oxagen/` lives — published steering records and
-// the promotion ledger. An agent is an identity on a runtime, not a file
-// there (ADR-198). A workspace has exactly one main repo. Nothing waits on
-// it: runs record, spend counts, and a published record steers the
-// workspace's agents whether one is bound or not (ADR-212).
+// The steering repository is where `.oxagen/` lives: published steering
+// records and the promotion ledger. An agent is an identity on a runtime, not
+// a file there (ADR-198). A workspace has exactly one steering repository, and
+// `provision_steering_repo` writes it when the workspace is created (ADR-212).
+// The contracts still call it `main`.
 //
 // These are types rather than zod schemas, and deliberately so. Every other
 // view model in this directory exists because its port maps a contract record
@@ -50,8 +50,8 @@ type MainRepository = {
    * state a delete-then-reconnect leaves: the binding head still points at the
    * retired connection, every reader that joins the two finds nothing, and
    * steering is off while the repository still reads as bound. The panel shows
-   * the repository either way and offers the repair — re-binding the same
-   * repository, which supersedes the binding onto the live connection.
+   * the repository either way and says steering is off. The app offers no
+   * repair since #4616 removed the bind; #4637 tracks one.
    */
   connectionLive: boolean;
 };
@@ -59,9 +59,8 @@ type MainRepository = {
 type GitHubInstallation = {
   /**
    * An installation is attached to this workspace's GitHub connection. False
-   * is exactly the state in which `bind_main_repository` refuses with
-   * `github_not_connected`, so the dialog offers the install door instead of a
-   * picker that could only refuse.
+   * is the state in which every GitHub write refuses with
+   * `github_not_connected`, so the panel offers the install door.
    */
   connected: boolean;
   /**
@@ -149,11 +148,10 @@ export type AttachedInstallation = {
 
 /**
  * One repository the workspace binds, as `list_repositories` reports it (MC
- * spec §10.1): its one main repository, where `.oxagen/` lives, and every
- * linked one, the repositories its agents work on. The role is what the
- * Repositories section keys on: a linked row offers an unlink, the main row
- * never does, because a workspace without a main repo cannot exist and
- * `unlink_repository` refuses it regardless.
+ * spec §10.1): its one steering repository (role `main`), where `.oxagen/`
+ * lives, and every linked one, the repositories its agents work on. The role
+ * is what the Repositories section keys on: a linked row offers an unlink, the
+ * steering row never does, because `unlink_repository` refuses it.
  */
 type BoundRepositoryRow = {
   /** What `unlink_repository` takes. */
@@ -187,9 +185,10 @@ type BoundRepositoryRow = {
 };
 
 /**
- * Every repository the workspace binds, main first, linked ones after by full
- * name. A local read: nothing here came from GitHub, so the list draws while
- * GitHub is down. An empty list is a workspace that binds nothing yet.
+ * Every repository the workspace binds, the steering repository first, linked
+ * ones after by full name. A local read: nothing here came from GitHub, so the
+ * list draws while GitHub is down. An empty list is a workspace that binds
+ * nothing yet.
  */
 export type WorkspaceRepositories = {
   repositories: BoundRepositoryRow[];

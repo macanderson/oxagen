@@ -3,7 +3,6 @@ import {
   enrollCommandFor,
   hashEnrollmentToken,
   parseRepositoryRemote,
-  provisionalUntil,
 } from "./onboarding";
 
 describe("parseRepositoryRemote", () => {
@@ -29,7 +28,7 @@ describe("parseRepositoryRemote", () => {
     ).toEqual({ provider: "github", owner: "my-org", name: "my.repo_v2" });
   });
 
-  it("records nothing for a remote bind_main_repository cannot act on", () => {
+  it("records nothing for a remote that does not name one GitHub repository", () => {
     for (const remote of [
       "",
       "git@gitlab.com:acme/widgets.git",
@@ -53,15 +52,6 @@ describe("hashEnrollmentToken", () => {
     expect(hash).not.toContain(token);
     expect(hashEnrollmentToken(token)).toBe(hash);
     expect(hashEnrollmentToken(`${token}x`)).not.toBe(hash);
-  });
-});
-
-describe("provisionalUntil", () => {
-  it("is fourteen days after the organization was created", () => {
-    const created = new Date("2026-09-15T12:00:00.000Z");
-    expect(provisionalUntil(created).toISOString()).toBe(
-      "2026-09-29T12:00:00.000Z",
-    );
   });
 });
 

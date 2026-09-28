@@ -7,7 +7,7 @@
 // needs the same two things first: the head in THIS workspace whose current
 // binding carries that id, and a client minted from the installation attached
 // to the workspace's live GitHub connection. The caller never names an
-// installation, for the reason `bind_main_repository` gives.
+// installation, for the reason repository.github-connection.ts gives.
 //
 // A steering repository the provisioner created is the one exception. Its head
 // hangs from a `github_steering` connection, and only the Oxagen Steering app

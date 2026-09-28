@@ -6,11 +6,6 @@ const OPEN = {
   workspace: { id: "wrk_0123456789", slug: "core" },
   firstFrameAt: null,
   firstRunId: null,
-  provisional: {
-    until: "2026-09-29T12:00:00.000Z",
-    mainRepoBoundAt: null,
-    detectedRepository: null,
-  },
 };
 
 describe("get_onboarding_state contract", () => {
@@ -36,7 +31,6 @@ describe("get_onboarding_state contract", () => {
         workspace: null,
         firstFrameAt: null,
         firstRunId: null,
-        provisional: null,
       }).step,
     ).toBe("organization");
     expect(onboardingStateGet.output.parse(OPEN)).toEqual(OPEN);
@@ -45,15 +39,11 @@ describe("get_onboarding_state contract", () => {
       step: "unlocked",
       firstFrameAt: "2026-09-15T12:05:00.000Z",
       firstRunId: "tse_0123456789",
-      provisional: {
-        ...OPEN.provisional,
-        detectedRepository: { provider: "github", owner: "acme", name: "w" },
-      },
     };
     expect(onboardingStateGet.output.parse(unlocked)).toEqual(unlocked);
   });
 
-  it("refuses a step outside the four, a non-workspace id, and a provider other than GitHub", () => {
+  it("refuses a step outside the four, a non-workspace id, and the provisional window #4616 removed", () => {
     expect(
       onboardingStateGet.output.safeParse({ ...OPEN, step: "signup" }).success,
     ).toBe(false);
@@ -64,13 +54,8 @@ describe("get_onboarding_state contract", () => {
       }).success,
     ).toBe(false);
     expect(
-      onboardingStateGet.output.safeParse({
-        ...OPEN,
-        provisional: {
-          ...OPEN.provisional,
-          detectedRepository: { provider: "gitlab", owner: "a", name: "b" },
-        },
-      }).success,
+      onboardingStateGet.output.safeParse({ ...OPEN, provisional: null })
+        .success,
     ).toBe(false);
   });
 });

@@ -2,7 +2,7 @@
 // One repository's dialog on its own, over rows in the states the page test
 // does not reach: a tree that could not be read, a production branch GitHub
 // no longer has, a governed linked repository, an init pull request waiting,
-// a retired main connection, and a production branch that did not move. A link
+// a retired steering connection, and a production branch that did not move. A link
 // opens a steering PR (ADR-212), so the dialog names that PR and says to merge
 // it, or says the next steering sync links a repository workspace.toml lists.
 import {
@@ -23,11 +23,6 @@ import type { RepositoryRow } from "./view";
 const actions = vi.hoisted(() => ({
   linkWorkspaceRepository: vi.fn(),
   setProductionBranch: vi.fn(),
-  readWorkspaceRepository: vi.fn(),
-  listInstallationRepositories: vi.fn(),
-  bindWorkspaceRepository: vi.fn(),
-  listGithubInstallations: vi.fn(),
-  attachGithubInstallation: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -103,7 +98,6 @@ function dialog(
 beforeEach(() => {
   for (const fn of [...Object.values(actions), ...Object.values(handlers)])
     fn.mockReset();
-  actions.readWorkspaceRepository.mockReturnValue(new Promise(() => {}));
 });
 afterEach(async () => {
   try {
@@ -194,21 +188,23 @@ describe("the repository dialog", () => {
     );
   });
 
-  it("offers the main repository's setup again when its connection was retired", () => {
+  it("says steering is off when the steering repository's connection was retired, and offers no repair", () => {
     const root = dialog({
       ...LINKED,
       role: "main",
       fullName: "acme/platform",
       connectionLive: false,
     });
+    const retired = within(root).getByRole("region", {
+      name: "Connection retired",
+    });
     expect(
-      within(root).getByRole("region", { name: "Connection retired" }),
-    ).toBeTruthy();
-    expect(within(root).getByTestId("repository-setup")).toBeTruthy();
-    expect(actions.readWorkspaceRepository).toHaveBeenCalledWith(
-      "acme",
-      "core-platform",
+      within(retired).getByTestId("repository-dialog-retired"),
+    ).toHaveTextContent(
+      "This steering repository's connection was retired, so steering is off.",
     );
+    expect(within(retired).queryByRole("button")).toBeNull();
+    expect(within(root).queryByTestId("repository-setup")).toBeNull();
   });
 
   it("says nothing was written when the branch typed is already the production branch (negative)", async () => {

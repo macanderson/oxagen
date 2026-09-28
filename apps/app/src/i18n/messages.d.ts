@@ -4998,38 +4998,19 @@ type Messages = {
       install: {
         heading: string;
         body: string;
-        unreachable: string;
+        attached: string;
         action: string;
         connect: string;
       };
       unconfigured: string;
-      picker: {
-        heading: string;
-        loading: string;
-        filterLabel: string;
-        filterPlaceholder: string;
-        listLabel: string;
-        empty: string;
-        noMatch: string;
-        private: string;
-        defaultBranch: string;
-        truncated: string;
-        bind: string;
-        binding: string;
-        none: string;
-      };
+      provisioned: string;
       bound: {
         heading: string;
         defaultRef: string;
         boundAt: string;
         open: string;
+        openGitLab: string;
         retired: string;
-        reconnect: string;
-        reconnecting: string;
-        fixed: string;
-        refDrift: string;
-        reapprove: string;
-        reapproving: string;
       };
       manage: string;
       installChoose: string;
@@ -5044,20 +5025,6 @@ type Messages = {
         attach: string;
         attaching: string;
         none: string;
-      };
-      gitlab: {
-        heading: string;
-        body: string;
-        reconnectHeading: string;
-        reconnectBody: string;
-        pathLabel: string;
-        pathHint: string;
-        tokenLabel: string;
-        selfManaged: string;
-        submit: string;
-        submitting: string;
-        webhookRefused: string;
-        open: string;
       };
     };
     failure: {
@@ -5221,6 +5188,7 @@ type Messages = {
       initOpen: string;
       initOpenLink: string;
       retiredLead: string;
+      retired: string;
       unlink: string;
       link: string;
       linking: string;
@@ -5520,19 +5488,10 @@ type Messages = {
         option: string;
         hint: string;
         empty: string;
-        noMain: string;
-        roleLabel: string;
-        main: {
-          title: string;
-          about: string;
-        };
-        linked: {
-          title: string;
-          about: string;
-        };
+        connect: string;
         noteLinked: string;
         noteMain: string;
-        moveMain: string;
+        noteLink: string;
       };
       branch: {
         lead: string;

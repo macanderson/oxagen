@@ -233,16 +233,6 @@
       "consumes": []
     },
     {
-      "name": "bind_main_repository",
-      "domain": "repository",
-      "surfaces": [
-        "api"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "bisect_runs",
       "domain": "run",
       "surfaces": [
