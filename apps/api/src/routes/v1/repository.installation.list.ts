@@ -5,8 +5,9 @@ import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
 /**
- * List the repositories the workspace's GitHub App installation can reach —
- * the set `bind_main_repository` accepts (`list_installation_repositories`).
+ * List the repositories the workspace's GitHub App installation can reach
+ * (`list_installation_repositories`). The app's link picker offers them to
+ * `link_repository`.
  * Mounted at `/repository/installation/repositories` behind session auth on
  * the org-scoped router.
  */

@@ -107,7 +107,7 @@ describe("list_installation_repositories", () => {
       code: "conflict",
       reason: "github_not_connected",
     });
-    // The same refusal bind_main_repository gives, and no GitHub call made.
+    // The same refusal link_repository gives, and no GitHub call made.
     expect(repositories).not.toHaveBeenCalled();
   });
 

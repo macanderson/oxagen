@@ -4,7 +4,7 @@
 // the file, and open the pull request. The cases pin what propose_skill is
 // sent, that the one gold control waits on what its step needs, that a failed
 // check is named where the person acted with nothing written, and that the
-// pull request step refuses to send while the workspace binds no main
+// pull request step refuses to send while the workspace has no steering
 // repository. Each state gets an axe check.
 import {
   act,
@@ -341,7 +341,7 @@ describe("the skill wizard: describe it", () => {
     );
   });
 
-  it("will not open a pull request while the workspace binds no main repository (negative)", async () => {
+  it("will not open a pull request while the workspace has no steering repository (negative)", async () => {
     readMainRepository.mockResolvedValue({ ok: true, value: null });
     await toPullRequest("Cut release notes");
     expect((await screen.findByTestId("repo-state")).textContent).toBe(

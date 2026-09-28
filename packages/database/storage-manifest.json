@@ -212,15 +212,6 @@
       "writes": []
     },
     {
-      "domain": "repository",
-      "name": "bind_main_repository",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
       "domain": "run",
       "name": "bisect_runs",
       "reads": [],
@@ -4302,7 +4293,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7d82919fcbcc916324c8419673e1fd276d2061e4171108e8ee622f42005152ab",
+  "contentHash": "d1fc4ca1bbe68fb42361ee2d4ff4adebc1310c9db0745933bdd8c498cb75ea16",
   "domains": [
     {
       "name": "agent",

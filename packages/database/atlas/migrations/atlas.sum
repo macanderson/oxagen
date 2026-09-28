@@ -1,4 +1,4 @@
-h1:OLp1UNTMs9YMtRdZyfL+Od++OWSLlelgLEBJCjWO6k4=
+h1:ehP2/K6yE7QHkdYR7Stj6qGHnEAH/ddYF2lv/FlM3y0=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -232,4 +232,5 @@ h1:OLp1UNTMs9YMtRdZyfL+Od++OWSLlelgLEBJCjWO6k4=
 20260928013000_onboarding_state_workspace_nullable.sql h1:BsnF2gLF85nHBwPeS546KCRcPov0lmwgQ8IexO+79xo=
 20260928061500_conversation_title_source.sql h1:F8egca1OVrDEmXXeb0lnPZCIQ7/wSOU4tD0/7Wkt94s=
 20260928063000_steering_repo_health.sql h1:lC0S9/QdjyH478LjKIUiuwd92CF4aMByFNGx5T1zR14=
-20260928090000_mcp_operator_tokens.sql h1:6Ts2d5a/fRgyZAt2HMCbcAHf/R7oAPZXTKBU68w96RM=
+20260928071500_onboarding_state_provisional_until_default.sql h1:slQZkwTczGfVEWxFapDpLgXc/6AfPL/1xT0E6bLJckE=
+20260928090000_mcp_operator_tokens.sql h1:E9JtYF6rffcAancmv9AGdswy4GpiMOKhPvDuc2/LhsQ=

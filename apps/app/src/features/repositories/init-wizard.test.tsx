@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // The init wizard on its own, over the paths the page test does not walk: a
-// workspace with no main repository binds the repository first and finds its
-// binding in the list, a production branch changed on step 2 is written
-// before the pull request, every write on the way can refuse, and a pull
-// request that already existed is said to be reused. A linked repository with
-// no binding proposes its link as a steering PR (ADR-212), and the wizard
-// stops there: no branch move and no pull request until the PR merges.
+// bound repository whose production branch changed on step 2 has the branch
+// written before the pull request, every write on the way can refuse, and a
+// pull request that already existed is said to be reused. A repository with
+// no binding is linked: the wizard proposes the link as a steering PR
+// (ADR-212) and stops there, with no branch move and no pull request until the
+// PR merges. The wizard offers no main repository choice, because Oxagen
+// creates the steering repository when it provisions the workspace.
 import {
   cleanup,
   render,
@@ -22,12 +23,9 @@ import type { RepositoryRow } from "./view";
 
 const actions = vi.hoisted(() => ({
   linkWorkspaceRepository: vi.fn(),
-  bindWorkspaceRepository: vi.fn(),
-  readWorkspaceRepositories: vi.fn(),
   setProductionBranch: vi.fn(),
   openInitPullRequest: vi.fn(),
   readWorkspaceRepository: vi.fn(),
-  listInstallationRepositories: vi.fn(),
   listGithubInstallations: vi.fn(),
   attachGithubInstallation: vi.fn(),
 }));
@@ -69,6 +67,39 @@ const MAIN: RepositoryRow = {
   bindingId: "rpb_main01",
   events: "installed",
   tree: { kind: "loading" },
+};
+
+/** A production branch that reads and holds no `.oxagen/`. */
+function absentTree(
+  bindingId: string,
+  role: "main" | "linked",
+  fullName: string,
+): RepositoryRow["tree"] {
+  return {
+    kind: "ready",
+    value: {
+      bindingId,
+      role,
+      fullName,
+      productionBranch: "main",
+      githubDefaultBranch: "main",
+      head: "0123456789abcdef0123",
+      oxagen: { present: false, files: [] },
+      workspaceToml: null,
+      governanceToml: null,
+      governanceMode: "absent",
+      initPullRequest: null,
+      readAt: "2026-09-19T10:00:00.000Z",
+    },
+  };
+}
+
+/** A linked repository this workspace binds, with no `.oxagen/` on its branch. */
+const BOUND_LINKED: RepositoryRow = {
+  ...AVAILABLE,
+  role: "linked",
+  bindingId: "rpb_link01",
+  tree: absentTree("rpb_link01", "linked", "acme/infra"),
 };
 
 const OPENED = {
@@ -139,27 +170,11 @@ afterEach(async () => {
 });
 
 describe("the init wizard", () => {
-  it("binds the repository as main when the workspace has none, finds its binding, moves the branch, then opens the pull request", async () => {
-    actions.bindWorkspaceRepository.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/infra",
-        defaultRef: "main",
-        boundAt: "2026-09-19T10:00:00.000Z",
-      },
-    });
-    actions.readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: {
-        repositories: [
-          { fullName: "ACME/Infra", bindingId: "rpb_new01", role: "main" },
-        ],
-      },
-    });
+  it("moves the branch of a bound repository, then opens the pull request", async () => {
     actions.setProductionBranch.mockResolvedValue({
       ok: true,
       value: {
-        bindingId: "rpb_new02",
+        bindingId: "rpb_link02",
         fullName: "acme/infra",
         productionBranch: "release",
         previousBranch: "main",
@@ -171,9 +186,9 @@ describe("the init wizard", () => {
       value: { ...OPENED.value, reused: true },
     });
     const user = userEvent.setup();
-    const root = wizard([AVAILABLE]);
+    const root = wizard([MAIN, BOUND_LINKED]);
     expect(within(root).getByTestId("init-wizard-role-note")).toHaveTextContent(
-      "acme/infra is this workspace’s main repo.",
+      "acme/infra is linked to this workspace.",
     );
     await toLastStep(user, root, "release");
     await user.click(within(root).getByTestId("init-wizard-open"));
@@ -182,94 +197,38 @@ describe("the init wizard", () => {
     ).toHaveTextContent(
       "acme/infra#9 already adds .oxagen/. Nothing new was pushed.",
     );
-    expect(actions.bindWorkspaceRepository).toHaveBeenCalledWith(
-      "acme",
-      "core-platform",
-      { owner: "acme", name: "infra" },
-    );
     expect(actions.linkWorkspaceRepository).not.toHaveBeenCalled();
     expect(actions.setProductionBranch).toHaveBeenCalledWith(
       "acme",
       "core-platform",
-      "rpb_new01",
+      "rpb_link01",
       "release",
     );
     expect(actions.openInitPullRequest.mock.calls[0]?.[2]).toMatchObject({
-      bindingId: "rpb_new01",
+      bindingId: "rpb_link01",
     });
     expect(onOpened).toHaveBeenCalledTimes(1);
   });
 
-  it("prints the bind's refusal and writes nothing else (negative)", async () => {
-    actions.bindWorkspaceRepository.mockResolvedValue({
-      ok: false,
-      reason: "conflict",
-      code: "main_repo_claimed",
-    });
-    const user = userEvent.setup();
+  it("says a repository with no binding is linked by a steering PR, and offers no role choice", () => {
     const root = wizard([AVAILABLE]);
-    await toLastStep(user, root);
-    await user.click(within(root).getByTestId("init-wizard-open"));
-    expect(
-      await within(root).findByTestId("init-wizard-failure"),
-    ).toHaveTextContent("Another workspace steers by that repository");
-    expect(actions.readWorkspaceRepositories).not.toHaveBeenCalled();
-    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
-    expect(onOpened).not.toHaveBeenCalled();
+    expect(within(root).getByTestId("init-wizard-role-note")).toHaveTextContent(
+      "acme/infra is not linked yet, so the wizard opens a steering PR that links it and stops there.",
+    );
+    expect(root.querySelector("[data-role]")).toBeNull();
+    expect(within(root).queryByRole("radio")).toBeNull();
   });
 
-  it("prints the list's refusal after the bind, and re-reads the page for the bind it did write (negative)", async () => {
-    actions.bindWorkspaceRepository.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/infra",
-        defaultRef: "main",
-        boundAt: "2026-09-19T10:00:00.000Z",
-      },
-    });
-    actions.readWorkspaceRepositories.mockResolvedValue({
-      ok: false,
-      reason: "unavailable",
-      code: "github_down",
-    });
-    const user = userEvent.setup();
-    const root = wizard([AVAILABLE]);
-    await toLastStep(user, root);
-    await user.click(within(root).getByTestId("init-wizard-open"));
-    expect(
-      await within(root).findByTestId("init-wizard-failure"),
-    ).toHaveTextContent("github_down");
-    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
-    // The bind was written, so the page re-reads even though the wizard
-    // stops: otherwise the table still offers the repository as not linked.
-    expect(onOpened).toHaveBeenCalledTimes(1);
+  it("names the steering repository when it is the one picked", () => {
+    const root = wizard([
+      { ...MAIN, tree: absentTree("rpb_main01", "main", "acme/platform") },
+    ]);
+    expect(within(root).getByTestId("init-wizard-role-note")).toHaveTextContent(
+      "acme/platform is this workspace’s steering repository.",
+    );
   });
 
-  it("says the repository is not linked when the list does not hold the one it just bound (negative)", async () => {
-    actions.bindWorkspaceRepository.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/infra",
-        defaultRef: "main",
-        boundAt: "2026-09-19T10:00:00.000Z",
-      },
-    });
-    actions.readWorkspaceRepositories.mockResolvedValue({
-      ok: true,
-      value: { repositories: [] },
-    });
-    const user = userEvent.setup();
-    const root = wizard([AVAILABLE]);
-    await toLastStep(user, root);
-    await user.click(within(root).getByTestId("init-wizard-open"));
-    expect(
-      await within(root).findByTestId("init-wizard-failure"),
-    ).toHaveTextContent("Reload the page");
-    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
-    expect(onOpened).toHaveBeenCalledTimes(1);
-  });
-
-  it("prints the link's refusal when the workspace already has a main repository (negative)", async () => {
+  it("prints the link's refusal and writes nothing else (negative)", async () => {
     actions.linkWorkspaceRepository.mockResolvedValue({
       ok: false,
       reason: "conflict",
@@ -282,7 +241,9 @@ describe("the init wizard", () => {
     expect(
       await within(root).findByTestId("init-wizard-failure"),
     ).toHaveTextContent("Another workspace has linked");
-    expect(actions.bindWorkspaceRepository).not.toHaveBeenCalled();
+    expect(actions.setProductionBranch).not.toHaveBeenCalled();
+    expect(actions.openInitPullRequest).not.toHaveBeenCalled();
+    expect(onOpened).not.toHaveBeenCalled();
   });
 
   it("proposes the link as a steering PR and stops before the branch move and the pull request", async () => {
@@ -322,7 +283,6 @@ describe("the init wizard", () => {
       "core-platform",
       { owner: "acme", name: "infra" },
     );
-    expect(actions.bindWorkspaceRepository).not.toHaveBeenCalled();
     expect(actions.setProductionBranch).not.toHaveBeenCalled();
     expect(actions.openInitPullRequest).not.toHaveBeenCalled();
     // The footer is gone: there is nothing left to open from here.
@@ -392,29 +352,7 @@ describe("the init wizard", () => {
       code: "branch_not_found",
     });
     const user = userEvent.setup();
-    const bound: RepositoryRow = {
-      ...AVAILABLE,
-      role: "linked",
-      bindingId: "rpb_link01",
-      tree: {
-        kind: "ready",
-        value: {
-          bindingId: "rpb_link01",
-          role: "linked",
-          fullName: "acme/infra",
-          productionBranch: "main",
-          githubDefaultBranch: "main",
-          head: "0123456789abcdef0123",
-          oxagen: { present: false, files: [] },
-          workspaceToml: null,
-          governanceToml: null,
-          governanceMode: "absent",
-          initPullRequest: null,
-          readAt: "2026-09-19T10:00:00.000Z",
-        },
-      },
-    };
-    const root = wizard([MAIN, bound]);
+    const root = wizard([MAIN, BOUND_LINKED]);
     await toLastStep(user, root, "nope");
     await user.click(within(root).getByTestId("init-wizard-open"));
     expect(
@@ -443,7 +381,7 @@ describe("the init wizard", () => {
   it("carries the GitHub connection on step 1 when nothing can be offered until it exists", () => {
     const root = wizard([], true);
     expect(within(root).getByTestId("init-wizard-connect")).toHaveTextContent(
-      "This workspace binds no main repo yet.",
+      "GitHub is not connected to this workspace yet.",
     );
     expect(within(root).getByTestId("repository-setup")).toBeTruthy();
     expect(within(root).getByTestId("init-wizard-next")).toBeDisabled();
