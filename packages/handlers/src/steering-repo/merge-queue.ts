@@ -47,7 +47,9 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
+  IMPORT_RECORDS_DIR,
   IMPORT_REPLACES_PATH,
+  isImportBranch,
   isStampedRecordPath,
   mergeTrailers,
   parseReplacesFile,
@@ -299,7 +301,9 @@ async function importReplaces(
  * its `id` and `hash`, and the ledger line that records the merge. On an
  * import branch, each converted record's ledger change also names the id it
  * replaces, and the stamp commit deletes {@link IMPORT_REPLACES_PATH}, so the
- * file never reaches the production branch. The host refuses with
+ * file never reaches the production branch. An import branch that adds or
+ * changes a record under {@link IMPORT_RECORDS_DIR} without naming its old id
+ * is refused with `replaces_missing`. The host refuses with
  * `head_moved` when the branch is no longer at `head`.
  */
 export async function stampHead(input: StampInput): Promise<StampResult> {
@@ -367,6 +371,24 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
       "replaces_unmatched",
       `${IMPORT_REPLACES_PATH} names an old id for ${unmatched.sort().join(", ")}, and ${input.branch} adds or changes no steering record there`,
     );
+  }
+  // Each record an import converts keeps its old id, so its runs follow it.
+  // A batch of only skills or governance.toml adds no record there.
+  if (isImportBranch(input.branch)) {
+    const unnamed = changes
+      .filter(
+        (change) =>
+          change.id !== undefined &&
+          change.path.startsWith(`${IMPORT_RECORDS_DIR}/`) &&
+          !replaces.has(change.path),
+      )
+      .map((change) => change.path);
+    if (unnamed.length > 0) {
+      throw stampRefused(
+        "replaces_missing",
+        `${IMPORT_REPLACES_PATH} names no old id for ${unnamed.sort().join(", ")}, and every record ${input.branch} adds or changes under ${IMPORT_RECORDS_DIR}/ needs one`,
+      );
+    }
   }
 
   const target = await chooseLedgerTarget({

@@ -673,14 +673,61 @@ describe("landSteeringPr: the import branch", () => {
     await expectImported(gh, IMPORT_BRANCH);
   });
 
-  it("writes no replaces when the import branch has no replaces file", async () => {
+  it("refuses imported records that name no old id, before it stamps", async () => {
     const gh = steeringRepo();
     const pr = await openImport(gh, null);
 
-    await land(gh, pr);
+    const err = await refusal(land(gh, pr));
 
+    expect(err).toMatchObject({ reason: "replaces_missing" });
+    expect(err.message).toContain(importPath(REFUNDS));
+    expect(err.message).toContain(importPath(PUSH));
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("refuses a replaces file that leaves out one imported record", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(
+      gh,
+      renderReplacesFile(new Map([[importPath(REFUNDS), OLD_REFUNDS]])),
+    );
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_missing" });
+    expect(err.message).toContain(importPath(PUSH));
+    expect(err.message).not.toContain(importPath(REFUNDS));
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("lands an import batch that holds only a skill, with no replaces file", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const skill = `steering/skills/${lineage}/SKILL.md`;
+    const branch = importBranch(2);
+    await gh.ensureBranch(REPO, branch, REPO.defaultBranch);
+    gh.commit(branch, skill, record(lineage, "Write the release notes."));
+    const head = gh.commit(
+      branch,
+      `steering/skills/${lineage}/template.md`,
+      "## Changes\n",
+    );
+    const { number } = await gh.openPullRequest(REPO, {
+      title: "Import .oxagen/",
+      head: branch,
+      base: REPO.defaultBranch,
+      body: "Imports one skill.",
+    });
+
+    await land(gh, { number, branch, head, path: skill });
+
+    expect(gh.merges).toHaveLength(1);
     const line = (await ledgerLines(gh)).at(-1)!;
-    expect(line.changes).toHaveLength(2);
+    expect(line.changes).toContainEqual(
+      expect.objectContaining({ path: skill, lineage }),
+    );
     for (const change of line.changes) expect(change).not.toHaveProperty("replaces");
   });
 

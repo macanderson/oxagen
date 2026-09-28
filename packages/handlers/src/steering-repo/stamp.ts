@@ -447,12 +447,18 @@ export function isImportBranch(branch: string): boolean {
 }
 
 /**
+ * The folder an import writes each converted record to. On an import branch,
+ * every record the PR adds or changes here must name the id it replaces.
+ */
+export const IMPORT_RECORDS_DIR = "steering/imported";
+
+/**
  * The file an import branch commits beside the records it converts. It names
  * each record's id before the conversion, so the stamp can write it as
  * `replaces`. The file is part of the reviewed head, and the stamp commit
  * deletes it, so it never reaches the production branch.
  */
-export const IMPORT_REPLACES_PATH = "steering/imported/replaces.txt";
+export const IMPORT_REPLACES_PATH = `${IMPORT_RECORDS_DIR}/replaces.txt`;
 
 export type BranchScopeRefusal = {
   reason:
