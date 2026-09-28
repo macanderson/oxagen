@@ -10,7 +10,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { assertSurfaceMark, brandPath } from "./sync-brand-assets.mjs";
+import {
+  assertSurfaceMark,
+  brandPath,
+  expectedInk,
+  rewriteInk,
+} from "./sync-brand-assets.mjs";
 
 describe("brand kit selection", () => {
   it("finds the current sibling checkout without an override", () => {
@@ -85,6 +90,17 @@ describe("surface checks without a kit", () => {
         fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url)),
         script,
       );
+      // The script imports apps/web's INK map (#3074), so the fixture tree
+      // carries that module where the repo does, or the child exits on
+      // ERR_MODULE_NOT_FOUND before it checks anything.
+      const theme = join(root, "apps/web/scripts/lib/theme.mjs");
+      mkdirSync(dirname(theme), { recursive: true });
+      copyFileSync(
+        fileURLToPath(
+          new URL("../../apps/web/scripts/lib/theme.mjs", import.meta.url),
+        ),
+        theme,
+      );
       const surface = join(root, "apps/app/public/brand");
       mkdirSync(surface, { recursive: true });
       writeFileSync(join(surface, ".DS_Store"), "finder metadata");
@@ -105,5 +121,89 @@ describe("surface checks without a kit", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// #3074: the check verified nothing about apps/web's art modules, and
+// theme.mjs had drifted (INK.dim #52525B against the kit's #71717A).
+describe("the web art palette", () => {
+  const kit = {
+    ink: "#09090B",
+    panel: "#18181B",
+    hl: "#27272A",
+    border: "#27272A",
+    rule: "#3F3F46",
+    dim: "#71717A",
+    muted: "#A1A1AA",
+    "text-body": "#E4E4E7",
+    text: "#FFFFFF",
+    gold: "#D4AF37",
+  };
+  const theme = [
+    "// header",
+    "export const INK = Object.freeze({",
+    '  ground: "#09090B",',
+    '  dim: "#52525B",',
+    '  silver: "#A1A1AA",',
+    "});",
+    "",
+    "export function lineTones(t = INK) {",
+    "  return [t.dim];",
+    "}",
+    "",
+  ].join("\n");
+  const map = { ground: "ink", dim: "dim", silver: "muted" };
+
+  it("maps each INK key to the hex of the kit token it names", () => {
+    expect(expectedInk(kit, map)).toEqual({
+      ground: "#09090B",
+      dim: "#71717A",
+      silver: "#A1A1AA",
+    });
+  });
+
+  it("covers every INK key with a real kit token by default", () => {
+    const ink = expectedInk(kit);
+    expect(Object.keys(ink).sort()).toEqual(
+      [
+        "body",
+        "dim",
+        "gold",
+        "ground",
+        "line",
+        "muted",
+        "panel",
+        "raised",
+        "rule",
+        "silver",
+        "text",
+      ].sort(),
+    );
+  });
+
+  it("fails loudly on a token the kit does not define", () => {
+    expect(() => expectedInk({}, { dim: "dim" })).toThrow(
+      'house kit has no colour token "dim" for INK.dim',
+    );
+  });
+
+  it("rewrites a drifted value and leaves everything else byte for byte", () => {
+    const out = rewriteInk(theme, expectedInk(kit, map));
+    expect(out).not.toBe(theme);
+    expect(out).toBe(theme.replace('dim: "#52525B"', 'dim: "#71717A"'));
+  });
+
+  it("returns the source unchanged when it already matches, so --check passes", () => {
+    const current = theme.replace('dim: "#52525B"', 'dim: "#71717A"');
+    expect(rewriteInk(current, expectedInk(kit, map))).toBe(current);
+  });
+
+  it("refuses a palette it cannot read rather than passing over it", () => {
+    expect(() => rewriteInk("export const X = 1;\n", { dim: "#71717A" })).toThrow(
+      "no `export const INK` block",
+    );
+    expect(() => rewriteInk(theme, { gold: "#D4AF37" })).toThrow(
+      "INK has no gold colour",
+    );
   });
 });

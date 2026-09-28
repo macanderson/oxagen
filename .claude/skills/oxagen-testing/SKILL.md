@@ -21,6 +21,8 @@ The full gate runs in CI on every push and PR — that is the authoritative gate
 
 **Turbo quirk:** `turbo run test` halts on the first failing package's coverage, masking other failures. Use `turbo run test:coverage --continue` if you genuinely need to see every package's failures in one pass (still not a mid-task habit).
 
+CI's `checks` job does the same since #3428. Its `turbo run lint typecheck` passes `--continue`, `tools/scripts/run-checks.mjs` runs the manifest, contracts, and env checks and names every failure, and each later step runs after an earlier failure (`if: ${{ !cancelled() && steps.install.outcome == 'success' }}`). One run reports every failure, and the job still fails if any check did. `check-checks-job-continues.mjs` in `check:contracts` holds that shape.
+
 ## Location — co-located, not `__tests__/`
 
 `*.test.ts` / `*.test.tsx` next to the source file is the dominant convention (~98% of ~1650 test files sampled). `__tests__/` directories are the rare, deliberate exception for grouped/integration suites where no single source file is the natural home (e.g. `packages/database/src/__tests__/schema-append-only.test.ts`, `packages/handlers/src/__tests__/iam-schema.test.ts`). Default to co-location; reach for `__tests__/` only for genuinely cross-file suites.

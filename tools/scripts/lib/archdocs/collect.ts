@@ -7,6 +7,7 @@
  * the same tree always produces the same model — that is what lets
  * `--check` diff the output in CI.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { sendersIn, triggersIn } from "../../check-inngest-senders";
@@ -36,6 +37,11 @@ export interface ManifestTable {
   columns: ManifestColumn[];
   meta?: Record<string, string>;
 }
+/**
+ * The storage manifest as the atlas reads it. `contentHash` and each store's
+ * `tableCount` are not in the committed file (ADR-216); `collectManifest`
+ * computes them when it reads it.
+ */
 export interface StorageManifest {
   version: number;
   contentHash: string;
@@ -206,10 +212,27 @@ export function collectWorkspace(root: string): WorkspacePackage[] {
 
 // ── Storage manifest (ADR-031) ───────────────────────────────────────────────
 
+/**
+ * Read the committed manifest and compute the two values it no longer
+ * commits (ADR-216). The file is canonical JSON kept current by
+ * `pnpm schema:manifest:check`, so the sha256 of its bytes is the content hash
+ * `pnpm schema:manifest` prints.
+ */
 export function collectManifest(root: string): StorageManifest {
-  return JSON.parse(
-    read(join(root, "packages/database/storage-manifest.json")),
-  ) as StorageManifest;
+  const text = read(join(root, "packages/database/storage-manifest.json"));
+  const committed = JSON.parse(text) as Omit<
+    StorageManifest,
+    "contentHash" | "stores"
+  > & { stores: Omit<StorageManifest["stores"][number], "tableCount">[] };
+  return {
+    ...committed,
+    contentHash: createHash("sha256").update(text).digest("hex"),
+    stores: committed.stores.map((store) => ({
+      ...store,
+      tableCount: committed.tables.filter((t) => t.store === store.kind)
+        .length,
+    })),
+  };
 }
 
 export function collectPgSchemas(
@@ -780,14 +803,16 @@ export function collectCaddy(root: string): CaddyRoute[] {
   if (!existsSync(p)) return [];
   const src = read(p);
   const out: CaddyRoute[] = [];
-  const hosts = new Map<string, string>();
-  for (const m of src.matchAll(/@(\w+)\s+host\s+(\S+)/g))
-    hosts.set(m[1]!, m[2]!);
+  // A matcher can name several hosts (`@app host app.oxagen.sh oxagen.app`),
+  // and each one is a route of its own.
+  const hosts = new Map<string, string[]>();
+  for (const m of src.matchAll(/@(\w+)[ \t]+host[ \t]+([^\n#]+)/g))
+    hosts.set(m[1]!, m[2]!.trim().split(/\s+/));
   for (const m of src.matchAll(
     /handle\s+@(\w+)\s*\{[^}]*?reverse_proxy\s+127\.0\.0\.1:(\d+)/gs,
   )) {
-    const host = hosts.get(m[1]!);
-    if (host) out.push({ host, port: Number(m[2]) });
+    for (const host of hosts.get(m[1]!) ?? [])
+      out.push({ host, port: Number(m[2]) });
   }
   return out.sort(by((r) => r.host));
 }

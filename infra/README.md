@@ -208,6 +208,23 @@ return an error, it bounces mail; a missing DKIM key bounces nothing and just
 starts landing in spam folders days later, with nothing pointing back at the
 change that caused it.
 
+## `oxagen.app` is the app's domain
+
+The production web app moves from `app.oxagen.sh` to `oxagen.app` (ADR-215).
+The domain is registered at Vercel, in the team with slug `oxagen-inc`, and
+its nameservers point at the Route 53 zone in
+`stacks-new/oxagen/dns-oxagen-app.tf`. It came into Route 53 as a vanity
+redirect (`dns-vanity-domains.tf`), and `moved` blocks carried its zone,
+records, and certificate out of that set, so the delegation and the issued
+certificate survived the move.
+
+The ALB serves both `oxagen.app` and `www.oxagen.app` with that certificate.
+Until the cutover, a listener rule answers them with a 302 to the same path
+on `app.oxagen.sh`. `tools/caddy/Caddyfile.alb` already routes both names to
+the app. Install it with `tools/install-node-scripts.sh` before the cutover
+deletes the rule, or Caddy answers the names with a 404. ADR-215 lists the
+rest of the cutover, including the Parameter Store values it changes.
+
 ## The certificate ordering trap
 
 An ACM certificate validates by DNS, so it cannot issue until Route 53 is

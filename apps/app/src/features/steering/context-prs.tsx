@@ -75,11 +75,13 @@ export function ContextPrs({
                       repository: row.repository,
                     })}
                   </SafeLink>
-                  <div className={`${mono} text-xs text-muted-foreground`}>
+                  <div
+                    className={`${mono} text-xs text-muted-foreground md:truncate`}
+                  >
                     {proposal.lineage}
                   </div>
                 </td>
-                <td className={`${cell} ${mono} text-xs break-all`}>
+                <td className={`${cell} ${mono} text-xs`}>
                   {row.branch}
                 </td>
                 <td className={cell}>{record(`kinds.${proposal.kind}`)}</td>

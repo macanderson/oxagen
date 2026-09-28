@@ -349,9 +349,32 @@ describe("the tool checks", () => {
       message: "The vault has no credential named billing-oauth-client.",
       fix: "Add the credential.",
     },
+    {
+      rule: "tool_not_offered",
+      level: "error",
+      tool: "get_refund",
+      field: "operation",
+      message: "get_refund imports operation getRefund, and the source no longer offers it.",
+      fix: "Remove [tools.get_refund] from tools.toml.",
+    },
   ];
 
-  it("maps each finding to the file, line, and field it names, and leaves unknown_credential to the references check", async () => {
+  it("runs MCP Studio's lint when the options name none", async () => {
+    const head = replaced(TOOLS, 'select = ["items[].id", "items[].amount", "items[].status"]\n', "");
+    const { findings } = await servers(head);
+    expect(findings).toEqual([
+      expect.objectContaining({
+        rule: "lint-unbounded-array",
+        severity: "warning",
+        path: TOOLS,
+        line: lineStarting(textOf(head, TOOLS), "[tools.list_refunds]"),
+        field: "tools.list_refunds.select",
+        detail: { tool_check: "unbounded_array", level: "warning" },
+      }),
+    ]);
+  });
+
+  it("maps each finding to the file, line, and field it names, and leaves out what other checks report", async () => {
     const lint = vi.fn<ServerLint>((folder) => (folder.name === "billing" ? FOUND : []));
     const { findings } = await servers(fixtureRepo(), { base: null }, lint);
     const tools = textOf(fixtureRepo(), TOOLS);

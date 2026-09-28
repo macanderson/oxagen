@@ -108,14 +108,14 @@ export function ProviderRow({
           type="button"
           data-provider-open={server.id}
           aria-label={t("openNamed", { name: server.name })}
-          className={`${buttonGhost} -ml-2 items-start gap-2.5`}
+          className={`${buttonGhost} -ml-2 max-w-full items-start gap-2.5`}
           onClick={show}
         >
           <ProviderIcon name={server.name} iconUrl={server.iconUrl} size={24} />
-          <span className="flex flex-col items-start gap-0.5">
-            <span className="font-semibold">{server.name}</span>
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-semibold md:truncate">{server.name}</span>
             <span
-              className={`${mono} text-xs font-normal text-muted-foreground`}
+              className={`${mono} text-xs font-normal text-muted-foreground md:truncate`}
             >
               {server.id}
             </span>
@@ -138,7 +138,7 @@ export function ProviderRow({
             {t("transportMcp")}
           </span>
           <span
-            className={`${mono} break-all text-[10.5px] text-muted-foreground`}
+            className={`${mono} text-[10.5px] text-muted-foreground md:truncate`}
           >
             {t("wireLine", {
               wire: server.transportType,
@@ -181,7 +181,7 @@ export function ProviderRow({
         <NotBackedValue gap="providers" />
       </td>
       <td className={cell}>
-        <span className="flex flex-wrap gap-1.5">
+        <span className="flex gap-1.5 max-md:flex-wrap">
           <button
             type="button"
             data-testid={`provider-open-${server.id}`}

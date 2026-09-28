@@ -4,12 +4,21 @@
 // An error blocks the steering PR. A warning and an info show in the PR and
 // in Studio and block nothing. Each finding names the tool and field at
 // fault and the change that clears it.
+//
+// lint reads the folder and what the source offers now. It never calls
+// compile, which throws at the first folder that cannot build: lint reports
+// every finding at once, on a draft Studio has not saved as well as on a
+// steering PR.
 import type { McpToolsLock } from "../contract/lock";
+import type { RegistryEntry } from "../contract/registry-entry";
 import type { McpServer, ServerSourceType } from "../contract/server";
 import type { McpTools } from "../contract/tools";
 import type { ImportNote } from "../model/import-result";
 import type { UpstreamTool } from "../model/upstream-tool";
-import { notBuilt } from "../not-built";
+import { lintRegistry } from "./registry";
+import type { Report } from "./report";
+import { lintServer } from "./server";
+import { lintTools } from "./tools";
 
 export type FindingLevel = "error" | "warning" | "info";
 
@@ -53,6 +62,18 @@ export const LINT_RULES = {
 
   // Local.
   local_without_machines: { level: "info", sources: ["local"] },
+
+  // Registry.
+  /** An entry with no remote, and no source.machines to run its package. */
+  registry_without_remote: { level: "info", sources: ["registry"] },
+  /** No source.registry_type, no package of that type, an mcpb bundle, a transport other than stdio, or another runner in runtimeHint. */
+  package_cannot_run: { level: "error", sources: ["registry"] },
+  /** A required argument with no value, a positional argument with no unique valueHint, or a source.arguments key no argument takes. */
+  argument_without_value: { level: "error", sources: ["registry"] },
+  /** A ${NAME} not in source.env, or a variable the package requires missing from it. */
+  env_variable_missing: { level: "error", sources: ["registry"] },
+  /** A secret argument with a literal value, or one only the entry fills. */
+  secret_literal: { level: "error", sources: ["registry"] },
 } as const satisfies Record<string, { level: FindingLevel; sources: "all" | readonly ServerSourceType[] }>;
 
 export type LintRule = keyof typeof LINT_RULES;
@@ -81,6 +102,11 @@ export interface ServerFolder {
   offered: readonly UpstreamTool[];
   /** What import skipped, cut, or could not map. */
   notes: readonly ImportNote[];
+  /**
+   * The catalog entry at source.version, for a registry source. The package
+   * checks need it. Without it, lint checks only what server.toml says.
+   */
+  registry_entry?: RegistryEntry;
 }
 
 export interface LintContext {
@@ -90,7 +116,23 @@ export interface LintContext {
   accepted_unchanged: ReadonlySet<string>;
 }
 
-/** Every finding for one server folder, errors first. */
+const LEVEL_ORDER: readonly FindingLevel[] = ["error", "warning", "info"];
+
+/**
+ * Every finding for one server folder: errors, then warnings, then infos.
+ * Within a level, server findings come first, then each tool in tools.toml's
+ * order, each in the Tool checks table's order, then the definition budget.
+ */
 export function lint(folder: ServerFolder, context: LintContext): Finding[] {
-  return notBuilt("lint", folder, context);
+  const type = folder.server.source.type;
+  const found: Finding[] = [];
+  const report: Report = (rule, at) => {
+    const { level, sources } = LINT_RULES[rule];
+    if (sources !== "all" && !(sources as readonly ServerSourceType[]).includes(type)) return;
+    found.push({ rule, level, ...at });
+  };
+  lintServer(folder, context, report);
+  lintRegistry(folder, report);
+  lintTools(folder, context, report);
+  return LEVEL_ORDER.flatMap((level) => found.filter((finding) => finding.level === level));
 }

@@ -192,19 +192,18 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `agent-monitored-pr`, the pass rule replaces the round rule.
 
-Four issue fields carry what a label cannot. When these fields are available in GitHub,
+Three issue fields carry what a label cannot. When these fields are available in GitHub,
 set them when you open an issue and correct them when you learn better. Until they are
 provisioned, add an `Issue metadata` section to the issue body with each field name and
 its value. Keep those values current, then copy them into the fields when available:
 
 | Field | Type | What it records |
 |---|---|---|
-| Estimated agent minutes | Number | Minutes of agent work to reach the definition of done, including tests, docs and review response. Not wall-clock, and not human hours. |
 | Impacts schema | Yes / No | The change alters a Postgres, ClickHouse or Neo4j schema and needs a migration. |
 | Breaking change | Yes / No | The change alters a capability contract, an API response, a CLI flag, a hook payload or a stored format that a consumer already depends on. |
 | Customer reported | Yes / No | A customer or prospect reported the problem. An audit, a reviewer, CI or telemetry did not. |
 
-Size labels stay: they size the change, while estimated agent minutes sizes the work.
+Size labels stay: they size the change, while `agent_mins_est` on the `All issues` board sizes the work (see Issue fields and reflection below).
 
 A triaged issue carries one priority, one `kind:`, one `size/`, one `area:`, and one `job:` label:
 
@@ -229,3 +228,32 @@ Retired on 2026-09-25, so do not apply them: `build-time:*`, `model:tier-*`, `sc
 Keep active instructions close to their source. Use `docs/README.md` to navigate internal docs and `apps/docs/content/docs/` for published instructions. Update capability docs when contracts change, including their registered names, surfaces, and index entries.
 
 Do not copy package counts, dependency versions, route lists, or old gap counts into additional documents. Link to the manifest, route oracle, check output, or owning source instead. Preserve useful decisions and incident records with their dates. Remove duplicate copies and repair their inbound links.
+
+## Issue fields and reflection
+
+Mac set this on 2026-09-28 for every repository. Every issue in Mac's repositories belongs on the `All issues` project board in the `macanderson` account. The board carries six fields. Keep all six correct on every issue you work on.
+
+| Field | Values | Meaning |
+|---|---|---|
+| Prompt | Text | The prompt that starts an agent on the work |
+| Model Tier | Ultra, Pro, Standard, Lite | The model tier the work needs |
+| Size | XS, S, M, L, XL | The size of the change |
+| `agent_mins_est` | Number | Agent minutes the work should take |
+| `agent_mins` | Number | Agent minutes the work took |
+| Resolution | Shipped, Won't ship, Duplicate | How the issue closed |
+
+- **Add the issue to the board when you file it.** Set Prompt, Model Tier, and `agent_mins_est` at the same time. Set Size too, unless a triage rule in this repository gives sizing to the triage agent.
+- **Stamp your minutes when your run ends.** Add the minutes your run spent on the issue to `agent_mins`. Add to the value already there, because several runs can share one issue.
+- **Write a reflection when your run ends.** Post it as a comment on the issue. Give your run's minutes, say what shipped, compare `agent_mins` with `agent_mins_est`, and say what the next agent should know. The reflections are the record of minutes. If two runs write `agent_mins` at once and one value is lost, rebuild the sum from the reflections.
+- **Set Resolution when the issue closes.**
+- **Fix any field you find wrong** on any issue you touch.
+- **Use the reflection until the board exists.** If `gh project list` shows no `All issues` board, or your token lacks the `project` scope, write the six values in the reflection instead. Copy them to the board once it exists.
+
+These commands find the board and set a field:
+
+```sh
+gh project list --owner macanderson                                  # the board titled "All issues"
+gh project field-list <number> --owner macanderson --format json     # field and option ids
+gh project item-add <number> --owner macanderson --url <issue-url> --format json --jq .id   # the item id
+gh project item-edit --project-id <project-id> --id <item-id> --field-id <field-id> --number 42
+```

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -23,6 +24,7 @@ import {
   collectClickHouse,
   collectCompose,
   collectInngest,
+  collectManifest,
   collectMcpTools,
   collectPostgresEdges,
   collectWorkflows,
@@ -608,6 +610,27 @@ describe("collectors", () => {
       'function addWrap(parent: Command): void {\n  parent\n    .command("verify")\n    .description("Check the chain");\n}\nretiredCommand("pr", "PR watching");\nprogram\n  .command("cost")\n  .description("Project cost");\nconst budgetCmd = program\n  .command("budget")\n  .description("Ceilings");\nbudgetCmd\n  .command("show")\n  .description("Show them");\nconst old = program\n  .command("old", { hidden: true })\n  .description("Deprecated");\naddWrap(old);\n',
     );
     expect(collectCaddy(root)).toEqual([{ host: "api.example", port: 4000 }]);
+    // One matcher can name several hosts; each is its own route (ADR-215).
+    file(
+      root,
+      "infra/tools/caddy/Caddyfile.alb",
+      ":80 {\n route {\n  @app host app.example new.example\n  handle @app {\n   reverse_proxy 127.0.0.1:3000\n  }\n }\n}\n",
+    );
+    expect(collectCaddy(root)).toEqual([
+      { host: "app.example", port: 3000 },
+      { host: "new.example", port: 3000 },
+    ]);
+    // Spaces and a trailing comment on the matcher line add no host, and a
+    // handle whose matcher names no host adds no route.
+    file(
+      root,
+      "infra/tools/caddy/Caddyfile.alb",
+      ":80 {\n route {\n  @app host app.example  new.example   # moving\n  handle @app {\n   reverse_proxy 127.0.0.1:3000\n  }\n  @static path /static/*\n  handle @static {\n   reverse_proxy 127.0.0.1:5000\n  }\n }\n}\n",
+    );
+    expect(collectCaddy(root)).toEqual([
+      { host: "app.example", port: 3000 },
+      { host: "new.example", port: 3000 },
+    ]);
     expect(collectCompose(root)).toEqual([
       { name: "postgres", image: "postgres:16" },
     ]);
@@ -693,6 +716,64 @@ describe("collectors", () => {
         source: "relations",
       },
     ]);
+  });
+
+  it("computes the manifest's content hash and per-store table counts, which the file no longer commits (ADR-216)", () => {
+    // The site prints a table count per store and the content hash. Both left
+    // the committed manifest in #3691, so the collector derives them: counts
+    // from the tables array, the hash from the file's bytes, which for a
+    // canonical file is the value `pnpm schema:manifest` prints.
+    const root = scratch();
+    const text =
+      JSON.stringify(
+        {
+          domains: [],
+          stores: [
+            { domains: ["agent", "org"], kind: "postgres", purpose: "p" },
+            { domains: ["telemetry"], kind: "clickhouse", purpose: "c" },
+            { domains: [], kind: "neo4j", purpose: "n" },
+          ],
+          tables: [
+            { id: "clickhouse:telemetry.usage", store: "clickhouse" },
+            { id: "postgres:agent.agents", store: "postgres" },
+            { id: "postgres:org.members", store: "postgres" },
+          ],
+          version: 2,
+        },
+        null,
+        2,
+      ) + "\n";
+    file(root, "packages/database/storage-manifest.json", text);
+
+    const m = collectManifest(root);
+    expect(m.contentHash).toBe(
+      createHash("sha256").update(text).digest("hex"),
+    );
+    expect(m.stores.map((s) => [s.kind, s.tableCount])).toEqual([
+      ["postgres", 2],
+      ["clickhouse", 1],
+      ["neo4j", 0],
+    ]);
+  });
+
+  it("recounts a manifest that still commits a stale tableCount rather than trusting it", () => {
+    // A file written before ADR-216, or a merge that kept one side's count,
+    // must not put a wrong number on the site.
+    const root = scratch();
+    file(
+      root,
+      "packages/database/storage-manifest.json",
+      JSON.stringify({
+        contentHash: "0".repeat(64),
+        domains: [],
+        stores: [{ domains: [], kind: "postgres", purpose: "p", tableCount: 99 }],
+        tables: [{ id: "postgres:agent.agents", store: "postgres" }],
+        version: 1,
+      }),
+    );
+    const m = collectManifest(root);
+    expect(m.stores[0]?.tableCount).toBe(1);
+    expect(m.contentHash).not.toBe("0".repeat(64));
   });
 });
 
