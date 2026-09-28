@@ -90,6 +90,17 @@ describe("surface checks without a kit", () => {
         fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url)),
         script,
       );
+      // The script imports apps/web's INK map (#3074), so the fixture tree
+      // carries that module where the repo does, or the child exits on
+      // ERR_MODULE_NOT_FOUND before it checks anything.
+      const theme = join(root, "apps/web/scripts/lib/theme.mjs");
+      mkdirSync(dirname(theme), { recursive: true });
+      copyFileSync(
+        fileURLToPath(
+          new URL("../../apps/web/scripts/lib/theme.mjs", import.meta.url),
+        ),
+        theme,
+      );
       const surface = join(root, "apps/app/public/brand");
       mkdirSync(surface, { recursive: true });
       writeFileSync(join(surface, ".DS_Store"), "finder metadata");
