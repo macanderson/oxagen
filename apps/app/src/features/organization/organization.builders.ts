@@ -296,6 +296,7 @@ export function orgSource(reads: OrgReads): {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

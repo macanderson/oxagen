@@ -1,8 +1,9 @@
 // The provisioning steps a person sees, and the state of each, derived from
 // the last step that finished (`view.step`) and the step that failed or
-// stopped (`view.failedStep`). The job skips two steps in two cases, so the
-// list leaves them out: `bind_repository` runs only for a workspace, and
-// `add_to_installation` runs only on GitHub.
+// stopped (`view.failedStep`). The job skips three steps in three cases, so
+// the list leaves them out. `bind_repository` runs only for a workspace.
+// `add_to_installation` runs only on GitHub. `register_webhook` runs only on
+// GitLab.
 import {
   STEERING_REPO_STEPS,
   type SteeringRepoStep,
@@ -21,6 +22,7 @@ function runs(
   if (step === "bind_repository") return ws !== null;
   // A connection not yet picked reads as GitHub, the default host.
   if (step === "add_to_installation") return provider !== "gitlab";
+  if (step === "register_webhook") return provider === "gitlab";
   return true;
 }
 

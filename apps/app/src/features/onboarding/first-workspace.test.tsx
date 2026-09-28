@@ -3,12 +3,14 @@
 // may see it (an org Owner or Admin, checked before anything is read), the
 // name form while the organization has no live workspace, the steering repo's
 // provisioning once one exists, the failed read that keeps the form under an
-// alert, and the line a GitHub install leaves behind. The steering-repo lane
-// is stubbed at its barrel, so these tests pin what this step hands it. Axe
-// runs after every test.
+// alert, a failed steering repo read that still lets the person continue, and
+// the line a GitHub install leaves behind. The steering-repo lane is stubbed
+// at its barrel, so these tests pin what this step hands it. Axe runs after
+// every test.
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DataSource } from "@/data/ports";
 import { readError } from "@/data/read";
 import type { SteeringRepoRead } from "@/features/steering-repo";
 import type { WsCtx as WsCtxType } from "@/server/viewer";
@@ -19,7 +21,10 @@ import { onboardingSource, workspaceList } from "./onboarding.builders";
 
 const mocks = vi.hoisted(() => ({
   requireViewer: vi.fn<(org: string, ws: string) => Promise<WsCtxType>>(),
-  readSteeringRepo: vi.fn<(ctx: WsCtxType) => Promise<SteeringRepoRead>>(),
+  readSteeringRepo:
+    vi.fn<
+      (source: DataSource, ctx: WsCtxType) => Promise<SteeringRepoRead>
+    >(),
 }));
 
 vi.mock("next/link", () => ({
@@ -53,12 +58,6 @@ vi.mock("@/features/steering-repo", () => ({
       data-status={view.status}
       data-can-act={String(canAct)}
       data-return-to={returnTo}
-    />
-  ),
-  SteeringRepoUnavailable: ({ capability }: { capability: string }) => (
-    <section
-      data-testid="steering-repo-unavailable"
-      data-capability={capability}
     />
   ),
 }));
@@ -218,7 +217,7 @@ describe("Create the first workspace", () => {
       ),
     ).toBeInTheDocument();
     expect(mocks.requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-    expect(mocks.readSteeringRepo).toHaveBeenCalledWith(WS_CTX);
+    expect(mocks.readSteeringRepo).toHaveBeenCalledWith(source, WS_CTX);
     const provisioning = screen.getByTestId("steering-repo-provisioning");
     expect(provisioning).toHaveAttribute("data-org", "acme");
     expect(provisioning).toHaveAttribute("data-ws", "core-platform");
@@ -235,10 +234,10 @@ describe("Create the first workspace", () => {
     expect(screen.queryByLabelText("Workspace name")).toBeNull();
   });
 
-  it("says the steering repo read is not backed yet, and still continues (negative)", async () => {
+  it("names the code a failed steering repo read answered, and still continues (negative)", async () => {
     mocks.readSteeringRepo.mockResolvedValueOnce({
-      kind: "not_backed",
-      capability: "get_steering_repo",
+      kind: "failed",
+      failure: readError("installation_unreachable", 503),
     });
     const { source } = onboardingSource({ workspaces: workspaceList([CORE]) });
     const element = await WelcomeFirstWorkspace({
@@ -247,9 +246,31 @@ describe("Create the first workspace", () => {
       result: null,
     });
     render(<IntlProvider>{element}</IntlProvider>);
-    expect(screen.getByTestId("steering-repo-unavailable")).toHaveAttribute(
-      "data-capability",
-      "get_steering_repo",
+    const failure = document.querySelector("[data-reason]");
+    expect(failure).toHaveAttribute("data-reason", "error");
+    expect(failure).toHaveTextContent(
+      "Steering repo could not be loaded: the control plane answered installation_unreachable. Nothing was changed, and runs kept recording.",
+    );
+    expect(screen.queryByTestId("steering-repo-provisioning")).toBeNull();
+    expect(screen.getByTestId("workspace-continue")).toBeInTheDocument();
+  });
+
+  it("names the permission a denied steering repo read needed, and still continues (negative)", async () => {
+    mocks.readSteeringRepo.mockResolvedValueOnce({
+      kind: "failed",
+      failure: { ok: false, reason: "denied", permission: "repository.read" },
+    });
+    const { source } = onboardingSource({ workspaces: workspaceList([CORE]) });
+    const element = await WelcomeFirstWorkspace({
+      ctx: ctxAs("owner"),
+      source,
+      result: null,
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    const failure = document.querySelector("[data-reason]");
+    expect(failure).toHaveAttribute("data-reason", "denied");
+    expect(failure).toHaveTextContent(
+      "You cannot see Steering repo in this workspace. Your roles do not include repository.read; an organization owner can grant it.",
     );
     expect(screen.queryByTestId("steering-repo-provisioning")).toBeNull();
     expect(screen.getByTestId("workspace-continue")).toBeInTheDocument();

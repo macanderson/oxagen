@@ -110,6 +110,7 @@ const source: DataSource = {
     memories: refuse,
     tree: refuse,
   },
+  steeringRepo: { get: refuse },
   tools: {
     versions: refuse,
     grants: refuse,

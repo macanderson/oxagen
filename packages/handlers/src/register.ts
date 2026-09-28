@@ -2317,6 +2317,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .publishedSteeringGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_steering_index",
+    async () =>
+      (await import("./context.steering.index.get"))
+        .steeringIndexGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_production_branch",
     async () =>
       (await import("./repository.production_branch.set"))

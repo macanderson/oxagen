@@ -1720,6 +1720,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_steering_index",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "get_steering_repo",
       "reads": [],
@@ -4283,7 +4293,7 @@
       "writes": []
     }
   ],
-  "contentHash": "2cef931385704e8755a47a442c662377145e2fb1b9a5477b5cd2fb64943918a9",
+  "contentHash": "b4b42ee415e839ed1e801375665f5381de20f9895aab2ad0af239284e42d3326",
   "domains": [
     {
       "name": "agent",

@@ -337,6 +337,7 @@ export function onboardingSource(reads: Reads): {
       memories: refuse("steering.memories"),
       tree: refuse("steering.tree"),
     },
+    steeringRepo: { get: refuse("steeringRepo.get") },
     tools: {
       versions: refuse("tools.versions"),
       grants: refuse("tools.grants"),

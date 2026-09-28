@@ -1804,11 +1804,11 @@
     "get_steering_repo": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a the steering repo card: provisioning steps, the repository link, the published version, and health. The workspace layout's health banner and onboarding read it too (features/steering-repo/read.ts, card.tsx, health-banner.tsx)",
+      "entry": "Repositories \u203a the steering repo card: provisioning steps, the repository link, the published version, and health. The workspace layout's health banner and onboarding read it too. features/steering-repo/read.ts reads it through the DataSource port data/live/steering-repo.ts, and card.tsx and health-banner.tsx draw it",
       "testid": "steering-repo-card",
       "proof": "apps/app/src/features/steering-repo/card.test.tsx",
-      "verifiedAt": "2026-09-27",
-      "verifiedBy": "s2-steering-drift"
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "s2-app-reader"
     },
     "list_memories": {
       "route": "/[org]/[ws]/steering/memory",
