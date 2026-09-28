@@ -1,12 +1,18 @@
-// repository.main.get.ts — `get_main_repository` (#2967).
+// repository.main.get.ts: `get_main_repository` (#2967, #4516).
 //
-// The read behind the Workspace settings dialog's Repository section, and the
-// read that unblocks it. `bind_main_repository` refuses
-// `conflict: github_not_connected` unless the workspace already carries a
-// GitHub App installation, and nothing in the app could produce one: the
-// install leg is an HTTP flow the API runs, and no capability handed out its
-// signed URL. This answers all three faces of "can this workspace keep its
-// steering in git yet, and if not, what is the next click".
+// Answers the workspace's steering repo: the one repository whose steering
+// head the workspace's steering records live in (ADR-212). The code
+// repositories linked to the workspace are `list_repositories`' answer, not
+// this one's. The capability id still says "main". Renaming it changes the
+// contract, the app, the MCP tool, and the CLI, which other lanes own (#4616).
+//
+// It is also the read that gets a workspace to a steering repo.
+// `bind_main_repository` refuses `conflict: github_not_connected` unless the
+// workspace already carries a GitHub App installation, and nothing in the app
+// could produce one: the install leg is an HTTP flow the API runs, and no
+// capability handed out its signed URL. This answers all three faces of "can
+// this workspace keep its steering in git yet, and if not, what is the next
+// click".
 //
 // Flow:
 //   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), the pair the

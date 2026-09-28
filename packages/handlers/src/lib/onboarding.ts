@@ -4,9 +4,8 @@
 // `ingest_tacho_events` closes it on the first frame. The gate's own handlers
 // (get, advance) and `bind_main_repository` read and write the row directly.
 import { createHash } from "node:crypto";
-import { schema, type Tx, withTenantDb } from "@oxagen/database";
+import { schema, type Tx } from "@oxagen/database";
 import { PROVISIONAL_DAYS } from "@oxagen/database/schema";
-import { HandlerError } from "@oxagen/oxagen";
 import type { DetectedRepository } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import { and, eq, isNull, ne } from "drizzle-orm";
 
@@ -154,37 +153,4 @@ export function parseRepositoryRemote(
     }
   }
   return null;
-}
-
-/**
- * The provisional window's one refusal (spec App. F: "steering, records, and
- * agent definitions stay off until a main repo is bound"): a write that needs
- * somewhere to publish to is `conflict: provisional` while the workspace is
- * the gate's and no main repository is bound. Any other workspace, and the
- * gate's once `bind_main_repository` ran, passes.
- */
-export async function assertWorkspaceNotProvisional(scope: {
-  orgId: string;
-  workspaceId: string;
-}): Promise<void> {
-  const [row] = await withTenantDb((tx) =>
-    tx
-      .select({ provisionalUntil: schema.onboardingState.provisionalUntil })
-      .from(schema.onboardingState)
-      .where(
-        and(
-          eq(schema.onboardingState.orgId, scope.orgId),
-          eq(schema.onboardingState.workspaceId, scope.workspaceId),
-          isNull(schema.onboardingState.mainRepoBoundAt),
-        ),
-      )
-      .limit(1),
-  );
-  if (row) {
-    throw new HandlerError({
-      code: "conflict",
-      reason: "provisional",
-      message: `This workspace is provisional until ${row.provisionalUntil.toISOString()}: bind a main repository before publishing context records`,
-    });
-  }
 }
