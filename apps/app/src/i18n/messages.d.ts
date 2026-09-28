@@ -3206,6 +3206,7 @@ type Messages = {
           errors: {
             tokenInvalid: string;
             groupUnreachable: string;
+            tokenNotGroup: string;
             tokenInsufficient: string;
             forbidden: string;
             badInput: string;
@@ -5079,6 +5080,7 @@ type Messages = {
       repositoryLinkedElsewhere: string;
       mainRepoUnlinkRefused: string;
       repositoryNotLinked: string;
+      workspaceTomlUnreadable: string;
       branchNotFound: string;
       productionBranchMissing: string;
       productionBranchIsInitBranch: string;
@@ -5224,7 +5226,6 @@ type Messages = {
       unlink: string;
       link: string;
       linking: string;
-      linked: string;
       seeChanges: string;
       addOxagen: string;
       branch: {
@@ -5249,6 +5250,15 @@ type Messages = {
       submit: string;
       pending: string;
       done: string;
+    };
+    steering: {
+      linkProposed: string;
+      linkReused: string;
+      linkMerge: string;
+      linkListed: string;
+      unlinkProposed: string;
+      unlinkReused: string;
+      unlinkMerge: string;
     };
     copies: {
       title: string;
@@ -5625,6 +5635,7 @@ type Messages = {
         merge: string;
         link: string;
       };
+      resume: string;
     };
     drift: {
       heading: string;
@@ -6542,7 +6553,11 @@ type Messages = {
       closedReason: string;
       receipt: {
         sent: string;
-        linked: string;
+        linkProposed: string;
+        linkReused: string;
+        linkMerge: string;
+        linkListed: string;
+        linkBound: string;
         created: string;
       };
       timeout: {
@@ -6585,6 +6600,8 @@ type Messages = {
         githubNotAuthorized: string;
         installationUnreachable: string;
         repositoryNotInstalled: string;
+        mainRepoUnbound: string;
+        workspaceTomlUnreadable: string;
         choice: string;
         slug: string;
         name: string;

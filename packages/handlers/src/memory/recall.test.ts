@@ -4,6 +4,7 @@ import {
   MEMORY_RECALL_MAX,
   MEMORY_RECALL_TOKENS_MAX,
 } from "@oxagen/oxagen/steering-repo/tokens";
+import { remoteDigests } from "../lib/remote-digests";
 import { RECALL_HALF_LIFE_DAYS, rankRecall } from "./recall";
 import type { RecallCandidate, RecallRequest } from "./types";
 
@@ -20,7 +21,7 @@ function request(overrides: Partial<RecallRequest> = {}): RecallRequest {
     now: NOW,
     agent: "claude-code",
     inApp: false,
-    repository: "github.com/acme/api",
+    repositoryDigests: remoteDigests("github.com/acme/api"),
     tools: ["billing__create_refund"],
     paths: ["src/billing/refund.ts"],
     text: "Fix the billing refund tests",
@@ -112,10 +113,29 @@ describe("rankRecall", () => {
       ]);
       expect(ids(items)).toEqual(["api", "empty"]);
       expect(
-        rankRecall(request({ repository: null }), [
+        rankRecall(request({ repositoryDigests: [] }), [
           record("api", undefined, { repos: ["github.com/acme/api"] }),
         ]),
       ).toEqual([]);
+    });
+
+    it("matches a record's repository to the digests of a remote typed in another case", () => {
+      const items = rankRecall(
+        request({ repositoryDigests: remoteDigests("github.com/Acme/API") }),
+        [record("api", undefined, { repos: ["github.com/acme/api"] })],
+      );
+      expect(ids(items)).toEqual(["api"]);
+    });
+
+    it("keeps a record's repository out of a request whose digests name another", () => {
+      const items = rankRecall(
+        request({ repositoryDigests: remoteDigests("github.com/acme/web") }),
+        [
+          record("api", undefined, { repos: ["github.com/acme/api"] }),
+          record("any"),
+        ],
+      );
+      expect(ids(items)).toEqual(["any"]);
     });
 
     it("keeps a candidate with tools to a request whose toolbelt matches one", () => {

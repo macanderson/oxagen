@@ -140,12 +140,51 @@ describe("answer_interjection contract: a repository question (#3941)", () => {
     commandIds: ["tcm_0123"],
     receiptId: "rcp_0123",
     path: "create",
-    repository: { bindingId: "rpb_0123", fullName: "acme/api" },
+    // A create links no repository (lane S1, #4450).
+    repository: null,
     workspace: { publicId: "ws_0123", slug: "api" },
   };
 
-  it("returns the path, the repository and the workspace a create made", () => {
+  it("returns the path and the workspace a create made", () => {
     expect(agentInterjectionAnswer.output.parse(created)).toEqual(created);
+  });
+
+  it("returns the steering PR a link opened, or null when the repository was linked already (ADR-212)", () => {
+    const linked = {
+      ...created,
+      path: "link",
+      repository: {
+        fullName: "acme/api",
+        bindingId: null,
+        steeringPullRequest: {
+          number: 12,
+          url: "https://github.com/acme/oxagen-steering/pull/12",
+          reused: false,
+        },
+      },
+      workspace: null,
+    };
+    expect(agentInterjectionAnswer.output.parse(linked)).toEqual(linked);
+    const already = {
+      ...linked,
+      repository: {
+        fullName: "acme/api",
+        bindingId: "rpb_0123",
+        steeringPullRequest: null,
+      },
+    };
+    expect(agentInterjectionAnswer.output.parse(already)).toEqual(already);
+  });
+
+  it("refuses a link repository without its steering PR field (negative)", () => {
+    expect(
+      agentInterjectionAnswer.output.safeParse({
+        ...created,
+        path: "link",
+        repository: { fullName: "acme/api", bindingId: "rpb_0123" },
+        workspace: null,
+      }).success,
+    ).toBe(false);
   });
 
   it("requires the receipt, in its rcp_ form, on every answer (negative)", () => {

@@ -13,8 +13,13 @@
 // why: the viewer's role, the closed window, no pick yet, or an unnamed
 // workspace. Only an organization Owner or Admin, or the workspace Owner, can
 // answer with a path, so anyone else sees the question and the reason.
+//
+// A link binds nothing at once (ADR-212). It opens a steering PR that adds the
+// repository to the workspace's steering record, so the receipt names that PR
+// and says to merge it. A repository the record lists already, or one linked
+// already, opens no PR, and the receipt says which.
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useId, useState } from "react";
+import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import type { InterjectionItem } from "@/data/contracts/interjections";
 import {
   buttonPrimary,
@@ -24,7 +29,8 @@ import {
   mono,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
+import { PullRequestLink, useNavigate } from "@/ui/navigation";
 import { type AnsweredInterjection, answerInterjection } from "./actions";
 import { UNANSWERED, useAnswerFailure } from "./interjection-failure";
 
@@ -117,12 +123,64 @@ function PickCard({
   );
 }
 
+/**
+ * What a link answer did. A steering PR carries the link until a person merges
+ * it. With no PR, the repository was linked already (it has a binding) or the
+ * steering record lists it already and the next steering sync links it.
+ */
+function LinkReceipt({
+  linked,
+  ws,
+}: {
+  linked: NonNullable<AnsweredInterjection["repository"]>;
+  /** The slug of the workspace the link is for. */
+  ws: string;
+}) {
+  const t = useTranslations("run.interjection.receipt");
+  const proposal = linked.steeringPullRequest;
+  if (proposal === null)
+    return (
+      <p className="text-muted-foreground">
+        {linked.bindingId === null
+          ? t("linkListed", { repository: linked.fullName, ws })
+          : t("linkBound", { repository: linked.fullName, ws })}
+      </p>
+    );
+  const url = parsePullRequestUrl(proposal.url);
+  const values = {
+    repository: linked.fullName,
+    ws,
+    number: proposal.number,
+    pr: (chunks: ReactNode) =>
+      url === null ? (
+        chunks
+      ) : (
+        <PullRequestLink
+          to={url}
+          data-testid="interjection-receipt-pr"
+          className="font-medium text-link underline"
+        >
+          {chunks}
+        </PullRequestLink>
+      ),
+  };
+  return (
+    <>
+      <p className="text-muted-foreground">
+        {proposal.reused
+          ? t.rich("linkReused", values)
+          : t.rich("linkProposed", values)}
+      </p>
+      <p>{t("linkMerge")}</p>
+    </>
+  );
+}
+
 export function InterjectionAnswer({
   org,
   ws,
   interjectionId,
   body,
-  repository,
   canAnswer,
   closedAt,
 }: {
@@ -131,8 +189,6 @@ export function InterjectionAnswer({
   interjectionId: string;
   /** The body the host sealed with the question: its two paths. */
   body: Body;
-  /** `owner/name` the control plane matched to the run's remote; null when unresolved. */
-  repository: string | null;
   /** The viewer's roles admit a path answer. */
   canAnswer: boolean;
   /** The instant the window closed, as the page prints it; null while it is open. */
@@ -235,13 +291,6 @@ export function InterjectionAnswer({
   }
 
   if (answered !== null) {
-    const bound = answered.repository?.fullName ?? repository;
-    const detail =
-      answered.path === "create" && answered.workspace !== null
-        ? t("receipt.created", { slug: answered.workspace.slug })
-        : answered.path === "link" && bound !== null
-          ? t("receipt.linked", { repository: bound, ws: target })
-          : null;
     return (
       <div
         role="status"
@@ -249,9 +298,13 @@ export function InterjectionAnswer({
         className="flex flex-col gap-1 rounded-lg border border-border bg-app-panel-bg px-3 py-2.5 text-sm"
       >
         <p>{t("receipt.sent", { receipt: answered.receiptId })}</p>
-        {detail === null ? null : (
-          <p className="text-muted-foreground">{detail}</p>
-        )}
+        {answered.path === "create" && answered.workspace !== null ? (
+          <p className="text-muted-foreground">
+            {t("receipt.created", { slug: answered.workspace.slug })}
+          </p>
+        ) : answered.path === "link" && answered.repository !== null ? (
+          <LinkReceipt linked={answered.repository} ws={target} />
+        ) : null}
       </div>
     );
   }

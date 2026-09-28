@@ -90,6 +90,7 @@ describe("get_run contract", () => {
       canSummarize: false,
       name: null,
       summary: null,
+      repositoryUnlinked: false,
     };
     expect(
       runGet.output.safeParse({
@@ -120,6 +121,22 @@ describe("get_run contract", () => {
     expect(
       runGet.output.safeParse({
         run: withoutHarness,
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }).success,
+    ).toBe(false);
+    // So is the unlinked-repository flag: a ledger run answers it false.
+    const { repositoryUnlinked: _u, ...withoutFlag } = run;
+    expect(
+      runGet.output.safeParse({
+        run: withoutFlag,
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      runGet.output.safeParse({
+        run: { ...run, repositoryUnlinked: "no" },
         frames: { frames: [], cursor: null },
         witnessFor: null,
       }).success,

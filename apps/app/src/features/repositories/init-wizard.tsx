@@ -16,13 +16,18 @@
 // does not bind yet (its tree is read by the `layout` check, which refuses a
 // repository that already has one). Main or linked is a choice there, and the
 // drafted `role` follows it. Opening the pull request on a repository that is
-// not bound yet binds it first (`bind_main_repository` or `link_repository`),
-// then moves the production branch if the person changed it
+// not bound yet binds it first. A main repository binds at once
+// (`bind_main_repository`). A linked one does not: `link_repository` opens a
+// steering PR that adds it to `workspace.toml` (ADR-212), and the wizard stops
+// there, names that PR, and says to merge it. Opened again after the merge, it
+// finds the repository bound and goes on. With a binding in hand, the wizard
+// moves the production branch if the person changed it
 // (`set_production_branch`), then opens the pull request (`open_init_pr`).
 // Each is a governed write the kernel gates on its own.
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
+import type { LinkedRepository } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
 import {
   buttonPrimary,
@@ -58,6 +63,7 @@ import {
 } from "./failure";
 import { RepositorySetup } from "./main-repository";
 import { CheckRows, code, note } from "./parts";
+import { SteeringProposal } from "./steering-proposal";
 import { type RepositoryRow, treeState } from "./view";
 
 const WIZARD_STEPS = [
@@ -163,6 +169,9 @@ export function InitWizard({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
+  /** The link proposed for a linked repository with no binding. The wizard stops on it. */
+  const [proposed, setProposed] = useState<LinkedRepository | null>(null);
+  const finished = opened !== null || proposed !== null;
 
   const repository = candidates.find((row) => row.fullName === picked) ?? null;
   // The drafted role follows the choice: a repository already bound keeps
@@ -219,9 +228,11 @@ export function InitWizard({
   }
 
   /**
-   * The binding this repository opens through, binding it first when it has
-   * none. `onBound` fires once a bind has been written, even when the list
-   * read that follows it fails: the workspace changed, so the page re-reads.
+   * The binding this repository opens through, binding it as main first when
+   * it has none. A linked repository with no binding never reaches here:
+   * `submit` proposes its link and stops. `onBound` fires once a bind has been
+   * written, even when the list read that follows it fails: the workspace
+   * changed, so the page re-reads.
    */
   async function bindingFor(
     row: RepositoryRow,
@@ -229,12 +240,6 @@ export function InitWizard({
   ): Promise<{ ok: true; bindingId: string } | RepositoriesFailure> {
     if (row.bindingId !== null) return { ok: true, bindingId: row.bindingId };
     const target = { owner: row.owner, name: row.name };
-    if (role === "linked") {
-      const linked = await linkWorkspaceRepository(org, ws, target);
-      return linked.ok
-        ? { ok: true, bindingId: linked.value.bindingId }
-        : linked;
-    }
     const bound = await bindWorkspaceRepository(org, ws, target);
     if (!bound.ok) return bound;
     onBound();
@@ -255,6 +260,24 @@ export function InitWizard({
     setFailure(null);
     let wrote = false;
     try {
+      // A link binds nothing at once (ADR-212). It opens a steering PR, and
+      // the binding follows its merge, so there is no binding yet to move the
+      // production branch on or to open the pull request against. The wizard
+      // stops on the steering PR, and opened again after the merge it finds
+      // the repository bound and goes on from here.
+      if (repository.bindingId === null && role === "linked") {
+        const linked = await linkWorkspaceRepository(org, ws, {
+          owner: repository.owner,
+          name: repository.name,
+        });
+        if (!linked.ok) {
+          setFailure(failureText(linked));
+          return;
+        }
+        wrote = true;
+        setProposed(linked.value);
+        return;
+      }
       const binding = await bindingFor(repository, () => {
         wrote = true;
       });
@@ -301,7 +324,7 @@ export function InitWizard({
   }
 
   const footer =
-    opened !== null ? null : (
+    finished ? null : (
       <>
         {index > 0 ? (
           <button
@@ -357,7 +380,7 @@ export function InitWizard({
       testId="init-wizard"
       wide
       footer={footer}
-      closeLabel={opened === null && index === 0 ? t("cancel") : undefined}
+      closeLabel={!finished && index === 0 ? t("cancel") : undefined}
     >
       <ol
         aria-label={t("stepsLabel")}
@@ -394,6 +417,21 @@ export function InitWizard({
 
       {opened !== null ? (
         <OpenedPullRequest opened={opened} />
+      ) : proposed !== null ? (
+        <div className="flex flex-col gap-3">
+          <SteeringProposal
+            action="link"
+            fullName={proposed.fullName}
+            steeringPullRequest={proposed.steeringPullRequest}
+            testId="init-wizard-steering-pr"
+          />
+          <p
+            data-testid="init-wizard-resume"
+            className="text-[13px] leading-relaxed text-muted-foreground"
+          >
+            {t.rich("resume", { repository: proposed.fullName, code })}
+          </p>
+        </div>
       ) : step === "repository" ? (
         <div
           data-testid="init-wizard-repository"

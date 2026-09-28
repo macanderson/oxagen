@@ -3439,6 +3439,7 @@ describe("the wire and the host file", () => {
       "steer_next_step",
       "unbound_repo",
       "cedar",
+      "skills",
     ]);
   });
 

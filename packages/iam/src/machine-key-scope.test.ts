@@ -8,6 +8,7 @@ import { tachoBundleGet } from "@oxagen/oxagen/contracts/tacho.bundle.get";
 import { tachoGithubTokenIssue } from "@oxagen/oxagen/contracts/tacho.github_token.issue";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
+import { tachoMemoriesIngest } from "@oxagen/oxagen/contracts/tacho.memories.ingest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
@@ -324,7 +325,7 @@ describe("a ledger run credential", () => {
 });
 
 describe("the Tacho host key", () => {
-  it("names the control client's four capabilities as their contracts register them", () => {
+  it("names the control client's five capabilities as their contracts register them", () => {
     // A capability rename (ADR-025) left this list naming
     // `fetch_tacho_commands` after the contract became `fetch_commands`, and
     // every host's command poll was refused in production. The list is held
@@ -337,16 +338,18 @@ describe("the Tacho host key", () => {
         tachoCommandFetch.name,
         tachoEventsIngest.name,
         tachoGithubTokenIssue.name,
+        tachoMemoriesIngest.name,
       ].sort(),
     );
   });
 
-  it("may make the four calls its control client makes", async () => {
+  it("may make the five calls its control client makes", async () => {
     for (const capability of [
       "ingest_tacho_events",
       "get_tacho_bundle",
       "fetch_commands",
       "create_github_token",
+      "ingest_tacho_memories",
     ]) {
       keyWithScope({
         purpose: TACHO_HOST_PURPOSE,
