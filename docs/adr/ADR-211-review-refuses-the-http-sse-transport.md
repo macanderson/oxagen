@@ -28,11 +28,14 @@ streamable-http endpoint, or run its package on the local gateway.
 ## Decision
 
 1. **server.toml and the lock accept http only.** `remoteTransportSchema` in
-   `packages/mcp-studio/src/contract/primitives.ts` is `z.enum(["http"])`.
-   A remote source's `transport` and a registry lock source's `transport` both
-   use it, and the JSON schemas under `packages/mcp-studio/schemas/` follow. A
-   server folder that names sse fails review, and the steering PR's check
-   prints `SSE_REFUSAL`: "sse is the older HTTP+SSE transport, which the gateway
+   `packages/mcp-studio/src/contract/primitives.ts` accepts `http` and nothing
+   else. A remote source's `transport` and a registry lock source's `transport`
+   both use it, and the JSON schemas under `packages/mcp-studio/schemas/`
+   publish `enum: ["http"]`. The schema is a refined string, not
+   `z.enum(["http"])`: a failed enum aborts the remote source, and the source
+   union then reports only "Invalid input" at `source`. A failed refinement
+   keeps the refusal at `source.transport`. A server folder that names sse
+   fails review, and the steering PR's check prints `SSE_REFUSAL`: "sse is the older HTTP+SSE transport, which the gateway
    does not call. Point url at the server's streamable-http endpoint and set
    transport to http." Any other value keeps zod's message.
 2. **The lock skips an sse remote.** `registryLockSource` in
