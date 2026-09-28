@@ -7,7 +7,7 @@ import { servedResumeKey } from "../approvals";
 import type { ApprovalRequest } from "../types";
 import { AGENT, run } from "./fixtures";
 
-vi.mock("@oxagen/database", () => ({ schema: {}, withTenantDb: vi.fn() }));
+vi.mock("@oxagen/database", () => ({ schema: {}, withTenantDb: vi.fn(), withOrgDb: vi.fn() }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: vi.fn() }));
 vi.mock("@oxagen/rules/approval-notify", () => ({ notifyApprovalRequested: vi.fn() }));
 vi.mock("@oxagen/rules", () => ({ inputDigest: (input: unknown) => JSON.stringify(input) }));
