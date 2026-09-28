@@ -83,8 +83,10 @@ export const textareaBase = `${fieldSkin} rounded-xl py-3`;
  * A menu, listbox or picker surface, as the preset draws one: 70% of the menu
  * fill over a blurred, saturated copy of what lies beneath, a 2xl corner, a
  * faint ring in place of the border, and a deep shadow. `isolate` keeps the
- * blur layer (`before:-z-1`) under the items and over the page.
- * `menuPopup` adds the 4px inset a menu's rows sit in.
+ * blur layer (`before:-z-1`) under the items and over the page, and
+ * `relative` anchors it. Its callers sit in the flow or inside a positioner,
+ * so none adds a position of its own. `menuPopup` adds the 4px inset a menu's
+ * rows sit in.
  */
 export const menuSurface =
   "relative isolate overflow-hidden rounded-2xl bg-menu-popup-bg/70 text-menu-popup-fg shadow-2xl ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 " +
@@ -112,9 +114,12 @@ export const menuLabel = "px-3 py-2.5 text-xs text-muted-foreground";
 /**
  * A popover or hint that floats over the page: the menu's translucent fill
  * on the raised surface the shell's drawers use, a 2xl corner and the ring.
+ * It sets no position. The caller adds `absolute` or `fixed`, which also
+ * anchors the blur layer. Tailwind emits `relative` after both, so a
+ * `relative` here would pull the popover back into the flow.
  */
 export const popoverSurface =
-  "relative isolate rounded-2xl bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "isolate rounded-2xl bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
   "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /**
