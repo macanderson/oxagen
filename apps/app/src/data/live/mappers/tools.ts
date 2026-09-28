@@ -198,6 +198,8 @@ export function toMcpServerList(
       authKind: item.authKind,
       iconUrl: item.iconUrl,
       authorization: item.authorization,
+      contextTokens: item.contextTokens,
+      weeklyPrice: item.weeklyPrice,
     })),
   };
 }

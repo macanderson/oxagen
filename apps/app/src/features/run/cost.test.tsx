@@ -1281,6 +1281,75 @@ describe("CostTab's tool costs (#3892)", () => {
   });
 });
 
+describe("CostTab's standing context (#4537)", () => {
+  const area = (name: string) =>
+    screen
+      .getAllByTestId("area-row")
+      .find((row) => row.dataset.area === name);
+
+  it("fills Tool definitions and Context retrievals from the standing context, labelled estimate", async () => {
+    const { container } = await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            standingContext: {
+              toolDefinitions: {
+                resentTokens: 40_000,
+                cost: usd("120000", "estimated"),
+              },
+              steering: {
+                resentTokens: 10_000,
+                cost: usd("30000", "estimated"),
+              },
+              contextFrames: null,
+            },
+          }),
+        ),
+      }),
+    );
+    const definitions = area("definitions");
+    expect(definitions).toHaveTextContent("$0.12");
+    expect(definitions).toHaveTextContent("40,000 tok · estimate");
+    // Context retrievals holds the steering alone: the recorder reported no
+    // context frames, so none are counted.
+    const context = area("context");
+    expect(context).toHaveTextContent("$0.03");
+    expect(context).toHaveTextContent("10,000 tok · estimate");
+    expect(context?.querySelector("[title]")?.getAttribute("title")).toBe(
+      "Re-sent on every call after the first: 10,000 tokens of steering, an estimate inside the run's cost",
+    );
+    expect(screen.getByTestId("area-note")).toHaveTextContent(
+      "Every call after the first re-sent the run's standing context: 40,000 tokens of tool definitions and 10,000 tokens of steering.",
+    );
+    // The system prompt is not a reported source.
+    expect(area("system")).toHaveTextContent("not recorded");
+    await expectNoAxe(container);
+  });
+
+  it("shows a reported source's tokens without a cost when the run has no price, and an unreported area as not recorded (negative)", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            standingContext: {
+              toolDefinitions: { resentTokens: 40_000, cost: null },
+              steering: null,
+              contextFrames: null,
+            },
+          }),
+        ),
+      }),
+    );
+    const definitions = area("definitions");
+    expect(definitions).toHaveTextContent("not recorded");
+    expect(definitions).toHaveTextContent("40,000 tok · estimate");
+    expect(definitions?.textContent).not.toMatch(/\$/);
+    const context = area("context");
+    expect(context).toHaveTextContent("not recorded");
+    expect(context?.textContent).not.toMatch(/\$|\d/);
+  });
+});
+
 describe("CostTab's finding pins (#4001)", () => {
   const FINDING = "fnd_0123456789abcdefghjkmn";
   const turns = costTurns(releaseRunTurns());

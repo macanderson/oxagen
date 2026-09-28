@@ -363,25 +363,32 @@ describe("list_findings for one run (#4001)", () => {
     expect(() => findingList.output.parse(out)).not.toThrow();
   });
 
-  it("cites the whole run for a finding about its cache, pinning no frame", async () => {
-    const handler = createFindingListHandler({
-      readFindings: async () => [
-        findingRow({
-          kind: "cache_writes_never_read",
-          level: "operator",
-          subject: "prn_aaaaaaaaaaaaaaaaaaaaaa",
-        }),
-      ],
-      readPricedSpend: spend,
-    });
-    const out = await handler({ status: "open", runId: RUN }, ctx());
-    expect(out.findings[0]?.citation).toEqual({
-      runId: RUN,
-      runLevel: true,
-      frames: [],
-      framesTotal: 0,
-    });
-  });
+  it.each([
+    "cache_writes_never_read",
+    "standing_context",
+    "model_class_fit",
+  ] as const)(
+    "cites the whole run for a %s finding, pinning no frame",
+    async (kind) => {
+      const handler = createFindingListHandler({
+        readFindings: async () => [
+          findingRow({
+            kind,
+            level: "operator",
+            subject: "prn_aaaaaaaaaaaaaaaaaaaaaa",
+          }),
+        ],
+        readPricedSpend: spend,
+      });
+      const out = await handler({ status: "open", runId: RUN }, ctx());
+      expect(out.findings[0]?.citation).toEqual({
+        runId: RUN,
+        runLevel: true,
+        frames: [],
+        framesTotal: 0,
+      });
+    },
+  );
 
   it("filters the read on the run's id among the cited runs, and reads every run without one", async () => {
     const db = drizzle.mock({ schema });

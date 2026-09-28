@@ -119,6 +119,8 @@ export function createSteeringHost(
     getPullRequest: (repo, number) => on(repo).getPullRequest(repo, number),
     branchHead: (repo, branch) => on(repo).branchHead(repo, branch),
     listFiles: (repo, ref, dir) => on(repo).listFiles(repo, ref, dir),
+    listTree: (repo, commit) => on(repo).listTree(repo, commit),
+    createTag: (repo, name, sha) => on(repo).createTag(repo, name, sha),
     changedPaths: (repo, base, head) => on(repo).changedPaths(repo, base, head),
     reportCheckRun: (repo, args) => on(repo).reportCheckRun(repo, args),
     mergePullRequest: (repo, args) => on(repo).mergePullRequest(repo, args),
