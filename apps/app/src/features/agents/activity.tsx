@@ -97,13 +97,22 @@ function Runs({
       >
         {runs.value.map((run: RunRow) => (
           <tr key={run.id} data-testid="agent-run">
-            <td className={cell}>
+            <td className={`${cell} max-w-72`}>
+              {/* #4571: the session name leads, as on Fleet, with the id
+                  on the line below it. */}
               <SafeLink
                 to={routes.run(place.org, place.ws, run.id)}
-                className={`${mono} text-xs underline-offset-4 hover:underline`}
+                title={run.name ?? run.taskRef ?? undefined}
+                className="block truncate text-xs underline-offset-4 hover:underline"
+              >
+                {run.name ?? run.taskRef ?? t("untitled")}
+              </SafeLink>
+              <span
+                data-testid="agent-run-id"
+                className={`${mono} block truncate text-[11px] text-dim`}
               >
                 {run.id}
-              </SafeLink>
+              </span>
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} outcome={run.outcome} />

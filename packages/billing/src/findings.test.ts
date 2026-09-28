@@ -1285,6 +1285,7 @@ describe("the limits the contracts carry", () => {
       counterfactual: money,
       runs: Array.from({ length: runs }, (_, i) => ({
         runId: `tse_${i}`,
+        name: null,
         startedAt: START.toISOString(),
         calls: 1,
         measuredTokens: 0,

@@ -29,7 +29,7 @@ The evidence behind one finding: the arithmetic the findings job wrote with it (
 | `evidence.coveredCalls` | integer | the cited calls the counterfactual prices; the rest add nothing to the saving |
 | `evidence.measuredTokens`, `evidence.counterfactualTokens` | integer | the tokens the covered calls carried, and the tokens the alternative would have |
 | `evidence.measured`, `evidence.counterfactual` | money | what the covered calls cost at the price each run paid, and what the alternative would have; the saving is the difference |
-| `evidence.runs` | object[] | the cited runs with the largest saving, at most ten: `{ runId, startedAt, calls, measuredTokens, counterfactualTokens, measured, counterfactual }` |
+| `evidence.runs` | object[] | the cited runs with the largest saving, at most ten: `{ runId, name, startedAt, calls, measuredTokens, counterfactualTokens, measured, counterfactual }`. `name` is the session name the Fleet board shows, or null when the run has none |
 
 ## Errors
 

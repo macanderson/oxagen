@@ -4272,7 +4272,7 @@
       "writes": []
     }
   ],
-  "contentHash": "192daf9c217ddc911e92b933cc5bbf238b2dee72725a484dc8842ab080e671d8",
+  "contentHash": "700560fdcf65494da5cb4fad95e26d18269f55c32e1f5588d5246ecf7c11d63d",
   "domains": [
     {
       "name": "agent",
@@ -13605,6 +13605,12 @@
         },
         {
           "name": "title",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "title_source",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

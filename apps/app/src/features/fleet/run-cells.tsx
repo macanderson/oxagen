@@ -1,7 +1,7 @@
 "use client";
 // The Fleet runs table's cells that board.tsx draws from one row each: the
-// summary, the pull requests, the lines changed, the tokens and the status
-// word, and the Tokens shown tile. Kept out of board.tsx to keep that file
+// pull requests, the lines changed, the tokens and the status word, and the
+// Tokens shown tile. Kept out of board.tsx to keep that file
 // under 1,500 lines.
 import { GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -32,31 +32,6 @@ import {
   pullRequestLabel,
   type RowState,
 } from "./view";
-
-/**
- * The generated summary, two lines at most with the whole text on hover. A
- * workspace that turned summaries off reads so, rather than "none yet".
- */
-export function SummaryCell({ run }: { run: RunRow }) {
-  const t = useTranslations("fleet.runs");
-  const off = run.enrichmentEnabled === false;
-  const summary = off ? null : run.summary;
-  if (summary === null)
-    return (
-      <span className="text-muted-foreground">
-        {off ? t("summaryOff") : t("summaryNone")}
-      </span>
-    );
-  return (
-    <p
-      data-testid="row-summary"
-      title={summary.text}
-      className="line-clamp-2 text-[12px] leading-snug text-muted-foreground"
-    >
-      {summary.text}
-    </p>
-  );
-}
 
 /** The tone a recorded pull-request state reads in; the Run page uses the same ladder. */
 const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {

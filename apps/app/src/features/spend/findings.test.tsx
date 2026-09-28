@@ -234,6 +234,46 @@ describe("Finding evidence", () => {
     });
   });
 
+  it("names an unnamed run Untitled session and keeps its id under it (#4571)", () => {
+    const finding = NINE[2];
+    if (finding === undefined) throw new Error("fixture");
+    render(
+      <IntlProvider>
+        <FindingEvidence
+          evidence={readOk({
+            finding,
+            calls: 2,
+            coveredCalls: 2,
+            measuredTokens: 100,
+            counterfactualTokens: 40,
+            measured: { micros: "3000000", currency: "USD" },
+            counterfactual: { micros: "1000000", currency: "USD" },
+            runs: [
+              {
+                runId: "tse_7k2m9q",
+                name: null,
+                startedAt: "2026-09-11T06:00:00.000Z",
+                calls: 2,
+                measuredTokens: 100,
+                counterfactualTokens: 40,
+                measured: { micros: "3000000", currency: "USD" },
+                counterfactual: { micros: "1000000", currency: "USD" },
+              },
+            ],
+          })}
+          at={AT}
+        />
+      </IntlProvider>,
+    );
+    const dialog = screen.getByTestId("spend-evidence-dialog");
+    expect(
+      within(dialog).getByRole("link", { name: "Untitled session" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/tse_7k2m9q");
+    expect(within(dialog).getByTestId("run-id")).toHaveTextContent(
+      /^tse_7k2m9q$/,
+    );
+  });
+
   it("returns to the page it opened over when that page names where (#4001)", async () => {
     const user = userEvent.setup();
     const finding = NINE[2];

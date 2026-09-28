@@ -23,6 +23,8 @@ export const conversationRenameHandler: CapabilityHandler<
       .update(schema.conversations)
       .set({
         title: input.title,
+        // A name a person chose. The model titler never replaces it.
+        titleSource: "user",
         updatedAt: now,
         updatedById: userId,
       })

@@ -904,8 +904,9 @@
           "empty": "No run of this agent is on the newest page of runs. It has {count} in the last 30 days, and every one of them is in the audit record.",
           "emptyNoRollup": "No run of this agent is on the newest page of runs, and the 30-day rollup holds none.",
           "audit": "Open the audit record",
+          "untitled": "Untitled session",
           "columns": {
-            "run": "Run",
+            "run": "Session name",
             "status": "Status",
             "tokens": "Tokens",
             "cost": "Cost",
