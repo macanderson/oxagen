@@ -9,6 +9,8 @@
 > not. The exact graph stays local to each checkout/worktree. Oxagen retains stable
 > provider metadata and durable traces; canonical protected/default-ref topology
 > and typed run evidence are separate follow-ups.
+>
+> **Amended 2026-09-28 by [ADR-214](./ADR-214-server-built-code-graph-copies-hold-symbols-chunks-and-embeddings.md).** A server-side exact code graph returns for copies Oxagen builds itself from the provider. This ADR's cloud-sync and local-daemon paths stay retired.
 
 ## Context
 
