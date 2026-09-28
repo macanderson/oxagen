@@ -21,7 +21,7 @@ describe("repair_steering_repo contract", () => {
 
   it("is an admin button, off the agent surface", () => {
     expect(steeringRepoRepair.surfaces).not.toContain("agent");
-    expect(steeringRepoRepair.agent).toBeUndefined();
+    expect("agent" in steeringRepoRepair).toBe(false);
   });
 
   it("takes nothing", () => {
