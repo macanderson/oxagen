@@ -482,8 +482,9 @@ export type LinearAuthorizationUrl = Branded<string, "linear-authorization-url">
 export function parseLinearAuthorizationUrl(raw: string): LinearAuthorizationUrl | null; // https://linear.app/oauth/authorize with S256 PKCE and a 43-character state only
 
 // src/shared/canonical-host.ts — the production app's canonical host (ADR-215)
-export type CanonicalHostUrl = Branded<string, "canonical-host-url">;
-export function canonicalHostRedirect(req: { method: string; host: string; pathname: string; search: string }): { url: CanonicalHostUrl; permanent: boolean } | null; // a GET or HEAD for a page on another production host; never /api/ or /.well-known/
+type CanonicalHostUrl = Branded<string, "canonical-host-url">;                  // not exported; it travels inside CanonicalHostRedirect
+export interface CanonicalHostRedirect { url: CanonicalHostUrl; permanent: boolean }
+export function canonicalHostRedirect(req: { method: string; host: string; pathname: string; search: string }): CanonicalHostRedirect | null; // a GET or HEAD for a page on another production host; never /api/ or /.well-known/
 
 // src/shared/navigation.ts     — the only module that calls next/navigation redirect()
 export function redirectTo(path: SafePath): never;
@@ -492,7 +493,7 @@ export function redirectToLoopback(uri: LoopbackUri, q: { code: string; state: s
 export function redirectToCheckout(url: ExternalCheckoutUrl): never;
 export function responseRedirect(req: Request, path: SafePath, status?: 307 | 308): NextResponse; // route handlers and proxy.ts; 308 for the App. F table
 export function redirectToLinearAuthorization(url: LinearAuthorizationUrl): never;
-export function redirectToCanonicalHost(target: { url: CanonicalHostUrl; permanent: boolean }): NextResponse; // proxy.ts; a 308 cached for an hour to oxagen.app, a 307 with no-store to any other host
+export function redirectToCanonicalHost(target: CanonicalHostRedirect): NextResponse; // proxy.ts; a 308 cached for an hour to oxagen.app, a 307 with no-store to any other host
 
 // src/ui/navigation.tsx        — the only useRouter importer, and the only file with a computed href/action
 export function useNavigate(): { replace(path: SafePath): void; push(path: SafePath): void };

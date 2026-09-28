@@ -9,7 +9,8 @@
 import { getMetadataBase } from "./app-url";
 
 declare const canonicalHostUrl: unique symbol;
-export type CanonicalHostUrl = string & { readonly [canonicalHostUrl]: true };
+/** Not exported: it reaches navigation.ts inside `CanonicalHostRedirect`. */
+type CanonicalHostUrl = string & { readonly [canonicalHostUrl]: true };
 
 /**
  * Every public host the production app answers on. The host of
