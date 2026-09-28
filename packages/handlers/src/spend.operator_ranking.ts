@@ -87,8 +87,10 @@ async function readWorkspaceRole(
   scope: RankingScope,
   userId: string,
 ): Promise<string | null> {
-  // withSystemDb, as capability-role-guard reads it: this read decides
-  // whether the caller may act in the scope, so it must not depend on it.
+  // tenancy: one workspace_users row, filtered by the scope's workspaceId
+  // and the caller's userId. It runs under withSystemDb, as
+  // capability-role-guard reads it: this read decides whether the caller
+  // may act in the scope, so it must not depend on it.
   const rows = await withSystemDb((tx) =>
     tx
       .select({ role: schema.workspaceUsers.role })
