@@ -4,7 +4,13 @@ import { resolveModelFundingSource, selectModelFromFunding } from "@oxagen/ai";
 import { evaluateTurnCreditGate, turnCostUsd } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import type { RunFrame } from "@oxagen/run-ledger";
-import { digestBytes } from "@oxagen/tacho";
+import {
+  capSubject,
+  clipSummary,
+  digestBytes,
+  SUMMARY_MAX_CHARS,
+  SUMMARY_MAX_SENTENCES,
+} from "@oxagen/tacho";
 import type { RunScope } from "./run-record";
 
 export const ENRICHMENT_CHUNK_CHARS = 24_000;
@@ -357,11 +363,31 @@ function terminalOrRetryable(failure: unknown): unknown {
   return new NonRetriableError((failure as Error).message, { cause: failure });
 }
 
+/** The account's sentence when some recorded bodies could not be read. */
+export function partialEvidenceNote(missing: number): string {
+  return missing > 0
+    ? ` Evidence is partial: ${missing} recorded bodies were unavailable.`
+    : "";
+}
+
 /**
- * A stable suffix avoids title collisions without another charged model call.
- * The run id follows in parentheses, since a label joined with a separator
- * character is hard to scan.
+ * The model's name for a run, cut the way a session name is cut: at most
+ * `SESSION_SUBJECT_MAX` code points, on a word, with no trailing punctuation
+ * (#4571). It carries no run id. The run id has its own line on the run page,
+ * and every run list shows the name in place of the id. Null when nothing is
+ * left, so the run keeps the title it already has.
  */
-export function uniqueRunName(name: string, runId: string): string {
-  return `${name.trim().slice(0, Math.max(1, 80 - runId.length - 3))} (${runId})`;
+export function accountName(name: string): string | null {
+  return capSubject(name.replace(/^["'`‘’“”]+|["'`‘’“”]+$/gu, ""));
+}
+
+/**
+ * The stored summary: the model's first sentences, then the notes. The notes
+ * are kept whole and the model's text gives way, so the stored field never
+ * passes `SUMMARY_MAX_CHARS` and never loses the note that says the account
+ * is partial (#4571).
+ */
+export function accountSummary(summary: string, notes: string): string {
+  const room = SUMMARY_MAX_CHARS - Array.from(notes).length;
+  return `${clipSummary(summary, SUMMARY_MAX_SENTENCES, room) ?? ""}${notes}`;
 }

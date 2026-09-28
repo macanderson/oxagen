@@ -6,6 +6,7 @@ import {
 } from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import { SESSION_SUBJECT_MAX, SUMMARY_MAX_CHARS } from "@oxagen/tacho";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
@@ -27,9 +28,11 @@ import { createFunction, MAX_BATCH_SIZE } from "../create-function";
 import {
   collectRunText,
   enrichmentFailureReason,
+  accountName,
+  accountSummary,
   fallbackRunTitle,
+  partialEvidenceNote,
   runNarrativeTurn,
-  uniqueRunName,
   ENRICHMENT_BUDGET_NOTE,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_RUN_BUDGET_USD,
@@ -59,9 +62,11 @@ const eventSchema = z.object({
   /** Set when a person asked through `summarize_run`. */
   requestedByUserId: z.string().optional(),
 });
+// No length limit here: a paid answer a few characters over the asked length
+// is cut to fit (`accountName`, `accountSummary`), not thrown away.
 const narrativeSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  summary: z.string().trim().min(1).max(1600),
+  name: z.string().trim().min(1),
+  summary: z.string().trim().min(1),
 });
 
 /**
@@ -906,15 +911,21 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       if (!(await enabled())) throw new Error("Run enrichment was disabled");
       const chunks = await portionTexts(portions, budgetReached);
       const result = await narrate(
-        `Return only JSON with name (short, specific user goal, at most 80 characters) and summary (concise account of all recorded turns, at most 1600 characters). Name the distinctive task, not the first generic greeting. This input covers ${collected.frames} frames and ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable. State missing evidence when it limits the account.${budgetReached ? " The summarizing budget ran out, so this input covers only the start of the run. Say so in the summary." : ""}\n\n${chunks.join("\n")}`,
+        `Return only JSON with name and summary. name is the session's subject, the way a coding agent names a session: the specific user goal in sentence case, at most ${SESSION_SUBJECT_MAX} characters, with no quotes and no trailing period. summary is 2 to 3 sentences, at most ${SUMMARY_MAX_CHARS} characters, saying what the person asked for, what the agent did, and what was left unfinished. Name the distinctive task, not the first generic greeting. This input covers ${collected.frames} frames and ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable. State missing evidence when it limits the account.${budgetReached ? " The summarizing budget ran out, so this input covers only the start of the run. Say so in the summary." : ""}\n\n${chunks.join("\n")}`,
       );
       await recordEnrichmentSpend(data, result.costUsd);
       const json = result.text
         .trim()
         .replace(/^```(?:json)?\s*/u, "")
         .replace(/\s*```$/u, "");
+      const account = narrativeSchema.parse(JSON.parse(json));
       return {
-        ...narrativeSchema.parse(JSON.parse(json)),
+        name: accountName(account.name),
+        summary: accountSummary(
+          account.summary,
+          partialEvidenceNote(collected.missing) +
+            (budgetReached ? ENRICHMENT_BUDGET_NOTE : ""),
+        ),
         model: result.model,
         costUsd: result.costUsd,
       };
@@ -928,13 +939,9 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           tx
             .update(table)
             .set({
-              name: uniqueRunName(generated.name, data.runPublicId),
-              summary:
-                generated.summary +
-                (collected.missing > 0
-                  ? ` Evidence is partial: ${collected.missing} recorded bodies were unavailable.`
-                  : "") +
-                (budgetReached ? ENRICHMENT_BUDGET_NOTE : ""),
+              // A name that cut to nothing leaves the prompt's title in place.
+              ...(generated.name === null ? {} : { name: generated.name }),
+              summary: generated.summary,
               summaryModel: generated.model,
               summaryGeneratedAt: new Date(),
               summaryInputDigest:

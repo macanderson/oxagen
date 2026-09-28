@@ -22,7 +22,6 @@ import {
   ENRICHMENT_BODY_READ_CEILING,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_TEXT_CEILING_CHARS,
-  uniqueRunName,
 } from "./run-enrichment";
 const scope = { orgId: "o", workspaceId: "w" };
 function frame(seq: number, text: string) {
@@ -127,14 +126,6 @@ describe("the full recorded input", () => {
     expect((await collectRunText(scope, [one, two], get)).digest).not.toBe(
       a.digest,
     );
-  });
-  it("distinguishes runs with the same model-written title", () => {
-    expect(uniqueRunName("Fix login", "tse_12345678")).not.toBe(
-      uniqueRunName("Fix login", "tse_87654321"),
-    );
-    expect(
-      uniqueRunName("x".repeat(100), "tse_12345678").length,
-    ).toBeLessThanOrEqual(80);
   });
 });
 
