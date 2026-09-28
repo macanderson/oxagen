@@ -6,6 +6,9 @@
 // link-local address, and no redirect to another host. The key goes in the
 // Authorization header only. No message this module builds carries the key,
 // the endpoint's url, or any part of the endpoint's response body.
+//
+// These requests do not go through @oxagen/ai (ADR-217), so the caller gets
+// each request's token count through onUsage and records it.
 import { concat, decodeText, encodeText, parseJson } from "../execute/body";
 import { createCloudTransport } from "../execute/cloud/transport";
 import { parseEndpoint } from "../execute/endpoint";
@@ -67,6 +70,17 @@ export class SearchIndexError extends Error {
   }
 }
 
+/** What one embeddings request used. The caller records it, because @oxagen/ai does not see the request. */
+export interface EmbedUsage {
+  /** The texts the request carried, in order. */
+  texts: readonly string[];
+  purpose: EmbedPurpose;
+  /** The endpoint's usage.total_tokens, or null when its response gives no count. */
+  tokens: number | null;
+  /** How long the request took, in milliseconds. */
+  durationMs: number;
+}
+
 /** How long one embeddings request may take. */
 export const EMBED_DEADLINE_MS = 10_000;
 
@@ -85,6 +99,11 @@ export interface HttpEmbedderOptions {
   apiKey: string | null;
   /** True to send input_type, which Voyage AI reads. A custom endpoint may not accept it. */
   inputType: boolean;
+  /**
+   * Called once for each request that returns its vectors, and never for one
+   * that fails. It must not throw.
+   */
+  onUsage?: (usage: EmbedUsage) => void;
   /** The cloud Transport by default. A test passes a fake. */
   transport?: Pick<Transport, "http">;
   deadlineMs?: number;
@@ -112,7 +131,8 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
       if (options.apiKey !== null) headers.push(["authorization", `Bearer ${options.apiKey}`]);
       const body = { model: options.model, input: texts, ...(options.inputType ? { input_type: purpose } : {}) };
       const controller = new AbortController();
-      const clock = new Clock(Date.now() + deadlineMs, signal ?? controller.signal, controller);
+      const startedAt = Date.now();
+      const clock = new Clock(startedAt + deadlineMs, signal ?? controller.signal, controller);
       try {
         const sent = await clock.race(
           transport.http({
@@ -136,7 +156,9 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
         const bytes = await readCapped(response, clock, limit);
         const parsed = parseJson(decodeText(bytes));
         if (!parsed.ok) throw malformed("The embeddings endpoint's response is not JSON.", response.status);
-        return vectorsOf(parsed.value, texts.length, response.status);
+        const vectors = vectorsOf(parsed.value, texts.length, response.status);
+        options.onUsage?.({ texts, purpose, tokens: tokensOf(parsed.value), durationMs: Date.now() - startedAt });
+        return vectors;
       } finally {
         clock.dispose();
       }
@@ -229,6 +251,13 @@ function vectorsOf(value: unknown, count: number, status: number): Float32Array[
     ordered.push(vector);
   }
   return ordered;
+}
+
+/** usage.total_tokens, which Voyage AI and OpenAI both send, or null when the response has no count. */
+function tokensOf(value: unknown): number | null {
+  const usage = isRecord(value) ? value.usage : undefined;
+  const total = isRecord(usage) ? usage.total_tokens : undefined;
+  return typeof total === "number" && Number.isInteger(total) && total >= 0 ? total : null;
 }
 
 function malformed(message: string, status: number): SearchIndexError {

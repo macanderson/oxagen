@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { bodyJson, fakeHttp, header, reply, streamed } from "../execute/__tests__/fake-http";
 import { TransportError, type HttpTransportRequest, type HttpTransportResponse } from "../execute/transport";
-import { SearchIndexError, httpEmbedder, type HttpEmbedderOptions } from "./embedder";
+import { SearchIndexError, httpEmbedder, type EmbedUsage, type HttpEmbedderOptions } from "./embedder";
 
 const KEY = "sk-never-in-a-message";
 
@@ -261,5 +261,31 @@ describe("httpEmbedder", () => {
       expect(error.status).toBe(200);
       expect(error.message).not.toContain("not json");
     }
+  });
+
+  it("reports each answered request's token count and duration to onUsage", async () => {
+    const usages: EmbedUsage[] = [];
+    const counted = fakeHttp(() => reply(200, { ...(data([[1], [2]]) as object), usage: { total_tokens: 17 } }));
+    await httpEmbedder(voyage({ transport: counted.transport, onUsage: (usage) => usages.push(usage) })).embed(["a", "b"], "document");
+
+    const uncounted = fakeHttp(() => reply(200, { ...(data([[1]]) as object), usage: { total_tokens: "17" } }));
+    await httpEmbedder(voyage({ transport: uncounted.transport, onUsage: (usage) => usages.push(usage) })).embed(["q"], "query");
+
+    expect(usages).toEqual([
+      { texts: ["a", "b"], purpose: "document", tokens: 17, durationMs: expect.any(Number) },
+      { texts: ["q"], purpose: "query", tokens: null, durationMs: expect.any(Number) },
+    ]);
+    for (const usage of usages) expect(usage.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("reports no usage for a request that fails", async () => {
+    const onUsage = vi.fn();
+    const refused = fakeHttp(() => reply(401));
+    await failure(httpEmbedder(voyage({ transport: refused.transport, onUsage })).embed(["a"], "query"));
+
+    const short = fakeHttp(() => reply(200, { ...(data([[1]]) as object), usage: { total_tokens: 4 } }));
+    await failure(httpEmbedder(voyage({ transport: short.transport, onUsage })).embed(["a", "b"], "document"));
+
+    expect(onUsage).not.toHaveBeenCalled();
   });
 });

@@ -81,8 +81,18 @@ Two rules stand in the way:
   publish sends only new lines, and a search sends one query line, which
   the process caches. If this spend grows, a later change bills it the way
   `@oxagen/ai` bills other embeddings.
+- **The `oxagen` provider's spend stays visible in `token_usage`.** Each
+  answered request writes one row, as `@oxagen/ai` does for its own
+  embeddings: the input tokens from the response's `usage.total_tokens`, the
+  duration, the surface `mcp`, the prompt hash, and the provider cost from
+  the rate card. The row charges no credits. `searchUsageRecorder` in
+  `packages/handlers/src/mcp-studio/search-usage.ts` writes it, and a failed
+  write is logged and never fails a search or a publish.
 - **A `custom` provider bills the workspace's own account.** Oxagen charges
-  nothing for those tokens.
+  nothing for those tokens and writes no `token_usage` row for them.
+- **These calls are the one exception to the `@oxagen/ai` rule.**
+  `AGENTS.md` and `CLAUDE.md` name it. Every other model call still goes
+  through `@oxagen/ai`.
 - **Publish can take up to 15 seconds longer** when a search-mode server's
   entries change.
 - **A search can embed an entry itself.** The warm deletes old rows before
