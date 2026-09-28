@@ -119,6 +119,7 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [ask_assistant](assistant.ask.md) | [assistant.ask.ts](../../packages/oxagen/src/contracts/assistant.ask.ts) | api, mcp |
+| [render_chart](assistant.chart.render.md) | [assistant.chart.render.ts](../../packages/oxagen/src/contracts/assistant.chart.render.ts) | agent |
 | [get_assistant_engine](assistant.engine.get.md) | [assistant.engine.get.ts](../../packages/oxagen/src/contracts/assistant.engine.get.ts) | api, mcp |
 | [get_assistant_reply](assistant.reply.get.md) | [assistant.reply.get.ts](../../packages/oxagen/src/contracts/assistant.reply.get.ts) | api |
 | [record_reply_feedback](assistant.reply_feedback.record.md) | [assistant.reply_feedback.record.ts](../../packages/oxagen/src/contracts/assistant.reply_feedback.record.ts) | api, mcp |

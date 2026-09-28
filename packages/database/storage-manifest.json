@@ -3156,6 +3156,15 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "render_chart",
+      "reads": [],
+      "surfaces": [
+        "agent"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "repair_steering_repo",
       "reads": [],
@@ -4293,7 +4302,7 @@
       "writes": []
     }
   ],
-  "contentHash": "b4b42ee415e839ed1e801375665f5381de20f9895aab2ad0af239284e42d3326",
+  "contentHash": "e961d68b2655f1a7fe31a6eba22d219122e4d1063f2b619a8d78d4c0b4de26ad",
   "domains": [
     {
       "name": "agent",

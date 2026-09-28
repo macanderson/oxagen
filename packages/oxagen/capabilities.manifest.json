@@ -1225,6 +1225,21 @@
       }
     },
     {
+      "name": "render_chart",
+      "file": "assistant.chart.render.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_assistant_engine",
       "file": "assistant.engine.get.ts",
       "domain": "assistant",
