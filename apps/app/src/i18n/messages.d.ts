@@ -8741,6 +8741,9 @@ type Messages = {
       on: string;
       average: string;
       sparkline: string;
+      noPricedDay: string;
+      day: string;
+      spend: string;
       cross: {
         tool: string;
         agent: string;
@@ -9009,6 +9012,11 @@ type Messages = {
         denied: string;
         failed: string;
       };
+    };
+    agentChart: {
+      title: string;
+      label: string;
+      footer: string;
     };
     toolChart: {
       metric: {
@@ -11142,6 +11150,10 @@ type Messages = {
       };
       failed: string;
       photoPlaceholder: string;
+    };
+    chart: {
+      notRecorded: string;
+      table: string;
     };
   };
 };

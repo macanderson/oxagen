@@ -7,7 +7,11 @@
 // with its column (card tables), so each table keeps a single header row.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { divMicros, ratioOfMicros } from "@/data/contracts/money";
+import {
+  byMicrosDescending,
+  divMicros,
+  ratioOfMicros,
+} from "@/data/contracts/money";
 import type {
   SpendBudgets,
   SpendDrillKind,
@@ -37,6 +41,7 @@ import {
   UnmeteredNote,
 } from "./figures";
 import { NotBacked } from "./not-backed";
+import { RankedSpendChart } from "./ranked-spend-chart";
 import {
   cacheHitRate,
   classesOf,
@@ -272,6 +277,15 @@ export function OperatorTable({
   );
 }
 
+/** How many agents the chart beside the By agent table holds. */
+const CHART_MAX = 12;
+
+/**
+ * By agent: the table, and beside it the leading agents by recorded spend as
+ * a ranked bar. The chart answers which few agents carry the period's spend.
+ * The table holds every agent, so it is the chart's text equivalent. With no
+ * recorded amount there is nothing to rank, and the table takes the width.
+ */
 export function AgentTable({
   report,
   findings,
@@ -283,7 +297,7 @@ export function AgentTable({
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
-  return (
+  const table = (
     <Panel
       id="spend-agent"
       title={t("groups.agent.title")}
@@ -348,6 +362,41 @@ export function AgentTable({
         </Table>
       )}
     </Panel>
+  );
+  const ranked = report.rows
+    .flatMap((row) =>
+      row.cost === null ? [] : [{ key: row.key, value: row.cost }],
+    )
+    .sort((x, y) => byMicrosDescending(x.value, y.value));
+  if (ranked.length === 0) return table;
+  const shown = ranked.slice(0, CHART_MAX);
+  return (
+    <div className="grid items-start gap-3.5 lg:grid-cols-3">
+      <div className="min-w-0 lg:col-span-2">{table}</div>
+      <section
+        aria-labelledby="spend-agent-chart"
+        data-testid="spend-agent-chart"
+        className={panel}
+      >
+        <div className={panelHeader}>
+          <h2 id="spend-agent-chart" className={panelTitle}>
+            {t("agentChart.title")}
+          </h2>
+        </div>
+        <RankedSpendChart
+          items={shown}
+          label={t("agentChart.label")}
+          seriesLabel={t("agentChart.title")}
+          precision="cents"
+        />
+        <p className={panelFooter}>
+          {t("agentChart.footer", {
+            shown: formatCount(shown.length, locale),
+            total: formatCount(report.rows.length, locale),
+          })}
+        </p>
+      </section>
+    </div>
   );
 }
 

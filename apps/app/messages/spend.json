@@ -478,6 +478,9 @@
       "on": "on {day}",
       "average": "Average",
       "sparkline": "Spend by day from {from} to {to}",
+      "noPricedDay": "No day in this window carries a priced run.",
+      "day": "Day",
+      "spend": "Spend",
       "cross": {
         "tool": "By tool",
         "agent": "By agent",
@@ -746,6 +749,11 @@
         "denied": "Only an org Owner or Admin can change this setting.",
         "failed": "The setting did not save. Try again."
       }
+    },
+    "agentChart": {
+      "title": "Cumulative spend",
+      "label": "Cumulative spend for the leading agents",
+      "footer": "The leading {shown} of {total}. The table holds every agent."
     },
     "toolChart": {
       "metric": {
