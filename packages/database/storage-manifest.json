@@ -1903,6 +1903,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "ingest_tacho_memories",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "integration",
       "name": "install_integration",
       "reads": [],
@@ -2982,6 +2991,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "recall_tacho_memories",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4274,7 +4292,7 @@
       "writes": []
     }
   ],
-  "contentHash": "22e179758804294b7ceb8740feb505ed20ef8823e5970e0de259f4e4960dd35e",
+  "contentHash": "fe2b5a5bb0e059b6d2cb0ad09435de4813ba63b7eeb596db3ab3a5024236e578",
   "domains": [
     {
       "name": "agent",
@@ -24116,6 +24134,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "repository_unlinked",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         },
         {
           "name": "git_branch",

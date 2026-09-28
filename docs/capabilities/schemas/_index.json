@@ -2091,6 +2091,16 @@
       "consumes": []
     },
     {
+      "name": "ingest_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "install_integration",
       "domain": "integration",
       "surfaces": [
@@ -3274,6 +3284,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "recall_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

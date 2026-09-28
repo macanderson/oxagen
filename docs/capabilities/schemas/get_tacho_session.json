@@ -278,6 +278,9 @@
               }
             ]
           },
+          "repositoryUnlinked": {
+            "type": "boolean"
+          },
           "gitHeadShaStart": {
             "anyOf": [
               {
@@ -441,6 +444,7 @@
           "terminalReason",
           "projectDir",
           "gitRemoteDigest",
+          "repositoryUnlinked",
           "gitHeadShaStart",
           "worktreeBranch",
           "inputTokens",

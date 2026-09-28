@@ -102,6 +102,10 @@ describe("GitlabConnect", () => {
       "GitLab found no group at that path that this token can reach. Check the group path.",
     ],
     [
+      "gitlab_token_not_group",
+      "This is not an access token of the group. Create one under the group's Settings > Access tokens.",
+    ],
+    [
       "gitlab_token_insufficient",
       "The token needs the api scope and the Maintainer role on the group.",
     ],

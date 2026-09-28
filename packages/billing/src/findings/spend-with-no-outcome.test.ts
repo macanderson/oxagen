@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { ZERO_TOKENS, type RunTotalsRecord } from "../cost-rollup";
 import { blankOutcome, type OutcomeRow } from "../run-pr-outcomes";
 import {
+  detectInputFixture,
+  FIXTURE_WINDOW_START,
+} from "./detect-input-fixture";
+import {
   DETECTORS,
   detectFindings,
   Groups,
   SPIN_LOOP_REPEATS,
   type DetectContext,
-  type DetectInput,
+  type DetectReads,
   type PricedRequestFrame,
   type ToolCallObservation,
 } from "./index";
@@ -20,15 +24,14 @@ import {
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
-const START = new Date("2026-08-16T00:00:00.000Z");
-const END = new Date("2026-09-15T00:00:00.000Z");
+const START = FIXTURE_WINDOW_START;
 const OPERATOR = "prn_0123456789abcdefghjkmn";
 const AGENT = "acme.core.triage";
 const TURN_MICROS = 12_000n;
 const TURN_TOKENS = 4_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MERGED_AT = new Date("2026-08-20T12:00:00.000Z");
-const READ_AT = new Date("2026-09-14T00:00:00.000Z");
+const MERGED_AT = new Date("2026-09-01T12:00:00.000Z");
+const READ_AT = new Date("2026-09-26T00:00:00.000Z");
 
 let seq = 0;
 
@@ -168,15 +171,8 @@ function byRun(rows: readonly OutcomeRow[]): Map<string, OutcomeRow[]> {
   return out;
 }
 
-function detect(over: Partial<DetectInput>) {
-  return detectFindings({
-    window: { start: START, end: END },
-    toolWindowStart: START,
-    runs: [],
-    toolCalls: [],
-    decidedSince: new Map(),
-    ...over,
-  });
+function detect(over: Partial<DetectReads>) {
+  return detectFindings(detectInputFixture(over));
 }
 
 /** One run with three priced frames and the given outcome rows. */
@@ -317,7 +313,11 @@ describe("spend with no outcome", () => {
   it("yields none when the pass reads no outcomes", () => {
     const r = run();
     expect(
-      detect({ runs: [r], frames: new Map([[r.runId, framesOf(r)]]) }),
+      detect({
+        runs: [r],
+        outcomes: undefined,
+        frames: new Map([[r.runId, framesOf(r)]]),
+      }),
     ).toEqual([]);
   });
 
@@ -376,15 +376,11 @@ describe("spend with no outcome", () => {
   it("skips a frame an earlier detector claimed this pass, such as detector 7", () => {
     const r = run();
     const frames = framesOf(r);
-    const input: DetectInput = {
-      window: { start: START, end: END },
-      toolWindowStart: START,
+    const input = detectInputFixture({
       runs: [r],
-      toolCalls: [],
-      decidedSince: new Map(),
       outcomes: byRun([closedUnmerged(r)]),
       frames: new Map([[r.runId, frames]]),
-    };
+    });
     const ctx: DetectContext = {
       groups: new Groups(new Map()),
       runs: new Map([[r.runId, r]]),
@@ -403,7 +399,7 @@ describe("spend with no outcome", () => {
   });
 
   it("cites a run whose frames were not read, and prices none of it", () => {
-    const unread = run();
+    const unread = run({ modelCalls: 2 });
     expect(
       detect({
         runs: [unread],
@@ -416,6 +412,7 @@ describe("spend with no outcome", () => {
       runs: [priced, unread],
       outcomes: byRun([closedUnmerged(priced), closedUnmerged(unread)]),
       frames: new Map([[priced.runId, framesOf(priced)]]),
+      frameCoverage: { runs: 2, read: 1, capped: 1, unmatched: 0 },
     });
     const [finding] = findings;
     expect(finding).toMatchObject({
@@ -423,13 +420,17 @@ describe("spend with no outcome", () => {
       confidence: "medium",
       citedRuns: [priced.runId, unread.runId],
     });
-    expect(finding!.evidence).toMatchObject({ calls: 4, coveredCalls: 3 });
+    // Both of the unread run's calls are cited and neither is covered.
+    expect(finding!.evidence).toMatchObject({ calls: 5, coveredCalls: 3 });
+    expect(
+      finding!.evidence.runs.find((e) => e.runId === unread.runId),
+    ).toMatchObject({ calls: 2, measuredMicros: "0" });
     expect(finding!.claims).toHaveLength(3);
   });
 
   it("cites a run whose read found none of the model calls it counted", () => {
     const priced = run();
-    const missed = run();
+    const missed = run({ modelCalls: 2 });
     const [finding] = detect({
       runs: [priced, missed],
       outcomes: byRun([closedUnmerged(priced), closedUnmerged(missed)]),
@@ -443,7 +444,111 @@ describe("spend with no outcome", () => {
       confidence: "medium",
       citedRuns: [priced.runId, missed.runId],
     });
+    expect(finding!.evidence).toMatchObject({ calls: 5, coveredCalls: 3 });
+  });
+
+  it("writes no finding for a run of 100 model calls whose read returned 1 frame", () => {
+    const r = run({ modelCalls: 100 });
+    const findings = detect({
+      runs: [r],
+      outcomes: byRun([closedUnmerged(r)]),
+      frames: new Map([[r.runId, framesOf(r, 1)]]),
+    });
+    // 1 of 100 calls is covered, under the 50% gate.
+    expect(findings).toEqual([]);
+  });
+
+  it("writes a finding for a run of 100 model calls whose read returned every frame", () => {
+    const r = run({ modelCalls: 100 });
+    const [finding, ...rest] = detect({
+      runs: [r],
+      outcomes: byRun([closedUnmerged(r)]),
+      frames: new Map([[r.runId, framesOf(r, 100)]]),
+    });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({
+      savingMicros: 100n * TURN_MICROS,
+      confidence: "high",
+      citedRuns: [r.runId],
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 100, coveredCalls: 100 });
+    expect(finding!.claims).toHaveLength(100);
+  });
+
+  it("cites each call a short read missed, and prices only the frames it returned", () => {
+    const r = run({ modelCalls: 4 });
+    const [finding] = detect({
+      runs: [r],
+      outcomes: byRun([closedUnmerged(r)]),
+      frames: new Map([[r.runId, framesOf(r, 3)]]),
+    });
+    expect(finding).toMatchObject({
+      savingMicros: 3n * TURN_MICROS,
+      confidence: "medium",
+      citedRuns: [r.runId],
+    });
     expect(finding!.evidence).toMatchObject({ calls: 4, coveredCalls: 3 });
+    expect(finding!.evidence.runs[0]).toMatchObject({ calls: 4 });
+    expect(finding!.claims).toHaveLength(3);
+  });
+
+  it("counts every call of a run the frame cap left unread against coverage", () => {
+    const priced = run();
+    const coverage = { runs: 2, read: 1, capped: 1, unmatched: 0 };
+    const withCapped = (capped: RunTotalsRecord) =>
+      detect({
+        runs: [priced, capped],
+        outcomes: byRun([closedUnmerged(priced), closedUnmerged(capped)]),
+        frames: new Map([[priced.runId, framesOf(priced)]]),
+        frameCoverage: coverage,
+      });
+    // 3 of 7 calls covered: under half, so nothing is written.
+    expect(withCapped(run({ modelCalls: 4 }))).toEqual([]);
+    // 3 of 6 calls covered: exactly half, the least the gate writes.
+    const capped = run({ modelCalls: 3 });
+    const [finding] = withCapped(capped);
+    expect(finding).toMatchObject({
+      savingMicros: 3n * TURN_MICROS,
+      confidence: "medium",
+      citedRuns: [priced.runId, capped.runId],
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 6, coveredCalls: 3 });
+  });
+
+  it("counts a frame an earlier detector claimed as read, not as missing", () => {
+    const r = run({ modelCalls: 5 });
+    const frames = framesOf(r, 3);
+    const input = detectInputFixture({
+      runs: [r],
+      outcomes: byRun([closedUnmerged(r)]),
+      frames: new Map([[r.runId, frames]]),
+    });
+    const ctx: DetectContext = {
+      groups: new Groups(new Map()),
+      runs: new Map([[r.runId, r]]),
+      views: [],
+      claimed: new Set([claimKey(r.runId, frames[0]!.key)]),
+      taken: new Set(),
+    };
+    spendWithNoOutcome.detect(input, ctx);
+    const [group] = [...ctx.groups.values()];
+    // 2 frames priced, and the 2 calls the read did not return cited.
+    expect(group!.covered).toBe(2);
+    expect(group!.calls).toBe(4);
+  });
+
+  it("adds no uncovered call when the read returned more frames than the rollup counted", () => {
+    const r = run({ modelCalls: 2 });
+    const [finding] = detect({
+      runs: [r],
+      outcomes: byRun([closedUnmerged(r)]),
+      frames: new Map([[r.runId, framesOf(r, 3)]]),
+    });
+    expect(finding).toMatchObject({
+      savingMicros: 3n * TURN_MICROS,
+      confidence: "high",
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 3, coveredCalls: 3 });
   });
 
   it("leaves out a run with no model call, so it does not pull coverage down", () => {
@@ -474,7 +579,7 @@ describe("spend with no outcome", () => {
   });
 
   it("cites an unpriced frame and claims none for it", () => {
-    const r = run();
+    const r = run({ modelCalls: 4 });
     const frames = [...framesOf(r), frameAt(r, 10_000, null)];
     const [finding] = detect({
       runs: [r],

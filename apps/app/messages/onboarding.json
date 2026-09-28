@@ -90,6 +90,7 @@
           "errors": {
             "tokenInvalid": "GitLab did not accept the token. Create a new group access token and try again.",
             "groupUnreachable": "GitLab found no group at that path that this token can reach. Check the group path.",
+            "tokenNotGroup": "This is not an access token of the group. Create one under the group's Settings > Access tokens.",
             "tokenInsufficient": "The token needs the api scope and the Maintainer role on the group.",
             "forbidden": "Your role on this organization cannot connect a code host. An owner or admin can.",
             "badInput": "Enter the group path and the token.",

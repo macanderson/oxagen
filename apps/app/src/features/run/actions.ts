@@ -424,9 +424,9 @@ export type AnsweredInterjection = ContractOutput<
 >;
 
 /**
- * The two answers a person can give a repository question: link the
- * repository to the workspace the host named, or create a workspace for it
- * under the name and slug the person typed.
+ * The two answers a person can give a repository question: propose linking
+ * the repository to the workspace the host named, or create a workspace for
+ * it under the name and slug the person typed.
  */
 export type InterjectionChoice =
   | { path: "link" }
@@ -441,9 +441,11 @@ const Choice = z.discriminatedUnion("path", [
 
 /**
  * Answer the question a host held this run on (`answer_interjection`,
- * #3941). The answer is one governed write: it links the repository or
- * creates the workspace, records the answer on the question with a receipt,
- * and queues the release the host reads to let the run go on.
+ * #3941). The answer is one governed write: it opens a steering PR that links
+ * the repository (ADR-212) or creates the workspace, records the answer on the
+ * question with a receipt, and queues the release the host reads to let the
+ * run go on. A link binds nothing at once. `repository.steeringPullRequest`
+ * names the PR, and the binding follows its merge.
  *
  * A server action is an endpoint, so the choice is parsed here rather than
  * trusted from the page: anything but the two shapes comes back as `invalid`

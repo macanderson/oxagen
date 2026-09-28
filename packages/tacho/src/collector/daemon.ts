@@ -144,8 +144,10 @@ import {
   createMemoryReader,
   HARNESS_MEMORY_LOCATIONS,
 } from "./memory-capture/memory-reader";
+import { createMemoryRecall } from "./memory-capture/memory-recall";
 import { createMemoryUpload } from "./memory-capture/memory-upload";
 import { pushCredentialBasis } from "./push-basis";
+import { sessionSkills } from "./session-skills";
 import { issueRunToken } from "./credential-issuer";
 import { utcDay } from "./day-spend";
 import { type BeforeForward, createModelProxy } from "./model-proxy";
@@ -287,6 +289,13 @@ export interface DaemonOptions {
    * listener scans.
    */
   memoryCapture?: boolean;
+  /**
+   * Ask the control plane for the memories most relevant to each live
+   * prompt, and hand them to the agent with it (`recall_tacho_memories`).
+   * Defaults to on for a daemon with a started listener, so a test that
+   * drives the API directly makes no recall call unless it asks for one.
+   */
+  memoryRecall?: boolean;
 }
 
 export interface DaemonHandle {
@@ -566,6 +575,13 @@ async function initializeDaemon(
       process.stderr.write(`${new Date(now()).toISOString()} tachod ${line}\n`);
     });
   const timers: DaemonTimers = { ...DEFAULT_TIMERS, ...options.timers };
+  // The bundle's published skills, placed where each session's harness
+  // reads them and removed when it ends (`./session-skills`).
+  const skills = sessionSkills({
+    home: options.home ?? homedir(),
+    now: () => new Date(now()),
+    log,
+  });
   const exec = options.exec ?? defaultExec;
   // An injected synchronous `exec` still governs the git probes, so a test
   // that hands the daemon a fake git does not get a real one. Only a daemon
@@ -606,6 +622,17 @@ async function initializeDaemon(
   let host: HostFile = loaded;
   for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
+  // The memories each live prompt recalls, asked of the control plane with
+  // the host key and given at most a second (`./memory-capture/memory-recall`).
+  const recallMemories =
+    (options.memoryRecall ?? options.listen ?? true)
+      ? createMemoryRecall({
+          host: () => host,
+          fetch: options.fetch ?? globalThis.fetch,
+          log,
+          now,
+        })
+      : undefined;
 
   const deviceKey: DeviceKey = loadOrCreateDeviceKey(paths.deviceKey).key;
   const startedAt = now();
@@ -2266,6 +2293,8 @@ async function initializeDaemon(
             }),
           repositoryRemote: (cwd) => readRepositoryRemote(execAsync, cwd),
           cedar: loadCedarRuntime,
+          skills,
+          ...(recallMemories !== undefined ? { recallMemories } : {}),
         },
         envelope.replay,
         envelope.harness,
@@ -3718,6 +3747,24 @@ async function initializeDaemon(
     };
   }
 
+  /**
+   * A session the sweep ended because its process is gone gets its skills
+   * removed here. That is the only end a Stella session has, because Stella
+   * sends no SessionEnd. A session sealed for going quiet may still be
+   * running, so its skills stay, and the TTL clears them if it never
+   * returns.
+   */
+  async function removeSweptSkills(
+    session: SessionRecord,
+    closedIdle: boolean,
+  ): Promise<void> {
+    if (closedIdle || session.customAgent !== undefined) return;
+    await skills.remove(
+      session.harness ?? "claude-code",
+      session.harnessSessionId,
+    );
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -3784,6 +3831,7 @@ async function initializeDaemon(
               continue;
             }
             registry.settleSwept(candidate);
+            await removeSweptSkills(candidate.record, candidate.closedIdle);
           }
           registry.forgetSealed(timers.walRetainMs);
           // A sealed session is kept for a week; what only a running chain

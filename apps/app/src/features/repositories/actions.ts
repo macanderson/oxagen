@@ -257,14 +257,24 @@ export async function readWorkspaceRepositories(
 }
 
 /**
- * Link a repository as one of the workspace's LINKED repositories. Names only
- * the repository, as the bind does and for the same reason: the installation
- * is the workspace's own. The handler refuses the workspace's main repository
- * (`conflict: main_repo`), a repository already linked
- * (`conflict: repository_already_linked`), another workspace's main
- * repository (`conflict: main_repo_claimed`, ADR-099), one the installation
- * cannot see (`not_found: repository_not_installed`), and a workspace with
- * no installation attached (`conflict: github_not_connected`).
+ * Propose linking a repository to the workspace (ADR-212). Names only the
+ * repository, as the bind does and for the same reason: the installation is
+ * the workspace's own. Nothing is bound here. `workspace.toml` on the steering
+ * repository decides which repositories are linked, so the handler opens a
+ * steering PR that adds the entry and answers `proposed` with it. `reused`
+ * says that PR was already open. When `workspace.toml` lists the repository
+ * already, it answers `listed` with no PR, and the next steering sync writes
+ * the link. The binding follows the merge either way.
+ *
+ * The handler refuses a workspace with no installation attached
+ * (`conflict: github_not_connected`), one with no steering repository to hold
+ * the steering record (`conflict: main_repo_unbound`), the workspace's own
+ * steering repository (`conflict: main_repo`), a repository already linked
+ * (`conflict: repository_already_linked`), another workspace's steering
+ * repository (`conflict: main_repo_claimed`, ADR-099), a `workspace.toml` that
+ * is present but does not read as `workspace/v1`
+ * (`conflict: workspace_toml_unreadable`), and a repository the installation
+ * cannot see (`not_found: repository_not_installed`).
  */
 export async function linkWorkspaceRepository(
   org: string,
@@ -281,21 +291,28 @@ export async function linkWorkspaceRepository(
     ? {
         ok: true,
         value: {
-          bindingId: result.value.bindingId,
           fullName: result.value.fullName,
           defaultRef: result.value.defaultRef,
-          linkedAt: result.value.linkedAt,
+          status: result.value.status,
+          steeringPullRequest: result.value.steeringPullRequest,
         },
       }
     : result;
 }
 
 /**
- * Unlink a linked repository by the binding id the list answered. The head
- * goes; every binding version stays, because runs admitted against it still
- * cite it. The main repository is refused (`conflict: main_repo_unlink_refused`)
- * and the section never offers it; a binding this workspace does not see is
- * `not_found: repository_not_linked`.
+ * Unlink a linked repository by the binding id the list answered (ADR-212).
+ * When `workspace.toml` lists the repository, the handler opens a steering PR
+ * that removes the entry and answers `proposed` with it. The link stays until
+ * the PR merges and the steering sync reads the new file. A link that predates
+ * the steering record has no entry to remove, so the handler deletes its head
+ * at once and answers `unlinked`. Every binding version stays either way,
+ * because runs admitted against it still cite it.
+ *
+ * The steering repository is refused (`conflict: main_repo_unlink_refused`)
+ * and the section never offers it. A binding this workspace does not see is
+ * `not_found: repository_not_linked`, and a `workspace.toml` that is present
+ * but does not read as `workspace/v1` is `conflict: workspace_toml_unreadable`.
  */
 export async function unlinkWorkspaceRepository(
   org: string,
@@ -310,7 +327,9 @@ export async function unlinkWorkspaceRepository(
         value: {
           bindingId: result.value.bindingId,
           fullName: result.value.fullName,
+          status: result.value.status,
           unlinkedAt: result.value.unlinkedAt,
+          steeringPullRequest: result.value.steeringPullRequest,
         },
       }
     : result;

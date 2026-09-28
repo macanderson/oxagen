@@ -130,6 +130,7 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     terminalReason: null,
     projectDir: "/home/dev/proj",
     gitRemoteDigest: null,
+    repositoryUnlinked: false,
     gitHeadShaStart: null,
     worktreeBranch: null,
     inputTokens: 66,
@@ -860,6 +861,7 @@ describe("fleet reads", () => {
       thinkingTokens: 1029,
       envSnapshot: { CLAUDE_EFFORT: "high" },
       toolsAvailable: ["Read"],
+      repositoryUnlinked: false,
     });
     expect(one.models[0]?.model).toBe("m");
     expect(one.files[0]?.path).toBe("/a");
@@ -885,6 +887,30 @@ describe("fleet reads", () => {
       OPERATOR,
     );
     await tachoHostListHandler({ limit: 1, cursor: "garbage" }, OPERATOR);
+  });
+
+  it("answers the unlinked-repository flag as ingest stamped it", async () => {
+    const db: Fake = {
+      hosts: [host()],
+      sessions: [
+        sessionRow({
+          gitRemoteDigest: `sha256:${"c".repeat(64)}`,
+          repositoryUnlinked: true,
+        }),
+      ],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    const one = await tachoSessionGetHandler(
+      { sessionUuid: SESSION_UUID },
+      OPERATOR,
+    );
+    expect(one.session).toMatchObject({
+      gitRemoteDigest: `sha256:${"c".repeat(64)}`,
+      repositoryUnlinked: true,
+    });
   });
 
   it("answers not found for an unknown session", async () => {

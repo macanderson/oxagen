@@ -265,16 +265,12 @@ import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
 import { cmsRoute } from "./routes/v1/cms";
-import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_launch.register";
-import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
-import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
+import { mountTachoHostRoutes } from "./routes/v1/tacho.host-routes";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoWorkspaceRunsPauseRoute } from "./routes/v1/tacho.workspace_runs.pause";
-import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
 import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke";
-import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
 import { tachoHostEnrollRoute } from "./routes/v1/tacho.host.enroll";
 import { tachoEnrollmentTokenCreateRoute } from "./routes/v1/tacho.enrollment_token.create";
 import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
@@ -517,15 +513,27 @@ app.route("/v1/tacho/enroll", tachoHostEnrollRoute);
 // so a retry storm on either can no longer starve the other.
 const TACHO_HOST_PER_MIN = 30;
 const TACHO_INGEST_PER_MIN = 120;
+// Memory recall runs once per prompt, so its bucket follows the prompt rate of
+// every session on the host, not the daemon's own schedule. It gets the
+// ingest budget: a host whose sessions prompt faster than that loses recalled
+// memories on the extra prompts, since the daemon fails open on a 429, and
+// its command poll and bundle refresh keep their own budget.
+const TACHO_RECALL_PER_MIN = 120;
+// Three more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
+// the GitHub credential, the contained launch, and the memory upload. A
+// memory upload is its own bucket because a daemon's first scan sends every
+// memory file a harness holds, and that burst must not starve the command
+// poll or the bundle refresh.
+const TACHO_OWN_BUCKET_PATHS = 3;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
 // slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
 // for shared NATs and a per-credential bucket for one abused key. The
 // credential bucket is the sum of the post-auth budgets: it sees every
-// request the enrolled key makes across all three paths, so anything lower
-// would be the operative ceiling for a healthy host and would put the two
-// buckets below back into one.
+// request the enrolled key makes across every path, so anything lower would
+// be the operative ceiling for a healthy host and would put the buckets
+// below back into one.
 //
 // Registered HERE, above `app.route("/v1", userScoped)`, and not beside the
 // `/v1/tacho` mount further down. `userScoped` applies `authMiddleware` on
@@ -549,7 +557,10 @@ app.use(
   "/v1/tacho/*",
   distributedRateLimiter({
     keyPrefix: "tacho-preauth-credential",
-    max: TACHO_INGEST_PER_MIN + TACHO_HOST_PER_MIN,
+    max:
+      TACHO_INGEST_PER_MIN +
+      TACHO_RECALL_PER_MIN +
+      TACHO_HOST_PER_MIN * (1 + TACHO_OWN_BUCKET_PATHS),
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
     storeErrorPolicy: "degrade-to-local",
@@ -682,11 +693,25 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
-tachoScoped.route("/", tachoEventsIngestRoute);
-tachoScoped.route("/", tachoBundleGetRoute);
-tachoScoped.route("/", tachoGithubTokenIssueRoute);
-tachoScoped.route("/", tachoContainedLaunchRegisterRoute);
-tachoScoped.route("/", tachoCommandFetchRoute);
+tachoScoped.use(
+  "/memories",
+  distributedRateLimiter({
+    keyPrefix: "tacho-memories",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+// `/memories` above matches that path alone, so recall never counts against
+// the memory upload's bucket, nor the upload against recall's.
+tachoScoped.use(
+  "/memories/recall",
+  distributedRateLimiter({
+    keyPrefix: "tacho-recall",
+    max: TACHO_RECALL_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+mountTachoHostRoutes(tachoScoped);
 app.route("/v1/tacho", tachoScoped);
 
 // Distributed, workspace-keyed rate limiters for the expensive surfaces. Budgets

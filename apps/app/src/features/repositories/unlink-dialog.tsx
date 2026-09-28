@@ -1,21 +1,28 @@
 "use client";
 // Unlink a repository (mockup `DLG_EXT.repounlink`): what stops reaching the
 // workspace, that the repository itself is untouched, that records published
-// there stop steering runs here at once while recorded runs keep their
-// hashes, and what becomes of its working copies. Unlinking is workspace
-// membership, not a committed file, so it opens no pull request, and
-// `unlink_repository` writes it as a governed action.
+// there stop steering runs here once the unlink takes effect while recorded
+// runs keep their hashes, and what becomes of its working copies.
+//
+// `unlink_repository` answers one of two ways (ADR-212). When
+// `workspace.toml` on the steering repository lists the repository, it opens
+// a steering PR that removes the entry, and the link stays until a person
+// merges it. The dialog stays open, names the PR, and says to merge it. A link
+// that predates the steering record is removed at once, and the dialog closes
+// with the notice as before.
 //
 // The repository stays in the table as not linked, so linking it back is the
 // same round trip from the repository dialog.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import type { UnlinkedRepository } from "@/data/contracts/repository";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { unlinkWorkspaceRepository } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
 import { buttonDanger, code, note } from "./parts";
+import { SteeringProposal } from "./steering-proposal";
 import { type RepositoryRow, treeState } from "./view";
 
 export function UnlinkDialog({
@@ -38,16 +45,19 @@ export function UnlinkDialog({
   const failureText = useRepositoriesFailure();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** The unlink a steering PR carries. The dialog shows it until it closes. */
+  const [proposed, setProposed] = useState<UnlinkedRepository | null>(null);
 
   async function submit() {
-    if (row?.bindingId == null || pending) return;
+    if (row?.bindingId == null || pending || proposed !== null) return;
     setPending(true);
     setFailure(null);
     try {
       const result = await unlinkWorkspaceRepository(org, ws, row.bindingId);
-      if (result.ok)
+      if (!result.ok) setFailure(failureText(result));
+      else if (result.value.status === "proposed") setProposed(result.value);
+      else
         onUnlinked(t("done", { repository: result.value.fullName, workspace }));
-      else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
     } finally {
@@ -61,33 +71,44 @@ export function UnlinkDialog({
       onOpenChange={(next) => {
         if (!next) {
           setFailure(null);
+          setProposed(null);
           onClose();
         }
       }}
       title={
         row === null ? "" : t("title", { repository: row.fullName, workspace })
       }
-      closeLabel={t("keep")}
+      closeLabel={proposed === null ? t("keep") : undefined}
       testId="unlink-dialog"
       footer={
-        <button
-          type="button"
-          data-testid="unlink-submit"
-          data-touch-target=""
-          disabled={pending}
-          className={buttonDanger}
-          onClick={() => {
-            void submit();
-          }}
-        >
-          {pending ? t("pending") : t("submit")}
-        </button>
+        proposed === null ? (
+          <button
+            type="button"
+            data-testid="unlink-submit"
+            data-touch-target=""
+            disabled={pending}
+            className={buttonDanger}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            {pending ? t("pending") : t("submit")}
+          </button>
+        ) : null
       }
     >
       {row === null ? null : (
         <div className="flex flex-col gap-2.5">
           {failure === null ? null : (
             <FormAlert testId="unlink-failure">{failure}</FormAlert>
+          )}
+          {proposed === null ? null : (
+            <SteeringProposal
+              action="unlink"
+              fullName={proposed.fullName}
+              steeringPullRequest={proposed.steeringPullRequest}
+              testId="unlink-proposed"
+            />
           )}
           <p className={note}>{t.rich("body", { code })}</p>
           {treeState(row.tree) === "governed" ? (

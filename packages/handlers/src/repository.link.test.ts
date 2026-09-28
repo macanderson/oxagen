@@ -1,11 +1,27 @@
-// `link_repository` (Mission Control spec §10.1; ADR-099): a second repository
-// on the workspace, as a `role = 'linked'` head. Every refusal in order — the
-// role gate, no installation, an unseen repository, another workspace's main
-// repository, a workspace with no main repository yet, this workspace's own
-// main, an existing link, a main claim that lands elsewhere mid-flight — then
-// the one write.
+// `link_repository` (ADR-212). The handler writes no head. It opens a steering
+// PR that adds the repository to workspace.toml on the steering repository's
+// production branch, and the steering sync writes the head once that PR
+// merges.
+//
+// The repository checks in `repository.link.write.ts` are stubs here, so each
+// case names the refusal the handler must pass through. The steering host is
+// a fake passed in deps, so the steering PR runs for real through
+// `repository.steering-pr.ts` and `repository.workspace-toml.ts`.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GitHubRepoInfo } from "@oxagen/github";
+import { OXAGEN_PR_LABELS, type GitHubRepoInfo } from "@oxagen/github";
+import { HandlerError } from "@oxagen/oxagen";
+import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
+import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
+import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
+import type { SteeringRepository } from "./context.steering.github";
+import {
+  createRepositoryLinkHandler,
+  readWorkspaceNames,
+  type RepositoryLinkDeps,
+  type RepositorySteeringHost,
+} from "./repository.link";
+import type { LinkTarget } from "./repository.link.write";
+import { readWorkspaceToml } from "./repository.workspace-toml";
 import { makeCTX } from "./test-utils/fixtures";
 
 const mocks = vi.hoisted(() => ({
@@ -13,28 +29,10 @@ const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   assertOrgRole: vi.fn(async () => "Owner"),
   resolveActingUserId: vi.fn(async (c: { userId: string | null }) => c.userId),
-  resolveDataPlane: vi.fn(
-    async (): Promise<{
-      orgId: string;
-      kind: "postgres";
-      mode: "shared" | "dedicated";
-      status: "active";
-    }> => ({
-      orgId: "org-uuid",
-      kind: "postgres",
-      mode: "shared",
-      status: "active",
-    }),
-  ),
-  assertDataPlaneUsable: vi.fn(),
-  writeRepositoryHead: vi.fn(
-    async (
-      _tx: unknown,
-      _args: Record<string, unknown>,
-    ): Promise<{ bindingPublicId: string }> => ({
-      bindingPublicId: "rpb_0123abcd",
-    }),
-  ),
+  resolveLinkTarget:
+    vi.fn<typeof import("./repository.link.write").resolveLinkTarget>(),
+  assertLinkAllowed:
+    vi.fn<typeof import("./repository.link.write").assertLinkAllowed>(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -47,15 +45,6 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
 
-vi.mock("@oxagen/tenancy", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
-  return {
-    ...real,
-    resolveDataPlane: mocks.resolveDataPlane,
-    assertDataPlaneUsable: mocks.assertDataPlaneUsable,
-  };
-});
-
 vi.mock("@oxagen/iam/org-role", () => ({
   assertOrgRole: mocks.assertOrgRole,
   resolveActingUserId: mocks.resolveActingUserId,
@@ -63,26 +52,17 @@ vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorWorkspaceRole: async () => null,
 }));
 
-// The head writer has its own suite (repository.binding-write.test.ts); here
-// it is a seam, so the test can say WHAT the handler asked it to write. The
-// rest of the module, the workspace lock among it, stays real.
-vi.mock("./repository.binding-write", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./repository.binding-write")>()),
-  writeRepositoryHead: mocks.writeRepositoryHead,
+// The checks the steering sync also runs before it writes a head. Here they
+// are seams, so a case can refuse at either one and watch what follows.
+vi.mock("./repository.link.write", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository.link.write")>()),
+  resolveLinkTarget: mocks.resolveLinkTarget,
+  assertLinkAllowed: mocks.assertLinkAllowed,
 }));
 
-import { schema } from "@oxagen/database";
-import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
-import { createRepositoryLinkHandler } from "./repository.link";
+const SCOPE = { orgId: "org_1", workspaceId: "ws_1" };
 
-const CONNECTION = {
-  id: "conn-uuid",
-  publicId: "con_abc",
-  status: "connected",
-  deliveryConfig: { installationId: "555" },
-  createdAt: new Date("2026-09-01T00:00:00.000Z"),
-};
-
+/** The repository as the installation sees it. GitHub keeps the owner's case. */
 const REPO: GitHubRepoInfo = {
   id: "9002",
   owner: "Acme",
@@ -92,85 +72,127 @@ const REPO: GitHubRepoInfo = {
   defaultBranch: "main",
 };
 
+const TARGET: LinkTarget = {
+  connection: { id: "conn-uuid", publicId: "con_abc" },
+  repo: REPO,
+};
+
 const INPUT = { provider: "github" as const, owner: "acme", name: "docs" };
 
-/** This workspace's main head, on a different repository than `REPO`. */
-const MAIN_HEAD = { role: "steering", providerRepositoryId: "1" };
-
-interface Tx {
-  locks: number;
-  /** The transaction object handed to the write, for identity checks. */
-  tx: unknown;
-}
-
-/** A drizzle terminal that can be awaited or `.limit()`-ed. */
-function rows(result: unknown[]) {
-  return Object.assign(Promise.resolve(result), {
-    limit: async () => result,
-  });
-}
+/** The transaction `withTenantDb` hands the link check. */
+const TX = { tx: "tenant" };
 
 /**
- * The handler reads through `withTenantDb` twice: first
- * `resolveWorkspaceGithubInstallation` (select → from → where → orderBy), then
- * the link transaction, whose one select is this workspace's main head plus
- * its heads for the repository. `heads` answers that select as one list.
+ * The workspace's steering repository. Its production branch is not `main`,
+ * so a PR base of `production` can only have come from here.
  */
-function wire(opts: { connections?: unknown[]; heads?: unknown[] }): Tx {
-  const state: Tx = { locks: 0, tx: null };
-  mocks.withTenantDb
-    .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        select: () => ({
-          from: () => ({
-            where: () => ({ orderBy: async () => opts.connections ?? [] }),
-          }),
-        }),
-      }),
-    )
-    .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        execute: async () => {
-          state.locks += 1;
-          return [];
-        },
-        select: () => ({
-          from: () => ({ where: () => rows(opts.heads ?? []) }),
-        }),
-      };
-      state.tx = tx;
-      return fn(tx);
-    });
-  return state;
+const STEERING: SteeringRepository = {
+  provider: "github",
+  owner: "acme",
+  repo: "steering",
+  fullName: "acme/steering",
+  currentFullName: "acme/steering",
+  defaultBranch: "production",
+};
+
+/** How workspace.toml lists `REPO`: lowercase, host first. */
+const REF = "github.com/acme/docs";
+const BRANCH = "workspace/link-acme-docs-a9799a26";
+const PR_URL = "https://github.com/acme/steering/pull/12";
+const NAMES = { organization: "a-intel", workspace: "core-platform" };
+
+/** A workspace/v1 file that lists `urls` as `[[repositories]]` entries. */
+function workspaceToml(...urls: string[]): string {
+  return [
+    schemaDirective("workspace/v1"),
+    'schema = "workspace/v1"',
+    'organization = "a-intel"',
+    'workspace = "core-platform"',
+    ...urls.flatMap((url) => ["", "[[repositories]]", `url = "${url}"`]),
+    "",
+  ].join("\n");
 }
 
-/**
- * The two shared-plane reads, told apart by table: is any organisation on a
- * dedicated plane (then the global claim is unknowable), and does another
- * workspace hold this repository as its MAIN.
- */
-function sharedPlane(opts: {
-  mainElsewhere?: unknown[];
-  dedicated?: unknown[];
-}) {
-  const byTable = new Map<unknown, unknown[]>([
-    [schema.repositoryBindingHeads, opts.mainElsewhere ?? []],
-    [schema.dataPlanes, opts.dedicated ?? []],
-  ]);
-  mocks.withSystemDb.mockImplementation(
-    async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({ limit: async () => byTable.get(table) ?? [] }),
-          }),
-        }),
-      }),
+/** A steering host whose production branch holds `toml` at workspace.toml. */
+function steeringHost(toml: string | null) {
+  return {
+    resolveRepository: vi.fn<RepositorySteeringHost["resolveRepository"]>(
+      async () => STEERING,
+    ),
+    readFile: vi.fn<RepositorySteeringHost["readFile"]>(async () => toml),
+    ensureBranch: vi.fn<RepositorySteeringHost["ensureBranch"]>(
+      async () => undefined,
+    ),
+    putFile: vi.fn<RepositorySteeringHost["putFile"]>(async () => ({
+      commitSha: "c0ffee",
+    })),
+    findOpenPullRequest: vi.fn<RepositorySteeringHost["findOpenPullRequest"]>(
+      async () => null,
+    ),
+    openPullRequest: vi.fn<RepositorySteeringHost["openPullRequest"]>(
+      async () => ({ number: 12, htmlUrl: PR_URL }),
+    ),
+  };
+}
+
+type SteeringFake = ReturnType<typeof steeringHost>;
+
+function handler(
+  toml: string | null,
+  names: { organization: string; workspace: string } | null = NAMES,
+) {
+  const steering = steeringHost(toml);
+  const workspaceNames = vi.fn<RepositoryLinkDeps["workspaceNames"]>(
+    async () => names,
+  );
+  const deps: RepositoryLinkDeps = {
+    repository: vi.fn<RepositoryLinkDeps["repository"]>(async () => REPO),
+    steering,
+    workspaceNames,
+  };
+  return {
+    run: createRepositoryLinkHandler(deps),
+    deps,
+    steering,
+    workspaceNames,
+  };
+}
+
+/** The error a call rejects with. Fails the test when the call resolves. */
+async function refusal(call: Promise<unknown>): Promise<unknown> {
+  return call.then(
+    () => {
+      throw new Error("expected the handler to refuse");
+    },
+    (err: unknown) => err,
   );
 }
 
-function handler(repository = vi.fn(async () => REPO)) {
-  return { run: createRepositoryLinkHandler({ repository }), repository };
+/** The content the steering PR wrote to workspace.toml. */
+function writtenContent(steering: SteeringFake): string {
+  const call = steering.putFile.mock.calls[0];
+  if (!call) throw new Error("the handler did not write workspace.toml");
+  return call[1].content;
+}
+
+/** When a mock was first called, across every mock in the test. */
+function firstCall(fn: { mock: { invocationCallOrder: number[] } }): number {
+  const at = fn.mock.invocationCallOrder[0];
+  if (at === undefined) throw new Error("the mock was not called");
+  return at;
+}
+
+function expectNoSteeringPr(steering: SteeringFake): void {
+  expect(steering.ensureBranch).not.toHaveBeenCalled();
+  expect(steering.putFile).not.toHaveBeenCalled();
+  expect(steering.findOpenPullRequest).not.toHaveBeenCalled();
+  expect(steering.openPullRequest).not.toHaveBeenCalled();
+}
+
+function expectSteeringUntouched(steering: SteeringFake): void {
+  expect(steering.resolveRepository).not.toHaveBeenCalled();
+  expect(steering.readFile).not.toHaveBeenCalled();
+  expectNoSteeringPr(steering);
 }
 
 beforeEach(() => {
@@ -179,258 +201,376 @@ beforeEach(() => {
   mocks.resolveActingUserId.mockImplementation(
     async (c: { userId: string | null }) => c.userId,
   );
-  mocks.resolveDataPlane.mockResolvedValue({
-    orgId: "org-uuid",
-    kind: "postgres",
-    mode: "shared",
-    status: "active",
-  });
-  mocks.writeRepositoryHead.mockResolvedValue({
-    bindingPublicId: "rpb_0123abcd",
-  });
-  sharedPlane({});
+  mocks.withTenantDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn(TX),
+  );
+  mocks.resolveLinkTarget.mockResolvedValue(TARGET);
+  mocks.assertLinkAllowed.mockResolvedValue(undefined);
 });
 
-describe("link_repository", () => {
-  it("refuses a caller who is not an org Owner/Admin or the workspace Owner, before reading anything", async () => {
-    mocks.assertOrgRole.mockRejectedValueOnce(new Error("org_role_required"));
-    const { run, repository } = handler();
-    await expect(run(INPUT, makeCTX())).rejects.toThrow("org_role_required");
+describe("link_repository: role gate", () => {
+  it("refuses a caller who is not an org Owner or Admin or the workspace Owner, before it reads anything", async () => {
+    const denied = new Error("org_role_required");
+    mocks.assertOrgRole.mockRejectedValueOnce(denied);
+    const { run, steering, workspaceNames } = handler(workspaceToml());
+
+    await expect(run(INPUT, makeCTX())).rejects.toBe(denied);
+
     expect(mocks.assertOrgRole).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "u_1" }),
       { org: ["Owner", "Admin"], workspace: ["Owner"] },
     );
+    expect(mocks.resolveLinkTarget).not.toHaveBeenCalled();
     expect(mocks.withTenantDb).not.toHaveBeenCalled();
-    expect(repository).not.toHaveBeenCalled();
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+    expect(mocks.assertLinkAllowed).not.toHaveBeenCalled();
+    expect(workspaceNames).not.toHaveBeenCalled();
+    expectSteeringUntouched(steering);
   });
 
-  it("refuses a workspace with no GitHub App installation attached", async () => {
-    wire({ connections: [] });
-    const { run, repository } = handler();
-    await expect(run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "github_not_connected",
-    });
-    expect(repository).not.toHaveBeenCalled();
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("refuses a repository the installation cannot see", async () => {
-    wire({ connections: [CONNECTION] });
-    const repository = vi.fn(async () => null);
-    await expect(
-      createRepositoryLinkHandler({ repository })(INPUT, makeCTX()),
-    ).rejects.toMatchObject({
-      code: "not_found",
-      reason: "repository_not_installed",
-    });
-    // Through the connection's installation, never one the caller named.
-    expect(repository).toHaveBeenCalledWith("555", "acme", "docs");
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("refuses a repository that is ANOTHER workspace's main repository, naming neither holder, before the transaction", async () => {
-    sharedPlane({ mainElsewhere: [{ id: "head-elsewhere" }] });
-    const state = wire({ connections: [CONNECTION] });
-    const err = await handler()
-      .run(INPUT, makeCTX())
-      .then(
-        () => null,
-        (e: unknown) => e,
-      );
-    expect(err).toMatchObject({
-      code: "conflict",
-      reason: "main_repo_claimed",
-    });
-    expect((err as Error).message).toContain("Acme/Docs");
-    expect((err as Error).message).not.toContain("head-elsewhere");
-    // Refused before the link transaction: no lock, no write.
-    expect(state.locks).toBe(0);
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("refuses while any organisation is on a dedicated Postgres plane, where the claim is unknowable", async () => {
-    sharedPlane({ dedicated: [{ id: "dpl_other" }] });
-    wire({ connections: [CONNECTION] });
-    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "main_repo_plane_unsupported",
-    });
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  // The organisation's first workspace is written without a main repository
-  // (ADR-099 §6), and GitHub can be attached to it before `bind_main_repository`
-  // runs. A link then would be a linked head with no main beside it.
-  it("refuses a workspace with no main repository yet with main_repo_unbound, inside the lock", async () => {
-    const state = wire({ connections: [CONNECTION], heads: [] });
-    const err = await handler()
-      .run(INPUT, makeCTX())
-      .then(
-        () => null,
-        (e: unknown) => e,
-      );
-    expect(err).toMatchObject({
-      code: "conflict",
-      reason: "main_repo_unbound",
-    });
-    expect((err as Error).message).toBe(
-      "Bind this workspace's main repository first; a linked repository is its second.",
-    );
-    expect(state.locks).toBe(1);
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("main_repo_unbound wins over an existing link of the same repository: a head the demotion left behind does not stand in for a main", async () => {
-    wire({
-      connections: [CONNECTION],
-      heads: [{ role: "linked", providerRepositoryId: "9002" }],
-    });
-    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "main_repo_unbound",
-    });
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("refuses this workspace's own main repository with main_repo, inside the lock", async () => {
-    const state = wire({
-      connections: [CONNECTION],
-      heads: [{ role: "steering", providerRepositoryId: "9002" }],
-    });
-    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "main_repo",
-    });
-    expect(state.locks).toBe(1);
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("refuses this workspace's own steering repository with main_repo, the same as a main one", async () => {
-    wire({
-      connections: [CONNECTION],
-      heads: [{ role: "steering", providerRepositoryId: "9002" }],
-    });
-    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "main_repo",
-    });
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  it("links beside a steering head, which stands in for the main one", async () => {
-    wire({
-      connections: [CONNECTION],
-      heads: [{ role: "steering", providerRepositoryId: "1" }],
-    });
-    await expect(handler().run(INPUT, makeCTX())).resolves.toMatchObject({
-      role: "linked",
-    });
-    expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
-  });
-
-  it("refuses a repository already linked to this workspace", async () => {
-    const state = wire({
-      connections: [CONNECTION],
-      heads: [MAIN_HEAD, { role: "linked", providerRepositoryId: "9002" }],
-    });
-    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
-      code: "conflict",
-      reason: "repository_already_linked",
-    });
-    expect(state.locks).toBe(1);
-    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
-  });
-
-  // The window the pre-check cannot close: a main claim on this repository
-  // committed elsewhere after the read. The trigger's repository-keyed lock
-  // serialised the two writes and refused this one by constraint name.
-  it("refuses with main_repo_claimed when the trigger refuses the linked head because a main head landed elsewhere mid-flight", async () => {
-    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
-    mocks.writeRepositoryHead.mockRejectedValueOnce(
-      Object.assign(new Error("insert failed"), {
-        cause: Object.assign(new Error("trigger refused"), {
-          code: "23505",
-          constraint_name: "repository_binding_heads_linked_is_main_elsewhere",
-        }),
-      }),
-    );
-    const err = await handler()
-      .run(INPUT, makeCTX())
-      .then(
-        () => null,
-        (e: unknown) => e,
-      );
-    expect(err).toMatchObject({
-      code: "conflict",
-      reason: "main_repo_claimed",
-    });
-    expect((err as Error).message).toContain("Acme/Docs");
-  });
-
-  it("lets an unrelated unique violation through as itself", async () => {
-    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
-    const unrelated = Object.assign(new Error("insert failed"), {
-      cause: Object.assign(new Error("duplicate key value"), {
-        code: "23505",
-        constraint_name: "repository_binding_heads_repository_uq",
-      }),
-    });
-    mocks.writeRepositoryHead.mockRejectedValueOnce(unrelated);
-    const err = await handler()
-      .run(INPUT, makeCTX())
-      .then(
-        () => null,
-        (e: unknown) => e,
-      );
-    expect(err).toBe(unrelated);
-  });
-
-  it("writes a linked head through writeRepositoryHead, on the locked transaction, and answers the contract's shape", async () => {
-    const state = wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
-    const before = Date.now();
-    const out = await handler().run(INPUT, makeCTX());
-
-    expect(state.locks).toBe(1);
-    expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
-    const [tx, args] = mocks.writeRepositoryHead.mock.calls[0]!;
-    // The same transaction that took the workspace lock and read the heads.
-    expect(tx).toBe(state.tx);
-    expect(args).toMatchObject({
-      scope: { orgId: "org_1", workspaceId: "ws_1" },
-      connectionId: "conn-uuid",
-      repo: REPO,
-      role: "linked",
-      userId: "u_1",
-      now: expect.any(Date),
-    });
-
-    expect(out).toEqual({
-      bindingId: "rpb_0123abcd",
-      connectionId: "con_abc",
-      fullName: "Acme/Docs",
-      defaultRef: "main",
-      role: "linked",
-      linkedAt: (args["now"] as Date).toISOString(),
-    });
-    expect(Date.parse(out.linkedAt)).toBeGreaterThanOrEqual(before);
-    // What the kernel will parse on the way out.
-    expect(repositoryLink.output.safeParse(out).success).toBe(true);
-  });
-
-  it("checks the role against the acting user the context resolves (INV-29)", async () => {
+  it("checks the role of the acting user the context resolves (INV-29)", async () => {
     mocks.resolveActingUserId.mockResolvedValueOnce("u_acting");
-    wire({ connections: [CONNECTION], heads: [MAIN_HEAD] });
-    await handler().run(INPUT, makeCTX({ userId: "u_session" }));
+    const { run } = handler(workspaceToml(REF));
+
+    await run(INPUT, makeCTX({ userId: "u_session" }));
+
+    expect(mocks.resolveActingUserId).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u_session" }),
+    );
     expect(mocks.assertOrgRole).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "u_acting" }),
+      expect.objectContaining({
+        userId: "u_acting",
+        orgId: "org_1",
+        workspaceId: "ws_1",
+      }),
       { org: ["Owner", "Admin"], workspace: ["Owner"] },
     );
-    // And the head is attributed to that user, not the session's.
-    expect(mocks.writeRepositoryHead.mock.calls[0]?.[1]).toMatchObject({
-      userId: "u_acting",
+  });
+});
+
+describe("link_repository: repository checks", () => {
+  it.each([
+    ["github_not_connected", "conflict"],
+    ["repository_not_installed", "not_found"],
+    ["main_repo_claimed", "conflict"],
+  ] as const)(
+    "passes a %s refusal from resolveLinkTarget through and leaves the steering repository alone",
+    async (reason, code) => {
+      const refused = new HandlerError({ code, reason, message: reason });
+      mocks.resolveLinkTarget.mockRejectedValueOnce(refused);
+      const { run, steering, workspaceNames } = handler(workspaceToml());
+
+      await expect(run(INPUT, makeCTX())).rejects.toBe(refused);
+
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      expect(mocks.assertLinkAllowed).not.toHaveBeenCalled();
+      expect(workspaceNames).not.toHaveBeenCalled();
+      expectSteeringUntouched(steering);
+    },
+  );
+
+  it.each([
+    ["main_repo_unbound", "conflict"],
+    ["main_repo", "conflict"],
+    ["repository_already_linked", "conflict"],
+  ] as const)(
+    "passes a %s refusal from assertLinkAllowed through and leaves the steering repository alone",
+    async (reason, code) => {
+      const refused = new HandlerError({ code, reason, message: reason });
+      mocks.assertLinkAllowed.mockRejectedValueOnce(refused);
+      const { run, steering, workspaceNames } = handler(workspaceToml());
+
+      await expect(run(INPUT, makeCTX())).rejects.toBe(refused);
+
+      expect(mocks.assertLinkAllowed).toHaveBeenCalledWith(TX, SCOPE, REPO);
+      expect(workspaceNames).not.toHaveBeenCalled();
+      expectSteeringUntouched(steering);
+    },
+  );
+
+  it("runs both checks on the caller's scope before it reads the steering repository", async () => {
+    const { run, deps, steering } = handler(workspaceToml(REF));
+
+    await run(INPUT, makeCTX());
+
+    // The caller names the repository. The installation, never the caller,
+    // decides which repository that is.
+    expect(mocks.resolveLinkTarget).toHaveBeenCalledWith(
+      SCOPE,
+      "acme",
+      "docs",
+      deps,
+    );
+    // The heads check runs on the tenant transaction, against the repository
+    // the installation answered with.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+    expect(mocks.assertLinkAllowed).toHaveBeenCalledWith(TX, SCOPE, REPO);
+    expect(firstCall(mocks.assertLinkAllowed)).toBeLessThan(
+      firstCall(steering.resolveRepository),
+    );
+    expect(steering.resolveRepository).toHaveBeenCalledWith(SCOPE);
+  });
+});
+
+describe("link_repository: workspace.toml", () => {
+  it("answers listed with no steering PR when workspace.toml already lists the repository", async () => {
+    // GitHub names the repository Acme/Docs. workspace.toml lists it in
+    // lowercase, and the handler still finds it.
+    const { run, steering, workspaceNames } = handler(
+      workspaceToml("github.com/acme/other", REF),
+    );
+
+    const out = await run(INPUT, makeCTX());
+
+    expect(out).toEqual({
+      fullName: "Acme/Docs",
+      defaultRef: "main",
+      status: "listed",
+      steeringPullRequest: null,
     });
+    expect(repositoryLink.output.parse(out)).toEqual(out);
+    // The file is read from the production branch of the steering repository.
+    expect(steering.readFile).toHaveBeenCalledWith(
+      STEERING,
+      WORKSPACE_TOML_PATH,
+      "production",
+    );
+    expect(workspaceNames).not.toHaveBeenCalled();
+    expectNoSteeringPr(steering);
+  });
+
+  it("creates workspace.toml with this one entry when the file is missing", async () => {
+    const { run, steering, workspaceNames } = handler(null);
+
+    const out = await run(INPUT, makeCTX());
+
+    expect(out.status).toBe("proposed");
+    expect(workspaceNames).toHaveBeenCalledWith(SCOPE);
+    const read = readWorkspaceToml(writtenContent(steering));
+    expect(read).toMatchObject({
+      kind: "read",
+      value: { organization: "a-intel", workspace: "core-platform" },
+      repositories: [REF],
+    });
+  });
+
+  it("refuses with workspace_not_found when workspace.toml is missing and the workspace has no slugs", async () => {
+    const { run, steering } = handler(null, null);
+
+    await expect(run(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "not_found",
+      reason: "workspace_not_found",
+    });
+    expectNoSteeringPr(steering);
+  });
+
+  it("appends the entry to a workspace/v1 file that does not list it, and keeps the rest of the file", async () => {
+    const original = workspaceToml("github.com/acme/other");
+    const { run, steering, workspaceNames } = handler(original);
+
+    const out = await run(INPUT, makeCTX());
+
+    expect(out.status).toBe("proposed");
+    expect(workspaceNames).not.toHaveBeenCalled();
+    const content = writtenContent(steering);
+    expect(content.startsWith(original)).toBe(true);
+    expect(readWorkspaceToml(content)).toMatchObject({
+      kind: "read",
+      value: { organization: "a-intel", workspace: "core-platform" },
+      repositories: ["github.com/acme/other", REF],
+    });
+  });
+
+  it.each([
+    [
+      "names another schema",
+      '[tool]\nname = "other"\n',
+      "does not name the workspace/v1 schema on its first line",
+    ],
+    [
+      "names workspace/v1 and does not read against it",
+      `${schemaDirective("workspace/v1")}\n[stella\n`,
+      "does not read as workspace/v1",
+    ],
+  ] as const)(
+    "refuses to edit a workspace.toml that %s",
+    async (_case, text, detail) => {
+      const { run, steering, workspaceNames } = handler(text);
+
+      const err = await refusal(run(INPUT, makeCTX()));
+
+      expect(err).toBeInstanceOf(HandlerError);
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "workspace_toml_unreadable",
+      });
+      const message = (err as HandlerError).message;
+      expect(message).toContain(
+        `${WORKSPACE_TOML_PATH} on acme/steering@production`,
+      );
+      expect(message).toContain(detail);
+      expect(workspaceNames).not.toHaveBeenCalled();
+      expectNoSteeringPr(steering);
+    },
+  );
+});
+
+describe("link_repository: the steering PR", () => {
+  it("opens the steering PR from workspace/link-<owner>-<name>-<hash> into the production branch", async () => {
+    const { run, steering } = handler(workspaceToml("github.com/acme/other"));
+
+    const out = await run(INPUT, makeCTX());
+
+    // The branch name is lowercase, whatever case GitHub gives the repository.
+    expect(steering.ensureBranch).toHaveBeenCalledWith(
+      STEERING,
+      BRANCH,
+      "production",
+    );
+    expect(steering.putFile).toHaveBeenCalledWith(STEERING, {
+      path: WORKSPACE_TOML_PATH,
+      content: expect.any(String),
+      message: "Link Acme/Docs to the workspace",
+      branch: BRANCH,
+    });
+    expect(steering.findOpenPullRequest).toHaveBeenCalledWith(STEERING, {
+      head: BRANCH,
+      base: "production",
+    });
+    expect(steering.openPullRequest).toHaveBeenCalledWith(STEERING, {
+      title: "Link Acme/Docs",
+      head: BRANCH,
+      base: "production",
+      body: expect.stringContaining(REF),
+      labels: OXAGEN_PR_LABELS,
+    });
+    // The file lands on the branch before the handler looks for an open PR,
+    // so a reused PR always carries this change.
+    expect(firstCall(steering.ensureBranch)).toBeLessThan(
+      firstCall(steering.putFile),
+    );
+    expect(firstCall(steering.putFile)).toBeLessThan(
+      firstCall(steering.findOpenPullRequest),
+    );
+
+    // `defaultRef` is the linked repository's branch, not the steering base.
+    expect(out).toEqual({
+      fullName: "Acme/Docs",
+      defaultRef: "main",
+      status: "proposed",
+      steeringPullRequest: { number: 12, url: PR_URL, reused: false },
+    });
+    expect(repositoryLink.output.parse(out)).toEqual(out);
+  });
+
+  it("reuses the open steering PR on a second call for the same repository", async () => {
+    const { run, steering } = handler(workspaceToml());
+    steering.findOpenPullRequest.mockResolvedValueOnce({
+      number: 12,
+      htmlUrl: PR_URL,
+      body: "",
+    });
+
+    const out = await run(INPUT, makeCTX());
+
+    expect(steering.putFile).toHaveBeenCalledTimes(1);
+    expect(steering.openPullRequest).not.toHaveBeenCalled();
+    expect(out).toEqual({
+      fullName: "Acme/Docs",
+      defaultRef: "main",
+      status: "proposed",
+      steeringPullRequest: { number: 12, url: PR_URL, reused: true },
+    });
+    expect(repositoryLink.output.parse(out)).toEqual(out);
+  });
+});
+
+describe("link_repository: steering host errors", () => {
+  it.each([
+    [
+      "ensureBranch",
+      (s: SteeringFake, err: Error) => s.ensureBranch.mockRejectedValueOnce(err),
+    ],
+    [
+      "putFile",
+      (s: SteeringFake, err: Error) => s.putFile.mockRejectedValueOnce(err),
+    ],
+    [
+      "findOpenPullRequest",
+      (s: SteeringFake, err: Error) =>
+        s.findOpenPullRequest.mockRejectedValueOnce(err),
+    ],
+    [
+      "openPullRequest",
+      (s: SteeringFake, err: Error) =>
+        s.openPullRequest.mockRejectedValueOnce(err),
+    ],
+  ] as const)(
+    "maps a %s failure to conflict: github_refused",
+    async (_step, fail) => {
+      const { run, steering } = handler(null);
+      fail(steering, new Error("GitHub answered 502 Bad Gateway"));
+
+      await expect(run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "github_refused",
+        message: "GitHub answered 502 Bad Gateway",
+      });
+    },
+  );
+
+  it("maps a failed read of workspace.toml to conflict: github_refused and opens no steering PR", async () => {
+    const { run, steering, workspaceNames } = handler(workspaceToml());
+    steering.readFile.mockRejectedValueOnce(new Error("GitHub timed out"));
+
+    const err = await refusal(run(INPUT, makeCTX()));
+
+    expect(err).toBeInstanceOf(HandlerError);
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "github_refused",
+      message: "GitHub timed out",
+    });
+    expect(workspaceNames).not.toHaveBeenCalled();
+    expectNoSteeringPr(steering);
+  });
+
+  it("passes a refusal the steering host raises as itself", async () => {
+    const missing = new HandlerError({
+      code: "not_found",
+      reason: "workspace_repository_missing",
+      message: "This workspace has no steering repository",
+    });
+    const { run, steering } = handler(workspaceToml());
+    steering.resolveRepository.mockRejectedValueOnce(missing);
+
+    await expect(run(INPUT, makeCTX())).rejects.toBe(missing);
+    expect(steering.readFile).not.toHaveBeenCalled();
+    expectNoSteeringPr(steering);
+  });
+});
+
+describe("readWorkspaceNames", () => {
+  /** The organization read, then the workspace read, each through `.limit(1)`. */
+  function slugReads(...results: Array<Array<{ slug: string }>>): void {
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: () => ({
+              where: () => ({ limit: async () => results.shift() ?? [] }),
+            }),
+          }),
+        }),
+    );
+  }
+
+  it("answers the organization and workspace slugs", async () => {
+    slugReads([{ slug: "a-intel" }], [{ slug: "core-platform" }]);
+    await expect(readWorkspaceNames(SCOPE)).resolves.toEqual(NAMES);
+  });
+
+  it("answers null when the workspace no longer exists", async () => {
+    slugReads([{ slug: "a-intel" }], []);
+    await expect(readWorkspaceNames(SCOPE)).resolves.toBeNull();
   });
 });
