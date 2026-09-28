@@ -7,11 +7,14 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useEffect, useRef, useState } from "react";
 
-/** How long a pointer rests on a cut value before the whole value shows. */
+/**
+ * How long a pointer rests on a cut value before the whole value shows.
+ * @internal Exported for its component test.
+ */
 export const OPEN_DELAY_MS = 300;
 
 /** How often, at most, the keyboard stops follow a table that changes. */
-export const SCAN_INTERVAL_MS = 200;
+const SCAN_INTERVAL_MS = 200;
 
 const BODY_CELL = "tbody :is(td, th):not([colspan])";
 
@@ -33,6 +36,7 @@ function isCut(cell: HTMLElement): boolean {
  * nothing focusable, so focus can reach it and show the whole value. A cell
  * whose text fits again gives the stop back. It measures every cell before it
  * changes any, so the page lays out once.
+ * @internal Exported for its component test.
  */
 export function markCutCells(root: ParentNode): void {
   const changes: [HTMLElement, boolean][] = [];
@@ -71,6 +75,7 @@ function touchesTable(record: MutationRecord): boolean {
  * runs past its own box. Focus on a cut cell itself reads the whole cell. Null
  * when the target is outside a body cell, sits in a value with its own hover
  * card or title, or every value in its path fits.
+ * @internal Exported for its component test.
  */
 export function clippedElement(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
