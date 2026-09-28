@@ -2,8 +2,9 @@
 // `INK_TOKENS` names, from oxagenai/oxagen-brand's tokens/house-tokens.json
 // (vendored as packages/ui/src/styles/house-tokens.json).
 // `node tools/scripts/sync-brand-assets.mjs` rewrites the values from the kit,
-// and its `--check` fails when one drifts (#3074). Ink only: the site is ink, and an ink image sits well on paper
-// where a paper image on paper washes out, so there is no light rendering.
+// and its `--check` fails when one drifts (#3074). Ink only: the site is ink,
+// and an ink image sits well on paper where a paper image on paper washes out,
+// so there is no light rendering.
 // Gold is identity: a generated image spends it on the one gold dot in a
 // panel's title bar and the wordmark's x, never as a surface or decoration.
 // No gradients anywhere.

@@ -1,6 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseSource } from "./lib/role-gate-ast.mjs";
 import {
@@ -8,6 +15,7 @@ import {
   declaresAgentRoleRestriction,
   declaresRoleRestriction,
   findGaps,
+  handlerAssertsRole,
   parseDefaultRoles,
   resolveHandler,
   ROLE_ENFORCEMENT_BASELINE,
@@ -757,7 +765,46 @@ describe("findGaps reads code, not text (#3490)", () => {
 });
 
 describe("resolve_mcp_servers (#3490)", () => {
-  it("is checked in packages/agent and its handler now asserts the role", () => {
+  const repoRoot = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+  );
+  const handlersDir = join(repoRoot, "packages", "handlers", "src");
+  const agentHandlersDir = join(
+    repoRoot,
+    "packages",
+    "agent",
+    "src",
+    "handlers",
+  );
+  const parse = (file: string) =>
+    parseSource(file, readFileSync(file, "utf8"));
+
+  // Before #3490 the high-sensitivity rule read only
+  // packages/handlers/src/agent.mcp.resolve.ts, which does not exist, so the
+  // contract was skipped and every assertion below "not a gap" passed empty.
+  // This one fails unless the check really reaches the packages/agent handler
+  // and finds the gate in it.
+  it("is resolved to its packages/agent handler, which calls a role gate", () => {
+    const handler = resolveHandler({
+      name: "resolve_mcp_servers",
+      stem: "agent.mcp.resolve",
+      registerSource: parse(join(handlersDir, "register.ts")),
+      agentIndexSource: parse(join(agentHandlersDir, "index.ts")),
+      handlersDir,
+      agentHandlersDir,
+    });
+    expect(handler).toEqual({
+      file: join(agentHandlersDir, "agent.mcp.resolve.ts"),
+      exportName: "agentMcpResolveHandler",
+    });
+    expect(
+      handler && handlerAssertsRole(handler.file, handler.exportName),
+    ).toBe(true);
+  });
+
+  it("is neither a gap nor a baseline entry", () => {
     const { gaps, baselineHits } = findGaps();
     expect(gaps.map((g) => g.name)).not.toContain("resolve_mcp_servers");
     expect(baselineHits.map((g) => g.name)).not.toContain(

@@ -68,8 +68,8 @@
  * Every baseline stem is checked against its current contract and handler on
  * each run. A stem is stale, and fails the check until it is removed, when its
  * handler now calls a role gate, when its contract no longer declares a
- * restriction, when its contract is gone, or when no handler can be found for
- * it. Left in place, a stale stem would absorb a later regression as a known
+ * restriction, when its contract became platform-only, when its contract is
+ * gone, or when no handler can be found for it. Left in place, a stale stem would absorb a later regression as a known
  * gap instead of failing the build.
  *
  * Exit codes:
