@@ -153,19 +153,15 @@ export function RepositorySetup({
 
 /**
  * Whether the panel draws the GitHub doors, and so reads the installations
- * they offer. A workspace with no steering repository gets them, and so does a
- * GitHub head whose connection was retired while no live one is attached. A
- * live head, a GitLab head, and a retired head with a live connection already
- * attached get none.
+ * they offer. A workspace with no steering repository gets them. So does any
+ * workspace with no GitHub installation attached, whatever its steering head:
+ * Oxagen reads a provisioned head through the Oxagen Steering app, so the head
+ * can be live while the workspace has no installation, and linking a code
+ * repository still needs one (ADR-212). A bound workspace with an installation
+ * attached gets none.
  */
 function offersDoors(value: WorkspaceRepository): boolean {
-  const { repository } = value;
-  if (repository === null) return true;
-  return (
-    !repository.connectionLive &&
-    repository.provider === "github" &&
-    !value.github.connected
-  );
+  return value.repository === null || !value.github.connected;
 }
 
 function MainRepositoryPanel({
@@ -295,10 +291,11 @@ function MainRepositoryPanel({
               manageUrl={settings.value.github.manageUrl}
             />
             {/*
-              A retired GitHub connection with no live one attached: the doors
-              are the next click, and they are the same doors an unconnected
-              workspace gets. Drawn beside the bound panel rather than inside
-              it, so the repository it still binds stays legible.
+              No GitHub installation is attached, whether the head is live,
+              retired, or on GitLab: the doors are the next click, and they are
+              the same doors an unconnected workspace gets. Drawn beside the
+              bound panel rather than inside it, so the repository it binds
+              stays legible.
             */}
             {offersDoors(settings.value) ? (
               <div className="mt-4">

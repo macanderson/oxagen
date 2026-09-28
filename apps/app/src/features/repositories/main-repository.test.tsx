@@ -761,9 +761,47 @@ describe("a bound steering repository", () => {
     await expectNoAxe(dialog);
   });
 
+  // Oxagen reads a provisioned head through the Oxagen Steering app, so the
+  // head is live while the workspace has no GitHub installation of its own.
+  // Linking a code repository still needs one (ADR-212), so the doors stay
+  // beside the bound panel until an installation is attached.
+  it("keeps the doors beside a live head when no installation is attached", async () => {
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        repository: bound.repository,
+        github: {
+          connected: false,
+          connectUrl: CONNECT_URL,
+          installUrl: INSTALL_URL,
+          manageUrl: MANAGE_URL,
+        },
+      },
+    });
+    await openSettings();
+    expect(screen.getByTestId("workspace-repository-bound")).toHaveTextContent(
+      "acme/platform",
+    );
+    expect(
+      await screen.findByTestId("workspace-repository-install"),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("workspace-installations-loading"),
+      ).toBeNull();
+    });
+    expect(listGithubInstallations).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+    expect(screen.queryByTestId("workspace-repository-retired")).toBeNull();
+  });
+
   // A gitlab.com head (#3762) opens on GitLab and has no GitHub installation
-  // to manage, so the panel draws no GitHub link and no GitHub doors for it.
-  it("opens a GitLab head on GitLab, with no GitHub settings or doors", async () => {
+  // to manage, so the panel draws no GitHub settings link for it. The
+  // workspace has no GitHub installation either, and linking a code
+  // repository needs one, so the doors still show.
+  it("opens a GitLab head on GitLab, with no GitHub settings link", async () => {
     readWorkspaceRepository.mockResolvedValue({ ok: true, value: gitlabBound });
     await openSettings();
     const panel = await screen.findByTestId("workspace-repository-bound");
@@ -772,6 +810,30 @@ describe("a bound steering repository", () => {
       within(panel).getByRole("link", { name: "Open on GitLab" }),
     ).toHaveAttribute("href", "https://gitlab.com/acme/platform/rules");
     expect(screen.queryByTestId("workspace-github-manage")).toBeNull();
+    expect(
+      await screen.findByTestId("workspace-repository-install"),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("workspace-installations-loading"),
+      ).toBeNull();
+    });
+    expect(listGithubInstallations).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+  });
+
+  it("draws no doors beside a GitLab head once an installation is attached (negative)", async () => {
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        ...gitlabBound,
+        github: { ...gitlabBound.github, connected: true },
+      },
+    });
+    await openSettings();
+    await screen.findByTestId("workspace-repository-bound");
     expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(listGithubInstallations).not.toHaveBeenCalled();
@@ -844,14 +906,14 @@ describe("a binding whose connection was retired", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  // The GitHub App is not the way back for a GitLab head, so it gets the
-  // sentence and nothing else.
+  // The GitHub App is not the way back for a GitLab head. With a GitHub
+  // installation already attached, it gets the sentence and nothing else.
   it("says steering is off for a GitLab head, and draws no GitHub doors for it (negative)", async () => {
     readWorkspaceRepository.mockResolvedValue({
       ok: true,
       value: {
-        ...gitlabBound,
         repository: { ...GITLAB_REPOSITORY, connectionLive: false },
+        github: { ...gitlabBound.github, connected: true },
       },
     });
     await openSettings();
