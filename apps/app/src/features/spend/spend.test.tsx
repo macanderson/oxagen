@@ -351,7 +351,10 @@ const wasteRead: SpendWaste = {
       cause: "cache_write_never_read",
       wasted: cost("2469135", "client_attested"),
       runs: 2,
-      provingRuns: ["arun_01k5rn8f3j", "tse_01k5rn9aaa"],
+      provingRuns: [
+        { runId: "arun_01k5rn8f3j", name: "Repair the login redirect" },
+        { runId: "tse_01k5rn9aaa", name: null },
+      ],
     },
   ],
 };
@@ -703,6 +706,7 @@ describe("Spend › Findings", () => {
       runs: [
         {
           runId: "arun_01k5rn8f3j",
+          name: "Repair the login redirect",
           startedAt: "2026-09-11T06:00:00.000Z",
           calls: 36,
           measuredTokens: 41200,
@@ -723,8 +727,18 @@ describe("Spend › Findings", () => {
     expect(dialog).toHaveTextContent("2,980 of 3,106");
     expect(dialog).toHaveTextContent("$1,030.40");
     expect(
-      within(dialog).getByRole("link", { name: "arun_01k5rn8f3j" }),
+      within(dialog).getByRole("columnheader", { name: "Session name" }),
+    ).toBeInTheDocument();
+    const row = within(dialog)
+      .getByRole("link", { name: "Repair the login redirect" })
+      .closest("tr");
+    if (!(row instanceof HTMLElement)) throw new Error("no evidence row");
+    expect(
+      within(row).getByRole("link", { name: "Repair the login redirect" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_01k5rn8f3j");
+    expect(within(row).getByTestId("run-id")).toHaveTextContent(
+      /^arun_01k5rn8f3j$/,
+    );
   });
 
   it("says inside the dialog when the evidence read is refused (negative)", async () => {
@@ -1162,8 +1176,18 @@ describe("Spend › Wasted spend", () => {
     expect(causes.querySelectorAll('li[data-recorded="false"]')).toHaveLength(
       6,
     );
+    const named = document.querySelector('[data-run="arun_01k5rn8f3j"]');
+    if (!(named instanceof HTMLElement)) throw new Error("no named run card");
+    expect(named).toHaveTextContent("Repair the login redirect");
+    expect(within(named).getByTestId("run-id")).toHaveTextContent(
+      /^arun_01k5rn8f3j$/,
+    );
     const run = document.querySelector('[data-run="tse_01k5rn9aaa"]');
     if (!(run instanceof HTMLElement)) throw new Error("no run card");
+    expect(run).toHaveTextContent("Untitled session");
+    expect(within(run).getByTestId("run-id")).toHaveTextContent(
+      /^tse_01k5rn9aaa$/,
+    );
     expect(
       within(run).getByRole("link", { name: "Open the run" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/tse_01k5rn9aaa");

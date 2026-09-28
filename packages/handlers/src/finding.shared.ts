@@ -67,7 +67,19 @@ export function toFinding(row: FindingRow): Finding {
   };
 }
 
-export function toEvidence(row: FindingRow): FindingEvidence {
+/** The runs the row's evidence itemises, in its order. */
+export function evidenceRunIds(row: FindingRow): string[] {
+  return (row.citedFrames as StoredEvidence).runs.map((r) => r.runId);
+}
+
+/**
+ * The stored arithmetic as the contract's money shapes. `names` holds each
+ * itemised run's session name, and a run missing from it reads as unnamed.
+ */
+export function toEvidence(
+  row: FindingRow,
+  names: ReadonlyMap<string, string | null>,
+): FindingEvidence {
   const e = row.citedFrames as StoredEvidence;
   return {
     calls: e.calls,
@@ -78,6 +90,7 @@ export function toEvidence(row: FindingRow): FindingEvidence {
     counterfactual: money(e.counterfactualMicros, row.currency),
     runs: e.runs.map((r) => ({
       runId: r.runId,
+      name: names.get(r.runId) ?? null,
       startedAt: r.startedAt,
       calls: r.calls,
       measuredTokens: r.measuredTokens,

@@ -32,7 +32,7 @@ import { formatCount } from "@/ui/money-format";
 import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
-import { CopyPath } from "./copy-text";
+import { CopyPath, CopyRunId } from "./copy-text";
 import { DeliveryReport } from "./delivery-report";
 import { effortVerdict, fitOf, runEffort } from "./fit";
 import { ExportAction } from "./record-actions";
@@ -697,9 +697,9 @@ function SubagentsFromWork({
 }
 
 /**
- * "<task title> · started <t>", then how it ended once the status says it
- * has: Oxagen's close of a run silent for 12 hours, named as such, else the
- * recorder's end time, else the seal, which is the server's receipt
+ * "started <t>", then how it ended once the status says it has (the session
+ * name moved to the heading in #4571): Oxagen's close of a run silent for 12
+ * hours, named as such, else the recorder's end time, else the seal, which is the server's receipt
  * time and can trail the run by the upload. Keyed on the status, the one
  * definition of sealed the actions and summarize_run also gate on, so a run
  * that ended with no seal instant says so rather than looking live.
@@ -709,15 +709,11 @@ function When({ run }: { run: RunRow }) {
   const format = useFormatter();
   const when = (at: string) =>
     format.dateTime(new Date(at), { dateStyle: "medium", timeStyle: "medium" });
-  // With automatic names off, get_run already sends the harness's own title
-  // as `name` (or null), so the header takes it as sent.
-  const title = run.name ?? run.taskRef;
   return (
     <p
       data-testid="run-when"
       className="mt-2 max-w-[70ch] text-[13px] text-muted-foreground"
     >
-      {title === null ? null : <>{title} · </>}
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
         run.sealedAt != null ? (
@@ -1007,9 +1003,14 @@ export function RunHeader({
       >
         <div className="min-w-0">
           <p className={`${eyebrow} mb-2.5`}>{t("header.eyebrow")}</p>
-          <h1 className="mb-1 break-all font-mono text-[19px] font-bold leading-tight text-foreground">
-            {run.id}
+          {/* #4571: the session name is the heading, and the id sits under
+              it to copy. With automatic names off, get_run already sends
+              the harness's own title as `name` (or null), so the header
+              takes it as sent. */}
+          <h1 className="mb-1 break-words text-[19px] font-bold leading-tight text-foreground">
+            {run.name ?? run.taskRef ?? t("header.untitled")}
           </h1>
+          <CopyRunId id={run.id} />
           <div
             data-testid="run-chips"
             aria-label={t("header.chips")}

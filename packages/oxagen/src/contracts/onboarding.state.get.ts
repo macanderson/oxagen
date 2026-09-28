@@ -57,7 +57,7 @@ export const onboardingStateGet = registerCapability({
   output: z
     .object({
       step: onboardingStepSchema,
-      /** The gate's workspace, the first one the organization made; null before an organization exists. */
+      /** The gate's workspace, the first one the organization made; null until that workspace exists (#4582). */
       workspace: z
         .object({
           id: z.string().regex(/^wrk_[0-9a-z]+$/),

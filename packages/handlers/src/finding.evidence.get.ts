@@ -7,7 +7,9 @@ import {
   findingEvidenceGet,
   type FindingEvidenceGetOutput,
 } from "@oxagen/oxagen/contracts/finding.evidence.get";
+import { readRunNames } from "./lib/run-names";
 import {
+  evidenceRunIds,
   findingNotFound,
   findingScope,
   readFindingRow,
@@ -15,18 +17,25 @@ import {
   toFinding,
 } from "./finding.shared";
 
-type FindingEvidenceDeps = { read: typeof readFindingRow };
+type FindingEvidenceDeps = {
+  read: typeof readFindingRow;
+  /** The session name of each cited run, so the page names it (#4571). */
+  readRunNames: typeof readRunNames;
+};
 
 export function createFindingEvidenceHandler(
   deps: FindingEvidenceDeps,
 ): CapabilityHandler<typeof findingEvidenceGet> {
   return async (input, ctx): Promise<FindingEvidenceGetOutput> => {
-    const row = await deps.read(findingScope(ctx), input.findingId);
+    const scope = findingScope(ctx);
+    const row = await deps.read(scope, input.findingId);
     if (!row) throw findingNotFound();
-    return { finding: toFinding(row), evidence: toEvidence(row) };
+    const names = await deps.readRunNames(scope, evidenceRunIds(row));
+    return { finding: toFinding(row), evidence: toEvidence(row, names) };
   };
 }
 
 export const findingEvidenceHandler = createFindingEvidenceHandler({
   read: readFindingRow,
+  readRunNames,
 });
