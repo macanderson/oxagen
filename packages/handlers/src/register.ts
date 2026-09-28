@@ -1370,6 +1370,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoMemoriesIngestHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "recall_tacho_memories",
+    async () =>
+      (await import("./tacho.memories.recall"))
+        .tachoMemoriesRecallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))

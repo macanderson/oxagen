@@ -389,6 +389,7 @@ import "./contracts/tacho.machine_group.add";
 import "./contracts/tacho.machine_group.list";
 import "./contracts/tacho.machine_group.remove";
 import "./contracts/tacho.memories.ingest";
+import "./contracts/tacho.memories.recall";
 import "./contracts/tacho.session.get";
 import "./contracts/tacho.session.list";
 import "./contracts/tacho.session_policy.read";
