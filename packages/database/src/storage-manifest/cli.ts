@@ -16,6 +16,12 @@
 // eight `tacho.*` tables migration 20260908120000 added: adding a table or a
 // capability without re-running `pnpm schema:manifest` landed a stale manifest
 // with every check green.
+//
+// The manifest commits no content hash and no per-store table count (ADR-214).
+// The summary below computes both from the file it reads. Committed, each was
+// a line that every table- or capability-adding branch rewrote, so two such
+// branches always conflicted, and keeping one side's value left a manifest
+// that disagreed with its own body (#3691, #3233).
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -34,6 +40,9 @@ export const MANIFEST_PATH = resolve(
   join(HERE, "..", "..", "storage-manifest.json"),
 );
 
+/** Repository-relative path, for messages a reader acts on. */
+const MANIFEST_DISPLAY_PATH = "packages/database/storage-manifest.json";
+
 function summarize(json: string): string {
   const manifest = JSON.parse(json) as StorageManifest;
   const s = manifestSummary(manifest);
@@ -41,64 +50,146 @@ function summarize(json: string): string {
     .map(([k, n]) => `${k}=${n}`)
     .join(" ");
   return [
-    `contentHash: ${manifest.contentHash}`,
+    `contentHash: ${contentHashOf(manifest)}`,
     `domains: ${s.domains}  tables: ${s.tables}  stores: ${s.stores}  capabilities: ${s.capabilities}`,
     `tables by store: ${byStore}`,
   ].join("\n");
+}
+
+/** Where a committed file first departs from its regenerated form. */
+export interface FirstDifference {
+  /** 1-based line number. */
+  line: number;
+  /** The committed line, or null when the committed file ends first. */
+  committed: string | null;
+  /** The regenerated line, or null when the regenerated file ends first. */
+  regenerated: string | null;
+}
+
+/**
+ * The first line at which two texts differ, or null when they are equal.
+ *
+ * `tools/scripts/lib/capability-schema-docs.ts` has the same function for the
+ * capability schema docs. It is repeated rather than shared because this
+ * package cannot import from `tools/`, and nine lines do not earn a package.
+ */
+export function firstDifference(
+  committed: string,
+  regenerated: string,
+): FirstDifference | null {
+  if (committed === regenerated) return null;
+  const a = committed.split("\n");
+  const b = regenerated.split("\n");
+  const length = Math.max(a.length, b.length);
+  for (let i = 0; i < length; i += 1) {
+    if (a[i] !== b[i]) {
+      return {
+        line: i + 1,
+        committed: a[i] ?? null,
+        regenerated: b[i] ?? null,
+      };
+    }
+  }
+  return { line: length, committed: null, regenerated: null };
+}
+
+/**
+ * A committed body without the scalars ADR-214 stopped committing, so a file
+ * that still records them hashes the same as its content.
+ */
+function withoutDerivedScalars(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const { contentHash: _hash, ...rest } = body;
+  if (Array.isArray(rest.stores)) {
+    rest.stores = rest.stores.map((store: unknown) => {
+      if (store === null || typeof store !== "object") return store;
+      const { tableCount: _count, ...kept } = store as Record<string, unknown>;
+      return kept;
+    });
+  }
+  return rest;
+}
+
+function carriesDerivedScalars(body: Record<string, unknown>): boolean {
+  if ("contentHash" in body) return true;
+  return (
+    Array.isArray(body.stores) &&
+    body.stores.some(
+      (store: unknown) =>
+        store !== null && typeof store === "object" && "tableCount" in store,
+    )
+  );
+}
+
+function showLine(line: string | null): string {
+  return line === null ? "(end of file)" : JSON.stringify(line);
 }
 
 /**
  * The lines `--check` prints when the committed bytes differ from the
  * regenerated ones.
  *
- * Split out from `main` so the wording is testable, and because getting it
- * wrong costs more than it looks. `--check` compares BYTES, and a manifest has
- * two independent ways to differ: its body, and the `contentHash` field
- * recording that body. Reporting only one of them describes a file nobody has.
+ * Split out from `main` so the wording is testable. The report names the
+ * file, the content hash of each side, and the first line where they differ
+ * with both values, so a reader can tell at once whether the manifest is
+ * behind the schema or was resolved by keeping one side of a merge.
  *
- * The earlier version printed `contentHashOf(committed)` against the
- * regenerated hash, to avoid a stale recorded value reading as a match on a
- * file that had really drifted. That defeated the diagnostic in the opposite
- * case, which is the one that actually occurred: when the body is current and
- * only the recorded field is stale, both recomputed hashes are equal, so the
- * check printed two identical hashes under a DRIFT DETECTED banner and gave a
- * reader no way to tell a real difference from a bug in the check. It cost a
- * cutover a CI cycle.
- *
- * So both numbers are printed, and the two cases are named rather than left to
- * be inferred from them.
+ * An earlier version printed a recorded `contentHash` field beside a
+ * recomputed one, and once printed two identical hashes under a DRIFT
+ * DETECTED banner, which cost a cutover a CI cycle. The field is gone
+ * (ADR-214), so the two numbers are now always the committed content and the
+ * regenerated content, and the case where only the form differs is named
+ * rather than left to be inferred.
  */
 export function driftReport(
   committed: string,
-  regeneratedHash: string,
+  regenerated: string,
+  file: string = MANIFEST_DISPLAY_PATH,
 ): string[] {
-  const out = ["storage-manifest DRIFT DETECTED — committed file is stale."];
+  const out = [`storage-manifest DRIFT DETECTED — ${file} is stale.`];
+  const regeneratedHash = contentHashOf(
+    JSON.parse(regenerated) as Record<string, unknown>,
+  );
+  const difference = firstDifference(committed, regenerated);
+  const differenceLines =
+    difference === null
+      ? []
+      : [
+          `  first difference at line ${difference.line}:`,
+          `    committed:   ${showLine(difference.committed)}`,
+          `    regenerated: ${showLine(difference.regenerated)}`,
+        ];
+  const fix =
+    "  Run `pnpm schema:manifest` and commit the result. After a merge, regenerate from the merged tree; do not keep either side's copy.";
+
   let body: Record<string, unknown>;
   try {
     body = JSON.parse(committed) as Record<string, unknown>;
   } catch {
-    // An unparseable file has no body to hash and no recorded field to read.
+    // An unparseable file, such as one holding merge markers, has no content
+    // to hash, but its first differing line still shows what went wrong.
     out.push("  committed file is not valid JSON.");
-    out.push(`  regenerated contentHash: ${regeneratedHash}`);
-    out.push("  Run `pnpm schema:manifest` and commit the result.");
+    out.push(`  regenerated content hash:  ${regeneratedHash}`);
+    out.push(...differenceLines, fix);
     return out;
   }
 
-  const recorded = typeof body.contentHash === "string" ? body.contentHash : "";
-  const recomputed = contentHashOf(body);
+  const committedHash = contentHashOf(withoutDerivedScalars(body));
+  out.push(`  committed content hash:    ${committedHash}`);
+  out.push(`  regenerated content hash:  ${regeneratedHash}`);
+  out.push(...differenceLines);
 
-  out.push(`  committed contentHash field:     ${recorded || "(absent)"}`);
-  out.push(`  recomputed over committed body:  ${recomputed}`);
-  out.push(`  regenerated contentHash:         ${regeneratedHash}`);
-
-  if (recomputed === regeneratedHash) {
+  if (committedHash !== regeneratedHash) {
+    out.push("  The content itself has drifted.");
+  } else if (carriesDerivedScalars(body)) {
     out.push(
-      "  The body is current; only the recorded contentHash field is stale.",
+      "  The content is current, but the file still records contentHash or stores[].tableCount, which ADR-214 stopped committing.",
     );
   } else {
-    out.push("  The body itself has drifted.");
+    out.push("  The content is current; only its formatting differs.");
   }
-  out.push("  Run `pnpm schema:manifest` and commit the result.");
+  out.push(fix);
   return out;
 }
 
@@ -116,7 +207,7 @@ function main(): void {
     }
     const committed = readFileSync(MANIFEST_PATH, "utf8");
     if (committed !== json) {
-      for (const line of driftReport(committed, manifest.contentHash)) {
+      for (const line of driftReport(committed, json)) {
         console.error(line);
       }
       process.exit(1);
