@@ -962,6 +962,7 @@ type Messages = {
           empty: string;
           emptyNoRollup: string;
           audit: string;
+          untitled: string;
           columns: {
             run: string;
             status: string;
@@ -2729,7 +2730,6 @@ type Messages = {
       tokensUnsorted: string;
       columns: {
         run: string;
-        summary: string;
         agent: string;
         operator: string;
         status: string;
@@ -2779,8 +2779,7 @@ type Messages = {
       exportQueued: string;
       exportFailed: string;
       actionsColumn: string;
-      summaryNone: string;
-      summaryOff: string;
+      untitled: string;
       prFilter: {
         label: string;
         any: string;
@@ -6924,6 +6923,7 @@ type Messages = {
       machineRecorded: string;
       machineEnrollment: string;
       eyebrow: string;
+      untitled: string;
       task: string;
       effort: string;
       notCaptured: string;
@@ -8403,6 +8403,7 @@ type Messages = {
         counterfactual: string;
         runs: string;
         runsEmpty: string;
+        untitled: string;
         columns: {
           run: string;
           startedAt: string;
@@ -8582,6 +8583,7 @@ type Messages = {
       none: string;
       openRun: string;
       showFrames: string;
+      untitled: string;
     };
     budgets: {
       title: string;

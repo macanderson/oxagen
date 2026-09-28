@@ -1,3 +1,4 @@
+import { setConversationOpenedSender } from "@oxagen/agent/runtime/conversation-opened-event";
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
@@ -28,6 +29,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
   // the assistant's seal sends `cost/run.sealed` as every other seal does
   // (#4167). The client is imported on first send, not at boot.
   setRunSealedSender(async (event) => {
+    const { eventClient } = await import("./event-client");
+    await eventClient.send(event);
+  });
+  // A new conversation is named from its first prompt inside @oxagen/agent,
+  // and `chat/conversation.opened` asks the titler for a better name. The
+  // sender is handed in here for the same reason as the seal's above.
+  setConversationOpenedSender(async (event) => {
     const { eventClient } = await import("./event-client");
     await eventClient.send(event);
   });

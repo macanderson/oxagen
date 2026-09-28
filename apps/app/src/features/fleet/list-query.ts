@@ -221,7 +221,7 @@ export function nextSort(
 }
 
 /**
- * The column each server-sortable header orders by. Run, Summary, Pull
+ * The column each server-sortable header orders by. Session name, Pull
  * requests, Lines, Tokens and Frames are absent: no single SQL order covers
  * them in both stores, so their headers do not sort.
  */

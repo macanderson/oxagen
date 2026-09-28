@@ -21,6 +21,7 @@ const finding = {
 
 const run = {
   runId: "tse_0123456789abcdefghjkmn",
+  name: "Repair the login redirect",
   startedAt: "2026-09-11T06:00:00.000Z",
   calls: 36,
   measuredTokens: 1_483_200,
@@ -64,6 +65,34 @@ describe("get_finding_evidence contract", () => {
       findingEvidenceGet.output.safeParse({
         ...out,
         evidence: { ...out.evidence, runs: Array(11).fill(run) },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("names each run by its session name, or null when it has none (#4571)", () => {
+    const evidence = (name: unknown) => ({
+      finding,
+      evidence: {
+        calls: 36,
+        coveredCalls: 36,
+        measuredTokens: 1_483_200,
+        counterfactualTokens: 144_000,
+        measured: { micros: "24100000", currency: "USD" },
+        counterfactual: { micros: "2340000", currency: "USD" },
+        runs: [{ ...run, name }],
+      },
+    });
+    expect(findingEvidenceGet.output.safeParse(evidence(null)).success).toBe(
+      true,
+    );
+    expect(
+      findingEvidenceGet.output.safeParse(evidence("x".repeat(257))).success,
+    ).toBe(false);
+    const { name: _name, ...unnamed } = run;
+    expect(
+      findingEvidenceGet.output.safeParse({
+        ...evidence(null),
+        evidence: { ...evidence(null).evidence, runs: [unnamed] },
       }).success,
     ).toBe(false);
   });

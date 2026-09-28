@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   updateReturning: vi.fn(),
+  updateSet: vi.fn(),
 }));
 
 mocks.updateReturning.mockResolvedValue([
@@ -28,11 +29,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         update: (_table: unknown) => ({
-          set: (_vals: unknown) => ({
-            where: (_cond: unknown) => ({
-              returning: mocks.updateReturning,
-            }),
-          }),
+          set: (vals: unknown) => {
+            mocks.updateSet(vals);
+            return {
+              where: (_cond: unknown) => ({
+                returning: mocks.updateReturning,
+              }),
+            };
+          },
         }),
       }),
   };
@@ -79,6 +83,13 @@ describe("conversationRenameHandler (@oxagen/handlers)", () => {
   it("calls the update returning exactly once", async () => {
     await conversationRenameHandler(BASE_INPUT, CTX);
     expect(mocks.updateReturning).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks the title as the person's own, so the model titler leaves it alone", async () => {
+    await conversationRenameHandler(BASE_INPUT, CTX);
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "New Title", titleSource: "user" }),
+    );
   });
 
   // ── not found ─────────────────────────────────────────────────────────────
