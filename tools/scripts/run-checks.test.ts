@@ -6,8 +6,21 @@
  * and two failing checks and asserts it ran all three and named both
  * failures.
  */
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runChecks, summaryLines } from "./run-checks.mjs";
+import {
+  escapeData,
+  escapeProperty,
+  isEntrypoint,
+  runChecks,
+  summaryLines,
+} from "./run-checks.mjs";
+
+const RUNNER = join(dirname(fileURLToPath(import.meta.url)), "run-checks.mjs");
 
 describe("runChecks", () => {
   beforeEach(() => {
@@ -71,5 +84,53 @@ describe("summaryLines", () => {
       "2 of 3 checks failed: check:manifest, check:inngest-senders",
     );
     expect(lines.filter((l) => l.startsWith("::error "))).toHaveLength(2);
+  });
+});
+
+describe("workflow command escaping", () => {
+  it("escapes the colon in a check name so the title is not split", () => {
+    const lines = summaryLines({
+      results: [{ name: "check:manifest", status: 1 }],
+      failed: ["check:manifest"],
+    });
+    const annotation = lines.find((l) => l.startsWith("::error "));
+    expect(annotation).toMatch(/^::error title=check%3Amanifest failed::pnpm /);
+  });
+
+  it("escapes percent signs, newlines, colons and commas as @actions/core does", () => {
+    expect(escapeProperty("a:b,c%\n")).toBe("a%3Ab%2Cc%25%0A");
+    expect(escapeData("50%\r\nnext: line")).toBe("50%25%0D%0Anext: line");
+  });
+});
+
+describe("entrypoint", () => {
+  // The step in pipeline.yml runs `node tools/scripts/run-checks.mjs ...`.
+  // If the entrypoint test misread that as an import, the script would exit
+  // 0 having run nothing and the CI step would pass green. With no check
+  // named, a script that did start exits 2.
+  it("runs when node starts it directly", () => {
+    const result = spawnSync(process.execPath, [RUNNER], { encoding: "utf8" });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("name at least one pnpm script");
+  });
+
+  it("runs when node starts it through a symlink", () => {
+    // Node resolves symlinks in import.meta.url but not in argv[1], so the
+    // `file://${argv[1]}` comparison the other guards use reads false here.
+    const dir = mkdtempSync(join(tmpdir(), "run-checks-"));
+    try {
+      const link = join(dir, "run-checks.mjs");
+      symlinkSync(RUNNER, link);
+      const result = spawnSync(process.execPath, [link], { encoding: "utf8" });
+      expect(result.status).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reads false for another script and for no script", () => {
+    expect(isEntrypoint(undefined)).toBe(false);
+    expect(isEntrypoint(fileURLToPath(import.meta.url))).toBe(false);
+    expect(isEntrypoint("/no/such/file.mjs")).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   RESOLVED_MARKER,
   classify,
   medianGapMinutes,
+  parseThreshold,
   plan,
   readRuns,
   relevantRuns,
@@ -125,6 +126,29 @@ describe("classify", () => {
   });
 });
 
+describe("parseThreshold", () => {
+  it("reads 3 when the variable is unset or empty, never 0", () => {
+    // The workflow passes `vars.CI_SUPERSEDED_THRESHOLD`, which is an empty
+    // string when the repository variable does not exist. Number("") is 0,
+    // and at 0 a branch whose last run succeeded would read as superseded.
+    expect(parseThreshold(undefined)).toBe(3);
+    expect(parseThreshold("")).toBe(3);
+    expect(classify(ONE_CANCEL_THEN_GREEN, { threshold: parseThreshold("") }).state).toBe("answered");
+  });
+
+  it("refuses a threshold that would fire on one supersede", () => {
+    expect(parseThreshold("1")).toBe(3);
+    expect(parseThreshold("0")).toBe(3);
+    expect(parseThreshold("two")).toBe(3);
+    expect(parseThreshold("2.5")).toBe(3);
+  });
+
+  it("accepts a whole number of at least 2", () => {
+    expect(parseThreshold("2")).toBe(2);
+    expect(parseThreshold("5")).toBe(5);
+  });
+});
+
 describe("relevantRuns", () => {
   it("drops runs from a fork's branch of the same name, other events, and runs before the PR opened", () => {
     const fork = { ...run(9, "f", "2026-09-18T01:00:00Z", "completed", "cancelled"), head_repository: { full_name: "someone/oxagen" } };
@@ -149,7 +173,7 @@ describe("plan", () => {
     const actions = plan(classify(THREE_CANCELLED));
     expect(actions.map((a: { kind: string }) => a.kind)).toEqual(["status", "comment-create"]);
     expect(actions[0]).toMatchObject({ state: "failure", targetUrl: THREE_CANCELLED[0]?.html_url });
-    expect(actions[1]?.body.startsWith(MARKER)).toBe(true);
+    expect(actions[1]?.body?.startsWith(MARKER)).toBe(true);
   });
 
   it("edits the existing comment rather than posting a second", () => {
@@ -277,6 +301,10 @@ describe(".github/workflows/ci-superseded.yml", () => {
   it("can write the status and the comment it reports with", () => {
     expect(workflow).toMatch(/^\s+statuses: write$/m);
     expect(workflow).toMatch(/^\s+pull-requests: write$/m);
+  });
+
+  it("passes the threshold variable the ADR says can change the streak", () => {
+    expect(workflow).toMatch(/^\s+CI_SUPERSEDED_THRESHOLD: \$\{\{ vars\.CI_SUPERSEDED_THRESHOLD \}\}$/m);
   });
 
   it("never expands an event value inside the run script", () => {

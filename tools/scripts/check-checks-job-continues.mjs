@@ -22,7 +22,7 @@
  * check-main-concurrency.mjs: the repo carries no YAML dependency for its
  * guards, and the job's step layout (six-space `- ` items) is stable.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -96,7 +96,11 @@ export function steps(job) {
         if (l.trim() !== "" && l.match(/^\s*/)[0].length <= indent) break;
         body.push(l.trim());
       }
-      run = /^[|>]/.test(first) ? body.join("\n") : [first, ...body].join("\n");
+      // A folded scalar (`>`, `>-`) is one shell line in YAML, so join its
+      // lines with spaces; a literal one (`|`) keeps its newlines.
+      if (/^>/.test(first)) run = body.join(" ");
+      else if (/^\|/.test(first)) run = body.join("\n");
+      else run = [first, ...body].join(" ");
     }
     return {
       name: key("name"),
@@ -136,7 +140,10 @@ export function problems(yaml) {
   }
 
   for (const s of list) {
-    if (s.run && /\bpnpm\b[^\n]*&&[^\n]*\bpnpm\b/.test(s.run)) {
+    // Join shell continuations first: `pnpm a &&` at the end of one line and
+    // `pnpm b` on the next is still a chain, and so is a `\` line break.
+    const shell = (s.run ?? "").replace(/\\\n/g, " ").replace(/&&\s*\n/g, "&& ");
+    if (/\bpnpm\b[^\n]*&&[^\n]*\bpnpm\b/.test(shell)) {
       found.push(
         `"${s.name ?? s.uses}" chains pnpm commands with &&, so the first failure hides the rest. Use tools/scripts/run-checks.mjs.`,
       );
@@ -157,7 +164,7 @@ export function problems(yaml) {
       if (EXEMPT_STEPS.has(label)) continue;
       if (!s.if || !CONTINUE_IF.test(s.if)) {
         found.push(
-          `"${label}" is skipped whenever an earlier check fails. Give it if: \${{ !cancelled() && steps.install.outcome == 'success' }}.`,
+          `"${label}" needs if: \${{ !cancelled() && steps.install.outcome == 'success' }}, so it runs after an earlier check fails and not after a failed install.`,
         );
       }
     }
@@ -165,9 +172,20 @@ export function problems(yaml) {
   return found;
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+// Real paths, not `file://${argv[1]}`: node resolves symlinks in the main
+// module's URL but not in argv[1], and a false here would exit 0 having
+// checked nothing. run-checks.test.ts proves the symlink case.
+const isEntrypoint = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+})();
 
 if (isEntrypoint) {
   const found = problems(readFileSync(path, "utf8"));

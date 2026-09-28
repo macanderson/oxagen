@@ -81,4 +81,7 @@ jobs:
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+          # A repository variable, so the streak length changes without a code
+          # change. Unset reads as 3 (parseThreshold in the script).
+          CI_SUPERSEDED_THRESHOLD: ${{ vars.CI_SUPERSEDED_THRESHOLD }}
         run: node tools/scripts/check-superseded-runs.mjs

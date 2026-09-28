@@ -97,7 +97,10 @@ request still needs its own finished run for review.
 
 - ADR-046 now states that `cancelled` on a required check is not a pass, next
   to its note that cancelled runs look like ordinary cleanup.
-- `CI_SUPERSEDED_THRESHOLD` changes the streak length without a code change.
+- The repository variable `CI_SUPERSEDED_THRESHOLD` changes the streak
+  length without a code change. It must be a whole number of at least 2.
+  Anything else, including unset, reads as 3, because 1 would fire on a
+  single supersede.
 - `pipeline.yml`'s `name: CI` is what `workflow_run` matches. The test in
   `check-superseded-runs.test.ts` fails if that name changes.
 - Not customer-facing. No published documentation changes.

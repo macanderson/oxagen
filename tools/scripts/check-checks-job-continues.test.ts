@@ -113,7 +113,7 @@ describe("problems", () => {
     expect(found.some((p: string) => p.includes("id: install"))).toBe(true);
     expect(
       found.some((p: string) =>
-        p.startsWith('"knip production mode (apps/app)" is skipped'),
+        p.startsWith('"knip production mode (apps/app)" needs if:'),
       ),
     ).toBe(true);
     // The Linear step is exempt, so it is never reported.
@@ -132,8 +132,38 @@ describe("problems", () => {
       "      - name: knip production mode (apps/app)\n        if: always()",
     );
     expect(problems(always)).toEqual([
-      `"knip production mode (apps/app)" is skipped whenever an earlier check fails. Give it if: ${IF}.`,
+      `"knip production mode (apps/app)" needs if: ${IF}, so it runs after an earlier check fails and not after a failed install.`,
     ]);
+  });
+
+  it("rejects a chain split across lines of a literal block", () => {
+    // `pnpm a &&` ending one line and `pnpm b` on the next is still one
+    // shell list, and so is a backslash line break.
+    for (const joiner of [" &&\n          ", " && \\\n          "]) {
+      const split = AFTER.replace(
+        "        run: pnpm --filter @oxagen/app exec knip --production --strict",
+        `        run: |\n          pnpm check:manifest${joiner}pnpm check:contracts`,
+      );
+      expect(
+        problems(split).some((p: string) =>
+          p.includes("chains pnpm commands with &&"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a chain folded across lines of a > block", () => {
+    // YAML folds `>-` lines into one shell line, so these two lines are
+    // `pnpm check:manifest && pnpm check:contracts`.
+    const folded = AFTER.replace(
+      "        run: pnpm --filter @oxagen/app exec knip --production --strict",
+      "        run: >-\n          pnpm check:manifest &&\n          pnpm check:contracts",
+    );
+    expect(
+      problems(folded).some((p: string) =>
+        p.includes("chains pnpm commands with &&"),
+      ),
+    ).toBe(true);
   });
 
   it("reports a missing checks job instead of passing", () => {

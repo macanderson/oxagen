@@ -45,6 +45,9 @@
  * detector must never be the thing that blocks a merge.
  */
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 export const MARKER = "<!-- ci-superseded -->";
 export const RESOLVED_MARKER = "<!-- ci-superseded:resolved -->";
 export const STATUS_CONTEXT = "ci-superseded";
@@ -147,11 +150,44 @@ export function resolvedBody({ answered }) {
 }
 
 /**
+ * The streak length that reports, from CI_SUPERSEDED_THRESHOLD.
+ *
+ * Unset, empty, or anything but a whole number of at least 2 reads as 3.
+ * `Number("")` is 0, and a threshold of 0 would report every branch with a
+ * finished run as superseded; 1 would fire on the ordinary single supersede
+ * the detector must stay silent on.
+ */
+export function parseThreshold(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 2 ? n : 3;
+}
+
+/**
+ * @typedef {{
+ *   kind: "status" | "comment-create" | "comment-update",
+ *   state?: "failure" | "success",
+ *   description?: string,
+ *   targetUrl?: string,
+ *   id?: number,
+ *   body?: string,
+ * }} Action
+ */
+
+/**
  * What to write for a verdict, given what is already there.
  *
  * Pure, so the test can assert that a superseded branch gets one failing
  * status and one comment, that an answered branch clears only what an earlier
  * report left, and that a pending branch writes nothing.
+ *
+ * @param {{ state: string, streak: any[], answered: any }} verdict
+ * @param {{
+ *   existingComment?: { id: number, body: string } | null,
+ *   existingStatus?: string | null,
+ *   capped?: boolean,
+ *   threshold?: number,
+ * }} [options]
+ * @returns {Action[]}
  */
 export function plan(verdict, { existingComment = null, existingStatus = null, capped = false, threshold = 3 } = {}) {
   const actions = [];
@@ -219,6 +255,16 @@ async function findPullRequest({ prNumber, headRepo, headBranch }) {
  * Page the branch's CI runs until the verdict is decided.
  *
  * `get` is the API reader, injected so the test can drive the paging.
+ *
+ * @param {(path: string) => Promise<any>} get
+ * @param {{
+ *   repo?: string,
+ *   branch: string,
+ *   headRepo?: string | null,
+ *   since?: string | null,
+ *   threshold?: number,
+ * }} options
+ * @returns {Promise<{ runs: any[], capped: boolean }>}
  */
 export async function readRuns(get, { repo = REPO, branch, headRepo, since, threshold = 3 }) {
   const runs = [];
@@ -288,7 +334,7 @@ async function apply(actions, { prNumber, sha }) {
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run") || process.env.DRY_RUN === "1";
-  const threshold = Number(process.env.CI_SUPERSEDED_THRESHOLD ?? 3);
+  const threshold = parseThreshold(process.env.CI_SUPERSEDED_THRESHOLD);
   const pr = await findPullRequest({
     prNumber: process.env.PR_NUMBER || null,
     headRepo: process.env.HEAD_REPO || null,
@@ -322,9 +368,20 @@ async function main() {
   console.log(`[ci-superseded] Wrote ${actions.length} change(s).`);
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+// Real paths, not `file://${argv[1]}`: node resolves symlinks in the main
+// module's URL but not in argv[1], and a false here would exit 0 having
+// reported nothing. run-checks.test.ts proves the symlink case.
+const isEntrypoint = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+})();
 
 if (isEntrypoint) {
   main().catch((err) => {
