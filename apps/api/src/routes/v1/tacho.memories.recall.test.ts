@@ -10,7 +10,7 @@ import { tachoMemoriesRecallRoute } from "./tacho.memories.recall";
 
 const input = {
   host_enrollment_id: "tch_0123456789abcdefghjkmn",
-  repository: "github.com/a-intel/platform",
+  repository_digests: [`sha256:${"a".repeat(64)}`],
   tools: ["Bash", "Edit"],
   paths: ["apps/api/src/billing.ts"],
   text: "Change the proration rule.",
@@ -72,23 +72,28 @@ describe("host memory recall endpoint", () => {
   });
 
   it("reads a prompt at the largest body the contract takes", async () => {
-    // Three UTF-8 bytes a character: about 87 KiB, over the 64 KiB the
-    // bundle route allows.
+    // JSON writes a control character as a six-byte `\u` escape, the most
+    // any one code unit costs: about 315 KiB, over the 256 KiB the command
+    // poll allows.
+    const escaped = "\u0001";
     const body = JSON.stringify({
       ...input,
-      repository: "倉".repeat(200),
-      tools: Array.from({ length: 64 }, () => "具".repeat(200)),
-      paths: Array.from({ length: 16 }, () => "路".repeat(512)),
-      text: "記".repeat(8000),
+      repository_digests: Array.from(
+        { length: 8 },
+        (_, i) => `sha256:${String(i).repeat(64)}`,
+      ),
+      tools: Array.from({ length: 64 }, () => escaped.repeat(200)),
+      paths: Array.from({ length: 64 }, () => escaped.repeat(512)),
+      text: escaped.repeat(8000),
     });
-    expect(new TextEncoder().encode(body).length).toBeGreaterThan(64 * 1024);
+    expect(new TextEncoder().encode(body).length).toBeGreaterThan(256 * 1024);
     expect((await app().fetch(request(body))).status).toBe(200);
   });
 
   it.each([
     ["invalid", "application/json", 400],
     ["{}", "text/plain", 415],
-    ["x".repeat(256 * 1024 + 1), "application/json", 413],
+    ["x".repeat(384 * 1024 + 1), "application/json", 413],
   ])("rejects invalid transport %#", async (body, type, status) => {
     expect(
       (await app().fetch(request(String(body), String(type)))).status,

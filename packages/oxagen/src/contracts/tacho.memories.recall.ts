@@ -9,6 +9,7 @@
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
  */
+import { SHA256_DIGEST_PATTERN } from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { MEMORY_RECALL_MAX } from "../steering-repo/tokens";
@@ -36,15 +37,22 @@ export const tachoMemoriesRecall = registerCapability({
     .object({
       host_enrollment_id: hostEnrollmentIdSchema,
       /**
-       * The code repository the prompt runs in, as `<host>/<owner>/<name>` in
-       * lowercase, or null outside a repository. A record scoped to other
+       * The digests of the repository the prompt runs in, as the host
+       * computes them from its `origin` remote: `canonicalRemote`, then
+       * `foldedRemote`, each through `digestBytes`. The remote stays on the
+       * host. Empty outside a repository, and then a record scoped to
        * repositories is left out.
        */
-      repository: z.string().min(1).max(200).nullable(),
-      /** The tools the session has called, for records scoped to tools. */
+      repository_digests: z
+        .array(z.string().regex(SHA256_DIGEST_PATTERN))
+        .max(8),
+      /** The tools the session has called, most recent first. */
       tools: z.array(z.string().min(1).max(200)).max(64),
-      /** The files the prompt names or the session has touched. */
-      paths: z.array(z.string().min(1).max(512)).max(16),
+      /**
+       * The files the session has touched, most recent first, relative to
+       * the repository root.
+       */
+      paths: z.array(z.string().min(1).max(512)).max(64),
       /** The prompt's text. It may be empty. */
       text: z.string().max(8000),
     })

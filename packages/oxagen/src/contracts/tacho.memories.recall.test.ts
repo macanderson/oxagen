@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { MEMORY_RECALL_MAX } from "../steering-repo/tokens";
 import { tachoMemoriesRecall as contract } from "./tacho.memories.recall";
 
+const DIGEST = `sha256:${"a".repeat(64)}`;
+
 const input = {
   host_enrollment_id: "tch_0123456789abcdefghjkmn",
-  repository: "github.com/a-intel/platform",
+  repository_digests: [DIGEST],
   tools: ["Bash", "mcp__linear__create_issue"],
   paths: ["apps/api/src/app.ts"],
   text: "Why does the billing test fail after the proration change?",
@@ -22,12 +24,13 @@ describe("host memory recall contract", () => {
   it("takes one prompt from a named host", () => {
     expect(contract.input.safeParse(input).success).toBe(true);
     for (const patch of [
-      { repository: null },
+      { repository_digests: [] },
+      { repository_digests: Array.from({ length: 8 }, () => DIGEST) },
       { tools: [], paths: [] },
       { text: "" },
       { text: "t".repeat(8000) },
       { tools: Array.from({ length: 64 }, (_, i) => `tool_${i}`) },
-      { paths: Array.from({ length: 16 }, (_, i) => `src/${i}.ts`) },
+      { paths: Array.from({ length: 64 }, (_, i) => `src/${i}.ts`) },
     ]) {
       expect(
         contract.input.safeParse({ ...input, ...patch }).success,
@@ -43,10 +46,13 @@ describe("host memory recall contract", () => {
       { tools: Array.from({ length: 65 }, (_, i) => `tool_${i}`) },
       { tools: [""] },
       { tools: ["t".repeat(201)] },
-      { paths: Array.from({ length: 17 }, (_, i) => `src/${i}.ts`) },
+      { paths: Array.from({ length: 65 }, (_, i) => `src/${i}.ts`) },
       { paths: ["p".repeat(513)] },
-      { repository: "" },
-      { repository: "r".repeat(201) },
+      { repository_digests: Array.from({ length: 9 }, () => DIGEST) },
+      // The remote stays on the host: a plain name is not a digest.
+      { repository_digests: ["github.com/a-intel/platform"] },
+      { repository_digests: [`sha256:${"A".repeat(64)}`] },
+      { repository: "github.com/a-intel/platform" },
       { text: "t".repeat(8001) },
     ]) {
       expect(

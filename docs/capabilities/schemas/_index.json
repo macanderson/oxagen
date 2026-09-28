@@ -1,5 +1,5 @@
 {
-  "generatedCount": 406,
+  "generatedCount": 407,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -3263,6 +3263,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "recall_tacho_memories",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

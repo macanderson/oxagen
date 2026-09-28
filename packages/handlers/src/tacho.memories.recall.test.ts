@@ -30,10 +30,11 @@ import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
 import { createTachoMemoriesRecallHandler } from "./tacho.memories.recall";
 
 const HOST = "tch_0123456789abcdefghjkmn";
+const DIGEST = `sha256:${"a".repeat(64)}`;
 const NOW = new Date("2026-09-27T12:00:00.000Z");
 const input = contract.input.parse({
   host_enrollment_id: HOST,
-  repository: "github.com/a-intel/platform",
+  repository_digests: [DIGEST],
   tools: ["Bash", "Edit"],
   paths: ["apps/api/src/billing.ts"],
   text: "Change the proration rule.",
@@ -196,7 +197,7 @@ describe("recall_tacho_memories", () => {
       now: NOW,
       agent: "agent.laptop",
       inApp: false,
-      repository: "github.com/a-intel/platform",
+      repositoryDigests: [DIGEST],
       tools: ["Bash", "Edit"],
       paths: ["apps/api/src/billing.ts"],
       text: "Change the proration rule.",

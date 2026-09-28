@@ -509,6 +509,12 @@ app.route("/v1/tacho/enroll", tachoHostEnrollRoute);
 // so a retry storm on either can no longer starve the other.
 const TACHO_HOST_PER_MIN = 30;
 const TACHO_INGEST_PER_MIN = 120;
+// Memory recall runs once per prompt, so its bucket follows the prompt rate of
+// every session on the host, not the daemon's own schedule. It gets the
+// ingest budget: a host whose sessions prompt faster than that loses recalled
+// memories on the extra prompts, since the daemon fails open on a 429, and
+// its command poll and bundle refresh keep their own budget.
+const TACHO_RECALL_PER_MIN = 120;
 // Three more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
 // the GitHub credential, the contained launch, and the memory upload. A
 // memory upload is its own bucket because a daemon's first scan sends every
@@ -549,6 +555,7 @@ app.use(
     keyPrefix: "tacho-preauth-credential",
     max:
       TACHO_INGEST_PER_MIN +
+      TACHO_RECALL_PER_MIN +
       TACHO_HOST_PER_MIN * (1 + TACHO_OWN_BUCKET_PATHS),
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
@@ -687,6 +694,16 @@ tachoScoped.use(
   distributedRateLimiter({
     keyPrefix: "tacho-memories",
     max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+// `/memories` above matches that path alone, so recall never counts against
+// the memory upload's bucket, nor the upload against recall's.
+tachoScoped.use(
+  "/memories/recall",
+  distributedRateLimiter({
+    keyPrefix: "tacho-recall",
+    max: TACHO_RECALL_PER_MIN,
     bucketKey: enrolledMachineBucketKey,
   }),
 );

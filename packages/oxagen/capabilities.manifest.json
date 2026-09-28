@@ -2124,7 +2124,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -6545,7 +6546,7 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {

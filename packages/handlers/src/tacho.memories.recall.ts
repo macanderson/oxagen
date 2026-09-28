@@ -198,7 +198,7 @@ export function createTachoMemoriesRecallHandler(
         now: deps.now?.() ?? new Date(),
         agent: host.agentKey,
         inApp: false,
-        repository: input.repository,
+        repositoryDigests: input.repository_digests,
         tools: input.tools,
         paths: input.paths,
         text: input.text,

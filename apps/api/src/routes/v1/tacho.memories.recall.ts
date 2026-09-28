@@ -13,12 +13,12 @@ import type { AppEnv } from "../../app";
  * this route lives on the static /v1/tacho router and refuses anything but an
  * API key before it reads the body.
  */
-// The contract admits 64 tools of 200 UTF-16 code units, 16 paths of 512, a
-// repository of 200, and a prompt of 8,000. JSON writes one code unit as at
-// most 6 bytes (a `\u` escape), so those fields fit in 175,152 bytes and
-// 256 KiB leaves room for the rest of the body. tacho.host-routes.ts mounts
-// routes by this limit.
-const MAX_BODY_BYTES = 256 * 1024;
+// The contract admits 64 tools of 200 UTF-16 code units, 64 paths of 512, a
+// prompt of 8,000, and 8 repository digests of 71 ASCII characters. JSON
+// writes one code unit as at most 6 bytes (a `\u` escape), so those fields
+// fit in 321,976 bytes and 384 KiB leaves room for the rest of the body.
+// tacho.host-routes.ts mounts routes by this limit.
+const MAX_BODY_BYTES = 384 * 1024;
 
 export const tachoMemoriesRecallRoute = new Hono<AppEnv>();
 
