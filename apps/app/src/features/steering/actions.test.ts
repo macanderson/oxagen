@@ -1,7 +1,10 @@
-// The Context PR writes through the real kernel seam: the viewer resolution
+// The steering PR writes through the real kernel seam. The viewer resolution
 // and the kernel's invoke() are the only fakes, so each case shows what the
-// person gets back and whether the capability ran — ok, invalid (refused
-// before the kernel), denied and conflict with the handler's reason (INV-19).
+// person gets back and whether the capability ran: ok, invalid (refused
+// before the kernel), and denied and conflict with the handler's reason
+// (INV-19). The four writes Oxagen has not registered yet (#4518) answer
+// `tool_not_registered` and never reach invoke(). When the platform
+// registers one, its case here fails and moves to the ok path.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { contextPrOutput } from "@/test/steering-outputs";
 
@@ -28,10 +31,14 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  approveContextPr,
   dismissProposal,
+  dropMemoryRecord,
   forgetMemory,
   mergeContextPr,
+  mergePrWithoutReview,
   openContextPr,
+  restoreManagedBlock,
   setGovernanceMode,
 } = await import("./actions");
 
@@ -48,6 +55,8 @@ const ctx = unsafeMint(WsCtx, {
 });
 
 const ID = "prp_01k5ru4a";
+const BRANCH = "memory/2026-09-27-release-lessons";
+const RECORD_PATH = ".oxagen/memory/release.no-reread-changelog.toml";
 /** The CapabilityContext every write reaches the kernel with. */
 const TENANT = {
   orgId: ctx.orgId,
@@ -190,9 +199,45 @@ describe("a person the workspace refuses", () => {
     ["openContextPr", () => openContextPr("acme", "x", ID)],
     ["mergeContextPr", () => mergeContextPr("acme", "x", ID)],
     ["dismissProposal", () => dismissProposal("acme", "x", ID, "why")],
+    ["approveContextPr", () => approveContextPr("acme", "x", ID)],
+    ["mergePrWithoutReview", () => mergePrWithoutReview("acme", "x", ID)],
+    [
+      "dropMemoryRecord",
+      () => dropMemoryRecord("acme", "x", BRANCH, RECORD_PATH),
+    ],
+    [
+      "restoreManagedBlock",
+      () => restoreManagedBlock("acme", "x", ID, "AGENTS.md"),
+    ],
   ])("%s runs nothing (negative)", async (_name, run) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(run()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("the steering PR writes Oxagen has not registered yet", () => {
+  it.each([
+    ["approveContextPr", () => approveContextPr("acme", "core-platform", ID)],
+    [
+      "mergePrWithoutReview",
+      () => mergePrWithoutReview("acme", "core-platform", ID),
+    ],
+    [
+      "dropMemoryRecord",
+      () => dropMemoryRecord("acme", "core-platform", BRANCH, RECORD_PATH),
+    ],
+    [
+      "restoreManagedBlock",
+      () => restoreManagedBlock("acme", "core-platform", ID, "AGENTS.md"),
+    ],
+  ])("%s answers tool_not_registered (negative)", async (_name, run) => {
+    expect(await run()).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_not_registered",
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).not.toHaveBeenCalled();
   });
 });

@@ -32,9 +32,19 @@ describe("stepNumber", () => {
 });
 
 describe("gateRail", () => {
-  it("marks the wrap step current and leaves the run step unreachable", () => {
+  it("marks the wrap step current, opens connect and the first workspace behind it, and leaves the run step unreachable", () => {
     expect(gateRail("wrap", place)).toEqual([
       { step: "organization", state: "done", to: null },
+      {
+        step: "connect",
+        state: "done",
+        to: "/welcome/acme/new-workspace/connect",
+      },
+      {
+        step: "workspace",
+        state: "done",
+        to: "/welcome/acme/new-workspace",
+      },
       {
         step: "wrap",
         state: "current",
@@ -46,12 +56,20 @@ describe("gateRail", () => {
 
   it("opens the run step once the gate reached it", () => {
     const rail = gateRail("run", place);
-    expect(rail.map((item) => item.state)).toEqual(["done", "done", "current"]);
-    expect(rail[2]?.to).toBe("/acme/core-platform/register/run");
+    expect(rail.map((item) => item.state)).toEqual([
+      "done",
+      "done",
+      "done",
+      "done",
+      "current",
+    ]);
+    expect(rail[4]?.to).toBe("/acme/core-platform/register/run");
   });
 
   it("leaves every step done once the first frame opened the gate", () => {
     expect(gateRail("unlocked", place).map((item) => item.state)).toEqual([
+      "done",
+      "done",
       "done",
       "done",
       "done",
@@ -67,8 +85,17 @@ describe("gateRail", () => {
     });
     expect(rail.map((item) => item.step)).toEqual([
       "organization",
+      "connect",
+      "workspace",
       "wrap",
       "run",
+    ]);
+    // A step the gate has not reached opens nothing, connect included.
+    expect(rail.slice(1).map((item) => item.to)).toEqual([
+      null,
+      null,
+      null,
+      null,
     ]);
   });
 });

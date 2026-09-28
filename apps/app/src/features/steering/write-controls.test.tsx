@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-// The Context PR writes as a person makes them: each write sends the proposal
-// the page shows, a completed write reloads the view it leads to, a refusal
-// is named where the person acted and navigates nowhere, and a merge the
-// checks have not cleared cannot be sent. Every refusal code the three
-// handlers throw has its own sentence. Each state gets an axe check.
+// The steering PR writes as a person makes them: each write sends the
+// proposal the page shows, a completed write reloads the view it leads to, a
+// refusal is named where the person acted and navigates nowhere, and a merge
+// the checks have not cleared cannot be sent. Every refusal code the handlers
+// and the merge queue throw has its own sentence, and a write the platform has
+// not registered says so. Each state gets an axe check.
 import {
   cleanup,
   fireEvent,
@@ -17,22 +18,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, openContextPr, mergeContextPr, dismissProposal } = vi.hoisted(
-  () => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    openContextPr: vi.fn(),
-    mergeContextPr: vi.fn(),
-    dismissProposal: vi.fn(),
-  }),
-);
+const {
+  router,
+  openContextPr,
+  mergeContextPr,
+  dismissProposal,
+  approveContextPr,
+  mergePrWithoutReview,
+  restoreManagedBlock,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  openContextPr: vi.fn(),
+  mergeContextPr: vi.fn(),
+  dismissProposal: vi.fn(),
+  approveContextPr: vi.fn(),
+  mergePrWithoutReview: vi.fn(),
+  restoreManagedBlock: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   openContextPr,
   mergeContextPr,
   dismissProposal,
+  approveContextPr,
+  mergePrWithoutReview,
+  restoreManagedBlock,
+  dropMemoryRecord: vi.fn(),
 }));
 
-const { MergeContextPr, ProposalWrites } = await import("./write-controls");
+const {
+  ApproveContextPr,
+  MergeContextPr,
+  MergeWithoutReview,
+  ProposalWrites,
+  RestoreManagedBlock,
+} = await import("./write-controls");
 const { useActionFailure } = await import("./action-failure");
 
 const TARGET = { org: "acme", ws: "core-platform", proposalId: "prp_01k5ru4a" };
@@ -49,6 +69,9 @@ beforeEach(() => {
     openContextPr,
     mergeContextPr,
     dismissProposal,
+    approveContextPr,
+    mergePrWithoutReview,
+    restoreManagedBlock,
   ]) {
     fn.mockReset();
   }
@@ -267,6 +290,91 @@ describe("Merge pull request", () => {
   });
 });
 
+describe("Approve", () => {
+  it("approves this proposal's pull request and reloads its steering PR", async () => {
+    approveContextPr.mockResolvedValue({ ok: true, value: { approvals: 1 } });
+    render(<ApproveContextPr {...TARGET} />, { wrapper: intl });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(PRS);
+    });
+    expect(approveContextPr).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+    );
+  });
+
+  it("says the platform has not registered approve yet (negative)", async () => {
+    approveContextPr.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_not_registered",
+    });
+    render(<ApproveContextPr {...TARGET} />, { wrapper: intl });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(
+      await screen.findByTestId("approve-context-pr-failure"),
+    ).toHaveTextContent("Oxagen has not registered this action yet.");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("Merge without review", () => {
+  it("cannot be sent while the checks have not passed (negative)", () => {
+    render(<MergeWithoutReview {...TARGET} blocked />, { wrapper: intl });
+    const button = screen.getByRole("button", { name: "Merge without review" });
+    expect(button).toBeDisabled();
+    const form = button.closest("form");
+    if (form === null) throw new Error("the button sits in no form");
+    fireEvent.submit(form);
+    expect(mergePrWithoutReview).not.toHaveBeenCalled();
+  });
+
+  it("merges this proposal's pull request without an approval and reloads it", async () => {
+    mergePrWithoutReview.mockResolvedValue({
+      ok: true,
+      value: { commit: "4d5e6f7" },
+    });
+    render(<MergeWithoutReview {...TARGET} blocked={false} />, {
+      wrapper: intl,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Merge without review" }),
+    );
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(PRS);
+    });
+    expect(mergePrWithoutReview).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+    );
+  });
+});
+
+describe("Restore block", () => {
+  it("restores the managed block in the drifted file and reloads the steering PR", async () => {
+    restoreManagedBlock.mockResolvedValue({
+      ok: true,
+      value: { commitSha: "a1b2c3d4e5f6" },
+    });
+    render(<RestoreManagedBlock {...TARGET} path="AGENTS.md" />, {
+      wrapper: intl,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore block" }));
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(PRS);
+    });
+    expect(restoreManagedBlock).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+      "AGENTS.md",
+    );
+  });
+});
+
 describe("the sentence for each refusal", () => {
   it.each([
     [
@@ -319,7 +427,43 @@ describe("the sentence for each refusal", () => {
     ],
     [
       { reason: "conflict", code: "record_file_missing" },
-      "The change was refused: record_file_missing. Nothing was changed.",
+      "The record file is not on the branch at the checked commit.",
+    ],
+    [
+      { reason: "denied", code: "approval_required" },
+      "needs an approval from a workspace member other than the author",
+    ],
+    [
+      { reason: "conflict", code: "repository_unhealthy" },
+      "Oxagen merges nothing until they are fixed.",
+    ],
+    [
+      { reason: "conflict", code: "too_many_files" },
+      "This steering PR changes too many files to merge.",
+    ],
+    [
+      { reason: "conflict", code: "version_mismatch" },
+      "is not the one in force. Run the checks again.",
+    ],
+    [
+      { reason: "conflict", code: "production_branch_missing" },
+      "The repository has no production branch to merge into.",
+    ],
+    [
+      { reason: "conflict", code: "production_branch_moving" },
+      "The production branch kept moving while Oxagen was merging. Merge again.",
+    ],
+    [
+      { reason: "conflict", code: "checks_failed" },
+      "the checks failed after Oxagen brought the branch up to date",
+    ],
+    [
+      { reason: "conflict", code: "some_new_reason" },
+      "The change was refused: some_new_reason. Nothing was changed.",
+    ],
+    [
+      { reason: "unavailable", code: "tool_not_registered" },
+      "Oxagen has not registered this action yet.",
     ],
     [
       { reason: "invalid", code: "invalid_input", field: "reason" },

@@ -149,6 +149,16 @@ export const routes = {
     q?: { agent?: string },
   ): SafePath =>
     withQuery(pathOf("welcome", org, ws, step), { agent: q?.agent }),
+  /**
+   * Onboarding's connect step: GitHub (both Oxagen apps) or a GitLab group,
+   * before the organization has a workspace. `new-workspace` is a reserved
+   * workspace slug, so the path never shadows `/welcome/{org}/{ws}`.
+   */
+  welcomeConnect: (org: string): SafePath =>
+    pathOf("welcome", org, "new-workspace", "connect"),
+  /** Onboarding's first workspace: its name, then its steering repo's provisioning. */
+  welcomeFirstWorkspace: (org: string): SafePath =>
+    pathOf("welcome", org, "new-workspace"),
   invite: (token: string): SafePath => pathOf("invite", token),
   cliAuthorize: (query: Readonly<Record<string, string>>): SafePath =>
     withQuery(mint("/cli/authorize"), query),

@@ -1,5 +1,6 @@
-// Context PRs (#2961; spec §10.3): the proposals on this page that have a pull
-// request, as a table, and the one the URL selects as the Context PR panel.
+// Steering PRs (#2961; spec §10.3): the proposals on this page that have a
+// pull request, as a table, and the one the URL selects as the steering PR
+// panel.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { ContextPr, ProposalPage } from "@/data/contracts/steering";
@@ -19,6 +20,7 @@ export function ContextPrs({
   read,
   selected,
   pr,
+  canMergeWithoutReview = false,
 }: {
   at: SteeringAt;
   offset: number;
@@ -27,6 +29,8 @@ export function ContextPrs({
   selected: string | null;
   /** get_context_pr for `selected`; null when nothing is selected. */
   pr: Read<ContextPr> | null;
+  /** The viewer may merge a steering PR no one has approved. */
+  canMergeWithoutReview?: boolean;
 }) {
   const t = useTranslations("steering.prs");
   const record = useTranslations("ui.record");
@@ -100,7 +104,13 @@ export function ContextPrs({
       <Section id="steering-prs" title={title} lead={t("lead")}>
         {body}
       </Section>
-      {pr === null ? null : <ContextPrPanel at={at} read={pr} />}
+      {pr === null ? null : (
+        <ContextPrPanel
+          at={at}
+          read={pr}
+          canMergeWithoutReview={canMergeWithoutReview}
+        />
+      )}
     </>
   );
 }

@@ -89,7 +89,7 @@
     "bind_main_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
-      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cBind as main repo\u201d on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
+      "entry": "Repositories \u203a GitHub connection and main repository \u2014 \u201cBind as main repo\u201d on the picked repository (features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/main-repository.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
@@ -182,7 +182,7 @@
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: name, slug and the main repository as owner/name, which create_workspace binds in the same transaction (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: a name only, then the steering repo status create_workspace returns and a link to Repositories (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-m0-workspace-repositories"
@@ -852,17 +852,7 @@
       "entry": "Repositories \u203a the Not linked table of repositories the installation reaches, and the main-repository picker (features/repositories/bound-repositories.tsx, features/repositories/main-repository.tsx, features/repositories/actions.ts)",
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-mc-repositories-page",
-      "also": [
-        {
-          "route": "/[org]",
-          "page": "apps/app/src/app/[org]/page.tsx",
-          "entry": "Organization › Create a workspace: the Main repository select offers the repositories the organization's installations reach, and Production branch the default branch create_workspace records (features/organization/workspace-reads.ts, features/organization/workspace-actions.tsx)",
-          "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
-          "verifiedAt": "2026-09-24",
-          "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
-        }
-      ]
+      "verifiedBy": "session-mc-repositories-page"
     },
     "list_interjections": {
       "route": "/[org]/[ws]",

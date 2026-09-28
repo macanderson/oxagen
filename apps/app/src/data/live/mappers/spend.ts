@@ -174,6 +174,9 @@ function toFinding(finding: FindingOut): z.input<typeof SpendFinding> {
     window: finding.window,
     why: finding.why,
     fix: finding.fix,
+    ...(finding.recommendation === undefined
+      ? {}
+      : { recommendation: finding.recommendation }),
     runs: finding.runs,
     calls: finding.calls,
   };

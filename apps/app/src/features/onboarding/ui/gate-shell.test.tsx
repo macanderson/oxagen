@@ -44,7 +44,7 @@ function rail() {
 }
 
 describe("GateShell", () => {
-  it("on step 1: the email, Cancel, the rail with step 1 current and 2 and 3 disabled, and the caption", () => {
+  it("on step 1: the email, Cancel, the rail with step 1 current and steps 2 to 5 disabled, and the caption", () => {
     render(
       <IntlProvider>
         <GateShell
@@ -63,18 +63,23 @@ describe("GateShell", () => {
     const steps = rail();
     expect(steps.map((s) => [s.step, s.state])).toEqual([
       ["organization", "current"],
+      ["connect", "todo"],
+      ["workspace", "todo"],
       ["wrap", "todo"],
       ["run", "todo"],
     ]);
     expect(steps[0]?.control).toHaveAttribute("aria-current", "step");
     expect(steps[0]?.control).toHaveTextContent("Name the organization");
-    expect(steps[1]?.control).toBeDisabled();
-    expect(steps[2]?.control).toBeDisabled();
+    expect(steps[1]?.control).toHaveTextContent("Connect a code host");
+    expect(steps[2]?.control).toHaveTextContent("Create the first workspace");
+    for (const step of steps.slice(1)) {
+      expect(step.control).toBeDisabled();
+    }
     expect(screen.getByText(CAPTION)).toBeInTheDocument();
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
-  it("on step 3: steps 1 and 2 are done and open their pages, step 3 is current", () => {
+  it("on step 5: steps 1 to 4 are done and open their pages, step 5 is current", () => {
     const wrap = routes.welcome("acme", "core", "wrap", { agent: "agt_1" });
     render(
       <IntlProvider>
@@ -82,18 +87,37 @@ describe("GateShell", () => {
           step="run"
           email={null}
           cancel={routes.fleet("acme", "core")}
-          back={{ organization: routes.newOrganization(), wrap }}
+          back={{
+            organization: routes.newOrganization(),
+            connect: routes.welcomeConnect("acme"),
+            workspace: routes.welcomeFirstWorkspace("acme"),
+            wrap,
+          }}
         >
           <p>body</p>
         </GateShell>
       </IntlProvider>,
     );
     const steps = rail();
-    expect(steps.map((s) => s.state)).toEqual(["done", "done", "current"]);
+    expect(steps.map((s) => s.state)).toEqual([
+      "done",
+      "done",
+      "done",
+      "done",
+      "current",
+    ]);
     expect(steps[0]?.control).toHaveAttribute("href", "/new-organization");
-    expect(steps[1]?.control).toHaveAttribute("href", wrap);
-    expect(steps[1]?.control).toHaveTextContent("✓Wrap an agentdone");
-    expect(steps[2]?.control).toHaveAttribute("aria-current", "step");
+    expect(steps[1]?.control).toHaveAttribute(
+      "href",
+      "/welcome/acme/new-workspace/connect",
+    );
+    expect(steps[2]?.control).toHaveAttribute(
+      "href",
+      "/welcome/acme/new-workspace",
+    );
+    expect(steps[3]?.control).toHaveAttribute("href", wrap);
+    expect(steps[3]?.control).toHaveTextContent("✓Wrap an agentdone");
+    expect(steps[4]?.control).toHaveAttribute("aria-current", "step");
     expect(screen.queryByTestId("gate-email")).toBeNull();
     expect(screen.getByTestId("gate-cancel")).toHaveAttribute(
       "href",

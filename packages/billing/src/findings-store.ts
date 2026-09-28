@@ -28,6 +28,7 @@ import {
   notInArray,
   sql,
 } from "drizzle-orm";
+import { FRAME_TOKEN_CLASSES, type FrameTokenClass } from "./class-cost";
 import {
   divideHalfEven,
   priceFrame,
@@ -42,12 +43,33 @@ import {
   FINDINGS_WINDOW_DAYS,
   microsOf,
   runsWithRepeats,
+  type DetectReads,
   type FindingDraft,
+  type FrameClassPrice,
+  type FrameClassPrices,
+  type FrameContextPart,
+  type FrameCoverage,
   type PricedRequestFrame,
+  type RunCompaction,
+  type RunFirstPrompt,
   type ToolCallObservation,
   type UnproductiveSpend,
 } from "./findings";
-import { loadPriceBookSlice, type PriceBook } from "./price-book";
+import {
+  readCompactions,
+  readFileChanges,
+  readFirstPrompts,
+  readOutcomes,
+  readRunRefs,
+} from "./findings-run-facts";
+import {
+  indexPriceBookByClass,
+  loadPriceBookSlice,
+  resolvePriceEntryFromClassBook,
+  type PriceBook,
+  type PriceTokenClass,
+} from "./price-book";
+import type { OutcomeRow } from "./run-pr-outcomes";
 
 const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
@@ -57,8 +79,9 @@ const claims = schema.findingClaims;
 /** Tool calls one pass reads, newest first; past this the tool-call window starts at the oldest call read. */
 export const TOOL_CALL_READ_MAX = 200_000;
 /**
- * Runs one pass reads model-call frames for, most repeats first. A repeat on
- * a run past this cap is cited, and nothing prices it (ADR-208).
+ * Runs one pass reads model-call frames for: most repeats first, then the
+ * dearest. A run past this cap has no frames, and `frameCoverage.capped`
+ * counts it (ADR-208, ADR-210).
  */
 export const FRAME_RUNS_READ_MAX = 200;
 /** Model-call frame reads one pass runs at once. */
@@ -102,6 +125,38 @@ interface FindingsPassDeps {
   ) => Promise<Map<string, PricedRequestFrame[]>>;
   /** Per fingerprint, the latest decision on it. */
   readDecisions: (scope: FindingsScope) => Promise<Map<string, Date>>;
+  /**
+   * Each run's frame source, by run public id. Without it, a wrapped run's
+   * source is its root and the chains its tool calls name, and a ledger run
+   * has none.
+   */
+  readRunRefs?: (
+    scope: FindingsScope,
+    runs: readonly RunTotalsRecord[],
+    runIdBySession: ReadonlyMap<string, string>,
+  ) => Promise<Map<string, FrameRunRef>>;
+  /** Each wrapped run's first prompt, by run public id; `rootByRun` maps a run to its root session. */
+  readFirstPrompts?: (
+    scope: FindingsScope,
+    rootByRun: ReadonlyMap<string, string>,
+    from: Date,
+  ) => Promise<Map<string, RunFirstPrompt>>;
+  /** Whether each wrapped run changed a file, by run public id. */
+  readFileChanges?: (
+    scope: FindingsScope,
+    rootByRun: ReadonlyMap<string, string>,
+  ) => Promise<Map<string, boolean>>;
+  /** Each wrapped run's compactions in time order, by run public id. */
+  readCompactions?: (
+    scope: FindingsScope,
+    rootByRun: ReadonlyMap<string, string>,
+    from: Date,
+  ) => Promise<Map<string, RunCompaction[]>>;
+  /** Each run's pull request outcomes, by run public id. */
+  readOutcomes?: (
+    scope: FindingsScope,
+    runIds: readonly string[],
+  ) => Promise<Map<string, OutcomeRow[]>>;
   write: (
     scope: FindingsScope,
     passStartedAt: Date,
@@ -197,6 +252,159 @@ export function frameReads(
   return out;
 }
 
+/** Each wrapped run's root session uuid, by run public id. */
+export function tachoRoots(
+  runs: readonly RunTotalsRecord[],
+  runIdBySession: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const tacho = new Set(
+    runs.filter((r) => r.runSource === "tacho").map((r) => r.runId),
+  );
+  const out = new Map<string, string>();
+  for (const [root, runId] of runIdBySession)
+    if (tacho.has(runId)) out.set(runId, root);
+  return out;
+}
+
+/**
+ * Two sources for one run, as one: a wrapped run's sessions are the union of
+ * both, root first. Otherwise the store's source wins.
+ */
+function mergeRef(stored: FrameRunRef, fromCalls: FrameRunRef): FrameRunRef {
+  if (
+    stored.kind !== "tacho" ||
+    fromCalls.kind !== "tacho" ||
+    stored.rootSessionUuid !== fromCalls.rootSessionUuid
+  )
+    return stored;
+  const root = stored.rootSessionUuid;
+  const rest = new Set([...stored.sessionUuids, ...fromCalls.sessionUuids]);
+  rest.delete(root);
+  return {
+    kind: "tacho",
+    rootSessionUuid: root,
+    sessionUuids: [root, ...[...rest].sort()],
+  };
+}
+
+/**
+ * The runs a pass reads model-call frames for, and what the plan left out.
+ * Every run in the window with a frame source is ranked: most repeats first,
+ * then the dearest, then by run id. The first `limit` are read. `capped`
+ * counts the ranked runs past the limit, and `unmatched` the runs with no
+ * source, so a detector can tell a run with no frames from a run the pass did
+ * not read (ADR-210).
+ */
+export function planFrameReads(
+  runs: readonly RunTotalsRecord[],
+  refs: ReadonlyMap<string, FrameRunRef>,
+  repeatsByRun: ReadonlyMap<string, number>,
+  limit: number,
+): { reads: FrameRead[]; coverage: FrameCoverage } {
+  const cost = (r: RunTotalsRecord) => r.costMicros ?? -1n;
+  const ranked = [...runs].sort((a, b) => {
+    const ra = repeatsByRun.get(a.runId) ?? 0;
+    const rb = repeatsByRun.get(b.runId) ?? 0;
+    if (ra !== rb) return rb - ra;
+    const ca = cost(a);
+    const cb = cost(b);
+    if (ca !== cb) return ca > cb ? -1 : 1;
+    return a.runId < b.runId ? -1 : a.runId > b.runId ? 1 : 0;
+  });
+  const matched: FrameRead[] = [];
+  let unmatched = 0;
+  for (const run of ranked) {
+    const ref = refs.get(run.runId);
+    if (ref === undefined) unmatched += 1;
+    else matched.push({ runId: run.runId, ref });
+  }
+  const reads = matched.slice(0, Math.max(0, limit));
+  return {
+    reads,
+    coverage: {
+      runs: runs.length,
+      read: reads.length,
+      capped: matched.length - reads.length,
+      unmatched,
+    },
+  };
+}
+
+/**
+ * Each run's frame source: the store's, when it read one, merged with the
+ * chains the run's tool calls name.
+ */
+export function frameSources(
+  runs: readonly RunTotalsRecord[],
+  rows: readonly ToolCallObservationRow[],
+  runIdBySession: ReadonlyMap<string, string>,
+  stored: ReadonlyMap<string, FrameRunRef>,
+): Map<string, FrameRunRef> {
+  const every = new Map(runs.map((r) => [r.runId, 0]));
+  const out = new Map<string, FrameRunRef>();
+  for (const read of frameReads(
+    rows,
+    runIdBySession,
+    every,
+    Number.POSITIVE_INFINITY,
+  ))
+    out.set(read.runId, read.ref);
+  for (const [runId, ref] of stored) {
+    if (!every.has(runId)) continue;
+    const fromCalls = out.get(runId);
+    out.set(runId, fromCalls === undefined ? ref : mergeRef(ref, fromCalls));
+  }
+  return out;
+}
+
+/** One class's price entry at a frame's instant, as a frame carries it. */
+function classPriceOf(
+  classIndex: ReadonlyMap<PriceTokenClass, PriceBook>,
+  orgId: string,
+  model: string,
+  at: Date,
+  c: FrameTokenClass,
+): FrameClassPrice | null {
+  const entry = resolvePriceEntryFromClassBook(classIndex.get(c) ?? [], {
+    orgId,
+    modelId: model,
+    at,
+  });
+  return entry === null
+    ? null
+    : {
+        entryId: entry.id,
+        microsPerMillion: entry.microsPerMillion,
+        currency: entry.currency,
+        source: entry.source,
+      };
+}
+
+/** Every class's price entry at a frame's instant. */
+function classPricesOf(
+  classIndex: ReadonlyMap<PriceTokenClass, PriceBook>,
+  orgId: string,
+  model: string,
+  at: Date,
+): FrameClassPrices {
+  const out = {} as Record<FrameTokenClass, FrameClassPrice | null>;
+  for (const c of FRAME_TOKEN_CLASSES)
+    out[c] = classPriceOf(classIndex, orgId, model, at, c);
+  return out;
+}
+
+function toContextParts(
+  row: ModelCallFrameRow,
+): readonly FrameContextPart[] | undefined {
+  return row.systemContextParts?.map((p) => ({
+    kind: p.kind,
+    name: p.name,
+    ...(p.provider === undefined ? {} : { provider: p.provider }),
+    digest: p.digest,
+    tokens: p.tokens,
+  }));
+}
+
 function toModelCallFrame(row: ModelCallFrameRow): ModelCallFrame {
   return {
     at: new Date(row.at),
@@ -235,6 +443,9 @@ function rowContent(row: ModelCallFrameRow): string {
     // Last, so frames that already differ keep the order they had before the
     // chain was read. Two chains' frames of one instant differ here alone.
     row.sessionUuid ?? null,
+    // After the chain, for the same reason: two frames that differ only in
+    // their system context keep one order from pass to pass.
+    row.systemContextDigest ?? null,
   ]);
 }
 
@@ -249,12 +460,23 @@ function rowContent(row: ModelCallFrameRow): string {
  *
  * Each frame names its chain as a tool call does: null on `rootSessionUuid`,
  * the chain's uuid otherwise, and absent when the row names none.
+ *
+ * Each frame also carries its model, its tokens and price entry per class,
+ * its tool-definition, context-frame, and steering tokens, and its system
+ * context digest. A recorder lists a digest's parts on the first frame that
+ * carries the digest, so a later frame with the same digest takes the parts
+ * the run last listed for it. A frame whose digest no earlier frame listed has
+ * null parts (ADR-210).
  */
 export function pricedFrames(
   book: PriceBook,
   orgId: string,
   rows: readonly ModelCallFrameRow[],
   rootSessionUuid: string | null,
+  classIndex: ReadonlyMap<
+    PriceTokenClass,
+    PriceBook
+  > = indexPriceBookByClass(book),
 ): PricedRequestFrame[] {
   const ordered = rows
     .map((row) => ({ row, micros: microsOf(row.at), text: rowContent(row) }))
@@ -264,6 +486,7 @@ export function pricedFrames(
         (a.text < b.text ? -1 : a.text > b.text ? 1 : 0),
     );
   const atCount = new Map<string, number>();
+  const partsByDigest = new Map<string, readonly FrameContextPart[]>();
   const out: PricedRequestFrame[] = [];
   for (const { row, micros } of ordered) {
     const n = atCount.get(row.at) ?? 0;
@@ -271,6 +494,10 @@ export function pricedFrames(
     const frame = toModelCallFrame(row);
     const priced = priceFrame(book, orgId, frame);
     const t = frame.tokens;
+    const digest = row.systemContextDigest ?? null;
+    const listed = toContextParts(row);
+    if (digest !== null && listed !== undefined)
+      partsByDigest.set(digest, listed);
     out.push({
       key: `${row.at}#${n}`,
       at: frame.at,
@@ -293,6 +520,16 @@ export function pricedFrames(
             sessionUuid:
               row.sessionUuid === rootSessionUuid ? null : row.sessionUuid,
           }),
+      model: frame.model,
+      provider: frame.provider,
+      classTokens: { ...t },
+      classPrices: classPricesOf(classIndex, orgId, frame.model, frame.at),
+      toolDefinitionTokens: row.toolDefinitionTokens,
+      contextFrameTokens: row.contextFrameTokens,
+      steeringTokens: row.steeringTokens,
+      systemContextDigest: digest,
+      systemContextParts:
+        digest === null ? null : (partsByDigest.get(digest) ?? null),
     });
   }
   return out;
@@ -312,10 +549,14 @@ async function readFrames(
   }
   const all = read.flatMap((r) => r.rows).map(toModelCallFrame);
   const book = await loadPriceBookSlice(runPriceSlice(scope.orgId, all));
+  const classIndex = indexPriceBookByClass(book);
   const out = new Map<string, PricedRequestFrame[]>();
   for (const { run, rows } of read) {
     const root = run.ref.kind === "tacho" ? run.ref.rootSessionUuid : null;
-    out.set(run.runId, pricedFrames(book, scope.orgId, rows, root));
+    out.set(
+      run.runId,
+      pricedFrames(book, scope.orgId, rows, root, classIndex),
+    );
   }
   return out;
 }
@@ -596,15 +837,21 @@ const productionDeps: FindingsPassDeps = {
   readToolCalls: readTachoToolCallObservations,
   readFrames,
   readDecisions,
+  readRunRefs,
+  readFirstPrompts,
+  readFileChanges,
+  readCompactions,
+  readOutcomes,
   write: writeFindings,
 };
 
 /**
- * One findings pass over a workspace's trailing window: read the run rows and
- * the tool calls, read and price the model-call frames of the runs with
- * repeats, detect, and replace the open findings and their claims. Throws when a store
- * is degraded: the job retries rather than writing findings from missing
- * frames.
+ * One findings pass over a workspace's trailing window: read the run rows,
+ * the tool calls, and each run's first prompt, file changes, compactions, and
+ * outcomes; read and price the model-call frames of up to
+ * `FRAME_RUNS_READ_MAX` runs; detect; and replace the open findings and their
+ * claims. Throws when a store is degraded: the job retries rather than
+ * writing findings from missing frames.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
@@ -627,9 +874,22 @@ export async function runFindingsPass(
   const toolCalls = toObservations(rows, runIdBySession).filter((c) =>
     runIds.has(c.runId),
   );
-  const reads = frameReads(
-    rows,
-    runIdBySession,
+  const rootByRun = tachoRoots(runs, runIdBySession);
+  const [stored, firstPrompts, fileChanges, compactions, outcomes] =
+    await Promise.all([
+      deps.readRunRefs?.(scope, runs, runIdBySession) ??
+        new Map<string, FrameRunRef>(),
+      deps.readFirstPrompts?.(scope, rootByRun, start) ??
+        new Map<string, RunFirstPrompt>(),
+      deps.readFileChanges?.(scope, rootByRun) ?? new Map<string, boolean>(),
+      deps.readCompactions?.(scope, rootByRun, start) ??
+        new Map<string, RunCompaction[]>(),
+      deps.readOutcomes?.(scope, [...runIds]) ??
+        new Map<string, OutcomeRow[]>(),
+    ]);
+  const { reads, coverage } = planFrameReads(
+    runs,
+    frameSources(runs, rows, runIdBySession, stored),
     runsWithRepeats(toolCalls),
     FRAME_RUNS_READ_MAX,
   );
@@ -637,14 +897,20 @@ export async function runFindingsPass(
     reads.length === 0
       ? new Map<string, PricedRequestFrame[]>()
       : await deps.readFrames(scope, reads);
-  const drafts = detectFindings({
+  const input: DetectReads = {
     window: { start, end },
     toolWindowStart: toolWindowStart(start, rows, TOOL_CALL_READ_MAX),
     runs,
     toolCalls,
     decidedSince,
     frames,
-  });
+    firstPrompts,
+    fileChanges,
+    compactions,
+    outcomes,
+    frameCoverage: coverage,
+  };
+  const drafts = detectFindings(input);
   return { findings: await deps.write(scope, end, decidedSince, drafts) };
 }
 

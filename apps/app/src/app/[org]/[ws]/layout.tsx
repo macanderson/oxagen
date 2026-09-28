@@ -2,6 +2,7 @@ import { type ReactNode, Suspense } from "react";
 import { dataSource } from "@/data/source";
 import { CreateHost } from "@/features/create";
 import { ShellWorkspace, WorkspaceDenied } from "@/features/shell";
+import { SteeringRepoHealthBanner } from "@/features/steering-repo";
 import { resolveWorkspaceViewer } from "@/server/viewer";
 import { PageSkeleton } from "@/ui/page-states";
 
@@ -46,6 +47,9 @@ async function WorkspaceGate({
   const { ctx } = viewer;
   return (
     <>
+      <Suspense fallback={null}>
+        <SteeringRepoHealthBanner ctx={ctx} />
+      </Suspense>
       {children}
       <CreateHost org={ctx.orgSlug} ws={ctx.wsSlug} wsName={ctx.wsName} />
       <Suspense fallback={null}>
