@@ -3,7 +3,6 @@
 import { describe, expect, it } from "vitest";
 import { CompileError } from "./compile";
 import { graphqlSender, grpcSender, httpSender, mcpSender } from "./execute";
-import { importGraphql } from "./graphql";
 import { importGrpc } from "./grpc";
 import { lint, type LintContext, type ServerFolder } from "./lint";
 import { NotBuiltError } from "./not-built";
@@ -18,7 +17,6 @@ const syncStubs: Array<[string, () => unknown]> = [
 
 const asyncStubs: Array<[string, () => Promise<unknown>]> = [
   ["openapi", () => importOpenApi(stub())],
-  ["graphql", () => importGraphql(stub())],
   ["grpc", () => importGrpc(stub())],
 ];
 
