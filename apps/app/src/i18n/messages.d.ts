@@ -9606,7 +9606,6 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
-        approvalRequired: string;
         repositoryUnhealthy: string;
         tooManyFiles: string;
         versionMismatch: string;

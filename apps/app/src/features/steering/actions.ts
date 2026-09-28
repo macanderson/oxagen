@@ -8,6 +8,7 @@
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
@@ -189,23 +190,19 @@ export async function forgetMemory(
     : result;
 }
 
-// The steering PR writes the platform has not registered yet (#4518). Each
-// one is a local contract under the name the platform will register, so the
+// The steering PR writes the platform has not registered yet (#4518):
+// approve_context_pr, drop_memory_record and restore_managed_block. Each one
+// is a local contract under the name the platform will register, so the
 // kernel answers `unavailable` with code `tool_not_registered` today, and the
 // same call reaches the handler, unchanged, once the capability lands. The
-// schemas are the proposed shapes. The platform contract replaces each one.
+// schemas are the proposed shapes. The platform contract replaces each one,
+// as merge_pr_without_review's did (#4528).
 const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
 
 const approveContextPrContract = {
   name: "approve_context_pr",
   input: z.object({ proposalId: PROPOSAL_ID }).strict(),
   output: z.object({ approvals: z.number().int().nonnegative() }),
-};
-
-const mergePrWithoutReviewContract = {
-  name: "merge_pr_without_review",
-  input: contextPrMerge.input,
-  output: contextPrMerge.output,
 };
 
 const dropMemoryRecordContract = {
@@ -252,7 +249,7 @@ export async function mergePrWithoutReview(
   proposalId: string,
 ): Promise<ActionResult<{ commit: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, mergePrWithoutReviewContract, {
+  const result = await kernelWrite(ctx, contextPrMergeWithoutReview, {
     proposalId,
   });
   return result.ok
