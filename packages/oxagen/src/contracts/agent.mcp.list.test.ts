@@ -159,6 +159,47 @@ describe("agent.mcp.list capability", () => {
     ).toThrow();
   });
 
+  it("carries each server's context tokens and weekly price, and reads an older answer as null (#4537)", () => {
+    const server = {
+      publicId: "mcp_a",
+      name: "github",
+      transportType: "sse",
+      endpointUrl: "https://mcp.github.com/sse",
+      healthStatus: "healthy",
+      lastHealthcheckAt: null,
+      toolCount: 3,
+    } as const;
+    const weeklyPrice = {
+      micros: "249600",
+      currency: "USD",
+      basis: "estimated",
+    } as const;
+    const parsed = agentMcpList.output.parse({
+      servers: [{ ...server, contextTokens: 5_200, weeklyPrice }],
+    });
+    expect(parsed.servers[0]?.contextTokens).toBe(5_200);
+    expect(parsed.servers[0]?.weeklyPrice).toEqual(weeklyPrice);
+    const older = agentMcpList.output.parse({ servers: [server] });
+    expect(older.servers[0]?.contextTokens).toBeNull();
+    expect(older.servers[0]?.weeklyPrice).toBeNull();
+    expect(() =>
+      agentMcpList.output.parse({
+        servers: [{ ...server, contextTokens: -1 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      agentMcpList.output.parse({
+        servers: [
+          {
+            ...server,
+            contextTokens: 5_200,
+            weeklyPrice: { ...weeklyPrice, micros: "0.5" },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it("is registered in the capability registry", () => {
     expect(getCapability("list_mcp_servers")).toBe(agentMcpList);
   });

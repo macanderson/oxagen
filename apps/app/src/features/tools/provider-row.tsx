@@ -10,9 +10,18 @@
 // authenticates, with an OAuth token's expiry (#4132). Toolbelts, Agents and
 // Last import have no field on any read yet (#3852, #3917), and each cell
 // says so.
+//
+// Weekly price is what the provider's tool definitions cost the workspace over
+// the last 7 days, sent on every model call (#4537). The server prices it from
+// the book at each call's rate, and the row prints the figure it returns: the
+// app never multiplies a rate by tokens (ADR-060). The cell says not recorded
+// when no listing names the provider, and not priced when the tokens are
+// known and the week has no priced call.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import type { McpServer } from "@/data/contracts/tools";
 import { buttonSecondary, mono } from "@/ui/control-styles";
+import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { ProviderIcon } from "@/ui/provider-icon";
 import { cell, numericCell } from "@/ui/table";
@@ -30,6 +39,51 @@ import {
   ReconnectProvider,
 } from "./provider-status";
 import type { ToolsAt } from "./view";
+
+/** A provider's weekly price as the server priced it, with the tokens it priced. */
+function ProviderWeeklyPrice({ server }: { server: McpServer }) {
+  const t = useTranslations("tools.providers");
+  const locale = useLocale();
+  const { contextTokens: tokens, weeklyPrice } = server;
+  if (tokens === null) {
+    return (
+      <span
+        data-testid={`provider-weekly-${server.id}`}
+        data-state="absent"
+        className="text-xs text-muted-foreground"
+      >
+        {t("weeklyAbsent")}
+      </span>
+    );
+  }
+  const count = formatCount(tokens, locale);
+  if (weeklyPrice === null) {
+    return (
+      <span
+        data-testid={`provider-weekly-${server.id}`}
+        data-state="unpriced"
+        className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground"
+      >
+        <span>{t("weeklyUnpriced")}</span>
+        <span className="text-[10.5px]">
+          {t("weeklyTokenCount", { tokens: count })}
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span
+      data-testid={`provider-weekly-${server.id}`}
+      className="flex flex-col items-end gap-0.5"
+      title={t("weeklyTitle", { tokens: count })}
+    >
+      <Money value={weeklyPrice} />
+      <span className="text-[10.5px] text-muted-foreground">
+        {t("weeklyTokens", { tokens: count })}
+      </span>
+    </span>
+  );
+}
 
 export function ProviderRow({
   at,
@@ -104,6 +158,9 @@ export function ProviderRow({
             {t("pinned", { count: server.toolCount })}
           </span>
         </span>
+      </td>
+      <td className={numericCell}>
+        <ProviderWeeklyPrice server={server} />
       </td>
       <td className={cell}>
         <NotBackedValue gap="toolbelts" />

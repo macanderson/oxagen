@@ -46,6 +46,9 @@ vi.mock("./actions", () => ({
   removePriceEntryAction: vi.fn(),
   setGatewayPolicyAction: vi.fn(),
 }));
+vi.mock("./operator-ranking-actions", () => ({
+  setOperatorPseudonymsAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -124,6 +127,7 @@ const findings = vi.fn<DataSource["spend"]["findings"]>();
 const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
+const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -172,6 +176,7 @@ const source: DataSource = {
     fleet: vi.fn(),
     drill,
     waste,
+    operatorRanking,
     budgets,
     gatewayPolicy,
     findings,
@@ -399,6 +404,7 @@ beforeEach(() => {
   findingEvidence.mockReset();
   priceBook.mockReset();
   unpricedModels.mockReset();
+  operatorRanking.mockReset();
 });
 
 afterEach(async () => {
@@ -839,6 +845,123 @@ describe("Spend › Coaching", () => {
     expect(panel).toHaveTextContent("Stop the retry storms");
     expect(panel.querySelectorAll("[data-signal]")).toHaveLength(13);
     expect(panel.querySelector("[data-testid=money]")).toBeNull();
+  });
+
+  it("links each operator signal to the operator ranking", async () => {
+    loaded();
+    await renderSpend(["coaching"]);
+    const links = document.querySelectorAll("a[data-signal]");
+    expect(links).toHaveLength(6);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/acme/core-platform/spend/operator");
+    }
+    expect(
+      screen.getByRole("link", { name: "Get to one prompt per session" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/operator");
+  });
+});
+
+describe("Spend › By operator › Operator ranking", () => {
+  const owner = unsafeMint(WsCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+    wsRole: "member",
+  });
+
+  it("reads the ranking for an org Owner and prints it above the operator table", async () => {
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: { micros: "5000000", currency: "USD" },
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: {
+              kind: "named",
+              key: "prn_marcusbell",
+              facts: MARCUS,
+            },
+            unproductive: { micros: "5000000", currency: "USD" },
+            shareOfTotal: 1,
+            unproductiveShare: 0.4,
+            runs: 1,
+            topRuns: [
+              {
+                runId: "arun_01",
+                unproductive: { micros: "5000000", currency: "USD" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["operator"], undefined, owner);
+    expect(operatorRanking).toHaveBeenCalledWith(owner, PERIOD);
+    const ranking = screen.getByRole("table", { name: "Operator ranking" });
+    const table = screen.getByRole("table", { name: "By operator" });
+    expect(
+      ranking.compareDocumentPosition(table) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(ranking).toHaveTextContent("$5.00");
+    expect(ranking).toHaveTextContent("Marcus Bell");
+    expect(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the ranking for the workspace Owner and hides the pseudonym switch an org role sets", async () => {
+    const wsOwner = ctxAs("owner");
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: { micros: "0", currency: "USD" },
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [],
+      }),
+    );
+    await renderSpend(["operator"], undefined, wsOwner);
+    expect(operatorRanking).toHaveBeenCalledWith(wsOwner, PERIOD);
+    expect(
+      screen.getByText("No run has unproductive spend in this period."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
+  });
+
+  it("asks no ranking for a member and says who can read it (negative)", async () => {
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    await renderSpend(["operator"]);
+    expect(operatorRanking).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("table", { name: "Operator ranking" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(/or the workspace Owner, can read the operator ranking/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "By operator" })).toBeVisible();
   });
 });
 

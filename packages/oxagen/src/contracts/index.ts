@@ -122,6 +122,8 @@ import { evidenceDisclosureGrainSet } from "./evidence.disclosure_grain.set";
 import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
+import { spendOperatorRanking } from "./spend.operator_ranking";
+import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -825,6 +827,8 @@ export {
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1243,6 +1247,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendGet,
   spendDrill,
   spendWasteList,
+  spendOperatorRanking,
+  spendOperatorPseudonymsSet,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,

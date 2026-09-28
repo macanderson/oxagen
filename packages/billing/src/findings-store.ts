@@ -37,6 +37,7 @@ import {
 } from "./cost-rollup";
 import { runPriceSlice, runTotalsRowToRecord } from "./cost-rollup-store";
 import {
+  type ClaimRow,
   countClaims,
   detectFindings,
   FINDINGS_WINDOW_DAYS,
@@ -775,26 +776,30 @@ async function writeClaims(
       .onConflictDoNothing();
 }
 
+/** One claimed frame as the unproductive spend readers select it. */
+export type UnproductiveClaim = ClaimRow & { currency: string };
+
 /**
- * The unproductive spend headline over a window, and each operator's share
- * of it (ADR-208). It adds the frames that open and applied findings claim
- * and that ran in the window. A frame counts once, under the first detector
- * in counting order that claims it, so the operator totals sum to the
- * headline. A dismissed finding's claims do not count. The org and workspace
- * predicates hold on a tenant or a system transaction alike.
+ * The claims behind the unproductive spend headline over a window (ADR-208):
+ * the frames that open and applied findings claim and that ran in the window.
+ * A dismissed finding's claims do not count. The org and workspace predicates
+ * hold on a tenant or a system transaction alike. `countClaims` turns the
+ * rows into the headline, and the operator ranking reads the same rows for
+ * its runs, so the two agree.
  */
-export async function readUnproductiveSpend(
+export async function readUnproductiveClaims(
   tx: Tx,
   scope: FindingsScope,
   window: { start: Date; end: Date },
-): Promise<UnproductiveSpend> {
-  const rows = await tx
+): Promise<UnproductiveClaim[]> {
+  return tx
     .select({
       detector: claims.detector,
       runId: claims.runId,
       frameKey: claims.frameKey,
       operatorKey: claims.operatorKey,
       costMicros: claims.costMicros,
+      currency: claims.currency,
     })
     .from(claims)
     .innerJoin(findings, eq(findings.id, claims.findingId))
@@ -809,7 +814,20 @@ export async function readUnproductiveSpend(
         inArray(findings.status, ["open", "applied"]),
       ),
     );
-  return countClaims(rows);
+}
+
+/**
+ * The unproductive spend headline over a window, and each operator's share
+ * of it (ADR-208). It adds the frames `readUnproductiveClaims` returns. A
+ * frame counts once, under the first detector in counting order that claims
+ * it, so the operator totals sum to the headline.
+ */
+export async function readUnproductiveSpend(
+  tx: Tx,
+  scope: FindingsScope,
+  window: { start: Date; end: Date },
+): Promise<UnproductiveSpend> {
+  return countClaims(await readUnproductiveClaims(tx, scope, window));
 }
 
 const productionDeps: FindingsPassDeps = {

@@ -308,6 +308,7 @@ export function onboardingSource(reads: Reads): {
       findings: refuse("spend.findings"),
       findingEvidence: refuse("spend.findingEvidence"),
       priceBook: refuse("spend.priceBook"),
+      operatorRanking: refuse("spend.operatorRanking"),
       unpricedModels: refuse("spend.unpricedModels"),
     },
     audit: {

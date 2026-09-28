@@ -2,18 +2,26 @@
 // `runAreas`): the run's cost split across what its tokens were spent on,
 // seven areas, then the dearest tools, then how the split is read.
 //
-// Two areas are recorded. Model output is the output and reasoning classes the
-// rollup counts, at the cost it recorded for them. Tool calls is the tools'
-// result tokens at the run's uncached input rate (#3892, ADR-199): an
-// estimate of input the run's cost already counts, labelled estimate, and
-// never money on top of it. The five other input areas (the first prompt, the
-// follow-ups, the context Oxagen injected, the tool definitions and the system
-// prompt) share the rest of the input, and how a request splits into them is
-// not recorded (`cost.run_totals` carries no `tool_definition_tokens`,
-// `context_frame_tokens` or `steering_tokens` yet, #3894). So each of them
-// draws its meter with an empty track and "not recorded", and the note names
-// the input total they share. A bar's width is its share of the priced total,
-// never of the widest bar, so an area drawn alone is not drawn as the largest.
+// Model output is the output and reasoning classes the rollup counts, at the
+// cost it recorded for them. Tool calls is the tools' result tokens at the
+// run's uncached input rate (#3892, ADR-199): an estimate of input the run's
+// cost already counts, labelled estimate, and never money on top of it.
+//
+// Tool definitions and Context retrievals are the run's standing context
+// (spec detector 2, #4537): the tokens of each source every call after the
+// first re-sent, at the run's cache read rate, or its input rate when it read
+// nothing from the cache. Context retrievals holds two sources, the context
+// frames and the steering Oxagen injected, as the mockup's area does, and its
+// title and the note name each. The recorder estimates the tokens, so each
+// figure is labelled estimate. A source the recorder did not report stays
+// absent, and an area none of whose sources was reported reads not recorded.
+//
+// The first prompt, the follow-ups, and the system prompt share the rest of
+// the input, and how a request splits into them is not recorded. So each of
+// them draws its meter with an empty track and "not recorded", and the note
+// names the input total they share. A bar's width is its share of the priced
+// total, never of the widest bar, so an area drawn alone is not drawn as the
+// largest.
 //
 // Most expensive tools lists the tools by that same estimate, dearest first.
 // A row rolled up before result tokens were recorded carries no tool cost, so
@@ -25,7 +33,7 @@ import {
   ratioOfMicros,
   sumMoney,
 } from "@/data/contracts/money";
-import type { RunCost } from "@/data/contracts/run";
+import type { RunCost, RunCostStandingContext } from "@/data/contracts/run";
 import { eyebrowQuiet, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
@@ -33,7 +41,11 @@ import type { ClassPrices } from "./cost-figures";
 import type { RunMetrics } from "./metrics";
 import { Meter, NoValue, Note, Panel, PanelBody } from "./parts";
 
-/** The six input areas, in the mockup's order; only Tool calls is recorded (#3892). */
+/**
+ * The six input areas, in the mockup's order. Tool calls is recorded
+ * (#3892), and Context retrievals and Tool definitions are recorded when the
+ * run reports its standing context (#4537).
+ */
 const INPUT_AREAS = [
   "initial",
   "followUp",
@@ -47,6 +59,51 @@ const INPUT_AREAS = [
 const TOOL_ROWS = 8;
 
 type ToolCost = NonNullable<RunCost["rollup"]>["byTool"][number];
+
+type StandingSource = NonNullable<RunCostStandingContext["toolDefinitions"]>;
+
+/** The sources in the order the note names them, with the area each falls in. */
+const STANDING_PARTS = [
+  ["toolDefinitions", "definitions"],
+  ["steering", "context"],
+  ["contextFrames", "context"],
+] as const;
+
+/** A standing context area: its re-sent tokens, and their estimated cost when the run was priced. */
+type StandingArea = {
+  tokens: number;
+  cost: MoneyValue | null;
+  /** The sources in the area the recorder reported. */
+  parts: { source: (typeof STANDING_PARTS)[number][0]; tokens: number }[];
+};
+
+/**
+ * The area's sources summed; null when the recorder reported none of them.
+ * Every source is priced at the run's one rate, so the cost is null when any
+ * reported source has none.
+ */
+function standingArea(
+  context: RunCostStandingContext | null,
+  area: "definitions" | "context",
+): StandingArea | null {
+  if (context === null) return null;
+  const reported = STANDING_PARTS.flatMap(([source, inArea]) => {
+    const figure: StandingSource | null = context[source];
+    return inArea === area && figure !== null ? [{ source, figure }] : [];
+  });
+  if (reported.length === 0) return null;
+  const costs = reported.flatMap(({ figure }) =>
+    figure.cost === null ? [] : [figure.cost],
+  );
+  return {
+    tokens: reported.reduce((sum, { figure }) => sum + figure.resentTokens, 0),
+    cost: costs.length === reported.length ? sumMoney(costs) : null,
+    parts: reported.map(({ source, figure }) => ({
+      source,
+      tokens: figure.resentTokens,
+    })),
+  };
+}
 
 /** A listed tool: its name, its calls, and its estimated cost when the rollup priced its results. */
 type ListedTool = { name: string | null; calls: number; cost: MoneyValue | null };
@@ -95,11 +152,14 @@ export function SpendByArea({
   metrics,
   prices,
   byTool,
+  standingContext,
 }: {
   metrics: RunMetrics;
   prices: ClassPrices;
   /** The rollup's per-tool calls, result tokens and estimated cost; null before the rollup. */
   byTool: readonly ToolCost[] | null;
+  /** The context every call after the first re-sent, by source; null when no source was reported. */
+  standingContext: RunCostStandingContext | null;
 }) {
   const t = useTranslations("run.cost.area");
   const tCost = useTranslations("run.cost");
@@ -125,6 +185,73 @@ export function SpendByArea({
     results === null || prices.total === null
       ? null
       : ratioOfMicros(results, prices.total);
+  const standing = {
+    definitions: standingArea(standingContext, "definitions"),
+    context: standingArea(standingContext, "context"),
+  };
+  // Tool definitions, then steering, then context frames, as the finding
+  // names them.
+  const standingParts = [
+    ...(standing.definitions?.parts ?? []),
+    ...(standing.context?.parts ?? []),
+  ];
+  const split = (parts: StandingArea["parts"]) =>
+    new Intl.ListFormat(locale, { type: "conjunction" }).format(
+      parts.map((part) => t(`sources.${part.source}`, { count: part.tokens })),
+    );
+  const meter = (area: (typeof INPUT_AREAS)[number]) => {
+    if (area === "results" && results !== null)
+      return (
+        <Meter
+          label={t(`areas.${area}`)}
+          title={t("resultsTitle")}
+          value={
+            <>
+              <Money value={results} />{" "}
+              <span className={areaTokens}>· {t("estimate")}</span>
+            </>
+          }
+          share={resultsShare}
+          hue="bg-info"
+        />
+      );
+    const figure =
+      area === "definitions" || area === "context" ? standing[area] : null;
+    if (figure !== null)
+      return (
+        <Meter
+          label={t(`areas.${area}`)}
+          title={t("standingTitle", { split: split(figure.parts) })}
+          value={
+            <>
+              {figure.cost === null ? (
+                <NoValue />
+              ) : (
+                <Money value={figure.cost} />
+              )}{" "}
+              <span className={areaTokens}>
+                · {t("tok", { count: formatCount(figure.tokens, locale) })} ·{" "}
+                {t("estimate")}
+              </span>
+            </>
+          }
+          share={
+            figure.cost === null || prices.total === null
+              ? null
+              : ratioOfMicros(figure.cost, prices.total)
+          }
+          hue="bg-info"
+        />
+      );
+    return (
+      <Meter
+        label={t(`areas.${area}`)}
+        value={<NoValue />}
+        share={null}
+        hue="bg-info"
+      />
+    );
+  };
   return (
     <Panel
       title={t("title")}
@@ -146,27 +273,7 @@ export function SpendByArea({
         <div className="grid gap-[9px]">
           {INPUT_AREAS.map((area) => (
             <div key={area} data-testid="area-row" data-area={area}>
-              {area === "results" && results !== null ? (
-                <Meter
-                  label={t(`areas.${area}`)}
-                  title={t("resultsTitle")}
-                  value={
-                    <>
-                      <Money value={results} />{" "}
-                      <span className={areaTokens}>· {t("estimate")}</span>
-                    </>
-                  }
-                  share={resultsShare}
-                  hue="bg-info"
-                />
-              ) : (
-                <Meter
-                  label={t(`areas.${area}`)}
-                  value={<NoValue />}
-                  share={null}
-                  hue="bg-info"
-                />
-              )}
+              {meter(area)}
             </div>
           ))}
           <div data-testid="area-row" data-area="output">
@@ -247,15 +354,27 @@ export function SpendByArea({
         <Note testId="area-note">
           {tokens === null
             ? t("noteNotRolledUp")
-            : t.rich(results === null ? "note" : "noteWithResults", {
-                input: formatCount(tokens.input, locale),
-                cost: () =>
-                  prices.input === null ? (
-                    <NoValue />
-                  ) : (
-                    <Money value={prices.input} />
-                  ),
-              })}
+            : standingParts.length > 0
+              ? t.rich("noteWithStanding", {
+                  input: formatCount(tokens.input, locale),
+                  split: split(standingParts),
+                  results: results === null ? "no" : "yes",
+                  cost: () =>
+                    prices.input === null ? (
+                      <NoValue />
+                    ) : (
+                      <Money value={prices.input} />
+                    ),
+                })
+              : t.rich(results === null ? "note" : "noteWithResults", {
+                  input: formatCount(tokens.input, locale),
+                  cost: () =>
+                    prices.input === null ? (
+                      <NoValue />
+                    ) : (
+                      <Money value={prices.input} />
+                    ),
+                })}
         </Note>
       </PanelBody>
     </Panel>
