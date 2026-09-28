@@ -59,6 +59,13 @@ export function setConversationOpenedSender(
 }
 
 /**
+ * How long a turn waits for the event bus to accept `chat/conversation.opened`.
+ * The title is optional, so a slow bus costs the conversation its model title
+ * at worst, never the turn.
+ */
+export const CONVERSATION_OPENED_SEND_TIMEOUT_MS = 2_000;
+
+/**
  * Send `chat/conversation.opened` for a conversation whose row has committed
  * with a prompt title. Never throws: a missing sender or a failed send is
  * logged, and the conversation keeps its prompt title.
@@ -73,15 +80,44 @@ export async function sendConversationOpened(
     );
     return;
   }
-  try {
-    await sender({
-      ...event,
-      id: conversationOpenedEventId(event.data.conversationId),
-    });
-  } catch (err) {
-    logger.error(
-      { err, conversationId: event.data.conversationId },
-      "chat/conversation.opened dispatch failed; the conversation keeps its prompt title",
+  // Both callers await this on a new conversation's first turn, so a stalled
+  // event bus would hold the turn. The title is optional, so the wait is
+  // bounded: past the limit the turn goes on, and a send that lands later
+  // still names the conversation.
+  const install = sender;
+  const sent = Promise.resolve()
+    .then(() =>
+      install({
+        ...event,
+        id: conversationOpenedEventId(event.data.conversationId),
+      }),
+    )
+    .then(
+      () => "sent" as const,
+      (err: unknown) => {
+        logger.error(
+          { err, conversationId: event.data.conversationId },
+          "chat/conversation.opened dispatch failed; the conversation keeps its prompt title",
+        );
+        return "failed" as const;
+      },
+    );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timed_out">((resolve) => {
+    timer = setTimeout(
+      () => resolve("timed_out"),
+      CONVERSATION_OPENED_SEND_TIMEOUT_MS,
+    );
+  });
+  const outcome = await Promise.race([sent, timedOut]);
+  clearTimeout(timer);
+  if (outcome === "timed_out") {
+    logger.warn(
+      {
+        conversationId: event.data.conversationId,
+        timeoutMs: CONVERSATION_OPENED_SEND_TIMEOUT_MS,
+      },
+      "chat/conversation.opened dispatch is slow; the turn goes on with the prompt title",
     );
   }
 }
