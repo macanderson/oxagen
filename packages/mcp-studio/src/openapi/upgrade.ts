@@ -29,12 +29,19 @@ export function detectVersion(document: unknown, entry: string): OpenApiVersion 
     if (/^3\.1(?:\.\d+)?(?:-[\w.]+)?$/.test(version)) return "3.1";
     if (/^3\.0(?:\.\d+)?(?:-[\w.]+)?$/.test(version)) return "3.0";
   }
-  const declared = typeof version === "string" ? `OpenAPI ${version}` : `swagger ${String(swagger)}`;
   throw new OpenApiImportError(
     "unsupported_version",
-    `${entry} is ${declared}. Import reads OpenAPI 3.1 and 3.0, and Swagger 2.0. ` +
+    `${entry} ${declaredVersion(openapi, swagger, version)}. Import reads OpenAPI 3.1 and 3.0, and Swagger 2.0. ` +
       "Convert the document to one of those versions and import again.",
   );
+}
+
+/** What an unsupported document declares, as the rest of a sentence that opens with its path. */
+function declaredVersion(openapi: unknown, swagger: unknown, version: unknown): string {
+  if (typeof version === "string") return `is OpenAPI ${version}`;
+  if (openapi !== undefined) return "has an openapi field that is not a version number";
+  if (typeof swagger === "string" || typeof swagger === "number") return `is Swagger ${String(swagger)}`;
+  return "has a swagger field that is not a version number";
 }
 
 /** The document as OpenAPI 3.1. It converts in place, so the caller passes a copy it owns. */
