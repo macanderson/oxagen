@@ -7,10 +7,11 @@
 // unterminated fence or bold marker never renders as broken HTML mid-reply
 // (`parseIncompleteMarkdown`). An `oxagen-chart` fence, which `render_chart`
 // hands the assistant, draws as a chart instead of code (`assistant-chart.tsx`).
+import { type ComponentProps, lazy, Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 import { CHART_FENCE_LANGUAGE } from "@oxagen/oxagen/chart-spec";
-import { AssistantChartBlock } from "./assistant-chart";
 
 /**
  * Shiki highlighting for fenced code. `[light, dark]` emits both themes as
@@ -22,11 +23,38 @@ const codePlugin = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
 
+/**
+ * The chart renderer and Recharts behind it load the first time a reply holds
+ * an `oxagen-chart` fence. Every signed-in page renders the shell, which
+ * imports this file, and most replies draw no chart, so a static import would
+ * put Recharts in every page's first download.
+ */
+const AssistantChartBlock = lazy(() =>
+  import("./assistant-chart").then((module) => ({
+    default: module.AssistantChartBlock,
+  })),
+);
+
+function ChartLoading() {
+  const t = useTranslations("shell.assistant.chart");
+  return (
+    <p data-testid="assistant-chart-loading" className="text-muted-foreground">
+      {t("drawing")}
+    </p>
+  );
+}
+
+function LazyChartBlock(props: ComponentProps<typeof AssistantChartBlock>) {
+  return (
+    <Suspense fallback={<ChartLoading />}>
+      <AssistantChartBlock {...props} />
+    </Suspense>
+  );
+}
+
 const PLUGINS = {
   code: codePlugin,
-  renderers: [
-    { language: CHART_FENCE_LANGUAGE, component: AssistantChartBlock },
-  ],
+  renderers: [{ language: CHART_FENCE_LANGUAGE, component: LazyChartBlock }],
 };
 
 /**

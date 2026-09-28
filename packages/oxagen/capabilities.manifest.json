@@ -1234,7 +1234,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false,
+        "unit": true,
         "docs": true,
         "app": true
       }

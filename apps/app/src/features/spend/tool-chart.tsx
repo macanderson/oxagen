@@ -5,13 +5,11 @@
 // holds every one. The bars come from the chart kit through RankedSpendChart.
 // A bar's length is layout and never a printed figure; the money at its end
 // is. A tool whose metric was not recorded is left out of the chart rather
-// than drawn as a zero.
+// than drawn as a zero, and so is a tool billed in another currency than the
+// chart's, which the footer counts.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import {
-  byMicrosDescending,
-  type Money as MoneyValue,
-} from "@/data/contracts/money";
+import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   panel,
   panelFooter,
@@ -19,7 +17,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { RankedSpendChart } from "./ranked-spend-chart";
+import { RankedSpendChart, rankInOneCurrency } from "./ranked-spend-chart";
 
 const METRICS = ["cumulative", "perRun", "perCall"] as const;
 type Metric = (typeof METRICS)[number];
@@ -38,12 +36,12 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
   const t = useTranslations("spend.toolChart");
   const locale = useLocale();
   const [metric, setMetric] = useState<Metric>("cumulative");
-  const ranked = tools
-    .flatMap((tool) => {
+  const { ranked, otherCurrency } = rankInOneCurrency(
+    tools.flatMap((tool) => {
       const value = tool[metric];
       return value === null ? [] : [{ key: tool.key, value }];
-    })
-    .sort((a, b) => byMicrosDescending(a.value, b.value));
+    }),
+  );
   const shown = ranked.slice(0, CHART_MAX);
   return (
     <section
@@ -93,6 +91,9 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
           shown: formatCount(shown.length, locale),
           total: formatCount(tools.length, locale),
         })}
+        {otherCurrency > 0
+          ? ` ${t("otherCurrency", { count: otherCurrency })}`
+          : null}
       </p>
     </section>
   );

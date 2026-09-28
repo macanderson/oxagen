@@ -7,11 +7,7 @@
 // with its column (card tables), so each table keeps a single header row.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import {
-  byMicrosDescending,
-  divMicros,
-  ratioOfMicros,
-} from "@/data/contracts/money";
+import { divMicros, ratioOfMicros } from "@/data/contracts/money";
 import type {
   SpendBudgets,
   SpendDrillKind,
@@ -41,7 +37,7 @@ import {
   UnmeteredNote,
 } from "./figures";
 import { NotBacked } from "./not-backed";
-import { RankedSpendChart } from "./ranked-spend-chart";
+import { RankedSpendChart, rankInOneCurrency } from "./ranked-spend-chart";
 import {
   cacheHitRate,
   classesOf,
@@ -363,11 +359,11 @@ export function AgentTable({
       )}
     </Panel>
   );
-  const ranked = report.rows
-    .flatMap((row) =>
+  const { ranked, otherCurrency } = rankInOneCurrency(
+    report.rows.flatMap((row) =>
       row.cost === null ? [] : [{ key: row.key, value: row.cost }],
-    )
-    .sort((x, y) => byMicrosDescending(x.value, y.value));
+    ),
+  );
   if (ranked.length === 0) return table;
   const shown = ranked.slice(0, CHART_MAX);
   return (
@@ -394,6 +390,9 @@ export function AgentTable({
             shown: formatCount(shown.length, locale),
             total: formatCount(report.rows.length, locale),
           })}
+          {otherCurrency > 0
+            ? ` ${t("agentChart.otherCurrency", { count: otherCurrency })}`
+            : null}
         </p>
       </section>
     </div>

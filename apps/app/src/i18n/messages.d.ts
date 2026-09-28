@@ -9024,6 +9024,7 @@ type Messages = {
       title: string;
       label: string;
       footer: string;
+      otherCurrency: string;
     };
     toolChart: {
       metric: {
@@ -9035,6 +9036,7 @@ type Messages = {
       label: string;
       empty: string;
       footer: string;
+      otherCurrency: string;
     };
   };
   steering: {
