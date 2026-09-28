@@ -10,7 +10,7 @@
 
 > **Amended 2026-09-28 by [ADR-217](./ADR-217-a-search-mode-server-ranks-its-tools-by-the-workspaces-embedding-provider.md).** A search-mode MCP Studio server embeds its tool entries with the provider in the workspace's `[embeddings]` table. The `oxagen` provider uses `voyage-4-large` on the platform key, and that spend is platform cost with no credit charge. A `custom` provider sends the entries to the workspace's own endpoint with its own credential, and Oxagen bills nothing for it.
 
-> **Amended 2026-09-28 by [ADR-220](./ADR-220-the-code-graph-builds-on-the-operators-machine-and-a-workspace-may-name-its-embedding-endpoint.md) (proposed).** For the code graph only, a workspace may send its embeddings to its own OpenAI-compatible endpoint, whose vectors form their own embedding space and are not billed by Oxagen. Every other embedding still follows decision 2.
+> **Amended 2026-09-28 by [ADR-220](./ADR-220-the-code-graph-builds-on-the-operators-machine-and-a-workspace-may-name-its-embedding-endpoint.md) (proposed).** For the code graph only, a workspace may send its embeddings to its own OpenAI-compatible endpoint, whose vectors form their own embedding space and are not billed by Oxagen. Every other embedding still follows decision 2, with one more exception. Under [ADR-217](./ADR-217-a-search-mode-server-ranks-its-tools-by-the-workspaces-embedding-provider.md), a `custom` provider in a workspace's `[embeddings]` table also sends a search-mode server's tool entries off the platform key.
 
 ## Context
 

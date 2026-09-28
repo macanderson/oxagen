@@ -94,7 +94,11 @@ into the shared store. A local graph has to avoid that path.
      partial HNSW index per space, and never mix with Voyage vectors.
 
    This amends ADR-194 decision 2 for the code graph alone. Every other
-   embedding still goes to Voyage on the platform key.
+   embedding still goes to Voyage on the platform key, with one more
+   exception. Under
+   [ADR-217](./ADR-217-a-search-mode-server-ranks-its-tools-by-the-workspaces-embedding-provider.md),
+   a `custom` provider in a workspace's `[embeddings]` table also sends a
+   search-mode server's tool entries off the platform key.
 5. **The endpoint credential belongs to one workspace and one embedding
    space, and is stored like a model credential.** `set_model_credential`
    gains a `purpose`. With `purpose: "embeddings"` it also takes a workspace,
