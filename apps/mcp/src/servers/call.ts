@@ -335,12 +335,12 @@ export async function callServed(
 
   // call: decided, parked, run, and metered as the tool it names.
   const inner = args["arguments"] ?? {};
-  const name = toolArgument(args);
-  const entry = name === null ? null : findInServer(view, server, name);
+  const toolName = toolArgument(args);
+  const entry = toolName === null ? null : findInServer(view, server, toolName);
   if (entry === null || !isRecord(inner)) {
     let message = `arguments is an object of the tool's input. Call ${server.name}__describe for its schema.`;
-    if (name === null) message = "call needs a tool. Pass the tool's name in tool.";
-    else if (entry === null) message = `${server.name} serves no tool named ${name}. Call ${server.name}__search to find one.`;
+    if (toolName === null) message = "call needs a tool. Pass the tool's name in tool.";
+    else if (entry === null) message = `${server.name} serves no tool named ${toolName}. Call ${server.name}__search to find one.`;
     const answer = refusal(message, "failed");
     await meter(view, ports, "call", entry?.tool.name ?? `${server.name}__call`, server.name, answer.outcome);
     return answer.result;
