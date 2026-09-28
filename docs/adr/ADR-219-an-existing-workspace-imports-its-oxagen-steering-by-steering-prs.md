@@ -82,3 +82,22 @@ unless the ledger says which id it replaces.
   it cannot convert stays in the old repository, listed with its reason.
 - Two gaps stay open in #4644. The stamp accepts one old id for two records,
   and an import branch skips the one-change rule for every steering path.
+- The import is one synchronous call. The `steering_import` setting also
+  serves as a lease: a run holds the workspace for ten minutes after its last
+  save, and a second call in that window gets `steering_import_running`. A
+  call after the lease lapses resumes the run that stopped.
+- The import reads GitHub only. It refuses a workspace steered from GitLab
+  (`steering_import_provider_unsupported`) and a repository Oxagen can no
+  longer reach (`steering_import_source_unreachable`). It also refuses a
+  repository the workspace reads through a sources connection with no binding
+  (`steering_import_legacy_connection`). The owner binds that repository
+  first.
+- When a rule needs a kind or a constraint needs an effect, the import answers
+  `needs_choices` and changes nothing. The owner runs it again with
+  `ruleKinds` and `constraintEffects`.
+- Oxagen's agent registry records no operator yet. Until it does, the import
+  writes no agent file, and the first steering PR lists every agent under
+  "Agents to place by hand".
+- A rerun finds a pull request it opened but did not save by looking for the
+  open pull request on its branch. If a person closes that pull request
+  before the rerun, the rerun opens a new one.
