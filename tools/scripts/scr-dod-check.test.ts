@@ -385,6 +385,49 @@ describe("dodStatus", () => {
       );
       expect(status.unchecked).toEqual(["x"]);
     });
+
+    // The real shape that tripped the gate: #3536, three subheadings, prose
+    // lines between the lists, and a link list in the next section. #3618
+    // closed it with `Closes #3536`, and the collector then read no boxes.
+    // The fixture is the issue body verbatim from the API.
+    describe("the body of #3536", () => {
+      const issue = readFileSync(
+        resolve(repoRoot, "tools/scripts/fixtures/issue-3536-body.txt"),
+        "utf8",
+      );
+
+      it("counts all fourteen boxes across its three subheadings", () => {
+        const status = dodStatus(issue);
+        expect(status.present).toBe(true);
+        expect(status.heading).toBe("Definition of done");
+        expect(status.checked).toBe(0);
+        expect(status.unchecked).toHaveLength(14);
+        expect(status.unchecked[0]).toBe(
+          "Skill totals and rows come from one consistent database view, even when new session data arrives during the read.",
+        );
+        expect(status.unchecked.at(-1)).toBe(
+          "Update the affected docs and app text to match the final behavior.",
+        );
+      });
+
+      it("fails a close while any box is open, and passes once all are ticked", () => {
+        const open = verdict({ body: "Closes #3536", labels: [] }, [
+          { ref: "#3536", body: issue },
+        ]);
+        expect(open.ok).toBe(false);
+        expect(open.reasons[0]).toContain("#3536 has 14 unchecked DoD item(s)");
+
+        const ticked = issue.replace(/^- \[ \]/gm, "- [x]");
+        const status = dodStatus(ticked);
+        expect(status.checked).toBe(14);
+        expect(status.unchecked).toEqual([]);
+        expect(
+          verdict({ body: "Closes #3536", labels: [] }, [
+            { ref: "#3536", body: ticked },
+          ]).ok,
+        ).toBe(true);
+      });
+    });
   });
 });
 
