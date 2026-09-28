@@ -14,7 +14,7 @@ The health banner's Repair settings button calls this when the steering repo is 
 
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/repo/repair` with the body `{}` returns 200
 - MCP: `repair_steering_repo`
-- Agent: none. The contract carries `requiresApproval: true` (medium risk, governance), so an in-app agent would wait for a person's approval if the agent surface is added
+- Agent: none. Repair is the health banner's admin button, so the contract carries no agent metadata
 - CLI: none
 - Authentication: org Owner or Admin, checked by the handler (INV-29). A call that carries only an API key names no user, so the role check refuses it (`no_principal`) on every surface
 - Not billed (`noBillingGate: true`), IAM default-deny, high sensitivity

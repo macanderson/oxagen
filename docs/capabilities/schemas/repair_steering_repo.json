@@ -8,11 +8,7 @@
     "mcp"
   ],
   "sensitivity": "high",
-  "agent": {
-    "requiresApproval": true,
-    "riskLevel": "medium",
-    "category": "governance"
-  },
+  "agent": null,
   "chain": {
     "produces": [],
     "consumes": [],

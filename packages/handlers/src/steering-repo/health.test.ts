@@ -941,6 +941,68 @@ describe("checkRepoHealth", () => {
     expect(r.row()?.postedDigest).toBeNull();
   });
 
+  it("posts on every pull request again when a post on one of them failed", async () => {
+    const r = rig({
+      observation: MERGES_DELETED,
+      failCheck: async (pr) => {
+        if (pr.number === 12) throw new GitHubApiError(502, "Bad gateway");
+      },
+    });
+    expect((await r.read(RULESET_DELETED))?.posted).toBe(1);
+    // The row records that the report did not reach every pull request.
+    expect(r.row()?.postedDigest).not.toBeNull();
+    expect(r.row()?.postedDigest).not.toMatch(/^[0-9a-f]{64}$/);
+
+    r.script.failCheck = async () => {};
+    r.reset();
+    expect((await r.read())?.posted).toBe(2);
+    expect(r.host.failCheck.mock.calls.map(([pr]) => pr.number)).toEqual([11, 12]);
+    expect(r.row()?.postedDigest).toMatch(/^[0-9a-f]{64}$/);
+
+    // Once the report reached every pull request, an unchanged sweep posts nothing.
+    r.reset();
+    expect((await r.read())?.posted).toBe(0);
+    expect(r.host.failCheck).not.toHaveBeenCalled();
+  });
+
+  it("restores again on the next read when a restore on one pull request failed", async () => {
+    const r = rig({ observation: MERGES_DELETED });
+    await r.read(RULESET_DELETED);
+    r.script.observation = CLEAN;
+    r.reset();
+    r.host.restoreCheck.mockImplementation(async (pr) => {
+      if (pr.number === 12) throw new GitHubApiError(502, "Bad gateway");
+    });
+    expect(await r.read()).toMatchObject({ health: "healthy", previous: "drifted", restored: 1 });
+    expect(r.row()?.postedDigest).not.toBeNull();
+
+    r.host.restoreCheck.mockImplementation(async () => {});
+    r.reset();
+    expect(await r.read()).toMatchObject({ health: "healthy", restored: 2, notified: false });
+    expect(r.host.restoreCheck.mock.calls.map(([pr]) => pr.number)).toEqual([11, 12]);
+    expect(r.row()?.postedDigest).toBeNull();
+
+    // With every check put back, the next healthy read has nothing to restore.
+    r.reset();
+    await r.read();
+    expect(r.host.openPullRequests).not.toHaveBeenCalled();
+  });
+
+  it("restores the checks that went out when the first post reached only some pull requests", async () => {
+    const r = rig({
+      observation: MERGES_DELETED,
+      failCheck: async (pr) => {
+        if (pr.number === 12) throw new GitHubApiError(502, "Bad gateway");
+      },
+    });
+    expect((await r.read(RULESET_DELETED))?.posted).toBe(1);
+    r.script.observation = CLEAN;
+    r.reset();
+    expect(await r.read()).toMatchObject({ health: "healthy", previous: "drifted", restored: 2 });
+    expect(r.host.restoreCheck.mock.calls.map(([pr]) => pr.number)).toEqual([11, 12]);
+    expect(r.row()?.postedDigest).toBeNull();
+  });
+
   it("retries a failed notification on the next read", async () => {
     const r = rig({ observation: MERGES_DELETED });
     r.notify.mockRejectedValueOnce(new Error("Resend answered 500"));

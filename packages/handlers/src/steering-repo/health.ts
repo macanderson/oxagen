@@ -428,6 +428,14 @@ export function renderHealthReport(state: HealthState): HealthReport {
 /** The comment a pull request keeps once the repo is healthy again. */
 export const RECOVERY_COMMENT = `${HEALTH_COMMENT_MARKER}\n**${REQUIRED_CHECK_NAME}**\n\n${HEALTHY_AGAIN}\n`;
 
+/**
+ * The posted digest while a report reached only some of the pull requests it
+ * was for. No report hashes to it, so the next unhealthy read posts on every
+ * open pull request again. It is not null, so a recovery still puts back the
+ * checks that did go out.
+ */
+const INCOMPLETE_DIGEST = "incomplete";
+
 /** Changes whenever the report would change. */
 export function healthDigest(state: HealthState): string {
   return createHash("sha256")
@@ -939,19 +947,25 @@ export async function checkRepoHealth(
   if (health !== "healthy") {
     const prs = await pullRequestsToPost(host, row, report, trigger, log);
     if (prs !== null) {
+      let missed = 0;
       for (const pr of prs) {
         if (host.isRevert(pr) || pr.number === row.revertPrNumber) continue;
         if (await postOne(log, pr, () => postFailure(host, pr, report))) posted += 1;
+        else missed += 1;
       }
-      row.postedDigest = report.digest;
+      row.postedDigest = missed === 0 ? report.digest : INCOMPLETE_DIGEST;
     }
   } else if (previous !== null && previous.postedDigest !== null) {
     const prs = await listOpen(host, log);
     if (prs !== null) {
+      let missed = 0;
       for (const pr of prs) {
         if (await postOne(log, pr, () => postRecovery(host, pr))) restored += 1;
+        else missed += 1;
       }
-      row.postedDigest = null;
+      // A pull request the recovery missed still carries the failed check.
+      // Keep the digest set so the next healthy read restores it.
+      if (missed === 0) row.postedDigest = null;
     }
   }
 
@@ -1133,7 +1147,9 @@ async function postRecovery(host: HealthHost, pr: OpenPullRequest): Promise<void
 /**
  * Post on one pull request. A rate limit stops the run so it is retried. Any
  * other failure is logged and the run moves on: a disconnected repo refuses
- * every post, and one closed pull request must not stop the rest.
+ * every post, and one closed pull request must not stop the rest. The caller
+ * counts each false return, so a pull request the run missed gets the post
+ * again on the next read.
  */
 async function postOne(
   log: LogScope,
@@ -1147,7 +1163,7 @@ async function postOne(
     if (isRateLimited(err)) throw err;
     logger.warn(
       { err, ...log, pr: pr.number },
-      "steering-repo.health: could not post the health check on a pull request",
+      "steering-repo.health: could not post the health check on a pull request; the next read tries again",
     );
     return false;
   }

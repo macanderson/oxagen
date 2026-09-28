@@ -19,12 +19,9 @@ describe("repair_steering_repo contract", () => {
     });
   });
 
-  it("asks a person before an agent runs it", () => {
-    expect(steeringRepoRepair.agent).toEqual({
-      requiresApproval: true,
-      riskLevel: "medium",
-      category: "governance",
-    });
+  it("is an admin button, off the agent surface", () => {
+    expect(steeringRepoRepair.surfaces).not.toContain("agent");
+    expect(steeringRepoRepair.agent).toBeUndefined();
   });
 
   it("takes nothing", () => {

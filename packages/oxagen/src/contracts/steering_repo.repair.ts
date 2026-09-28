@@ -16,6 +16,8 @@ import { REPO_HEALTH_STATES } from "../steering-repo/health";
  * will not merge (conflict `steering_revert_refused`).
  *
  * Org Owners and Admins only. The handler checks the role itself (INV-29).
+ * Repair is the health banner's admin button, so the contract is not on the
+ * agent surface and carries no agent metadata.
  */
 export const steeringRepoRepair = registerCapability({
   name: "repair_steering_repo",
@@ -28,7 +30,6 @@ export const steeringRepoRepair = registerCapability({
   scoped: true,
   noBillingGate: true,
   mutates: true,
-  agent: { requiresApproval: true, riskLevel: "medium", category: "governance" },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {
