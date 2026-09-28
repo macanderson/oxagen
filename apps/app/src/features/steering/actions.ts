@@ -8,6 +8,7 @@
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
@@ -202,12 +203,6 @@ const approveContextPrContract = {
   output: z.object({ approvals: z.number().int().nonnegative() }),
 };
 
-const mergePrWithoutReviewContract = {
-  name: "merge_pr_without_review",
-  input: contextPrMerge.input,
-  output: contextPrMerge.output,
-};
-
 const dropMemoryRecordContract = {
   name: "drop_memory_record",
   input: z
@@ -242,9 +237,10 @@ export async function approveContextPr(
 }
 
 /**
- * Merge a steering PR that holds no approval. The merge queue allows this to
- * an org or workspace owner, or to a member holding
- * `pr.merge_without_review`. It takes the same input as merge_context_pr.
+ * Merge a steering PR that holds no approval (ADR-213). The handler allows
+ * this to an org or workspace owner, or to a member holding
+ * `merge_pr_without_review`, and refuses on every other ground
+ * merge_context_pr refuses. It takes merge_context_pr's input and output.
  */
 export async function mergePrWithoutReview(
   org: string,
@@ -252,7 +248,7 @@ export async function mergePrWithoutReview(
   proposalId: string,
 ): Promise<ActionResult<{ commit: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, mergePrWithoutReviewContract, {
+  const result = await kernelWrite(ctx, contextPrMergeWithoutReview, {
     proposalId,
   });
   return result.ok

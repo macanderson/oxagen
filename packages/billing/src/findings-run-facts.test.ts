@@ -21,7 +21,8 @@ vi.mock("@oxagen/database", () => ({
   schema: { tachoSessions: {}, tachoSessionFiles: {}, agentRuns: {} },
   withSystemDb: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
 }));
-vi.mock("drizzle-orm", () => ({
+vi.mock("drizzle-orm", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("drizzle-orm")>()),
   and: vi.fn(),
   eq: vi.fn(),
   inArray: vi.fn(),

@@ -2,7 +2,7 @@
 // and the kernel's invoke() are the only fakes, so each case shows what the
 // person gets back and whether the capability ran: ok, invalid (refused
 // before the kernel), and denied and conflict with the handler's reason
-// (INV-19). The four writes Oxagen has not registered yet (#4518) answer
+// (INV-19). The three writes Oxagen has not registered yet (#4518) answer
 // `tool_not_registered` and never reach invoke(). When the platform
 // registers one, its case here fails and moves to the ok path.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -161,6 +161,46 @@ describe("mergeContextPr", () => {
   });
 });
 
+describe("mergePrWithoutReview", () => {
+  it("merges without an approval and returns the merge commit", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      status: "merged",
+      record: {
+        id: "ctr_7k2m9q4x",
+        lineageId: "ctx.release.no-reread-changelog",
+        version: 1,
+        path: ".oxagen/rules/ctx.release.no-reread-changelog.toml",
+      },
+      mergedCommit: "4d5e6f7a8b9c",
+      promotionEvent: { id: "ctp_8qm2x4", seq: 42, chainDigest: "sha256:ab" },
+      bundleVersion: { before: 41, after: 42 },
+    });
+    expect(await mergePrWithoutReview("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: { commit: "4d5e6f7a8b9c" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "merge_pr_without_review",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a caller without the capability as denied (negative)", async () => {
+    invoke.mockRejectedValue(
+      refused("forbidden", "merge_without_review_not_held"),
+    );
+    expect(
+      await mergePrWithoutReview("acme", "core-platform", ID),
+    ).toMatchObject({
+      ok: false,
+      reason: "denied",
+      code: "merge_without_review_not_held",
+    });
+  });
+});
+
 describe("dismissProposal", () => {
   it("dismisses with the reason trimmed", async () => {
     invoke.mockResolvedValue({ proposalId: ID, status: "rejected" });
@@ -219,10 +259,6 @@ describe("a person the workspace refuses", () => {
 describe("the steering PR writes Oxagen has not registered yet", () => {
   it.each([
     ["approveContextPr", () => approveContextPr("acme", "core-platform", ID)],
-    [
-      "mergePrWithoutReview",
-      () => mergePrWithoutReview("acme", "core-platform", ID),
-    ],
     [
       "dropMemoryRecord",
       () => dropMemoryRecord("acme", "core-platform", BRANCH, RECORD_PATH),
