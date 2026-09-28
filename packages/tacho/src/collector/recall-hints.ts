@@ -6,10 +6,10 @@
  *
  * Tool hooks fill the lists, in the same shape from all four harnesses. Each
  * list keeps the most recent entries, each once, and a repeat moves to the
- * front. The repository is read once per session, off the prompt's path,
- * and read again only when the session's `cwd` leaves that repository. The
- * lists live in memory only, and `forgetRecallHints` clears them when the
- * session ends.
+ * front. The repository is read off the prompt's path, from the directory
+ * the session works in (`workingDir`), and read again only when that
+ * directory leaves the repository. The lists live in memory only, and
+ * `forgetRecallHints` clears them when the session ends.
  */
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { RepositoryRemote } from "./git-facts";
@@ -32,7 +32,10 @@ const PATH_MAX_CHARS = 512;
 const PATH_KEYS = ["file_path", "path", "notebook_path"] as const;
 
 /** The part of a session record this module reads and writes. */
-export type RecallHintsHolder = Pick<SessionRecord, "cwd" | "recallHints">;
+export type RecallHintsHolder = Pick<
+  SessionRecord,
+  "cwd" | "workDir" | "recallHints"
+>;
 
 /** Reads the repository a directory is in (`readRepositoryRemote`). */
 export type RepositoryReader = (
@@ -100,39 +103,52 @@ export function noteRecallHints(
 }
 
 /**
- * True when `held` answers for `cwd`: the same directory, or one inside its
+ * The directory the session works in: the one it last wrote a file in, or
+ * its `cwd` until it writes one. An agent in a git worktree often keeps its
+ * `cwd` on the primary checkout and edits files by absolute path, so a read
+ * from `cwd` would name the primary checkout's repository (`workDir` on
+ * `SessionRecord`). The git lane reads from the same directory. A write
+ * outside the repository, such as a scratch file under the temp directory,
+ * moves it there until the next write back inside.
+ */
+function workingDir(record: RecallHintsHolder): string | undefined {
+  return record.workDir ?? record.cwd;
+}
+
+/**
+ * True when `held` answers for `dir`: the same directory, or one inside its
  * root.
  */
-function covers(held: RepositoryRead, cwd: string): boolean {
-  if (held.cwd === cwd) return true;
+function covers(held: RepositoryRead, dir: string): boolean {
+  if (held.cwd === dir) return true;
   const root = held.remote?.root;
-  return root !== undefined && relativeTo(root, cwd) !== undefined;
+  return root !== undefined && relativeTo(root, dir) !== undefined;
 }
 
 /**
  * The read of the session's repository: the one already held when it
- * answers for the session's `cwd`, or a new one started now. Undefined when
- * the `cwd` is not known. The answer never rejects, so a caller may leave it
- * running and read `recallScope` later.
+ * answers for the directory the session works in (`workingDir`), or a new
+ * one started now. Undefined when no directory is known. The answer never
+ * rejects, so a caller may leave it running and read `recallScope` later.
  */
 export function readRepository(
   record: RecallHintsHolder,
   read: RepositoryReader,
 ): Promise<RepositoryRemote | undefined> | undefined {
-  const cwd = record.cwd;
-  if (cwd === undefined) return undefined;
+  const dir = workingDir(record);
+  if (dir === undefined) return undefined;
   const hints = hintsOf(record);
   const held = hints.repository;
-  if (held !== undefined && covers(held, cwd)) return held.answer;
+  if (held !== undefined && covers(held, dir)) return held.answer;
   const next: RepositoryRead = {
-    cwd,
+    cwd: dir,
     settled: false,
     answer: Promise.resolve(undefined),
   };
   // `then` runs the reader after this call returns, so a reader that throws
   // at once settles the answer as undefined too.
   next.answer = Promise.resolve()
-    .then(() => read(cwd))
+    .then(() => read(dir))
     .then(
       (remote) => remote,
       () => undefined,
@@ -155,10 +171,9 @@ export function readRepository(
 export function recallScope(record: RecallHintsHolder): RecallScope {
   const hints = record.recallHints;
   const held = hints?.repository;
+  const dir = workingDir(record);
   const remote =
-    held?.settled === true &&
-    record.cwd !== undefined &&
-    covers(held, record.cwd)
+    held?.settled === true && dir !== undefined && covers(held, dir)
       ? held.remote
       : undefined;
   const root = remote?.root;
