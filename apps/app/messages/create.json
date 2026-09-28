@@ -182,7 +182,7 @@
         "opening": "Opening the pull request",
         "repo": {
           "loading": "Reading the workspace’s main repository.",
-          "unbound": "This workspace has no main repository yet. Bind one in Workspace settings, then open the pull request.",
+          "unbound": "This workspace has no steering repository yet, so there is nowhere to open the pull request. Oxagen creates one when it provisions the workspace.",
           "denied": "Opening a skill pull request needs Owner or Admin on the organization.",
           "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
         }
@@ -205,7 +205,7 @@
         "checkLoadCost": "The file is over the workspace’s search budget. Cut it and try again. Nothing was written.",
         "mergedUnversioned": "The merged copy of this skill has no version, so there is nothing to compare against. Fix it on the production branch first.",
         "orgRoleRequired": "Opening a skill pull request needs Owner or Admin on the organization.",
-        "noRepository": "This workspace has no main repository yet. Bind one in Workspace settings.",
+        "noRepository": "This workspace has no steering repository yet. Oxagen creates one when it provisions the workspace.",
         "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
         "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
         "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",

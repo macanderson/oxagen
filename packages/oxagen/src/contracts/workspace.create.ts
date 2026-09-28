@@ -8,7 +8,7 @@ import {
 import {
   githubOwnerSchema,
   githubRepositoryNameSchema,
-} from "./repository.main.bind";
+} from "./repository.shared";
 
 /**
  * A GitHub repository by owner and name, the older `mainRepo` shape. The

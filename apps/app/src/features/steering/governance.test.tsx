@@ -256,7 +256,7 @@ describe("the governance dialog", () => {
     ],
     [
       { ok: false, reason: "not_found", code: "repository_not_installed" },
-      "This workspace has no main repository with the GitHub App installed",
+      "This workspace has no steering repository the GitHub App can reach",
     ],
     [
       { ok: false, reason: "conflict", code: "github_refused" },

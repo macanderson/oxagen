@@ -69,7 +69,7 @@
       "openPr": "Open pull request #{number}",
       "failure": {
         "denied": "Your roles here do not include set_governance_mode. An org Owner or Admin, or a workspace Owner or Admin, changes the mode. Nothing was changed.",
-        "noRepository": "This workspace has no main repository with the GitHub App installed, so there is no governance.toml to change. Bind one on Repositories.",
+        "noRepository": "This workspace has no steering repository the GitHub App can reach, so there is no governance.toml to change. Check the GitHub connection on Repositories.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed."

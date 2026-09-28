@@ -49,7 +49,8 @@ write a file into `.oxagen/` but cannot account for the directory it writes into
    capabilities and `bind_main_repository`, and nothing else in this area; the only
    repo-facing surface in `apps/app` is the onboarding bind-main-repo step. #3233 is
    landing the Workspace settings dialog that binds a **main** repo, which is the first
-   half of one of the four tabs here (§6).
+   half of one of the four tabs here (§6). (#4616 later removed
+   `bind_main_repository` and the bind step, under ADR-212.)
 
 There is also a **file-name collision** waiting in the tree. MC spec §10.1 says the
 committed configuration file is `.oxagen/workspace.toml`;

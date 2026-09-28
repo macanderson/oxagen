@@ -1,6 +1,6 @@
 // context.steering.github.ts — the GitHub seam under the Context PR handlers
-// (ADR-061; MC spec §10.1, §10.3). The workspace's repository is its **main
-// repository**: the repository binding `bind_main_repository` wrote
+// (ADR-061; MC spec §10.1, §10.3). The workspace's repository is its
+// **steering repository**: the steering head's binding
 // (`ingestion.repository_binding_heads` → `ingestion.repository_bindings`),
 // which is the system of record for repository identity per MC spec §10.1.
 // Its production branch is the default ref that binding recorded — the one an
@@ -101,11 +101,11 @@ interface SteeringRepositoryFields {
    * The production branch: the only ref a Context PR is opened against,
    * compared against, checked on and merged into.
    *
-   * For a BOUND repository this is the binding's `configured_default_ref` —
-   * the ref approved when `bind_main_repository` recorded that binding version
-   * — and NOT whatever GitHub currently reports as the repository's default
-   * branch. Changing the default branch on GitHub must not move steering onto
-   * a branch nobody approved; only a new binding version does that. See
+   * For a BOUND repository this is the binding's `configured_default_ref`,
+   * the ref recorded with that binding version, and NOT whatever GitHub
+   * currently reports as the repository's default branch. Changing the
+   * default branch on GitHub must not move steering onto a branch nobody
+   * approved; only a new binding version does that. See
    * `readGitHubConnection`, which is the one source of this fact.
    */
   defaultBranch: string;
@@ -495,8 +495,8 @@ export type SteeringConnection =
  * Falls back to the connection's delivery config for a workspace connected
  * through the legacy sources wizard, which populates `owner`/`repo` at its
  * mappings step and never writes a binding. Without the fallback those
- * workspaces would lose steering; with it, a workspace that later binds a main
- * repository is answered from the binding, which wins.
+ * workspaces would lose steering; with it, a workspace that later gets a
+ * steering head is answered from the binding, which wins.
  *
  * The fallback is narrowed to the case it exists for: NO BINDING HEAD AT ALL.
  * The joined read above misses for two different reasons — no head was ever
@@ -505,9 +505,9 @@ export type SteeringConnection =
  * silently retargets steering and every Context PR at whatever unrelated
  * repository a still-connected legacy sources connection happens to name in
  * its ingestion `delivery_config`. Writing steering into the wrong repository
- * is worse than steering being off, so a workspace whose main repository is
- * bound but unreachable answers null and its callers refuse; the repair is
- * `bind_main_repository` on the live connection, which moves the head.
+ * is worse than steering being off, so a workspace whose steering repository
+ * is bound but unreachable answers null and its callers refuse. No capability
+ * repairs that state yet (#4637).
  *
  * The binding also carries the ref, not only the identity. A binding records
  * `configured_default_ref` — the production branch as it stood when an org
@@ -999,13 +999,13 @@ export function createSteeringGitHub(
       // A BOUND repository has an approved ref and that ref is the answer. The
       // live `info.defaultBranch` is deliberately not consulted here: if an
       // admin changes the repository's default branch on GitHub after the
-      // bind, the immutable binding and the settings page still name the
-      // approved branch, and steering must agree with them. Following GitHub
-      // instead would open, check and merge Context PRs into a branch no one
-      // approved, while `assertProductionBase` below — which compares a PR's
-      // base against this very field — would wave it through. Approving a new
-      // branch is a new binding version (`bind_main_repository`), which is the
-      // only thing that moves this.
+      // binding is written, the immutable binding and the settings page still
+      // name the approved branch, and steering must agree with them.
+      // Following GitHub instead would open, check and merge Context PRs into
+      // a branch no one approved, while `assertProductionBase` below — which
+      // compares a PR's base against this very field — would wave it through.
+      // Approving a new branch is a new binding version
+      // (`set_production_branch`), which is the only thing that moves this.
       //
       // A LEGACY connection has no binding, so there is no approved ref to
       // honour and live GitHub is the only source there is. That is
@@ -1033,8 +1033,9 @@ export function createSteeringGitHub(
         // repository was renamed after it was bound; records stay correctly
         // grouped under the approved name, but an operator comparing a record
         // to GitHub sees two names and no explanation unless something logs
-        // it. Re-approving through `bind_main_repository` writes the new name
-        // into a successor binding and ends the divergence.
+        // it. Nothing re-records a renamed repository's name on its own since
+        // #4616. `set_production_branch` writes the live name into the
+        // successor binding when it moves the branch.
         logger.warn(
           {
             approvedFullName: fullName,

@@ -21,15 +21,6 @@ export function onboardingGate(
     workspace: { id: "wrk_core", slug: "core-platform" },
     firstFrameAt: null,
     firstRunId: null,
-    provisional: {
-      until: "2026-09-29T00:00:00.000Z",
-      mainRepoBoundAt: null,
-      detectedRepository: {
-        provider: "github",
-        owner: "acme",
-        name: "platform",
-      },
-    },
     ...overrides,
   };
 }

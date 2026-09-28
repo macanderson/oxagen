@@ -5,8 +5,8 @@
 // daemon asks here. The answer is a token scoped to one repository's
 // immutable id with `contents: write`, minted from the installation attached
 // to the workspace's live GitHub connection. The host names the repository;
-// it never names the installation, for the reason `bind_main_repository`
-// gives (ADR-027).
+// it never names the installation, for the reason
+// repository.github-connection.ts gives (ADR-027).
 //
 // The workspace's steering repository takes changes through a steering PR.
 // This handler never mints an Oxagen Steering app token for it. That app holds

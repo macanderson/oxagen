@@ -37,7 +37,7 @@ import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 import type { SteeringRepository } from "./context.steering.github";
 import type { RepositorySteeringHost } from "./repository.link";
-import { workspaceRepositoriesLock } from "./repository.main.bind";
+import { workspaceRepositoriesLock } from "./repository.binding-write";
 import { createRepositoryUnlinkHandler } from "./repository.unlink";
 import { readWorkspaceToml } from "./repository.workspace-toml";
 
