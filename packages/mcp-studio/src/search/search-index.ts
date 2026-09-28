@@ -110,7 +110,7 @@ export class SearchIndex {
     this.embedder = options.embedder;
     this.store = options.store;
     this.cache = options.cache ?? new VectorCache();
-    this.pending = options.pending ?? new Map();
+    this.pending = options.pending ?? new Map<string, Promise<Float32Array>>();
     this.namespace = options.namespace;
     this.queue = new EmbeddingQueue(options.embedder, options.batchSize ?? EMBED_BATCH_SIZE);
     this.rankTimeoutMs = options.rankTimeoutMs ?? RANK_TIMEOUT_MS;
