@@ -31,6 +31,9 @@ const PATH_MAX_CHARS = 512;
 /** The `tool_input` keys that name a file, in Claude Code's shape. */
 const PATH_KEYS = ["file_path", "path", "notebook_path"] as const;
 
+/** The prefix Claude Code puts before an MCP server's tool name. */
+const MCP_PREFIX = "mcp__";
+
 /** The part of a session record this module reads and writes. */
 export type RecallHintsHolder = Pick<
   SessionRecord,
@@ -71,6 +74,19 @@ function relativeTo(root: string, path: string): string | undefined {
 }
 
 /**
+ * A tool name as a memory names it. A memory scoped to an MCP tool names it
+ * `<server>__<tool>`, so Claude Code's `mcp__github__get_issue` is noted as
+ * `github__get_issue`, or the recall would never match it. The rule is
+ * `withoutMcpPrefix` in `@oxagen/handlers`' memory capture, which writes the
+ * memory's tool names: `mcp__query` is the tool `query` of a server named
+ * mcp, so it stays as it is.
+ */
+function recalledToolName(seen: string): string {
+  const rest = seen.startsWith(MCP_PREFIX) ? seen.slice(MCP_PREFIX.length) : "";
+  return rest.includes("__") ? rest : seen;
+}
+
+/**
  * Note one tool call: its tool's name, and the file its input names under
  * `file_path`, `path`, or `notebook_path`. A relative path is resolved
  * against the session's `cwd`, and is dropped when the `cwd` is not known,
@@ -87,7 +103,11 @@ export function noteRecallHints(
     toolName.length > 0 &&
     toolName.length <= TOOL_NAME_MAX_CHARS
   )
-    hints.tools = inFront(hints.tools, toolName, RECALL_TOOLS_KEPT);
+    hints.tools = inFront(
+      hints.tools,
+      recalledToolName(toolName),
+      RECALL_TOOLS_KEPT,
+    );
   for (const key of PATH_KEYS) {
     const value = toolInput?.[key];
     if (typeof value !== "string" || value.length === 0) continue;
