@@ -91,7 +91,7 @@ Those four points are the boundary spec's own launch invariants 1 to 4.
    the same ID in Stella's local graph and in Oxagen's graph. Stella is
    AGPL-3.0-only, so Oxagen links these crates under the commercial license
    that Stella's contributor agreement lets Mac grant, pinned to a Stella
-   release tag.
+   release tag. Mac approved that license on 2026-09-28.
 
 ## Consequences
 
