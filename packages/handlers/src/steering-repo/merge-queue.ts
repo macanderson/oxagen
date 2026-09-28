@@ -47,8 +47,10 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
+  IMPORT_BRANCH,
   isStampedRecordPath,
   mergeTrailers,
+  parseReplacesBlock,
   stampRecordText,
 } from "./stamp";
 
@@ -248,6 +250,12 @@ export interface StampInput {
   at: Date;
   approval: MergeApproval;
   mergedBy: string;
+  /**
+   * The id each record had before a format change, by path. The stamp writes
+   * it as `replaces` on the record's ledger change. Only the import PR on
+   * {@link IMPORT_BRANCH} carries it.
+   */
+  replaces?: ReadonlyMap<string, string>;
 }
 
 export interface StampResult {
@@ -306,13 +314,25 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
     if (stamped.text !== text) {
       files.push({ path: file.path, content: stamped.text });
     }
+    const replaces = input.replaces?.get(file.path);
     changes.push({
       path: file.path,
       action: file.status,
       lineage: stamped.lineage,
       id: stamped.id,
       hash: stamped.hash,
+      ...(replaces && replaces !== stamped.id ? { replaces } : {}),
     });
+  }
+  const unmatched = [...(input.replaces?.keys() ?? [])].filter(
+    (path) =>
+      !changes.some((change) => change.path === path && change.id !== undefined),
+  );
+  if (unmatched.length > 0) {
+    throw stampRefused(
+      "replaces_unmatched",
+      `#${input.number} names an old id for ${unmatched.sort().join(", ")}, and ${input.branch} adds or changes no steering record there`,
+    );
   }
 
   const target = await chooseLedgerTarget({
@@ -359,6 +379,34 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
 }
 
 // ── Landing a PR ─────────────────────────────────────────────────────────────
+
+/**
+ * The old id of each record the import PR converted, read from the replaces
+ * block in its body. Refuses when the PR is no longer the open one on its
+ * branch, or when the block does not parse.
+ */
+async function importReplaces(input: LandInput): Promise<Map<string, string>> {
+  const pr = await input.host.findOpenPullRequest(input.repo, {
+    head: input.branch,
+    base: input.repo.defaultBranch,
+  });
+  if (pr === null || pr.number !== input.number) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "pull_request_missing",
+      message: `#${input.number} is not the open pull request from ${input.branch}`,
+    });
+  }
+  const block = parseReplacesBlock(pr.body);
+  if (!block.ok) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "replaces_unreadable",
+      message: `The body of #${input.number} cannot be read: ${block.message}`,
+    });
+  }
+  return block.replaces;
+}
 
 /** What a re-check after an update found: whether it passed, and which checks ran. */
 export interface RecheckResult {
@@ -455,6 +503,10 @@ function headsAfterUpdate(
 export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
   const attempts = input.maxAttempts ?? LAND_ATTEMPTS;
+  const replaces =
+    input.layout.layout === "steering" && input.branch === IMPORT_BRANCH
+      ? await importReplaces(input)
+      : undefined;
   let head = input.checkedHead;
   let heads: string[] = [head];
   let checks = input.checks;
@@ -508,6 +560,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
           at,
           approval,
           mergedBy: input.mergedBy,
+          replaces,
         });
         await host.reportCheckRun(repo, {
           name: REQUIRED_CHECK_NAME,

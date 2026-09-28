@@ -15,6 +15,7 @@ import type {
   GovernanceMode,
   RepositoryProvider,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { recordIdSchema } from "@oxagen/oxagen/steering-repo/common";
 import { readJsonLines } from "@oxagen/oxagen/steering-repo/files";
 import {
   BRANCH_PREFIXES,
@@ -411,6 +412,14 @@ function changeUnit(path: string): string {
 /** Branches whose pull request may change many files. */
 const MANY_FILE_PREFIXES: readonly BranchPrefix[] = ["memory", "tools"];
 
+/**
+ * The one steering/ branch that may change many files: the steering PR that
+ * imports a workspace's old .oxagen/ records, skills, and governance.toml into
+ * its steering repo (steering-repo-spec, Migration). Any other steering/
+ * branch still changes one thing.
+ */
+export const IMPORT_BRANCH = "steering/import-oxagen";
+
 export type BranchScopeRefusal = {
   reason: "branch_prefix" | "branch_scope" | "one_change" | "ledger_owned";
   message: string;
@@ -419,10 +428,11 @@ export type BranchScopeRefusal = {
 /**
  * Why a steering PR's branch and the paths it changes do not fit together, or
  * null when they do. The branch starts with the top-level folder it changes
- * (workspace/ for root files, memory/ for steering/memory/). A memory PR and a
- * tools PR may change many files; every other steering PR changes one record,
- * one skill, one agent, one policy group, or one root file. No steering PR
- * may change the ledger, which only the stamp writes.
+ * (workspace/ for root files, memory/ for steering/memory/). A memory PR, a
+ * tools PR, and the import PR on {@link IMPORT_BRANCH} may change many files.
+ * Every other steering PR changes one record, one skill, one agent, one
+ * policy group, or one root file. No steering PR may change the ledger, which
+ * only the stamp writes.
  */
 export function branchScopeRefusal(
   branch: string,
@@ -452,7 +462,7 @@ export function branchScopeRefusal(
         : `${outside} is outside every folder a steering PR may change`,
     };
   }
-  if (!MANY_FILE_PREFIXES.includes(prefix)) {
+  if (!MANY_FILE_PREFIXES.includes(prefix) && branch !== IMPORT_BRANCH) {
     const units = new Set(paths.map(changeUnit));
     if (units.size > 1) {
       return {
@@ -462,4 +472,72 @@ export function branchScopeRefusal(
     }
   }
   return null;
+}
+
+// ── The import ───────────────────────────────────────────────────────────────
+
+/** The line that opens the replaces block in an import PR's body. */
+export const REPLACES_BLOCK_START = "<!-- oxagen:replaces";
+
+/** The line that closes it. */
+const REPLACES_BLOCK_END = "-->";
+
+/**
+ * The block an import PR's body carries so the stamp can write each converted
+ * record's old id as `replaces` on its ledger line. It holds one line per
+ * record: the record's path, a space, and the id it had before the
+ * conversion. The block is an HTML comment, so the PR page does not show it.
+ */
+export function renderReplacesBlock(
+  replaces: ReadonlyMap<string, string>,
+): string {
+  const lines = [...replaces]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([path, id]) => `${path} ${id}`);
+  return [REPLACES_BLOCK_START, ...lines, REPLACES_BLOCK_END].join("\n");
+}
+
+export type ReplacesBlock =
+  | { ok: true; replaces: Map<string, string> }
+  | { ok: false; message: string };
+
+/**
+ * The old id of each record an import PR's body names, by path. A body with
+ * no block names none. The parse refuses a line that is not a record path and
+ * a record id, a path named twice, and a block with no closing line.
+ */
+export function parseReplacesBlock(body: string): ReplacesBlock {
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === REPLACES_BLOCK_START);
+  const replaces = new Map<string, string>();
+  if (start === -1) return { ok: true, replaces };
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = (lines[i] as string).trim();
+    if (line === REPLACES_BLOCK_END) return { ok: true, replaces };
+    if (line === "") continue;
+    const [path, id, ...rest] = line.split(/\s+/);
+    if (
+      rest.length > 0 ||
+      !path ||
+      !id ||
+      !isStampedRecordPath(path) ||
+      !recordIdSchema.safeParse(id).success
+    ) {
+      return {
+        ok: false,
+        message: `the replaces block line "${line}" is not a record path and a record id`,
+      };
+    }
+    if (replaces.has(path)) {
+      return {
+        ok: false,
+        message: `the replaces block names ${path} twice`,
+      };
+    }
+    replaces.set(path, id);
+  }
+  return {
+    ok: false,
+    message: `the replaces block has no closing ${REPLACES_BLOCK_END} line`,
+  };
 }

@@ -36,7 +36,13 @@ import {
   type MergeApproval,
   type RecheckResult,
 } from "./merge-queue";
-import { mergeTrailers, steeringBranch } from "./stamp";
+import {
+  IMPORT_BRANCH,
+  mergeTrailers,
+  renderReplacesBlock,
+  REPLACES_BLOCK_START,
+  steeringBranch,
+} from "./stamp";
 
 const LEDGER = "steering/promotions/2026-09.jsonl";
 const CHECKS = ["schema", "lineage", "hash"] as const;
@@ -566,6 +572,121 @@ describe("landSteeringPr: stamping", () => {
     expect(gh.merges).toEqual([
       expect.objectContaining({ sha: pr.head, commitMessage: expect.stringContaining("Oxagen-Version: 21") }),
     ]);
+  });
+});
+
+describe("landSteeringPr: the import branch", () => {
+  const REFUNDS = "a-intel.platform.refunds-over-100";
+  const PUSH = "a-intel.platform.no-push-to-main";
+  const OLD_REFUNDS = "rec_a_intel_refunds_over_100_ec4ece819896";
+  const OLD_PUSH = "rec_a_intel_no_push_to_main_27e708fab014";
+  const importPath = (lineage: string) => `steering/imported/${lineage}.md`;
+
+  /** Open a PR on `branch` that adds both records, with `body`. */
+  async function openImport(
+    gh: FakeGitHub,
+    body: string,
+    branch = IMPORT_BRANCH,
+  ): Promise<OpenPr> {
+    await gh.ensureBranch(REPO, branch, REPO.defaultBranch);
+    gh.commit(branch, importPath(REFUNDS), record(REFUNDS, "Refunds over $100 need approval."));
+    const head = gh.commit(branch, importPath(PUSH), record(PUSH, "Nobody pushes to main."));
+    const { number } = await gh.openPullRequest(REPO, {
+      title: "Import .oxagen/",
+      head: branch,
+      base: REPO.defaultBranch,
+      body,
+    });
+    return { number, branch, head, path: importPath(REFUNDS) };
+  }
+
+  const block = renderReplacesBlock(
+    new Map([
+      [importPath(REFUNDS), OLD_REFUNDS],
+      [importPath(PUSH), OLD_PUSH],
+    ]),
+  );
+
+  it("lands many records in one steering PR and writes each old id as replaces", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, `Imports two records.\n\n${block}\n`);
+
+    await land(gh, pr);
+
+    const line = (await ledgerLines(gh)).at(-1)!;
+    expect(line.branch).toBe(IMPORT_BRANCH);
+    expect(line.changes).toEqual([
+      expect.objectContaining({
+        path: importPath(PUSH),
+        action: "added",
+        lineage: PUSH,
+        replaces: OLD_PUSH,
+      }),
+      expect.objectContaining({
+        path: importPath(REFUNDS),
+        action: "added",
+        lineage: REFUNDS,
+        replaces: OLD_REFUNDS,
+      }),
+    ]);
+    for (const change of line.changes) {
+      expect(change.id).not.toBe(change.replaces);
+      const published = (await gh.readFile(REPO, change.path, "main")) ?? "";
+      expect(published).toContain(`id: ${change.id}`);
+    }
+  });
+
+  it("writes no replaces when the import PR's body has no block", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, "Imports two records.");
+
+    await land(gh, pr);
+
+    const line = (await ledgerLines(gh)).at(-1)!;
+    expect(line.changes).toHaveLength(2);
+    for (const change of line.changes) expect(change).not.toHaveProperty("replaces");
+  });
+
+  it("ignores a replaces block on any other steering/ branch", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, REFUNDS);
+    await gh.updatePullRequest(REPO, {
+      number: pr.number,
+      title: REFUNDS,
+      body: renderReplacesBlock(new Map([[pr.path, OLD_REFUNDS]])),
+    });
+
+    await land(gh, pr);
+
+    const line = (await ledgerLines(gh)).at(-1)!;
+    expect(line.changes).toHaveLength(1);
+    expect(line.changes[0]).not.toHaveProperty("replaces");
+  });
+
+  it("refuses an old id for a path the import PR does not add, and drops nothing on main", async () => {
+    const gh = steeringRepo();
+    const stray = "steering/imported/a-intel.platform.stray.md";
+    const pr = await openImport(
+      gh,
+      renderReplacesBlock(new Map([[stray, OLD_REFUNDS]])),
+    );
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_unmatched" });
+    expect(err.message).toContain(stray);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("refuses a replaces block that does not parse, before it stamps", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, `${REPLACES_BLOCK_START}\n${importPath(REFUNDS)} ${OLD_REFUNDS}\n`);
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_unreadable" });
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
   });
 });
 

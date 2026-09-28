@@ -12,10 +12,14 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
+  IMPORT_BRANCH,
   isStampedRecordPath,
   ledgerInstant,
   ledgerPeriodBounds,
   mergeTrailers,
+  parseReplacesBlock,
+  renderReplacesBlock,
+  REPLACES_BLOCK_START,
   stampRecordText,
   steeringBranch,
   type LedgerLineInput,
@@ -716,5 +720,112 @@ describe("branchScopeRefusal", () => {
         "steering/promotions/2026-09.jsonl",
       ]),
     ).toMatchObject({ reason: "ledger_owned" });
+  });
+
+  it("accepts many records, skills, and governance.toml on the import branch", () => {
+    expect(IMPORT_BRANCH).toBe("steering/import-oxagen");
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a-intel.core-platform.refunds-over-100.md",
+        "steering/imported/a-intel.core-platform.no-push-to-main.md",
+        "steering/skills/a-intel.core-platform.release-notes/SKILL.md",
+        "steering/skills/a-intel.core-platform.brand-voice/SKILL.md",
+        "steering/governance.toml",
+      ]),
+    ).toBeNull();
+  });
+
+  it("still refuses two records on a steering/ branch that only looks like the import branch", () => {
+    for (const branch of [
+      "steering/import",
+      "steering/import-oxagen-2",
+      "steering/imports/import-oxagen",
+      "Steering/import-oxagen",
+    ]) {
+      expect(
+        branchScopeRefusal(branch, [
+          "steering/imported/a.md",
+          "steering/imported/b.md",
+        ]),
+      ).toMatchObject({ reason: branch.startsWith("steering/") ? "one_change" : "branch_prefix" });
+    }
+  });
+
+  it("keeps the folder and ledger rules on the import branch", () => {
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a.md",
+        "workspace.toml",
+      ]),
+    ).toMatchObject({
+      reason: "branch_scope",
+      message: "workspace.toml belongs on a workspace/ branch, not steering/import-oxagen",
+    });
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a.md",
+        "steering/promotions/2026-09.jsonl",
+      ]),
+    ).toMatchObject({ reason: "ledger_owned" });
+  });
+});
+
+describe("the replaces block", () => {
+  const OLD_REFUNDS = "rec_a_intel_refunds_over_100_ec4ece819896";
+  const OLD_PUSH = "rec_a_intel_no_push_to_main_27e708fab014";
+  const REFUNDS = "steering/imported/a-intel.core-platform.refunds-over-100.md";
+  const PUSH = "steering/imported/a-intel.core-platform.no-push-to-main.md";
+
+  it("renders one line per record in path order, inside an HTML comment", () => {
+    const block = renderReplacesBlock(
+      new Map([
+        [REFUNDS, OLD_REFUNDS],
+        [PUSH, OLD_PUSH],
+      ]),
+    );
+    expect(block).toBe(
+      [REPLACES_BLOCK_START, `${PUSH} ${OLD_PUSH}`, `${REFUNDS} ${OLD_REFUNDS}`, "-->"].join("\n"),
+    );
+  });
+
+  it("reads back what it renders from anywhere in a PR body, with CRLF line ends", () => {
+    const replaces = new Map([
+      [REFUNDS, OLD_REFUNDS],
+      [PUSH, OLD_PUSH],
+    ]);
+    const body = ["## Summary", "", "Imports three records.", "", renderReplacesBlock(replaces), "", "Refs #4620"].join("\r\n");
+    expect(parseReplacesBlock(body)).toEqual({ ok: true, replaces });
+  });
+
+  it("reads a body with no block as naming no old ids", () => {
+    expect(parseReplacesBlock("Imports three records.")).toEqual({
+      ok: true,
+      replaces: new Map(),
+    });
+  });
+
+  it("refuses a line that is not a record path and a record id", () => {
+    for (const line of [
+      `${REFUNDS}`,
+      `${REFUNDS} ${OLD_REFUNDS} extra`,
+      `workspace.toml ${OLD_REFUNDS}`,
+      `${REFUNDS} rec_not-an-id`,
+    ]) {
+      expect(parseReplacesBlock([REPLACES_BLOCK_START, line, "-->"].join("\n"))).toMatchObject({
+        ok: false,
+        message: expect.stringContaining("is not a record path and a record id"),
+      });
+    }
+  });
+
+  it("refuses a path named twice, and a block with no closing line", () => {
+    expect(
+      parseReplacesBlock(
+        [REPLACES_BLOCK_START, `${REFUNDS} ${OLD_REFUNDS}`, `${REFUNDS} ${OLD_PUSH}`, "-->"].join("\n"),
+      ),
+    ).toEqual({ ok: false, message: `the replaces block names ${REFUNDS} twice` });
+    expect(
+      parseReplacesBlock([REPLACES_BLOCK_START, `${REFUNDS} ${OLD_REFUNDS}`].join("\n")),
+    ).toEqual({ ok: false, message: "the replaces block has no closing --> line" });
   });
 });
