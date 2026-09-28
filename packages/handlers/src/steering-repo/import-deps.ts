@@ -9,8 +9,9 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { createGitHubClient } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { createSteeringGitHub, resolveGitHubToken } from "../context.steering.github";
+import { createSteeringGitHub } from "../context.steering.github";
 import { createSteeringHost } from "../context.steering.host";
+import { resolveGitHubToken } from "../lib/github-token";
 import {
   GITHUB_STEERING_PROVIDER,
   GITLAB_STEERING_PROVIDER,

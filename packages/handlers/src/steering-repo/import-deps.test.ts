@@ -122,6 +122,8 @@ vi.mock("@oxagen/github", async (importOriginal) => ({
 }));
 vi.mock("../context.steering.github", () => ({
   createSteeringGitHub: mocks.createSteeringGitHub,
+}));
+vi.mock("../lib/github-token", () => ({
   resolveGitHubToken: mocks.resolveGitHubToken,
 }));
 vi.mock("../context.steering.host", () => ({
