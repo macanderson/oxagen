@@ -330,6 +330,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // The no-progress limit the owning team sets for its runs. org_id +
   // workspace_id both NOT NULL → standard tenant_isolation RLS.
   { table: "workspace.no_progress_policy", policyClass: "standard" },
+  // The operator ranking's pseudonym setting (spend spec, Operator ranking).
+  // org_id + workspace_id both NOT NULL → standard tenant_isolation RLS.
+  { table: "workspace.operator_ranking_policy", policyClass: "standard" },
   // Verified-Outcome Market Router governance. org_id NOT NULL + workspace_id
   // NULLABLE → workspace_nullable tenant_isolation RLS.
   { table: "workspace.routing_policy", policyClass: "workspace_nullable" },

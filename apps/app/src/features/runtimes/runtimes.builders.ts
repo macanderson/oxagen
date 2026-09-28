@@ -209,6 +209,7 @@ export function runtimesSource(reads: {
       findings: refuse,
       findingEvidence: refuse,
       priceBook: refuse,
+      operatorRanking: refuse,
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

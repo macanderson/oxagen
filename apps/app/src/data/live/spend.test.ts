@@ -8,6 +8,7 @@ import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.ge
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -153,6 +154,80 @@ describe("spend port", () => {
       input: {},
       page: "spend",
     });
+  });
+
+  it("operatorRanking reads get_operator_ranking for the period and keeps each row's operator as the contract named it", async () => {
+    const usd = (micros: string) => ({ micros, currency: "USD" });
+    kernelRead.mockResolvedValue(
+      readOk({
+        period,
+        pseudonyms: false,
+        unproductive: usd("9000000"),
+        unattributed: { unproductive: usd("1000000"), runs: 1 },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: null },
+            unproductive: usd("8000000"),
+            shareOfTotal: 0.8889,
+            unproductiveShare: 0.5,
+            runs: 2,
+            topRuns: [{ runId: "arun_01", unproductive: usd("8000000") }],
+          },
+        ],
+      }),
+    );
+    const read = await spend.operatorRanking(ctx, period);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: spendOperatorRanking,
+      input: { period },
+      page: "spend",
+    });
+    if (!read.ok) throw new Error("the ranking must map");
+    expect(read.value.operators[0]?.operator).toEqual({
+      kind: "named",
+      key: "prn_marcusbell",
+      facts: null,
+    });
+    expect(read.value.unattributed.runs).toBe(1);
+  });
+
+  it("operatorRanking maps a pseudonym row with no key and no share (negative)", async () => {
+    const usd = (micros: string) => ({ micros, currency: "USD" });
+    kernelRead.mockResolvedValue(
+      readOk({
+        period,
+        pseudonyms: true,
+        unproductive: usd("8000000"),
+        unattributed: { unproductive: usd("0"), runs: 0 },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "pseudonym", pseudonym: "Operator 0A1B2C3D" },
+            unproductive: usd("8000000"),
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: null,
+            topRuns: [],
+          },
+        ],
+      }),
+    );
+    const read = await spend.operatorRanking(ctx, period);
+    if (!read.ok) throw new Error("the ranking must map");
+    const [row] = read.value.operators;
+    expect(row?.operator).toEqual({
+      kind: "pseudonym",
+      pseudonym: "Operator 0A1B2C3D",
+    });
+    expect(row?.runs).toBeNull();
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("operatorRanking passes the mixed-currency refusal through (negative)", async () => {
+    const refused = readError("ranking_mixed_currency", 409);
+    kernelRead.mockResolvedValue(refused);
+    expect(await spend.operatorRanking(ctx, period)).toEqual(refused);
   });
 
   it("passes a refusal through as the kernel classified it (negative)", async () => {
