@@ -312,7 +312,7 @@ const HEALTHY_AGAIN =
   "The steering repo is healthy again. Oxagen merges and publishes again.";
 
 const REPAIR_SETTINGS =
-  "Repair: a workspace admin opens Workspace settings, then Steering repo, and selects Repair settings.";
+  "Repair: an admin selects Repair settings on the steering repo banner in Oxagen.";
 
 function rulesetName(key: string): string {
   return GITHUB_SETTINGS_BASELINE.rulesets[key]?.name ?? key;
@@ -413,7 +413,7 @@ export function renderHealthReport(state: HealthState): HealthReport {
       publishedLine(state.published_version),
       state.revert_pr_number === null
         ? "Oxagen could not open the pull request that reverts main. The next check tries again."
-        : `Repair: merge #${state.revert_pr_number}, which Oxagen opened to put main back at the published version.`,
+        : `Repair: an admin selects Repair settings on the steering repo banner in Oxagen, which merges #${state.revert_pr_number} and puts main back at the published version.`,
     );
   }
   const summary = lines.join("\n");
@@ -439,6 +439,7 @@ export function healthDigest(state: HealthState): string {
         version: state.published_version,
         differences: state.differences.map((d) => ({
           setting: d.setting,
+          expected: d.expected,
           actual: d.actual,
           by: d.changed_by,
           at: d.changed_at,
