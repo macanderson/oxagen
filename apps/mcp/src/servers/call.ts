@@ -5,8 +5,9 @@
 // tool, parked for a person's approval when a rule asks for one, and run by
 // M6's executor on the server's sandbox environment. A search-mode server's
 // search, describe, and call answer here too, and call is decided as the
-// tool it names. Every one of them is a governed action, so each is metered
-// whether it was allowed, denied, parked, or failed.
+// tool it names. Every one of them is a governed action. Billing admits
+// each one before anything else runs, and each is metered whether it was
+// allowed, denied, parked, or failed.
 import {
   SearchIndexError,
   effectiveAnnotations,
@@ -21,6 +22,7 @@ import { keywordRank, searchArguments, searchEntry, searchLines, type Ranker, ty
 import { unserved, visibleTools, type ServedTool, type ServedView } from "./snapshot";
 import {
   ServedRouteError,
+  type Admission,
   type ApprovalState,
   type MeterKind,
   type MeterOutcome,
@@ -38,8 +40,12 @@ function text(message: string): CallToolResult {
   return { content: [{ type: "text", text: message }] };
 }
 
+function failure(message: string): CallToolResult {
+  return { content: [{ type: "text", text: message }], isError: true };
+}
+
 function refusal(message: string, outcome: MeterOutcome): Answer {
-  return { result: { content: [{ type: "text", text: message }], isError: true }, outcome };
+  return { result: failure(message), outcome };
 }
 
 function clock(ports: ServedPorts): number {
@@ -60,7 +66,16 @@ async function meter(
   outcome: MeterOutcome,
 ): Promise<void> {
   try {
-    await ports.meter({ kind, tool, server, outcome, agent: view.agent?.name ?? null, run: view.run, at: new Date(clock(ports)) });
+    await ports.meter({
+      id: ports.newId?.() ?? crypto.randomUUID(),
+      kind,
+      tool,
+      server,
+      outcome,
+      agent: view.agent?.name ?? null,
+      run: view.run,
+      at: new Date(clock(ports)),
+    });
   } catch (error) {
     ports.log.warn("Oxagen could not record a governed action. The call's result stands.", {
       kind,
@@ -68,6 +83,40 @@ async function meter(
       outcome,
       error: errorName(error),
     });
+  }
+}
+
+/**
+ * Billing's refusal of a governed action, or null when billing admits it.
+ * It runs first, as the kernel runs assertGauAvailable, so nobody is asked
+ * to approve a call that billing then refuses. A refused action is not
+ * metered. When billing cannot be read, nothing is sent.
+ */
+async function unadmitted(view: ServedView, ports: ServedPorts, name: string): Promise<CallToolResult | null> {
+  let admission: Admission;
+  try {
+    admission = await ports.admit(view.run);
+  } catch (error) {
+    ports.log.warn("Oxagen could not read the organization's billing, so the call was not sent.", {
+      tool: name,
+      error: errorName(error),
+    });
+    return failure(`Oxagen could not check billing for ${name}, so it was not sent. Call it again in a minute.`);
+  }
+  if (admission.admitted) return null;
+  switch (admission.reason) {
+    case "units_exhausted":
+      return failure(
+        `The organization has no governed actions left this period, so Oxagen did not send ${name}. Ask an organization admin to add units in Billing.`,
+      );
+    case "no_payment_method":
+      return failure(
+        `The organization used this month's free governed actions, so Oxagen did not send ${name}. Ask an organization admin to add a payment method in Billing.`,
+      );
+    case "suspended":
+      return failure(
+        `Billing is suspended for the organization, so Oxagen did not send ${name}. Ask an organization admin to pay the open invoice in Billing.`,
+      );
   }
 }
 
@@ -172,6 +221,9 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
         run: view.run,
         agent,
         tool: tool.name,
+        version: tool.version,
+        publication:
+          view.published === null ? null : { repository: view.published.repository, version: view.published.version },
         server: server.name,
         args,
         reasons: verdict.reasons,
@@ -324,6 +376,8 @@ export async function callServed(
 ): Promise<CallToolResult | null> {
   const resolved = resolveName(view, name);
   if (resolved === null) return null;
+  const refused = await unadmitted(view, ports, name);
+  if (refused !== null) return refused;
 
   if (resolved.kind === "tool") {
     const { entry } = resolved;

@@ -5,7 +5,8 @@
 // the same table and inbox every other parked call uses. The agent calls
 // the tool again with the same arguments. An approved row lets exactly one
 // call through: the first retry claims it, and a later identical call opens
-// a new approval.
+// a new approval. The row answers only for the run that asked, the tool
+// version it asked about, and the publication it was decided under.
 //
 // This follows externalApproval in packages/agent/src/runtime/external-approval.ts,
 // which needs a chat message and a conversation that a wrapped agent's call
@@ -22,12 +23,22 @@ export const APPROVAL_TTL_MS = 5 * 60_000;
 
 const RISKS = new Set(["low", "medium", "high", "critical"]);
 
-/** The key that finds the approval for this exact call by this agent. */
+/**
+ * The key that finds the approval for this exact call: this run on this
+ * machine, this agent, this tool at this version under this publication,
+ * and these arguments. Another run with the same arguments opens its own
+ * approval, and so does a call after any new publish.
+ */
 export function servedResumeKey(request: ApprovalRequest): string {
+  const { run } = request;
   return `served:${inputDigest({
-    workspaceId: request.run.workspaceId,
+    workspaceId: run.workspaceId,
+    machine: run.machine,
+    run: run.runPublicId,
     agent: request.agent.name,
     tool: request.tool,
+    version: request.version,
+    publication: request.publication,
     args: request.args,
   })}`;
 }

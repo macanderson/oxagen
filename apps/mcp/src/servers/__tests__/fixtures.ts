@@ -26,6 +26,7 @@ import type {
 import { requireCedarRuntime, type CedarRuntime, type PolicyFile } from "@oxagen/policy";
 import { ServedCache, servedView, type ServedView } from "../snapshot";
 import type {
+  Admission,
   ApprovalRequest,
   ApprovalState,
   MeterEvent,
@@ -319,6 +320,8 @@ export interface LogLine {
 }
 
 export interface Recorded {
+  /** The runs billing was asked to admit an action for. */
+  admitted: ServedRun[];
   meter: MeterEvent[];
   logs: LogLine[];
   approvals: ApprovalRequest[];
@@ -331,6 +334,7 @@ export interface Recorded {
 export interface PortOptions {
   off?: { servers?: string[]; tools?: string[] };
   withheld?: string[];
+  admit?: (run: ServedRun) => Promise<Admission>;
   approval?: (request: ApprovalRequest) => Promise<ApprovalState>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
   /** Replaces the Transport lookup, such as to throw for a route. */
@@ -351,7 +355,8 @@ function unreached(): Promise<never> {
 }
 
 export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; recorded: Recorded } {
-  const recorded: Recorded = { meter: [], logs: [], approvals: [], credentials: [], routes: [], local: [], sent: [] };
+  const recorded: Recorded = { admitted: [], meter: [], logs: [], approvals: [], credentials: [], routes: [], local: [], sent: [] };
+  let actions = 0;
   function sender<K extends RequestKind>(kind: K): Sender<K> {
     return {
       kind,
@@ -374,6 +379,10 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     off: () =>
       Promise.resolve({ servers: new Set(options.off?.servers ?? []), tools: new Set(options.off?.tools ?? []) }),
     withheld: () => Promise.resolve(new Set(options.withheld ?? [])),
+    admit: (served) => {
+      recorded.admitted.push(served);
+      return options.admit?.(served) ?? Promise.resolve({ admitted: true });
+    },
     approvals: {
       settle: (request) => {
         recorded.approvals.push(request);
@@ -402,6 +411,7 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     },
     senders,
     now: () => NOW,
+    newId: () => `act_${++actions}`,
   };
   return { ports, recorded };
 }

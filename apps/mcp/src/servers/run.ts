@@ -2,11 +2,19 @@
 // Call path).
 //
 // A wrapped agent's MCP connection authenticates with its host's gateway
-// key. The key's scope names the host it was minted for, the host names the
-// runtime it enrolled as, and the session header names the tacho session.
-// The runtime and the session's harness pick the agent/v1 file the run
-// belongs to. A request with no gateway key, or whose host is revoked or has
-// no runtime, belongs to no run and is served no tool.
+// key. The key's scope names the host it was minted for. The host names the
+// runtime it enrolled as and the person who enrolled it, who operates every
+// session the host opens. That person's workspace role, read when the
+// request arrives, is the operator role Cedar decides with. It comes from
+// the key, so no header can change it.
+//
+// The session header names the tacho session, and the session's harness
+// picks the agent/v1 file when several share the runtime. The header can
+// name only a session on the key's own host. That host's daemon reported
+// every such session's harness through ingest, so naming one gives the key
+// holder no agent it could not already claim. A request with no gateway
+// key, or whose host is revoked or has no runtime, belongs to no run and is
+// served no tool.
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import type { ServedRun } from "./types";
 
@@ -20,6 +28,12 @@ export interface ServedHost {
   publicId: string;
   /** The runtime's slug. Null when the host bound no runtime. */
   runtime: string | null;
+  /**
+   * The workspace role, lowercased, that the person who enrolled the host
+   * holds now. Null when the host records no enroller or the enroller holds
+   * no role in the workspace.
+   */
+  operatorRole: string | null;
 }
 
 /** The tacho session a request names, in the fields the served tools read. */
@@ -27,7 +41,6 @@ export interface ServedSession {
   /** tacho.sessions.public_id: tse_... */
   publicId: string;
   harness: string;
-  operatorRole: string | null;
 }
 
 /** Where the resolver reads from. Production binds Postgres. */
@@ -53,7 +66,7 @@ export async function resolveServedRun(ctx: CapabilityContext, sources: RunSourc
     sessionId: session === null ? null : sessionUuid,
     runtime: host.runtime,
     harness: session?.harness ?? null,
-    ...(session?.operatorRole == null ? {} : { operatorRole: session.operatorRole }),
+    ...(host.operatorRole === null ? {} : { operatorRole: host.operatorRole }),
     machine: host.publicId,
     runPublicId: session?.publicId ?? null,
   };
