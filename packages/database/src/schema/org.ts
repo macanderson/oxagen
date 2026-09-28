@@ -486,15 +486,14 @@ export const assistantModelKeys = orgSchema.table(
 // (the mockup's `organization` step is complete), advanced by
 // `advance_onboarding` between `wrap` and `run`, and closed by the first frame
 // `ingest_tacho_events` accepts from one of the organization's hosts, which is
-// the only writer of `unlocked` and of `first_frame_at` / `first_run_id`. The
-// provisional window (spec §3: 14 days without a main repo) is `provisional_
-// until` with `main_repo_bound_at` null; `bind_main_repository` closes it. An
-// organization created before this table existed has no row: it was never
-// provisional and no first frame is known for it, and every reader treats the
-// missing row as an open gate with no window. `workspace_id` is null when
-// `create_org` made no workspace (`workspace: null`), and the organization's
-// first `create_workspace` fills it (#4582). Org-only RLS.
-export const PROVISIONAL_DAYS = 14;
+// the only writer of `unlocked` and of `first_frame_at` / `first_run_id`. An
+// organization created before this table existed has no row: no first frame
+// is known for it, and every reader treats the missing row as an open gate.
+// `workspace_id` is null when `create_org` made no workspace (`workspace:
+// null`), and the organization's first `create_workspace` fills it (#4582).
+// #4616 dropped the provisional window (`provisional_until`,
+// `main_repo_bound_at`), which only `bind_main_repository` closed.
+// Org-only RLS.
 
 export const onboardingState = orgSchema.table(
   "onboarding_state",
@@ -512,17 +511,9 @@ export const onboardingState = orgSchema.table(
     }),
     // The public id of the run the first frame opened (`tse_…`), the row Fleet reads.
     firstRunId: text("first_run_id"),
-    provisionalUntil: timestamp("provisional_until", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    mainRepoBoundAt: timestamp("main_repo_bound_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
     // The git remote the enrolling host reported: `{ provider, owner, name }`.
-    // Written once by enroll_host while the gate is open; the app offers it
-    // to bind_main_repository. Null until a host reports one.
+    // Written once by enroll_host while the gate is open. Null until a host
+    // reports one. No reader reads it since #4616 removed the bind it fed.
     detectedRepository: jsonb("detected_repository"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()

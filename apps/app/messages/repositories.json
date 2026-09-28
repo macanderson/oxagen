@@ -1,47 +1,28 @@
 {
   "repositories": {
     "mainRepository": {
-      "heading": "GitHub connection and main repository",
-      "about": "The main repository is where this workspace keeps .oxagen/: its published steering records, the promotion ledger, and every agent definition. A workspace has one. Until it is bound the workspace is provisional: runs are still recorded and spend still counts, but steering and agent definitions stay off.",
-      "loading": "Reading this workspace's main repository…",
+      "heading": "GitHub connection and steering repository",
+      "about": "The steering repository is where this workspace keeps .oxagen/: its published steering records, the promotion ledger, and every agent definition. Oxagen creates it with the workspace, and a workspace has one.",
+      "loading": "Reading this workspace's steering repository…",
       "connected": "Returned from GitHub. The installation is attached to this workspace.",
       "installRefused": "Returned from GitHub, but that installation could not be verified, so nothing was attached. Install the App again from this workspace and approve it on the account that owns the repository.",
       "installUnverified": "Returned from GitHub with the App installed, but GitHub sent no authorization to check the installation against, so nothing has been attached yet. Use “Connect an existing installation” below to finish. The App is already installed, so it takes one click and no further approval.",
       "install": {
         "heading": "Oxagen reaches a repository through its GitHub App",
-        "body": "No installation is attached to this workspace yet, so there is nothing to pick from. Install the App on the account that owns the repository, or connect an installation that account already has; GitHub sends you back here either way.",
-        "unreachable": "An installation is attached to this workspace, but GitHub would not let Oxagen use it. That is what an uninstalled, suspended, or withdrawn installation looks like from here. Install the App again, or attach an installation this account still reaches. Either one replaces the installation on file.",
+        "body": "No installation is attached to this workspace yet. Install the App on the account that owns the repository, or connect an installation that account already has; GitHub sends you back here either way.",
+        "attached": "An installation is attached to this workspace. To act through a different account, pick another installation or install the App again.",
         "action": "Install the GitHub App",
         "connect": "Connect an existing installation"
       },
-      "unconfigured": "This deployment has no GitHub App configured, so the App cannot be installed from here. An operator sets the App up before a repository can be bound.",
-      "picker": {
-        "heading": "Pick this workspace's main repository",
-        "loading": "Listing the repositories the installation reaches…",
-        "filterLabel": "Filter repositories",
-        "filterPlaceholder": "owner/name",
-        "listLabel": "Repositories the installation reaches",
-        "empty": "The installation reaches no repositories. Grant it access to one on GitHub, then reload this page.",
-        "noMatch": "No repository matches “{query}”.",
-        "private": "Private",
-        "defaultBranch": "default branch {ref}",
-        "truncated": "The installation reaches more repositories than this list holds, so the one you want may not be here. Narrow the App's repository access on GitHub and reload this page.",
-        "bind": "Bind as main repo",
-        "binding": "Binding…",
-        "none": "Choose a repository first."
-      },
+      "unconfigured": "This deployment has no GitHub App configured, so the App cannot be installed from here. An operator sets the App up before Oxagen can reach a repository.",
+      "provisioned": "This workspace has no steering repository yet, and Oxagen creates one when it provisions the workspace.",
       "bound": {
         "heading": "Bound",
         "defaultRef": "Default branch",
         "boundAt": "Bound {date}",
         "open": "Open on GitHub",
-        "retired": "The GitHub connection this repository was bound through has been removed, so Oxagen can no longer read .oxagen/ from it. Steering and Context PRs are off until it is bound again. The repository itself has not changed, and neither has anything else about this workspace. Bind it again through a live GitHub connection.",
-        "reconnect": "Reconnect this repository",
-        "reconnecting": "Reconnecting…",
-        "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an organization owner's decision, needs approval, and is recorded as a security event.",
-        "refDrift": "Context PRs are opened against, checked against, and merged into the branch approved here, never whatever GitHub currently calls the default. If this repository's default branch was renamed, they are refused until the new branch is approved.",
-        "reapprove": "Re-approve the default branch",
-        "reapproving": "Re-approving…"
+        "openGitLab": "Open on GitLab",
+        "retired": "This steering repository's connection was retired, so steering is off."
       },
       "manage": "Change which repositories the App reaches",
       "installChoose": "Returned from GitHub. This account reaches more than one installation of the Oxagen App, so pick the one this workspace should act through.",
@@ -56,25 +37,11 @@
         "attach": "Use this installation",
         "attaching": "Attaching…",
         "none": "Choose an installation first."
-      },
-      "gitlab": {
-        "heading": "Or connect a GitLab project",
-        "body": "Keep steering in a gitlab.com project. Create a project access token on the project with the api scope and the Developer role, then paste it here. With the Maintainer role, Oxagen also registers a webhook for merge request events. Oxagen stores the token encrypted and never shows it again.",
-        "reconnectHeading": "Connect the project again",
-        "reconnectBody": "Paste a new project access token for {project}. The binding stays on the same project.",
-        "pathLabel": "Project path",
-        "pathHint": "group/project or group/subgroup/project",
-        "tokenLabel": "Project access token",
-        "selfManaged": "gitlab.com only. Self-managed GitLab is not supported yet.",
-        "submit": "Connect and bind",
-        "submitting": "Connecting…",
-        "webhookRefused": "Connected and bound. The token's role cannot register a webhook, so Oxagen reads merge request state only when you act on a proposal. Use a Maintainer token to add the webhook.",
-        "open": "Open on GitLab"
       }
     },
     "failure": {
       "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
-      "githubNotConnected": "No GitHub App installation is attached to this workspace, so there is nothing to bind. Install the App first.",
+      "githubNotConnected": "No GitHub App installation is attached to this workspace, so Oxagen cannot reach a repository. Install the App first.",
       "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
       "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
       "invalid": "That repository name is not one GitHub accepts.",
@@ -141,7 +108,7 @@
       },
       "empty": {
         "title": "This workspace has no repository yet",
-        "body": "A workspace without a main repo cannot exist, so this state is the moment between creating one and binding it. The main repo is where steering and configuration are managed in source control. Until it is bound, there is nowhere for a record to be published to."
+        "body": "Oxagen creates a workspace's steering repository when it provisions the workspace, so this state is the moment between the two. The steering repository is where steering and configuration are managed in source control. Until it exists, there is nowhere for a record to be published to."
       }
     },
     "repos": {
@@ -198,7 +165,7 @@
       "notRecorded": "not recorded",
       "none": "—",
       "nothingWaiting": "nothing waiting",
-      "retired": "Connection retired. Open the repository to bind it again through a live connection.",
+      "retired": "Connection retired. Oxagen can no longer reach this repository.",
       "reachableUnread": "The repositories this installation reaches could not be listed, so only bound ones are shown.",
       "truncated": "The installation reaches more repositories than this list holds. Narrow the App's repository access on GitHub to see the rest.",
       "note": "Changing which repository is <code>main</code> is an organization-owner action with approval, and it lands in the audit record as a security event. The production branch never moves on its own: when GitHub’s default branch changes, the App records it and prompts, and the binding stays where it is until somebody confirms."
@@ -233,6 +200,7 @@
       "initOpen": "Pull request #{number} adds .oxagen/ and is waiting for a person to merge it.",
       "initOpenLink": "Open it on GitHub",
       "retiredLead": "Connection retired",
+      "retired": "This steering repository's connection was retired, so steering is off.",
       "unlink": "Unlink",
       "link": "Link to this workspace",
       "linking": "Linking",
@@ -532,19 +500,10 @@
         "option": "{repository} · {visibility}",
         "hint": "Only repositories the installation can already reach, and only the ones with no <code>.oxagen/</code> yet. A repository that has one is already governed; changing it is an ordinary pull request from the page it belongs to.",
         "empty": "No repository the installation reaches is without <code>.oxagen/</code>. Every one is governed already, or the installation reaches nothing yet.",
-        "noMain": "This workspace binds no main repo yet. Connect GitHub and bind the main repo first; the wizard continues from there.",
-        "roleLabel": "Role",
-        "main": {
-          "title": "Make it the main repo",
-          "about": "The workspace’s steering and configuration live here. Exactly one per workspace, and moving it is an owner action with approval."
-        },
-        "linked": {
-          "title": "Link it",
-          "about": "Its agents work on it. It may carry records that steer only runs on this repository, and never records that claim the workspace."
-        },
-        "noteLinked": "{main} is already this workspace’s main repo, so this one is linked.",
-        "noteMain": "{repository} is this workspace’s main repo.",
-        "moveMain": "Moving the main repo to another repository is an organization-owner action with approval, and no capability performs it yet."
+        "connect": "GitHub is not connected to this workspace yet. Connect it below, and the wizard continues from there.",
+        "noteLinked": "{repository} is linked to this workspace.",
+        "noteMain": "{repository} is this workspace’s steering repository.",
+        "noteLink": "{repository} is not linked yet, so the wizard opens a steering PR that links it and stops there."
       },
       "branch": {
         "lead": "Two things are decided once here, and both are then changed the way everything else is: by a pull request against this repository.",

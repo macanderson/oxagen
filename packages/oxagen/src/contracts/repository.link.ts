@@ -47,7 +47,7 @@ import { registerCapability } from "../registry";
 import {
   githubOwnerSchema,
   githubRepositoryNameSchema,
-} from "./repository.main.bind";
+} from "./repository.shared";
 
 /** The steering PR a link or an unlink opened on the steering repository. */
 export const steeringPullRequestSchema = z

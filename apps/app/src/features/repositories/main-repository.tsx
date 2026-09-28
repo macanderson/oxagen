@@ -1,22 +1,21 @@
 "use client";
-// The Repositories page's GitHub setup (MC spec §10.1, §10.2, §11.4): the main
-// repository panel and, below it, the bound repositories (bound-repositories.tsx)
-// that it links and unlinks. Both used to live in a Workspace settings dialog
-// opened from the workspace menu. The menu no longer carries Settings, and
-// nothing the dialog did was dropped: installing or connecting the GitHub App,
-// attaching an installation, binding the main repository, reconnecting a retired
-// binding, re-approving its branch, and linking or unlinking a second
-// repository all happen here, on the page the mockup draws for them.
+// The Repositories page's GitHub setup (MC spec §10.1, §10.2, §11.4): the
+// GitHub connection and the steering repository, above the bound repositories
+// (bound-repositories.tsx). Installing or connecting the GitHub App and
+// attaching an installation happen here.
 //
-// Why the main repository matters: it is where `.oxagen/` lives (published
-// steering records, the promotion ledger, and every agent definition), and
-// until a workspace binds one it stays provisional. This panel opens the App's
-// install door and then lists what the installation actually reaches, so the
-// set on screen is the set `bind_main_repository` accepts.
+// The steering repository is where `.oxagen/` lives: published steering
+// records, the promotion ledger, and every agent definition. Oxagen writes it
+// once, through `provision_steering_repo` when the workspace is created
+// (ADR-212), so this panel shows it and offers no control that binds one. The
+// bind, its re-bind repairs, and the GitLab connect form were removed in
+// #4616. #4637 tracks a repair for a retired connection, and #4636 tracks
+// GitLab settings.
 //
-// Every state it can be in is drawn, and none is faked: reading, no
-// installation, an unconfigured deployment, a picker over a live GitHub list,
-// a bound repository, and each refusal the three capabilities can give.
+// Every state it can be in is drawn, and none is faked: reading, a refusal of
+// that read, a bound and live steering repository, one whose connection was
+// retired, and a workspace with no steering repository, with the GitHub doors
+// beside it.
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -24,32 +23,21 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useId,
   useState,
 } from "react";
 import type {
   GitHubInstallations,
-  InstallationRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parseGitLabUrl } from "@/shared/gitlab-url";
 import { routes, sanitizeNext } from "@/shared/safe-path";
-import {
-  buttonSecondary,
-  eyebrow,
-  inputBase,
-  linkText,
-  panel,
-} from "@/ui/control-styles";
+import { buttonSecondary, eyebrow, linkText, panel } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { GitHubLink, GitLabLink, useNavigate } from "@/ui/navigation";
 import {
   attachGithubInstallation,
-  bindWorkspaceRepository,
-  connectGitLabProject,
   listGithubInstallations,
-  listInstallationRepositories,
   readWorkspaceRepository,
 } from "./actions";
 import {
@@ -122,16 +110,16 @@ function GitHubReturnQuery({
     onReturned((github === null ? null : ACKNOWLEDGEMENTS[github]) ?? null);
     // Back to the path with no query. `replace` also re-renders the server
     // tree, which is wanted here: the workspace just gained an installation,
-    // and the provisional banner is stale.
+    // and the pages behind this panel read the same state.
     navigate.replace(sanitizeNext(pathname, routes.root()));
   }, [params, pathname, navigate, onReturned]);
   return null;
 }
 
 /**
- * The GitHub connection and the main repository, as one section of the
- * Repositories tab. `onChanged` tells the page a bind, re-bind or attach
- * settled, so the repository table above it re-reads.
+ * The GitHub connection and the steering repository, as one section of the
+ * Repositories tab. `onChanged` tells the page an attach settled, so the
+ * repository table above it re-reads.
  */
 export function RepositorySetup({
   org,
@@ -163,6 +151,23 @@ export function RepositorySetup({
   );
 }
 
+/**
+ * Whether the panel draws the GitHub doors, and so reads the installations
+ * they offer. A workspace with no steering repository gets them, and so does a
+ * GitHub head whose connection was retired while no live one is attached. A
+ * live head, a GitLab head, and a retired head with a live connection already
+ * attached get none.
+ */
+function offersDoors(value: WorkspaceRepository): boolean {
+  const { repository } = value;
+  if (repository === null) return true;
+  return (
+    !repository.connectionLive &&
+    repository.provider === "github" &&
+    !value.github.connected
+  );
+}
+
 function MainRepositoryPanel({
   org,
   ws,
@@ -174,7 +179,7 @@ function MainRepositoryPanel({
   ws: string;
   open: boolean;
   acknowledgement: InstallAcknowledgement;
-  /** A bind, re-bind or attach settled: the record other sections read moved. */
+  /** An attach settled: the record other sections read moved. */
   onChanged: () => void;
 }) {
   const t = useTranslations("repositories.mainRepository");
@@ -183,9 +188,6 @@ function MainRepositoryPanel({
   const [settings, setSettings] = useState<Load<WorkspaceRepository>>({
     kind: "loading",
   });
-  const [listing, setListing] = useState<Load<InstallationRepositories> | null>(
-    null,
-  );
   const [candidates, setCandidates] =
     useState<Load<GitHubInstallations> | null>(null);
 
@@ -207,7 +209,6 @@ function MainRepositoryPanel({
     // panel shows its pending state on the same frame it opens.
     const load = async () => {
       setSettings({ kind: "loading" });
-      setListing(null);
       setCandidates(null);
       let record;
       try {
@@ -221,51 +222,18 @@ function MainRepositoryPanel({
         return;
       }
       setSettings({ kind: "ready", value: record.value });
-      // A bound workspace whose connection is still live needs neither list:
-      // the panel shows what it binds. One whose connection was retired is a
-      // different state — steering is off and the repair binds the same
-      // repository again through a LIVE connection — so it falls through to
-      // the doors below when there is no live connection to repair through.
-      const repository = record.value.repository;
-      if (repository !== null && repository.connectionLive) return;
+      if (!offersDoors(record.value)) return;
 
-      if (record.value.github.connected) {
-        // A bound repository is repaired by re-binding the one it already
-        // names, so the picker's list is not what this state asks for.
-        if (repository !== null) return;
-        // An installation is attached and nothing is bound: the repositories it
-        // reaches are the set the bind accepts.
-        setListing({ kind: "loading" });
-        let repositories;
-        try {
-          repositories = await listInstallationRepositories(org, ws);
-        } catch {
-          repositories = UNANSWERED;
-        }
-        if (cancelled()) return;
-        if (repositories.ok) {
-          setListing({ kind: "ready", value: repositories.value });
-          return;
-        }
-        setListing({ kind: "failed", failure: repositories });
-        // A listing that refused with an installation on file is the one state
-        // `get_main_repository` cannot see: it makes no GitHub call, so it
-        // reports `connected` from the stored installation id whether or not
-        // that installation still exists. An installation uninstalled or
-        // suspended on GitHub fails here, at the token, and nowhere earlier.
-        // So this falls through to the candidates read rather than returning:
-        // the fastest way out is attaching an installation this account still
-        // reaches, which overwrites the id on file, and only GitHub can say
-        // which those are.
-      }
-
-      // No installation attached, or the one attached could not be used. The
-      // panel asks rather than assuming there is nothing to pick from, because
-      // that assumption is what made this surface dead-end: the Connect action
-      // opens GitHub's identity URL, which always returns a code and never an
-      // `installation_id`, so a person whose account already carries the App
-      // returns authorized with nothing attached. What they reach is a
-      // question only GitHub answers.
+      // The panel asks which installations this account reaches rather than
+      // assuming there are none, because that assumption is what made this
+      // surface dead-end: the Connect action opens GitHub's identity URL,
+      // which always returns a code and never an `installation_id`, so a
+      // person whose account already carries the App returns authorized with
+      // nothing attached. What they reach is a question only GitHub answers.
+      // It is asked with an installation on file too, because
+      // `get_main_repository` makes no GitHub call and reports `connected`
+      // from the stored id even after the installation was uninstalled on
+      // GitHub. Attaching one this account still reaches replaces it.
       setCandidates({ kind: "loading" });
       let reachable;
       try {
@@ -286,7 +254,7 @@ function MainRepositoryPanel({
     };
   }, [open, org, ws, reloads]);
 
-  const bound = () => {
+  const attached = () => {
     setReloads((n) => n + 1);
     onChanged();
   };
@@ -300,9 +268,9 @@ function MainRepositoryPanel({
       {/*
         The acknowledgement describes the return leg from GitHub, so it is worth
         saying exactly once. Any action taken in this panel supersedes it: after
-        an attach, "pick which account" is still on screen while the repository
-        picker it asked for is already drawn, which reads as an instruction the
-        person has not followed.
+        an attach, "pick which account" would still be on screen beside the
+        account already picked, which reads as an instruction the person has
+        not followed.
       */}
       <Acknowledgement
         acknowledgement={reloads === 0 ? acknowledgement : null}
@@ -323,22 +291,16 @@ function MainRepositoryPanel({
         ) : settings.value.repository !== null ? (
           <>
             <BoundRepositoryPanel
-              org={org}
-              ws={ws}
               repository={settings.value.repository}
-              connected={settings.value.github.connected}
               manageUrl={settings.value.github.manageUrl}
-              onRepaired={bound}
             />
             {/*
-              A retired connection with no live one to repair through: the
-              doors are the next click, and they are the same doors an
-              unconnected workspace gets. Drawn beside the bound panel rather
-              than inside it, so the repository it still binds stays legible.
+              A retired GitHub connection with no live one attached: the doors
+              are the next click, and they are the same doors an unconnected
+              workspace gets. Drawn beside the bound panel rather than inside
+              it, so the repository it still binds stays legible.
             */}
-            {settings.value.repository.connectionLive ||
-            settings.value.repository.provider === "gitlab" ||
-            settings.value.github.connected ? null : (
+            {offersDoors(settings.value) ? (
               <div className="mt-4">
                 <ConnectPanel
                   org={org}
@@ -346,44 +308,33 @@ function MainRepositoryPanel({
                   connectUrl={settings.value.github.connectUrl}
                   installUrl={settings.value.github.installUrl}
                   candidates={candidates}
-                  onAttached={bound}
-                />
-              </div>
-            )}
-          </>
-        ) : settings.value.github.connected ? (
-          <>
-            <RepositoryPicker
-              org={org}
-              ws={ws}
-              listing={listing}
-              manageUrl={settings.value.github.manageUrl}
-              onBound={bound}
-            />
-            {/*
-              The listing refused with an installation on file, which is what a
-              revoked, uninstalled or suspended installation looks like from
-              here — `get_main_repository` makes no GitHub call, so it goes on
-              reporting `connected` from the stored id. Without this the panel
-              was the error and nothing else: no way to replace the stale
-              installation and no way to reinstall the App, on the one surface
-              that owns both. Same doors an unconnected workspace gets, because
-              they are the same next click, and drawn beside the refusal rather
-              than instead of it so the reason stays on screen.
-            */}
-            {listing !== null && listing.kind === "failed" ? (
-              <div className="mt-4">
-                <ConnectPanel
-                  org={org}
-                  ws={ws}
-                  connectUrl={settings.value.github.connectUrl}
-                  installUrl={settings.value.github.installUrl}
-                  candidates={candidates}
-                  onAttached={bound}
-                  body={t("install.unreachable")}
+                  onAttached={attached}
                 />
               </div>
             ) : null}
+          </>
+        ) : settings.value.github.connected ? (
+          <>
+            {/*
+              An installation is attached and no steering repository is bound.
+              Nothing here binds one, because Oxagen writes it when the
+              workspace is created. The doors stay, so a stale installation
+              can still be replaced.
+            */}
+            <p data-testid="workspace-repository-provisioned" className={prose}>
+              {t("provisioned")}
+            </p>
+            <div className="mt-4">
+              <ConnectPanel
+                org={org}
+                ws={ws}
+                connectUrl={settings.value.github.connectUrl}
+                installUrl={settings.value.github.installUrl}
+                candidates={candidates}
+                onAttached={attached}
+                body={t("install.attached")}
+              />
+            </div>
           </>
         ) : (
           <ConnectPanel
@@ -392,19 +343,9 @@ function MainRepositoryPanel({
             connectUrl={settings.value.github.connectUrl}
             installUrl={settings.value.github.installUrl}
             candidates={candidates}
-            onAttached={bound}
+            onAttached={attached}
           />
         )}
-        {/*
-          The other host (#3762). Offered whenever nothing is bound, beside the
-          GitHub doors rather than behind them: a workspace that keeps its code
-          on gitlab.com never needs the GitHub App.
-        */}
-        {settings.kind === "ready" && settings.value.repository === null ? (
-          <div className="mt-4">
-            <GitLabPanel org={org} ws={ws} onBound={bound} />
-          </div>
-        ) : null}
       </div>
     </section>
   );
@@ -456,8 +397,8 @@ function Acknowledgement({
 }
 
 /**
- * No installation is attached yet. Both doors, and the choice between the
- * installations this account already has.
+ * The GitHub doors, and the choice between the installations this account
+ * already has.
  *
  * Two doors, because they are two different things and a person arrives
  * needing either. `connectUrl` is GitHub's identity leg — authorize Oxagen as
@@ -474,10 +415,9 @@ function Acknowledgement({
  *
  * `body` is the sentence above the doors, and it is a prop because this panel
  * answers two different questions with the same three controls. Its default
- * says no installation is attached. The repository picker draws it with a
- * different sentence when the listing refused: an installation IS on file
- * there, it simply could not be used, and telling that person nothing is
- * attached would be a sentence the panel knows to be false.
+ * says no installation is attached. A workspace with an installation on file
+ * gets a different sentence, because telling that person nothing is attached
+ * would be a sentence the panel knows to be false.
  */
 function ConnectPanel({
   org,
@@ -628,9 +568,8 @@ function InstallationPicker({
         chosen.installationId,
       );
       if (result.ok) {
-        // The panel re-reads — it is now connected, so the next thing it draws
-        // is the repository picker — and the server tree re-renders, because
-        // the onboarding gate's provisional banner behind this dialog reads the
+        // The panel re-reads, now with this installation attached, and the
+        // server tree re-renders, because the pages behind this panel read the
         // same state.
         onAttached();
         navigate.refresh();
@@ -706,31 +645,23 @@ function InstallationPicker({
 }
 
 /**
- * A repository is bound: what it is, where `.oxagen/` is read from, and either
- * why this is not the place to change it or — when the connection behind it was
- * retired — that steering is off and how to get it back.
+ * The steering repository is bound: what it is, where `.oxagen/` is read from,
+ * and, when the connection behind it was retired, that steering is off.
  *
  * Those are the same panel on purpose. A person meeting the second state
  * deleted a GitHub connection and reconnected, which is an ordinary thing to
- * do; what they need told is that the repository is still the one on screen and
- * that nothing else about the workspace moved. Drawing it as a separate
- * "broken" surface would read as though the binding itself were lost.
+ * do. What they need told is that the repository is still the one on screen
+ * and that nothing else about the workspace moved. Drawing it as a separate
+ * "broken" surface would read as though the binding itself were lost. The
+ * panel offers no repair: the bind that did one was removed in #4616, and
+ * #4637 tracks its successor.
  */
 function BoundRepositoryPanel({
-  org,
-  ws,
   repository,
-  connected,
   manageUrl,
-  onRepaired,
 }: {
-  org: string;
-  ws: string;
   repository: NonNullable<WorkspaceRepository["repository"]>;
-  /** A live GitHub connection is attached, so the repair has something to bind through. */
-  connected: boolean;
   manageUrl: string | null;
-  onRepaired: () => void;
 }) {
   const t = useTranslations("repositories.mainRepository");
   const onGitLab = repository.provider === "gitlab";
@@ -763,367 +694,18 @@ function BoundRepositoryPanel({
           data-testid="workspace-repository-open"
           className={`mt-2 inline-block ${linkText}`}
         >
-          {t("gitlab.open")}
+          {t("bound.openGitLab")}
         </GitLabLink>
       )}
       {repository.connectionLive ? (
-        <>
-          {/*
-            Spec §10.1: moving a workspace to a DIFFERENT repository is an org
-            owner's decision recorded as a security event, and
-            `bind_main_repository` refuses it with `main_repo_bound`. A control
-            offering THAT here would be a control that lies, which is why none
-            is offered and the copy says so.
-
-            Re-approving the default branch below is not that control. It binds
-            the same owner and name — nothing about which repository is main
-            moves — and it is the only way the approved production ref ever
-            changes, because steering reads the ref from the binding and never
-            from live GitHub.
-          */}
-          <p className={`mt-3 ${prose}`}>{t("bound.fixed")}</p>
-          <ReapproveDefaultRef
-            org={org}
-            ws={ws}
-            repository={repository}
-            onRepaired={onRepaired}
-          />
-          {onGitLab ? null : <ManageLink manageUrl={manageUrl} />}
-        </>
-      ) : onGitLab ? (
-        // The token was revoked or the connection deleted. The repair is a
-        // new token for the same project; which project is main never moves.
+        onGitLab ? null : (
+          <ManageLink manageUrl={manageUrl} />
+        )
+      ) : (
         <div className="mt-3" data-testid="workspace-repository-retired">
           <FormAlert>{t("bound.retired")}</FormAlert>
-          <div className="mt-3">
-            <GitLabPanel
-              org={org}
-              ws={ws}
-              projectPath={repository.fullName}
-              onBound={onRepaired}
-            />
-          </div>
         </div>
-      ) : (
-        <RetiredConnection
-          org={org}
-          ws={ws}
-          repository={repository}
-          connected={connected}
-          onRepaired={onRepaired}
-        />
       )}
-    </div>
-  );
-}
-
-/**
- * The connection this binding hangs off is gone, so steering is off (#3233).
- *
- * Reached by deleting the workspace's GitHub connection and reconnecting:
- * the delete leaves the old row mid-delete, the reconnect attaches a new
- * connection, and the binding head goes on naming the retired one — so every
- * reader that joins the two resolves nothing and no Context PR can be opened,
- * while the repository still reads as bound. Until `get_main_repository`
- * reported `connectionLive`, nothing on any surface said so, and re-binding the
- * same repository took the bind's idempotent branch and moved nothing.
- *
- * The repair is that same bind, on the same owner and name. It supersedes the
- * binding onto the live connection, which is why this is not the "change the
- * main repository" control the panel refuses to offer above: nothing about
- * which repository is main changes here.
- */
-function RetiredConnection({
-  org,
-  ws,
-  repository,
-  connected,
-  onRepaired,
-}: {
-  org: string;
-  ws: string;
-  repository: NonNullable<WorkspaceRepository["repository"]>;
-  connected: boolean;
-  onRepaired: () => void;
-}) {
-  const t = useTranslations("repositories.mainRepository");
-  const failureText = useRepositoriesFailure();
-  const navigate = useNavigate();
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  async function reconnect(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setFailure(null);
-    try {
-      // The SAME repository, by the owner and name the binding already
-      // carries: a repair, never a choice of a different repo.
-      const result = await bindWorkspaceRepository(org, ws, {
-        owner: repository.owner,
-        name: repository.name,
-      });
-      if (result.ok) {
-        onRepaired();
-        navigate.refresh();
-      } else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <div className="mt-3" data-testid="workspace-repository-retired">
-      <FormAlert>{t("bound.retired")}</FormAlert>
-      {/*
-        No live connection to bind through: the bind would refuse with
-        `github_not_connected`, so the doors below this panel are the next
-        click and an action here would only be a button that fails.
-      */}
-      {!connected ? null : (
-        <form noValidate className="mt-3" onSubmit={(e) => void reconnect(e)}>
-          {failure === null ? null : (
-            <div className="mb-3">
-              <FormAlert testId="workspace-repository-reconnect-failure">
-                {failure}
-              </FormAlert>
-            </div>
-          )}
-          <SubmitButton
-            pending={pending}
-            fullWidth={false}
-            secondary
-            label={t("bound.reconnect")}
-            pendingLabel={t("bound.reconnecting")}
-          />
-        </form>
-      )}
-    </div>
-  );
-}
-
-/**
- * The approved production ref, re-read from GitHub on demand (#3265 review, P1).
- *
- * Steering resolves `defaultBranch` from the binding's `configuredDefaultRef`,
- * and `assertProductionBase` refuses any Context PR whose base is not it. That
- * is deliberate — it is what stops a default-branch rename on GitHub silently
- * retargeting every Context PR at a branch nobody approved. The cost is that a
- * rename leaves the workspace pinned to a branch that may no longer exist, and
- * until this control the pin had no way to move: `bind_main_repository` treated
- * a same-repository re-bind as idempotent, and `set_main_repository` is a spec
- * entry with no contract and no handler. Steering stopped and nothing on any
- * surface could restart it.
- *
- * Offered unconditionally rather than only when drift is detected, because
- * detecting it would put a GitHub round trip on every settings render:
- * `get_main_repository` is a pure binding read today. The bind compares the
- * recorded facts against what GitHub reports and writes a successor only if
- * they differ, so pressing this when nothing has moved is a no-op that returns
- * the existing binding's identity.
- */
-function ReapproveDefaultRef({
-  org,
-  ws,
-  repository,
-  onRepaired,
-}: {
-  org: string;
-  ws: string;
-  repository: NonNullable<WorkspaceRepository["repository"]>;
-  onRepaired: () => void;
-}) {
-  const t = useTranslations("repositories.mainRepository");
-  const failureText = useRepositoriesFailure();
-  const navigate = useNavigate();
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  async function reapprove(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setFailure(null);
-    try {
-      // The SAME owner and name the binding already carries. A re-approval of
-      // this repository's current default branch, never a choice of another
-      // repository — the bind refuses that with `main_repo_bound` regardless.
-      const result = await bindWorkspaceRepository(
-        org,
-        ws,
-        repository.provider === "gitlab"
-          ? { provider: "gitlab", projectPath: repository.fullName }
-          : { owner: repository.owner, name: repository.name },
-      );
-      if (result.ok) {
-        onRepaired();
-        navigate.refresh();
-      } else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <div className="mt-3" data-testid="workspace-repository-reapprove">
-      <p className={prose}>{t("bound.refDrift")}</p>
-      <form noValidate className="mt-3" onSubmit={(e) => void reapprove(e)}>
-        {failure === null ? null : (
-          <div className="mb-3">
-            <FormAlert testId="workspace-repository-reapprove-failure">
-              {failure}
-            </FormAlert>
-          </div>
-        )}
-        <SubmitButton
-          pending={pending}
-          fullWidth={false}
-          secondary
-          label={t("bound.reapprove")}
-          pendingLabel={t("bound.reapproving")}
-        />
-      </form>
-    </div>
-  );
-}
-
-/**
- * Connect a gitlab.com project with a project access token and bind it as the
- * main repository (#3762). The same form repairs a GitLab binding whose token
- * was revoked: the path is fixed to the bound project and a new token rotates
- * the stored one.
- *
- * The token field is a password field with autocomplete off, and the value is
- * cleared once the write settles either way, so the token does not sit in the
- * page after it has been sent.
- */
-function GitLabPanel({
-  org,
-  ws,
-  projectPath: fixedPath,
-  onBound,
-}: {
-  org: string;
-  ws: string;
-  /** The bound project, for a repair; the path is then not editable. */
-  projectPath?: string;
-  onBound: () => void;
-}) {
-  const t = useTranslations("repositories.mainRepository");
-  const failureText = useRepositoriesFailure();
-  const navigate = useNavigate();
-  const pathId = useId();
-  const tokenId = useId();
-  const [path, setPath] = useState(fixedPath ?? "");
-  const [token, setToken] = useState("");
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  async function connect(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    setPending(true);
-    setFailure(null);
-    setNotice(null);
-    try {
-      const result = await connectGitLabProject(org, ws, {
-        projectPath: path.trim(),
-        token: token.trim(),
-      });
-      if (result.ok) {
-        if (result.value.webhook === "refused")
-          setNotice(t("gitlab.webhookRefused"));
-        onBound();
-        navigate.refresh();
-      } else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setToken("");
-      setPending(false);
-    }
-  }
-
-  return (
-    <div data-testid="workspace-gitlab-connect" className={`${panel} p-4`}>
-      <h4 className={sectionTitle}>
-        {fixedPath === undefined
-          ? t("gitlab.heading")
-          : t("gitlab.reconnectHeading")}
-      </h4>
-      <p className={`mt-1.5 ${prose}`}>
-        {fixedPath === undefined
-          ? t("gitlab.body")
-          : t("gitlab.reconnectBody", { project: fixedPath })}
-      </p>
-      <form noValidate className="mt-3" onSubmit={(e) => void connect(e)}>
-        {failure === null ? null : (
-          <div className="mb-3">
-            <FormAlert testId="workspace-gitlab-failure">{failure}</FormAlert>
-          </div>
-        )}
-        {notice === null ? null : (
-          <p
-            role="status"
-            data-testid="workspace-gitlab-notice"
-            className={`mb-3 ${prose}`}
-          >
-            {notice}
-          </p>
-        )}
-        <label htmlFor={pathId} className="text-sm font-medium text-foreground">
-          {t("gitlab.pathLabel")}
-        </label>
-        <input
-          id={pathId}
-          data-testid="workspace-gitlab-path"
-          className={`mt-1 ${inputBase}`}
-          value={path}
-          readOnly={fixedPath !== undefined}
-          placeholder={t("gitlab.pathHint")}
-          autoComplete="off"
-          spellCheck={false}
-          required
-          onChange={(e) => {
-            setPath(e.target.value);
-          }}
-        />
-        <label
-          htmlFor={tokenId}
-          className="mt-3 block text-sm font-medium text-foreground"
-        >
-          {t("gitlab.tokenLabel")}
-        </label>
-        <input
-          id={tokenId}
-          data-testid="workspace-gitlab-token"
-          className={`mt-1 ${inputBase}`}
-          type="password"
-          value={token}
-          autoComplete="off"
-          spellCheck={false}
-          required
-          onChange={(e) => {
-            setToken(e.target.value);
-          }}
-        />
-        <p className={`mt-1.5 text-xs ${prose}`}>{t("gitlab.selfManaged")}</p>
-        <div className="mt-3">
-          <SubmitButton
-            pending={pending}
-            fullWidth={false}
-            secondary
-            label={t("gitlab.submit")}
-            pendingLabel={t("gitlab.submitting")}
-          />
-        </div>
-      </form>
     </div>
   );
 }
@@ -1153,208 +735,5 @@ function ManageLink({ manageUrl }: { manageUrl: string | null }) {
     >
       {t("manage")}
     </GitHubLink>
-  );
-}
-
-/** The set `bind_main_repository` accepts, filtered by name, with one submit. */
-function RepositoryPicker({
-  org,
-  ws,
-  listing,
-  manageUrl,
-  onBound,
-}: {
-  org: string;
-  ws: string;
-  listing: Load<InstallationRepositories> | null;
-  manageUrl: string | null;
-  onBound: () => void;
-}) {
-  const t = useTranslations("repositories.mainRepository");
-  const failureText = useRepositoriesFailure();
-  const navigate = useNavigate();
-  const filterId = useId();
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  if (listing === null || listing.kind === "loading") {
-    return (
-      <p
-        role="status"
-        data-testid="workspace-repositories-loading"
-        className={prose}
-      >
-        {t("picker.loading")}
-      </p>
-    );
-  }
-  if (listing.kind === "failed") {
-    // The refusal, and the one control the ready path offers that still means
-    // something here. A listing can refuse because the installation is gone —
-    // the doors drawn beside this panel are the answer to that — or because it
-    // is suspended or reaches nothing this token may read, and that is settled
-    // on the App's own page, which is where this link goes. Returning the
-    // alert alone is what stranded the workspace (#3233): the state was
-    // reachable and had no affordance to leave it.
-    return (
-      <div data-testid="workspace-repositories-refused">
-        <FormAlert testId="workspace-repositories-failure">
-          {failureText(listing.failure)}
-        </FormAlert>
-        <ManageLink manageUrl={manageUrl} />
-      </div>
-    );
-  }
-
-  const { repositories, truncated } = listing.value;
-  const needle = query.trim().toLocaleLowerCase();
-  const shown =
-    needle === ""
-      ? repositories
-      : repositories.filter((repository) =>
-          repository.fullName.toLocaleLowerCase().includes(needle),
-        );
-
-  async function bind(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
-    // Resolved from `shown`, not `repositories`: a selection the filter has
-    // since hidden is not a choice this form is offering. Searching the
-    // unfiltered list would bind a repository that is not on screen — and
-    // because a bound main repo cannot be changed from here (spec §10.1 makes
-    // that an org-owner decision), a stray keystroke in the filter box would
-    // bind the wrong repository permanently. `picked` is deliberately left
-    // alone so the selection survives clearing the filter again.
-    const chosen = shown.find((repository) => repository.id === picked);
-    if (chosen === undefined) {
-      setFailure(t("picker.none"));
-      return;
-    }
-    setPending(true);
-    setFailure(null);
-    try {
-      const result = await bindWorkspaceRepository(org, ws, {
-        owner: chosen.owner,
-        name: chosen.name,
-      });
-      if (result.ok) {
-        // The panel re-reads, and the rest of the app re-renders: the bind
-        // closes the onboarding gate's provisional window, which the Fleet
-        // banner behind this dialog is drawing from.
-        onBound();
-        navigate.refresh();
-      } else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      noValidate
-      data-testid="workspace-repository-picker"
-      onSubmit={(e) => void bind(e)}
-    >
-      <h4 className={sectionTitle}>{t("picker.heading")}</h4>
-      {repositories.length === 0 ? (
-        <p
-          data-testid="workspace-repositories-empty"
-          className={`mt-2 ${prose}`}
-        >
-          {t("picker.empty")}
-        </p>
-      ) : (
-        <>
-          <label htmlFor={filterId} className={`mt-3 block ${eyebrow}`}>
-            {t("picker.filterLabel")}
-          </label>
-          <input
-            id={filterId}
-            type="search"
-            data-testid="workspace-repository-filter"
-            className={`mt-1 ${inputBase}`}
-            placeholder={t("picker.filterPlaceholder")}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-            }}
-          />
-          {shown.length === 0 ? (
-            <p
-              data-testid="workspace-repositories-no-match"
-              className={`mt-3 ${prose}`}
-            >
-              {t("picker.noMatch", { query: query.trim() })}
-            </p>
-          ) : (
-            <fieldset className="mt-3 flex flex-col gap-1">
-              <legend className="sr-only">{t("picker.listLabel")}</legend>
-              {shown.map((repository) => (
-                <label
-                  key={repository.id}
-                  data-touch-target=""
-                  className="flex min-h-11 items-center gap-2.5 rounded-md border border-border px-2.5 py-2 text-sm hover:bg-accent has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
-                >
-                  <input
-                    type="radio"
-                    name="repository"
-                    value={repository.id}
-                    checked={picked === repository.id}
-                    onChange={() => {
-                      setPicked(repository.id);
-                    }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <b className="block truncate font-mono text-[13px] font-semibold">
-                      {repository.fullName}
-                    </b>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {t("picker.defaultBranch", {
-                        ref: repository.defaultBranch,
-                      })}
-                    </span>
-                  </span>
-                  {repository.private ? (
-                    <span className="flex-none rounded-sm border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                      {t("picker.private")}
-                    </span>
-                  ) : null}
-                </label>
-              ))}
-            </fieldset>
-          )}
-        </>
-      )}
-      {truncated ? (
-        <p
-          data-testid="workspace-repositories-truncated"
-          className={`mt-3 ${prose}`}
-        >
-          {t("picker.truncated")}
-        </p>
-      ) : null}
-      <ManageLink manageUrl={manageUrl} />
-      {failure === null ? null : (
-        <div className="mt-3">
-          <FormAlert testId="workspace-repository-bind-failure">
-            {failure}
-          </FormAlert>
-        </div>
-      )}
-      {repositories.length === 0 ? null : (
-        <div className="mt-4 flex justify-end">
-          <SubmitButton
-            pending={pending}
-            fullWidth={false}
-            label={t("picker.bind")}
-            pendingLabel={t("picker.binding")}
-          />
-        </div>
-      )}
-    </form>
   );
 }

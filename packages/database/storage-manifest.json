@@ -212,15 +212,6 @@
       "writes": []
     },
     {
-      "domain": "repository",
-      "name": "bind_main_repository",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
       "domain": "run",
       "name": "bisect_runs",
       "reads": [],
@@ -4272,7 +4263,7 @@
       "writes": []
     }
   ],
-  "contentHash": "192daf9c217ddc911e92b933cc5bbf238b2dee72725a484dc8842ab080e671d8",
+  "contentHash": "7c52b9ac232d2adbde1f36c4b5bc42d9022fa0d91a8fb23fa74067ea95f6a66d",
   "domains": [
     {
       "name": "agent",
@@ -19919,18 +19910,6 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
-        },
-        {
-          "name": "provisional_until",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "main_repo_bound_at",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
         },
         {
           "name": "detected_repository",

@@ -236,9 +236,10 @@ describe("pullRequestBackfillDeps", () => {
     );
   });
 
-  // Regression: the sources `workspace.create` and `bind_main_repository`
-  // make carry only `{ installationId }`. A read that required a stored
-  // owner found none of them, so no modern workspace ever got a state.
+  // Regression: the sources the install callback and
+  // `attach_github_installation` write carry only `{ installationId }`. A
+  // read that required a stored owner found none of them, so no modern
+  // workspace ever got a state.
   it("reads through a source that records only its installation", async () => {
     mocks.answers = [
       [

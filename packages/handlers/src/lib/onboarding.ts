@@ -2,18 +2,19 @@
 // make in passing (#2967). `create_org` opens the gate, `create_workspace`
 // fills in its workspace when `create_org` made none (#4582), and
 // `ingest_tacho_events` closes it on the first frame. The gate's own handlers
-// (get, advance) and `bind_main_repository` read and write the row directly.
+// (get, advance) read and write the row directly.
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
-import { PROVISIONAL_DAYS } from "@oxagen/database/schema";
-import type { DetectedRepository } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import { and, eq, isNull, ne } from "drizzle-orm";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The provisional window's end for an organization created at `now`. */
-export function provisionalUntil(now: Date): Date {
-  return new Date(now.getTime() + PROVISIONAL_DAYS * DAY_MS);
+/**
+ * The repository a host's git remote names, as `enroll_host` records it on
+ * the gate row (`detected_repository`).
+ */
+interface DetectedRepository {
+  provider: "github";
+  owner: string;
+  name: string;
 }
 
 /**
@@ -29,7 +30,6 @@ export async function openOnboardingGate(
     orgId: args.orgId,
     workspaceId: args.workspaceId,
     step: "wrap",
-    provisionalUntil: provisionalUntil(args.now),
     createdAt: args.now,
     updatedAt: args.now,
   });
@@ -138,9 +138,8 @@ const GITHUB_REMOTE = [
 ];
 
 /**
- * The repository a git remote names, for the remotes GitHub issues; anything
- * else is null and nothing is recorded — the gate offers a binding only for
- * a remote `bind_main_repository` can act on.
+ * The repository a git remote names, for the remotes GitHub issues. Anything
+ * else is null, and nothing is recorded.
  */
 export function parseRepositoryRemote(
   remote: string,

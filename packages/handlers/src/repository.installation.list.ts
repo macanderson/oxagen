@@ -1,20 +1,19 @@
 // repository.installation.list.ts — `list_installation_repositories` (#2967).
 //
-// The picker behind `bind_main_repository`. It exists so the choice on screen
-// and the choice the write accepts are the same set: the bind resolves the
-// repository through the installation's token and answers
-// `not_found: repository_not_installed` for anything that token cannot read,
-// so a picker built from any other list — the user's own repositories, a typed
-// `owner/name` — would offer options that refuse on submit.
+// The picker behind `link_repository`. `link_repository` resolves the
+// repository through the installation's token. It answers
+// `not_found: repository_not_installed` for anything that token cannot read.
+// A picker built from any other list, such as the user's own repositories or a
+// typed `owner/name`, would offer options that refuse on submit.
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), the pair that
-//      may bind.
+//   1. Role gate: assertOrgRole, org Owner or Admin (INV-29).
 //   2. The installation: the workspace's GitHub connection, through the one
-//      shared resolver. The caller names no installation — an installation id
+//      shared resolver. The caller names no installation. An installation id
 //      a caller could choose would let one tenant enumerate another account's
 //      repositories. No installation is `conflict: github_not_connected`, the
-//      same refusal the bind gives and the state `get_main_repository` reports.
+//      same refusal `link_repository` gives and the state `get_main_repository`
+//      reports.
 //   3. The listing, read through the installation's token, sorted by full name
 //      so the picker is stable between two reads of an unchanged installation.
 import type { CapabilityHandler } from "@oxagen/oxagen";

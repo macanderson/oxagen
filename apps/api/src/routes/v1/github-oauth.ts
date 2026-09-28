@@ -319,12 +319,12 @@ const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
  * The org roles that may start a SETTINGS-level GitHub connect.
  *
  * The same pair `attach_github_installation`, `get_main_repository` and
- * `bind_main_repository` admit (INV-29), and it has to be: a settings state
- * names the workspace and nothing else, so whoever holds one can complete the
- * identity leg as themselves and have the callback attach an installation THEY
- * reach onto the workspace's authoritative GitHub connection — overwriting the
- * one an Owner configured, and redirecting every repository operation this
- * workspace runs through.
+ * `list_installation_repositories` admit (INV-29), and it has to be: a
+ * settings state names the workspace and nothing else, so whoever holds one
+ * can complete the identity leg as themselves and have the callback attach an
+ * installation THEY reach onto the workspace's authoritative GitHub
+ * connection — overwriting the one an Owner configured, and redirecting every
+ * repository operation this workspace runs through.
  *
  * The capability gate alone did not stop that, because the HTTP route is a
  * second path to the same write and only one of them was gated. Membership is
@@ -360,7 +360,7 @@ const SETTINGS_CONNECT_ROLES: OrgRoleRequirement = {
  *     account reaches (`installationClaimVerified` proves reachability BY THE
  *     AUTHORIZING USER, which is exactly what an attacker has), and that id is
  *     what `resolveWorkspaceGithubInstallation` hands to
- *     `list_installation_repositories` / `bind_main_repository`, which mint a
+ *     `list_installation_repositories` / `link_repository`, which mint a
  *     token with the platform App's private key;
  *   - resets `status` to `pending_setup`, taking a live connection out of
  *     service.
@@ -1468,12 +1468,12 @@ const GITHUB_ACK: Record<InstallAttachOutcome, string> = {
  * That used not to matter, on either leg. The legacy wizard also took the id
  * from this parameter, but everything downstream of it called GitHub with the
  * **user OAuth token** (`GET /user/installations/:id/repositories`), and GitHub
- * itself refuses an installation that user cannot reach. The three repository
- * capabilities added in #2967 do not: `list_installation_repositories` and
- * `bind_main_repository` mint a token with the **platform App's private key**
+ * itself refuses an installation that user cannot reach. The repository
+ * capabilities do not: `list_installation_repositories` (#2967) and
+ * `link_repository` mint a token with the **platform App's private key**
  * (`getInstallationToken`), which checks no caller entitlement at all. GitHub's
  * own check is gone, so an unverified id is cross-tenant access to another
- * account's repositories — listed, and bindable.
+ * account's repositories, listed and linkable.
  *
  * So the id is checked against `GET /user/installations`, the authenticated
  * user's own authoritative list, through the same `fetchAllInstallations` the
@@ -1533,7 +1533,7 @@ type InstallLeg = "settings" | "wizard";
  * That reasoning expired with #2967: `resolveWorkspaceGithubInstallation`
  * (packages/handlers/src/repository.github-connection.ts) hands **any** github
  * connection row carrying an `installationId` — legacy wizard rows included —
- * to `list_installation_repositories` and `bind_main_repository`, and those
+ * to `list_installation_repositories` and `link_repository`, and those
  * mint a token with the **platform App's private key**, which checks no caller
  * entitlement. So an id written by the wizard leg is an id the App acts
  * through, and the wizard leg's `installation_id` is the same unproven query
@@ -1723,7 +1723,7 @@ async function resolveSettingsInstallationFromUser(args: {
  * Attach a settings-level GitHub App install to the workspace's GitHub source
  * connection, creating that connection when the workspace has none.
  *
- * Why this exists: `get_main_repository`, `bind_main_repository` and
+ * Why this exists: `get_main_repository`, `link_repository` and
  * `list_installation_repositories` all read the workspace's installation out of
  * `ingestion.source_connections` through one shared resolver
  * (`resolveWorkspaceGithubInstallation`). The platform catalog the callback
@@ -1821,10 +1821,11 @@ async function attachWorkspaceGithubInstallation(args: {
       // ingestion poll scheduler claims
       // (`source_connections_poll_due_partial_idx`), so marking it connected
       // here would enrol a workspace with no record-type mappings into the sync
-      // loop. `bind_main_repository` promotes it to `connected` when it binds a
-      // repository, and all three repository reads match on the installation id
-      // rather than the status — so `pending_setup` blocks nothing the dialog
-      // needs while keeping an unbound install out of the poller.
+      // loop. `writeLinkedHead` (repository.link.write.ts) promotes it to
+      // `connected` when the steering sync writes a linked head on it. The
+      // repository capabilities match on the installation id, not the status,
+      // so `pending_setup` blocks nothing the dialog needs while keeping an
+      // unbound install out of the poller.
       status: "pending_setup",
       ...(oauthAccountId ? { oauthAccountId } : {}),
       createdAt: now,
@@ -1899,7 +1900,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
       // Direct-from-GitHub install / owner-approval: no signed state → no tenant
       // context, but the installations registry is platform-scoped, so we still
       // record the installation id here (the App webhook + the first tenant to
-      // attach enrich + bind it). A completed install means it is live → reactivate.
+      // attach enriches it). A completed install means it is live → reactivate.
       if (installationId) {
         await upsertGithubInstallation({
           installationId,

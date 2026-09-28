@@ -678,9 +678,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "github",
     description:
       "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page. " +
-      "Also required in-process by app: repository.main.bind.ts and " +
-      "repository.installation.list.ts mint installation tokens directly " +
-      "when invoked from the Workspace settings dialog, not only from api/mcp.",
+      "Also required in-process by app: repository.binding-write.ts (behind " +
+      "link_repository) and repository.installation.list.ts mint installation " +
+      "tokens directly when the app invokes them, not only from api/mcp.",
     secret: false,
     clientExposed: false,
     services: ["api", "mcp", "app"],
@@ -1975,10 +1975,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS). " +
       "Also read in-process by app and mcp: resolveGitHubToken's " +
       "stored-OAuth-token path (packages/github/src/workspace-token.ts) " +
-      "decrypts through resolveIngestionCryptoAdapterForKeyId whenever " +
-      "repository.main.bind.ts or repository.installation.list.ts falls back " +
-      "off the installation-token path, and resolveWorkspaceGithubUserToken " +
-      "opens the stored token that backs the list_github_installations tool.",
+      "decrypts through resolveIngestionCryptoAdapterForKeyId whenever it " +
+      "falls back off the installation-token path, and " +
+      "resolveWorkspaceGithubUserToken opens the stored token that backs the " +
+      "list_github_installations tool.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],

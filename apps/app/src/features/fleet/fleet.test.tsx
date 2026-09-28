@@ -380,7 +380,7 @@ describe("header", () => {
     await renderFleet(
       { runs: runPage(RUNS), approvals: NO_APPROVALS },
       null,
-      <p data-testid="banner">provisional</p>,
+      <p data-testid="banner">first run</p>,
     );
     expect(screen.getByTestId("banner")).toBeInTheDocument();
   });

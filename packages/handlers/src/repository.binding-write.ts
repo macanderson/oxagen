@@ -152,6 +152,9 @@ export async function assertGlobalClaimIsKnowable(
   assertDataPlaneUsable(plane);
   if (plane.mode !== "shared") throw planeUnsupported();
 
+  // tenancy: global read of org.data_planes, a shared-plane system table, with
+  // no org_id filter by design. It reads one row id to learn whether any
+  // dedicated plane exists, and nothing outside this function sees the id.
   const dedicatedElsewhere = await withSystemDb((tx) =>
     tx
       .select({ id: schema.dataPlanes.id })

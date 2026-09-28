@@ -27,10 +27,10 @@ import {
  * the org's graph placement (pooled, or its own Neo4j database — ADR-098),
  * the IAM roles and grants, the first workspace with everything a workspace
  * needs, the onboarding gate opened on that workspace (#2967: the
- * organization exists, so the gate is at `wrap` with its 14-day provisional
- * window), and the $5 signup grant (grantSignupCredits), in one system
- * transaction. The grant funds the in-app agent's platform-paid turns
- * (ADR-053 §2; apps/app/ARCHITECTURE.md §9, 2026-09-15), so an org never
+ * organization exists, so the gate is at `wrap`), and the $5 signup grant
+ * (grantSignupCredits), in one system transaction. The grant funds the
+ * in-app agent's platform-paid turns (ADR-053 §2; apps/app/ARCHITECTURE.md
+ * §9, 2026-09-15), so an org never
  * exists without it. No other billing row is written: no contract_terms,
  * gau_buckets or gau_settlements row, and the billing settings row appears on
  * the first write that needs it.

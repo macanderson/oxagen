@@ -20,7 +20,8 @@
 //   5. The head, written under the workspace's repository lock. The trigger
 //      `repository_binding_heads_exclusive_main` serialises it against a
 //      concurrent steering claim elsewhere, and a lost race maps back to
-//      `main_repo_claimed`.
+//      `main_repo_claimed`. A connection still at `pending_setup` moves to
+//      `connected` in the same transaction.
 //
 // `link_repository` runs steps 1 to 4 before it opens the steering PR, so a
 // PR that could never take effect is refused up front. The sync runs all
@@ -193,6 +194,31 @@ export async function assertLinkAllowed(
 }
 
 /**
+ * The install callback and `attach_github_installation` write the workspace's
+ * GitHub connection at `pending_setup`. That status keeps an installation with
+ * nothing bound through it out of the ingestion poller, which claims only
+ * `connected` rows. Once a linked head is written on the connection, a
+ * repository is bound through it, so it moves to `connected`, and the readers
+ * that mint a token through `resolveGitHubToken` can use it. Only
+ * `pending_setup` moves. A connection in any other status keeps it.
+ */
+async function promotePendingConnection(
+  tx: Tx,
+  connectionId: string,
+  now: Date,
+): Promise<void> {
+  await tx
+    .update(schema.sourceConnections)
+    .set({ status: "connected", updatedAt: now })
+    .where(
+      and(
+        eq(schema.sourceConnections.id, connectionId),
+        eq(schema.sourceConnections.status, "pending_setup"),
+      ),
+    );
+}
+
+/**
  * Step 5: write the linked head under the workspace lock. `userId` is null
  * when the steering sync writes it: the person who merged the steering PR is
  * the host's fact, not an Oxagen user.
@@ -206,7 +232,7 @@ export async function writeLinkedHead(
     return await withTenantDb(async (tx) => {
       await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
       await assertLinkAllowed(tx, scope, target.repo);
-      return writeRepositoryHead(tx, {
+      const written = await writeRepositoryHead(tx, {
         scope,
         connectionId: target.connection.id,
         repo: target.repo,
@@ -214,6 +240,8 @@ export async function writeLinkedHead(
         userId: args.userId,
         now: args.now,
       });
+      await promotePendingConnection(tx, target.connection.id, args.now);
+      return written;
     });
   } catch (err) {
     // The window the pre-check cannot close: a steering claim on this

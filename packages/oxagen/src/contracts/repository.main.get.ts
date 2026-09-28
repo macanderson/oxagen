@@ -7,19 +7,19 @@
  * and until it is bound the workspace is provisional: runs record and spend
  * counts, but steering, records and agent definitions stay off.
  *
- * `bind_main_repository` is the write, and it refuses
- * `conflict: github_not_connected` unless the workspace already carries a
- * GitHub App installation. Nothing in the app could produce one: the install
- * leg is an HTTP flow the API runs (`/connections/github/auth-url` → GitHub →
- * the HMAC-verified callback), and no capability exposed it, so the only repo
- * a person could ever bind was the git remote the enrolling host happened to
- * report. This read closes that hole. It answers three things at once, because
+ * `link_repository` refuses `conflict: github_not_connected` unless the
+ * workspace already carries a GitHub App installation. Nothing in the app
+ * could produce one before this read: the install leg is an HTTP flow the API
+ * runs (`/connections/github/auth-url` → GitHub → the HMAC-verified callback),
+ * and no capability exposed it, so the only repo a person could ever bind was
+ * the git remote the enrolling host happened to report. This read closes that
+ * hole. It answers three things at once, because
  * they are three faces of one question — "can this workspace keep its steering
  * in git yet, and if not, what is the next click":
  *
  *   - `repository`: the bound main repo, or null while none is bound.
  *   - `github.connected`: whether an installation is attached, which is
- *     exactly the precondition `bind_main_repository` checks.
+ *     the precondition `link_repository` checks.
  *   - `github.connectUrl` / `github.installUrl` / `github.manageUrl`: the
  *     three doors to GitHub, which are three different doors and not one worn
  *     three ways. CONNECT is the identity leg, for an account that already
@@ -38,12 +38,12 @@
  *
  * The installation id is deliberately NOT in the output. A caller that could
  * name an installation could mint tokens for another account's installation,
- * which is why the bind takes it from the connection rather than from input;
+ * which is why `link_repository` takes it from the connection, not from input;
  * shipping it to a browser would hand back the same handle by another route.
  *
- * Roles: org Owner or Admin, checked by the handler (INV-29) — the same pair
- * the bind admits, because the install URL in this output is the first half of
- * that write. A settings read: `noBillingGate: true`.
+ * Roles: org Owner or Admin, checked by the handler (INV-29), the same pair
+ * `attach_github_installation` admits, because the install URL in this output
+ * leads to the same installation write. A settings read: `noBillingGate: true`.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -98,10 +98,7 @@ export const repositoryMainGet = registerCapability({
            *
            * It is reported rather than hidden because the repository is still
            * the one the workspace binds and the person has to be told which it
-           * is. `bind_main_repository` is the repair: re-binding the SAME
-           * repository supersedes the binding onto the live connection and
-           * moves the head with it (changing to a DIFFERENT repository stays
-           * `conflict: main_repo_bound`, an org owner's decision, spec §10.1).
+           * is. No capability repairs that state yet (#4637).
            */
           connectionLive: z.boolean(),
         })
@@ -111,7 +108,8 @@ export const repositoryMainGet = registerCapability({
         .object({
           /**
            * An installation is attached to this workspace's GitHub connection.
-           * False is exactly the state in which `bind_main_repository` answers
+           * False is the state in which `link_repository` and
+           * `list_installation_repositories` answer
            * `conflict: github_not_connected`.
            */
           connected: z.boolean(),

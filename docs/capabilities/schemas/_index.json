@@ -1,5 +1,5 @@
 {
-  "generatedCount": 409,
+  "generatedCount": 408,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -228,16 +228,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "bind_main_repository",
-      "domain": "repository",
-      "surfaces": [
-        "api"
       ],
       "component": null,
       "produces": [],

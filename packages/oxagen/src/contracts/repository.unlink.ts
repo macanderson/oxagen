@@ -38,7 +38,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { steeringPullRequestSchema } from "./repository.link";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 
 export const repositoryUnlink = registerCapability({
   name: "unlink_repository",
@@ -59,12 +59,12 @@ export const repositoryUnlink = registerCapability({
   },
   input: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
     })
     .strict(),
   output: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       /** `owner/name` of the repository. */
       fullName: z.string().min(1),
       status: z.enum(["unlinked", "proposed"]),

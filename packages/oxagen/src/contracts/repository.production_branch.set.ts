@@ -5,9 +5,9 @@
  * The production branch is the only branch whose commits update the code
  * graph, the only one `.oxagen/` is read from, and the only one a Context PR
  * merges into. GitHub's default branch is the suggestion; the person decides.
- * `bind_main_repository` re-approves whatever GitHub's default is today, which
- * is the confirm half. This is the change half: any branch that exists on
- * GitHub, named by the caller.
+ * A new head records GitHub's default branch when it is written. This
+ * capability confirms or changes it: any branch that exists on GitHub, named
+ * by the caller.
  *
  * The handler reads the branch through the workspace's installation (a branch
  * GitHub does not know is `not_found: branch_not_found`) and, when it differs
@@ -28,7 +28,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 
 /** A git branch name as GitHub accepts one: no spaces, no `..`, no leading `-`. */
 export const branchName = z
@@ -59,14 +59,14 @@ export const repositoryProductionBranchSet = registerCapability({
   },
   input: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       branch: branchName,
     })
     .strict(),
   output: z
     .object({
       /** The binding the head points at now: the successor when `changed`. */
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       fullName: z.string().min(1),
       productionBranch: z.string().min(1),
       previousBranch: z.string().min(1),

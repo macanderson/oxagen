@@ -3,7 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-09-27
 - **Amended:** 2026-09-28, the provisional refusal removed and
-  `bind_main_repository` kept until #4616.
+  `bind_main_repository` kept until #4616. Amended again on 2026-09-28:
+  #4616 removed `bind_main_repository` and the provisional window.
 - **Owners:** platform, steering
 - **Related:** issue #4516 (lane S8), PR #4517 (the steering role), ADR-099
   (a workspace is born with its main repository, superseded in part here),
@@ -106,11 +107,16 @@ checkout cannot name a workspace.
   no prior list named it and the reconcile leaves it alone.
 - A `workspace.toml` that does not read moves no head, and the sync warns.
 - Only GitHub repositories link. An entry on another host is a warning.
-- `bind_main_repository` stays until Mac approves removing the app's bind
-  controls, which lane S7 keeps (#4616). It writes the `steering` role. The
-  onboarding gate's provisional window (ADR-065) goes with it: the
-  `provisional` field of `get_onboarding_state`, and the `provisional_until`
-  and `main_repo_bound_at` columns.
+- `bind_main_repository` is gone. Mac approved removing the app's bind
+  controls on 2026-09-28, and #4616 removed the capability, its route, its
+  handler, the Repositories page's bind and GitLab project controls, and the
+  init wizard's bind step. The steering repo job's bind step is now the only
+  writer of a `steering` head, and a steering PR is the only way to write a
+  `linked` head. The onboarding gate's provisional window (ADR-065) went with
+  it: the `provisional` field of `get_onboarding_state`, `PROVISIONAL_DAYS`,
+  and the `provisional_until` and `main_repo_bound_at` columns. The Shared
+  contract section of the steering-repo spec is unchanged: the `main` role
+  enum and the `main_repo_*` reason codes stay.
 - The provisional window refuses nothing. `publish_context_record` used to
   refuse the gate's workspace with `conflict: provisional` until
   `bind_main_repository` set `main_repo_bound_at`. Onboarding no longer binds
@@ -118,7 +124,9 @@ checkout cannot name a workspace.
   record. The refusal is gone.
 - `repository_unlinked` has no backfill. A session recorded before the
   column reads `false`.
-- Enrollment still reads the host's git remote, and only to suggest a
-  repository on the onboarding screen. The CLI's `.oxagen/workspace.json` is
+- Enrollment still reads the host's git remote and records it on the gate
+  row as `detected_repository`. Since #4616 nothing reads that column: the
+  onboarding screen offered it only as a repository to bind, and
+  `get_onboarding_state` no longer returns it. The CLI's `.oxagen/workspace.json` is
   a gitignored choice one person makes for one checkout. It scopes that
   person's CLI calls and never a wrapped session.

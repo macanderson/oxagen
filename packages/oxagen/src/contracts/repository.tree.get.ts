@@ -25,7 +25,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 import { repositoryRole } from "./repository.list";
 
 /** The governance mode `.oxagen/rules/governance.toml` declares, as read. */
@@ -56,12 +56,12 @@ export const repositoryTreeGet = registerCapability({
   },
   input: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
     })
     .strict(),
   output: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       role: repositoryRole,
       /** `owner/name` as the binding recorded it. */
       fullName: z.string().min(1),

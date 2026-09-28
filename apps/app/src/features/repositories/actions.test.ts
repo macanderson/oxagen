@@ -1,4 +1,4 @@
-// The Repositories page reads and the bind, through the real viewer and
+// The Repositories page reads and writes, through the real viewer and
 // kernel seams: the session and the kernel's invoke() are the only fakes, so
 // each case shows what the page gets back and whether the capability ran.
 //
@@ -32,8 +32,6 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   attachGithubInstallation,
-  bindWorkspaceRepository,
-  connectGitLabProject,
   linkWorkspaceRepository,
   listGithubInstallations,
   closeRepositoryChange,
@@ -231,7 +229,7 @@ describe("readWorkspaceRepository", () => {
 });
 
 describe("listInstallationRepositories", () => {
-  it("answers the set bind_main_repository will accept", async () => {
+  it("answers the set link_repository will accept", async () => {
     invoke.mockResolvedValue(LISTING);
     expect(await listInstallationRepositories("acme", "core-platform")).toEqual(
       { ok: true, value: LISTING },
@@ -256,94 +254,6 @@ describe("listInstallationRepositories", () => {
     expect(await listInstallationRepositories("acme", "core-platform")).toEqual(
       { ok: false, reason: "conflict", code: "github_not_connected" },
     );
-  });
-});
-
-describe("bindWorkspaceRepository", () => {
-  it("binds the picked repository and answers with what the handler wrote", async () => {
-    invoke.mockResolvedValue({
-      bindingId: "rpb_0a1b2c",
-      provider: "github",
-      connectionId: "con_01hq",
-      fullName: "acme/platform",
-      defaultRef: "main",
-      boundAt: "2026-09-17T09:00:00.000Z",
-      provisionalClosed: true,
-    });
-    expect(
-      await bindWorkspaceRepository("acme", "core-platform", {
-        owner: "acme",
-        name: "platform",
-      }),
-    ).toEqual({
-      ok: true,
-      value: {
-        fullName: "acme/platform",
-        defaultRef: "main",
-        boundAt: "2026-09-17T09:00:00.000Z",
-      },
-    });
-  });
-
-  it("names only the repository: the installation comes from the workspace's connection", async () => {
-    invoke.mockResolvedValue({
-      bindingId: "rpb_0a1b2c",
-      provider: "github",
-      connectionId: "con_01hq",
-      fullName: "acme/platform",
-      defaultRef: "main",
-      boundAt: "2026-09-17T09:00:00.000Z",
-      provisionalClosed: false,
-    });
-    await bindWorkspaceRepository("acme", "core-platform", {
-      owner: "acme",
-      name: "platform",
-    });
-    expect(invoke.mock.calls[0]?.[1]).toEqual({
-      owner: "acme",
-      name: "platform",
-    });
-  });
-
-  it("reads back a workspace that already binds another repository (negative)", async () => {
-    invoke.mockRejectedValue({ code: "conflict", reason: "main_repo_bound" });
-    expect(
-      await bindWorkspaceRepository("acme", "core-platform", {
-        owner: "acme",
-        name: "other",
-      }),
-    ).toEqual({ ok: false, reason: "conflict", code: "main_repo_bound" });
-  });
-
-  it("reads back a repository the installation cannot see (negative)", async () => {
-    invoke.mockRejectedValue({
-      code: "not_found",
-      reason: "repository_not_installed",
-    });
-    expect(
-      await bindWorkspaceRepository("acme", "core-platform", {
-        owner: "acme",
-        name: "unreachable",
-      }),
-    ).toEqual({
-      ok: false,
-      reason: "not_found",
-      code: "repository_not_installed",
-    });
-  });
-
-  it("refuses a repository name GitHub would not accept before the kernel runs (negative)", async () => {
-    const result = await bindWorkspaceRepository("acme", "core-platform", {
-      owner: "acme",
-      name: "not a repo name",
-    });
-    expect(result).toEqual({
-      ok: false,
-      reason: "invalid",
-      code: "invalid_input",
-      field: "name",
-    });
-    expect(invoke).not.toHaveBeenCalled();
   });
 });
 
@@ -1039,77 +949,6 @@ describe("readRepositoryChanges", () => {
       reason: "denied",
       code: "repository.read",
     });
-  });
-});
-
-describe("connectGitLabProject", () => {
-  const TOKEN = "glpat-abcdefghijklmnopqrstuvwxyz";
-  const ATTACHED = {
-    connectionId: "con_gl1",
-    projectId: "4242",
-    fullName: "acme/platform/rules",
-    defaultRef: "main",
-    tokenExpiresAt: null,
-    rotated: false,
-    webhook: { status: "registered" as const },
-  };
-  const BOUND_GITLAB = {
-    bindingId: "rpb_0a1b2d",
-    connectionId: "con_gl1",
-    provider: "gitlab",
-    fullName: "acme/platform/rules",
-    defaultRef: "main",
-    boundAt: "2026-09-23T10:00:00.000Z",
-    provisionalClosed: true,
-  };
-
-  beforeEach(() => {
-    invoke.mockReset();
-    requireViewer.mockResolvedValue(ctx);
-  });
-
-  it("attaches the token, then binds the project GitLab reported, and never answers the token", async () => {
-    invoke.mockResolvedValueOnce(ATTACHED).mockResolvedValueOnce(BOUND_GITLAB);
-    const result = await connectGitLabProject("acme", "core-platform", {
-      projectPath: "acme/platform/rules",
-      token: TOKEN,
-    });
-    expect(result).toEqual({
-      ok: true,
-      value: {
-        fullName: "acme/platform/rules",
-        defaultRef: "main",
-        boundAt: "2026-09-23T10:00:00.000Z",
-        webhook: "registered",
-      },
-    });
-    expect(invoke.mock.calls.map((c) => [c[0], c[1]])).toEqual([
-      [
-        "attach_gitlab_project",
-        { projectPath: "acme/platform/rules", token: TOKEN },
-      ],
-      [
-        "bind_main_repository",
-        { provider: "gitlab", projectPath: "acme/platform/rules" },
-      ],
-    ]);
-    expect(JSON.stringify(result)).not.toContain(TOKEN);
-  });
-
-  it("stops at a refused attach and binds nothing (negative)", async () => {
-    invoke.mockRejectedValueOnce({
-      code: "conflict",
-      reason: "gitlab_token_not_project_scoped",
-    });
-    const result = await connectGitLabProject("acme", "core-platform", {
-      projectPath: "acme/platform/rules",
-      token: TOKEN,
-    });
-    expect(result).toMatchObject({
-      ok: false,
-      code: "gitlab_token_not_project_scoped",
-    });
-    expect(invoke).toHaveBeenCalledTimes(1);
   });
 });
 

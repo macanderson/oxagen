@@ -47,4 +47,4 @@ None. The org and workspace come from the capability context.
 |---|---|---|
 | `forbidden` | IAM | the principal holds none of the default roles |
 
-A workspace with no heads answers an empty list. That state is reachable only for the organization's first workspace, which `create_org` writes without a main repository (spec line 222: onboarding binds it later through the installer, inside a 14-day provisional window). Every workspace `create_workspace` writes has its main head from its first instant.
+A workspace with no heads answers an empty list. A workspace has none until the steering repo job binds its steering repository (ADR-212). `create_workspace` starts that job and returns before it finishes. `create_org` does not start it, so a first workspace it writes has no heads.

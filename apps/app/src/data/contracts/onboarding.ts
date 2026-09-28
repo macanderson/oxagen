@@ -22,13 +22,6 @@ export const OnboardingStep = z.enum([
 ]);
 export type OnboardingStep = z.infer<typeof OnboardingStep>;
 
-/** The git remote the enrolling host reported, as `enroll_host` parsed it. */
-const DetectedRepository = z.object({
-  provider: z.literal("github"),
-  owner: z.string().min(1),
-  name: z.string().min(1),
-});
-
 export const OnboardingGate = z.object({
   step: OnboardingStep,
   /** The gate's workspace; null until the organization's first workspace exists (#4582). */
@@ -37,18 +30,6 @@ export const OnboardingGate = z.object({
   firstFrameAt: Instant.nullable(),
   /** The run the first frame opened; null with `firstFrameAt`. */
   firstRunId: PublicId.nullable(),
-  /**
-   * The provisional window. Null before an organization exists and for an
-   * organization that predates the gate, which was never provisional; open
-   * while `mainRepoBoundAt` is null.
-   */
-  provisional: z
-    .object({
-      until: Instant,
-      mainRepoBoundAt: Instant.nullable(),
-      detectedRepository: DetectedRepository.nullable(),
-    })
-    .nullable(),
 });
 export type OnboardingGate = z.infer<typeof OnboardingGate>;
 
