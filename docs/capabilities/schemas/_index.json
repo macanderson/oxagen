@@ -1,5 +1,5 @@
 {
-  "generatedCount": 409,
+  "generatedCount": 411,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -228,16 +228,6 @@
         "api",
         "mcp",
         "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "bind_main_repository",
-      "domain": "repository",
-      "surfaces": [
-        "api"
       ],
       "component": null,
       "produces": [],
@@ -1900,6 +1890,28 @@
       "consumes": []
     },
     {
+      "name": "get_steering_index",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_repo",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_subscription",
       "domain": "billing",
       "surfaces": [
@@ -3449,6 +3461,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "repair_steering_repo",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

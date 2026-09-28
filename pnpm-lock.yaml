@@ -913,6 +913,9 @@ importers:
 
   apps/mcp:
     dependencies:
+      '@cedar-policy/cedar-wasm':
+        specifier: 4.13.0
+        version: 4.13.0
       '@clickhouse/client':
         specifier: 1.23.1
         version: 1.23.1
@@ -937,18 +940,27 @@ importers:
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../../packages/iam
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../../packages/mcp-studio
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@oxagen/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
       '@oxagen/rules':
         specifier: workspace:*
         version: link:../../packages/rules
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       ai:
         specifier: 7.0.111
         version: 7.0.111(zod@3.25.76)
@@ -2120,6 +2132,9 @@ importers:
 
   packages/steering-check:
     dependencies:
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../mcp-studio
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen

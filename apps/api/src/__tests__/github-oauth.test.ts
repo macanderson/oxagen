@@ -245,8 +245,8 @@ const APP_SLUG = "oxagen-test";
  * so a test can say WHICH one a leg asked for rather than only that it asked.
  *
  * `SETTINGS_REQUIREMENT` is what `attach_github_installation`,
- * `get_main_repository` and `bind_main_repository` admit (org only — their
- * contracts carry `workspace: {}`); `CONNECTION_REQUIREMENT` is what
+ * `get_main_repository` and `list_installation_repositories` admit (org only:
+ * their contracts carry `workspace: {}`); `CONNECTION_REQUIREMENT` is what
  * `create_connection` and `delete_connection` admit.
  */
 const SETTINGS_REQUIREMENT = { org: ["Owner", "Admin"] } as const;
@@ -495,12 +495,13 @@ describe("GET /connections/github/auth-url", () => {
    *
    * The mounted middleware establishes workspace MEMBERSHIP; it says nothing
    * about role. `attach_github_installation`, `get_main_repository` and
-   * `bind_main_repository` are all org Owner/Admin, so without a gate here an
-   * ordinary member reached the same write one layer down: ask this route for a
-   * settings state, complete the identity leg as themselves, and the callback
-   * attaches an installation THEY reach onto the workspace's authoritative
-   * GitHub connection — replacing the credentials every repository operation
-   * runs through. Two paths to one write, only one of them gated.
+   * `list_installation_repositories` are all org Owner/Admin, so without a
+   * gate here an ordinary member reached the same write one layer down: ask
+   * this route for a settings state, complete the identity leg as themselves,
+   * and the callback attaches an installation THEY reach onto the
+   * workspace's authoritative GitHub connection — replacing the credentials
+   * every repository operation runs through. Two paths to one write, only one
+   * of them gated.
    */
   describe("the settings leg is Owner/Admin only", () => {
     it("refuses a member, and mints no state for them", async () => {
@@ -1392,7 +1393,7 @@ describe("GET /oauth/github/callback", () => {
 
   // ── settings-level install → the workspace's GitHub source connection ──────
   //
-  // `get_main_repository`, `bind_main_repository` and
+  // `get_main_repository`, `link_repository` and
   // `list_installation_repositories` all read the workspace's installation out
   // of `ingestion.source_connections`. Before these, a settings-level install
   // wrote only the platform catalog (`ingestion.github_installations`), which
@@ -1879,10 +1880,10 @@ describe("GET /oauth/github/callback", () => {
   // That was survivable while every consumer called GitHub with the USER token
   // (`GET /user/installations/:id/repositories`), because GitHub scoped the
   // request to that user itself. It is not survivable now:
-  // `list_installation_repositories` and `bind_main_repository` mint a token
+  // `list_installation_repositories` and `link_repository` mint a token
   // with the platform App's PRIVATE KEY, which checks no caller entitlement at
   // all. GitHub's own check is gone, so an unverified id is another tenant's
-  // repositories listed and bindable. These are the tests that keep the check.
+  // repositories listed and linkable. These are the tests that keep the check.
 
   it("settings install: an installation_id the authorizing user cannot reach is NEVER written", async () => {
     // The forgery, exactly: a valid state for the attacker's OWN workspace, a
@@ -2099,7 +2100,7 @@ describe("GET /oauth/github/callback", () => {
   // itself. That reasoning expired with #2967:
   // `resolveWorkspaceGithubInstallation` hands ANY github connection row
   // carrying an installationId — legacy wizard rows included — to
-  // `list_installation_repositories` and `bind_main_repository`, and those mint
+  // `list_installation_repositories` and `link_repository`, and those mint
   // a token with the platform App's PRIVATE KEY, which checks no caller
   // entitlement. So a wizard-written id is an id the App acts through, and the
   // exemption was the same hole by another door.

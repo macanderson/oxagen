@@ -27,7 +27,7 @@ const ORG_ID = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WORKSPACE_ID = "0192d4a8-7c1e-7a00-8000-0000000c0e01";
 const ACTOR_ID = "0192d4a8-7c1e-7a00-8000-0000000a0001";
 
-// The runner owns the step list. These are the seven names @oxagen/handlers
+// The runner owns the step list. These are the eight names @oxagen/handlers
 // lists today, copied here because this package cannot import handlers.
 const STEPS = [
   "pick_connection",
@@ -35,6 +35,7 @@ const STEPS = [
   "add_to_installation",
   "write_first_commit",
   "apply_settings",
+  "register_webhook",
   "publish_version",
   "bind_repository",
 ] as const;

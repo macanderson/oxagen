@@ -97,6 +97,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

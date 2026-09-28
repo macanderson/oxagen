@@ -1,11 +1,11 @@
 "use server";
 // What the Repositories page reads and writes (MC spec §10.1, §10.2, §11.4):
-// the workspace's main repository, the repositories its GitHub App
-// installation reaches, the bind that turns the second into the first
-// (#2967), the list, link and unlink of every bound repository (§17 M0: "a
-// second repo can be linked and unlinked"), what each one holds under
-// `.oxagen/`, its production branch, the pull request that adds Oxagen to
-// it, the Context PRs Oxagen has open, and the directories the CLI reported.
+// the workspace's steering repository, the repositories its GitHub App
+// installation reaches, the list, link and unlink of every bound repository
+// (§17 M0: "a second repo can be linked and unlinked"), what each one holds
+// under `.oxagen/`, its production branch, the pull request that adds Oxagen
+// to it, the Context PRs Oxagen has open, and the directories the CLI
+// reported.
 //
 // These are reads made on demand rather than through a DataSource port. Most
 // of them are live calls to GitHub through the workspace's installation
@@ -15,19 +15,14 @@
 // needs it, through this module, which resolves its own viewer exactly as a
 // write does (§3.3, and the `features` row of §2).
 //
-// `bind_main_repository` also has an action in features/onboarding: the
-// provisional banner binds the one repository the enrolling host reported.
-// This one binds the repository a person picked out of the installation. Each
-// feature owns its own actions (§2 admits no edge between two features), and
-// the two callers refuse differently (the banner stays where it is, the page
-// re-reads its panel), so the duplication is the seam, not an accident.
+// The steering repository is written once, by `provision_steering_repo` when
+// the workspace is created (ADR-212), so nothing here binds it. The app's bind
+// and GitLab connect actions were removed in #4616.
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
-import { repositoryGitlabAttach } from "@oxagen/oxagen/contracts/repository.gitlab.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
-import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
@@ -60,15 +55,9 @@ import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import { WORKING_COPY_LIMIT } from "./view";
 
-export type BoundRepository = {
-  fullName: string;
-  defaultRef: string;
-  boundAt: string;
-};
-
 /**
- * The workspace's main repository, whether an installation is attached, and
- * the doors to GitHub. Answering all three at once is the point: they are
+ * The workspace's steering repository, whether an installation is attached,
+ * and the doors to GitHub. Answering all three at once is the point: they are
  * three faces of "can this workspace keep its steering in git yet, and if not,
  * what is the next click".
  */
@@ -86,11 +75,10 @@ export async function readWorkspaceRepository(
 }
 
 /**
- * The repositories the installation reaches — the set `bind_main_repository`
+ * The repositories the installation reaches, which is the set `link_repository`
  * accepts, so nothing offered on screen can refuse on submit. Called only once
- * `readWorkspaceRepository` has said an installation is attached: without one
- * this is `conflict: github_not_connected`, which is a state the dialog
- * already knows how to show.
+ * an installation is attached: without one this is
+ * `conflict: github_not_connected`, which the page already knows how to show.
  */
 export async function listInstallationRepositories(
   org: string,
@@ -103,86 +91,6 @@ export async function listInstallationRepositories(
     page: "repositories",
   });
   return readToActionResult(read);
-}
-
-/**
- * Bind the picked repository as this workspace's main repo. The installation
- * comes from the workspace's GitHub connection, never from the caller, so this
- * names only the repository; a repository the installation cannot read is
- * `not_found: repository_not_installed`, and a workspace that already binds a
- * different one is `conflict: main_repo_bound`.
- */
-export async function bindWorkspaceRepository(
-  org: string,
-  ws: string,
-  repository:
-    | { owner: string; name: string }
-    | { provider: "gitlab"; projectPath: string },
-): Promise<ActionResult<BoundRepository>> {
-  const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(
-    ctx,
-    repositoryMainBind,
-    "projectPath" in repository
-      ? { provider: "gitlab", projectPath: repository.projectPath }
-      : { owner: repository.owner, name: repository.name },
-  );
-  return result.ok
-    ? {
-        ok: true,
-        value: {
-          fullName: result.value.fullName,
-          defaultRef: result.value.defaultRef,
-          boundAt: result.value.boundAt,
-        },
-      }
-    : result;
-}
-
-/** What connecting a GitLab project settled. */
-export type ConnectedGitLabProject = BoundRepository & {
-  /** Whether GitLab delivers merge request events: the hook's registration. */
-  webhook: "registered" | "refused" | "unchanged";
-};
-
-/**
- * Connect a gitlab.com project with a project access token, then bind it as
- * the main repository (#3762). Two writes, in this order, because a token is
- * not an App installation: `attach_gitlab_project` verifies and stores the
- * token, and `bind_main_repository` binds the project through the connection
- * it wrote. A refusal from either is returned as it came. When the bind
- * refuses, the connection stays, and submitting the form again rotates the
- * same token in place and retries the bind.
- *
- * The token passes from the form to this server action and on to the kernel,
- * and nothing returns it.
- */
-export async function connectGitLabProject(
-  org: string,
-  ws: string,
-  input: { projectPath: string; token: string },
-): Promise<ActionResult<ConnectedGitLabProject>> {
-  const ctx = await requireViewer(org, ws);
-  const connected = await kernelWrite(ctx, repositoryGitlabAttach, {
-    projectPath: input.projectPath,
-    token: input.token,
-  });
-  if (!connected.ok) return connected;
-  const bound = await kernelWrite(ctx, repositoryMainBind, {
-    provider: "gitlab",
-    projectPath: connected.value.fullName,
-  });
-  return bound.ok
-    ? {
-        ok: true,
-        value: {
-          fullName: bound.value.fullName,
-          defaultRef: bound.value.defaultRef,
-          boundAt: bound.value.boundAt,
-          webhook: connected.value.webhook.status,
-        },
-      }
-    : bound;
 }
 
 /**
@@ -239,7 +147,8 @@ export async function attachGithubInstallation(
 }
 
 /**
- * Every repository the workspace binds, main and linked, with each one's role.
+ * Every repository the workspace binds, the steering repository and each
+ * linked one, with each one's role.
  * Local facts only — no GitHub call — so the Repositories section draws while
  * GitHub is down, and draws the connection-retired note from the same record.
  */
@@ -258,8 +167,8 @@ export async function readWorkspaceRepositories(
 
 /**
  * Propose linking a repository to the workspace (ADR-212). Names only the
- * repository, as the bind does and for the same reason: the installation is
- * the workspace's own. Nothing is bound here. `workspace.toml` on the steering
+ * repository, because the installation is the workspace's own. Nothing is
+ * bound here. `workspace.toml` on the steering
  * repository decides which repositories are linked, so the handler opens a
  * steering PR that adds the entry and answers `proposed` with it. `reused`
  * says that PR was already open. When `workspace.toml` lists the repository

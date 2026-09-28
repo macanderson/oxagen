@@ -34,9 +34,6 @@ const ROW = {
   workspaceId: "ws-uuid",
   firstFrameAt: null,
   firstRunId: null,
-  provisionalUntil: new Date("2026-09-29T12:00:00.000Z"),
-  mainRepoBoundAt: null,
-  detectedRepository: { provider: "github", owner: "acme", name: "widgets" },
   workspacePublicId: "wrk_0123456789",
   workspaceSlug: "core",
 };
@@ -54,12 +51,11 @@ describe("get_onboarding_state", () => {
       workspace: null,
       firstFrameAt: null,
       firstRunId: null,
-      provisional: null,
     });
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
-  it("reads the gate row: the step, the gate's workspace, and the open provisional window", async () => {
+  it("reads the gate row: the step and the gate's workspace", async () => {
     wire([ROW]);
     const out = await onboardingStateGetHandler({}, makeCTX());
     expect(out).toEqual({
@@ -67,37 +63,24 @@ describe("get_onboarding_state", () => {
       workspace: { id: "wrk_0123456789", slug: "core" },
       firstFrameAt: null,
       firstRunId: null,
-      provisional: {
-        until: "2026-09-29T12:00:00.000Z",
-        mainRepoBoundAt: null,
-        detectedRepository: {
-          provider: "github",
-          owner: "acme",
-          name: "widgets",
-        },
-      },
     });
   });
 
-  it("reports the first frame and the bound repository once recorded, and drops a malformed detected repository", async () => {
+  it("reports the first frame once recorded", async () => {
     wire([
       {
         ...ROW,
         step: "unlocked",
         firstFrameAt: new Date("2026-09-15T12:05:00.000Z"),
         firstRunId: "tse_0123456789",
-        mainRepoBoundAt: new Date("2026-09-15T12:06:00.000Z"),
-        detectedRepository: { provider: "gitlab", owner: "acme" },
       },
     ]);
     const out = await onboardingStateGetHandler({}, makeCTX());
-    expect(out.step).toBe("unlocked");
-    expect(out.firstFrameAt).toBe("2026-09-15T12:05:00.000Z");
-    expect(out.firstRunId).toBe("tse_0123456789");
-    expect(out.provisional).toEqual({
-      until: "2026-09-29T12:00:00.000Z",
-      mainRepoBoundAt: "2026-09-15T12:06:00.000Z",
-      detectedRepository: null,
+    expect(out).toEqual({
+      step: "unlocked",
+      workspace: { id: "wrk_0123456789", slug: "core" },
+      firstFrameAt: "2026-09-15T12:05:00.000Z",
+      firstRunId: "tse_0123456789",
     });
   });
 
@@ -109,7 +92,6 @@ describe("get_onboarding_state", () => {
       workspace: null,
       firstFrameAt: null,
       firstRunId: null,
-      provisional: null,
     });
   });
 });

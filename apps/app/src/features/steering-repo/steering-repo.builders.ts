@@ -1,7 +1,10 @@
 // Test builders for the steering repo lane (#4518): one steering repo view in
 // each state the card, the provisioning list, and the health banner draw.
 // Every builder starts from a repo that finished provisioning and reads
-// healthy, and a test overrides only what it is about.
+// healthy, and a test overrides only what it is about. `steeringRepoSource`
+// is a DataSource that answers the lane's one read, `get_steering_repo`.
+import type { DataSource } from "@/data/ports";
+import { type Read, readOk } from "@/data/read";
 import {
   type SettingsDifferenceView,
   STEERING_REPO_STEPS,
@@ -71,4 +74,128 @@ export function settingsDifference(
     changedAt: "2026-09-26T14:05:00.000Z",
     ...overrides,
   };
+}
+
+/**
+ * A DataSource that answers `steeringRepo.get` with `read` and refuses every
+ * other port, so a test that reaches for another read fails rather than
+ * passing on a stub. `calls` records the arguments of each steering repo read.
+ */
+export function steeringRepoSource(read: Read<SteeringRepoView>) {
+  const calls: unknown[][] = [];
+  const refuse = () => Promise.reject(new Error("not a steering repo read"));
+  const source: DataSource = {
+    runtimes: { list: refuse, agents: refuse, named: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
+    pretenant: { orgs: refuse, workspaces: refuse },
+    shell: {
+      context: refuse,
+      preferences: refuse,
+      counts: refuse,
+      notifications: refuse,
+      assistantEngine: refuse,
+    },
+    billing: {
+      plan: refuse,
+      usageCredits: refuse,
+      retention: refuse,
+      bucket: refuse,
+      contractRate: refuse,
+      invoices: refuse,
+    },
+    runs: {
+      list: refuse,
+      get: refuse,
+      frameBody: refuse,
+      cost: refuse,
+      turns: refuse,
+      transcript: refuse,
+      chain: refuse,
+      commands: refuse,
+      outputs: refuse,
+      work: refuse,
+      outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
+    },
+    approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse, forRun: refuse },
+    agents: {
+      list: refuse,
+      get: refuse,
+      toolbelt: refuse,
+      incidents: refuse,
+    },
+    spend: {
+      byGroup: refuse,
+      fleet: refuse,
+      drill: refuse,
+      waste: refuse,
+      gatewayPolicy: refuse,
+      budgets: refuse,
+      findings: refuse,
+      findingEvidence: refuse,
+      priceBook: refuse,
+      operatorRanking: refuse,
+      unpricedModels: refuse,
+    },
+    onboarding: { state: refuse, firstFrame: refuse },
+    org: {
+      members: refuse,
+      roles: refuse,
+      workspaces: refuse,
+      apiKeys: refuse,
+      costCenters: refuse,
+      modelCredential: refuse,
+      dataPlane: refuse,
+      workspaceFacts: refuse,
+      sso: refuse,
+    },
+    skills: { inventory: refuse, configuration: refuse },
+    audit: {
+      events: refuse,
+      exportEvents: refuse,
+      retention: refuse,
+      bundle: refuse,
+    },
+    steering: {
+      records: refuse,
+      record: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+      hub: refuse,
+      deliveries: refuse,
+      memories: refuse,
+      tree: refuse,
+    },
+    steeringRepo: {
+      get: (...args) => {
+        calls.push(args);
+        // The contract's record holds a mutable differences array, and the
+        // view's is read-only, so an answered read copies it across.
+        return Promise.resolve(
+          read.ok
+            ? readOk({
+                ...read.value,
+                differences: [...read.value.differences],
+              })
+            : read,
+        );
+      },
+    },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+      connections: refuse,
+      mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
+    },
+    mandates: { list: refuse, get: refuse },
+  };
+  return { source, calls };
 }

@@ -169,7 +169,7 @@
       "proposalKept": "Proposal {proposal} is on Steering, under Proposals. Trying again opens its pull request. It does not propose a second record.",
       "repo": {
         "loading": "Reading the workspace’s main repository.",
-        "unbound": "This workspace has no main repository yet. Bind one in Workspace settings, then open the pull request.",
+        "unbound": "This workspace has no steering repository yet, so there is nowhere to open the pull request. Oxagen creates one when it provisions the workspace.",
         "denied": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace.",
         "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
       }
@@ -205,7 +205,7 @@
       "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry. Nothing was written.",
       "lineagePrOpen": "A Context PR for this lineage is already open. One concern, one pull request. Change the description to name a different concern, or finish the open one first.",
       "governanceUnreadable": "The main repository’s .oxagen/rules/governance.toml could not be read, so Oxagen cannot tell who may merge. Fix it on the production branch, then try again.",
-      "repositoryMissing": "This workspace has no main repository yet. Bind one in Workspace settings.",
+      "repositoryMissing": "This workspace has no steering repository yet. Oxagen creates one when it provisions the workspace.",
       "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",

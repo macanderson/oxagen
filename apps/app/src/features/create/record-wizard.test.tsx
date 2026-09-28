@@ -6,7 +6,7 @@
 // force and the constraint effect, that the one gold control waits on what
 // its step needs, that a refusal is named where the person acted, that a
 // retry reuses the proposal already made, and that the pull request step
-// refuses to send while the workspace binds no main repository. Each state
+// refuses to send while the workspace has no steering repository. Each state
 // gets an axe check.
 import {
   act,
@@ -587,7 +587,7 @@ describe("the context-record wizard: pull request", () => {
     );
   });
 
-  it("will not open a pull request while the workspace binds no main repository (negative)", async () => {
+  it("will not open a pull request while the workspace has no steering repository (negative)", async () => {
     readMainRepository.mockResolvedValue({ ok: true, value: null });
     await toPullRequest();
     expect((await screen.findByTestId("repo-state")).textContent).toBe(

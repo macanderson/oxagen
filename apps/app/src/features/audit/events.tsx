@@ -399,16 +399,18 @@ function EventsTable({
               {event.actor === null ? (
                 <NotRecordedValue />
               ) : (
-                (names.get(event.actor) ?? (
-                  <span className={mono}>{event.actor}</span>
-                ))
+                <span className="md:truncate">
+                  {names.get(event.actor) ?? (
+                    <span className={mono}>{event.actor}</span>
+                  )}
+                </span>
               )}
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground md:truncate">
                 {t("kindNotRecorded")}
               </span>
             </span>
           </td>
-          <td className={`${cell} max-w-[38ch]`}>
+          <td className={cell}>
             <span className={mono}>
               {event.capability ?? <NotRecordedValue />}
             </span>
@@ -419,7 +421,7 @@ function EventsTable({
                 <summary className="cursor-pointer text-muted-foreground max-md:inline-flex max-md:min-h-11 max-md:items-center">
                   {t("detail")}
                 </summary>
-                <pre className="max-w-prose whitespace-pre-wrap break-all pt-1 font-mono">
+                <pre className="max-w-prose overflow-x-auto pt-1 font-mono max-md:whitespace-pre-wrap max-md:break-all">
                   {JSON.stringify(event.detail, null, 2)}
                 </pre>
               </details>

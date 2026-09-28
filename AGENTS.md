@@ -37,6 +37,10 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
 | `web` | `apps/web/` | oxagen.sh public website + `/blog` — hand-authored HTML plus MDX posts from `content/`, built to `dist/`, deployed to S3 + CloudFront |
 
+### Domains
+
+Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the team with slug `oxagen-inc`, which Mac migrated to from an earlier Vercel team. Vercel stays the registrar, so a nameserver change happens in that team. The nameservers point at the Route 53 zone in `infra/stacks-new/oxagen/dns-oxagen-app.tf`. `oxagen.app` is the production web app's domain (ADR-215, #4655). Until ADR-215's cutover, the app is canonical at `app.oxagen.sh`. After it, `app.oxagen.sh` redirects page visits to `oxagen.app` and keeps answering `/api/*`. `api`, `mcp`, and `docs` stay on `oxagen.sh`. `oxagen.dev`, bought the same day, only redirects to the docs (`dns-vanity-domains.tf`).
+
 ### Core Packages
 
 | Package | Key File | Purpose |
@@ -122,6 +126,8 @@ Keep heavy dependencies out of the kernel. Import the handler registration modul
 | Blob (Vercel Blob / FS) | Binary assets, avatars, generated images/documents | Transactional state, metadata |
 
 Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw cross-schema JOINs inside handlers.
+
+**Code graph exception** (ADR-214): the code graph keeps its nodes, relationships, and vectors in Postgres (with pgvector) and in fixed S3 graph files, not Neo4j. It covers only copies Oxagen builds from a provider at a commit SHA.
 
 **Connector Dual-Write exception**: Data connectors write to Postgres (operational record, ACID) and Neo4j (graph index, async Inngest). ClickHouse observes ingestion events for telemetry.
 
@@ -225,7 +231,6 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **Reproduce from the log.** Read each failing job with `gh run view --job <id> --log-failed` and name the cause before you change anything.
 - **Push only the fix.** The commit message names each failing job, its cause, and the issue as `Refs #N`. Leave the close to CI, because the time between open and close is the recovery time.
 - **Watch the push.** Follow the `main` run on your commit until every job and both deploys pass. If it is still red, push the next fix the same way.
-- **Bring the open PRs up to date.** Once `main` is green, merge `origin/main` into each open PR branch and push, so its CI runs against the fix. Merge rather than rebase a branch someone else owns.
 
 Any other change to `main` still goes through a PR.
 
@@ -250,14 +255,26 @@ Any other change to `main` still goes through a PR.
 
 **Review main integrations for lost fixes (#3237, ADR-110).** A clean three-way squash merge normally preserves changes made only on `main`. In the #3222/#3178 incident, the PR branch had already merged the fix from `main`, but that integration commit discarded the CLI exemption. The squash then landed the damaged branch. Before merging, integrate current `main`, review the resolutions, and check the behavior both sides changed. `pipeline.yml` runs `tools/scripts/check-stale-merge-base.mjs` as an advisory overlap scan for branches behind `main`. Its exact-line signals can include formatting, and an up-to-date result does not inspect earlier integrations. Requiring up-to-date branches remains a maintainer setting decision. It cannot prevent a bad integration resolution. The historical audit and retained evidence are linked from ADR-110. Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` branches on every scope purpose value a live key can carry.
 
+## Replies to PR feedback
+
+Mac set this on 2026-09-28 for every repository and every PR, labelled or not. Each feedback comment an agent fixes gets two replies from that agent, with no exceptions.
+
+- **Reply with the fix branch before the first edit.** Create the branch that will carry the fix, then reply to the feedback comment with the branch name. Post this reply before you change any file for that comment.
+- **Reply with the commit SHA once the fix is done.** After the fix is committed and pushed, post a second reply to the same comment with the commit SHA.
+- **Give every comment its own two replies.** One reply answers one feedback comment. When one branch or one commit fixes several comments, each comment still gets both replies.
+- **Reply where the comment lives.** Answer a review thread inline, on the comment itself (`gh api repos/<owner>/<repo>/pulls/<n>/comments/<id>/replies`). A finding in a review body or a top-level comment has no thread, so answer it with two PR comments that each quote it.
+- **Mark both replies.** A watcher starts each reply with `<!-- pr-watch -->`, as it does every comment it posts.
+
+Agents chose these details on 2026-09-28, and Mac has not ruled on them. Cut the fix branch from the PR's head branch. One fix branch may carry several comments. Merge the fix branch into the PR's head branch before the second reply, so the SHA in that reply is a commit on the PR branch. A comment the agent does not fix, because it goes to a residue issue or does not hold, keeps one reply with the issue link or the evidence. A fix-branch reply with no commit-SHA reply after it marks unfinished work, and the next watcher picks it up.
+
 ## Agent-monitored pull requests
 
 Mac set this on 2026-09-26 for every repository. The `agent-monitored-pr` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
 
 - **Label every PR an agent opens.** Pass `--label agent-monitored-pr` to `gh pr create`. If the repository has no such label, create it first: `gh label create agent-monitored-pr --color fd0880 --description "Agent polls every 60 seconds fixes CI, comments, conflicts."`
-- **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, and the checks on the head commit. It reads every review thread with no inline reply after the reviewer's last comment. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`). It also reads review bodies and top-level comments, because a finding there has no thread. Answer each finding there once, with a PR comment that quotes it, and record the id of the comment you answered. Start every comment a watcher posts with `<!-- pr-watch -->`. Skip comments that start with that marker or with `<!-- pr-claim -->`, so a watcher does not answer its own comments.
+- **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, and the checks on the head commit. It reads every review thread that still needs a reply: one with no inline reply after the reviewer's last comment, or one whose fix-branch reply has no commit-SHA reply after it. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`). It also reads review bodies and top-level comments, because a finding there has no thread. Answer each finding there as Replies to PR feedback sets out, with PR comments that quote it, and record the id of the comment you answered. Start every comment a watcher posts with `<!-- pr-watch -->`. Skip comments that start with that marker or with `<!-- pr-claim -->`, so a watcher does not answer its own comments.
 - **Fix by review pass.** Pass N is the Nth review one reviewer submits on the PR. On pass 1, fix every P0, P1, and P2 finding. On pass 2, fix P0 and P1. From pass 3 on, fix P0 only. A P0 blocks the PR at every pass.
-- **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle, with the commit that fixed it or a link to the residue issue.
+- **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle. A finding you fix gets the two replies in Replies to PR feedback. A finding you carry gets a reply that links the residue issue.
 - **Let the pass rule govern review findings.** On a labelled PR, the pass rule decides which review findings get fixed, in place of any repository rule on review rounds or on fixing every finding in the PR. Residue goes to one issue, even where a repository files each finding alone. Where a repository allows one change per issue, residue from unrelated changes splits into one issue per change. A defect you notice yourself still follows fix over file. A P3 finding follows the repository's usual rules.
 - **Clear conflicts and CI failures as they appear.** When the PR conflicts, merge the base branch in, resolve it, and push. When a job fails, read its failing step with `gh run view --job <id> --log-failed`, fix it, and push without waiting for the rest of the run.
 - **Dispatch subagents.** Give each independent fix its own subagent when no two fixes touch the same file. Stay active until the PR merges or closes.

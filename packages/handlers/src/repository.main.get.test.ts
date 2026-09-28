@@ -147,7 +147,7 @@ describe("get_main_repository", () => {
         name: "widgets",
         fullName: "acme/widgets",
         defaultRef: "main",
-        // Derived from the full name: the bind persists no html url.
+        // Derived from the full name: a binding persists no html url.
         htmlUrl: "https://github.com/acme/widgets",
         boundAt: "2026-09-15T12:06:00.000Z",
         connectionLive: true,
@@ -260,7 +260,8 @@ describe("get_main_repository", () => {
       ],
     });
     const out = await handler()({}, makeCTX());
-    // Exactly the state bind_main_repository refuses as github_not_connected.
+    // The state link_repository and list_installation_repositories refuse as
+    // github_not_connected.
     expect(out.github.connected).toBe(false);
   });
 
@@ -423,7 +424,7 @@ describe("envGithubUrls", () => {
     GITHUB_APP_INSTALL_STATE_SECRET: "state-secret-32-bytes-long!!!!!!",
     // Not needed to start the flow, and needed for everything the flow is for:
     // `getInstallationToken` signs its JWT with these, so a deployment without
-    // them can complete a connect and then throw on every list and every bind.
+    // them can complete a connect and then throw on every list and every link.
     GITHUB_APP_ID: "123456",
     GITHUB_APP_PRIVATE_KEY:
       "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----",
@@ -526,7 +527,7 @@ describe("envGithubUrls", () => {
     "GITHUB_APP_SLUG",
     "GITHUB_APP_INSTALL_STATE_SECRET",
     // The signing half. Without either, the connect completes and then every
-    // `list_installation_repositories` and `bind_main_repository` throws
+    // `list_installation_repositories` and `link_repository` throws
     // "GitHub App is not configured" — the operator stranded PAST the point of
     // no return, which is worse than being refused at the door.
     "GITHUB_APP_ID",

@@ -1,7 +1,7 @@
 // The workspace repository model against a real Postgres (ADR-099, ADR-212).
 //
-// A workspace binds its main repository and gets one head with the role
-// `steering`. Linking a second repository writes no head. `link_repository`
+// A workspace has one head with the role `steering`, which the steering repo
+// job writes. Linking a second repository writes no head. `link_repository`
 // opens a steering PR that adds the repository to workspace.toml. When that PR
 // merges, the steering sync calls the link reconciler, and the reconciler
 // writes the linked head. Unlinking works the same way in reverse when
@@ -9,13 +9,13 @@
 // not list is deleted at once.
 //
 // The tests cover these rules:
-//   - The main head cannot be unlinked.
-//   - Another workspace's main repository cannot be linked.
-//   - A repository that is main nowhere links to two workspaces.
+//   - The steering head cannot be unlinked.
+//   - Another workspace's steering repository cannot be linked.
+//   - A repository that steers nowhere links to two workspaces.
 //   - Every reader of "the main repository" still answers the steering head
 //     while a linked head sits beside it.
-//   - A repository linked anywhere cannot become a main repository.
-//   - A workspace with GitHub attached and no main head cannot link.
+//   - A repository linked anywhere cannot become a steering repository.
+//   - A workspace with GitHub attached and no steering head cannot link.
 //   - The store's trigger refuses, by constraint name, the writes the
 //     handlers refuse by sentence.
 //
@@ -25,8 +25,8 @@
 //
 // `create_workspace` binds no repository (lane S1, #4450). So each workspace
 // here is created, given the GitHub connection the install callback attaches,
-// and bound through `bind_main_repository`. The steering repo job is a spy,
-// so nothing here needs a live Inngest.
+// and given the steering head the steering repo job's bind step writes. The
+// job itself is a spy, so nothing here needs a live Inngest.
 //
 // The fixture mirrors organization.pg.test.ts: an enterprise org, an Admin
 // with a principal and the seeded Admin role, and a first workspace the
@@ -46,9 +46,13 @@ import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
-import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import {
+  closeDatabase,
+  schema,
+  withSystemDb,
+  withTenantDb,
+} from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -57,6 +61,12 @@ import {
 } from "./context.steering.github";
 import { readMainRepositoryProvider } from "./context.steering.host";
 import { readMainBoundRepository } from "./context.steering.published.get";
+import { GITHUB_STEERING_PROVIDER } from "./lib/steering-app";
+import {
+  repositoryHeadConflict,
+  workspaceRepositoriesLock,
+  writeRepositoryHead,
+} from "./repository.binding-write";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 import {
   createRepositoryLinkHandler,
@@ -66,10 +76,6 @@ import {
 import { createLinkReconciler } from "./repository.link.reconcile";
 import { linkRepositoryHead } from "./repository.link.write";
 import { repositoryListHandler } from "./repository.list";
-import {
-  createMainRepositoryBindHandler,
-  repositoryHeadConflict,
-} from "./repository.main.bind";
 import { createMainRepositoryGetHandler } from "./repository.main.get";
 import { createRepositoryUnlinkHandler } from "./repository.unlink";
 import {
@@ -239,7 +245,6 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   const reconcileLinks = createLinkReconciler({
     repository: github.repository,
   });
-  const bindMainRepository = createMainRepositoryBindHandler(github);
   const getMainRepository = createMainRepositoryGetHandler({
     githubUrls: () => null,
   });
@@ -295,12 +300,66 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     inWorkspace(workspaceId, () =>
       reconcileLinks({ orgId, workspaceId }, { ...change, now: new Date() }),
     );
-  const bind = (workspaceId: string, repo: string) =>
+  /**
+   * The steering head the steering repo job's bind step writes (ADR-212). The
+   * workspace gets its own `github_steering` connection, created connected
+   * with the Oxagen Steering installation, and a head with role `steering`
+   * written under the workspace lock. The repository comes from the same
+   * fixture the link handler reads, so the store's cross-workspace rules see
+   * one id for it. A write the store refuses rolls back the connection too.
+   */
+  const steer = (workspaceId: string, repo: string) =>
     inWorkspace(workspaceId, () =>
-      bindMainRepository(
-        repositoryMainBind.input.parse({ owner: "acme", name: repo }),
-        ctx(workspaceId),
-      ),
+      withTenantDb(async (tx) => {
+        await tx.execute(workspaceRepositoriesLock(workspaceId));
+        const [existing] = await tx
+          .select({ id: schema.sourceConnections.id })
+          .from(schema.sourceConnections)
+          .where(
+            and(
+              eq(schema.sourceConnections.orgId, orgId),
+              eq(schema.sourceConnections.workspaceId, workspaceId),
+              eq(
+                schema.sourceConnections.connectorId,
+                GITHUB_STEERING_PROVIDER,
+              ),
+            ),
+          )
+          .limit(1);
+        let connectionId = existing?.id;
+        if (connectionId === undefined) {
+          const [inserted] = await tx
+            .insert(schema.sourceConnections)
+            .values({
+              orgId,
+              workspaceId,
+              connectorId: GITHUB_STEERING_PROVIDER,
+              displayName: "GitHub steering",
+              authScheme: "github_app_installation",
+              deliveryMethod: "webhook",
+              deliveryConfig: { installationId: "777", owner: "acme" },
+              status: "connected",
+              createdById: userId,
+            })
+            .returning({ id: schema.sourceConnections.id });
+          if (!inserted)
+            throw new Error("source_connections insert returned no row");
+          connectionId = inserted.id;
+        }
+        const repository = await github.repository("777", "acme", repo);
+        const written = await writeRepositoryHead(tx, {
+          scope: { orgId, workspaceId },
+          connectionId,
+          repo: repository,
+          role: "steering",
+          userId,
+          now: new Date(),
+        });
+        return {
+          bindingId: written.bindingPublicId,
+          fullName: repository.fullName,
+        };
+      }),
     );
   const unlink = (workspaceId: string, bindingId: string) =>
     inWorkspace(workspaceId, () =>
@@ -337,6 +396,23 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     }
     return null;
   };
+  /**
+   * The constraint a refused head write names, and the sentence
+   * `repositoryHeadConflict` maps it to.
+   */
+  const refusedBy = async (
+    write: Promise<unknown>,
+  ): Promise<{ constraint: string | null; mapped: string | null }> => {
+    const err = await write.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    if (err === null) throw new Error("the store admitted the write");
+    return {
+      constraint: constraintOf(err),
+      mapped: repositoryHeadConflict(err),
+    };
+  };
   const internalId = async (publicId: string) => {
     const [row] = await withSystemDb((tx) =>
       tx
@@ -349,7 +425,8 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   };
   /**
    * What the GitHub install callback leaves on a workspace: a connection
-   * carrying the installation. `bind_main_repository` marks it connected.
+   * carrying the installation, at `pending_setup`. The first linked head
+   * written on it moves it to `connected`.
    */
   const attachGithub = (workspaceId: string) =>
     withSystemDb((tx) =>
@@ -365,13 +442,16 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         createdById: userId,
       }),
     );
-  /** A workspace with its main repository: create, attach GitHub, and bind. */
-  const createWithMain = async (slug: string, repo: string) => {
+  /**
+   * A workspace with its steering repository: create, attach GitHub, and
+   * write the steering head.
+   */
+  const createWithSteering = async (slug: string, repo: string) => {
     const workspace = await create(slug);
     const id = await internalId(workspace.publicId);
     await attachGithub(id);
-    const main = await bind(id, repo);
-    return { id, main };
+    const steering = await steer(id, repo);
+    return { id, steering };
   };
   const headsOf = (workspaceId: string) =>
     withSystemDb((tx) =>
@@ -545,8 +625,8 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
           .delete(schema.workspaceSlugHistory)
           .where(inArray(schema.workspaceSlugHistory.workspaceId, wsIds));
       }
-      // The heads and bindings the binds, the reconciles, and the seeded
-      // legacy links wrote.
+      // The heads and bindings the steering fixture, the reconciles, and the
+      // seeded legacy links wrote.
       await tx
         .delete(schema.repositoryBindingHeads)
         .where(eq(schema.repositoryBindingHeads.orgId, orgId));
@@ -567,16 +647,16 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     await closeDatabase();
   });
 
-  it("walks the model: bind a main repo, link a second through a steering PR, the readers keep answering main, unlink the linked one through a steering PR, refuse to unlink main, refuse another workspace's main, share a repository that is nobody's main", async () => {
-    // ── bind: one head, role steering ────────────────────────────────────────
-    const alpha = await createWithMain("alpha", "alpha");
-    expect(alpha.main.fullName).toBe("acme/alpha");
+  it("walks the model: a steering head, link a second repo through a steering PR, the readers keep answering the steering repo, unlink the linked one through a steering PR, refuse to unlink the steering repo, refuse another workspace's steering repo, share a repository that steers nowhere", async () => {
+    // ── the steering head: one head, role steering ──────────────────────────
+    const alpha = await createWithSteering("alpha", "alpha");
+    expect(alpha.steering.fullName).toBe("acme/alpha");
     const alphaId = alpha.id;
     expect(await headsOf(alphaId)).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "alpha") },
     ]);
 
-    const beta = await createWithMain("beta", "beta");
+    const beta = await createWithSteering("beta", "beta");
     const betaId = beta.id;
     expect(await headsOf(betaId)).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "beta") },
@@ -589,12 +669,12 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(gamma.steering_repo).toEqual({ status: "provisioning" });
     const gammaId = await internalId(gamma.publicId);
     expect(await headsOf(gammaId)).toEqual([]);
-    // Binding alpha's main repository afterwards is refused by the global
-    // claim, and no head is left behind.
+    // A steering head for alpha's repository afterwards is refused by the
+    // store's global claim, and no head is left behind.
     await attachGithub(gammaId);
-    await expect(refusal(bind(gammaId, "alpha"))).resolves.toEqual({
-      code: "conflict",
-      reason: "main_repo_claimed",
+    await expect(refusedBy(steer(gammaId, "alpha"))).resolves.toEqual({
+      constraint: "repository_binding_heads_main_repository_uq",
+      mapped: "main_elsewhere",
     });
     expect(await headsOf(gammaId)).toEqual([]);
     // Each create started its workspace's steering repo job.
@@ -664,7 +744,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       ["main", "acme/alpha", true],
       ["linked", "acme/shared", true],
     ]);
-    expect(listed.repositories[0]?.bindingId).toBe(alpha.main.bindingId);
+    expect(listed.repositories[0]?.bindingId).toBe(alpha.steering.bindingId);
     const sharedRow = listed.repositories.find(
       (r) => r.fullName === "acme/shared",
     );
@@ -678,7 +758,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       getMainRepository({}, ctx(alphaId)),
     );
     expect(main.repository).toMatchObject({
-      bindingId: alpha.main.bindingId,
+      bindingId: alpha.steering.bindingId,
       fullName: "acme/alpha",
     });
     await expect(
@@ -764,7 +844,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     // ── unlink main: refused, nothing moves ──────────────────────────────
     const openedBeforeRefusals = opened.length;
     await expect(
-      refusal(unlink(alphaId, alpha.main.bindingId)),
+      refusal(unlink(alphaId, alpha.steering.bindingId)),
     ).resolves.toEqual({
       code: "conflict",
       reason: "main_repo_unlink_refused",
@@ -776,7 +856,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       reason: "repository_not_linked",
     });
     await expect(
-      refusal(unlink(betaId, alpha.main.bindingId)),
+      refusal(unlink(betaId, alpha.steering.bindingId)),
     ).resolves.toEqual({
       code: "not_found",
       reason: "repository_not_linked",
@@ -868,7 +948,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(await headsOf(alphaId)).toEqual(heads);
   });
 
-  it("holds the rule in the other direction and at the store: a linked repository cannot become a main, a link needs a main first, and the trigger refuses what the pre-checks refuse", async () => {
+  it("holds the rule in the other direction and at the store: a linked repository cannot become a steering repository, a link needs a steering head first, and the trigger refuses what the pre-checks refuse", async () => {
     // Left by the walk above: alpha (main alpha, linked shared) and beta
     // (main beta, linked shared). `shared` is main nowhere.
     const alphaId = await workspaceIdBySlug("alpha");
@@ -884,7 +964,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
 
     // ── the first workspace: GitHub attached, no main head yet ────────────
     // What the install callback leaves behind on the organisation's first
-    // workspace before `bind_main_repository` runs (ADR-099 §6).
+    // workspace before the steering repo job binds its steering repository.
     await attachGithub(coreWorkspaceId);
     expect(await headsOf(coreWorkspaceId)).toEqual([]);
 
@@ -900,11 +980,11 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(opened).toHaveLength(openedBefore);
     expect(await headsOf(coreWorkspaceId)).toEqual([]);
 
-    // Binding a repository other workspaces have linked as this one's main:
-    // refused by the pre-check, before the transaction.
-    await expect(refusal(bind(coreWorkspaceId, "shared"))).resolves.toEqual({
-      code: "conflict",
-      reason: "repository_linked_elsewhere",
+    // A steering head for a repository other workspaces link: refused by
+    // the store's trigger.
+    await expect(refusedBy(steer(coreWorkspaceId, "shared"))).resolves.toEqual({
+      constraint: "repository_binding_heads_main_is_linked_elsewhere",
+      mapped: "linked_elsewhere",
     });
     expect(await headsOf(coreWorkspaceId)).toEqual([]);
 
@@ -929,19 +1009,6 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       );
       if (!row) throw new Error(`no head for ${repo} in ${workspaceId}`);
       return row.id;
-    };
-    const refusedBy = async (
-      write: Promise<unknown>,
-    ): Promise<{ constraint: string | null; mapped: string | null }> => {
-      const err = await write.then(
-        () => null,
-        (e: unknown) => e,
-      );
-      if (err === null) throw new Error("the store admitted the write");
-      return {
-        constraint: constraintOf(err),
-        mapped: repositoryHeadConflict(err),
-      };
     };
     const betaShared = await headOf(betaId, "shared");
     const betaMain = await headOf(betaId, "beta");
@@ -997,10 +1064,10 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(await headsOf(alphaId)).toHaveLength(2);
 
     // ── and what the rule allows still passes the trigger ────────────────
-    // A repository nobody holds becomes the first workspace's main through
-    // `bind_main_repository`, and `shared`, main nowhere, links to a third
+    // A repository nobody holds becomes the first workspace's steering
+    // repository, and `shared`, which steers nowhere, links to a third
     // workspace through its own steering PR.
-    const bound = await bind(coreWorkspaceId, "orphan");
+    const bound = await steer(coreWorkspaceId, "orphan");
     expect(bound.fullName).toBe("acme/orphan");
     const third = await link(coreWorkspaceId, "shared");
     expect(third.role).toBe("linked");
@@ -1010,11 +1077,10 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     ]);
   });
 
-  it("reads a head with the steering role as the workspace's steering repository, unlinks a legacy head at once, and a re-bind keeps the role", async () => {
-    // Every head that steers carries role `steering`. The bind writes it, and
-    // so does S1's provisioned steering repository. Every reader has to
-    // answer that head.
-    const steers = await createWithMain("steer-ws", "steers");
+  it("reads a head with the steering role as the workspace's steering repository, and unlinks a legacy head at once", async () => {
+    // Every head that steers carries role `steering`. The steering repo job
+    // writes it (ADR-212). Every reader has to answer that head.
+    const steers = await createWithSteering("steer-ws", "steers");
     const steersId = steers.id;
     expect(await headsOf(steersId)).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "steers") },
@@ -1025,7 +1091,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       getMainRepository({}, ctx(steersId)),
     );
     expect(main.repository).toMatchObject({
-      bindingId: steers.main.bindingId,
+      bindingId: steers.steering.bindingId,
       fullName: "acme/steers",
     });
     await expect(
@@ -1046,7 +1112,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         readMainBoundRepository({ orgId, workspaceId: steersId }),
       ),
     ).resolves.toMatchObject({
-      bindingId: steers.main.bindingId,
+      bindingId: steers.steering.bindingId,
       fullName: "acme/steers",
       role: "main",
     });
@@ -1061,7 +1127,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       code: "conflict",
       reason: "main_repo",
     });
-    const other = await createWithMain("steer-other", "steers-other");
+    const other = await createWithSteering("steer-other", "steers-other");
     await expect(refusal(propose(other.id, "steers"))).resolves.toEqual({
       code: "conflict",
       reason: "main_repo_claimed",
@@ -1100,87 +1166,15 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       { role: "steering", providerRepositoryId: repoId("acme", "steers") },
     ]);
 
-    // ── unlink refuses it, and a re-bind neither demotes nor duplicates it ──
+    // ── unlink refuses it, and the steering head stays ───────────────────
     await expect(
-      refusal(unlink(steersId, steers.main.bindingId)),
+      refusal(unlink(steersId, steers.steering.bindingId)),
     ).resolves.toEqual({
       code: "conflict",
       reason: "main_repo_unlink_refused",
     });
-    const rebound = await bind(steersId, "steers");
-    expect(rebound.bindingId).toBe(steers.main.bindingId);
     expect(await headsFor(steersId, "steers")).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "steers") },
-    ]);
-  });
-
-  it("a workspace left with no main head binds its way out: a linked head is promoted in place, and a version retained from an unlinked head is reused", async () => {
-    // The exclusivity migration's demotion leaves this state. A link needs a
-    // main head first, so the test deletes the main head to reach it. The
-    // workspace is left with a linked head and no main head. Both binds below
-    // used to insert a second version-1 binding for a pair that already had
-    // one. `repository_bindings_repository_version_uq` refuses that insert.
-    // The refusal names no cross-workspace claim, so it reached the operator
-    // as a 500 on the one move that gives the workspace a main repository
-    // back.
-    const dropMainHead = () =>
-      withSystemDb((tx) =>
-        tx
-          .delete(schema.repositoryBindingHeads)
-          .where(
-            and(
-              eq(schema.repositoryBindingHeads.workspaceId, coreWorkspaceId),
-              eq(schema.repositoryBindingHeads.role, "steering"),
-            ),
-          ),
-      );
-
-    // ── a linked head, then no main head, then the bind ───────────────────
-    const linked = await link(coreWorkspaceId, "promoted");
-    expect(linked.role).toBe("linked");
-    await dropMainHead();
-
-    const promoted = await bind(coreWorkspaceId, "promoted");
-    // The bind reuses the binding version the reconcile wrote. Nothing it
-    // records has moved, so only the role changes.
-    expect(promoted.bindingId).toBe(linked.bindingId);
-    expect(await bindingsOf(coreWorkspaceId, "promoted")).toEqual([
-      { publicId: linked.bindingId, version: 1 },
-    ]);
-    expect(await headsFor(coreWorkspaceId, "promoted")).toEqual([
-      { role: "steering", providerRepositoryId: repoId("acme", "promoted") },
-    ]);
-
-    // ── a version retained from an unlinked legacy head ───────────────────
-    // workspace.toml lists `shared` and `promoted`, and not `retained`. So the
-    // unlink deletes the legacy head at once and opens no steering PR.
-    const retained = await seedLegacyHead(coreWorkspaceId, "retained");
-    expect(
-      listedRepositories(readWorkspaceToml(productionOf(coreWorkspaceId))),
-    ).toEqual(["github.com/acme/shared", "github.com/acme/promoted"]);
-    const openedBefore = opened.length;
-    await expect(
-      unlink(coreWorkspaceId, retained.bindingPublicId),
-    ).resolves.toMatchObject({
-      bindingId: retained.bindingPublicId,
-      status: "unlinked",
-      steeringPullRequest: null,
-    });
-    expect(opened).toHaveLength(openedBefore);
-    expect(await headsFor(coreWorkspaceId, "retained")).toEqual([]);
-    // The head is gone. The version stays, because admitted runs cite it.
-    expect(await bindingsOf(coreWorkspaceId, "retained")).toEqual([
-      { publicId: retained.bindingPublicId, version: 1 },
-    ]);
-    await dropMainHead();
-
-    const rebound = await bind(coreWorkspaceId, "retained");
-    expect(rebound.bindingId).toBe(retained.bindingPublicId);
-    expect(await bindingsOf(coreWorkspaceId, "retained")).toEqual([
-      { publicId: retained.bindingPublicId, version: 1 },
-    ]);
-    expect(await headsFor(coreWorkspaceId, "retained")).toEqual([
-      { role: "steering", providerRepositoryId: repoId("acme", "retained") },
     ]);
   });
 });

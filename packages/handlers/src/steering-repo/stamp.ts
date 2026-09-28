@@ -15,6 +15,7 @@ import type {
   GovernanceMode,
   RepositoryProvider,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { recordIdSchema } from "@oxagen/oxagen/steering-repo/common";
 import { readJsonLines } from "@oxagen/oxagen/steering-repo/files";
 import {
   BRANCH_PREFIXES,
@@ -411,18 +412,73 @@ function changeUnit(path: string): string {
 /** Branches whose pull request may change many files. */
 const MANY_FILE_PREFIXES: readonly BranchPrefix[] = ["memory", "tools"];
 
+/**
+ * The steering/ branch that imports a workspace's old .oxagen/ records,
+ * skills, and governance.toml into its steering repo (steering-repo-spec,
+ * Migration). It may change many files. Any other steering/ branch still
+ * changes one thing.
+ */
+export const IMPORT_BRANCH = "steering/import-oxagen";
+
+/**
+ * The most files one steering PR may change. The host's compare lists at most
+ * 300 files and does not say when it cut the list, so `refuseLongCompare`
+ * refuses a steering PR at 300.
+ */
+export const STEERING_PR_MAX_FILES = 299;
+
+const IMPORT_BATCH = /^steering\/import-oxagen-([2-9]|[1-9][0-9]+)$/;
+
+/**
+ * The branch of import batch `batch`. An import that changes more files than
+ * one steering PR may change goes in batches: the first on
+ * {@link IMPORT_BRANCH}, the next on steering/import-oxagen-2, and so on.
+ */
+export function importBranch(batch: number): string {
+  if (!Number.isInteger(batch) || batch < 1) {
+    throw new RangeError(`An import batch is a whole number from 1, not ${batch}`);
+  }
+  return batch === 1 ? IMPORT_BRANCH : `${IMPORT_BRANCH}-${batch}`;
+}
+
+/** True for {@link IMPORT_BRANCH} and each numbered batch after it. */
+export function isImportBranch(branch: string): boolean {
+  return branch === IMPORT_BRANCH || IMPORT_BATCH.test(branch);
+}
+
+/**
+ * The folder an import writes each converted record to. On an import branch,
+ * every record the PR adds or changes here must name the id it replaces.
+ */
+export const IMPORT_RECORDS_DIR = "steering/imported";
+
+/**
+ * The file an import branch commits beside the records it converts. It names
+ * each record's id before the conversion, so the stamp can write it as
+ * `replaces`. The file is part of the reviewed head, and the stamp commit
+ * deletes it, so it never reaches the production branch.
+ */
+export const IMPORT_REPLACES_PATH = `${IMPORT_RECORDS_DIR}/replaces.txt`;
+
 export type BranchScopeRefusal = {
-  reason: "branch_prefix" | "branch_scope" | "one_change" | "ledger_owned";
+  reason:
+    | "branch_prefix"
+    | "branch_scope"
+    | "one_change"
+    | "ledger_owned"
+    | "import_only";
   message: string;
 };
 
 /**
  * Why a steering PR's branch and the paths it changes do not fit together, or
  * null when they do. The branch starts with the top-level folder it changes
- * (workspace/ for root files, memory/ for steering/memory/). A memory PR and a
- * tools PR may change many files; every other steering PR changes one record,
- * one skill, one agent, one policy group, or one root file. No steering PR
- * may change the ledger, which only the stamp writes.
+ * (workspace/ for root files, memory/ for steering/memory/). A memory PR, a
+ * tools PR, and an import PR (see {@link isImportBranch}) may change many
+ * files. Every other steering PR changes one record, one skill, one agent,
+ * one policy group, or one root file. No steering PR may change the ledger,
+ * which only the stamp writes, and only an import PR may carry
+ * {@link IMPORT_REPLACES_PATH}.
  */
 export function branchScopeRefusal(
   branch: string,
@@ -452,7 +508,13 @@ export function branchScopeRefusal(
         : `${outside} is outside every folder a steering PR may change`,
     };
   }
-  if (!MANY_FILE_PREFIXES.includes(prefix)) {
+  if (!isImportBranch(branch) && paths.includes(IMPORT_REPLACES_PATH)) {
+    return {
+      reason: "import_only",
+      message: `${IMPORT_REPLACES_PATH} belongs on an import branch, not ${branch}`,
+    };
+  }
+  if (!MANY_FILE_PREFIXES.includes(prefix) && !isImportBranch(branch)) {
     const units = new Set(paths.map(changeUnit));
     if (units.size > 1) {
       return {
@@ -462,4 +524,55 @@ export function branchScopeRefusal(
     }
   }
   return null;
+}
+
+// ── The import ───────────────────────────────────────────────────────────────
+
+/**
+ * The text of {@link IMPORT_REPLACES_PATH}: one line per converted record, in
+ * path order, with the record's path, a space, and the id it had before the
+ * conversion.
+ */
+export function renderReplacesFile(
+  replaces: ReadonlyMap<string, string>,
+): string {
+  const lines = [...replaces]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([path, id]) => `${path} ${id}\n`);
+  return lines.join("");
+}
+
+export type ReplacesFile =
+  | { ok: true; replaces: Map<string, string> }
+  | { ok: false; message: string };
+
+/**
+ * The old id of each record {@link IMPORT_REPLACES_PATH} names, by path. The
+ * parse refuses a line that is not a record path and a record id, and a path
+ * named twice. Blank lines are skipped.
+ */
+export function parseReplacesFile(text: string): ReplacesFile {
+  const replaces = new Map<string, string>();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === "") continue;
+    const [path, id, ...rest] = line.split(/\s+/);
+    if (
+      rest.length > 0 ||
+      !path ||
+      !id ||
+      !isStampedRecordPath(path) ||
+      !recordIdSchema.safeParse(id).success
+    ) {
+      return {
+        ok: false,
+        message: `the line "${line}" is not a record path and a record id`,
+      };
+    }
+    if (replaces.has(path)) {
+      return { ok: false, message: `${path} is named twice` };
+    }
+    replaces.set(path, id);
+  }
+  return { ok: true, replaces };
 }

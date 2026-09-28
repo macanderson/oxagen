@@ -87,8 +87,7 @@ step("token", {
   tokenExpiresAt: expiresAt,
 });
 
-// 2. The seam, bound the way `bind_main_repository` binds: by project id,
-//    with the default branch approved.
+// 2. The seam, bound by project id, with the default branch approved.
 const seam = createSteeringGitLab({
   readConnection: async () => ({
     connectionId: "exercise",

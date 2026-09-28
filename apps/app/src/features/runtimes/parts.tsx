@@ -170,9 +170,10 @@ export function Sub({
 }) {
   return (
     <span
-      // Under a numeric cell the sub-line keeps its own face and wraps: the
-      // cell's mono and nowrap are for the figure above it.
-      className={`block whitespace-normal text-xs text-muted-foreground ${monoFace ? mono : "font-sans"}`}
+      // Under a numeric cell the sub-line keeps its own face: the cell's mono
+      // is for the figure above it. In a table cell on a wide screen it ends
+      // in an ellipsis, as every cell value does; in a key-value list it wraps.
+      className={`block text-xs text-muted-foreground md:[td_&]:truncate ${monoFace ? mono : "font-sans"}`}
     >
       {children}
     </span>
@@ -288,6 +289,8 @@ export function HarnessLabel({ harness }: { harness: string }) {
  * version in mono, as the design draws them. Enrollment records Claude Code's
  * version alone, and only as it was at enrollment, so that version says "at
  * enrollment" and every other harness's version is not recorded (#3919).
+ * In a table cell on a wide screen each line ends in an ellipsis; in the
+ * detail page's key-value list it wraps.
  */
 export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
   const t = useTranslations("runtimes.harness");
@@ -296,7 +299,11 @@ export function HarnessNames({ host }: { host: RuntimeEnrollment }) {
   return (
     <span className="flex flex-col gap-0.5">
       {host.harnesses.map((harness) => (
-        <span key={harness} data-harness={harness}>
+        <span
+          key={harness}
+          data-harness={harness}
+          className="md:[td_&]:truncate"
+        >
           <HarnessLabel harness={harness} />{" "}
           {harness === "claude-code" && host.claudeVersionAtEnroll !== null ? (
             <span className="text-muted-foreground">

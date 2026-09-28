@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
+import { dataSource } from "@/data/source";
 import { getAuthUser } from "@/features/auth";
 import {
   InstructionFindings,
@@ -26,7 +27,8 @@ export async function generateMetadata(): Promise<Metadata> {
 // then reopens the init wizard, whose first step carries the connection.
 //
 // The workspace's steering repo (#4518) sits above the code repositories. It
-// streams in its own <Suspense>, so a slow read never holds the tabs.
+// reads at render through the DataSource (`get_steering_repo`), and streams in
+// its own <Suspense>, so a slow read never holds the tabs.
 // Instruction files that drifted in the code repositories sit below them, in
 // their own <Suspense> for the same reason.
 export default async function RepositoriesPage({
@@ -52,7 +54,7 @@ export default async function RepositoriesPage({
           </p>
         }
       >
-        <SteeringRepoSection ctx={ctx} />
+        <SteeringRepoSection ctx={ctx} source={dataSource()} />
       </Suspense>
       <Repositories
         org={org}

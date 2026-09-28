@@ -532,7 +532,7 @@ export function ProviderButton({
         type="button"
         data-provider-open={view.server.id}
         aria-label={t("openNamed", { name: view.server.name })}
-        className={`${buttonGhost} rounded-md border-border`}
+        className={`${buttonGhost} max-w-full rounded-md border-border`}
         onClick={() => {
           setOpen(true);
         }}
@@ -542,7 +542,7 @@ export function ProviderButton({
           iconUrl={view.server.iconUrl}
           size={20}
         />
-        {view.server.name}
+        <span className="min-w-0 md:truncate">{view.server.name}</span>
       </button>
       <ProviderDialog
         at={at}

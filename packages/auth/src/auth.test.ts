@@ -304,6 +304,12 @@ describe("auth module — import and betterAuth config", () => {
     expect(origins).toContain("https://app.oxagen.sh");
   });
 
+  it("trustedOrigins holds both app hosts while the app moves to oxagen.app (ADR-215)", () => {
+    const origins = getConfig()["trustedOrigins"] as string[];
+    expect(origins).toContain("https://oxagen.app");
+    expect(origins).toContain("https://app.oxagen.sh");
+  });
+
   it("trustedOrigins includes localhost in test env (NODE_ENV !== production)", () => {
     // NODE_ENV=test in vitest → isLocalEnv=true → DEV_ORIGINS included
     const origins = getConfig()["trustedOrigins"] as string[];

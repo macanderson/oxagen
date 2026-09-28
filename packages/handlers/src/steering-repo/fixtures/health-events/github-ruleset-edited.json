@@ -1,0 +1,31 @@
+{
+  "action": "edited",
+  "repository_ruleset": {
+    "id": 1402391,
+    "name": "Main merges",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "acme/oxagen-steering-platform",
+    "enforcement": "active",
+    "bypass_actors": [],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec4AAjpnzgAVZHc",
+    "created_at": "2026-09-20T14:02:11.000Z",
+    "updated_at": "2026-09-26T18:41:07.000Z"
+  },
+  "changes": {
+    "name": { "from": "Oxagen merges" },
+    "enforcement": { "from": "active" }
+  },
+  "repository": {
+    "id": 904211873,
+    "node_id": "R_kgDONePZoQ",
+    "name": "oxagen-steering-platform",
+    "full_name": "acme/oxagen-steering-platform",
+    "private": true,
+    "default_branch": "main",
+    "updated_at": "2026-09-26T18:41:07Z"
+  },
+  "organization": { "login": "acme", "id": 71300124 },
+  "sender": { "login": "dana-ops", "id": 5412287, "type": "User" },
+  "installation": { "id": 61200044, "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNjEyMDAwNDQ=" }
+}

@@ -215,6 +215,9 @@ import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
 import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.deliveries";
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
 import { publishedSteeringGetRoute } from "./routes/v1/context.steering.published.get";
+import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
+import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
+import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -275,7 +278,6 @@ import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
 import { steeringConnectionRoute } from "./routes/v1/gitlab-oauth";
 import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
-import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
 import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
 import { repositoryLinkRoute } from "./routes/v1/repository.link";
 import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
@@ -745,10 +747,10 @@ orgScoped.route("/tacho/enrollments/revoke", tachoEnrollmentRevokeRoute);
 orgScoped.route("/tacho/enrollment-tokens", tachoEnrollmentTokenCreateRoute);
 orgScoped.route("/onboarding/advance", onboardingAdvanceRoute);
 orgScoped.route("/onboarding/first-frame", onboardingFirstFrameGetRoute);
-orgScoped.route("/repository/main", repositoryMainBindRoute);
-// The read beside the write, on the same path: GET answers the bound repo, the
-// install state and the signed GitHub doors; the picker it feeds sits one level
-// down, under the installation the workspace acts through.
+// GET answers the steering repository, the install state and the signed
+// GitHub doors. The picker it feeds sits one level down, under the
+// installation the workspace acts through. The POST beside it
+// (`bind_main_repository`) was removed in #4616 (ADR-212).
 orgScoped.route("/repository/main", repositoryMainGetRoute);
 // The workspace's repositories beyond the main one (MC spec §10.1): the list
 // of all of them, and the link and unlink writes for linked repositories.
@@ -1174,6 +1176,11 @@ orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
 orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
 // The published .oxagen/ tree with every file's text, for `oxagen pull`.
 orgScoped.route("/context/steering/published", publishedSteeringGetRoute);
+// The published record index and the check context, for `oxagen check`.
+orgScoped.route("/context/steering/index", steeringIndexGetRoute);
+// The workspace's steering repo and its settings repair (lane S2, #4560).
+orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
+orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

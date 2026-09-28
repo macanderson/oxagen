@@ -1,4 +1,4 @@
-// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, a repository sync request, and the merge request state stored on the run rows that name it. None is a privileged mutation a person makes.
+// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, a repository sync request, a steering repo health check request, and the merge request state stored on the run rows that name it. None is a privileged mutation a person makes.
 //
 // gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
@@ -42,6 +42,8 @@ import {
 } from "./lib/run-pull-request-state";
 import { gitlabDeliveryConfigOf } from "./repository.gitlab-connection";
 import { postgresSteeringStore } from "./context.steering.store";
+import type { HealthSignal } from "./steering-repo/health";
+import { gitlabHealthSignal } from "./steering-repo/health.events";
 
 const OPEN_PR: readonly ProposalStatus[] = [
   "pr_open",
@@ -101,6 +103,11 @@ export interface GitLabWebhookDeps {
     key: ForgeKey,
     forge: ForgeState,
   ): Promise<number>;
+  /**
+   * Ask for a health read of each steering repo the delivery names (S2,
+   * #4560). A failure is logged. Absent, nothing is asked.
+   */
+  requestHealthCheck?(signal: HealthSignal): Promise<void>;
 }
 
 export interface GitLabWebhookRequest {
@@ -132,7 +139,7 @@ export interface GitLabWebhookResult {
  * the payload leaves either out, so a payload shape this does not know still
  * asks for a sync rather than dropping one.
  */
-function pushesDefaultBranch(body: unknown): boolean {
+export function pushesDefaultBranch(body: unknown): boolean {
   const b = (body ?? {}) as {
     ref?: unknown;
     project?: { default_branch?: unknown } | null;
@@ -188,6 +195,36 @@ async function recordMergeRequestState(
   }
 }
 
+/**
+ * Ask for a health read when the delivery could change a steering repo's
+ * health: a push to main, a merge request with a new head, or a project
+ * setting change. It runs before the event is parsed, because a system hook
+ * body names its event in `event_name` and the parser does not read it. A
+ * signal for another project is dropped, so one connection's token cannot ask
+ * about a project it does not name. A failure is logged and never fails the
+ * delivery, because the 10-minute sweep reads every steering repo anyway.
+ */
+async function requestHealthCheck(
+  deps: GitLabWebhookDeps,
+  connection: WebhookConnection,
+  body: unknown,
+): Promise<void> {
+  const request = deps.requestHealthCheck;
+  if (!request) return;
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return;
+  const signal = gitlabHealthSignal(body as Record<string, unknown>);
+  if (signal === null) return;
+  if (!signal.repository_ids.includes(Number(connection.projectId))) return;
+  try {
+    await request(signal);
+  } catch (err) {
+    logger.error(
+      { err, connectionId: connection.id, reason: signal.trigger.reason },
+      "gitlab.webhook: could not request a steering repo health check, so the 10-minute sweep will run it",
+    );
+  }
+}
+
 /** Why a proposal is rejected when its merge request closes on GitLab. */
 export const CLOSED_ON_GITLAB = "Merge request closed on GitLab";
 
@@ -201,6 +238,8 @@ export async function handleGitLabWebhook(
     !verifyGitLabWebhookToken(req.tokenHeader, connection.webhookSecret)
   )
     return { status: 401, outcome: "unauthenticated" };
+
+  await requestHealthCheck(deps, connection, req.body);
 
   const event = parseGitLabWebhookEvent(req.body);
   if (!event) return { status: 202, outcome: "ignored_unparseable" };

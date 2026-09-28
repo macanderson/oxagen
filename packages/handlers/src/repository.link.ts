@@ -39,11 +39,11 @@ import {
 } from "./context.steering.github";
 import { createSteeringHost } from "./context.steering.host";
 import { logger } from "./logger";
-import { assertLinkAllowed, resolveLinkTarget } from "./repository.link.write";
 import {
   githubMainRepositoryDeps,
   type MainRepositoryDeps,
-} from "./repository.main.bind";
+} from "./repository.binding-write";
+import { assertLinkAllowed, resolveLinkTarget } from "./repository.link.write";
 import {
   openSteeringPullRequest,
   type SteeringPullRequestHost,

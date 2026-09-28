@@ -1,0 +1,228 @@
+{
+  "name": "get_steering_repo",
+  "domain": "repository",
+  "description": "Read the workspace's steering repo: its provisioning status and step, the repository, the published version, its settings health, and each setting that differs.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "provisioning",
+          "ready",
+          "failed",
+          "blocked"
+        ]
+      },
+      "step": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "pick_connection",
+              "create_repository",
+              "add_to_installation",
+              "write_first_commit",
+              "apply_settings",
+              "register_webhook",
+              "publish_version",
+              "bind_repository"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "failedStep": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "pick_connection",
+              "create_repository",
+              "add_to_installation",
+              "write_first_commit",
+              "apply_settings",
+              "register_webhook",
+              "publish_version",
+              "bind_repository"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "provider": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "repository": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "fullName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "fullName",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "publishedVersion": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "health": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "drifted",
+              "disconnected",
+              "diverged"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "differences": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "setting": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The setting's path in the baseline, such as rulesets.oxagen_merges."
+            },
+            "expected": {
+              "type": "string",
+              "description": "The prescribed value, rendered as text."
+            },
+            "actual": {
+              "type": "string",
+              "description": "The value the host reports, rendered as text."
+            },
+            "changedBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "changedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "setting",
+            "expected",
+            "actual",
+            "changedBy",
+            "changedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "status",
+      "step",
+      "failedStep",
+      "error",
+      "provider",
+      "repository",
+      "publishedVersion",
+      "health",
+      "differences"
+    ],
+    "additionalProperties": false
+  }
+}

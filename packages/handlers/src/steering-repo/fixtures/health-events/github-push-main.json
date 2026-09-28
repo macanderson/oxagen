@@ -1,0 +1,36 @@
+{
+  "ref": "refs/heads/main",
+  "before": "4f1c0e2a9b6d8e7f3a2b1c0d9e8f7a6b5c4d3e2f",
+  "after": "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
+  "created": false,
+  "deleted": false,
+  "forced": true,
+  "compare": "https://github.com/acme/oxagen-steering-platform/compare/4f1c0e2a9b6d...9a8b7c6d5e4f",
+  "commits": [
+    {
+      "id": "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
+      "message": "Loosen the review rule",
+      "timestamp": "2026-09-26T18:12:44-04:00",
+      "author": { "name": "Dana Ops", "email": "dana@acme.example", "username": "dana-ops" }
+    }
+  ],
+  "head_commit": {
+    "id": "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
+    "message": "Loosen the review rule",
+    "timestamp": "2026-09-26T18:12:44-04:00",
+    "author": { "name": "Dana Ops", "email": "dana@acme.example", "username": "dana-ops" }
+  },
+  "repository": {
+    "id": 904211873,
+    "name": "oxagen-steering-platform",
+    "full_name": "acme/oxagen-steering-platform",
+    "private": true,
+    "default_branch": "main",
+    "created_at": 1789999324,
+    "updated_at": "2026-09-26T21:02:48Z",
+    "pushed_at": 1790547166
+  },
+  "pusher": { "name": "dana-ops", "email": "dana@acme.example" },
+  "sender": { "login": "dana-ops", "id": 5412287, "type": "User" },
+  "installation": { "id": 61200044 }
+}

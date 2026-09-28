@@ -4,6 +4,8 @@
 **Status:** Approved — build in progress
 **Repositories reviewed:** Oxagen, Stella, and `context-graph-protocol`
 
+> **Amended 2026-09-28 by [ADR-214](../../adr/ADR-214-server-built-code-graph-copies-hold-symbols-chunks-and-embeddings.md).** The "Do NOT persist" list in §2 no longer applies to code graph copies that Oxagen builds from the provider at a commit SHA: the default branch, tagged releases, and open PRs. Those copies may hold symbols, references, call sites, source chunks, and source embeddings. Everything else in this spec stands: Stella's working-tree graph stays local, no client writes the shared graph, and no graph is kept for a feature branch or a worktree.
+
 ## Executive decision
 
 The model is **two graph planes joined by an immutable evidence bridge**:

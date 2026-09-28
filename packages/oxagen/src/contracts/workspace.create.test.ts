@@ -95,7 +95,7 @@ describe("workspace.create capability", () => {
       ).toBe(false);
   });
 
-  it("refuses a repository owner or name bind_main_repository would refuse", () => {
+  it("refuses a repository owner or name link_repository would refuse", () => {
     expect(
       workspaceCreate.input.safeParse({
         name: "Default",

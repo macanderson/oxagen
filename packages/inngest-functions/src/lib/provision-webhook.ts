@@ -1,3 +1,4 @@
+import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { createIngestionCryptoAdapter, encrypt } from "@oxagen/crypto";
@@ -29,20 +30,15 @@ async function encryptToEnvelope(plaintext: string): Promise<Envelope> {
 }
 
 /**
- * The API base the provider posts deliveries to. The delivery route is mounted
- * at POST /webhooks/:connectorId/:connectionId (apps/api), so the full URL is
- * `${OXAGEN_API_URL}/webhooks/${connectorId}/${connectionPublicId}`.
+ * The URL the provider posts deliveries to. The delivery route is mounted at
+ * POST /webhooks/:connectorId/:connectionId (apps/api), on the API's public
+ * origin (`apiPublicOrigin`, read from `NEXT_PUBLIC_API_URL`).
  */
 function webhookUrlFor(
   connectorId: string,
   connectionPublicId: string,
 ): string {
-  // The public API base the provider posts to. Falls back to the prod host so a
-  // provisioning run never registers a localhost URL by accident in prod.
-  const base = (
-    process.env["OXAGEN_API_URL"] ?? "https://api.oxagen.sh"
-  ).replace(/\/+$/, "");
-  return `${base}/webhooks/${connectorId}/${connectionPublicId}`;
+  return `${apiPublicOrigin()}/webhooks/${connectorId}/${connectionPublicId}`;
 }
 
 /** The stored webhook_path — the tenant-opaque per-connection delivery path. */
