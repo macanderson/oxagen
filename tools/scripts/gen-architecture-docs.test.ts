@@ -618,6 +618,17 @@ describe("collectors", () => {
       { host: "app.example", port: 3000 },
       { host: "new.example", port: 3000 },
     ]);
+    // Spaces and a trailing comment on the matcher line add no host, and a
+    // handle whose matcher names no host adds no route.
+    file(
+      root,
+      "infra/tools/caddy/Caddyfile.alb",
+      ":80 {\n route {\n  @app host app.example  new.example   # moving\n  handle @app {\n   reverse_proxy 127.0.0.1:3000\n  }\n  @static path /static/*\n  handle @static {\n   reverse_proxy 127.0.0.1:5000\n  }\n }\n}\n",
+    );
+    expect(collectCaddy(root)).toEqual([
+      { host: "app.example", port: 3000 },
+      { host: "new.example", port: 3000 },
+    ]);
     expect(collectCompose(root)).toEqual([
       { name: "postgres", image: "postgres:16" },
     ]);

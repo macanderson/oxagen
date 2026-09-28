@@ -420,10 +420,21 @@ describe("the canonical host (ADR-215)", () => {
         cookie: "better-auth.session_token=abc",
       }).headers.get("location"),
     ).toBeNull();
-    expect(
-      new URL(onHost("https://oxagen.app/acme").headers.get("location") ?? "")
-        .host,
-    ).toBe("oxagen.app");
+    const signIn = new URL(
+      onHost("https://oxagen.app/acme").headers.get("location") ?? "",
+    );
+    expect(signIn.origin).toBe("https://oxagen.app");
+    expect(signIn.pathname).toBe("/login");
+    expect(signIn.searchParams.get("next")).toBe("/acme");
+  });
+
+  it("moves a two-factor visit before the two-factor gate sends it to the old host's /login", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = onHost("https://app.oxagen.sh/two-factor?next=%2Facme");
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe(
+      "https://oxagen.app/two-factor?next=%2Facme",
+    );
   });
 
   it.each([
@@ -433,12 +444,12 @@ describe("the canonical host (ADR-215)", () => {
     "/.well-known/oauth-authorization-server",
   ])("keeps serving %s on the old host (negative)", (path) => {
     process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
-    const location = onHost(`https://app.oxagen.sh${path}`).headers.get(
-      "location",
-    );
-    expect(location === null ? null : new URL(location).host).not.toBe(
-      "oxagen.app",
-    );
+    // Signed in, so the session gate passes the request through: no redirect
+    // at all shows the path is served where it was asked for.
+    const res = onHost(`https://app.oxagen.sh${path}`, {
+      cookie: "better-auth.session_token=abc",
+    });
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("does not move a POST, which a redirect would turn into a lost submission (negative)", () => {

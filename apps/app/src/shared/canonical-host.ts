@@ -68,9 +68,11 @@ function isCanonicalHostUrl(
  *
  * Only a GET or HEAD for a page, on a production host that is not the
  * canonical one, moves. Local, staging, and test hosts are not in `APP_HOSTS`,
- * so nothing outside production redirects. A build whose origin is not a
- * production host (a mistyped `NEXT_PUBLIC_APP_URL`) redirects nothing either,
- * rather than sending production visitors to it.
+ * so nothing outside production redirects. A build whose origin names a host
+ * outside `APP_HOSTS` (a staging or local `NEXT_PUBLIC_APP_URL`) redirects
+ * nothing either, rather than sending production visitors to it. An origin
+ * that does not parse falls back to app.oxagen.sh, as the page metadata does,
+ * and app.oxagen.sh is then canonical.
  */
 export function canonicalHostRedirect(request: {
   readonly method: string;

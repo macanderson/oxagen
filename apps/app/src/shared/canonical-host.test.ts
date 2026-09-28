@@ -67,6 +67,18 @@ describe("canonicalHostRedirect once oxagen.app is canonical", () => {
     expect(target("oxagen.app", "/acme")).toBeNull();
   });
 
+  it("leaves oxagen.app however the Host header spells it (negative)", () => {
+    // Compared as sent, `OXAGEN.app:443` would get a cached 308 to itself.
+    expect(target("OXAGEN.app:443", "/acme")).toBeNull();
+  });
+
+  it("builds the target from the origin alone, whatever else the origin carries", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://u:p@oxagen.app/x#y";
+    expect(target("app.oxagen.sh", "/acme", "?tab=live")).toBe(
+      "https://oxagen.app/acme?tab=live",
+    );
+  });
+
   it.each(["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])(
     "leaves a %s, which cannot follow a redirect intact (negative)",
     (method) => {
@@ -133,6 +145,22 @@ describe("canonicalHostRedirect while app.oxagen.sh is canonical", () => {
   it("falls back to app.oxagen.sh as canonical when nothing is set", () => {
     delete process.env.NEXT_PUBLIC_APP_URL;
     expect(target("oxagen.app", "/")).toBe("https://app.oxagen.sh/");
+  });
+
+  it("treats an origin that does not parse as app.oxagen.sh, as the metadata does", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "oxagen.app";
+    const moved = canonicalHostRedirect(visit("oxagen.app", "/acme"));
+    expect(moved?.url).toBe("https://app.oxagen.sh/acme");
+    expect(moved?.permanent).toBe(false);
+  });
+});
+
+describe("canonicalHostRedirect with www.oxagen.app as the origin", () => {
+  it("sends a temporary redirect, because only oxagen.app is permanent", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://www.oxagen.app";
+    const moved = canonicalHostRedirect(visit("oxagen.app", "/acme"));
+    expect(moved?.url).toBe("https://www.oxagen.app/acme");
+    expect(moved?.permanent).toBe(false);
   });
 });
 
