@@ -346,6 +346,9 @@ export function resolveHandler({
  * Whether the handler export calls a role gate: in its body, in a same-file
  * function it calls, or in a function it imports by a relative path, one hop
  * deep. `exportName` null reads every export the module declares.
+ *
+ * @param {string} handlerFile
+ * @param {string | null} [exportName]
  */
 export function handlerAssertsRole(
   handlerFile,

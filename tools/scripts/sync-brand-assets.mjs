@@ -477,6 +477,10 @@ function tokens() {
  * tokens give it: each key of `INK_TOKENS` mapped to the hex of the token it
  * names. Throws when the kit has no such token, so a renamed token fails the
  * sync instead of writing `undefined`.
+ *
+ * @param {Record<string, unknown>} kitTokens
+ * @param {Readonly<Record<string, string>>} [map]
+ * @returns {Record<string, string>}
  */
 export function expectedInk(kitTokens, map = INK_TOKENS) {
   const ink = {};

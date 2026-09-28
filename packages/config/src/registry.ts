@@ -2400,6 +2400,57 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "app",
   },
+  PR_NUMBER: {
+    group: "Operator scripts",
+    description:
+      "The pull request check-superseded-runs.mjs reports on. ci-superseded.yml sets it from the triggering run's pull request, or from the pr input on a manual dispatch.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  HEAD_REPO: {
+    group: "Operator scripts",
+    description:
+      "The head repository (owner/name) of the CI run check-superseded-runs.mjs was triggered by. It finds the pull request from this and HEAD_BRANCH when PR_NUMBER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  HEAD_BRANCH: {
+    group: "Operator scripts",
+    description:
+      "The head branch of the CI run check-superseded-runs.mjs was triggered by. It finds the pull request from this and HEAD_REPO when PR_NUMBER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  DRY_RUN: {
+    group: "Operator scripts",
+    description:
+      "Set to 1 to make check-superseded-runs.mjs print what it would post instead of posting it. ci-superseded.yml sets it on a manual dispatch with dry_run.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  CI_SUPERSEDED_THRESHOLD: {
+    group: "Operator scripts",
+    description:
+      "How many superseded CI runs in a row make check-superseded-runs.mjs report a pull request. A repository variable in ci-superseded.yml. Unset or below 2 reads as 3.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "3",
+  },
   SCR_OWNER: {
     group: "Operator scripts",
     description:
