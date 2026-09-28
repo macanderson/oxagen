@@ -1,8 +1,9 @@
 // The routes are thin adapters over `handleGitLabWebhook` and
 // `handleGitLabSteeringWebhook`: each forwards the path parameters, the
 // `X-Gitlab-Token` header and the parsed body, and answers the handler's
-// status and outcome. The connection route also binds the steering repo
-// health request (S2, #4560) to the scope lookup and the event client.
+// status and outcome. Both routes also bind the steering repo health request
+// (S2, #4560): the connection route through the scope lookup, and the steering
+// route straight to the one scope its hook belongs to.
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthSignal } from "@oxagen/handlers/steering-repo/health";
@@ -129,12 +130,18 @@ describe("POST /webhooks/gitlab/steering/:scopeKind/:scopeId", () => {
     );
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ outcome: "health_requested" });
-    expect(mocks.handleSteering).toHaveBeenCalledWith(mocks.steeringDeps, {
-      scopeKind: "workspace",
-      scopeId: WORKSPACE,
-      tokenHeader: "hook-token",
-      body: { object_kind: "push", ref: "refs/heads/main" },
-    });
+    expect(mocks.handleSteering).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...mocks.steeringDeps,
+        requestHealthCheck: expect.any(Function),
+      }),
+      {
+        scopeKind: "workspace",
+        scopeId: WORKSPACE,
+        tokenHeader: "hook-token",
+        body: { object_kind: "push", ref: "refs/heads/main" },
+      },
+    );
     expect(mocks.handle).not.toHaveBeenCalled();
   });
 
@@ -235,5 +242,71 @@ describe("POST /webhooks/gitlab/:connectionId: the steering repo health request"
     const request = await boundRequest();
     await expect(request(SIGNAL)).rejects.toThrow("pg down");
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /webhooks/gitlab/steering/:scopeKind/:scopeId: the health request", () => {
+  beforeEach(() => {
+    mocks.handleSteering.mockReset();
+    mocks.findHealthScopes.mockReset();
+    mocks.send.mockReset();
+    mocks.handleSteering.mockResolvedValue({
+      status: 202,
+      outcome: "ignored_event",
+    });
+  });
+
+  /** The requestHealthCheck the steering route handed the handler. */
+  async function boundRequest() {
+    await app.request("/webhooks/gitlab/steering/workspace/ws-1", {
+      method: "POST",
+      body: '{"object_kind":"push"}',
+      headers: { "X-Gitlab-Token": "hook-token" },
+    });
+    const deps = mocks.handleSteering.mock.calls[0]?.[0] as {
+      requestHealthCheck(
+        scope: { orgId: string; workspaceId: string | null },
+        reason: "push" | "project" | "member",
+      ): Promise<void>;
+    };
+    return deps.requestHealthCheck;
+  }
+
+  it("sends one request for the hook's scope, without a scope lookup", async () => {
+    const request = await boundRequest();
+    await request({ orgId: "org-1", workspaceId: "ws-1" }, "push");
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    expect(mocks.send).toHaveBeenCalledWith([
+      {
+        name: "steering-repo/health.requested",
+        data: {
+          orgId: "org-1",
+          workspaceId: "ws-1",
+          key: "org-1:ws-1",
+          trigger: {
+            reason: "push",
+            actor: null,
+            at: null,
+            settings: [],
+            pull_request: null,
+          },
+        },
+      },
+    ]);
+  });
+
+  it("keys an organization's steering repo by the organization", async () => {
+    const request = await boundRequest();
+    await request({ orgId: "org-1", workspaceId: null }, "member");
+    const [[events]] = mocks.send.mock.calls as [[{ data: { key: string } }[]]];
+    expect(events.map((e) => e.data.key)).toEqual(["org-1:org"]);
+  });
+
+  it("lets a send failure reach the handler, which logs it", async () => {
+    mocks.send.mockRejectedValue(new Error("inngest down"));
+    const request = await boundRequest();
+    await expect(
+      request({ orgId: "org-1", workspaceId: "ws-1" }, "project"),
+    ).rejects.toThrow("inngest down");
   });
 });

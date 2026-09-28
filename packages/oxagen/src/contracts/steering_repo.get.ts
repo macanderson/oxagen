@@ -15,6 +15,7 @@ export const STEERING_REPO_STEP_NAMES = [
   "add_to_installation",
   "write_first_commit",
   "apply_settings",
+  "register_webhook",
   "publish_version",
   "bind_repository",
 ] as const;

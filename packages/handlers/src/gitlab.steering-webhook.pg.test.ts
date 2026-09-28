@@ -212,7 +212,7 @@ describe.skipIf(!enabled)("gitlabSteeringWebhookDeps against Postgres", () => {
     );
   });
 
-  it("leaves the health check out until #4560 plugs it in", () => {
+  it("leaves the health check to the API route, which holds the event client", () => {
     expect(deps.requestHealthCheck).toBeUndefined();
   });
 });

@@ -20,12 +20,16 @@
  * (#4562), at `POST /webhooks/gitlab/steering/:scopeKind/:scopeId`. Its
  * token is an HMAC of the scope and the project, and
  * `@oxagen/handlers/gitlab.steering-webhook` checks it and turns a push or a
- * merge into a health check and a steering sync.
+ * merge into a health check and a steering sync. The route binds that health
+ * check too. The handler has already matched the hook to one scope, so the
+ * request goes to that scope without a lookup.
  */
 import { Hono } from "hono";
 import {
   gitlabSteeringWebhookDeps,
   handleGitLabSteeringWebhook,
+  type SteeringHookReason,
+  type SteeringHookScope,
 } from "@oxagen/handlers/gitlab.steering-webhook";
 import {
   gitlabWebhookDeps,
@@ -67,9 +71,36 @@ async function requestHealthCheck(signal: HealthSignal): Promise<void> {
   );
 }
 
+/**
+ * Send one health request for the scope a steering project hook belongs to.
+ * A project hook names no actor, time, or setting, so the trigger carries the
+ * reason alone.
+ */
+async function requestSteeringHealthCheck(
+  scope: SteeringHookScope,
+  reason: SteeringHookReason,
+): Promise<void> {
+  const trigger = {
+    reason,
+    actor: null,
+    at: null,
+    settings: [],
+    pull_request: null,
+  };
+  await eventClient.send(
+    healthRequests([scope], trigger).map((r) => ({
+      name: r.name,
+      data: { ...r.data },
+    })),
+  );
+}
+
 gitlabWebhookRoute.post("/steering/:scopeKind/:scopeId", async (c) => {
   const result = await handleGitLabSteeringWebhook(
-    gitlabSteeringWebhookDeps(),
+    {
+      ...gitlabSteeringWebhookDeps(),
+      requestHealthCheck: requestSteeringHealthCheck,
+    },
     {
       scopeKind: c.req.param("scopeKind"),
       scopeId: c.req.param("scopeId"),

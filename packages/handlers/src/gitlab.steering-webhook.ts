@@ -74,8 +74,9 @@ export interface GitLabSteeringWebhookDeps {
   /** The secret the hook's token is made with. */
   secret(): string;
   /**
-   * Ask for a health read of the scope's steering repo (#4560). Absent until
-   * that lane plugs in its function, and a delivery then asks for nothing.
+   * Ask for a health read of the scope's steering repo (#4560). The API route
+   * binds it to the event client, the way it binds the connection hook's.
+   * Absent, a delivery asks for nothing.
    */
   requestHealthCheck?(
     scope: SteeringHookScope,
@@ -304,7 +305,8 @@ export function gitlabSteeringWebhookDeps(): GitLabSteeringWebhookDeps {
     },
     secret: () =>
       requireEnv(["BETTER_AUTH_SECRET"] as const).BETTER_AUTH_SECRET,
-    // requestHealthCheck is left out until #4560 lands its function.
+    // requestHealthCheck is bound by the API route, which holds the event
+    // client (apps/api/src/routes/v1/gitlab-webhook.ts).
     async requestSync(scope, reason) {
       const { requestSteeringSync } = await import(
         "./context.steering.sync.request"
