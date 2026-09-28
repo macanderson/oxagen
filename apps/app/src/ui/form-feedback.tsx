@@ -33,7 +33,7 @@ export function FormAlert({
         aria-hidden
         className="mt-0.5 size-4 flex-none text-destructive"
       />
-      <span>{children}</span>
+      <span className="min-w-0 md:[td_&]:truncate">{children}</span>
     </div>
   );
 }

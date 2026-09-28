@@ -460,7 +460,7 @@ function RunRowView({
     switch (column) {
       case "run":
         return (
-          <td key={column} className={`${cell} min-w-48 max-w-72`}>
+          <td key={column} className={`${cell} min-w-48`}>
             <SafeLink
               to={to}
               onClick={(event) => {
@@ -500,7 +500,7 @@ function RunRowView({
             {operatorLabel === null ? (
               notRecorded
             ) : (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="flex min-w-0 items-center gap-[7px]">
                 <Avatar
                   value={run.operatorAvatarUrl}
                   initials={initialsOf(run.operatorName ?? operatorLabel)}
@@ -508,11 +508,11 @@ function RunRowView({
                   testId="operator-avatar"
                 />
                 <span
-                  className={
+                  className={`min-w-0 md:truncate ${
                     run.operatorName === null && run.operatorKind === null
                       ? mono
-                      : undefined
-                  }
+                      : ""
+                  }`}
                 >
                   {operatorLabel}
                 </span>
@@ -577,7 +577,7 @@ function RunRowView({
             ) : (
               <>
                 <Money value={cost.value} />
-                <span className="block text-[10px] text-muted-foreground">
+                <span className="block text-[10px] text-muted-foreground md:truncate">
                   {cost.estimate ? (
                     // A running rollup, or before any rollup the agent's own
                     // figure, which Spend shown counts as an estimate too.

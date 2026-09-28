@@ -91,7 +91,7 @@ function Effective({ entry }: { entry: PriceEntry }) {
   return (
     <>
       <Instant iso={entry.effectiveFrom} />
-      <span className="block text-xs text-muted-foreground">
+      <span className="block text-xs text-muted-foreground md:truncate">
         {entry.effectiveTo === null
           ? t("book.open")
           : t("book.until", {
@@ -124,7 +124,7 @@ function WindowLine({ usage }: { usage: MissingClassWindow }) {
   return (
     <span
       data-window={usage.tokenClass}
-      className="block text-xs text-muted-foreground"
+      className="block text-xs text-muted-foreground md:truncate"
     >
       {usage.tokenClass === "server_tool_request"
         ? t("unpriced.windowRequests", values)
@@ -374,7 +374,7 @@ function PriceTable({
                 <td className={cell}>{entry.provider}</td>
                 <td className={cell}>{t(`class.${entry.tokenClass}`)}</td>
                 <td className={cell}>
-                  <span className="inline-flex flex-wrap items-baseline gap-x-2">
+                  <span className="inline-flex items-baseline gap-x-2 max-md:flex-wrap">
                     <Money value={entry.ratePerMillion} precision="exact" />
                     <span className="text-xs text-muted-foreground">
                       {t(`per.${entry.unit}`)}

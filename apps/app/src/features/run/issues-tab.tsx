@@ -139,7 +139,7 @@ function issueRow(issue: Issue, place: Place): IssueTableRow {
     status: issue.statusRead === "read" ? issue.status : null,
     cells: [
       <span key="ref" className="flex min-w-0 flex-col">
-        <span className={`${mono} text-xs`}>{issue.ref}</span>
+        <span className={`${mono} text-xs md:truncate`}>{issue.ref}</span>
         {issue.title === null ? null : (
           <span className="truncate text-[11.5px] text-muted-foreground">
             {issue.title}

@@ -299,7 +299,7 @@ function Row({
       className="cursor-pointer transition-colors hover:bg-hl"
     >
       <td className={cell}>
-        <span className="flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
           <FolderSimpleIcon
             aria-hidden="true"
             className="size-3.5 flex-none text-dim"
@@ -314,20 +314,20 @@ function Row({
               event.stopPropagation();
               open();
             }}
-            className={`${mono} break-all text-left font-semibold text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11`}
+            className={`${mono} min-w-0 text-left font-semibold text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11 md:truncate`}
           >
             {row.fullName}
           </button>
         </span>
         {row.visibility === null ? null : (
-          <span className="mt-0.5 block text-[11px] text-dim">
+          <span className="mt-0.5 block text-[11px] text-dim md:truncate">
             {t(`visibility.${row.visibility}`)}
           </span>
         )}
         {row.connectionLive ? null : (
           <span
             data-testid={`repository-retired-${row.fullName}`}
-            className="mt-1 block text-xs text-error-ink"
+            className="mt-1 block text-xs text-error-ink md:truncate"
           >
             {t("retired")}
           </span>
@@ -339,7 +339,7 @@ function Row({
       <td className={cell}>
         <span className={mono}>{row.productionBranch}</span>
         {ready?.head ? (
-          <span className={`${mono} block text-[11px] text-dim`}>
+          <span className={`${mono} block text-[11px] text-dim md:truncate`}>
             {ready.head.slice(0, 7)}
           </span>
         ) : null}
@@ -347,7 +347,9 @@ function Row({
       <td className={cell}>
         <TreeBadge state={state} testId={`repository-tree-${row.fullName}`} />
         {ready !== null && ready.oxagen.present ? (
-          <span className={`${mono} mt-0.5 block text-[11px] text-dim`}>
+          <span
+            className={`${mono} mt-0.5 block text-[11px] text-dim md:truncate`}
+          >
             {t("tree.files", { count: ready.oxagen.files.length })}
           </span>
         ) : null}
@@ -361,7 +363,7 @@ function Row({
             <span
               data-state="not-recorded"
               data-gap={REPOSITORY_GAPS.lifecycle}
-              className="block text-[11px] text-dim"
+              className="block text-[11px] text-dim md:truncate"
             >
               {t("deliveries")}
             </span>

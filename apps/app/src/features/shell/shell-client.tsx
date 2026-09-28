@@ -1,14 +1,16 @@
 "use client";
 // The client shell: every interactive piece of the chrome under one state
 // provider. It renders grid items (rail, top bar) plus fixed and portalled
-// overlays, so the layout places it beside the page without a wrapper, and it
-// labels the page's list tables for the phone's card layout.
+// overlays, so the layout places it beside the page without a wrapper. It
+// labels the page's list tables for the phone's card layout, and shows the
+// whole value of a table cell whose text ends in an ellipsis.
 import type { ReactNode } from "react";
 import { AccountDialog } from "./account-dialog";
 import { ApprovalsDrawer } from "./approvals-drawer";
 import { AssistantFlyout } from "./assistant-flyout";
 import { AvatarDialog } from "./avatar-dialog";
 import { useCardTables } from "./card-tables";
+import { CellOverflow } from "./cell-overflow";
 import { CommandMenu } from "./command-menu";
 import { NavDrawer, ShellMobileNav } from "./mobile-nav";
 import { NotificationsDialog } from "./notifications-dialog";
@@ -38,6 +40,7 @@ export function ShellClient({
       <AssistantFlyout enterToSubmit={data.viewer.enterToSubmit} />
       <NotificationsDialog data={data} />
       <ApprovalsDrawer data={data} cards={cards} />
+      <CellOverflow />
     </ShellStateProvider>
   );
 }

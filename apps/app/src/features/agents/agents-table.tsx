@@ -144,7 +144,7 @@ function initialsOf(name: string): string {
 function Owner({ row }: { row: AgentRow }) {
   if (row.operatorId === null) return <NotRecordedValue />;
   return (
-    <span className="inline-flex items-center gap-[7px] whitespace-nowrap">
+    <span className="flex min-w-0 items-center gap-[7px] whitespace-nowrap">
       <Avatar
         value={row.operatorAvatarUrl}
         initials={initialsOf(row.operatorName ?? row.operatorId)}
@@ -152,6 +152,7 @@ function Owner({ row }: { row: AgentRow }) {
         testId="operator-avatar"
       />
       <OperatorName
+        className="min-w-0"
         operator={{
           id: row.operatorId,
           name: row.operatorName,
@@ -165,7 +166,7 @@ function Owner({ row }: { row: AgentRow }) {
 
 function Sub({ children }: { children: ReactNode }) {
   return (
-    <span className="block font-mono text-[10px] text-muted-foreground">
+    <span className="block font-mono text-[10px] text-muted-foreground md:truncate">
       {children}
     </span>
   );
@@ -317,14 +318,17 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
         render: (row) => (
           <span className="block">
             {row.runtime === null ? null : (
-              <span data-testid="agent-row-runtime" className="block">
+              <span
+                data-testid="agent-row-runtime"
+                className="block md:truncate"
+              >
                 {row.runtime.name}
               </span>
             )}
-            <span className={`${mono} block text-[11.5px]`}>
+            <span className={`${mono} block text-[11.5px] md:truncate`}>
               {row.host ?? t("list.cells.none")}
             </span>
-            <span className="block text-[10px] text-muted-foreground">
+            <span className="block text-[10px] text-muted-foreground md:truncate">
               {/* With no host there is no runtime to have a kind, so the
                   line is the tier alone, as the design draws it. */}
               {row.host === null ? null : (

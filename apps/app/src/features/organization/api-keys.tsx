@@ -466,8 +466,10 @@ function Keys({
             data: { "data-api-key": key.id },
             cells: [
               <div key="name">
-                <div className="font-semibold text-foreground">{key.name}</div>
-                <div className={`${mono} text-[11px] text-dim`}>
+                <div className="font-semibold text-foreground md:truncate">
+                  {key.name}
+                </div>
+                <div className={`${mono} text-[11px] text-dim md:truncate`}>
                   {t("masked", { prefix: key.prefix })}
                 </div>
               </div>,

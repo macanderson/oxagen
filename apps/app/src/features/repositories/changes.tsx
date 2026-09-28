@@ -69,7 +69,7 @@ export function CiLight({ status }: { status: Status }) {
       <span
         aria-hidden="true"
         data-ci="failed"
-        className="font-bold text-error-ink"
+        className="shrink-0 font-bold text-error-ink"
       >
         ✕
       </span>
@@ -90,7 +90,7 @@ export function CiLight({ status }: { status: Status }) {
     <span
       aria-hidden="true"
       data-ci={ci}
-      className={`inline-block size-2.5 rounded-full ${tone}`}
+      className={`inline-block size-2.5 shrink-0 rounded-full ${tone}`}
     />
   );
 }
@@ -299,16 +299,18 @@ function ChangeRow({
       className="cursor-pointer transition-colors hover:bg-hl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
       <td className={cell}>
-        <span className="flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
           <FileTextIcon
             aria-hidden="true"
             className="size-3.5 flex-none text-dim"
           />
-          <b className="break-all font-semibold text-foreground">
+          <b className="min-w-0 font-semibold text-foreground md:truncate">
             {row.lineage}
           </b>
         </span>
-        <span className={`${mono} mt-0.5 block text-[11px] text-dim`}>
+        <span
+          className={`${mono} mt-0.5 block text-[11px] text-dim md:truncate`}
+        >
           {row.pullRequest.branch}
         </span>
       </td>
@@ -324,9 +326,7 @@ function ChangeRow({
         {person ? (
           <span className="text-foreground">{t("openedBy.person")}</span>
         ) : (
-          <span className={`${mono} break-all text-foreground`}>
-            {row.openedBy}
-          </span>
+          <span className={`${mono} text-foreground`}>{row.openedBy}</span>
         )}
       </td>
       <td className={cell}>
@@ -338,9 +338,11 @@ function ChangeRow({
         </Badge>
       </td>
       <td className={`${cell} whitespace-nowrap`}>
-        <span className="inline-flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
           <CiLight status={row.status} />
-          <span className={`${mono} text-[11.5px] text-muted-foreground`}>
+          <span
+            className={`${mono} min-w-0 text-[11.5px] text-muted-foreground md:truncate`}
+          >
             {row.checks === null
               ? t("ci.queued")
               : t("ci.count", {

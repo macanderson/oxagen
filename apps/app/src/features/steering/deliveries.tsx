@@ -45,13 +45,15 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
             {report.runs.map((run) => (
               <tr key={run.sessionUuid}>
                 <td className={cell}>
-                  <div>{run.agentKey}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="md:truncate">{run.agentKey}</div>
+                  <div className="text-xs text-muted-foreground md:truncate">
                     {run.harness} · {date(run.ts.replace(" ", "T") + "Z")}
                   </div>
                   <details>
                     <summary className="cursor-pointer">{t("run")}</summary>
-                    <code className="select-all">{run.sessionUuid}</code>
+                    <code className="block select-all md:truncate">
+                      {run.sessionUuid}
+                    </code>
                   </details>
                 </td>
                 <td className={numericCell}>{count(run.recordsIncluded)}</td>

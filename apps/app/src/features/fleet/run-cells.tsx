@@ -55,9 +55,12 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
   const label = pullRequestLabel(pull) ?? t("unnamed");
   const forge = forgeOf(pull.url);
   return (
-    <li className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+    <li className="flex items-center gap-x-1.5 gap-y-0.5 max-md:flex-wrap">
       {url === null ? (
-        <span className={`${mono} text-[11.5px]`} title={pull.url}>
+        <span
+          className={`${mono} min-w-0 text-[11.5px] md:truncate`}
+          title={pull.url}
+        >
           {label}
         </span>
       ) : (
@@ -74,10 +77,10 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           onClick={(event) => {
             event.stopPropagation();
           }}
-          className={`${linkText} inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11.5px]`}
+          className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-[11.5px]`}
         >
           <GitPullRequestIcon aria-hidden className="size-3 flex-none" />
-          {label}
+          <span className="min-w-0 md:truncate">{label}</span>
         </PullRequestLink>
       )}
       {pull.state === null ? (
@@ -155,7 +158,7 @@ export function PullRequestsCell({ run }: { run: RunRow }) {
         <PullRequestItem key={pull.url} pull={pull} />
       ))}
       {pulls.length > shown.length ? (
-        <li className="text-[11px] text-muted-foreground">
+        <li className="text-[11px] text-muted-foreground md:truncate">
           {t("more", { count: pulls.length - shown.length })}
         </li>
       ) : null}
@@ -193,7 +196,7 @@ export function DiffCell({ diff }: { diff: RunDiff | null | undefined }) {
         })}
       </span>
       {diff.basis === "git_observed" ? (
-        <span className="block text-[10px] text-muted-foreground">
+        <span className="block text-[10px] text-muted-foreground md:truncate">
           {t("uncommitted")}
         </span>
       ) : null}
@@ -230,12 +233,12 @@ export function TokensCell({ run }: { run: RunRow }) {
     >
       {formatCount(shown.total, locale)}
       {shown.cached === null ? null : (
-        <span className="block text-[10px] text-muted-foreground">
+        <span className="block text-[10px] text-muted-foreground md:truncate">
           {t("tokens.cached", { ratio: formatRatio(shown.cached, locale) })}
         </span>
       )}
       {shown.reported ? (
-        <span className="block text-[10px] text-muted-foreground">
+        <span className="block text-[10px] text-muted-foreground md:truncate">
           {t("tokens.reported")}
         </span>
       ) : null}
