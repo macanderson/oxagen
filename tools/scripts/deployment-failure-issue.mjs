@@ -161,7 +161,7 @@ ${jobLines(jobs)}
 
 CI filed this issue (\`.github/workflows/deployment-failure.yml\`). Later failures of the same kind are added here as comments instead of new issues. The first ${kind === "deploy" ? "run that deploys cleanly" : "green run on `main`"} ticks the box below and closes the issue, so the time from open to close is the time to recover.
 
-Commit the fix straight to `main`, with no branch and no PR (AGENTS.md, Git Workflow), and record the root cause and the fixing commit in a comment.
+Commit the fix straight to \`main\`, with no branch and no PR (AGENTS.md, Git Workflow), and record the root cause and the fixing commit in a comment.
 
 ## Definition of done
 

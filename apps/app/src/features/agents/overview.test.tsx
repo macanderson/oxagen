@@ -3,8 +3,9 @@
 // test in agent.test.tsx does not reach: a rollup that could not be read, a
 // row with no cost or no input, each health verdict, a composition whose
 // steering, belt, mandates or operator are missing or unreadable, and the
-// agent's versions (ADR-198). Every missing figure says "not recorded"
-// rather than drawing a zero. Axe runs after every test (INV-26).
+// agent's versions (ADR-198), and the cache TTL the coaching proposes. Every
+// missing figure says "not recorded" rather than drawing a zero. Axe runs
+// after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +18,7 @@ import {
   incident,
   incidentPage,
   runRow,
+  spendFindings,
   spendReport,
   spendRow,
   steeringDeliveries,
@@ -45,6 +47,7 @@ function renderOverview(overrides: Partial<Props> = {}) {
     deliveries: steeringDeliveries(),
     spend: spendReport([row]),
     spendRow: row,
+    findings: null,
     lastRun: runRow(),
     operatorName: "Marcus Bell",
     place: PLACE,
@@ -136,6 +139,86 @@ describe("Overview › 30-day token use", () => {
     expect(panel).toHaveTextContent("Per runnot recorded");
     expect(panel).toHaveTextContent("Per model callnot recorded");
     expect(tile("Tokens")).toHaveTextContent("cache read not recorded");
+  });
+});
+
+describe("Overview › cache TTL", () => {
+  const ttlFinding = (
+    recommendation: { setting: string; value: string; current?: string },
+    subject = "acme.core.release-bot",
+  ) =>
+    spendFindings([
+      { id: "fnd_ttl", kind: "idle_cache_rewrites", subject, recommendation },
+    ]);
+  const TOKEN_CLASSES_NOTE =
+    "Coaching is read off the token classes, and the record does not split input by class yet. Nothing is suggested until it does.";
+
+  it("proposes the 1-hour TTL and links the finding's evidence", () => {
+    renderOverview({
+      findings: ttlFinding({ setting: "cache_ttl", value: "1h", current: "5m" }),
+    });
+    const coaching = region("Coaching");
+    expect(within(coaching).getByTestId("cache-ttl")).toHaveTextContent(
+      "Cache TTLSet the cache TTL to 1 hour.Open the finding",
+    );
+    expect(
+      within(coaching).getByRole("link", { name: "Open the finding" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend?finding=fnd_ttl");
+    // The TTL is proposed, so the note no longer says nothing is.
+    expect(within(coaching).getByTestId("not-backed")).toHaveTextContent(
+      "Other coaching is read off the token classes, and the record does not split input by class yet.",
+    );
+  });
+
+  it("keeps the TTL the writes use when the finding proposes it", () => {
+    renderOverview({
+      findings: ttlFinding({ setting: "cache_ttl", value: "5m", current: "5m" }),
+    });
+    expect(screen.getByTestId("cache-ttl")).toHaveTextContent(
+      "Keep the 5-minute cache TTL.",
+    );
+  });
+
+  it("says the writes use both TTLs when the finding records no current TTL", () => {
+    renderOverview({
+      findings: ttlFinding({ setting: "cache_ttl", value: "5m" }),
+    });
+    expect(screen.getByTestId("cache-ttl")).toHaveTextContent(
+      "Set the cache TTL to 5 minutes. Its cache writes use both TTLs now.",
+    );
+  });
+
+  it("names the failed findings read and proposes no TTL (negative)", () => {
+    renderOverview({ findings: readError("findings_unavailable", 503) });
+    const coaching = region("Coaching");
+    expect(coaching).toHaveTextContent(
+      "Cache TTL could not be loaded: the control plane answered findings_unavailable.",
+    );
+    expect(screen.queryByTestId("cache-ttl")).toBeNull();
+    expect(within(coaching).getByTestId("not-backed")).toHaveTextContent(
+      TOKEN_CLASSES_NOTE,
+    );
+  });
+
+  it("proposes no TTL when no finding about this agent names one (negative)", () => {
+    renderOverview({
+      findings: ttlFinding(
+        { setting: "cache_ttl", value: "1h" },
+        "acme.core.triage",
+      ),
+    });
+    expect(screen.queryByTestId("cache-ttl")).toBeNull();
+    expect(
+      within(region("Coaching")).getByTestId("not-backed"),
+    ).toHaveTextContent(TOKEN_CLASSES_NOTE);
+  });
+
+  it("proposes no TTL for an agent with no key (negative)", () => {
+    renderOverview({
+      detail: agentDetail({ identity: { agentKey: null } }),
+      findings: ttlFinding({ setting: "cache_ttl", value: "1h" }),
+    });
+    expect(screen.queryByTestId("cache-ttl")).toBeNull();
   });
 });
 

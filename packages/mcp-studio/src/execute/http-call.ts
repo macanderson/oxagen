@@ -7,69 +7,19 @@
 // sends the request inside the call's deadline, reads the body under the
 // size cap, and records the exchange. A kind's own interpret step turns the
 // response into a value or an error, and this module adds the retry rule.
-import { hostSchema, type HttpMethod } from "../contract/primitives";
+import type { HttpMethod } from "../contract/primitives";
 import { relayHttpTargetSchema } from "../contract/relay-envelope";
 import type { RecordedExchange } from "../contract/tests-files";
 import { decodeText, isJsonMediaType, parseJson, readBody, transportFailure } from "./body";
 import type { RelayCredential } from "./credentials";
-import { headerValue, recordHttpResponse } from "./exchange";
+import type { Endpoint } from "./endpoint";
+import { headerValue, locationWithoutQuery, recordHttpResponse } from "./exchange";
 import { Clock, retryAfterMs, stopError, withRetries, type Attempt } from "./retry";
 import type { SendContext, SendError, SendResult } from "./sender";
 import type { HeaderEntry, HttpTarget, HttpTransportResponse } from "./transport";
 import { BuildError, isRecord, messageOf } from "./util";
 
-/** The scheme, host, port, and path an environment's url gives. */
-export interface Endpoint {
-  scheme: "https" | "http";
-  host: string;
-  /** Undefined for the scheme's default port, as a relay envelope writes it. */
-  port: number | undefined;
-  /** For a base url, the path with no trailing slash, or "" for none. For an endpoint, the path and query. */
-  path: string;
-}
-
-function invalidEnvironment(detail: string): BuildError {
-  return new BuildError("Invalid environment", detail);
-}
-
-/**
- * Read an environment's url.
- *
- * - base: an OpenAPI server url. Operation paths go after its path, so a
- *   trailing slash is dropped, and it may not carry a query.
- * - endpoint: an MCP or GraphQL endpoint, sent to exactly as written.
- */
-export function parseEndpoint(url: string | undefined, use: "base" | "endpoint"): Endpoint {
-  if (url === undefined) throw invalidEnvironment("The environment has no url, so the call has no host.");
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw invalidEnvironment(`The environment url ${url} does not parse.`);
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw invalidEnvironment(`An environment url is https or http, not ${parsed.protocol.slice(0, -1)}.`);
-  }
-  if (parsed.username !== "" || parsed.password !== "") {
-    throw invalidEnvironment("An environment url cannot carry a user name or password. Store the secret as a credential.");
-  }
-  if (parsed.hash !== "") throw invalidEnvironment(`An environment url has no fragment: ${url}.`);
-  if (parsed.hostname.startsWith("[")) {
-    throw invalidEnvironment("An IPv6 host is not supported. Name the host, or use an IPv4 address.");
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (!hostSchema.safeParse(host).success) throw invalidEnvironment(`${host} is not a host name or an IPv4 address.`);
-  if (use === "base" && parsed.search !== "") {
-    throw invalidEnvironment(`An API's base url has no query: ${url}.`);
-  }
-  return {
-    scheme: parsed.protocol === "https:" ? "https" : "http",
-    host,
-    // URL drops the scheme's default port, which is how the envelope writes it.
-    port: parsed.port === "" ? undefined : Number(parsed.port),
-    path: use === "base" ? parsed.pathname.replace(/\/+$/, "") : parsed.pathname + parsed.search,
-  };
-}
+export { parseEndpoint, type Endpoint } from "./endpoint";
 
 /** path with each query pair added. Each pair is already percent-encoded as name=value. */
 export function withQuery(path: string, pairs: readonly string[]): string {
@@ -127,17 +77,25 @@ function firstText(value: Record<string, unknown>, keys: readonly string[]): str
 
 /**
  * The error for a response that is not a success. A redirect names its
- * Location, because the gateway never follows one. Any other status takes the
- * RFC 9457 title and detail when the upstream sent them.
+ * Location, because the gateway never follows one. The Location loses its
+ * query and fragment first, since either can echo an API key the request
+ * carried. Any other status takes the RFC 9457 title and detail when the
+ * upstream sent them.
  */
 export function upstreamError(response: HttpTransportResponse, bytes: Uint8Array): SendError {
   const status = response.status;
   if (status >= 300 && status < 400) {
-    const location = headerValue(response.headers, "location");
+    const raw = headerValue(response.headers, "location");
+    const location = raw === undefined ? undefined : locationWithoutQuery(raw);
+    // The note does not depend on whether this Location had a query, so a
+    // replay of the recorded response gives the same detail.
     return {
       title: "Redirect not followed",
       detail:
-        `The upstream answered ${status}${location === undefined ? "" : ` with Location ${location}`}. ` +
+        (location === undefined
+          ? `The upstream answered ${status}. `
+          : `The upstream answered ${status} with Location ${location}. ` +
+            "The gateway leaves out a Location's query and fragment, since either can carry a credential. ") +
         "The gateway does not follow redirects, so set the environment's url to the final address.",
       status,
     };

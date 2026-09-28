@@ -1,0 +1,428 @@
+{
+  "auth": [
+    {
+      "in": "header",
+      "name": "X-Inventory-Key",
+      "scheme": "api_key",
+      "type": "api_key"
+    }
+  ],
+  "document_hash": "sha256:d1fb7114642e65ff627bc4debcb3c14883d980c2ac1d92b521f12286b89fd9cf",
+  "environments": [
+    {
+      "url": "https://inventory.a-intel.com"
+    }
+  ],
+  "files": [
+    {
+      "path": "openapi.yaml",
+      "text": "openapi: 3.0.3\ninfo:\n  title: a-intel inventory\n  version: 2.1.0\nservers:\n  - url: https://inventory.a-intel.com\nsecurity:\n  - api_key: []\npaths:\n  /items:\n    get:\n      operationId: listItems\n      summary: List items in stock.\n      parameters:\n        - name: warehouse\n          in: query\n          schema:\n            type: string\n      responses:\n        \"200\":\n          description: The items.\n          content:\n            application/json:\n              schema:\n                type: array\n                items:\n                  type: object\n                  required:\n                    - sku\n                    - name\n                  properties:\n                    sku:\n                      type: string\n                    name:\n                      type: string\n                    price:\n                      type: object\n                      required:\n                        - amount\n                        - currency\n                      properties:\n                        amount:\n                          type: integer\n                          description: The amount in the currency's minor unit.\n                        currency:\n                          type: string\n                          pattern: ^[A-Z]{3}$\n                    stock:\n                      type: object\n                      properties:\n                        on_hand:\n                          type: integer\n                          minimum: 0\n                        reserved:\n                          type: integer\n                          minimum: 0\n    post:\n      operationId: createItem\n      summary: Add an item to the catalogue.\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              $ref: \"#/paths/~1items/get/responses/200/content/application~1json/schema/items\"\n      responses:\n        \"201\":\n          description: The item.\n          content:\n            application/json:\n              schema:\n                $ref: \"#/paths/~1items/get/responses/200/content/application~1json/schema/items\"\n  /items/{sku}:\n    parameters:\n      - name: sku\n        in: path\n        required: true\n        schema:\n          type: string\n    get:\n      operationId: getItem\n      summary: Read one item.\n      responses:\n        \"200\":\n          description: The item.\n          content:\n            application/json:\n              schema:\n                $ref: \"#/paths/~1items/get/responses/200/content/application~1json/schema/items\"\n    patch:\n      operationId: adjustStock\n      summary: Change an item's stock count.\n      requestBody:\n        required: true\n        content:\n          application/json:\n            schema:\n              type: object\n              required:\n                - delta\n                - reason\n              properties:\n                delta:\n                  type: integer\n                reason:\n                  type: string\n                  enum:\n                    - received\n                    - sold\n                    - damaged\n                    - counted\n      responses:\n        \"200\":\n          description: The item.\n          content:\n            application/json:\n              schema:\n                $ref: \"#/paths/~1items/get/responses/200/content/application~1json/schema/items\"\ncomponents:\n  securitySchemes:\n    api_key:\n      type: apiKey\n      in: header\n      name: X-Inventory-Key\n"
+    }
+  ],
+  "listed": [],
+  "notes": [],
+  "tools": [
+    {
+      "description": "List items in stock.",
+      "inputSchema": {
+        "properties": {
+          "warehouse": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_items",
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "price": {
+                  "properties": {
+                    "amount": {
+                      "description": "The amount in the currency's minor unit.",
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "pattern": "^[A-Z]{3}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "type": "object"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "stock": {
+                  "properties": {
+                    "on_hand": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "reserved": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "required": [
+                "sku",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "listItems",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "warehouse",
+            "property": "warehouse",
+            "required": false
+          }
+        ],
+        "path": "/items",
+        "response": {
+          "media_type": "application/json",
+          "status": "200",
+          "wrap": "items"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Add an item to the catalogue.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "type": "integer"
+              },
+              "currency": {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "stock": {
+            "properties": {
+              "on_hand": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reserved": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "sku",
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "create_item",
+      "outputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "type": "integer"
+              },
+              "currency": {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "stock": {
+            "properties": {
+              "on_hand": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reserved": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "sku",
+          "name"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "sku",
+            "name",
+            "price",
+            "stock"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "createItem",
+        "parameters": [],
+        "path": "/items",
+        "response": {
+          "media_type": "application/json",
+          "status": "201"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Read one item.",
+      "inputSchema": {
+        "properties": {
+          "sku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku"
+        ],
+        "type": "object"
+      },
+      "name": "get_item",
+      "outputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "type": "integer"
+              },
+              "currency": {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "stock": {
+            "properties": {
+              "on_hand": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reserved": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "sku",
+          "name"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sku",
+            "property": "sku",
+            "required": true
+          }
+        ],
+        "path": "/items/{sku}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Change an item's stock count.",
+      "inputSchema": {
+        "properties": {
+          "delta": {
+            "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              "received",
+              "sold",
+              "damaged",
+              "counted"
+            ],
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sku",
+          "delta",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "name": "adjust_stock",
+      "outputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "type": "integer"
+              },
+              "currency": {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "stock": {
+            "properties": {
+              "on_hand": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reserved": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "sku",
+          "name"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "delta",
+            "reason"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "PATCH",
+        "operation": "adjustStock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sku",
+            "property": "sku",
+            "required": true
+          }
+        ],
+        "path": "/items/{sku}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    }
+  ]
+}

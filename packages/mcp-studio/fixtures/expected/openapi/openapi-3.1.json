@@ -1,0 +1,325 @@
+{
+  "auth": [
+    {
+      "scheme": "bearer",
+      "type": "http_bearer"
+    }
+  ],
+  "document_hash": "sha256:80e8f98eea619a61ec36f8350cee85e80e0ff82b1aa3353247b9550cd8faf987",
+  "environments": [
+    {
+      "url": "https://payments.a-intel.com"
+    }
+  ],
+  "files": [],
+  "listed": [
+    {
+      "kind": "webhook",
+      "name": "paymentSucceeded",
+      "reason": "A webhook is a request the API sends, so it never becomes a tool."
+    }
+  ],
+  "notes": [],
+  "tools": [
+    {
+      "description": "Take a payment by card or bank transfer.",
+      "inputSchema": {
+        "properties": {
+          "amount": {
+            "description": "The amount in the currency's minor unit.",
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "method": {
+            "description": "How the customer pays.",
+            "oneOf": [
+              {
+                "properties": {
+                  "save": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "card"
+                  }
+                },
+                "required": [
+                  "type",
+                  "token"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "iban": {
+                    "type": "string"
+                  },
+                  "reference": {
+                    "maxLength": 140,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "const": "bank_transfer"
+                  }
+                },
+                "required": [
+                  "type",
+                  "iban"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "method"
+        ],
+        "type": "object"
+      },
+      "name": "create_payment",
+      "outputSchema": {
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "method": {
+            "oneOf": [
+              {
+                "properties": {
+                  "save": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "card"
+                  }
+                },
+                "required": [
+                  "type",
+                  "token"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "iban": {
+                    "type": "string"
+                  },
+                  "reference": {
+                    "maxLength": 140,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "const": "bank_transfer"
+                  }
+                },
+                "required": [
+                  "type",
+                  "iban"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "currency",
+          "status",
+          "method"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "body": {
+          "in": "spread",
+          "media_type": "application/json",
+          "properties": [
+            "amount",
+            "currency",
+            "method",
+            "note"
+          ],
+          "required": true
+        },
+        "kind": "http",
+        "method": "POST",
+        "operation": "createPayment",
+        "parameters": [],
+        "path": "/payments",
+        "response": {
+          "media_type": "application/json",
+          "status": "201"
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    {
+      "description": "Read one payment.",
+      "inputSchema": {
+        "properties": {
+          "payment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_payment",
+      "outputSchema": {
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "method": {
+            "oneOf": [
+              {
+                "properties": {
+                  "save": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "card"
+                  }
+                },
+                "required": [
+                  "type",
+                  "token"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "iban": {
+                    "type": "string"
+                  },
+                  "reference": {
+                    "maxLength": 140,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "const": "bank_transfer"
+                  }
+                },
+                "required": [
+                  "type",
+                  "iban"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "currency",
+          "status",
+          "method"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "kind": "http",
+        "method": "GET",
+        "operation": "getPayment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "property": "payment_id",
+            "required": true
+          }
+        ],
+        "path": "/payments/{payment_id}",
+        "response": {
+          "media_type": "application/json",
+          "status": "200"
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  ]
+}

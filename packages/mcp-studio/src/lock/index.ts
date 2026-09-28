@@ -78,16 +78,19 @@ export interface RegistryLockSourceInput {
   server_version: string | undefined;
 }
 
-/** The catalog's remote types, as a lock source's transport names them. */
-const REMOTE_TRANSPORTS: Readonly<Record<string, "http" | "sse">> = {
+/**
+ * The catalog's remote types, as a lock source's transport names them. The
+ * gateway calls streamable-http only, so the lock skips an sse remote the
+ * way it skips any other type (ADR-211).
+ */
+const REMOTE_TRANSPORTS: Readonly<Record<string, "http">> = {
   "streamable-http": "http",
-  sse: "sse",
 };
 
 /**
  * A registry server's lock source. With source.machines it pins the package
  * and the launch registryLaunch builds, and ${NAME} stays in args as written.
- * Without it, it pins the entry's first streamable-http or sse remote.
+ * Without it, it pins the entry's first streamable-http remote.
  * Throws when the entry is not the one server.toml names, or names nothing
  * the gateway can run.
  */
@@ -117,10 +120,14 @@ export function registryLockSource(input: RegistryLockSourceInput): RegistryLock
     out.command = launch.command;
     out.args = launch.args;
   } else {
-    const remote = (entry.server.remotes ?? []).find((candidate) => Object.hasOwn(REMOTE_TRANSPORTS, candidate.type));
+    const remotes = entry.server.remotes ?? [];
+    const remote = remotes.find((candidate) => Object.hasOwn(REMOTE_TRANSPORTS, candidate.type));
     if (remote === undefined) {
+      const sseOnly = remotes.some((candidate) => candidate.type === "sse");
       throw new Error(
-        `${source.server} ${source.version} lists no streamable-http or sse remote. Name source.machines to run its package.`,
+        sseOnly
+          ? `${source.server} ${source.version} lists an sse remote and no streamable-http remote, and the gateway calls streamable-http only. Name source.machines to run its package.`
+          : `${source.server} ${source.version} lists no streamable-http remote. Name source.machines to run its package.`,
       );
     }
     out.url = remote.url;

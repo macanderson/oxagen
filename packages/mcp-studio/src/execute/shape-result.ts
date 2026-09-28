@@ -7,11 +7,13 @@
 // rendering. An MCP error result takes redact only. Other text takes only the
 // size cap.
 //
-// The size cap counts UTF-8 bytes after select and redact. A result over it
-// first loses items from the end of its list, so what remains is still valid
-// JSON. When no list can be cut, the text is cut at the cap and the result
-// carries no structuredContent. Every note about a cut or a stopped page goes
-// in its own text item after the result, never inside structuredContent.
+// The size cap counts UTF-8 bytes after select and redact. It counts every
+// content item and structuredContent together, because the agent receives
+// both. A result over it first loses items from the end of its list, so what
+// remains is still valid JSON. When no list can be cut, the result carries no
+// structuredContent, and text over the cap is cut at the cap. Every note about
+// a cut or a stopped page goes in its own text item after the result, never
+// inside structuredContent.
 import type { ManifestShaping } from "../contract/manifest";
 import type { Paging } from "../model/upstream-tool";
 import { decodeText, encodeText, parseJson } from "./body";
@@ -171,15 +173,42 @@ function cutNote(max: number): string {
   return `The result was cut at the ${max}-byte limit, so its text is incomplete.`;
 }
 
+/** What one content item costs against the size cap: its text, or the item's JSON. */
+function itemBytes(item: Content): number {
+  return item.type === "text" && typeof item.text === "string" ? byteLength(item.text) : byteLength(JSON.stringify(item));
+}
+
+/** What a result costs against the size cap: every content item, plus the JSON of structuredContent. */
+function resultBytes(content: readonly Content[], structured: Record<string, unknown> | undefined): number {
+  const items = content.reduce((sum, item) => sum + itemBytes(item), 0);
+  return structured === undefined ? items : items + byteLength(JSON.stringify(structured));
+}
+
+/** The result for a shaped JSON value: its text, and the value as structuredContent when it is an object. */
+function jsonResult(value: unknown, text: string): CallToolResult {
+  const result: CallToolResult = { content: [textItem(text)] };
+  if (isRecord(value)) result.structuredContent = value;
+  return result;
+}
+
+/** True when the result's content and structuredContent together fit the size cap. */
+function fitsCap(result: CallToolResult, rules: ResultRules): boolean {
+  return resultBytes(result.content, result.structuredContent) <= rules.max_result_bytes;
+}
+
 /**
- * The value with the list at rules.list cut to the longest head that fits,
- * and the note that says so, or undefined when no list can be cut to fit.
+ * The result with the list at rules.list cut to the longest head whose text
+ * and structuredContent together fit, and the note that says so, or
+ * undefined when no list can be cut to fit.
  */
-function cutList(value: unknown, rules: ResultRules): { value: unknown; text: string; note: string } | undefined {
+function cutList(value: unknown, rules: ResultRules): { result: CallToolResult; note: string } | undefined {
   const list = valueAt(value, rules.list);
   if (!isList(list) || list.length === 0) return undefined;
-  const render = (count: number): string => JSON.stringify(withValueAt(value, rules.list, list.slice(0, count)));
-  const fits = (count: number): boolean => byteLength(render(count)) <= rules.max_result_bytes;
+  const render = (count: number): CallToolResult => {
+    const head = withValueAt(value, rules.list, list.slice(0, count));
+    return jsonResult(head, JSON.stringify(head));
+  };
+  const fits = (count: number): boolean => fitsCap(render(count), rules);
   if (!fits(0)) return undefined;
   // The whole list does not fit, so the answer is below list.length.
   let low = 0;
@@ -192,13 +221,14 @@ function cutList(value: unknown, rules: ResultRules): { value: unknown; text: st
   const note =
     `The result holds the first ${low} of ${list.length} items, cut to fit the ${rules.max_result_bytes}-byte limit.` +
     rules.hint;
-  return { value: withValueAt(value, rules.list, list.slice(0, low)), text: render(low), note };
+  return { result: render(low), note };
 }
 
 /**
  * The result for a JSON value from an HTTP, GraphQL, or gRPC call. An object
- * becomes structuredContent and its compact JSON text. A string that parses
- * as JSON counts as that JSON. Other text takes only the size cap.
+ * becomes structuredContent and its compact JSON text, and the size cap
+ * counts both, as it does for an MCP result. A string that parses as JSON
+ * counts as that JSON. Other text takes only the size cap.
  */
 export function shapeValue(value: unknown, rules: ResultRules, notes: readonly string[]): CallToolResult {
   if (value === undefined) return withNotes({ content: [textItem("The upstream returned no content.")] }, notes);
@@ -210,16 +240,11 @@ export function shapeValue(value: unknown, rules: ResultRules, notes: readonly s
   }
   const shaped = shapeJson(json, rules);
   const text = JSON.stringify(shaped);
-  if (byteLength(text) <= rules.max_result_bytes) {
-    const result: CallToolResult = { content: [textItem(text)] };
-    if (isRecord(shaped)) result.structuredContent = shaped;
-    return withNotes(result, notes);
-  }
+  const whole = jsonResult(shaped, text);
+  if (fitsCap(whole, rules)) return withNotes(whole, notes);
   const cut = cutList(shaped, rules);
   if (cut === undefined) return withNotes(cutText(text, rules), notes);
-  const result: CallToolResult = { content: [textItem(cut.text)] };
-  if (isRecord(cut.value)) result.structuredContent = cut.value;
-  return withNotes(result, [...notes, cut.note]);
+  return withNotes(cut.result, [...notes, cut.note]);
 }
 
 /** Plain text under the size cap, with a note when it was cut. */
@@ -244,11 +269,6 @@ function shapeTextItem(item: Content, rules: ResultRules, isError: boolean): Con
   return { ...item, text: JSON.stringify(shapeRecord(parsed.value, rules, isError)) };
 }
 
-/** What one content item costs against the size cap: its text, or the item's JSON. */
-function itemBytes(item: Content): number {
-  return item.type === "text" && typeof item.text === "string" ? byteLength(item.text) : byteLength(JSON.stringify(item));
-}
-
 /**
  * The result from an MCP server, shaped. select and redact apply to
  * structuredContent and to each text item that parses as a JSON object. A
@@ -265,12 +285,9 @@ export function shapeToolResult(result: CallToolResult, rules: ResultRules, note
   const structured =
     result.structuredContent === undefined ? undefined : shapeRecord(result.structuredContent, rules, isError);
 
-  const size =
-    content.reduce((sum, item) => sum + itemBytes(item), 0) +
-    (structured === undefined ? 0 : byteLength(JSON.stringify(structured)));
   const shaped: CallToolResult = { content };
   if (isError) shaped.isError = true;
-  if (size <= rules.max_result_bytes) {
+  if (resultBytes(content, structured) <= rules.max_result_bytes) {
     if (structured !== undefined) shaped.structuredContent = structured;
     return withNotes(shaped, notes);
   }
