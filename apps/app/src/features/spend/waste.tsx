@@ -3,7 +3,8 @@
 // one cause today (a cache write no later call read), so it is printed as
 // recorded, and the six causes the design meters are listed as not recorded
 // yet (#2962) rather than drawn as zeros. A run card carries what the cause
-// cites: the run and the cause; its own amount is not on the contract yet.
+// cites: the run's session name over its id, and the cause. Its own amount is
+// not on the contract yet.
 // Wasted is a claim about frames, not about outcomes.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
@@ -44,12 +45,15 @@ export function WasteSection({
       ? null
       : (waste.causes.find((cause) => cause.cause === waste.largestCause) ??
         null);
+  // One card per run, in the order the causes first cite it.
   const runs = [
     ...new Map(
       waste.causes.flatMap((cause) =>
-        cause.provingRuns.map((run) => [run, cause.cause] as const),
+        cause.provingRuns.map(
+          (run) => [run.runId, { ...run, cause: cause.cause }] as const,
+        ),
       ),
-    ),
+    ).values(),
   ];
   return (
     <>
@@ -172,33 +176,46 @@ export function WasteSection({
           <Empty>{t("none")}</Empty>
         ) : (
           <ul className="flex flex-col gap-2.5 p-3.5">
-            {runs.map(([run, cause]) => (
+            {runs.map((run) => (
               <li
-                key={run}
-                data-run={run}
+                key={run.runId}
+                data-run={run.runId}
                 className={`${panel} flex flex-wrap items-center justify-between gap-3 px-3.5 py-3`}
               >
                 <span className="flex min-w-0 flex-col gap-1.5">
-                  <span className={`${mono} text-[12px] text-accent-text`}>
-                    {run}
+                  <span className="flex min-w-0 flex-col">
+                    <span
+                      title={run.name ?? undefined}
+                      className="truncate text-[13px] font-semibold"
+                    >
+                      {run.name ?? t("untitled")}
+                    </span>
+                    <span
+                      data-testid="run-id"
+                      className={`${mono} truncate text-[11px] text-dim`}
+                    >
+                      {run.runId}
+                    </span>
                   </span>
                   <span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">
                     <span
                       aria-hidden="true"
                       className="size-1.5 rounded-full bg-destructive"
                     />
-                    {t(`cause.${cause}`)}
+                    {t(`cause.${run.cause}`)}
                   </span>
                 </span>
                 <span className="flex flex-wrap gap-2">
                   <SafeLink
-                    to={routes.run(at.org, at.ws, run)}
+                    to={routes.run(at.org, at.ws, run.runId)}
                     className={buttonSecondary}
                   >
                     {t("openRun")}
                   </SafeLink>
                   <SafeLink
-                    to={routes.run(at.org, at.ws, run, { tab: "frames" })}
+                    to={routes.run(at.org, at.ws, run.runId, {
+                      tab: "frames",
+                    })}
                     className={buttonSecondary}
                   >
                     {t("showFrames")}

@@ -29,7 +29,8 @@ Spend the frames show bought nothing, by cause, with the runs that prove it (Mis
 | `share` | number or null | wasted over the period's priced spend; null when either is unpriced |
 | `runsWithWaste` | integer | runs that show at least one cause |
 | `largestCause` | enum or null | the cause with the most money on it |
-| `causes` | object[] | `{ cause, wasted, runs, runIds }`; `runIds` are the runs that prove it, largest waste first, at most ten |
+| `causes` | object[] | `{ cause, wasted, runs, runIds, provingRuns }`; `runIds` are the runs that prove it, largest waste first, at most ten |
+| `causes[].provingRuns` | object[] | the same runs in the same order as `{ runId, name }`. `name` is the session name the Fleet board shows, or null when the run has none |
 
 ## Causes
 

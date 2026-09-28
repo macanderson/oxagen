@@ -153,8 +153,13 @@ export const SpendWaste = z.object({
       cause: z.enum(["cache_write_never_read"]),
       wasted: Cost,
       runs: Count,
-      /** The runs that prove the cause, largest waste first. */
-      provingRuns: z.array(RunPublicId),
+      /**
+       * The runs that prove the cause, largest waste first, each with the
+       * session name the Fleet board shows, or null when it has none (#4571).
+       */
+      provingRuns: z.array(
+        z.object({ runId: RunPublicId, name: z.string().nullable() }),
+      ),
     }),
   ),
 });
@@ -307,6 +312,8 @@ export const SpendFindingEvidence = z.object({
   runs: z.array(
     z.object({
       runId: PublicId,
+      /** The session name the Fleet board shows, or null when the run has none (#4571). */
+      name: z.string().nullable(),
       startedAt: Instant,
       calls: Count,
       measuredTokens: Count,

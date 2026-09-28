@@ -8393,6 +8393,7 @@ type Messages = {
         counterfactual: string;
         runs: string;
         runsEmpty: string;
+        untitled: string;
         columns: {
           run: string;
           startedAt: string;
@@ -8572,6 +8573,7 @@ type Messages = {
       none: string;
       openRun: string;
       showFrames: string;
+      untitled: string;
     };
     budgets: {
       title: string;

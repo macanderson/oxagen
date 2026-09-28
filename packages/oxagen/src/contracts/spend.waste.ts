@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { runPublicIdSchema } from "./run.list";
+import { RUN_LABEL_MAX, runPublicIdSchema } from "./run.list";
 import { costSchema, dayRangeSchema, ratioSchema } from "./spend.shared";
 
 export const wasteCauseSchema = z.enum(["cache_write_never_read"]);
@@ -20,6 +20,20 @@ export const wasteCauseRowSchema = z
     runs: z.number().int().nonnegative(),
     /** The runs that prove the cause, largest waste first, at most ten. */
     runIds: z.array(runPublicIdSchema).max(10),
+    /**
+     * The same runs in the same order, each with its session name: the name
+     * the Fleet board shows, or null when the run has none (#4571).
+     */
+    provingRuns: z
+      .array(
+        z
+          .object({
+            runId: runPublicIdSchema,
+            name: z.string().max(RUN_LABEL_MAX).nullable(),
+          })
+          .strict(),
+      )
+      .max(10),
   })
   .strict();
 
