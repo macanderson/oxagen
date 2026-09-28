@@ -61,7 +61,7 @@ function source(
   });
 }
 
-function service(apply: SecurityScheme, reference: string | undefined = "oxagen:credential/billing-key"): CredentialRequest {
+function service(apply: SecurityScheme, reference = "oxagen:credential/billing-key"): CredentialRequest {
   return {
     server: "billing",
     environment: "sandbox",
@@ -147,7 +147,9 @@ describe("service mode: a secret from the vault", () => {
   });
 
   it("refuses an environment that names no credential", async () => {
-    const error = await failure(source().resolve(service({ type: "http_bearer" }, undefined), signal));
+    // Passing undefined to service() would take its default reference, so clear the field instead.
+    const request = { ...service({ type: "http_bearer" }), reference: undefined };
+    const error = await failure(source().resolve(request, signal));
     expect(error.code).toBe("no_reference");
   });
 
