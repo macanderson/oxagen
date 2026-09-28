@@ -22,7 +22,6 @@ import {
   ENRICHMENT_BODY_READ_CEILING,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_TEXT_CEILING_CHARS,
-  uniqueRunName,
 } from "./run-enrichment";
 const scope = { orgId: "o", workspaceId: "w" };
 function frame(seq: number, text: string) {
@@ -127,14 +126,6 @@ describe("the full recorded input", () => {
     expect((await collectRunText(scope, [one, two], get)).digest).not.toBe(
       a.digest,
     );
-  });
-  it("distinguishes runs with the same model-written title", () => {
-    expect(uniqueRunName("Fix login", "tse_12345678")).not.toBe(
-      uniqueRunName("Fix login", "tse_87654321"),
-    );
-    expect(
-      uniqueRunName("x".repeat(100), "tse_12345678").length,
-    ).toBeLessThanOrEqual(80);
   });
 });
 
@@ -410,12 +401,12 @@ describe("the fallback title", () => {
         "Please repair authentication. The redirect loops after login.",
         "fix/auth-redirect",
       ),
-    ).toBe("Please repair authentication on fix/auth-redirect");
+    ).toBe("Repair authentication on fix/auth-redirect");
   });
   it("leaves out a branch that names no work", () => {
     for (const branch of ["main", "master", "HEAD", " ", null])
       expect(fallbackRunTitle("Why does CI fail?", branch)).toBe(
-        "Why does CI fail?",
+        "Why does CI fail",
       );
   });
   it("reads the first line with words and drops markup", () => {
@@ -426,16 +417,15 @@ describe("the fallback title", () => {
       ),
     ).toBe("/review");
   });
-  it("cuts a long sentence at a word and keeps the whole title within 80 characters", () => {
+  it("cuts a long sentence at a word and drops a branch that does not fit", () => {
     const title = fallbackRunTitle(
       `Refactor ${"the billing proration path ".repeat(6)}and the invoices`,
       `feature/${"x".repeat(60)}`,
     )!;
-    expect(title.length).toBeLessThanOrEqual(80);
-    expect(title).toMatch(
-      /^Refactor the billing proration path .*… on feature\//u,
-    );
-    expect(title.split(" on feature/")[0]!.length).toBeLessThanOrEqual(60);
+    expect(Array.from(title).length).toBeLessThanOrEqual(72);
+    expect(title).not.toContain("…");
+    expect(title).not.toContain("feature/");
+    expect(title).toMatch(/^Refactor the billing proration path /u);
   });
   it("gives no title for a prompt with no words", () => {
     expect(fallbackRunTitle(" \n <br> \n", "fix/x")).toBeNull();

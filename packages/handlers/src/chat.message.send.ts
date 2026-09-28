@@ -1,23 +1,24 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
+import { sendConversationOpened } from "@oxagen/agent/runtime/conversation-opened-event";
 import { schema, withTenantDb } from "@oxagen/database";
+import { sessionSubject } from "@oxagen/tacho/session-subject";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
-import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
-import { CREDIT_REASONS } from "@oxagen/billing";
 import { logger } from "./logger";
 
 /**
  * Persists the user turn and a placeholder assistant message (metadata:
- * { status: "pending" }), then returns their ids. It does not call the model
- * or dispatch any background job. The LLM call and streaming happen in the
+ * { status: "pending" }), then returns their ids. It does not call the
+ * model. The LLM call and streaming happen in the
  * stream route (POST /api/v1/chat/stream), which is the single LLM caller
  * per turn and persists the assistant reply directly once the stream
  * finishes.
  *
- * For new conversations with a non-empty first message, a title is
- * generated asynchronously using generateObjectFor. This happens in the
- * background and doesn't block the message send response.
+ * A new conversation is named from its first message when its row is
+ * written: a subject of at most 72 characters (`sessionSubject`), marked
+ * `title_source = 'prompt'`. After the commit, `chat/conversation.opened`
+ * asks the fast model tier for a better subject in the background. A message
+ * with no words in it leaves the title null and sends nothing.
  */
 export const chatMessageSendHandler: CapabilityHandler<
   typeof chatMessageSend
@@ -33,15 +34,17 @@ export const chatMessageSendHandler: CapabilityHandler<
   const result = await withTenantDb(async (tx) => {
     // 1. Resolve or create the conversation.
     let conversationId = input.conversationId;
-    let isNewConversation = false;
+    let promptTitled = false;
     if (!conversationId) {
+      const title = sessionSubject(input.content);
       const [conv] = await tx
         .insert(schema.conversations)
         .values({
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           userId: ctx.userId!,
-          title: null,
+          title,
+          titleSource: title === null ? null : "prompt",
           status: "active",
           createdById: ctx.userId,
           updatedById: ctx.userId,
@@ -49,7 +52,7 @@ export const chatMessageSendHandler: CapabilityHandler<
         .returning({ id: schema.conversations.id });
       if (!conv) throw new Error("conversation insert returned no row");
       conversationId = conv.id;
-      isNewConversation = true;
+      promptTitled = title !== null;
     } else {
       // Confirm the conversation belongs to this tenant. Cross-tenant
       // lookup would be a leak; the tenant scope is part of the index.
@@ -125,26 +128,19 @@ export const chatMessageSendHandler: CapabilityHandler<
       userMessageId: userMessage.id,
       assistantMessageId: assistantMessage.id,
       activeLeafMessageId: assistantMessage.id,
-      isNewConversation,
+      promptTitled,
     };
   });
 
-  // After persisting the message, asynchronously generate a title for new conversations
-  // with a non-empty message. This runs outside the transaction so it doesn't block
-  // the message persistence, and only happens once per conversation.
-  if (result.isNewConversation && input.content.trim()) {
-    generateConversationTitleAsync(
-      result.conversationId,
-      input.content,
-      ctx.orgId,
-      ctx.workspaceId,
-      ctx.userId!,
-    ).catch((err) => {
-      logger.error(
-        { conversationId: result.conversationId, err, orgId: ctx.orgId },
-        "chat.message.send: title generation failed",
-      );
-      // Swallow the error — title generation failure must not fail the message send.
+  // Sent after the commit, so the titler can read the row. Never throws.
+  if (result.promptTitled) {
+    await sendConversationOpened({
+      name: "chat/conversation.opened",
+      data: {
+        conversationId: result.conversationId,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      },
     });
   }
 
@@ -155,60 +151,3 @@ export const chatMessageSendHandler: CapabilityHandler<
     activeLeafMessageId: result.activeLeafMessageId,
   };
 };
-
-async function generateConversationTitleAsync(
-  conversationId: string,
-  userMessage: string,
-  orgId: string,
-  workspaceId: string,
-  userId: string,
-): Promise<void> {
-  try {
-    const titleSchema = z.object({
-      title: z
-        .string()
-        .describe("A concise 3-8 word title for this conversation"),
-    });
-
-    const { object } = await generateObjectFor({
-      // Model and funding resolved together (ADR-053 §3, ADR-131): the key the
-      // call is built on and the party billed for it must be one answer. Asking
-      // only for `fundedBy` and letting `selectModel` fall back to the shared key
-      // is how an organisation on its own key came to be reported as having paid
-      // for a call Oxagen's key actually paid for.
-      ...(await selectModelForOrg(orgId)),
-      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
-      schema: titleSchema,
-      prompt: `Generate a concise 3-8 word title for a conversation that starts with: "${userMessage.substring(0, 200)}"`,
-      telemetry: {
-        orgId,
-        workspaceId,
-        surface: "runner",
-        messageId: conversationId,
-      },
-    });
-
-    // Update the conversation with the generated title
-    await withTenantDb(async (tx) => {
-      await tx
-        .update(schema.conversations)
-        .set({
-          title: object.title,
-          updatedById: userId,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.conversations.id, conversationId));
-    });
-
-    logger.info(
-      { conversationId, title: object.title, orgId },
-      "chat.message.send: conversation title generated",
-    );
-  } catch (err) {
-    // Log the error but don't throw — title generation is best-effort
-    logger.error(
-      { conversationId, err, orgId },
-      "chat.message.send: failed to generate conversation title",
-    );
-  }
-}

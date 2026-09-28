@@ -13,6 +13,11 @@ assignment, role grants) and the first workspace with everything a workspace
 needs (owner membership, built-in agent, default MCP registry, default
 environment). All of it commits in one transaction or not at all.
 
+`workspace: null` skips the first workspace. The web app sends it, because its
+welcome flow asks you to name the first workspace on a step of its own. The
+onboarding gate then opens with no workspace, and the org's first
+`create_workspace` fills it in.
+
 The slug becomes the first path segment in every URL (`/{org}/...`), so a
 top-level route segment (`login`, `api`, `invite`, …) is refused by the input
 schema (`RESERVED_ORG_SLUGS`, exported from the contract). The first
@@ -37,7 +42,7 @@ it.
 | `industry`       | industry slug                     | Business only.                                                        |
 | `employeeSize`   | employee-size slug                | Business only.                                                        |
 | `namespace`      | `string` (2 – 6 chars)            | Optional. Lowercase letters and digits. The immutable prefix of every agent key; used verbatim, refused if taken. Derived from the slug when absent. |
-| `workspace`      | `{ name, slug }`                  | The first workspace. Defaults to `{ name: "Default", slug: "default" }`; the slug follows the org slug rules and may not be an org-level route segment. |
+| `workspace`      | `{ name, slug } \| null`          | The first workspace. Defaults to `{ name: "Default", slug: "default" }`; the slug follows the org slug rules and may not be an org-level route segment. `null` creates no workspace. |
 
 The namespace is optional. Given, it is stored verbatim or refused as
 `namespace_taken`. Absent, it is derived from the slug server-side and kept
@@ -52,6 +57,7 @@ unique across organizations.
 | `slug`               | `string`            | Echoes the reserved slug.               |
 | `type`               | `string`            | `business` or `personal`.               |
 | `createdAt`          | `string` (ISO 8601) | Server-side creation timestamp.         |
+| `workspace`          | `object \| null`    | `null` when the input sent `workspace: null`. |
 | `workspace.publicId` | `string`            | Prefixed with `ws_`.                    |
 | `workspace.slug`     | `string`            | The first workspace's slug; `/{slug}/{workspace.slug}` is the Fleet page. |
 
@@ -62,7 +68,8 @@ One `withSystemDb` transaction:
 - `org.organizations` (name, slug, namespace, type, status `active`)
 - `org.org_users` (caller as `owner`)
 - `iam.roles`, `iam.principals`, `iam.principal_role_assignments`, `iam.role_grants` (`bootstrapOrgIAM`)
-- `workspace.workspaces`, `workspace.workspace_users` (caller as `owner`), `agent.agents` + `agent.agent_versions` (the `qa-chat` agent), `mcp.mcp_registries` (default), `environments.environments` (default) — `bootstrapWorkspace`, the same code `create_workspace` runs
+- `workspace.workspaces`, `workspace.workspace_users` (caller as `owner`), `agent.agents` + `agent.agent_versions` (the `qa-chat` agent), `mcp.mcp_registries` (default), `environments.environments` (default). `bootstrapWorkspace` writes them, the same code `create_workspace` runs. Skipped when the input sent `workspace: null`.
+- `org.onboarding_state` (the gate, pointing at the first workspace, or at none when there is none)
 
 After commit: a `security.security_events` row `organization.created`.
 
@@ -79,6 +86,6 @@ No `billing.*` row.
 
 ## Tests
 
-- `packages/oxagen/src/contracts/org.create.test.ts` — input rules including every reserved slug, the first-workspace default, `scoped: false`.
-- `packages/handlers/src/org.create.test.ts` — guards and the transaction shape with fakes; the billing package is never loaded.
-- `packages/handlers/src/org.create.pg.test.ts` — against Postgres (CI `test` job, `DATABASE_URL`): a user with no memberships gets the org, owner membership, IAM and first workspace in one call, and every `billing.*` table keyed by `org_id` has no row for the new org.
+- `packages/oxagen/src/contracts/org.create.test.ts`: input rules including every reserved slug, the first-workspace default, `workspace: null`, `scoped: false`.
+- `packages/handlers/src/org.create.test.ts`: guards and the transaction shape with fakes; the billing package is never loaded.
+- `packages/handlers/src/org.create.pg.test.ts`: against Postgres (CI `test` job, `DATABASE_URL`): a user with no memberships gets the org, owner membership, IAM and first workspace in one call, and every `billing.*` table keyed by `org_id` has no row for the new org.

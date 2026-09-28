@@ -103,7 +103,7 @@ const rowOf = (id: string) => {
   return found;
 };
 const ids = () =>
-  rows().map((r) => within(r).getAllByRole("link")[0]?.textContent);
+  rows().map((r) => within(r).getByTestId("row-id").textContent);
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ["Date"] });

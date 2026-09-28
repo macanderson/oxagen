@@ -268,6 +268,8 @@ describe("the detector registry", () => {
       [["recurring_runs"], 7],
       [["spend_with_no_outcome"], 8],
       [["cache_writes_never_read"], null],
+      [["idle_cache_rewrites"], null],
+      [["cache_busts"], null],
       [["unpaged_results"], null],
       [["standing_context"], null],
       [["model_class_fit"], null],
@@ -1283,6 +1285,7 @@ describe("the limits the contracts carry", () => {
       counterfactual: money,
       runs: Array.from({ length: runs }, (_, i) => ({
         runId: `tse_${i}`,
+        name: null,
         startedAt: START.toISOString(),
         calls: 1,
         measuredTokens: 0,

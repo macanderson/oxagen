@@ -9,7 +9,7 @@
  * wire is estimated by the reader.
  */
 import { z } from "zod";
-import { runPublicIdSchema } from "./run.list";
+import { RUN_LABEL_MAX, runPublicIdSchema } from "./run.list";
 import { costSchema, moneySchema } from "./spend.shared";
 
 /** The kinds the findings job writes (ADR-062, ADR-208). Mirrors `FINDING_KINDS` in the cost schema. */
@@ -86,6 +86,8 @@ export type Finding = z.output<typeof findingSchema>;
 const findingRunEvidenceSchema = z
   .object({
     runId: runPublicIdSchema,
+    /** The session name the Fleet board shows, or null when the run has none (#4571). */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
     startedAt: z.string().datetime(),
     calls: z.number().int().positive(),
     measuredTokens: z.number().int().nonnegative(),

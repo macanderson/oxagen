@@ -16,6 +16,7 @@ import {
   foldBasis,
   type RunTotalsRecord,
 } from "@oxagen/billing";
+import { readRunNames } from "./lib/run-names";
 import {
   cost,
   readRunTotals,
@@ -28,6 +29,8 @@ export type SpendWasteDeps = {
     scope: SpendScope,
     q: { from: string; to: string; filter: RunFilter },
   ) => Promise<RunTotalsRecord[]>;
+  /** The session name of each cited run, so the page names it (#4571). */
+  readRunNames: typeof readRunNames;
 };
 
 const CITED_RUNS = 10;
@@ -82,6 +85,8 @@ export function createSpendWasteHandler(
       .reduce<CostBasis | null>(foldBasis, null);
     const wasted =
       hits.length === 0 ? null : cost(wastedMicros, currency, basis);
+    const cited = hits.slice(0, CITED_RUNS).map((h) => h.runId);
+    const names = await deps.readRunNames(scope, cited);
 
     let pricedMicros: bigint | null = null;
     for (const run of runs)
@@ -109,11 +114,18 @@ export function createSpendWasteHandler(
                 cause: "cache_write_never_read",
                 wasted,
                 runs: hits.length,
-                runIds: hits.slice(0, CITED_RUNS).map((h) => h.runId),
+                runIds: cited,
+                provingRuns: cited.map((runId) => ({
+                  runId,
+                  name: names.get(runId) ?? null,
+                })),
               },
             ],
     };
   };
 }
 
-export const spendWasteHandler = createSpendWasteHandler({ readRunTotals });
+export const spendWasteHandler = createSpendWasteHandler({
+  readRunTotals,
+  readRunNames,
+});

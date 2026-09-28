@@ -78,9 +78,11 @@ const slugShape = z
   .regex(/^[a-z0-9-]+$/, "lowercase letters, digits, and hyphens only");
 
 /**
- * The first workspace is part of the org bootstrap: an org with no workspace
- * has no Fleet page to land on. Callers that do not name one get the
- * convention every existing surface used ("Default" at `default`).
+ * The first workspace create_org makes when the caller omits `workspace`
+ * ("Default" at `default`). API, MCP, and agent callers rely on it, since an
+ * org with no workspace has no Fleet page to land on. The web app sends
+ * `workspace: null` instead, and its welcome flow asks you to name the first
+ * workspace on a step of its own (#4582).
  */
 const DEFAULT_FIRST_WORKSPACE_NAME = "Default";
 const DEFAULT_FIRST_WORKSPACE_SLUG = "default";
@@ -120,12 +122,15 @@ export const organizationCreateInputBase = z.object({
   // Billing email/address were removed with billing.org_billing_profiles
   // (migration 20260802130000): the collected data was never read — Stripe
   // captures the billing address at checkout and is the source of truth.
+  // Omitted, create_org makes DEFAULT_FIRST_WORKSPACE. `null` makes no
+  // workspace, and the org's first create_workspace becomes its first one.
   workspace: z
     .object({
       name: z.string().min(1).max(120),
       // The shared shape: reserved segments and the one spelling (#3110).
       slug: workspaceSlug,
     })
+    .nullable()
     .default(DEFAULT_FIRST_WORKSPACE),
 });
 
@@ -185,10 +190,13 @@ export const organizationCreate = registerCapability({
     slug: z.string(),
     type: z.string(),
     createdAt: z.string(),
-    workspace: z.object({
-      publicId: z.string(),
-      slug: z.string(),
-    }),
+    // null when the caller sent `workspace: null`.
+    workspace: z
+      .object({
+        publicId: z.string(),
+        slug: z.string(),
+      })
+      .nullable(),
   }),
 });
 

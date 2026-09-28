@@ -43,6 +43,7 @@ describe("list_waste contract", () => {
           },
           runs: 1,
           runIds: ["arun_1"],
+          provingRuns: [{ runId: "arun_1", name: "Repair the login redirect" }],
         },
       ],
     };
@@ -70,6 +71,31 @@ describe("list_waste contract", () => {
           {
             ...out.causes[0],
             runIds: Array.from({ length: 11 }, () => "arun_1"),
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      spendWasteList.output.safeParse({
+        ...out,
+        causes: [
+          {
+            ...out.causes[0],
+            provingRuns: Array.from({ length: 11 }, () => ({
+              runId: "arun_1",
+              name: null,
+            })),
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      spendWasteList.output.safeParse({
+        ...out,
+        causes: [
+          {
+            ...out.causes[0],
+            provingRuns: [{ runId: "arun_1", name: "x".repeat(257) }],
           },
         ],
       }).success,

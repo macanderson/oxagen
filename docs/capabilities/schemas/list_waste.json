@@ -176,13 +176,42 @@
                 "type": "string"
               },
               "maxItems": 10
+            },
+            "provingRuns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 256
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "runId",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
             }
           },
           "required": [
             "cause",
             "wasted",
             "runs",
-            "runIds"
+            "runIds",
+            "provingRuns"
           ],
           "additionalProperties": false
         }

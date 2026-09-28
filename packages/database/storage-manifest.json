@@ -4272,7 +4272,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1385f6408357d2d6d8694b610806120bdd69e965aedabdf99a144d820db6cdad",
+  "contentHash": "700560fdcf65494da5cb4fad95e26d18269f55c32e1f5588d5246ecf7c11d63d",
   "domains": [
     {
       "name": "agent",
@@ -13610,6 +13610,12 @@
           "type": "text"
         },
         {
+          "name": "title_source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "status",
           "nullable": false,
           "primaryKey": false,
@@ -19898,7 +19904,7 @@
         },
         {
           "name": "workspace_id",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },

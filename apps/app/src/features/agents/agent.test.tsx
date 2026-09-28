@@ -726,10 +726,20 @@ describe("Activity", () => {
       within(runs)
         .getAllByRole("columnheader")
         .map((th) => th.textContent),
-    ).toEqual(["Run", "Status", "Tokens", "Cost", "Frames", "Started"]);
+    ).toEqual([
+      "Session name",
+      "Status",
+      "Tokens",
+      "Cost",
+      "Frames",
+      "Started",
+    ]);
     expect(
-      within(runs).getByRole("link", { name: "arun_7k2m9q" }),
+      within(runs).getByRole("link", { name: "Cut the 3.2 release branch" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
+    expect(within(runs).getByTestId("agent-run-id")).toHaveTextContent(
+      /^arun_7k2m9q$/,
+    );
     const accounting = region("Token accounting");
     expect(accounting).toHaveTextContent("Input, cache read3,000");
     expect(accounting).toHaveTextContent("Tool definitions");

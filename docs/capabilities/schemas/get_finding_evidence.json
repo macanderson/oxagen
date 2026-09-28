@@ -274,6 +274,17 @@
                 "runId": {
                   "type": "string"
                 },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "startedAt": {
                   "type": "string"
                 },
@@ -324,6 +335,7 @@
               },
               "required": [
                 "runId",
+                "name",
                 "startedAt",
                 "calls",
                 "measuredTokens",
