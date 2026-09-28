@@ -22,7 +22,21 @@ Empty object — workspace scope comes from the request envelope.
 
 | Field     | Type                                                                       | Notes                       |
 | --------- | -------------------------------------------------------------------------- | --------------------------- |
-| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, authorization }>` | Server inventory. |
+| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, authorization, contextTokens, weeklyPrice }>` | Server inventory. |
+
+`contextTokens` is the tokens the server's tool definitions add to a model
+call (#4537). It comes from the newest system context the recorder listed in
+the last 7 days whose tool part names the server. It is null when no listing
+names the server.
+
+`weeklyPrice` is what those tokens cost the workspace over the same 7 days, as
+`{ micros, currency, basis: "estimated" }`. Each of the workspace's model
+calls of the week is priced at the book's cache read rate in force when it
+ran, or at its input rate when it read nothing from the cache. The estimate
+assumes every call sent the server's definitions. A call the book has no rate
+for adds nothing, so the figure is a floor for such a week. `weeklyPrice` is
+null when `contextTokens` is null or when the book priced none of the week's
+calls. The Providers table shows it as the server's weekly price.
 
 `authKind` is `oauth`, `bearer`, `header` or `none`. `authorization` is null
 unless `authKind` is `oauth`, and then holds `state` (`connected`,
@@ -37,7 +51,11 @@ one.
 ## Side effects
 
 None. It reads `mcp.mcp_servers`, joined to `plugin.installed_plugins` and
-the status columns of `mcp.credentials`.
+the status columns of `mcp.credentials`. From ClickHouse it reads the tool
+parts of the week's model calls, and the week's calls by model. From the price
+book it reads the rates for those models. When the tool part read fails, the
+servers still list, and `contextTokens` and `weeklyPrice` read null. When the
+price read fails, `weeklyPrice` reads null.
 
 ## Errors
 

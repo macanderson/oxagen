@@ -114,3 +114,18 @@ that bypassed the proxy would inherit a word it did not earn.
 mode delivers nothing and can refuse nothing, and the record must say so.
 
 **A numeric score instead of words.** Rejected under ADR-078 §2.
+
+## Amendment 2026-09-27: `gateway` for a wrapped harness is computed
+
+The **Today** paragraph no longer holds for `gateway`. `enforcementTierOf` in
+`packages/handlers/src/tacho.events.ingest.ts` gives `gateway` to a run whose
+verified chain holds a model call the host's loopback proxy observed. A run
+with no routed call takes its tier from the host's policy mode: `harness` under
+`enforce`, `observe` under `observe`. `TACHO_HARNESS_TIERS` in
+`packages/tacho/src/wire.ts` still assigns a static tier per harness, and
+`contained` has no build yet.
+
+The policy mode and the tier are two facts, and one surface showed them as
+one. The desktop app's Status row read "active, observe mode", and a person
+enrolled on `gateway` took it to mean they were not. The desktop app and
+`tacho status` now print the policy mode on a line of its own (#4564).

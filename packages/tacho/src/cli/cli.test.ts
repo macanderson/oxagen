@@ -3035,7 +3035,7 @@ describe("stella", () => {
     expect(d.lines.join("\n")).toContain(
       "stella 0.9.423 at /usr/local/bin/stella",
     );
-    expect(d.lines.at(-1)).toContain("every Stella session");
+    expect(d.lines.at(-1)).toContain("Every Stella session");
     // A re-apply leaves the file as it is.
     expect((await enroll({ token: "tok" }, d)).ok).toBe(true);
     expect(readFileSync(d.paths.stellaToml, "utf8")).toBe(text);
@@ -3103,7 +3103,7 @@ describe("stella", () => {
     expect(settings.hooks["PreToolUse"]?.[0]?.hooks[0]?.timeoutMs).toBe(15_000);
     expect(existsSync(d.paths.stellaToml)).toBe(false);
     expect(d.lines.join("\n")).toContain("command hooks in settings.json");
-    expect(d.lines.at(-1)).toContain("every Claude Code and Stella session");
+    expect(d.lines.at(-1)).toContain("Every Claude Code and Stella session");
     const partial = await status({ json: true }, d);
     expect(partial.stellaHooks?.complete).toBe(true);
 

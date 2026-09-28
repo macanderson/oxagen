@@ -123,6 +123,8 @@ describe("get_run_cost", () => {
         },
       ],
       byTool: [{ name: "Read", calls: 2, resultTokens: null, cost: null }],
+      // The fixture's row carries no token sources.
+      standingContext: null,
       priceEntryIds: ["0192d4a8-7c1e-7a00-8000-0000000000e1"],
       rolledUpAt: ROLLED_UP_AT.toISOString(),
       // The fixture's row was rebuilt after the run sealed.
@@ -319,6 +321,33 @@ describe("get_run_cost steps and tool costs (#3984, #3892)", () => {
         cost: { micros: "3600", currency: "USD", basis: "estimated" },
       },
     ]);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers the standing context each source re-sent as an estimate, and a source not reported as null (#4537)", async () => {
+    // Two calls, 3,000 micros for 1,000 input tokens, and no cache read: the
+    // standing context prices at the input rate of 3 micros a token.
+    const row = Object.assign(
+      pricedRun(3_000n, { costBasis: "gateway_observed" }),
+      {
+        toolDefinitionTokens: 4_000,
+        contextFrameTokens: null,
+        steeringTokens: 1_000,
+      },
+    );
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    // The second of the two calls re-sent half of each source.
+    expect(out.rollup?.standingContext).toEqual({
+      toolDefinitions: {
+        resentTokens: 2_000,
+        cost: { micros: "6000", currency: "USD", basis: "estimated" },
+      },
+      steering: {
+        resentTokens: 500,
+        cost: { micros: "1500", currency: "USD", basis: "estimated" },
+      },
+      contextFrames: null,
+    });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 });
