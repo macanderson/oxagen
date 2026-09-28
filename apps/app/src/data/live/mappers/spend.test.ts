@@ -344,6 +344,22 @@ describe("toSpendFindings", () => {
     });
   });
 
+  it("carries the setting a finding's fix names", () => {
+    const recommendation = { setting: "cache_ttl", value: "1h", current: 300 };
+    const out = findingList.output.parse({
+      status: "open",
+      window: listedFinding.window,
+      saving,
+      spend: { micros: "18402660000", currency: "USD", basis: "mixed" },
+      share: 0.64,
+      annualised: { ...saving, micros: "17649600000" },
+      counts: { findings: 1, high: 1, medium: 0, operators: 3 },
+      findings: [{ ...listedFinding, recommendation }],
+    });
+    const view = SpendFindings.parse(toSpendFindings(out));
+    expect(view.findings[0]?.recommendation).toEqual(recommendation);
+  });
+
   it("keeps a window, a saving and a spend the contract left null null", () => {
     const out = findingList.output.parse({
       status: "open",

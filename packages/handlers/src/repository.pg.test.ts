@@ -1,6 +1,6 @@
 // The §10.1 repository model against a real Postgres (Mission Control spec
 // §17 M0; ADR-099): a workspace binds its main repository and gets exactly one
-// `role = 'main'` head; a second repository is linked and the workspace has
+// `role = 'steering'` head; a second repository is linked and the workspace has
 // two heads; the linked one is unlinked and its binding version survives; the
 // main one cannot be unlinked; another workspace's main repository cannot be
 // linked; a repository that is nobody's main links to two workspaces; and
@@ -367,18 +367,18 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   });
 
   it("walks the model: bind a main repo, link a second, the readers keep answering main, unlink the linked one, refuse to unlink main, refuse another workspace's main, share a repository that is nobody's main", async () => {
-    // ── bind: exactly one head, role main ────────────────────────────────
+    // ── bind: exactly one head, role steering ────────────────────────────────
     const alpha = await createWithMain("alpha", "alpha");
     expect(alpha.main.fullName).toBe("acme/alpha");
     const alphaId = alpha.id;
     expect(await headsOf(alphaId)).toEqual([
-      { role: "main", providerRepositoryId: repoId("acme", "alpha") },
+      { role: "steering", providerRepositoryId: repoId("acme", "alpha") },
     ]);
 
     const beta = await createWithMain("beta", "beta");
     const betaId = beta.id;
     expect(await headsOf(betaId)).toEqual([
-      { role: "main", providerRepositoryId: repoId("acme", "beta") },
+      { role: "steering", providerRepositoryId: repoId("acme", "beta") },
     ]);
 
     // A third workspace created with alpha's main repository as its
@@ -408,7 +408,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     });
     expect(await headsOf(alphaId)).toEqual([
       { role: "linked", providerRepositoryId: repoId("acme", "shared") },
-      { role: "main", providerRepositoryId: repoId("acme", "alpha") },
+      { role: "steering", providerRepositoryId: repoId("acme", "alpha") },
     ]);
     const listed = await list(alphaId);
     expect(
@@ -420,7 +420,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(listed.repositories[0]?.bindingId).toBe(alpha.main.bindingId);
     expect(listed.repositories[1]?.bindingId).toBe(shared.bindingId);
 
-    // ── the readers that resolve THE main repository filter role = 'main' ──
+    // ── the readers that resolve THE main repository filter on the steering role
     // With a linked head beside the main one, a reader that ignored the
     // column could answer either; both keep answering alpha.
     const main = await inWorkspace(alphaId, () =>
@@ -469,7 +469,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       fullName: "acme/shared",
     });
     expect(await headsOf(alphaId)).toEqual([
-      { role: "main", providerRepositoryId: repoId("acme", "alpha") },
+      { role: "steering", providerRepositoryId: repoId("acme", "alpha") },
     ]);
     expect(await bindingsOf(alphaId, "shared")).toEqual([
       { publicId: shared.bindingId, version: 1 },
@@ -585,7 +585,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         withSystemDb((tx) =>
           tx
             .update(schema.repositoryBindingHeads)
-            .set({ role: "main" })
+            .set({ role: "steering" })
             .where(eq(schema.repositoryBindingHeads.id, betaShared)),
         ),
       ),
@@ -625,7 +625,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     // Nothing moved.
     expect(await headsOf(betaId)).toEqual([
       { role: "linked", providerRepositoryId: repoId("acme", "shared") },
-      { role: "main", providerRepositoryId: repoId("acme", "beta") },
+      { role: "steering", providerRepositoryId: repoId("acme", "beta") },
     ]);
     expect(await headsOf(alphaId)).toHaveLength(2);
 
@@ -639,23 +639,16 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(third.role).toBe("linked");
     expect(await headsOf(coreWorkspaceId)).toEqual([
       { role: "linked", providerRepositoryId: repoId("acme", "shared") },
-      { role: "main", providerRepositoryId: repoId("acme", "orphan") },
+      { role: "steering", providerRepositoryId: repoId("acme", "orphan") },
     ]);
   });
 
   it("reads a head with the steering role as the workspace's steering repository, and a re-bind keeps the role", async () => {
-    // Lane S1 writes a provisioned steering repository's head with role
-    // `steering`. Until #4517 moves every `main` head to `steering`, both
-    // roles steer, and every reader has to answer the same repository for
-    // either. The update below stands in for S1's write.
+    // Every head that steers carries role `steering`. The bind writes it, and
+    // so does S1's provisioned steering repository. Every reader has to
+    // answer that head.
     const steers = await createWithMain("steer-ws", "steers");
     const steersId = steers.id;
-    await withSystemDb((tx) =>
-      tx
-        .update(schema.repositoryBindingHeads)
-        .set({ role: "steering" })
-        .where(eq(schema.repositoryBindingHeads.workspaceId, steersId)),
-    );
     expect(await headsOf(steersId)).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "steers") },
     ]);
@@ -746,7 +739,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
           .where(
             and(
               eq(schema.repositoryBindingHeads.workspaceId, coreWorkspaceId),
-              eq(schema.repositoryBindingHeads.role, "main"),
+              eq(schema.repositoryBindingHeads.role, "steering"),
             ),
           ),
       );
@@ -768,7 +761,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         (h) => h.providerRepositoryId === repoId("acme", "promoted"),
       ),
     ).toEqual([
-      { role: "main", providerRepositoryId: repoId("acme", "promoted") },
+      { role: "steering", providerRepositoryId: repoId("acme", "promoted") },
     ]);
 
     // ── a version retained from an unlinked head ──────────────────────────
@@ -790,7 +783,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         (h) => h.providerRepositoryId === repoId("acme", "retained"),
       ),
     ).toEqual([
-      { role: "main", providerRepositoryId: repoId("acme", "retained") },
+      { role: "steering", providerRepositoryId: repoId("acme", "retained") },
     ]);
   });
 });

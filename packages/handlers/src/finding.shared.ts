@@ -54,6 +54,10 @@ export function toFinding(row: FindingRow): Finding {
     },
     why: row.why,
     fix: row.fix,
+    // A row written before a detector named a setting carries none.
+    ...(evidence.recommendation === undefined
+      ? {}
+      : { recommendation: { ...evidence.recommendation } }),
     runs: row.citedRuns.length,
     calls: evidence.calls,
     status: row.status as FindingStatus,
@@ -90,15 +94,26 @@ export function operatorKeysOf(row: FindingRow): readonly string[] {
 }
 
 /**
- * What a finding cites in one run (#4001). A finding about a run's cache use
- * cites the run as a whole and pins no turn. A tool-call finding answers the
- * frames the findings job stored for the run, or null frames on a row written
- * before frames were stored. Its total then falls back to the calls the
+ * The kinds whose detectors cite each run as a whole and store no frames:
+ * cache writes never read, the standing context every request re-sends, and
+ * the model class a run could have used. Each prices the run, not a call.
+ */
+const RUN_LEVEL_KINDS: ReadonlySet<string> = new Set([
+  "cache_writes_never_read",
+  "standing_context",
+  "model_class_fit",
+]);
+
+/**
+ * What a finding cites in one run (#4001). A finding of a
+ * {@link RUN_LEVEL_KINDS} kind cites the run as a whole and pins no turn. A
+ * tool-call finding answers the frames the findings job stored for the run,
+ * or null frames on a row written before frames were stored. Its total then falls back to the calls the
  * evidence counted in the run. That evidence itemises only the ten runs with
  * the largest saving, so a run past them has no total and answers null.
  */
 export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
-  if (row.kind === "cache_writes_never_read")
+  if (RUN_LEVEL_KINDS.has(row.kind))
     return { runId, runLevel: true, frames: [], framesTotal: 0 };
   const evidence = row.citedFrames as StoredEvidence;
   const cited = evidence.frames?.[runId];

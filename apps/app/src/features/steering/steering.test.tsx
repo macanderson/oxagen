@@ -45,6 +45,10 @@ vi.mock("./actions", () => ({
   openContextPr: vi.fn(),
   mergeContextPr: vi.fn(),
   dismissProposal: vi.fn(),
+  approveContextPr: vi.fn(),
+  mergePrWithoutReview: vi.fn(),
+  restoreManagedBlock: vi.fn(),
+  dropMemoryRecord: vi.fn(),
   setSteeringGate: vi.fn(),
   setGovernanceMode: vi.fn(),
 }));

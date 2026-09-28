@@ -519,7 +519,8 @@
         "head": "Checked commit",
         "headUnknown": "not committed yet",
         "path": "File",
-        "governance": "Governance mode"
+        "governance": "Governance mode",
+        "approvals": "Approvals"
       },
       "checks": {
         "title": "Checks",
@@ -552,6 +553,16 @@
         "at": "Merged at",
         "promotion": "Promotion event",
         "record": "Published record"
+      },
+      "drift": {
+        "title": "Drift in {path}"
+      },
+      "memory": {
+        "title": "Memory records",
+        "notBacked": "the records on this memory branch and the memories each one cites. It needs list_memory_pr_records.",
+        "memories": "Cited memories",
+        "unknownAgent": "Unknown agent",
+        "evidence": "Evidence"
       }
     },
     "actions": {
@@ -587,6 +598,8 @@
         "governanceUnreadable": "The workspace repository has a .oxagen/rules/governance.toml that could not be read, so nothing was opened or merged.",
         "repositoryMissing": "This workspace has no connected repository to open the pull request on.",
         "checksNotPassed": "Merge is blocked until every check passes.",
+        "approvalRequired": "Merge needs an approval from a workspace member other than the author. An owner, or a member allowed to merge without review, can merge without one. Nothing was merged.",
+        "approvalsNotHeadBound": "Oxagen could not confirm which commit a reviewer approved on this GitLab project. Nothing was merged. Check that Reset approvals on push is on in the project's approval settings. The setting needs GitLab Premium, and the project access token must be able to read it. Oxagen also needs a GitLab version that reports when each approval was given.",
         "headMoved": "The pull request changed after the checks ran. Run the checks again.",
         "baseMoved": "The pull request no longer targets the production branch. Nothing was merged.",
         "githubRefused": "GitHub refused the change. Nothing was published.",
@@ -598,7 +611,33 @@
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "Write a reason before you dismiss the proposal.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
-        "unavailable": "The change could not be made: {code}. Nothing was changed."
+        "unavailable": "The change could not be made: {code}. Nothing was changed.",
+        "repositoryUnhealthy": "The workspace repository's settings need repair, so Oxagen merges nothing until they are fixed. Runs keep the last published version.",
+        "tooManyFiles": "This steering PR changes too many files to merge. Nothing was merged.",
+        "versionMismatch": "The steering version this PR was checked against is not the one in force. Run the checks again.",
+        "recordFileMissing": "The record file is not on the branch at the checked commit. Nothing was changed.",
+        "productionBranchMissing": "The repository has no production branch to merge into. Nothing was merged.",
+        "productionBranchMoving": "The production branch kept moving while Oxagen was merging. Merge again.",
+        "checksFailed": "The production branch moved, and the checks failed after Oxagen brought the branch up to date. Fix the branch and run the checks again.",
+        "toolNotRegistered": "Oxagen has not registered this action yet."
+      },
+      "approve": {
+        "confirm": "Approve",
+        "pending": "Approving"
+      },
+      "mergeWithoutReview": {
+        "confirm": "Merge without review",
+        "pending": "Merging"
+      },
+      "restore": {
+        "confirm": "Restore block",
+        "pending": "Restoring"
+      },
+      "drop": {
+        "confirm": "Drop",
+        "label": "Drop {title}",
+        "pending": "Dropping",
+        "dropped": "Dropped in {commit}"
       }
     },
     "create": {

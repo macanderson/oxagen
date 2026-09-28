@@ -7,11 +7,8 @@ import {
   type PricedRequestFrame,
   type ToolCallObservation,
 } from "./index";
-import {
-  CARRY_RESULT_TOKENS,
-  carriesOf,
-  runReadPrice,
-} from "./unpaged-results";
+import { standingReadPrice } from "../standing-context-price";
+import { CARRY_RESULT_TOKENS, carriesOf } from "./unpaged-results";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
@@ -372,23 +369,36 @@ describe("context carry", () => {
   });
 });
 
-describe("runReadPrice", () => {
+describe("the read price a carry is priced at", () => {
   it("is the run's cache reads over their tokens", () => {
     expect(
-      runReadPrice(run({ cacheRead: { tokens: 100_000, micros: 30_000n } })),
+      standingReadPrice(
+        run({ cacheRead: { tokens: 100_000, micros: 30_000n } }),
+      ),
     ).toEqual({ micros: 30_000n, tokens: 100_000n });
   });
 
   it("is the uncached input price for a run that read no cache", () => {
-    expect(runReadPrice(run())).toEqual({ micros: 9_000n, tokens: 3_000n });
+    expect(standingReadPrice(run())).toEqual({
+      micros: 9_000n,
+      tokens: 3_000n,
+    });
   });
 
-  it("is null when nothing priced the cache reads, or the run is estimated or unpriced", () => {
+  it("is zero, not unknown, for cache reads the book priced at nothing", () => {
     expect(
-      runReadPrice(run({ cacheRead: { tokens: 100_000, micros: 0n } })),
+      standingReadPrice(run({ cacheRead: { tokens: 100_000, micros: 0n } })),
+    ).toEqual({ micros: 0n, tokens: 100_000n });
+  });
+
+  it("is null when a cache read went unpriced, or the run is estimated or unpriced", () => {
+    const partial = run({ cacheRead: { tokens: 100_000, micros: 30_000n } });
+    partial.breakdown.models[0]!.hasUnpriced = true;
+    expect(standingReadPrice(partial)).toBeNull();
+    expect(standingReadPrice(run({ costBasis: "estimated" }))).toBeNull();
+    expect(
+      standingReadPrice(run({ costBasis: null, costMicros: null })),
     ).toBeNull();
-    expect(runReadPrice(run({ costBasis: "estimated" }))).toBeNull();
-    expect(runReadPrice(run({ costBasis: null, costMicros: null }))).toBeNull();
   });
 });
 

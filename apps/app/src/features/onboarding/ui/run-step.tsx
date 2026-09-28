@@ -1,8 +1,8 @@
 "use client";
-// Onboarding step 3, Start a run (mockup `regRun` in onboard mode with
-// `obRepoPanel`): the wait for the agent's first frame, then the frame and the
-// run's recorded trust words, and below it the repository the enrolling host
-// reported, to bind as the main repo now or later.
+// Onboarding step 5, Start a run (mockup `regRun` in onboard mode): the wait
+// for the agent's first frame, then the frame and the run's recorded trust
+// words. There is no main-repository panel: the workspace was created with its
+// steering repo on step 3 (#4518), so nothing is left to bind here.
 //
 // The wait is `get_first_frame`'s own long poll: the page re-reads a second
 // after each completed read, and the server holds each read open while a host
@@ -14,10 +14,7 @@
 // A value the record does not hold is left off, never filled in.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
-import type {
-  DetectedRepository,
-  FirstFrame,
-} from "@/data/contracts/onboarding";
+import type { FirstFrame } from "@/data/contracts/onboarding";
 import type { EnforcementTier, ReplayGrade } from "@/data/contracts/runs";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
@@ -27,11 +24,8 @@ import {
   mono,
   panel,
 } from "@/ui/control-styles";
-import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SafeLink, useNavigate } from "@/ui/navigation";
-import { bindMainRepository } from "../actions";
-import { UNANSWERED, useOnboardingFailure } from "../failure";
 import { GateFooter, GateHeader } from "./gate-shell";
 import type { WrapAgentFacts } from "./wrap-step";
 
@@ -53,30 +47,8 @@ export type ReceivedFrame = {
   chainIntact: boolean | null;
 };
 
-type Repository = {
-  detected: DetectedRepository | null;
-  until: string;
-  /** Whole days left in the provisional window, counted by the server at render. */
-  daysLeft: number;
-  boundAt: string | null;
-};
-
 const cardHeader =
   "flex flex-wrap items-center gap-2.5 border-b border-border px-4 py-3";
-
-function GitHubGlyph() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M8 .4a7.6 7.6 0 0 0-2.4 14.8c.38.07.52-.16.52-.36v-1.3c-2.1.46-2.55-1-2.55-1-.35-.88-.85-1.12-.85-1.12-.7-.47.05-.46.05-.46.77.06 1.17.79 1.17.79.68 1.17 1.79.83 2.23.64.07-.5.27-.83.48-1.03-1.68-.19-3.45-.84-3.6-3.73 0-.82.3-1.5.77-2.02-.08-.19-.33-.96.07-2 0 0 .63-.2 2.07.77a7.1 7.1 0 0 1 3.77 0c1.44-.97 2.07-.77 2.07-.77.4 1.04.15 1.81.07 2 .48.52.77 1.2.77 2.02 0 2.9-1.77 3.53-3.46 3.72.28.24.52.7.52 1.42v2.1c0 .2.14.44.52.36A7.6 7.6 0 0 0 8 .4z" />
-    </svg>
-  );
-}
 
 function Spinner() {
   return (
@@ -261,225 +233,21 @@ function monoChunk(chunks: ReactNode) {
   return <span className={mono}>{chunks}</span>;
 }
 
-function RepositoryPanel({
-  org,
-  ws,
-  workspace,
-  repository,
-  waiting,
-  onStatus,
-}: {
-  org: string;
-  ws: string;
-  workspace: string;
-  repository: Repository;
-  /** True while the first frame has not arrived: Bind is the screen's gold action. */
-  waiting: boolean;
-  onStatus: (text: string) => void;
-}) {
-  const t = useTranslations("onboarding.welcome.run.repo");
-  const format = useFormatter();
-  const failureText = useOnboardingFailure();
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [bound, setBound] = useState<{
-    fullName: string;
-    defaultRef: string | null;
-  } | null>(() =>
-    repository.boundAt === null || repository.detected === null
-      ? null
-      : {
-          fullName: `${repository.detected.owner}/${repository.detected.name}`,
-          defaultRef: null,
-        },
-  );
-  const [skipped, setSkipped] = useState(false);
-  const detected = repository.detected;
-  const fullName =
-    detected === null ? null : `${detected.owner}/${detected.name}`;
-  const until = format.dateTime(new Date(repository.until), {
-    dateStyle: "medium",
-  });
-
-  async function bind() {
-    if (pending || detected === null || fullName === null) return;
-    setPending(true);
-    setFailure(null);
-    try {
-      const result = await bindMainRepository(org, ws, {
-        owner: detected.owner,
-        name: detected.name,
-      });
-      if (result.ok) {
-        setBound({
-          fullName: result.value.fullName,
-          defaultRef: result.value.defaultRef,
-        });
-        setSkipped(false);
-        onStatus(t("boundToast", { repository: result.value.fullName }));
-      } else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(UNANSWERED));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  const bindButton = (label: string, gold: boolean) => (
-    <button
-      type="button"
-      data-testid="bind-main-repo"
-      aria-disabled={pending || undefined}
-      onClick={() => void bind()}
-      className={`${gold ? buttonPrimary : buttonSecondary} self-start`}
-    >
-      <GitHubGlyph />
-      <span>{pending ? t("binding") : label}</span>
-    </button>
-  );
-  const alert =
-    failure === null ? null : (
-      <FormAlert testId="bind-failure">{failure}</FormAlert>
-    );
-
-  if (bound !== null)
-    return (
-      <section data-testid="repo-bound" className={panel}>
-        <div className={cardHeader}>
-          <Badge tone="allowed">{t("bound")}</Badge>
-          <h3 className="text-[14px] font-semibold">{t("boundTitle")}</h3>
-        </div>
-        <div className="flex flex-col gap-2.5 px-4 py-3.5">
-          <div className="flex flex-wrap gap-1.5">
-            <Badge tone="quiet" dot={false} mono>
-              {bound.fullName}
-            </Badge>
-            {bound.defaultRef === null ? null : (
-              <Badge tone="quiet" dot={false}>
-                {t("branch", { branch: bound.defaultRef })}
-              </Badge>
-            )}
-            <Badge tone="allowed">{t("appInstalled")}</Badge>
-          </div>
-          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-            {t.rich("boundBody", {
-              repository: bound.fullName,
-              mono: monoChunk,
-            })}
-          </p>
-        </div>
-      </section>
-    );
-
-  if (detected === null || fullName === null)
-    return (
-      <section data-testid="repo-none" className={panel}>
-        <div className={cardHeader}>
-          <Badge tone="denied" dot={false}>
-            {t("provisional")}
-          </Badge>
-          <h3 className="text-[14px] font-semibold">{t("noneTitle")}</h3>
-        </div>
-        <p className="px-4 py-3.5 text-[12.5px] leading-relaxed text-muted-foreground">
-          {t.rich("noneBody", { workspace, until, b: bold })}
-        </p>
-      </section>
-    );
-
-  if (skipped)
-    return (
-      <section data-testid="repo-skipped" className={panel}>
-        <div className={cardHeader}>
-          <Badge tone="denied" dot={false}>
-            {t("provisional")}
-          </Badge>
-          <h3 className="text-[14px] font-semibold">{t("skippedTitle")}</h3>
-        </div>
-        <div className="flex flex-col gap-2.5 px-4 py-3.5">
-          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-            {t.rich("skippedBody", {
-              workspace,
-              until,
-              days: repository.daysLeft,
-              b: bold,
-            })}
-          </p>
-          {alert}
-          {bindButton(t("bindNow", { repository: fullName }), false)}
-        </div>
-      </section>
-    );
-
-  return (
-    <section data-testid="repo-detected" className={panel}>
-      <div className={cardHeader}>
-        <h3 className="text-[14px] font-semibold">{t("detectedTitle")}</h3>
-        <span className="ml-auto font-mono text-[11.5px] text-muted-foreground">
-          {t("reported")}
-        </span>
-      </div>
-      <div className="flex flex-col gap-3 px-4 py-3.5">
-        <div>
-          <Badge tone="quiet" dot={false} mono>
-            {t("remote", { repository: fullName })}
-          </Badge>
-        </div>
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          {t("remoteBody")}
-        </p>
-        {alert}
-        {bindButton(t("bind", { repository: fullName }), waiting)}
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          {t.rich("bindBody", { repository: fullName, mono: monoChunk })}
-        </p>
-        <hr className="border-border" />
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          <button
-            type="button"
-            data-testid="repo-skip"
-            onClick={() => {
-              setSkipped(true);
-            }}
-            className="font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            {t("skip")}
-          </button>{" "}
-          {t.rich("skipBody", {
-            workspace,
-            days: repository.daysLeft,
-            b: bold,
-          })}
-        </p>
-      </div>
-    </section>
-  );
-}
-
 export function RunStep({
-  org,
-  ws,
-  workspace,
   fleet,
   back,
   installer,
   register,
-  repository,
   pollRevision,
   agent,
   host,
   received,
   silentFor,
 }: {
-  org: string;
-  ws: string;
-  /** The workspace's slug, as the provisional copy names it. */
-  workspace: string;
   fleet: SafePath;
   back: SafePath;
   installer: SafePath;
   register: SafePath;
-  /** The gate's provisional window; null for a workspace that is not the gate's. */
-  repository: Repository | null;
   /** A new opaque value after every completed server read. */
   pollRevision: string;
   agent: WrapAgentFacts | null;
@@ -609,23 +377,6 @@ export function RunStep({
       ) : (
         <Received received={received} />
       )}
-      {repository === null ? null : (
-        <RepositoryPanel
-          org={org}
-          ws={ws}
-          workspace={workspace}
-          repository={repository}
-          waiting={received === null}
-          onStatus={setStatus}
-        />
-      )}
-      <p
-        role="status"
-        data-testid="run-status"
-        className="text-sm empty:hidden"
-      >
-        {status}
-      </p>
       {received === null ? (
         <GateFooter
           start={

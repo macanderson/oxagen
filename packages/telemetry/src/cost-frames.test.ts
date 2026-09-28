@@ -138,6 +138,8 @@ describe("readModelCallFrames", () => {
       "tool_definition_tokens",
       "context_frame_tokens",
       "steering_tokens",
+      "system_context_digest",
+      "system_context_parts",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
@@ -476,6 +478,84 @@ describe("readModelCallFrames", () => {
       contextFrameTokens: null,
       steeringTokens: 0,
     });
+  });
+
+  it("carries the system context digest, and the parts when the frame listed them", async () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const part = {
+      kind: "tool",
+      name: "Read",
+      provider: "builtin",
+      digest: `sha256:${"b".repeat(64)}`,
+      tokens: 420,
+    };
+    const base = {
+      model: "claude-sonnet-5",
+      provider: "firstParty",
+      input_uncached: "1000",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "200",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+    };
+    answer([
+      {
+        ...base,
+        at: "2026-09-14T10:00:00.000Z",
+        system_context_digest: digest,
+        system_context_parts: JSON.stringify([part]),
+      },
+      // The recorder lists the parts once per digest.
+      {
+        ...base,
+        at: "2026-09-14T10:00:01.000Z",
+        system_context_digest: digest,
+        system_context_parts: "",
+      },
+      // A list that does not parse is left out, and the digest stays.
+      {
+        ...base,
+        at: "2026-09-14T10:00:02.000Z",
+        system_context_digest: digest,
+        system_context_parts: JSON.stringify([{ kind: "unknown" }]),
+      },
+      {
+        ...base,
+        at: "2026-09-14T10:00:03.000Z",
+        system_context_digest: digest,
+        system_context_parts: "not json",
+      },
+      // A frame that carried no system context has neither key.
+      {
+        ...base,
+        at: "2026-09-14T10:00:04.000Z",
+        system_context_digest: "",
+        system_context_parts: "",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    const { query } = lastQuery();
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf("LEFT JOIN"));
+    expect(priced).toContain("system_context_digest");
+    expect(priced).toContain("system_context_parts");
+    expect(frames[0]).toMatchObject({
+      systemContextDigest: digest,
+      systemContextParts: [part],
+    });
+    expect(frames[1]!.systemContextDigest).toBe(digest);
+    expect(frames[1]).not.toHaveProperty("systemContextParts");
+    expect(frames[2]!.systemContextDigest).toBe(digest);
+    expect(frames[2]).not.toHaveProperty("systemContextParts");
+    expect(frames[3]).not.toHaveProperty("systemContextParts");
+    expect(frames[4]).not.toHaveProperty("systemContextDigest");
+    expect(frames[4]).not.toHaveProperty("systemContextParts");
   });
 
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {

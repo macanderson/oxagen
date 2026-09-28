@@ -189,6 +189,26 @@ export function toRunFrameBody(
   };
 }
 
+type ContractStandingContext = NonNullable<
+  RunCostOutput["rollup"]
+>["standingContext"];
+
+/**
+ * The standing context by source, each figure keeping its `estimated` basis.
+ * A rollup that carries no split, including one from before the sources were
+ * recorded, reads null, and the page shows no value for each source.
+ */
+function toStandingContext(context: ContractStandingContext | undefined) {
+  if (context === undefined || context === null) return null;
+  const source = (s: (typeof context)["toolDefinitions"]) =>
+    s === null ? null : { resentTokens: s.resentTokens, cost: toCost(s.cost) };
+  return {
+    toolDefinitions: source(context.toolDefinitions),
+    steering: source(context.steering),
+    contextFrames: source(context.contextFrames),
+  };
+}
+
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
   const { rollup, provisional, baseline } = out;
   return {
@@ -252,6 +272,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               resultTokens: row.resultTokens,
               cost: toCost(row.cost),
             })),
+            standingContext: toStandingContext(rollup.standingContext),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
             isEstimate: rollup.isEstimate,

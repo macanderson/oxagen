@@ -1,10 +1,12 @@
 "use client";
-// The Context PR writes on the page: open a proposal's Context PR (or run its
-// checks again), dismiss a proposal with a reason, and merge. Open and dismiss
-// sit behind a confirming dialog; merge is the panel's one primary action and
-// stays disabled until every check has passed. A refusal is named where the
-// person acted and changes nothing; a completed write reloads the view it
-// leads to.
+// The steering PR writes on the page: open a proposal's steering PR (or run
+// its checks again), dismiss a proposal with a reason, approve, merge, merge
+// without review, restore a drifted managed block, and drop one record from a
+// memory PR. Open and dismiss sit behind a confirming dialog. Merge is the
+// panel's one primary action and stays disabled until every check has
+// passed. A refusal is named where the person acted and changes nothing. A
+// completed write reloads the view it leads to, except a drop, which marks
+// its card in place.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ProposalStatus } from "@/data/contracts/steering";
@@ -15,7 +17,15 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
-import { dismissProposal, mergeContextPr, openContextPr } from "./actions";
+import {
+  approveContextPr,
+  dismissProposal,
+  dropMemoryRecord,
+  mergeContextPr,
+  mergePrWithoutReview,
+  openContextPr,
+  restoreManagedBlock,
+} from "./actions";
 
 type Copy = {
   open: string;
@@ -222,6 +232,169 @@ export function MergeContextPr({
       {blocked ? (
         <p className="text-xs text-muted-foreground">{t("blocked")}</p>
       ) : null}
+    </form>
+  );
+}
+
+/** One write behind one button, with its refusal above it. */
+function WriteButton({
+  label,
+  pendingLabel,
+  testId,
+  blocked = false,
+  write,
+  after,
+}: {
+  label: string;
+  pendingLabel: string;
+  testId: string;
+  blocked?: boolean;
+  write: () => Promise<ActionResult<unknown>>;
+  after: SafePath;
+}) {
+  const { pending, failure, run } = useWrite();
+
+  function submit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (blocked) return;
+    void run(write, after);
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-2">
+      {failure === null ? null : (
+        <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
+      )}
+      <button
+        type="submit"
+        data-testid={testId}
+        disabled={blocked || pending}
+        className={buttonSecondary}
+      >
+        {pending ? pendingLabel : label}
+      </button>
+    </form>
+  );
+}
+
+/** Approve: the approval a team or regulated merge needs from a member other than the author. */
+export function ApproveContextPr({ org, ws, proposalId }: Target) {
+  const t = useTranslations("steering.actions.approve");
+  return (
+    <WriteButton
+      testId="approve-context-pr"
+      label={t("confirm")}
+      pendingLabel={t("pending")}
+      write={() => approveContextPr(org, ws, proposalId)}
+      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+    />
+  );
+}
+
+/** Merge without review: an owner's merge of a steering PR no one has approved. */
+export function MergeWithoutReview({
+  org,
+  ws,
+  proposalId,
+  blocked,
+}: Target & { blocked: boolean }) {
+  const t = useTranslations("steering.actions.mergeWithoutReview");
+  return (
+    <WriteButton
+      testId="merge-without-review"
+      label={t("confirm")}
+      pendingLabel={t("pending")}
+      blocked={blocked}
+      write={() => mergePrWithoutReview(org, ws, proposalId)}
+      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+    />
+  );
+}
+
+/** Restore block: put the managed block back in one drifted file of the steering PR. */
+export function RestoreManagedBlock({
+  org,
+  ws,
+  proposalId,
+  path,
+}: Target & { path: string }) {
+  const t = useTranslations("steering.actions.restore");
+  return (
+    <WriteButton
+      testId="restore-managed-block"
+      label={t("confirm")}
+      pendingLabel={t("pending")}
+      write={() => restoreManagedBlock(org, ws, proposalId, path)}
+      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+    />
+  );
+}
+
+/**
+ * Drop one record from a memory PR. The card stays where it is and shows the
+ * commit that dropped it, so the person keeps their place among the others.
+ * The cards are keyed by path, so the page's refresh keeps this state.
+ */
+export function DropMemoryRecord({
+  org,
+  ws,
+  branch,
+  path,
+  title,
+  dropped,
+}: {
+  org: string;
+  ws: string;
+  branch: string;
+  path: string;
+  title: string;
+  dropped: { commitSha: string } | null;
+}) {
+  const t = useTranslations("steering.actions.drop");
+  const failureText = useActionFailure();
+  const [commit, setCommit] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  // A drop recorded before this page loaded, or by someone else since, comes
+  // in on `dropped` with the next refresh.
+  const droppedIn = commit ?? (dropped === null ? null : dropped.commitSha);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function submit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await dropMemoryRecord(org, ws, branch, path);
+      if (result.ok) setCommit(result.value.commitSha);
+      else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (droppedIn !== null) {
+    return (
+      <p data-dropped="" className="text-xs text-muted-foreground">
+        {t("dropped", { commit: droppedIn.slice(0, 7) })}
+      </p>
+    );
+  }
+  return (
+    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-2">
+      {failure === null ? null : (
+        <FormAlert testId="drop-memory-record-failure">{failure}</FormAlert>
+      )}
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label={pending ? undefined : t("label", { title })}
+        className={buttonSecondary}
+      >
+        {pending ? t("pending") : t("confirm")}
+      </button>
     </form>
   );
 }
