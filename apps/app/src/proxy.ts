@@ -1,11 +1,14 @@
 // Request interception (Next 16 `proxy`, formerly `middleware`). Cookies and
 // redirects only: no Node built-ins, database calls or secrets.
 //
-// It answers a legacy route with a 308 to the page that absorbed it (the
-// Appendix F table in shared/legacy-routes.ts, ARCHITECTURE.md §7.3), then acts
-// as the minimal session gate: it checks that a session cookie exists; the real
-// session and membership check is `requireViewer` in every layout and page.
+// It first sends a page visit on a production host that is not the canonical
+// one to that host (shared/app-url.ts, ADR-215). It answers a legacy route with
+// a 308 to the page that absorbed it (the Appendix F table in
+// shared/legacy-routes.ts, ARCHITECTURE.md §7.3), then acts as the minimal
+// session gate: it checks that a session cookie exists; the real session and
+// membership check is `requireViewer` in every layout and page.
 import { type NextRequest, NextResponse } from "next/server";
+import { canonicalHostRedirect } from "@/shared/app-url";
 import { LEGACY_ROUTES } from "@/shared/legacy-routes";
 import { responseRedirect } from "@/shared/navigation";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
@@ -99,8 +102,38 @@ function legacyTarget(pathname: string): SafePath | null {
     : sanitizeNext(pathname.replace(row.pattern, row.target), routes.root());
 }
 
+/**
+ * A page visit on a production host that is not the canonical one, sent to
+ * the same path there. The Host header is the name Caddy routed on; the
+ * request URL's host stands in when a request carries none.
+ *
+ * A permanent redirect is cached for an hour, the cap the static sites' edge
+ * redirects use, so a wrong target clears on its own. A temporary one is not
+ * cached at all.
+ */
+function toCanonicalHost(req: NextRequest): NextResponse | null {
+  const target = canonicalHostRedirect({
+    method: req.method,
+    host: req.headers.get("host") ?? req.nextUrl.host,
+    pathname: req.nextUrl.pathname,
+    search: req.nextUrl.search,
+  });
+  if (target === null) return null;
+  const res = NextResponse.redirect(
+    target.location,
+    target.permanent ? 308 : 307,
+  );
+  res.headers.set(
+    "cache-control",
+    target.permanent ? "public, max-age=3600" : "no-store",
+  );
+  return res;
+}
+
 export function proxy(req: NextRequest): NextResponse {
   const { pathname, search } = req.nextUrl;
+  const elsewhere = toCanonicalHost(req);
+  if (elsewhere !== null) return elsewhere;
   const signedOut = twoFactorWithoutFirstFactor(req);
   if (signedOut !== null) return signedOut;
   if (isPublicPath(pathname)) return NextResponse.next();

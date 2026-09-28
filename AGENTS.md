@@ -37,6 +37,10 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
 | `web` | `apps/web/` | oxagen.sh public website + `/blog` — hand-authored HTML plus MDX posts from `content/`, built to `dist/`, deployed to S3 + CloudFront |
 
+### Domains
+
+Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the team with slug `oxagen-inc`, which Mac migrated to from an earlier Vercel team. Vercel stays the registrar, so a nameserver change happens in that team. The nameservers point at the Route 53 zone in `infra/stacks-new/oxagen/dns-oxagen-app.tf`. `oxagen.app` is the production web app's domain (ADR-215, #4655). Until ADR-215's cutover, the app is canonical at `app.oxagen.sh`. After it, `app.oxagen.sh` redirects page visits to `oxagen.app` and keeps answering `/api/*`. `api`, `mcp`, and `docs` stay on `oxagen.sh`. `oxagen.dev`, bought the same day, only redirects to the docs (`dns-vanity-domains.tf`).
+
 ### Core Packages
 
 | Package | Key File | Purpose |

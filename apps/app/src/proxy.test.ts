@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { join, sep } from "node:path";
-import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { NextRequest, type NextResponse } from "next/server";
+import { afterEach, describe, expect, it } from "vitest";
 import { isPublicPath, proxy } from "./proxy";
 import { LEGACY_ROUTES } from "./shared/legacy-routes";
 
@@ -346,5 +346,107 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     expect(
       proxy(request("/invite/members")).headers.get("location"),
     ).toBeNull();
+  });
+});
+
+/**
+ * The app answers on app.oxagen.sh, oxagen.app and www.oxagen.app (ADR-215).
+ * A page visit on any of them that is not the canonical host moves there
+ * before the session gate runs. The canonical host is the one in
+ * NEXT_PUBLIC_APP_URL, which the build inlines.
+ */
+describe("the canonical host (ADR-215)", () => {
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+  afterEach(() => {
+    if (APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+    else process.env.NEXT_PUBLIC_APP_URL = APP_URL;
+  });
+
+  function visit(
+    url: string,
+    init: { method?: string; cookie?: string; host?: string } = {},
+  ): NextResponse {
+    const headers: Record<string, string> = {};
+    if (init.cookie !== undefined) headers.cookie = init.cookie;
+    if (init.host !== undefined) headers.host = init.host;
+    return proxy(
+      new NextRequest(url, { method: init.method ?? "GET", headers }),
+    );
+  }
+
+  it("sends app.oxagen.sh to oxagen.app for good once oxagen.app is canonical", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = visit("https://app.oxagen.sh/acme/core-platform?tab=runs");
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe(
+      "https://oxagen.app/acme/core-platform?tab=runs",
+    );
+    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+  });
+
+  it("moves the visit before the session gate can send it to the old host's /login", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = visit("https://app.oxagen.sh/login?next=%2Facme");
+    expect(res.headers.get("location")).toBe(
+      "https://oxagen.app/login?next=%2Facme",
+    );
+  });
+
+  it("sends www.oxagen.app to the apex", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = visit("https://www.oxagen.app/");
+    expect(res.status).toBe(308);
+    expect(res.headers.get("location")).toBe("https://oxagen.app/");
+  });
+
+  it("reads the Host header the front door routed on", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = visit("http://localhost:3000/acme", { host: "app.oxagen.sh" });
+    expect(res.headers.get("location")).toBe("https://oxagen.app/acme");
+  });
+
+  it("sends oxagen.app back to app.oxagen.sh while that is canonical, uncached", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.oxagen.sh";
+    const res = visit("https://oxagen.app/acme");
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("https://app.oxagen.sh/acme");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("leaves the canonical host to the session gate (negative)", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    expect(
+      visit("https://oxagen.app/acme", {
+        cookie: "better-auth.session_token=abc",
+      }).headers.get("location"),
+    ).toBeNull();
+    expect(
+      new URL(visit("https://oxagen.app/acme").headers.get("location") ?? "")
+        .host,
+    ).toBe("oxagen.app");
+  });
+
+  it.each([
+    "/api/auth/callback/github?code=c&state=s",
+    "/api/scim/v2/Users",
+    "/api/v1/runs",
+    "/.well-known/oauth-authorization-server",
+  ])("keeps serving %s on the old host (negative)", (path) => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const location = visit(`https://app.oxagen.sh${path}`).headers.get(
+      "location",
+    );
+    expect(location === null ? null : new URL(location).host).not.toBe(
+      "oxagen.app",
+    );
+  });
+
+  it("does not move a POST, which a redirect would turn into a lost submission (negative)", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    const res = visit("https://app.oxagen.sh/acme", {
+      method: "POST",
+      cookie: "better-auth.session_token=abc",
+    });
+    expect(res.headers.get("location")).toBeNull();
   });
 });

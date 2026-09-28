@@ -608,6 +608,16 @@ describe("collectors", () => {
       'function addWrap(parent: Command): void {\n  parent\n    .command("verify")\n    .description("Check the chain");\n}\nretiredCommand("pr", "PR watching");\nprogram\n  .command("cost")\n  .description("Project cost");\nconst budgetCmd = program\n  .command("budget")\n  .description("Ceilings");\nbudgetCmd\n  .command("show")\n  .description("Show them");\nconst old = program\n  .command("old", { hidden: true })\n  .description("Deprecated");\naddWrap(old);\n',
     );
     expect(collectCaddy(root)).toEqual([{ host: "api.example", port: 4000 }]);
+    // One matcher can name several hosts; each is its own route (ADR-215).
+    file(
+      root,
+      "infra/tools/caddy/Caddyfile.alb",
+      ":80 {\n route {\n  @app host app.example new.example\n  handle @app {\n   reverse_proxy 127.0.0.1:3000\n  }\n }\n}\n",
+    );
+    expect(collectCaddy(root)).toEqual([
+      { host: "app.example", port: 3000 },
+      { host: "new.example", port: 3000 },
+    ]);
     expect(collectCompose(root)).toEqual([
       { name: "postgres", image: "postgres:16" },
     ]);

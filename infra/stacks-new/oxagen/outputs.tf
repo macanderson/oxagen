@@ -13,6 +13,11 @@ output "vanity_domain_nameservers" {
   value       = { for domain, zone in aws_route53_zone.vanity : domain => zone.name_servers }
 }
 
+output "oxagen_app_nameservers" {
+  description = "oxagen.app's nameservers, as entered at Vercel in the oxagen-inc team. See dns-oxagen-app.tf."
+  value       = aws_route53_zone.oxagen_app.name_servers
+}
+
 output "zone_id" {
   description = "For stacks-new/stella's parent_zone_id and any future subdomain owned by another brand."
   value       = aws_route53_zone.oxagen_sh.zone_id
