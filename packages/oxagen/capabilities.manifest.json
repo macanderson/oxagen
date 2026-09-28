@@ -6304,6 +6304,23 @@
       }
     },
     {
+      "name": "import_workspace_steering",
+      "file": "steering_repo.import.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "repair_steering_repo",
       "file": "steering_repo.repair.ts",
       "domain": "repository",

@@ -1876,6 +1876,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "import_workspace_steering",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "run",
       "name": "ingest_run_frames",
       "reads": [],
@@ -4292,7 +4302,7 @@
       "writes": []
     }
   ],
-  "contentHash": "44326c02d2d4ab5ae6a9c1c5b20c3837e53e86614c9a4e4a80e4e381c6406929",
+  "contentHash": "99b5a8791a2c8743e405a36bffecf625cbbfa29a70521f5fa1294a2d8f1d4b26",
   "domains": [
     {
       "name": "agent",

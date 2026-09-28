@@ -1,5 +1,5 @@
 {
-  "generatedCount": 411,
+  "generatedCount": 412,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2052,6 +2052,17 @@
     {
       "name": "import_tools",
       "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "import_workspace_steering",
+      "domain": "repository",
       "surfaces": [
         "api",
         "mcp"
