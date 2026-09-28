@@ -110,6 +110,7 @@ describe("callServed in direct mode", () => {
     await call("billing__list_charges");
     expect(recorded.meter).toEqual([
       {
+        id: "act_1",
         kind: "call",
         tool: "billing__list_charges",
         server: "billing",
@@ -118,6 +119,16 @@ describe("callServed in direct mode", () => {
         run: run(),
         at: new Date(NOW),
       },
+    ]);
+  });
+
+  it("gives each governed action its own id, even in one request", async () => {
+    const { call, recorded } = await setup();
+    await call("billing__list_charges");
+    await call("billing__list_charges");
+    expect(recorded.meter.map((event) => [event.id, event.run.requestId])).toEqual([
+      ["act_1", "req_1"],
+      ["act_2", "req_1"],
     ]);
   });
 
@@ -180,6 +191,7 @@ describe("callServed policy decisions", () => {
         run: run(),
         agent: AGENT,
         tool: "billing__create_refund",
+        version: 1,
         server: "billing",
         args: REFUND,
         reasons: ["irreversible.approval"],
@@ -240,6 +252,77 @@ describe("callServed policy decisions", () => {
     );
     nothingSent(recorded);
     expect(recorded.meter.map((event) => [event.outcome, event.agent])).toEqual([["denied", null]]);
+  });
+});
+
+describe("callServed billing admission", () => {
+  it("asks billing once for each governed action, with the run", async () => {
+    const { call, recorded } = await setup();
+    await call("billing__list_charges");
+    expect(recorded.admitted).toEqual([run()]);
+  });
+
+  it("refuses a call when the organization has no units left, before any approval, and meters nothing", async () => {
+    const { call, recorded } = await setup({ admit: () => Promise.resolve({ admitted: false, reason: "units_exhausted" }) });
+    const result = await call("billing__create_refund", REFUND);
+    expect(result?.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      "The organization has no governed actions left this period, so Oxagen did not send billing__create_refund. Ask an organization admin to add units in Billing.",
+    );
+    expect(recorded.approvals).toEqual([]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(recorded.meter).toEqual([]);
+  });
+
+  it("refuses a call when the free month is used and no card is saved", async () => {
+    const { call, recorded } = await setup({ admit: () => Promise.resolve({ admitted: false, reason: "no_payment_method" }) });
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toBe(
+      "The organization used this month's free governed actions, so Oxagen did not send billing__list_charges. Ask an organization admin to add a payment method in Billing.",
+    );
+    nothingSent(recorded);
+    expect(recorded.meter).toEqual([]);
+  });
+
+  it("refuses a call when billing is suspended", async () => {
+    const { call, recorded } = await setup({ admit: () => Promise.resolve({ admitted: false, reason: "suspended" }) });
+    const result = await call("stripe__list_customers");
+    expect(textOf(result)).toBe(
+      "Billing is suspended for the organization, so Oxagen did not send stripe__list_customers. Ask an organization admin to pay the open invoice in Billing.",
+    );
+    nothingSent(recorded);
+    expect(recorded.meter).toEqual([]);
+  });
+
+  it("sends nothing when billing cannot be read, and logs only the error's name", async () => {
+    const { call, recorded } = await setup({ admit: () => Promise.reject(new Error("billing settings row for org_1 is locked")) });
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toBe("Oxagen could not check billing for billing__list_charges, so it was not sent. Call it again in a minute.");
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not read the organization's billing, so the call was not sent.",
+        fields: { tool: "billing__list_charges", error: "Error" },
+      },
+    ]);
+    nothingSent(recorded);
+    expect(recorded.meter).toEqual([]);
+  });
+
+  it("refuses a search-mode search when billing refuses it", async () => {
+    const { call, recorded } = await setup(
+      { admit: () => Promise.resolve({ admitted: false, reason: "units_exhausted" }) },
+      searchBilling(),
+    );
+    const result = await call("billing__search", { query: "refund" });
+    expect(result?.isError).toBe(true);
+    expect(recorded.meter).toEqual([]);
+  });
+
+  it("leaves a name no published server holds to Oxagen's own tools without asking billing", async () => {
+    const { call, recorded } = await setup();
+    expect(await call("oxagen_list_runs")).toBeNull();
+    expect(recorded.admitted).toEqual([]);
   });
 });
 

@@ -5,9 +5,10 @@
 // fakes to the same interfaces, so nothing here holds logic a test needs to
 // reach: it reads rows, hands them on, and picks the transport the
 // environment's network names.
-import { recordGovernedActions } from "@oxagen/billing";
+import { assertGauAvailable, BillingSuspendedError, GauExhaustedError, recordGovernedActions } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
+import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
 import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-calls/groups-store";
 import { launchSpecFor, machineGroupsOf } from "@oxagen/handlers/mcp-studio/local-calls/launch";
@@ -30,6 +31,7 @@ import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
 import {
   ServedRouteError,
+  type Admission,
   type MeterEvent,
   type OffSwitches,
   type ServedLog,
@@ -166,6 +168,23 @@ export function transportFor(route: ServedRoute): Transport {
   return cloud;
 }
 
+/**
+ * Billing's admission for one governed action: the gate the kernel and the
+ * external tool path run first (ADR-055, ADR-165). It charges nothing.
+ */
+export async function admitServed(run: ServedRun): Promise<Admission> {
+  try {
+    await runInTenantScope(scopeOf(run), () => assertGauAvailable(run.orgId));
+    return { admitted: true };
+  } catch (error) {
+    if (error instanceof GauExhaustedError) {
+      return { admitted: false, reason: error.reason === "free_no_payment_method" ? "no_payment_method" : "units_exhausted" };
+    }
+    if (error instanceof BillingSuspendedError) return { admitted: false, reason: "suspended" };
+    throw error;
+  }
+}
+
 /** One governed action on the run's ledger. */
 export async function meterServed(event: MeterEvent): Promise<void> {
   const { run } = event;
@@ -198,6 +217,7 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     // Discovery, which withholds a tool from a server, is only proposed
     // (mcp-studio-spec, Discovery). Until it stores a withheld list, none is.
     withheld: async () => new Set<string>(),
+    admit: admitServed,
     approvals: postgresApprovals(),
     credentials: workspaceCredentialSource(credentialStore(run)),
     transport: transportFor,
@@ -218,7 +238,7 @@ export const postgresRunSources: RunSources = {
       withTenantDb(async (tx): Promise<ServedHost | null> => {
         const hosts = schema.tachoHosts;
         const [host] = await tx
-          .select({ id: hosts.id, publicId: hosts.publicId, runtimeId: hosts.runtimeId })
+          .select({ id: hosts.id, publicId: hosts.publicId, runtimeId: hosts.runtimeId, enrolledBy: hosts.createdById })
           .from(hosts)
           .where(
             and(
@@ -230,7 +250,20 @@ export const postgresRunSources: RunSources = {
           )
           .limit(1);
         if (host === undefined) return null;
-        if (host.runtimeId === null) return { id: host.id, publicId: host.publicId, runtime: null };
+        // The enroller operates every session the host opens (ingest's
+        // enrollingOperator). Their role is read now, not the one a session
+        // stamped when it opened, so a demoted operator's runs lose the role.
+        let operatorRole: string | null = null;
+        if (host.enrolledBy !== null) {
+          const members = schema.workspaceUsers;
+          const [member] = await tx
+            .select({ role: members.role })
+            .from(members)
+            .where(and(eq(members.workspaceId, workspaceId), eq(members.userId, host.enrolledBy)))
+            .limit(1);
+          operatorRole = operatorRoleOf(member?.role);
+        }
+        if (host.runtimeId === null) return { id: host.id, publicId: host.publicId, runtime: null, operatorRole };
         const runtimes = schema.runtimes;
         const [runtime] = await tx
           .select({ slug: runtimes.slug })
@@ -244,7 +277,7 @@ export const postgresRunSources: RunSources = {
             ),
           )
           .limit(1);
-        return { id: host.id, publicId: host.publicId, runtime: runtime?.slug ?? null };
+        return { id: host.id, publicId: host.publicId, runtime: runtime?.slug ?? null, operatorRole };
       }),
     );
   },
@@ -254,7 +287,7 @@ export const postgresRunSources: RunSources = {
       withTenantDb(async (tx) => {
         const sessions = schema.tachoSessions;
         const [session] = await tx
-          .select({ publicId: sessions.publicId, harness: sessions.harness, operatorRole: sessions.operatorRole })
+          .select({ publicId: sessions.publicId, harness: sessions.harness })
           .from(sessions)
           .where(
             and(

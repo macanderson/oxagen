@@ -35,7 +35,10 @@ export interface PublishedTools {
 export interface ServedRun {
   orgId: string;
   workspaceId: string;
-  /** One per HTTP request. The meter keys each governed action by it. */
+  /**
+   * The client's x-request-id, or a fresh UUID when it sends none. The
+   * client chooses it, so it traces a request and keys nothing.
+   */
   requestId: string;
   /** The tacho session the request names, when it names one. */
   sessionId: string | null;
@@ -43,7 +46,7 @@ export interface ServedRun {
   runtime: string;
   /** The harness the session reports, when it reports one. */
   harness: string | null;
-  /** The operator's role, when Oxagen knows it. */
+  /** The role the gateway key's host enroller holds in the workspace now, when they hold one. */
   operatorRole?: string;
   /** The tacho.hosts public id of the machine the run is on. A local server runs there. */
   machine: string | null;
@@ -78,6 +81,8 @@ export interface ApprovalRequest {
   agent: ServedAgent;
   /** The full tool name the call was decided as. */
   tool: string;
+  /** The tool's locked version. An approval answers for this version only. */
+  version: number;
   server: string;
   args: Record<string, unknown>;
   /** The approval rules that parked the call. */
@@ -99,6 +104,8 @@ export type MeterOutcome = "allowed" | "denied" | "parked" | "failed";
 
 /** One governed action: a call, a search, or a describe. */
 export interface MeterEvent {
+  /** Oxagen's id for this one action. The ledger keys the action by it. */
+  id: string;
   kind: MeterKind;
   /** The full tool name: the underlying tool for a call, or <server>__search. */
   tool: string;
@@ -109,6 +116,12 @@ export interface MeterEvent {
   run: ServedRun;
   at: Date;
 }
+
+/** Why billing refused a governed action. */
+export type AdmissionRefusal = "units_exhausted" | "no_payment_method" | "suspended";
+
+/** Whether billing lets the organization take one more governed action. */
+export type Admission = { admitted: true } | { admitted: false; reason: AdmissionRefusal };
 
 export interface ServedLog {
   warn(message: string, fields?: Record<string, unknown>): void;
@@ -135,6 +148,8 @@ export interface ServedPorts {
   off(run: ServedRun): Promise<OffSwitches>;
   /** Full tool names Oxagen withholds from every agent. */
   withheld(run: ServedRun): Promise<ReadonlySet<string>>;
+  /** Billing's admission for one governed action. Throws when billing cannot be read. */
+  admit(run: ServedRun): Promise<Admission>;
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */
@@ -147,5 +162,7 @@ export interface ServedPorts {
   senders?: Partial<Senders>;
   /** Milliseconds since the epoch. Tests pass a clock. */
   now?: () => number;
+  /** A new id for each governed action. Tests pass a counter. */
+  newId?: () => string;
   signal?: AbortSignal;
 }

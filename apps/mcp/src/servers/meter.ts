@@ -2,8 +2,9 @@
 // records (lane M15; mcp-studio-spec, Spend).
 //
 // Every call is one governed action whether policy allows it, denies it, or
-// parks it. The ledger key is the HTTP request's id, so a request the agent
-// sends again is a second action.
+// parks it. The ledger key is the id Oxagen makes for each action. The
+// ledger drops a second entry with the same key, so a key the client chose,
+// such as its x-request-id, would let it repeat one id and pay for one call.
 import type { GovernedActionEntry } from "@oxagen/billing";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import type { MeterEvent } from "./types";
@@ -22,7 +23,7 @@ export function meterEntry(event: MeterEvent): GovernedActionEntry {
   const { run } = event;
   const scope = run.sessionId ?? run.workspaceId;
   return {
-    idempotencyKey: `external_tool:${scope}:mcp:${run.requestId}`,
+    idempotencyKey: `external_tool:${scope}:mcp:${event.id}`,
     source: "external_tool",
     capability: null,
     toolName: event.tool,
