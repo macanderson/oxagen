@@ -39,6 +39,11 @@ function clock(ports: ServedPorts): number {
   return ports.now?.() ?? Date.now();
 }
 
+/** An error's name for a log line. A message can quote a row, a request, or a secret, so it is never logged. */
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : "unknown";
+}
+
 async function meter(
   view: ServedView,
   ports: ServedPorts,
@@ -54,7 +59,7 @@ async function meter(
       kind,
       tool,
       outcome,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorName(error),
     });
   }
 }
@@ -126,15 +131,17 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
       "denied",
     );
   }
-  const refused = unservedRefusal(view, entry, agent);
-  if (refused !== null) return refused;
+  // With no decider nothing is visible, so this comes before the visibility
+  // test to say why.
   const decider = view.decider;
   if (decider === null) {
     return refusal(
-      `Oxagen could not decide ${tool.name} because the published policies did not compile, so it denied the call. Fix the policies in a steering PR and publish again.`,
+      `Oxagen could not load the workspace's policies, so it denied ${tool.name}. If a steering PR changed the policies, fix them and publish again. Otherwise call the tool again in a minute.`,
       "denied",
     );
   }
+  const refused = unservedRefusal(view, entry, agent);
+  if (refused !== null) return refused;
 
   const decide = (approval?: { granted: boolean; approvers: number }): ToolCallVerdict =>
     decideToolCall({
@@ -166,7 +173,7 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     } catch (error) {
       ports.log.warn("Oxagen could not open an approval, so the call was not sent.", {
         tool: tool.name,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorName(error),
       });
       return refusal(`Oxagen could not open an approval for ${tool.name}, so it was not sent. Call it again in a minute.`, "failed");
     }
@@ -213,7 +220,7 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     // Only the error's name: a credential lookup's message can quote the secret it read.
     ports.log.warn("The credential lookup failed, so the call was not sent.", {
       tool: tool.name,
-      error: error instanceof Error ? error.name : "unknown",
+      error: errorName(error),
     });
     return refusal(
       `Oxagen could not read the credential for ${server.name}, so it did not send ${tool.name}. Call it again in a minute, and ask a workspace admin to reconnect ${server.label} if it fails again.`,
@@ -253,7 +260,7 @@ async function search(view: ServedView, ports: ServedPorts, server: ManifestServ
   } catch (error) {
     ports.log.warn("The search index failed, so search ranked by keyword.", {
       server: server.name,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorName(error),
     });
     found = await keywordRank(parsed.query, entries, parsed.limit);
   }
@@ -274,6 +281,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * runTool, with any error it throws turned into a failed answer, so the
+ * call is still answered and still metered.
+ */
+async function governed(view: ServedView, ports: ServedPorts, entry: ServedTool, args: Record<string, unknown>): Promise<Answer> {
+  try {
+    return await runTool(view, ports, entry, args);
+  } catch (error) {
+    ports.log.warn("A served call failed before it was sent.", { tool: entry.tool.name, error: errorName(error) });
+    return refusal(`Oxagen could not send ${entry.tool.name} because of an internal error. Call it again in a minute.`, "failed");
+  }
+}
+
+/**
  * Answer a tools/call for a published server's tool, or null when the name
  * names no published server, which leaves the call to Oxagen's own tools.
  */
@@ -289,7 +309,7 @@ export async function callServed(
 
   if (resolved.kind === "tool") {
     const { entry } = resolved;
-    const answer = await runTool(view, ports, entry, args);
+    const answer = await governed(view, ports, entry, args);
     await meter(view, ports, "call", entry.tool.name, entry.server.name, answer.outcome);
     return answer.result;
   }
@@ -318,7 +338,7 @@ export async function callServed(
     await meter(view, ports, "call", entry?.tool.name ?? `${server.name}__call`, server.name, answer.outcome);
     return answer.result;
   }
-  const answer = await runTool(view, ports, entry, inner);
+  const answer = await governed(view, ports, entry, inner);
   await meter(view, ports, "call", entry.tool.name, server.name, answer.outcome);
   return answer.result;
 }

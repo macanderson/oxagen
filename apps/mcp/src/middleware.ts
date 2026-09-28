@@ -113,15 +113,18 @@ setSecurityEventEmitter((kernelEvent) => {
  * SECURITY: identity is derived solely from this validated credential — never
  * from client-controlled identity headers (`x-oxagen-org-id` & friends).
  */
-const auth = apiKeyAuthMiddleware({
-  headerName: "authorization",
-  validateApiKey: async (authHeader) => {
-    if (typeof authHeader !== "string") return false;
-    return extractBearerToken(authHeader) !== null;
-  },
-});
-
 // The served tools (lane M15) run after the auth gate. They add a run's
 // published tools to tools/list and answer a tools/call that names one.
-// Every other request reaches the transport untouched.
-export default [auth, servedToolsMiddleware] satisfies Middleware[];
+// Every other request reaches the transport untouched. The gate is built in
+// place: xmcp types it with express's RequestHandler, which this app does not
+// install, so a named binding would hold an unresolved type.
+export default [
+  apiKeyAuthMiddleware({
+    headerName: "authorization",
+    validateApiKey: async (authHeader) => {
+      if (typeof authHeader !== "string") return false;
+      return extractBearerToken(authHeader) !== null;
+    },
+  }),
+  servedToolsMiddleware,
+] satisfies Middleware[];

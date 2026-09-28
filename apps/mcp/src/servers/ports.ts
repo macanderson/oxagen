@@ -23,6 +23,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { postgresApprovals } from "./approvals";
 import { unbuiltRoute } from "./call";
+import { asCedarRuntime } from "./cedar";
 import { workspaceCredentialSource, type CredentialRow, type CredentialStore } from "./credentials";
 import { METER_LABEL, meterEntry } from "./meter";
 import type { PublishedSources } from "./published";
@@ -171,20 +172,6 @@ export async function meterServed(event: MeterEvent): Promise<void> {
   await runInTenantScope(scopeOf(run), () =>
     recordGovernedActions({ orgId: run.orgId, entries: [meterEntry(event)], label: METER_LABEL }),
   );
-}
-
-function hasEvaluator(mod: unknown): mod is CedarRuntime {
-  return typeof mod === "object" && mod !== null && typeof (mod as { isAuthorized?: unknown }).isAuthorized === "function";
-}
-
-/** The module's evaluator, or its default export's, or null. */
-export function asCedarRuntime(mod: unknown): CedarRuntime | null {
-  if (hasEvaluator(mod)) return mod;
-  if (typeof mod === "object" && mod !== null) {
-    const fallback = (mod as { default?: unknown }).default;
-    if (hasEvaluator(fallback)) return fallback;
-  }
-  return null;
 }
 
 let cedar: Promise<CedarRuntime | null> | undefined;
