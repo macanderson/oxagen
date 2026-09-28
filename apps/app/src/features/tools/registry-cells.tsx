@@ -36,12 +36,12 @@ export function ToolName({
   return (
     <span className="flex flex-col gap-0.5">
       <span
-        className={`font-medium text-foreground ${names === "api" ? mono : ""}`}
+        className={`font-medium text-foreground md:truncate ${names === "api" ? mono : ""}`}
       >
         {primary}
       </span>
       <span
-        className={`text-xs text-muted-foreground ${names === "api" ? "" : mono}`}
+        className={`text-xs text-muted-foreground md:truncate ${names === "api" ? "" : mono}`}
       >
         {secondary}
       </span>
@@ -92,7 +92,7 @@ export function CategoryCell({ version }: { version: ToolVersion }) {
     return <span className="text-xs text-muted-foreground">{t("noTags")}</span>;
   }
   return (
-    <span className="flex flex-wrap gap-1">
+    <span className="flex gap-1 max-md:flex-wrap">
       {version.classification.impacts.map((tag) => (
         <Chip key={tag}>{tag}</Chip>
       ))}

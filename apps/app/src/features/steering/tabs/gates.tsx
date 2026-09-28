@@ -134,10 +134,10 @@ function Notices({
       node: (
         <tr key={gate.id} data-gate={gate.id}>
           <td className={cell}>
-            <b className="block font-semibold text-foreground">
+            <b className="block font-semibold text-foreground md:truncate">
               {t("kinds.killSwitch")}
             </b>
-            <span className="block font-mono text-[11.5px] text-muted-foreground">
+            <span className="block font-mono text-[11.5px] text-muted-foreground md:truncate">
               {gate.id}
             </span>
           </td>

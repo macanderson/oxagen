@@ -378,7 +378,7 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
         <td className={cell}>
           <button
             type="button"
-            className={`${linkText} ${mono} break-all text-left`}
+            className={`${linkText} ${mono} max-w-full text-left md:truncate`}
             onClick={() => {
               setOpen(tool);
             }}
@@ -386,7 +386,9 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
             {tool.name}
           </button>
           {tool.server === null ? null : (
-            <span className={`${mono} block text-xs text-muted-foreground`}>
+            <span
+              className={`${mono} block text-xs text-muted-foreground md:truncate`}
+            >
               {tool.server}
             </span>
           )}
@@ -404,7 +406,9 @@ export function DecisionRules({ belt }: { belt: Toolbelt }) {
           <Badge tone={tool.decision === "allow" ? "allowed" : "approval"}>
             {t(`decision.${tool.decision}`)}
           </Badge>
-          <span className={`${mono} block text-xs text-muted-foreground`}>
+          <span
+            className={`${mono} block text-xs text-muted-foreground md:truncate`}
+          >
             {tool.rule}
           </span>
         </td>

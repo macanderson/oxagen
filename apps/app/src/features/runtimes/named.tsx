@@ -27,7 +27,7 @@ export function AgentsCell({ runtime }: { runtime: NamedRuntime }) {
     <ul className="flex flex-col gap-0.5">
       {runtime.agents.map((agent) => (
         <li key={agent.id} data-testid="named-runtime-agent">
-          <span className={mono}>{agent.slug}</span>
+          <span className={`${mono} block md:truncate`}>{agent.slug}</span>
           <Sub>{t(`harness.${agent.harness}`)}</Sub>
         </li>
       ))}
@@ -113,9 +113,9 @@ export function NamedRuntimes({
                 to={routes.runtime(org, ws, runtime.id)}
                 aria-label={t("open", { runtime: runtime.name })}
                 data-touch-target=""
-                className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
               >
-                {runtime.name}
+                <span className="min-w-0 md:truncate">{runtime.name}</span>
               </SafeLink>
               <Sub monoFace>{runtime.slug}</Sub>
             </td>

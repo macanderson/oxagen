@@ -68,7 +68,7 @@ function BeltList({
             >
               {belt.name}
             </SafeLink>
-            <span className="block text-xs text-muted-foreground">
+            <span className="block text-xs text-muted-foreground md:truncate">
               {belt.clonedFrom === null
                 ? t("allTools")
                 : t("clonedFrom", { name: belt.clonedFrom.name })}

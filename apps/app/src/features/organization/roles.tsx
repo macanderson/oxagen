@@ -55,7 +55,7 @@ function Permissions({ role }: { role: Role }) {
   }
   const rest = role.permissions.length - CHIPS;
   return (
-    <span className="flex max-w-[30ch] flex-wrap gap-1">
+    <span className="flex min-w-0 gap-1 max-md:flex-wrap">
       {role.permissions.slice(0, CHIPS).map((permission) => (
         <Badge key={permission} tone="quiet" dot={false} mono>
           {permission}
@@ -159,7 +159,7 @@ export function RolesTab({
           {role.name}
         </span>
         {role.description === null ? null : (
-          <span className="block text-[11.5px] text-dim">
+          <span className="block text-[11.5px] text-dim md:truncate">
             {role.description}
           </span>
         )}
@@ -177,7 +177,7 @@ export function RolesTab({
       <Permissions key="permissions" role={role} />,
       <HeldBy key="held" role={role} />,
       <Origin key="origin" role={role} origin={originOf(role)} />,
-      <div key="actions" className="flex flex-wrap gap-2">
+      <div key="actions" className="flex gap-2 max-md:flex-wrap">
         <RoleEditor
           org={org}
           catalog={catalog.catalog}
