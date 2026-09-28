@@ -31,6 +31,8 @@ Other rules:
 
 - Commit messages: imperative mood, under 72 chars (`Add capability: recall_memory`) — dotted capability names are retired (ADR-025).
 - GitHub ignores negation. "This PR does not close #12" closes #12 on merge, so the `dod` check fails a PR whose body or commit messages carry that phrasing (#3680). Write `Refs #12`, or put the reference in backticks.
+- A commit message closes an issue too, because a squash merge copies it to `main`. If the PR body says `Refs #12`, no commit on the branch may say `Closes #12`, `Fixes #12`, or `Resolves #12`, and the `dod` check fails the PR if one does (#3680). Reword the commit, or write `Closes #12` in the body if the PR does finish the issue.
+- A definition of done may group its boxes under `###` subheadings inside `## Definition of done`. The `dod` check counts every box down to the next `##` heading (#3678).
 - Don't rebase, squash, or cherry-pick to "tidy" shared history — correct, complete, pushed work beats a pretty history.
 - Everything committed must be **functionally complete**: fully wired end-to-end, every layer present, tests passing, no dead code.
 
