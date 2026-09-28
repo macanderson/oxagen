@@ -42,7 +42,7 @@ function row(overrides: Record<string, unknown>) {
 
 const MAIN = row({
   bindingId: "rpb_ffffaaaa",
-  role: "main",
+  role: "steering",
   name: "widgets",
   fullName: "acme/widgets",
   defaultRef: "trunk",
@@ -124,7 +124,7 @@ describe("list_repositories", () => {
     const gitlab = (webhookId: number | null) =>
       row({
         bindingId: "rpb_00000abc",
-        role: "main",
+        role: "steering",
         provider: "gitlab",
         owner: "acme/platform",
         name: "rules",

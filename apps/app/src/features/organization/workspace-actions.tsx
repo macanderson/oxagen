@@ -1,199 +1,41 @@
 "use client";
 // The Workspaces section's three writes (#2964): create a workspace, rename
-// and re-slug one, and archive one. Creating a workspace in the app is what
-// this lane adds to rev1: between the organization's first workspace, which
-// `create_org` makes, and this form, a second one was made through the API,
-// MCP or CLI. Each write reloads the page it changed.
+// one, and archive one. Creating a workspace in the app is what this lane adds
+// to rev1: between the organization's first workspace, which `create_org`
+// makes, and this form, a second one was made through the API, MCP or CLI.
+// Each write reloads the page it changed.
 //
-// A workspace is created with its main repository (MC spec §10.1, §17 M0: a
-// workspace cannot be created without one), so the create form asks for it
-// beside the name, as the design's `newws` does: a select of the repositories
-// the organization's installations reach, and the production branch that
-// `create_workspace` will record for it. The slug is made from the name
-// (`slugFromName`), because the design's form has none. The person names only
-// the repository, never an installation: `create_workspace` finds the GitHub
-// App installation from the owner through the org's GitHub authorization, and
-// refuses with a reason `action-failure.ts` has a sentence for when it cannot.
-// The edit form shows the main repository and branch `list_repositories`
-// reports, read-only, because which repository is main does not change from
-// here (spec §10.1 makes that an org owner's decision).
+// The create form asks for a name only. `create_workspace` makes the
+// workspace's private steering repo itself (lane S1, #4450), so the person
+// picks no repository, and the slug is made from the name (`slugFromName`).
+// The dialog stays open once the write answers, to say where the steering repo
+// stands and to link to the Repositories page, which shows each provisioning
+// step and a retry. The edit form shows the main repository and branch
+// `list_repositories` reports, read-only, because which repository is main does
+// not change from here (spec §10.1 makes that an org owner's decision).
 import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Workspace, WorkspaceFacts } from "@/data/contracts/org";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { inputBase } from "@/ui/control-styles";
 import { Field } from "@/ui/field";
-import { PullRequestLink, useNavigate } from "@/ui/navigation";
+import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import {
   archiveWorkspace,
   createWorkspace,
   editWorkspace,
   type GovernanceChanged,
   type NewWorkspaceDraft,
+  type WorkspaceCreated,
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
 import { note, warn } from "./parts";
-import {
-  type RepositoryChoice,
-  readRepositoryChoices,
-} from "./workspace-reads";
 
-/** The create form's draft: the name, and the main repository as chosen or typed. */
+/** The create form's draft: the name, which is all the form asks for. */
 function newDraftOf(form: FormData): NewWorkspaceDraft {
-  return {
-    name: textValue(form, "name"),
-    mainRepo: textValue(form, "mainRepo"),
-  };
-}
-
-/** What the create dialog knows of the repositories a new workspace can take. */
-type Choices =
-  | { state: "loading" }
-  | { state: "ready"; repositories: readonly RepositoryChoice[] }
-  | { state: "typed" };
-
-/**
- * Main repository and Production branch on the create form (mockup `newws`):
- * a select of the repositories the organization's GitHub App installations
- * reach, and the branch `create_workspace` will record for the one chosen,
- * which is GitHub's default. The list is read when the dialog opens
- * (`readRepositoryChoices`), because it is a live GitHub call. When nothing
- * can be read (no workspace to read through, an installation that refuses),
- * the field falls back to a typed `owner/name`, which the handler resolves the
- * same way.
- */
-function RepositoryFields({
-  org,
-  enterable,
-}: {
-  org: string;
-  enterable: readonly string[];
-}) {
-  const t = useTranslations("organization.actions.fields");
-  const [choices, setChoices] = useState<Choices>(
-    enterable.length === 0 ? { state: "typed" } : { state: "loading" },
-  );
-  const [chosen, setChosen] = useState("");
-  // The slugs as one string, so a parent re-render that hands in an equal
-  // list does not read GitHub again.
-  const key = enterable.join("\n");
-  useEffect(() => {
-    const slugs = key === "" ? [] : key.split("\n");
-    if (slugs.length === 0) return;
-    let live = true;
-    void readRepositoryChoices(org, slugs).then(
-      (read) => {
-        if (!live) return;
-        setChoices(
-          read.ok && read.value.length > 0
-            ? { state: "ready", repositories: read.value }
-            : { state: "typed" },
-        );
-      },
-      () => {
-        if (live) setChoices({ state: "typed" });
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [org, key]);
-
-  if (choices.state === "typed") {
-    return (
-      <>
-        <Field
-          id="create-workspace-main-repo"
-          name="mainRepo"
-          label={t("mainRepo")}
-          hint={t("mainRepoHint")}
-          required
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          className="font-mono"
-        />
-        <UnrecordedField
-          id="create-workspace-branch"
-          label={t("productionBranch")}
-          hint={t("productionBranchCreateHint")}
-        />
-      </>
-    );
-  }
-  const repositories = choices.state === "ready" ? choices.repositories : [];
-  const branch = repositories.find(
-    (repo) => repo.fullName === chosen,
-  )?.defaultBranch;
-  return (
-    <>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <label
-          htmlFor="create-workspace-main-repo"
-          className="text-sm font-medium text-foreground"
-        >
-          {t("mainRepo")}
-        </label>
-        <select
-          id="create-workspace-main-repo"
-          name="mainRepo"
-          required
-          value={chosen}
-          aria-busy={choices.state === "loading" || undefined}
-          aria-describedby="create-workspace-main-repo-hint"
-          data-testid="create-workspace-main-repo"
-          onChange={(event) => {
-            setChosen(event.currentTarget.value);
-          }}
-          className={`${inputBase} max-md:text-base font-mono`}
-        >
-          <option value="">{t("mainRepoChoose")}</option>
-          {repositories.map((repo) => (
-            <option key={repo.fullName} value={repo.fullName}>
-              {repo.fullName}
-            </option>
-          ))}
-        </select>
-        <p
-          id="create-workspace-main-repo-hint"
-          className="text-xs text-muted-foreground"
-        >
-          {t("mainRepoSelectHint")}
-        </p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <label
-          htmlFor="create-workspace-branch"
-          className="text-sm font-medium text-foreground"
-        >
-          {t("productionBranch")}
-        </label>
-        {/* One option: create_workspace takes no branch and records GitHub's
-            default, so the select offers what will be recorded and no more. */}
-        <select
-          id="create-workspace-branch"
-          disabled={branch === undefined}
-          aria-describedby="create-workspace-branch-hint"
-          data-testid="create-workspace-branch"
-          className={`${inputBase} max-md:text-base font-mono`}
-        >
-          <option>
-            {branch === undefined
-              ? t("branchPick")
-              : t("branchDefault", { branch })}
-          </option>
-        </select>
-        <p
-          id="create-workspace-branch-hint"
-          className="text-xs text-muted-foreground"
-        >
-          {t("productionBranchCreateHint")}
-        </p>
-      </div>
-    </>
-  );
+  return { name: textValue(form, "name") };
 }
 
 /**
@@ -210,18 +52,8 @@ function RepositoryFields({
  * this already holds it: the dialog opens for an org Owner or Admin, which is
  * inside the set `set_governance_mode` admits. It is disabled until a mode is
  * picked, so it never sits live over a form that is going to change nothing.
- *
- * `disabled` draws the same select on the create form, where
- * `create_workspace` takes no mode: the mode is set from Edit once the
- * workspace exists.
  */
-function GovernanceField({
-  idPrefix,
-  disabled = false,
-}: {
-  idPrefix: string;
-  disabled?: boolean;
-}) {
+function GovernanceField({ idPrefix }: { idPrefix: string }) {
   const t = useTranslations("organization.actions.governance");
   const [mode, setMode] = useState("");
   const option = (choice: string) =>
@@ -242,7 +74,6 @@ function GovernanceField({
         id={`${idPrefix}-governance`}
         name="mode"
         value={mode}
-        disabled={disabled}
         aria-describedby={`${idPrefix}-governance-about`}
         data-testid={`${idPrefix}-governance`}
         onChange={(event) => {
@@ -261,32 +92,30 @@ function GovernanceField({
         id={`${idPrefix}-governance-about`}
         className="text-xs text-muted-foreground"
       >
-        {disabled ? t("createHint") : t("about")}
+        {t("about")}
       </p>
-      {disabled ? null : (
-        <label
-          data-touch-target=""
-          className="flex min-h-11 items-start gap-2.5 text-sm has-[:disabled]:opacity-50"
-        >
-          <input
-            type="checkbox"
-            className="mt-1"
-            name="applyImmediately"
-            value="yes"
-            disabled={mode === ""}
-            aria-describedby={`${idPrefix}-governance-override-hint`}
-          />
-          <span>
-            <b className="block font-medium">{t("override")}</b>
-            <span
-              id={`${idPrefix}-governance-override-hint`}
-              className="block text-xs text-muted-foreground"
-            >
-              {t("overrideHint")}
-            </span>
+      <label
+        data-touch-target=""
+        className="flex min-h-11 items-start gap-2.5 text-sm has-[:disabled]:opacity-50"
+      >
+        <input
+          type="checkbox"
+          className="mt-1"
+          name="applyImmediately"
+          value="yes"
+          disabled={mode === ""}
+          aria-describedby={`${idPrefix}-governance-override-hint`}
+        />
+        <span>
+          <b className="block font-medium">{t("override")}</b>
+          <span
+            id={`${idPrefix}-governance-override-hint`}
+            className="block text-xs text-muted-foreground"
+          >
+            {t("overrideHint")}
           </span>
-        </label>
-      )}
+        </span>
+      </label>
     </div>
   );
 }
@@ -481,14 +310,49 @@ function GovernanceResult({
   );
 }
 
+/**
+ * What the create dialog shows once `create_workspace` answered: the new
+ * workspace, and where its steering repo stood when the call returned. A
+ * durable job makes the repository, so the usual answer is `provisioning`. The
+ * Repositories page shows each step, and a retry when one stopped.
+ */
+function WorkspaceCreatedPanel({
+  org,
+  created,
+}: {
+  org: string;
+  created: WorkspaceCreated;
+}) {
+  const t = useTranslations("organization.actions.createWorkspace.done");
+  const term = "text-muted-foreground";
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+        <dt className={term}>{t("workspace")}</dt>
+        <dd className="font-medium" data-testid="create-workspace-done-name">
+          {created.name}
+        </dd>
+        <dt className={term}>{t("steeringRepo")}</dt>
+        <dd data-testid="create-workspace-steering-status">
+          {t(`status.${created.steeringRepo}`)}
+        </dd>
+      </dl>
+      <SafeLink
+        to={routes.repositories(org, created.slug)}
+        data-testid="create-workspace-open-repositories"
+        className="font-medium underline"
+      >
+        {t("openRepositories")}
+      </SafeLink>
+    </div>
+  );
+}
+
 export function CreateWorkspace({
   org,
-  enterable = [],
   primary = false,
 }: {
   org: string;
-  /** The live workspaces the viewer may enter, through whose installations the repositories are read. */
-  enterable?: readonly string[];
   /** The header's and the empty state's gold action; the panel's is plain. */
   primary?: boolean;
 }) {
@@ -508,10 +372,15 @@ export function CreateWorkspace({
       testId="create-workspace"
       primary={primary}
       submit={(form) => createWorkspace(org, newDraftOf(form))}
+      done={{
+        close: t("createWorkspace.done.close"),
+        render: (created) => (
+          <WorkspaceCreatedPanel org={org} created={created} />
+        ),
+      }}
       onDone={(created) => {
         // WL-62: the workspace that was just made is where the operator wants to
-        // be, so the write's slug is what the navigation uses — the org page
-        // would leave `createWorkspace`'s answer with no reader.
+        // be, so closing the panel opens it by the slug the write returned.
         navigate.replace(routes.fleet(org, created.slug));
       }}
     >
@@ -520,22 +389,6 @@ export function CreateWorkspace({
         name="name"
         label={tf("name")}
         required
-      />
-      {/* The design asks for the namespace here. create_workspace derives it
-          from the slug, which the action makes from the name
-          (workspace-bootstrap.ts, deriveNamespace), and takes none, so the
-          field says so rather than collecting a value it drops. */}
-      <UnrecordedField
-        id="create-workspace-namespace"
-        label={tf("namespace")}
-        hint={tf("namespaceCreateHint")}
-      />
-      <RepositoryFields org={org} enterable={enterable} />
-      <GovernanceField idPrefix="create-workspace" disabled />
-      <UnrecordedField
-        id="create-workspace-retention"
-        label={tf("retention")}
-        hint={tf("retentionHint")}
       />
     </WriteDialog>
   );

@@ -1,8 +1,8 @@
 // The sentence a refused onboarding write shows. The kernel classified the
 // refusal and put the handler's HandlerError reason in `code` (§3.2). Each
-// reason the bound handlers throw — register_agent, create_enrollment_token,
-// advance_onboarding and bind_main_repository — has its own sentence; any
-// other code is printed as recorded, with no cause attached to it.
+// reason the bound handlers throw (register_agent, create_enrollment_token,
+// and advance_onboarding) has its own sentence. Any other code is printed as
+// recorded, with no cause attached to it.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
@@ -30,12 +30,6 @@ export function useOnboardingFailure(): (failure: OnboardingFailure) => string {
             return t("alreadyUnlocked");
           case "first_frame_required":
             return t("firstFrameRequired");
-          case "github_not_connected":
-            return t("githubNotConnected");
-          case "repository_not_installed":
-            return t("repositoryNotInstalled");
-          case "main_repo_bound":
-            return t("mainRepoBound");
           default:
             return t("refused", { code: failure.code });
         }

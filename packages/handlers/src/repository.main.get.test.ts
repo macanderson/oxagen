@@ -243,10 +243,8 @@ describe("get_main_repository", () => {
     await handler()({}, makeCTX());
     if (!captured) throw new Error("the head read issued no WHERE");
     const query = new PgDialect().sqlToQuery(captured);
-    expect(query.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
-    expect(query.params).toEqual(
-      expect.arrayContaining(["main", "steering"]),
-    );
+    expect(query.sql).toMatch(/"role" in \(\$\d+\)/);
+    expect(query.params).toContain("steering");
   });
 
   it("reports not-connected when the only GitHub connection carries no installation", async () => {

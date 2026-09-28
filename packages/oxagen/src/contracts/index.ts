@@ -301,6 +301,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -953,6 +954,7 @@ export {
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1369,6 +1371,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
+  contextPrMergeWithoutReview,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

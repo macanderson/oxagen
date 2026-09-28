@@ -18,6 +18,13 @@
 // Kind: `create_role` takes no kind. Every custom role is an agent role, held
 // through `assign_agent_role` (`list_iam_roles`, `roleKindSchema`), so the
 // editor shows the kind and does not offer to change it.
+//
+// Merge without review is drawn apart from the permission groups, as its own
+// checkbox with a hint. `pr.merge_without_review` lets the role's holder merge
+// a steering PR without an approval, and the required check still has to
+// pass. The box is live only while the catalogue lists the permission, which
+// it does once Oxagen registers `merge_pr_without_review`. Until then the box
+// is disabled and unchecked, and the editor never adds the permission.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { Permission, Role } from "@/data/contracts/org";
@@ -45,6 +52,9 @@ type EditorMode = "create" | "duplicate" | "edit" | "view";
 
 const label = "text-[12px] font-semibold text-muted-foreground";
 const hint = "text-xs text-muted-foreground";
+
+/** The permission the Merge without review box grants, drawn apart from its group. */
+const MERGE_WITHOUT_REVIEW = "pr.merge_without_review";
 
 /** The editor's opening state for one door. */
 function initial(
@@ -106,7 +116,13 @@ export function RoleEditor({
 
   const isNew = mode === "create" || mode === "duplicate";
   const readOnly = mode === "view";
-  const groups = [...new Set(catalog.map((entry) => entry.group))];
+  const mergeRegistered = catalog.some(
+    (entry) => entry.permission === MERGE_WITHOUT_REVIEW,
+  );
+  const grouped = catalog.filter(
+    (entry) => entry.permission !== MERGE_WITHOUT_REVIEW,
+  );
+  const groups = [...new Set(grouped.map((entry) => entry.group))];
   const title = isNew
     ? t("createTitle")
     : readOnly
@@ -323,7 +339,7 @@ export function RoleEditor({
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
                     {group}
                   </p>
-                  {catalog
+                  {grouped
                     .filter((entry) => entry.group === group)
                     .map((entry) => (
                       <label
@@ -348,6 +364,39 @@ export function RoleEditor({
                     ))}
                 </div>
               ))}
+            </div>
+            <div className="flex min-w-0 flex-col gap-1 border-t border-border pt-2">
+              <label
+                htmlFor={`${id}-merge-without-review`}
+                data-touch-target=""
+                className="flex min-h-8 items-start gap-2 text-[12.5px] max-md:min-h-11"
+              >
+                <input
+                  id={`${id}-merge-without-review`}
+                  type="checkbox"
+                  name="permissions"
+                  value={MERGE_WITHOUT_REVIEW}
+                  data-testid="role-merge-without-review"
+                  checked={
+                    mergeRegistered &&
+                    draft.permissions.has(MERGE_WITHOUT_REVIEW)
+                  }
+                  disabled={readOnly || !mergeRegistered}
+                  aria-describedby={`${id}-merge-without-review-hint`}
+                  onChange={(event) => {
+                    toggle(MERGE_WITHOUT_REVIEW, event.target.checked);
+                  }}
+                  className="mt-0.5 size-4"
+                />
+                <span className="font-semibold">
+                  {t("mergeWithoutReview")}
+                </span>
+              </label>
+              <p id={`${id}-merge-without-review-hint`} className={hint}>
+                {mergeRegistered
+                  ? t("mergeWithoutReviewHint")
+                  : t("mergeWithoutReviewUnavailable")}
+              </p>
             </div>
           </fieldset>
           {!isNew && role !== undefined && role.heldBy > 0 ? (

@@ -1,36 +1,33 @@
 // @vitest-environment jsdom
 // The Workspaces section's writes: create a workspace from the form this lane
 // adds, rename one, and archive one. Each reloads the page it changed; a
-// refusal is named and nothing navigates. Create offers the repositories the
-// organization's installations reach when it can read them, and a typed
-// owner/name when it cannot.
+// refusal is named and nothing navigates. Create asks for a name only, then
+// holds the dialog open to say where the new workspace's steering repo stands
+// and to link to its Repositories page.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const {
-  router,
-  archiveWorkspace,
-  createWorkspace,
-  editWorkspace,
-  readRepositoryChoices,
-} = vi.hoisted(() => ({
-  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-  archiveWorkspace: vi.fn(),
-  createWorkspace: vi.fn(),
-  editWorkspace: vi.fn(),
-  readRepositoryChoices: vi.fn(),
+const { router, archiveWorkspace, createWorkspace, editWorkspace } =
+  vi.hoisted(() => ({
+    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+    archiveWorkspace: vi.fn(),
+    createWorkspace: vi.fn(),
+    editWorkspace: vi.fn(),
+  }));
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
+    <a {...rest}>{children}</a>
+  ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   archiveWorkspace,
   createWorkspace,
   editWorkspace,
-}));
-vi.mock("./workspace-reads", () => ({
-  readRepositoryChoices,
 }));
 
 const { workspaceRow } = await import("./organization.builders");
@@ -47,7 +44,6 @@ beforeEach(() => {
   archiveWorkspace.mockReset();
   createWorkspace.mockReset();
   editWorkspace.mockReset();
-  readRepositoryChoices.mockReset();
 });
 
 afterEach(async () => {
@@ -60,69 +56,21 @@ async function open(name: string, testId: string) {
   return screen.getByTestId(testId);
 }
 
+/** Opens Create a workspace, types the name, and presses Create. */
+async function create(name = "Research") {
+  render(
+    <IntlProvider>
+      <CreateWorkspace org="acme" />
+    </IntlProvider>,
+  );
+  const dialog = await open("Create a workspace", "create-workspace");
+  await userEvent.type(within(dialog).getByLabelText("Name"), name);
+  await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+  return dialog;
+}
+
 describe("CreateWorkspace", () => {
-  // WL-62: the write answers with the new workspace's slug and the navigation
-  // is its only reader — creating a workspace lands the operator in it.
-  // M0 (spec §17): the draft carries the main repository, as typed, so the
-  // action is the one place that splits it.
-  it("sends the name and the main repository, asks for no slug, then navigates to the new workspace's Fleet", async () => {
-    createWorkspace.mockResolvedValue({
-      ok: true,
-      value: { slug: "research" },
-    });
-    render(
-      <IntlProvider>
-        <CreateWorkspace org="acme" />
-      </IntlProvider>,
-    );
-    const dialog = await open("Create a workspace", "create-workspace");
-    // The design's form has no slug: the action makes it from the name.
-    expect(within(dialog).queryByLabelText("Slug")).toBeNull();
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-    await userEvent.type(
-      within(dialog).getByLabelText("Main repository"),
-      "acme/research",
-    );
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
-    );
-    expect(createWorkspace).toHaveBeenCalledWith("acme", {
-      name: "Research",
-      mainRepo: "acme/research",
-    });
-    // With no workspace to read through, nothing asks GitHub.
-    expect(readRepositoryChoices).not.toHaveBeenCalled();
-    expect(router.replace).toHaveBeenCalledWith("/acme/research");
-    // The write leaves its receipt in the Organization frame's live region.
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "The workspace was created. Recorded in the audit record.",
-    );
-  });
-
-  // The person names a repository and nothing else: the hint says the
-  // installation is found from the owner, and no installation picker exists.
-  it("asks for the main repository as owner/name, with the installation rule as its hint", async () => {
-    render(
-      <IntlProvider>
-        <CreateWorkspace org="acme" />
-      </IntlProvider>,
-    );
-    const dialog = await open("Create a workspace", "create-workspace");
-    const field = within(dialog).getByLabelText("Main repository");
-    expect(field).toBeRequired();
-    expect(field).toHaveAccessibleDescription(/owner\/name on GitHub/);
-    expect(field).toHaveAccessibleDescription(
-      /finds the installation from the owner/,
-    );
-    expect(within(dialog).queryByLabelText(/installation/i)).toBeNull();
-  });
-
-  it("draws Production branch, Governance mode and Retention mode, and says which it cannot set yet", async () => {
+  it("asks for the name and nothing else", async () => {
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" primary />
@@ -132,195 +80,101 @@ describe("CreateWorkspace", () => {
       screen.getByRole("button", { name: "Create a workspace" }),
     ).toHaveClass("bg-button-primary-bg");
     const dialog = await open("Create a workspace", "create-workspace");
-    expect(within(dialog).getByLabelText("Production branch")).toBeDisabled();
-    const mode = within(dialog).getByLabelText("Governance mode");
-    expect(mode).toBeDisabled();
-    expect(mode).toHaveAccessibleDescription(
-      /Create a workspace takes no governance mode yet/,
-    );
-    expect(
-      within(mode)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual([
-      "Leave unchanged",
-      "solo · The author may merge their own.",
-      "team · A code-owner review is required.",
-      "regulated · A named approver from a role must approve, and the promotion ledger is hash-chained.",
-    ]);
-    expect(within(dialog).getByLabelText("Retention mode")).toHaveValue(
-      "not recorded",
-    );
-    // The design asks for a namespace; create_workspace derives it, so the
-    // field is read-only and says so.
-    const namespace = within(dialog).getByLabelText("Namespace");
-    expect(namespace).toBeDisabled();
-    expect(namespace).toHaveAccessibleDescription(
-      /derives it from the name when it creates the workspace/,
-    );
+    expect(within(dialog).getByLabelText("Name")).toBeRequired();
+    // Oxagen makes the steering repo, so the form offers no repository, and
+    // the action makes the slug from the name.
+    expect(within(dialog).getAllByRole("textbox")).toHaveLength(1);
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
+    expect(within(dialog).queryByRole("checkbox")).toBeNull();
+    for (const gone of [
+      "Main repository",
+      "Production branch",
+      "Governance mode",
+      "Retention mode",
+      "Namespace",
+      "Slug",
+    ]) {
+      expect(within(dialog).queryByLabelText(gone)).toBeNull();
+    }
   });
 
-  it("offers the repositories the installations reach, and the branch create_workspace records for the one chosen", async () => {
-    readRepositoryChoices.mockResolvedValue({
+  // WL-62: the write answers with the new workspace's slug, and closing the
+  // panel lands the operator in it.
+  it("sends the name alone, holds the dialog open on the result, and opens the new workspace's Fleet on Done", async () => {
+    createWorkspace.mockResolvedValue({
       ok: true,
-      value: [
-        { fullName: "acme/data-platform", defaultBranch: "main" },
-        { fullName: "acme/warehouse", defaultBranch: "release" },
-      ],
+      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
     });
-    createWorkspace.mockResolvedValue({ ok: true, value: { slug: "data" } });
-    render(
-      <IntlProvider>
-        <CreateWorkspace org="acme" enterable={["core-platform", "growth"]} />
-      </IntlProvider>,
+    const dialog = await create();
+    expect(createWorkspace).toHaveBeenCalledWith("acme", { name: "Research" });
+    const done = await within(dialog).findByTestId("create-workspace-done");
+    expect(within(done).getByTestId("create-workspace-done-name")).toHaveTextContent(
+      "Research",
     );
-    const dialog = await open("Create a workspace", "create-workspace");
-    expect(readRepositoryChoices).toHaveBeenCalledWith("acme", [
-      "core-platform",
-      "growth",
-    ]);
-    const repo = await within(dialog).findByRole("combobox", {
-      name: "Main repository",
-    });
-    await within(repo).findByRole("option", { name: "acme/warehouse" });
+    expect(done).toHaveTextContent("Steering repo");
     expect(
-      within(repo)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["Choose a repository", "acme/data-platform", "acme/warehouse"]);
-    expect(repo).toHaveAccessibleDescription(
-      "Required at creation. A workspace without a main repo cannot exist.",
-    );
-    const branch = within(dialog).getByLabelText("Production branch");
-    expect(branch).toBeDisabled();
-    await userEvent.selectOptions(repo, "acme/warehouse");
-    expect(branch).toBeEnabled();
-    expect(branch).toHaveTextContent("release — GitHub’s default, suggested");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Data");
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
-    );
-    expect(createWorkspace).toHaveBeenCalledWith("acme", {
-      name: "Data",
-      mainRepo: "acme/warehouse",
-    });
-  });
-
-  it("falls back to a typed owner/name when no installation can be read (negative)", async () => {
-    readRepositoryChoices.mockResolvedValue({
-      ok: false,
-      reason: "unavailable",
-      code: "installation_unreachable",
-    });
+      within(done).getByRole("link", { name: "Open repositories" }),
+    ).toHaveAttribute("href", "/acme/research/repositories");
+    // The form gave way to the result: no Create is left to press twice.
+    expect(within(dialog).queryByRole("button", { name: "Create" })).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+    // The write leaves its receipt in the Organization frame's live region.
     render(
       <IntlProvider>
-        <CreateWorkspace org="acme" enterable={["core-platform"]} />
+        <Receipts />
       </IntlProvider>,
     );
-    const dialog = await open("Create a workspace", "create-workspace");
-    const field = await within(dialog).findByRole("textbox", {
-      name: "Main repository",
-    });
-    expect(field).toHaveAccessibleDescription(/owner\/name on GitHub/);
+    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      "The workspace was created. Recorded in the audit record.",
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    expect(router.replace).toHaveBeenCalledWith("/acme/research");
   });
 
   it.each([
+    ["provisioning", "Oxagen is creating the private repository now."],
     [
-      "repository_unparsable",
-      {
-        ok: false,
-        reason: "invalid",
-        code: "repository_unparsable",
-        field: "mainRepo",
-      },
-      "Write it as owner/name.",
+      "ready",
+      "The private repository is created and bound to this workspace.",
     ],
+    ["failed", "A step stopped before the repository was ready."],
     [
-      "invalid_input on mainRepo.name",
-      {
-        ok: false,
-        reason: "invalid",
-        code: "invalid_input",
-        field: "mainRepo.name",
-      },
-      "Write it as owner/name.",
-    ],
-    [
-      "github_not_authorized",
-      { ok: false, reason: "conflict", code: "github_not_authorized" },
-      "has not connected GitHub",
-    ],
-    [
-      "installation_unreachable",
-      { ok: false, reason: "not_found", code: "installation_unreachable" },
-      "not installed on that owner",
-    ],
-    [
-      "repository_not_installed",
-      { ok: false, reason: "not_found", code: "repository_not_installed" },
-      "cannot see that repository",
-    ],
-    [
-      "main_repo_claimed",
-      { ok: false, reason: "conflict", code: "main_repo_claimed" },
-      "Another workspace already steers by that repository.",
-    ],
-    [
-      "repository_linked_elsewhere",
-      { ok: false, reason: "conflict", code: "repository_linked_elsewhere" },
-      "Another workspace has linked that repository",
+      "blocked",
+      "An organization owner has to act first, such as authorizing Oxagen again.",
     ],
   ])(
-    "names a main repository refused as %s and creates nothing (negative)",
-    async (_reason, refusal, sentence) => {
-      createWorkspace.mockResolvedValue(refusal);
-      render(
-        <IntlProvider>
-          <CreateWorkspace org="acme" />
-        </IntlProvider>,
-      );
-      const dialog = await open("Create a workspace", "create-workspace");
-      await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-      await userEvent.type(
-        within(dialog).getByLabelText("Main repository"),
-        "acme/research",
-      );
-      await userEvent.click(
-        within(dialog).getByRole("button", { name: "Create" }),
-      );
+    "reads a steering repo that is %s in one sentence, with the Repositories link",
+    async (status, sentence) => {
+      createWorkspace.mockResolvedValue({
+        ok: true,
+        value: { slug: "research", name: "Research", steeringRepo: status },
+      });
+      const dialog = await create();
+      const done = await within(dialog).findByTestId("create-workspace-done");
       expect(
-        await screen.findByTestId("create-workspace-failure"),
+        within(done).getByTestId("create-workspace-steering-status"),
       ).toHaveTextContent(sentence);
-      expect(router.replace).not.toHaveBeenCalled();
+      expect(
+        within(done).getByTestId("create-workspace-open-repositories"),
+      ).toHaveAttribute("href", "/acme/research/repositories");
     },
   );
 
-  // A name that makes no valid slug is still "refused as invalid": the repository
-  // sentence names one field and must not be shown for another.
-  it("keeps the generic invalid sentence for a field other than the repository (negative)", async () => {
+  // A name that makes no valid slug is refused as invalid, and the generic
+  // sentence is the one shown.
+  it("keeps the generic invalid sentence for a name that makes no slug (negative)", async () => {
     createWorkspace.mockResolvedValue({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
-      field: "slug",
+      field: "name",
     });
-    render(
-      <IntlProvider>
-        <CreateWorkspace org="acme" />
-      </IntlProvider>,
-    );
-    const dialog = await open("Create a workspace", "create-workspace");
-    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
-    await userEvent.type(
-      within(dialog).getByLabelText("Main repository"),
-      "acme/research",
-    );
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
-    );
+    await create();
     expect(
       await screen.findByTestId("create-workspace-failure"),
     ).toHaveTextContent("The request was refused as invalid.");
+    expect(screen.queryByTestId("create-workspace-done")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("names an address already taken, as the name's, and creates nothing (negative)", async () => {
@@ -329,28 +183,23 @@ describe("CreateWorkspace", () => {
       reason: "conflict",
       code: "slug_taken",
     });
-    render(
-      <IntlProvider>
-        <CreateWorkspace org="acme" />
-      </IntlProvider>,
-    );
-    const dialog = await open("Create a workspace", "create-workspace");
-    await userEvent.type(
-      within(dialog).getByLabelText("Name"),
-      "Core platform",
-    );
-    await userEvent.type(
-      within(dialog).getByLabelText("Main repository"),
-      "acme/research",
-    );
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Create" }),
-    );
+    await create("Core platform");
     expect(
       await screen.findByTestId("create-workspace-failure"),
     ).toHaveTextContent(
       "A workspace in this organization already has that address. Pick another name.",
     );
+    expect(screen.queryByTestId("create-workspace-done")).toBeNull();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("names a write that threw and stays on the form (negative)", async () => {
+    createWorkspace.mockRejectedValue(new Error("network"));
+    await create();
+    expect(
+      await screen.findByTestId("create-workspace-failure"),
+    ).not.toBeEmptyDOMElement();
+    expect(screen.queryByTestId("create-workspace-done")).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
   });
 });

@@ -123,6 +123,7 @@ import "./contracts/connection.update";
 import "./contracts/context.governance_mode.set";
 import "./contracts/context.pr.get";
 import "./contracts/context.pr.merge";
+import "./contracts/context.pr.merge_without_review";
 import "./contracts/context.pr.open";
 import "./contracts/context.proposal.create";
 import "./contracts/context.proposal.dismiss";

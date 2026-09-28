@@ -1,5 +1,5 @@
 {
-  "generatedCount": 404,
+  "generatedCount": 405,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2927,6 +2927,16 @@
     },
     {
       "name": "merge_context_pr",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "merge_pr_without_review",
       "domain": "context",
       "surfaces": [
         "api"

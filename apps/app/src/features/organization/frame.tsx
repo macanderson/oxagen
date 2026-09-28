@@ -144,7 +144,6 @@ export async function OrganizationFrame({
         ctx={ctx}
         pendingIds={members.value.invitations.map((i) => i.id)}
         twoFactorRequired={twoFactor.required}
-        enterable={enterable}
         avatarUrl={workspaces.value.orgAvatarUrl}
       />
       <OrganizationTabs
