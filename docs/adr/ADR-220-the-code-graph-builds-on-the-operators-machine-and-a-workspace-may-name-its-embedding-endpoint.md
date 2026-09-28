@@ -7,7 +7,7 @@
   acceptance.
 - **Amends:** ADR-214 decision 4 and ADR-194 decision 2, for the code graph
   only. ADR-016, whose local path returns under tachod.
-- **Related:** issue #4657, ADR-042 (tenant data planes), ADR-053 §2
+- **Related:** issues #4657 and #4662, ADR-042 (tenant data planes), ADR-053 §2
   (organization model keys), ADR-101 (four harnesses), ADR-187 (the gateways),
   ADR-211 (no HTTP+SSE), and the code graph spec version 1.2
   (`codegraph-spec.html` and `codegraph-build-plan.md` in
@@ -63,10 +63,13 @@ into the shared store. A local graph has to avoid that path.
    changes included. The result is named by its pin: the `HEAD` commit, a
    SHA-256 digest of the changed paths and contents, and the base commit its
    cloud facts come from (decision 1). It writes
-   `~/.oxagen/codegraph/<repo-id>/graph.db` and nothing else. No local build
-   writes a cloud table, and the shared graph comes only from ADR-214's server
-   builds. ADR-214 decision 1 stands: Oxagen keeps no graph of a feature
-   branch or a worktree, and the local graph is not a graph Oxagen keeps.
+   `~/.oxagen/codegraph/<repo-id>/graph.db` and nothing else. A local build
+   stores no code, card, card hash, or vector in the cloud. Its embedding
+   vectors stay in `graph.db` (decision 6). For a local build, the embedding
+   route records only the token count Oxagen bills in the Oxagen mode.
+   The shared graph comes only from ADR-214's server builds. ADR-214
+   decision 1 stands: Oxagen keeps no graph of a feature branch or a
+   worktree, and the local graph is not a graph Oxagen keeps.
 3. **Tachod serves it.** Tachod supervises the `codegraph` binary as the MCP
    server `codegraph`, over stdio or streamable HTTP on loopback, never
    HTTP+SSE (ADR-211). An HTTP call carries the token in
@@ -111,24 +114,39 @@ into the shared store. A local graph has to avoid that path.
    URL passes the same public-URL check as today's `baseUrl`. A loopback
    endpoint (`--embed-url http://127.0.0.1:11434/v1/embeddings`) is set only
    on the machine and is never stored in Oxagen.
-6. **Cards are embedded once per embedding space.** An embedding space is
-   named by its endpoint URL, model, and dimensions. The Oxagen mode is one
-   space, and two workspaces that name the same endpoint and model share
-   another. In the Oxagen mode and with a stored endpoint, builds send cards
-   through the code graph's embedding route, and a local build reaches it
-   through tachod. That route runs in the code graph's query service until
-   ADR-187 is accepted, then moves to the cloud gateway. Before it calls a
-   provider, it looks up each card hash in the organization's `embeddings`
-   table for that space. A card is embedded once per space, whichever machine
-   or commit produced it. Every card passes ADR-214 decision 5's secret
-   scanner before it leaves the machine. A loopback endpoint never uses the
-   route. The local host calls it directly and caches its vectors by card
-   hash in `graph.db`, and on that machine it overrides the workspace's mode.
-   A question the local server forwards to the cloud then searches by name
-   and text, because the cloud holds no vectors in the loopback space, and
-   the answer says so. A build in the custom mode with no stored credential
-   still publishes, without vectors, and marks the copy
-   `embeddings: missing_credential`.
+6. **Cloud builds embed a card once per embedding space, and a local build
+   caches its vectors only on its machine.** An embedding space is named by
+   its endpoint URL, model, and dimensions. The Oxagen mode is one space, and
+   two workspaces that name the same endpoint and model share another. In the
+   Oxagen mode and with a stored endpoint, builds send cards through the code
+   graph's embedding route, and a local build reaches it through tachod. That
+   route runs in the code graph's query service until ADR-187 is accepted,
+   then moves to the cloud gateway. Before it calls a provider, it looks up
+   each card hash in the organization's `embeddings` table for that space.
+   Every card passes ADR-214 decision 5's secret scanner before it leaves the
+   machine.
+   - **A cloud build writes the table.** When the caller is the cloud build
+     host, the route stores each new vector and card hash in the
+     `embeddings` table. A card from committed code is embedded once per
+     space, whichever commit produced it.
+   - **A local build only reads the table.** For a call that arrives through
+     tachod under an operator's identity, the route returns a hit from the
+     table, sends a miss to the provider, and returns the new vector without
+     storing it or the card. The local host caches every vector it receives
+     by card hash in `graph.db` and stores it nowhere else. The route decides
+     by the caller's identity, not by a flag the client sends, so an
+     operator's machine cannot write vectors for any card hash into the
+     organization's cache. The lookup sends a card hash, and the card text
+     already reaches the route on its way to the provider, so the lookup
+     discloses nothing the embedding call does not.
+   - **A loopback endpoint never uses the route.** The local host calls it
+     directly and caches its vectors by card hash in `graph.db`, and on that
+     machine it overrides the workspace's mode. A question the local server
+     forwards to the cloud then searches by name and text, because the cloud
+     holds no vectors in the loopback space, and the answer says so.
+
+   A build in the custom mode with no stored credential still publishes,
+   without vectors, and marks the copy `embeddings: missing_credential`.
 7. **Every commit on the default branch gets its own copy, and every release
    is kept.** Commits on the default branch build in order. A squash merge
    lands one commit, and a rebase merge lands several, each of which builds.
@@ -163,7 +181,12 @@ into the shared store. A local graph has to avoid that path.
 - Local and cloud answers can differ. Every answer carries `source`, and a
   local answer carries its pin, so a caller can tell which graph answered.
 - In the custom mode, the customer's provider sets the quality and retention
-  of embeddings. Oxagen stores the vectors and card hashes.
+  of embeddings. Oxagen stores the vectors and card hashes from cloud builds.
+- A local build pays for every card no cloud build has embedded. Two
+  operators who embed the same card from uncommitted work each pay for it,
+  because neither build writes the organization's cache. Once the card is
+  committed and a cloud build embeds it, later local builds read it from the
+  table.
 - The `codegraph` binary ships the Stella extraction crate to customer
   machines. ADR-214 records a commercial license for Oxagen to link that
   crate. Mac confirmed on 2026-09-28 that the grant covers shipping the crate
@@ -187,6 +210,12 @@ into the shared store. A local graph has to avoid that path.
 
 - **Push local graphs to the cloud.** That is ADR-016's retired path, and it
   brings back the July defects ADR-214 lists.
+- **Let a local build write the organization's `embeddings` table.** Two
+  machines would stop paying twice for one uncommitted card. The table would
+  then hold vectors of code Oxagen keeps no graph of, which breaks
+  decision 2, and an operator's machine could write a vector for any card
+  hash into the cache every build in the organization reads. Mac ruled on
+  2026-09-28, in #4662, that local embeddings are cached locally only.
 - **Build locally with a separate, lighter pipeline.** Two pipelines drift. A
   symbol would get one ID locally and another in the cloud, and no local answer
   could be checked against a copy.
