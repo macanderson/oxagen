@@ -7,7 +7,7 @@
 // order (it folds `import public` into the plain imports). scanHeader reads
 // them from the file's top-level statements with protobufjs's own tokenizer.
 import protobuf from "protobufjs";
-import type { Root } from "protobufjs";
+import type { IParserResult, Root } from "protobufjs";
 import { GrpcImportError } from "./errors";
 import { messageOf } from "./limits";
 
@@ -35,7 +35,7 @@ export interface ParsedProto {
 
 /** The file parsed, or a refusal that quotes protobufjs's error with its line. */
 export function parseProto(name: string, text: string): ParsedProto {
-  let parsed: protobuf.IParserResult;
+  let parsed: IParserResult;
   try {
     parsed = protobuf.parse(text, new protobuf.Root(), { keepCase: true, alternateCommentMode: true });
   } catch (error) {
