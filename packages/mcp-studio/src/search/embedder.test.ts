@@ -16,7 +16,7 @@ function voyage(overrides: Partial<HttpEmbedderOptions> = {}): HttpEmbedderOptio
   };
 }
 
-function data(vectors: ReadonlyArray<readonly number[]>): unknown {
+function data(vectors: ReadonlyArray<readonly unknown[]>): unknown {
   return { object: "list", data: vectors.map((embedding, index) => ({ object: "embedding", index, embedding })) };
 }
 
