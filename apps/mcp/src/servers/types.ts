@@ -83,6 +83,13 @@ export interface ApprovalRequest {
   tool: string;
   /** The tool's locked version. An approval answers for this version only. */
   version: number;
+  /**
+   * The published steering version the call was decided under. An approval
+   * answers for this publication only, since a publish can change the
+   * server's environments, credentials, or policies without a new tool
+   * version. Null only when nothing is published, which serves no tool.
+   */
+  publication: { repository: string; version: number } | null;
   server: string;
   args: Record<string, unknown>;
   /** The approval rules that parked the call. */

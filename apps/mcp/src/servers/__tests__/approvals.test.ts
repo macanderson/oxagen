@@ -18,6 +18,7 @@ function request(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
     agent: AGENT,
     tool: "billing__create_refund",
     version: 1,
+    publication: { repository: "finops-steering", version: 4 },
     server: "billing",
     args: { charge: "ch_1", amount: 100 },
     reasons: ["irreversible.approval"],
@@ -27,7 +28,7 @@ function request(overrides: Partial<ApprovalRequest> = {}): ApprovalRequest {
 }
 
 describe("servedResumeKey", () => {
-  it("covers the run, the machine, the agent, the tool at its version, and the arguments", () => {
+  it("covers the run, the machine, the agent, the tool at its version, the publication, and the arguments", () => {
     const key = servedResumeKey(request());
     expect(key.startsWith("served:")).toBe(true);
     expect(JSON.parse(key.slice("served:".length))).toEqual({
@@ -37,6 +38,7 @@ describe("servedResumeKey", () => {
       agent: AGENT.name,
       tool: "billing__create_refund",
       version: 1,
+      publication: { repository: "finops-steering", version: 4 },
       args: { charge: "ch_1", amount: 100 },
     });
   });
@@ -52,5 +54,10 @@ describe("servedResumeKey", () => {
 
   it("opens a new approval once a publish changes the tool", () => {
     expect(servedResumeKey(request({ version: 2 }))).not.toBe(servedResumeKey(request()));
+  });
+
+  it("opens a new approval after any new publication, even when the tool is unchanged", () => {
+    const republished = request({ publication: { repository: "finops-steering", version: 5 } });
+    expect(servedResumeKey(republished)).not.toBe(servedResumeKey(request()));
   });
 });

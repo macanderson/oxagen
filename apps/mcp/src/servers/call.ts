@@ -215,6 +215,8 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
         agent,
         tool: tool.name,
         version: tool.version,
+        publication:
+          view.published === null ? null : { repository: view.published.repository, version: view.published.version },
         server: server.name,
         args,
         reasons: verdict.reasons,

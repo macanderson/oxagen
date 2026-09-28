@@ -192,6 +192,7 @@ describe("callServed policy decisions", () => {
         agent: AGENT,
         tool: "billing__create_refund",
         version: 1,
+        publication: { repository: "finops-steering", version: 1 },
         server: "billing",
         args: REFUND,
         reasons: ["irreversible.approval"],
