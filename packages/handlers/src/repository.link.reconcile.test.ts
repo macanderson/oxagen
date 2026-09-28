@@ -31,7 +31,8 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   };
 });
 
-vi.mock("./repository.main.bind", () => ({
+vi.mock("./repository.binding-write", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository.binding-write")>()),
   githubMainRepositoryDeps: mocks.githubDeps,
   workspaceRepositoriesLock: mocks.lock,
 }));
@@ -54,7 +55,7 @@ import {
   type LinkChange,
   reconcileWorkspaceLinks,
 } from "./repository.link.reconcile";
-import type { MainRepositoryDeps } from "./repository.main.bind";
+import type { MainRepositoryDeps } from "./repository.binding-write";
 import { githubRepoRef, splitRepoRef } from "./repository.workspace-toml";
 
 const ORG = "00000000-0000-4000-8000-000000000001";

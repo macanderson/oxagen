@@ -31,19 +31,17 @@ import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { logger } from "./logger";
 import {
+  assertGlobalClaimIsKnowable,
+  type MainRepositoryDeps,
+  repositoryHeadConflict,
   type WrittenRepositoryHead,
+  workspaceRepositoriesLock,
   writeRepositoryHead,
 } from "./repository.binding-write";
 import {
   GITHUB_PROVIDER,
   resolveWorkspaceGithubInstallation,
 } from "./repository.github-connection";
-import {
-  assertGlobalClaimIsKnowable,
-  type MainRepositoryDeps,
-  repositoryHeadConflict,
-  workspaceRepositoriesLock,
-} from "./repository.main.bind";
 
 type Scope = { orgId: string; workspaceId: string };
 

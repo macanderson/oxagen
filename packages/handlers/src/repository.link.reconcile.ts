@@ -30,13 +30,13 @@ import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray } from "drizzle-orm";
 import type { SyncFinding } from "./context.steering.sync.plan";
 import { logger } from "./logger";
-import { GITHUB_PROVIDER } from "./repository.github-connection";
-import { linkRepositoryHead } from "./repository.link.write";
 import {
   githubMainRepositoryDeps,
   type MainRepositoryDeps,
   workspaceRepositoriesLock,
-} from "./repository.main.bind";
+} from "./repository.binding-write";
+import { GITHUB_PROVIDER } from "./repository.github-connection";
+import { linkRepositoryHead } from "./repository.link.write";
 import {
   GITHUB_HOST,
   githubRepoRef,

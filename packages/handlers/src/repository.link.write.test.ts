@@ -20,7 +20,7 @@ import {
   resolveLinkTarget,
   writeLinkedHead,
 } from "./repository.link.write";
-import type { MainRepositoryDeps } from "./repository.main.bind";
+import type { MainRepositoryDeps } from "./repository.binding-write";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
