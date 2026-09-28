@@ -3113,6 +3113,337 @@ type Messages = {
       };
     };
   };
+  mcpStudio: {
+    title: string;
+    eyebrow: string;
+    lede: string;
+    loading: string;
+    notRecorded: string;
+    providerLink: string;
+    boardFailed: string;
+    truncated: string;
+    missing: {
+      title: string;
+      body: string;
+      back: string;
+    };
+    off: {
+      badge: string;
+      flippedBy: string;
+      reason: string;
+      clearedBy: string;
+      unrecorded: string;
+    };
+    tabs: {
+      label: string;
+      atLeast: string;
+      tools: string;
+      connection: string;
+      try: string;
+      changes: string;
+    };
+    tools: {
+      title: string;
+      missing: string;
+      readOnly: string;
+      refused: string;
+      unclassified: string;
+      suggested: string;
+      offBadge: string;
+      search: string;
+      rows: string;
+      noMatch: string;
+      importNamed: string;
+      range: string;
+      previous: string;
+      next: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      filters: {
+        state: string;
+        risk: string;
+        sideEffect: string;
+      };
+      states: {
+        imported: string;
+        available: string;
+        stagedImport: string;
+        stagedRemove: string;
+      };
+      columns: {
+        import: string;
+        tool: string;
+        state: string;
+        risk: string;
+        sideEffect: string;
+        tokens: string;
+        off: string;
+      };
+      budget: {
+        title: string;
+        missing: string;
+        over: string;
+        unmeasured: string;
+        used: string;
+        meter: string;
+        before: string;
+      };
+    };
+    panel: {
+      classification: string;
+      unclassified: string;
+      risk: string;
+      sideEffect: string;
+      egress: string;
+      impacts: string;
+      none: string;
+      staged: string;
+      suggested: string;
+      basis: {
+        source_hint: string;
+        annotations: string;
+        http_method: string;
+        graphql_operation: string;
+        grpc_idempotency: string;
+        fail_safe: string;
+      };
+      importFirst: string;
+      choose: string;
+      confirm: string;
+      stage: string;
+      description: string;
+      draftHint: string;
+      draft: string;
+      draftNotBuilt: string;
+      draftFailed: string;
+      shaping: string;
+      shapingMissing: string;
+      hidden: string;
+      fixed: string;
+      returns: string;
+      whole: string;
+      selection: string;
+      server: string;
+      serverMissing: string;
+      annotations: string;
+      feedback: string;
+      feedbackMissing: string;
+      calls: string;
+      schemaRejections: string;
+      errorResults: string;
+      retries: string;
+      notes: string;
+      refused: string;
+      off: string;
+      offNone: string;
+    };
+    connection: {
+      cloud: string;
+      none: string;
+      noMachines: string;
+      facts: {
+        url: string;
+        transport: string;
+        network: string;
+        registry: string;
+        server: string;
+        version: string;
+        packageType: string;
+        machines: string;
+        env: string;
+        command: string;
+        from: string;
+        repo: string;
+        path: string;
+        ref: string;
+        type: string;
+        endpoint: string;
+        auth: string;
+        status: string;
+      };
+      from: {
+        repository: string;
+        url: string;
+        upload: string;
+        introspection: string;
+        reflection: string;
+      };
+      sourceTypes: {
+        remote: string;
+        registry: string;
+        local: string;
+        openapi: string;
+        graphql: string;
+        grpc: string;
+      };
+      source: {
+        title: string;
+        missing: string;
+      };
+      environments: {
+        title: string;
+        agentsUnset: string;
+        agentsCall: string;
+        sandbox: string;
+        agentBadge: string;
+        noCredential: string;
+        columns: {
+          name: string;
+          url: string;
+          network: string;
+          credential: string;
+          agents: string;
+        };
+      };
+      auth: {
+        title: string;
+        mode: string;
+        scheme: string;
+        credential: string;
+        replace: string;
+        note: string;
+        modes: {
+          none: string;
+          service: string;
+          operatorOauth: string;
+        };
+      };
+      machines: {
+        title: string;
+        body: string;
+        none: string;
+      };
+      sync: {
+        title: string;
+        schedule: string;
+        lastAt: string;
+        never: string;
+        schedules: {
+          onChange: string;
+          daily: string;
+          manual: string;
+        };
+      };
+    };
+    try: {
+      title: string;
+      environment: string;
+      sandboxOption: string;
+      tool: string;
+      liveBadge: string;
+      live: string;
+      args: string;
+      argsHint: string;
+      badJson: string;
+      run: string;
+      running: string;
+      credentialNote: string;
+      request: string;
+      raw: string;
+      shaped: string;
+      save: string;
+      saved: string;
+      tooLarge: string;
+      badRecord: string;
+      stripped: string;
+      notBuilt: string;
+      denied: string;
+      failed: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+    };
+    changes: {
+      empty: {
+        title: string;
+        body: string;
+      };
+      edits: {
+        title: string;
+        unstage: string;
+        unstageNamed: string;
+      };
+      ops: {
+        import: string;
+        remove: string;
+        classify: string;
+        describe: string;
+        test: string;
+      };
+      files: {
+        title: string;
+        folderMissing: string;
+      };
+      surface: {
+        title: string;
+        tokens: string;
+        to: string;
+        none: string;
+        tokensUnmeasured: string;
+        tokensAdded: string;
+        tokensRemoved: string;
+        columns: {
+          change: string;
+          tool: string;
+          detail: string;
+        };
+        kinds: {
+          added: string;
+          removed: string;
+          changed: string;
+        };
+        fields: {
+          classification: string;
+          description: string;
+        };
+      };
+      findings: {
+        title: string;
+        missing: string;
+        none: string;
+        server: string;
+        columns: {
+          level: string;
+          rule: string;
+          tool: string;
+          message: string;
+          fix: string;
+        };
+        levels: {
+          error: string;
+          warning: string;
+          info: string;
+        };
+      };
+      pr: {
+        title: string;
+        body: string;
+        open: string;
+        opening: string;
+        discard: string;
+        readOnly: string;
+        opened: string;
+        notBuilt: string;
+        failed: string;
+        updated: string;
+        conflict: string;
+        conflictDropped: string;
+        folderMissing: string;
+        sourceMissing: string;
+      };
+      review: {
+        title: string;
+        imported: string;
+        removed: string;
+        reclassified: string;
+        tokens: string;
+        tokensValue: string;
+      };
+    };
+  };
   onboarding: {
     errors: {
       orgNameRequired: string;

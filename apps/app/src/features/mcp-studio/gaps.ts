@@ -12,8 +12,8 @@ const STUDIO_GAPS = {
   record: 4678,
   /** Try it and Draft run through capabilities that PR2 of this lane adds. */
   capability: 4678,
-  /** Opening a steering PR from the Studio draft: lane M11, not started. */
-  steeringPr: 4678,
+  /** Saving the draft and opening a steering PR from it: lane M11 (PR #4688). */
+  steeringPr: 4686,
   /** Findings on the draft: lane M5's lint. */
   findings: 4672,
   /** Writing a credential: lane M8. */

@@ -14,7 +14,7 @@ import {
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import { type StudioTool, sumTokens } from "./model";
+import { type StudioSourceType, type StudioTool, sumTokens } from "./model";
 
 /** The part of a server view the draft reads: its tools, as the table lists them. */
 type DraftView = {
@@ -58,22 +58,35 @@ const DraftOpShape = z.discriminatedUnion("kind", [
 ]);
 
 export type DraftOp = z.infer<typeof DraftOpShape>;
-export type DraftOpKind = DraftOp["kind"];
 
 const DraftShape = z.array(DraftOpShape).max(2_000);
+
+/**
+ * A draft as the tab stores it: its edits, and the stored revision they were
+ * last saved over. Revision 0 is a draft never saved, which is also what a
+ * save sends to refuse overwriting a draft someone else stored.
+ */
+export type StoredDraft = { revision: number; ops: readonly DraftOp[] };
+
+const StoredDraftShape = z.object({
+  revision: z.number().int().min(0),
+  ops: DraftShape,
+});
+
+const EMPTY_DRAFT: StoredDraft = { revision: 0, ops: [] };
 
 /**
  * A stored draft, or an empty one when the text is absent, is not JSON, or
  * does not parse. A draft is a convenience, so a bad one is dropped rather
  * than shown half-read.
  */
-export function parseDraft(raw: string | null): readonly DraftOp[] {
-  if (raw === null) return [];
+export function parseStoredDraft(raw: string | null): StoredDraft {
+  if (raw === null) return EMPTY_DRAFT;
   try {
-    const parsed = DraftShape.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : [];
+    const parsed = StoredDraftShape.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : EMPTY_DRAFT;
   } catch {
-    return [];
+    return EMPTY_DRAFT;
   }
 }
 
@@ -91,7 +104,7 @@ const OPPOSITE: Readonly<Record<"import" | "remove", "import" | "remove">> = {
  * - A second classification or description of one tool replaces the first.
  * - Each saved test is its own edit.
  */
-export function stage(
+function stage(
   ops: readonly DraftOp[],
   op: DraftOp,
 ): readonly DraftOp[] {
@@ -109,6 +122,21 @@ export function stage(
   const at = ops.findIndex((o) => o.kind === op.kind && o.tool === op.tool);
   if (at === -1) return [...ops, op];
   return ops.map((o, index) => (index === at ? op : o));
+}
+
+/**
+ * The draft with one more edit, or null when the result breaks the draft's
+ * shape: a test whose result is too long, an impact tag the registry
+ * refuses, or more edits than a draft holds. A stored draft that does not
+ * parse is dropped whole (parseStoredDraft), so an edit that would spoil it is
+ * refused here instead.
+ */
+export function stageChecked(
+  ops: readonly DraftOp[],
+  op: DraftOp,
+): readonly DraftOp[] | null {
+  const next = stage(ops, op);
+  return DraftShape.safeParse(next).success ? next : null;
 }
 
 /** The draft without the edit at `index`. */
@@ -196,7 +224,7 @@ export function draftLines(
 }
 
 /** The saved tests the draft adds. */
-export function draftTests(
+function draftTests(
   ops: readonly DraftOp[],
 ): readonly Extract<DraftOp, { kind: "test" }>[] {
   return ops.filter(
@@ -205,7 +233,7 @@ export function draftTests(
 }
 
 /** The files in the server's folder the steering PR would change. */
-export type DraftFile = "tools.toml" | "tools.lock.json" | "tests/calls.jsonl";
+type DraftFile = "tools.toml" | "tools.lock.json" | "tests/calls.jsonl";
 
 export function draftFiles(
   view: DraftView,
@@ -241,4 +269,133 @@ export function draftTokens(
     before: sumTokens(view.tools.filter((tool) => tool.imported)),
     after: sumTokens(view.tools.filter((tool) => importedAfter(tool, ops))),
   };
+}
+
+/** A saved test's JSON fields, as Try it recorded them. */
+type TestRecord = Pick<
+  Extract<DraftOp, { kind: "test" }>,
+  "request" | "raw" | "shaped"
+>;
+
+/**
+ * Headers that carry a credential. A saved test holding one is refused at
+ * save (M5's CREDENTIAL_REQUEST_HEADERS and CREDENTIAL_RESPONSE_HEADERS),
+ * so the page strips all four from both sides before it stages the test.
+ */
+const CREDENTIAL_HEADERS: ReadonlySet<string> = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    const value: unknown = JSON.parse(text);
+    return { ok: true, value };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * One recorded request or response without its credential headers: the text
+ * as it came when there were none, or null when it is not a JSON object.
+ * Only an HTTP exchange has a top-level `headers` record, and one is never
+ * added to a shape that has none.
+ */
+function withoutCredentials(text: string, removed: Set<string>): string | null {
+  const parsed = parseJson(text);
+  if (!parsed.ok || !isRecord(parsed.value)) return null;
+  const { headers } = parsed.value;
+  if (!isRecord(headers)) return text;
+  const kept: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (CREDENTIAL_HEADERS.has(name.toLowerCase())) {
+      removed.add(name.toLowerCase());
+    } else {
+      kept[name] = value;
+    }
+  }
+  if (Object.keys(kept).length === Object.keys(headers).length) return text;
+  return JSON.stringify({ ...parsed.value, headers: kept });
+}
+
+/**
+ * A Try it result made fit to save as a test. The request and the raw
+ * result must each be one recorded exchange, a JSON object, and the shaped
+ * result must be JSON. Any credential header is removed and named in
+ * `removed`, lowercased, so the page can say what it dropped.
+ */
+export function scrubTest(
+  record: TestRecord,
+):
+  | ({ ok: true; removed: readonly string[] } & TestRecord)
+  | { ok: false } {
+  const removed = new Set<string>();
+  const request = withoutCredentials(record.request, removed);
+  const raw = withoutCredentials(record.raw, removed);
+  if (request === null || raw === null || !parseJson(record.shaped).ok) {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    request,
+    raw,
+    shaped: record.shaped,
+    removed: [...removed].sort(),
+  };
+}
+
+/**
+ * Whether Review needs the server's definition with the draft: whenever the
+ * draft imports a tool, and always for a gRPC server, because the lock does
+ * not carry the gRPC descriptor set (lane M11's rule for Review).
+ */
+export function sourceRequired(
+  ops: readonly DraftOp[],
+  sourceType: StudioSourceType | null,
+): boolean {
+  return sourceType === "grpc" || ops.some((op) => op.kind === "import");
+}
+
+function sameTest(
+  a: Extract<DraftOp, { kind: "test" }>,
+  b: DraftOp,
+): boolean {
+  return (
+    b.kind === "test" &&
+    a.tool === b.tool &&
+    a.environment === b.environment &&
+    a.args === b.args &&
+    a.request === b.request &&
+    a.raw === b.raw &&
+    a.shaped === b.shaped
+  );
+}
+
+/**
+ * The stored draft with this tab's edits staged on top, for a save refused
+ * because someone saved the draft since this tab last did. Each local edit
+ * is staged as if made again, so an edit to the same tool replaces the stored
+ * one and a test already stored is not added twice. `dropped` counts the
+ * edits that would have broken the draft's shape and were left out.
+ */
+export function mergeDrafts(
+  stored: readonly DraftOp[],
+  local: readonly DraftOp[],
+): { ops: readonly DraftOp[]; dropped: number } {
+  let ops = stored;
+  let dropped = 0;
+  for (const op of local) {
+    if (op.kind === "test" && ops.some((o) => sameTest(op, o))) continue;
+    const next = stageChecked(ops, op);
+    if (next === null) dropped += 1;
+    else ops = next;
+  }
+  return { ops, dropped };
 }

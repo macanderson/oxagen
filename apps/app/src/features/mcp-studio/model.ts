@@ -25,7 +25,7 @@ import type {
 } from "@/data/contracts/tools";
 
 /** Why Studio suggested a classification (`suggest`'s `SuggestionBasis`). */
-export type SuggestionBasis =
+type SuggestionBasis =
   | "source_hint"
   | "annotations"
   | "http_method"
@@ -45,7 +45,7 @@ export type StudioClassification = {
 };
 
 /** How the gateway shapes a call and its result (tools.toml's shaping keys). */
-export type StudioShaping = {
+type StudioShaping = {
   /** Inputs that leave the schema, so the model never sees them. */
   hide: readonly string[];
   /** Inputs the gateway fills with a fixed value. */
@@ -57,7 +57,7 @@ export type StudioShaping = {
 };
 
 /** What agents' calls said about a tool over the recorded window. */
-export type StudioFeedback = {
+type StudioFeedback = {
   calls: number;
   schemaRejections: number;
   errorResults: number;
@@ -67,7 +67,7 @@ export type StudioFeedback = {
 };
 
 /** One tool as the Studio record holds it. */
-export type StudioRecordTool = {
+type StudioRecordTool = {
   /** The tools.toml key, or the upstream name for a tool nobody imported. */
   name: string;
   imported: boolean;
@@ -85,7 +85,7 @@ export type StudioRecordTool = {
 };
 
 /** The package types the local gateway runs (`REGISTRY_TYPES`). */
-export type StudioRegistryType = "npm" | "pypi" | "oci" | "nuget";
+type StudioRegistryType = "npm" | "pypi" | "oci" | "nuget";
 
 /** server.toml's `[source]`, one shape per source type. */
 export type StudioSource =
@@ -187,6 +187,12 @@ export type StudioTool = {
 export type StudioServerView = {
   server: McpServer;
   record: StudioRecord | null;
+  /**
+   * The server's name in the steering repo: its folder under tools/servers/.
+   * A draft and a steering PR are keyed by it. Null until the record names
+   * the folder, which is also when Review cannot run.
+   */
+  serverName: string | null;
   tools: readonly StudioTool[];
   /** The record's environments, or the one `default` a server without any has. */
   environments: readonly StudioEnvironment[];
@@ -273,7 +279,7 @@ function environmentsOf(
  * none or two answers null; the schema check refuses it, and the page says so
  * rather than guessing.
  */
-export function agentEnvironmentOf(
+function agentEnvironmentOf(
   environments: readonly StudioEnvironment[],
 ): string | null {
   const [only] = environments;
@@ -281,6 +287,27 @@ export function agentEnvironmentOf(
   const marked = environments.filter((env) => env.sandbox);
   const [sandbox] = marked;
   return marked.length === 1 && sandbox !== undefined ? sandbox.name : null;
+}
+
+/**
+ * The Shared contract's server name rule and the name built-in tools take,
+ * restated from @oxagen/oxagen's steering-repo/names.ts. The app's layer
+ * test (src/test/arch/layers.ts) admits no import from that module here.
+ */
+const SERVER_NAME_PATTERN = /^[a-z][a-z0-9_]{0,23}$/;
+const BUILTIN_SERVER = "builtin";
+
+/**
+ * The server's name in the steering repo, read from the record's folder
+ * (`tools/servers/stripe` is `stripe`). Null when there is no record, or when
+ * the folder's last part breaks the Shared contract's server name rule or is
+ * the name built-in tools use, since no draft could be saved under it.
+ */
+function studioServerName(record: StudioRecord | null): string | null {
+  if (record === null) return null;
+  const name = record.folder.replace(/\/+$/, "").split("/").at(-1) ?? "";
+  if (!SERVER_NAME_PATTERN.test(name) || name === BUILTIN_SERVER) return null;
+  return name;
 }
 
 /**
@@ -354,6 +381,7 @@ export function buildStudioView({
   return {
     server,
     record,
+    serverName: studioServerName(record),
     tools,
     environments,
     agentEnvironment: agentEnvironmentOf(environments),
@@ -375,15 +403,4 @@ export function sumTokens(
     sum += tool.tokens;
   }
   return sum;
-}
-
-/**
- * The definition tokens the imported tools add to every model call. The sum
- * of each tool's measured tokens when every imported tool has one; otherwise
- * the server's own measurement from its latest listing, which may be null.
- */
-export function definitionTokens(view: StudioServerView): number | null {
-  const imported = view.tools.filter((tool) => tool.imported);
-  const sum = imported.length > 0 ? sumTokens(imported) : null;
-  return sum ?? view.server.contextTokens;
 }
