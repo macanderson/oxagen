@@ -21,6 +21,8 @@ vi.mock("@oxagen/database", () => ({
   schema: { tachoSessions: {}, tachoSessionFiles: {}, agentRuns: {} },
   withSystemDb: vi.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
 }));
+// Spread the real module so the schema's relations() still loads; only the
+// query builders the store calls are faked.
 vi.mock("drizzle-orm", async (importOriginal) => ({
   ...(await importOriginal<typeof import("drizzle-orm")>()),
   and: vi.fn(),

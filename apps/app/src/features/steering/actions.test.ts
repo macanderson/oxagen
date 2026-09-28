@@ -187,7 +187,7 @@ describe("mergePrWithoutReview", () => {
     );
   });
 
-  it("returns a caller without the capability as denied (negative)", async () => {
+  it("returns a caller without the permission as denied (negative)", async () => {
     invoke.mockRejectedValue(
       refused("forbidden", "merge_without_review_not_held"),
     );

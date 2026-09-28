@@ -190,11 +190,13 @@ export async function forgetMemory(
     : result;
 }
 
-// The steering PR writes the platform has not registered yet (#4518). Each
-// one is a local contract under the name the platform will register, so the
+// The steering PR writes the platform has not registered yet (#4518):
+// approve_context_pr, drop_memory_record and restore_managed_block. Each one
+// is a local contract under the name the platform will register, so the
 // kernel answers `unavailable` with code `tool_not_registered` today, and the
 // same call reaches the handler, unchanged, once the capability lands. The
-// schemas are the proposed shapes. The platform contract replaces each one.
+// schemas are the proposed shapes. The platform contract replaces each one,
+// as merge_pr_without_review's did (#4528).
 const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
 
 const approveContextPrContract = {
@@ -237,10 +239,9 @@ export async function approveContextPr(
 }
 
 /**
- * Merge a steering PR that holds no approval (ADR-213). The handler allows
- * this to an org or workspace owner, or to a member holding
- * `merge_pr_without_review`, and refuses on every other ground
- * merge_context_pr refuses. It takes merge_context_pr's input and output.
+ * Merge a steering PR that holds no approval. The merge queue allows this to
+ * an org or workspace owner, or to a member holding
+ * `merge_pr_without_review`. It takes the same input as merge_context_pr.
  */
 export async function mergePrWithoutReview(
   org: string,

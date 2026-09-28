@@ -576,6 +576,70 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     ).rejects.toMatchObject({ reason: "proposal_checks_failed" });
   });
 
+  it("refuses a write while a merge claim newer than the cutoff stands, and applies one once the claim is older or cleared", async () => {
+    const p = await propose({ lineageId: `${lineage}.claim` });
+    const claimedAt = new Date("2026-09-27T12:00:00Z");
+    await inScope(() =>
+      store.updateProposal(
+        p.id,
+        { status: "checks_passed", mergeClaimedAt: claimedAt },
+        ["proposed"],
+      ),
+    );
+    const before = new Date(claimedAt.getTime() - 1000);
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_running" },
+          ["checks_passed"],
+          { noClaimSince: before },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "merge_in_progress" });
+    // The status check comes first: a write from the wrong status names it.
+    await expect(
+      inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { noClaimSince: before },
+        ),
+      ),
+    ).rejects.toMatchObject({ reason: "proposal_checks_passed" });
+    expect(
+      await inScope(() => store.findProposal(scope, p.publicId)),
+    ).toMatchObject({ status: "checks_passed", mergeClaimedAt: claimedAt });
+
+    // A claim as old as the cutoff has lapsed.
+    expect(
+      await inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_running" },
+          ["checks_passed"],
+          { noClaimSince: claimedAt },
+        ),
+      ),
+    ).toMatchObject({ status: "checks_running", mergeClaimedAt: claimedAt });
+
+    // A cleared claim blocks nothing.
+    await inScope(() =>
+      store.updateProposal(p.id, { mergeClaimedAt: null }, ["checks_running"]),
+    );
+    expect(
+      await inScope(() =>
+        store.updateProposal(
+          p.id,
+          { status: "checks_passed" },
+          ["checks_running"],
+          { noClaimSince: new Date() },
+        ),
+      ),
+    ).toMatchObject({ status: "checks_passed", mergeClaimedAt: null });
+  });
+
   it("appends once per content hash and reads the first back on a repeat", async () => {
     const values = {
       orgId,

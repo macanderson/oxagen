@@ -27,6 +27,7 @@ import {
 } from "./shared";
 import { spendWithNoOutcome } from "./spend-with-no-outcome";
 import { spinLoops } from "./spin-loops";
+import { standingContext } from "./standing-context";
 import { unpagedResults } from "./unpaged-results";
 
 export * from "./shared";
@@ -63,6 +64,7 @@ export const DETECTORS: readonly Detector[] = [
   spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
+  standingContext,
   modelClassFit,
   repeatedInstructions,
 ];
