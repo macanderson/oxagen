@@ -537,8 +537,19 @@ and only that bot user merges. That protection needs GitLab Premium.
 
 The GitLab webhook route (`apps/api/src/routes/v1/gitlab-webhook.ts`) asks for a steering repo
 health read on a push to `main`, on a merge request with a new head, and on a project or
-membership event that names the project. Provisioning registers no project hook on a GitLab steering repo yet (#4562), so today the
-10-minute sweep finds drift on GitLab.
+membership event that names the project.
+
+Provisioning registers one project hook on each GitLab steering project in its `register_webhook`
+step (#4562). The hook posts push and merge request events to
+`/webhooks/gitlab/steering/<workspace|organization>/<id>` on `OXAGEN_API_URL`, with SSL
+verification on. Its token is an HMAC of the scope and the project id under `BETTER_AUTH_SECRET`
+(`packages/handlers/src/lib/steering-hook.ts`), so one scope's token fails on every other hook. The
+receiver (`packages/handlers/src/gitlab.steering-webhook.ts`) checks the token against the project
+that the scope's steering repo names, and answers 401 when it does not match. It asks for a health
+read on a push to `main`. For a workspace, it also asks for a repository sync (ADR-184) on a push to
+`main` or a merge. A rerun of provisioning writes the current token onto the same hook. When GitLab
+refuses the hook's URL, as GitLab.com does for a localhost `OXAGEN_API_URL`, the step logs a
+warning and finishes. The 10-minute sweep then finds drift until a later run registers the hook.
 
 ---
 
