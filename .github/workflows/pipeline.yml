@@ -63,6 +63,10 @@ concurrency:
   # covered by anything. The per-commit group above is why that can no longer
   # happen on main; pull requests keep the old behaviour, where superseding is
   # what you want.
+  #
+  # A pull request branch pushed faster than its run finishes gets only
+  # cancelled runs, and a cancelled required check is not a pass.
+  # ci-superseded.yml reports that state on the pull request (ADR-218, #3257).
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -229,7 +233,17 @@ jobs:
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
 
+      # `id: install` lets every check after "Lint and typecheck" run when an
+      # earlier check failed, but not when the install itself failed (#3428).
+      # Each of those steps carries
+      #   if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+      # A bare always() would run the checks against a missing node_modules and
+      # bury the install error under a page of unrelated failures. The job
+      # still fails: a failed step's conclusion stands whatever runs after it.
+      # tools/scripts/check-checks-job-continues.mjs (in check:contracts) holds
+      # this shape.
       - uses: ./.github/actions/pnpm-install
+        id: install
 
       - uses: ./.github/actions/turbo-cache
 
@@ -240,7 +254,14 @@ jobs:
           # processes far beyond the 2-core runner's memory; repeated exit-137
           # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
           # Three concurrent tasks bounds peak RSS while keeping the cores busy.
-          pnpm turbo run lint typecheck --concurrency=3 $TURBO_FILTER
+          #
+          # --continue (#3428): turbo otherwise stops at the first failing
+          # task, so a lint error in one package hid a type error in another
+          # until the next CI cycle. PR #3385 paid three cycles that way on
+          # 2026-09-19. --continue runs every task and names every failure.
+          # Turbo still exits non-zero if any task failed. The unit job's
+          # coverage step does the same for the same reason.
+          pnpm turbo run lint typecheck --concurrency=3 --continue $TURBO_FILTER
 
       # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
       # is reachable from a production entry and every dependency is imported.
@@ -248,15 +269,18 @@ jobs:
       # apps/app/knip-baseline.json: a finding outside the baseline and a
       # baseline entry knip no longer reports both fail this step.
       - name: knip production mode (apps/app)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm --filter @oxagen/app exec knip --production --strict
 
       # INV-12 (apps/app/ARCHITECTURE.md §4): src/i18n/messages.d.ts types every
       # t() key from messages/*.json; a catalog changed without regenerating it
       # fails here.
       - name: Message catalog types are current (apps/app)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm --filter @oxagen/app check:messages
 
       - name: Manifest, contracts, env invariants
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           # actions/checkout on a pull_request event checks out GitHub's
           # synthetic merge ref, so HEAD here is a merge commit, not the PR
@@ -266,7 +290,19 @@ jobs:
           # event, where db-lint-migrations.ts's own HEAD default is already
           # correct.
           DB_LINT_HEAD_REF: ${{ github.event.pull_request.head.sha }}
-        run: pnpm check:manifest && pnpm check:contracts && pnpm env:check && pnpm db:lint-migrations && pnpm check:db-migrate-script && pnpm schema:manifest:check && pnpm check:inngest-senders && pnpm docs:architecture:check
+        # run-checks.mjs runs all eight and fails if any failed, naming each
+        # failure in its summary. The `&&` chain it replaced stopped at the
+        # first, so one failure hid the rest until the next cycle (#3428).
+        run: >-
+          node tools/scripts/run-checks.mjs
+          check:manifest
+          check:contracts
+          env:check
+          db:lint-migrations
+          check:db-migrate-script
+          schema:manifest:check
+          check:inngest-senders
+          docs:architecture:check
 
       # Unconditional, and that is the whole point. The affected-package gate
       # (`turbo … --filter=…[<base sha>]`) selects a package only when it or one
@@ -277,6 +313,7 @@ jobs:
       # that adds an unaudited handler (#2526). Running it here costs seconds and
       # does not reintroduce the dependency.
       - name: SOC2 audit coverage (runs on every PR, not only compliance ones)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:audit-coverage
 
       # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
@@ -286,6 +323,7 @@ jobs:
       # apps/app/capability-ui-parity-baseline.json and must SHRINK (never grow)
       # as Phases 1-6 add each page's proof.
       - name: UI capability parity (strict ratchet)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:ui-parity --strict
 
       # The prose gate for the two customer-facing sites. It existed as a
@@ -295,6 +333,7 @@ jobs:
       # why the retired-line entries in check-prose.mjs would never have fired:
       # a gate nobody runs is a comment.
       - name: Prose gate (oxagen.sh and docs.oxagen.sh)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:prose
 
       # Advisory (#3237): a squash merge applies a branch's diff against its
@@ -307,6 +346,7 @@ jobs:
       # computation needs; the pull-request branch above already fetched
       # origin/main.
       - name: Stale merge base (advisory)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: node tools/scripts/check-stale-merge-base.mjs
 
       # `Org-only sentinel reads` (check-org-sentinel-reads.mjs) stood here and
@@ -604,6 +644,14 @@ jobs:
           else
             pnpm turbo run test:coverage --filter=@oxagen/$LANE
           fi
+
+      # apps/app's coverage report must name only apps/app/src files that
+      # exist. On 2026-09-19 it counted ~80 retired-app files at 0% and failed
+      # the floor while every test passed (#3431). reportOnFailure in
+      # apps/app/vitest.config.ts keeps the report present for this read.
+      - name: Coverage report names only apps/app source
+        if: ${{ !cancelled() && matrix.lane == 'app' && steps.scope.outputs.run == 'true' }}
+        run: node tools/scripts/check-coverage-scope.mjs apps/app
 
   # The required status check. The ruleset on main requires `test`, and
   # migration-gate, deploy-web and deploy-node need it, so it keeps the name

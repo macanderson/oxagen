@@ -20,10 +20,37 @@
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
 // (`turbo run typecheck --filter=...[origin/main]`).
-import { existsSync, realpathSync, writeFileSync, rmSync } from "node:fs";
+//
+// Route files. `apps/app`'s pages type their props with Next's generated
+// global `PageProps<"/[org]/audit">`, declared only in the gitignored
+// `.next/types/routes.d.ts`. A fresh clone or worktree has no `.next`, so every
+// commit that staged a route file failed here with TS2304 while CI was green
+// (#3403). The hook now does what the package's own typecheck does: when the
+// owning package's `typecheck` script runs `next typegen` (today only
+// `apps/app`) and `.next/types/routes.d.ts` is missing, it runs
+// `pnpm exec next typegen` in that package once, then adds `next-env.d.ts` and
+// `.next/types/routes.d.ts` to the temp config's `files` (the package's
+// `exclude` hides `.next` from `include`), and no other generated file, so the
+// staged program is never stricter than the package's own. It never regenerates
+// types that are already there, and it generates nothing when no staged file
+// belongs to such a package. Route files are then checked like any other
+// staged file, so a real type error in one still fails the commit. The
+// decisions live in `tools/scripts/lib/typecheck-staged-plan.mjs`.
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
+import {
+  generatedDeclarations,
+  needsTypegen,
+  stagedConfig,
+} from "./lib/typecheck-staged-plan.mjs";
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/;
 // Root-level tooling config files (vitest.config.ts, tailwind.config.ts,
@@ -95,41 +122,50 @@ for (const file of files) {
   groups.get(tsconfig).push(abs);
 }
 
+// The package.json beside a tsconfig, or an empty object when there is none.
+function packageJsonOf(pkgDir) {
+  const path = join(pkgDir, "package.json");
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+}
+
 let failed = false;
 for (const [tsconfig, absFiles] of groups) {
   const pkgDir = dirname(tsconfig);
+  const pkgJson = packageJsonOf(pkgDir);
+
+  if (needsTypegen(pkgDir, pkgJson, existsSync)) {
+    process.stdout.write(
+      `typecheck-staged: generating Next route types for ${relative(repoRoot, pkgDir)} (missing .next/types/routes.d.ts)\n`,
+    );
+    const gen = spawnSync("pnpm", ["exec", "next", "typegen"], {
+      cwd: pkgDir,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+    if (gen.status !== 0) {
+      // Say that the files were not checked, rather than let tsc report a
+      // wall of TS2304 that reads like the staged change is broken.
+      process.stderr.write(
+        `typecheck-staged: \`next typegen\` failed in ${relative(repoRoot, pkgDir)}, so its staged files were not typechecked.\n`,
+      );
+      failed = true;
+      continue;
+    }
+  }
+
   // Temp config beside the real one so extends/types/paths resolve identically.
   const tempPath = join(pkgDir, `tsconfig.staged-${process.pid}.json`);
+  const declarations = generatedDeclarations(pkgDir, pkgJson, {
+    exists: existsSync,
+  });
   writeFileSync(
     tempPath,
-    JSON.stringify({
-      extends: "./tsconfig.json",
-      // `declaration` off, always. This hook typechecks; it never emits. With
-      // `declaration: true` (tsconfig.base sets it, and only some packages
-      // override it) tsc additionally reports declaration-emit PORTABILITY
-      // diagnostics — chiefly TS2883, "the inferred type of X cannot be named
-      // without a reference to <some type> ... A type annotation is necessary."
-      // Whether a type is nameable depends on what else is in the program, and
-      // this config narrows the program to the staged files, so the same source
-      // that is clean under the package's real `include` reports TS2883 here.
-      // A merge stages every incoming file, which is how one ordinary merge
-      // commit produced ~40 of these against apps/app_deprecated while
-      // `turbo run typecheck --filter=@oxagen/app-deprecated` was green — a
-      // hook that fails open, because the way past it is `--no-verify`, which
-      // skips the format, lint and atlas checks too. Declaration portability
-      // is a property of the real build and CI typechecks the real build.
-      compilerOptions: {
-        noEmit: true,
-        declaration: false,
-        declarationMap: false,
-      },
-      files: absFiles.map((f) => relative(pkgDir, f)),
-      // Load only ambient declaration files (next-env.d.ts, src/types/*.d.ts,
-      // etc.) on top of `files` — NOT the whole source tree. Carries the global
-      // module declarations + augmentations that side-effect imports and global
-      // type extensions depend on, without re-typechecking every package file.
-      include: ["**/*.d.ts"],
-    }),
+    JSON.stringify(
+      stagedConfig(
+        absFiles.map((f) => relative(pkgDir, f)),
+        declarations,
+      ),
+    ),
   );
   try {
     const result = spawnSync(tsc, ["-p", tempPath], { stdio: "inherit" });
