@@ -1140,6 +1140,7 @@ export function runSource(reads: RunReads) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

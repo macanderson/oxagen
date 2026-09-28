@@ -658,10 +658,6 @@
     "steeringRepo": {
       "heading": "Steering repo",
       "loading": "Reading the steering repo…",
-      "unavailable": {
-        "body": "No capability answers the steering repo read yet, so this panel shows no state.",
-        "capability": "The read needs <code>{capability}</code>."
-      },
       "card": {
         "repository": "Repository",
         "notCreated": "Not created yet",

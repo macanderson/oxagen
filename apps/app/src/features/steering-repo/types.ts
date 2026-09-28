@@ -3,6 +3,9 @@
 // `@oxagen/oxagen/contracts/*` (INV-03), so the step list and the health states
 // mirror packages/handlers/src/steering_repo.provision.ts and
 // packages/oxagen/src/steering-repo/health.ts. `types.test.ts` pins the copies.
+// `SteeringRepoView` is the app's name for what `get_steering_repo` answers:
+// ./read assigns the port's record to it, so the compiler checks the two agree.
+import type { Read } from "@/data/read";
 
 /** The provisioning steps, in the order the job runs them. */
 export const STEERING_REPO_STEPS = [
@@ -21,6 +24,10 @@ type SteeringRepoStatus = "provisioning" | "ready" | "failed" | "blocked";
 /** The error code of a step that needs an owner to authorize Oxagen Steering again. */
 export const STEERING_REAUTHORIZE = "steering_reauthorize";
 
+/**
+ * @internal Exported for types.test.ts, which pins it to the platform's list.
+ * The app uses it only for `RepoHealth`.
+ */
 export const REPO_HEALTH_STATES = [
   "healthy",
   "drifted",
@@ -61,10 +68,11 @@ export type SteeringRepoView = {
 };
 
 /**
- * What the steering repo read answers. `not_backed` names the capability the
- * read needs while no lane has registered it: the page says so, and no kernel
- * call is made, because an unregistered call reports to error tracking.
+ * What the steering repo read answers: the view, or the failed `Read` that
+ * `get_steering_repo` returned (denied, pending approval, or an error). The
+ * card and onboarding draw the failure with `ReadFailure`. The health banner
+ * draws nothing.
  */
 export type SteeringRepoRead =
   | { kind: "ok"; view: SteeringRepoView }
-  | { kind: "not_backed"; capability: string };
+  | { kind: "failed"; failure: Exclude<Read<unknown>, { ok: true }> };
