@@ -49,6 +49,10 @@ import {
 } from "./registry";
 import type { RepositoryRemote } from "./git-facts";
 import type { SessionSkills } from "./session-skills";
+import type {
+  MemoryRecall,
+  RecalledMemory,
+} from "./memory-capture/memory-recall";
 import {
   notePolicyDenial,
   notePrompt,
@@ -151,6 +155,15 @@ export interface HookHandlerDeps {
    * `tacho-hook`, no hook touches a skills folder.
    */
   skills?: SessionSkills;
+  /**
+   * Ask the control plane for the memories most relevant to a prompt
+   * (`createMemoryRecall` in `./memory-capture/memory-recall`). A live prompt
+   * of a harness that reads a prompt answer's context gets them after the
+   * operator's messages, within `ADDITIONAL_CONTEXT_MAX_CHARS`. It resolves
+   * with none on any failure or past its timeout. Absent, as in `tacho-hook`,
+   * no prompt recalls anything.
+   */
+  recallMemories?: MemoryRecall;
 }
 
 export interface HookReplay {
@@ -862,6 +875,38 @@ function promptText(input: HookInput): string | undefined {
   return typeof userInput === "string" ? userInput : undefined;
 }
 
+/** What heads the memories a prompt's answer hands the agent. */
+export const RECALL_HEADING =
+  "Memories Oxagen recalled for this prompt, most relevant first:";
+
+/**
+ * The recalled memories as one block of a prompt's answer, with how many it
+ * holds, or undefined when none fits. `used` is how many characters the
+ * answer already carries. Memories go in their order, one line each with its
+ * whitespace collapsed. One that does not fit is left out, and a shorter one
+ * after it may still go.
+ */
+function recallContext(
+  memories: readonly RecalledMemory[],
+  used: number,
+): { text: string; count: number } | undefined {
+  const room =
+    ADDITIONAL_CONTEXT_MAX_CHARS -
+    used -
+    (used > 0 ? CONTEXT_JOINER.length : 0);
+  let text = RECALL_HEADING;
+  let count = 0;
+  for (const memory of memories) {
+    const statement = memory.statement.replace(/\s+/g, " ").trim();
+    if (statement.length === 0) continue;
+    const line = `\n- ${statement}`;
+    if (text.length + line.length > room) continue;
+    text += line;
+    count += 1;
+  }
+  return count > 0 ? { text, count } : undefined;
+}
+
 /**
  * The harness whose skills folder a session reads, or undefined for a custom
  * agent (`tacho hook --agent`), which reads none. The registry records a
@@ -1132,6 +1177,29 @@ async function routeHook(
         deliversMessages(record.harness, input.hook_event_name)
           ? drainMessages(record, deps, events, notice?.length ?? 0)
           : [];
+      const delivered = [
+        ...(notice !== undefined ? [notice] : []),
+        ...messages.map((m) => m.text),
+      ];
+      // The memories most relevant to this prompt (#4458), after the
+      // operator's messages, in what room the answer has left. Only a live
+      // prompt whose answer the harness reads asks, so a replay, Stella, and
+      // Cursor never wait on the control plane for text nobody would read.
+      // The daemon keeps no repository name to send: the remote it reads
+      // holds digests and a name, and the owner and host stay on the machine.
+      const recalled =
+        block === undefined &&
+        replay === undefined &&
+        deps.recallMemories !== undefined &&
+        deliversMessages(record.harness, input.hook_event_name)
+          ? recallContext(
+              await deps.recallMemories({
+                repository: null,
+                text: promptText(input) ?? "",
+              }),
+              delivered.join(CONTEXT_JOINER).length,
+            )
+          : undefined;
       // A person prompting supersedes a resume's continuation.
       if (block === undefined) record.control.resumeOwed = undefined;
       // Only a prompt the agent received can correct it.
@@ -1140,6 +1208,15 @@ async function routeHook(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
+            ...(recalled !== undefined
+              ? {
+                  attrs: {
+                    ...draft.attrs,
+                    "oxagen.recall_digest": digestText(recalled.text),
+                    "oxagen.recalled_memories": String(recalled.count),
+                  },
+                }
+              : {}),
             body: {
               ...draft.body,
               policy_decision: block === undefined ? "allow" : "deny",
@@ -1159,8 +1236,8 @@ async function routeHook(
         };
       }
       const context = [
-        ...(notice !== undefined ? [notice] : []),
-        ...messages.map((m) => m.text),
+        ...delivered,
+        ...(recalled !== undefined ? [recalled.text] : []),
       ];
       return {
         events,
