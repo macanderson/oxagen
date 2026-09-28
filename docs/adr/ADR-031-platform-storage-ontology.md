@@ -1,6 +1,6 @@
 # ADR-031: Platform Storage Ontology — a drift-aware, machine-readable self-model of the platform's storage layer
 
-- **Status:** Accepted (Phase 1); Proposed (Phases 2–4). Amended by ADR-214:
+- **Status:** Accepted (Phase 1); Proposed (Phases 2–4). Amended by ADR-216:
   the manifest no longer commits `contentHash` or a per-store `tableCount`.
   Readers compute both, and the manifest version is 2.
 - **Date:** 2026-07-13

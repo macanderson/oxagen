@@ -8,7 +8,7 @@
  * merge two branches of it in a real git repository, without loading the
  * real contracts or running the generator.
  *
- * The output holds no value derived from the whole capability set (ADR-214).
+ * The output holds no value derived from the whole capability set (ADR-216).
  * `_index.json` once carried `generatedCount` and `README.md` once carried
  * `**N capabilities** across M domains.` and a `- **domain** (N): a, b, c`
  * line per domain. Every branch that added a capability rewrote those lines,
@@ -96,7 +96,7 @@ export function renderSchemaDocs(
   }
 
   // No `generatedCount`: it is `capabilities.length`, and a committed copy of
-  // it is a line every capability-adding branch rewrites (ADR-214).
+  // it is a line every capability-adding branch rewrites (ADR-216).
   files.set(
     "_index.json",
     JSON.stringify({ capabilities: index }, null, 2) + "\n",
@@ -127,7 +127,7 @@ function renderReadme(caps: readonly CapabilityDocSource[]): string {
     `(produces/consumes/chainHints), and chat render component. Do not edit by hand.`,
     ``,
     `This page gives no count. A count is a line that every branch adding a`,
-    `capability rewrites, so two such branches always conflicted on it (ADR-214).`,
+    `capability rewrites, so two such branches always conflicted on it (ADR-216).`,
     `\`_index.json\` lists every capability for a machine to count.`,
   ];
   for (const [domain, names] of [...byDomain.entries()].sort((a, b) =>

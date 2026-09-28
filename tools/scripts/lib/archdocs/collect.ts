@@ -39,7 +39,7 @@ export interface ManifestTable {
 }
 /**
  * The storage manifest as the atlas reads it. `contentHash` and each store's
- * `tableCount` are not in the committed file (ADR-214); `collectManifest`
+ * `tableCount` are not in the committed file (ADR-216); `collectManifest`
  * computes them when it reads it.
  */
 export interface StorageManifest {
@@ -214,7 +214,7 @@ export function collectWorkspace(root: string): WorkspacePackage[] {
 
 /**
  * Read the committed manifest and compute the two values it no longer
- * commits (ADR-214). The file is canonical JSON kept current by
+ * commits (ADR-216). The file is canonical JSON kept current by
  * `pnpm schema:manifest:check`, so the sha256 of its bytes is the content hash
  * `pnpm schema:manifest` prints.
  */

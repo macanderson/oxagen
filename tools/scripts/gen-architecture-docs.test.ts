@@ -697,7 +697,7 @@ describe("collectors", () => {
     ]);
   });
 
-  it("computes the manifest's content hash and per-store table counts, which the file no longer commits (ADR-214)", () => {
+  it("computes the manifest's content hash and per-store table counts, which the file no longer commits (ADR-216)", () => {
     // The site prints a table count per store and the content hash. Both left
     // the committed manifest in #3691, so the collector derives them: counts
     // from the tables array, the hash from the file's bytes, which for a
@@ -736,7 +736,7 @@ describe("collectors", () => {
   });
 
   it("recounts a manifest that still commits a stale tableCount rather than trusting it", () => {
-    // A file written before ADR-214, or a merge that kept one side's count,
+    // A file written before ADR-216, or a merge that kept one side's count,
     // must not put a wrong number on the site.
     const root = scratch();
     file(

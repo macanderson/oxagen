@@ -114,7 +114,7 @@ describe("renderSchemaDocs", () => {
     );
   });
 
-  it("keeps no whole-set count in _index.json (ADR-214)", () => {
+  it("keeps no whole-set count in _index.json (ADR-216)", () => {
     const index = JSON.parse(
       renderSchemaDocs(baseRegistry()).get("_index.json") ?? "",
     ) as Record<string, unknown>;
@@ -125,7 +125,7 @@ describe("renderSchemaDocs", () => {
     );
   });
 
-  it("keeps no count and no joined name list in README.md (ADR-214)", () => {
+  it("keeps no count and no joined name list in README.md (ADR-216)", () => {
     const readme = renderSchemaDocs(baseRegistry()).get("README.md") ?? "";
     // No total, no per-domain count, and each capability on its own line.
     expect(readme).not.toMatch(/\*\*\d+ capabilities\*\*/);
@@ -333,7 +333,7 @@ function commitFiles(
 }
 
 /**
- * The old output shape, before ADR-214: `generatedCount` in the index and the
+ * The old output shape, before ADR-216: `generatedCount` in the index and the
  * count and joined-list lines in the README. Rebuilt from the new output so
  * the control differs from the real case only in those lines.
  */

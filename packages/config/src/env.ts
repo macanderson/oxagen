@@ -160,6 +160,7 @@ export const baseEnvSchema = z.object({
   OXAGEN_STEERING_APP_SLUG: z.string().optional(),
   OXAGEN_STEERING_APP_CLIENT_ID: z.string().optional(),
   OXAGEN_STEERING_APP_CLIENT_SECRET: z.string().optional(),
+  OXAGEN_STEERING_APP_WEBHOOK_SECRET: z.string().optional(),
   // LOCAL/DEMO-ONLY fallback PAT for GitHub write capabilities; must never be
   // set in production (bypasses per-workspace scoping — see resolveGitHubToken).
   GITHUB_PERSONAL_ACCESS_TOKEN: z.string().optional(),

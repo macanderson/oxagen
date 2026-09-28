@@ -44,7 +44,7 @@ export function canonicalJson(value: unknown): string {
  * stable across runs; for a current manifest it equals the sha256 of the
  * committed file's bytes.
  *
- * The manifest no longer commits this hash (ADR-214): it is computed wherever
+ * The manifest no longer commits this hash (ADR-216): it is computed wherever
  * it is read. A `contentHash` field is still excluded, so a file written
  * before that change hashes to the same value as its body.
  */

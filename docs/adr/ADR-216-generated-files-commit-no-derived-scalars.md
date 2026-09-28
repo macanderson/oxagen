@@ -1,4 +1,4 @@
-# ADR-214: Generated files commit no value derived from the whole set
+# ADR-216: Generated files commit no value derived from the whole set
 
 - **Status:** Accepted
 - **Date:** 2026-09-28

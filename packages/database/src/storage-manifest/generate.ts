@@ -7,7 +7,7 @@
 // serialization is order-independent too).
 //
 // The committed manifest holds no value derived from the whole table or
-// capability set (ADR-214). It once carried a `contentHash` over its body and a
+// capability set (ADR-216). It once carried a `contentHash` over its body and a
 // `tableCount` per store. Every branch that added a table or a capability
 // rewrote those lines, so any two such branches conflicted by construction,
 // and keeping one side's value left a manifest that disagreed with its own
@@ -32,7 +32,7 @@ import { collectCapabilities } from "./sources/capabilities";
 /**
  * Current manifest schema version. Bump on any breaking shape change.
  * 2: `contentHash` and `stores[].tableCount` left the committed shape
- * (ADR-214).
+ * (ADR-216).
  */
 export const MANIFEST_VERSION = 2;
 
@@ -68,7 +68,7 @@ function collectAllTables(): ManifestTable[] {
 /**
  * Build the per-store cross-view from the flat table list. No table count: it
  * is `tables.filter(t => t.store === kind).length`, and a committed copy of it
- * is a line every table-adding branch rewrites (ADR-214).
+ * is a line every table-adding branch rewrites (ADR-216).
  */
 function buildStores(tables: ManifestTable[]): ManifestStore[] {
   return STORE_ORDER.map((kind) => {

@@ -1,6 +1,6 @@
 /**
  * Two branches that each add a table and a capability merge to `main` with no
- * conflict in `storage-manifest.json` (#3691, ADR-214).
+ * conflict in `storage-manifest.json` (#3691, ADR-216).
  *
  * The manifest used to commit a `contentHash` over its body and a
  * `tableCount` per store. Every branch that added a table or a capability
@@ -94,7 +94,7 @@ const render: Render = (tables, capabilities) =>
   canonicalJson(assembleManifest(tables, capabilities));
 
 /**
- * The committed form before ADR-214: the same manifest with `contentHash` and
+ * The committed form before ADR-216: the same manifest with `contentHash` and
  * a per-store `tableCount` added back, exactly as the generator wrote them.
  */
 const renderLegacy: Render = (tables, capabilities) => {

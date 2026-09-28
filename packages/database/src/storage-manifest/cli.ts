@@ -17,7 +17,7 @@
 // capability without re-running `pnpm schema:manifest` landed a stale manifest
 // with every check green.
 //
-// The manifest commits no content hash and no per-store table count (ADR-214).
+// The manifest commits no content hash and no per-store table count (ADR-216).
 // The summary below computes both from the file it reads. Committed, each was
 // a line that every table- or capability-adding branch rewrote, so two such
 // branches always conflicted, and keeping one side's value left a manifest
@@ -94,7 +94,7 @@ export function firstDifference(
 }
 
 /**
- * A committed body without the scalars ADR-214 stopped committing, so a file
+ * A committed body without the scalars ADR-216 stopped committing, so a file
  * that still records them hashes the same as its content.
  */
 function withoutDerivedScalars(
@@ -138,7 +138,7 @@ function showLine(line: string | null): string {
  * An earlier version printed a recorded `contentHash` field beside a
  * recomputed one, and once printed two identical hashes under a DRIFT
  * DETECTED banner, which cost a cutover a CI cycle. The field is gone
- * (ADR-214), so the two numbers are now always the committed content and the
+ * (ADR-216), so the two numbers are now always the committed content and the
  * regenerated content, and the case where only the form differs is named
  * rather than left to be inferred.
  */
@@ -184,7 +184,7 @@ export function driftReport(
     out.push("  The content itself has drifted.");
   } else if (carriesDerivedScalars(body)) {
     out.push(
-      "  The content is current, but the file still records contentHash or stores[].tableCount, which ADR-214 stopped committing.",
+      "  The content is current, but the file still records contentHash or stores[].tableCount, which ADR-216 stopped committing.",
     );
   } else {
     out.push("  The content is current; only its formatting differs.");

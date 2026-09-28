@@ -116,7 +116,7 @@ describe("driftReport", () => {
 
   it("names a file that kept a side's contentHash in a merge, with both values", () => {
     // The wrong resolution #3691 and #3233 describe: the body is the merged
-    // one, and a committed hash from one side sits on top of it. ADR-214 took
+    // one, and a committed hash from one side sits on top of it. ADR-216 took
     // the field out of the shape, so it now fails as a legacy field.
     const committed = canonicalJson({
       version: 2,

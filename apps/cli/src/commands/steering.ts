@@ -723,14 +723,20 @@ export async function resolveContext(
       // as a checkout that points nowhere near the bound repository. Telling
       // a developer to relink over a slow git would send them to fix the
       // wrong thing.
+      //
+      // A linked checkout reaches this branch in the ordinary case too. The
+      // answer names the workspace's steering repository (ADR-212), and a
+      // code repository linked to that workspace has no remote pointing at
+      // it. The gates stay off here, since a code repository holds no
+      // committed records to be stale. The line still says so, because an
+      // edited link is also how a checkout would leave its gates behind. It
+      // no longer tells a correctly linked checkout to check its link.
       mismatch.push(
         budget.expired()
           ? `the check ran out of time before it could tell whether a remote of this checkout points at ${fromPlatform.repository}, so Oxagen's answer was ignored`
-          : `Oxagen's answer is about ${fromPlatform.repository}, which no remote of this checkout points at, so it was ignored — ${
-              scope
-                ? `check the workspace named in .oxagen/workspace.json`
-                : `run \`oxagen init\` in this repository to link it to its workspace`
-            }`,
+          : scope
+            ? `Oxagen's answer is about ${fromPlatform.repository}, the linked workspace's steering repository. No remote of this checkout points at it, so the workspace's steering gates do not apply here`
+            : `Oxagen's answer is about ${fromPlatform.repository}, which no remote of this checkout points at, so it was ignored — run \`oxagen init\` in this repository to link it to its workspace`,
       );
     }
   }

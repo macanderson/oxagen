@@ -1,11 +1,11 @@
 /**
- * ADR-214 rests on three facts outside the generators it changed. This test
+ * ADR-216 rests on three facts outside the generators it changed. This test
  * reads the files that hold them, so a later edit that breaks one fails here
  * instead of leaving the record wrong (#3691).
  *
  * 1. `AGENTS.md` names every shared cell, so an author meets the hazard
  *    before the conflict does.
- * 2. `atlas.sum` is excluded from ADR-214 because a wrong merge resolution
+ * 2. `atlas.sum` is excluded from ADR-216 because a wrong merge resolution
  *    already fails CI: the `atlas-validate` job checks the directory hash.
  * 3. `pnpm db:lint-migrations` fails a spliced `atlas.sum` with a message
  *    that names the command that fixes it.
@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (path: string): string => readFileSync(join(ROOT, path), "utf8");
 
-describe("shared cells (ADR-214)", () => {
+describe("shared cells (ADR-216)", () => {
   it("AGENTS.md names every shared cell under Git Workflow, with the rule", () => {
     const agents = read("AGENTS.md");
     const gitWorkflow = agents.slice(

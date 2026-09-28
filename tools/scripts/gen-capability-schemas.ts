@@ -34,7 +34,7 @@
  *
  * No output holds a count of the whole capability set, because two branches
  * that each add a capability would both rewrite it and always conflict
- * (ADR-214, #3691). After a merge, regenerate from the merged tree.
+ * (ADR-216, #3691). After a merge, regenerate from the merged tree.
  *
  * The rendering lives in `lib/capability-schema-docs.ts` and the Zod-to-JSON-
  * Schema conversion in `lib/zod-json-schema.ts`, so tests can exercise both

@@ -73,6 +73,7 @@ import {
   readWorkspaceToml,
 } from "./repository.workspace-toml";
 import { withToolProjection } from "./mcp-studio/publish-deps";
+import { readSteeringHealth } from "./steering-repo/health.read";
 import { steeringSyncPublish } from "./steering-repo/publisher";
 
 /** What one publish of the workspace's steering repository did. */
@@ -131,7 +132,12 @@ export function syncDeps(): SyncDeps {
     reconcileLinks: reconcileWorkspaceLinks,
     // The same publisher merge_context_pr calls, over the same host, so a
     // merge made on the host reaches the same version sequence.
-    publish: steeringSyncPublish({ host: github, extend: withToolProjection }),
+    // The publish refuses while the steering repo is not healthy (S2).
+    publish: steeringSyncPublish({
+      host: github,
+      extend: withToolProjection,
+      readHealth: readSteeringHealth,
+    }),
   };
 }
 

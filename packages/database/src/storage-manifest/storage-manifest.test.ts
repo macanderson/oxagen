@@ -75,7 +75,7 @@ describe("storage manifest — determinism", () => {
     expect(renderManifest()).toBe(renderManifest());
   });
 
-  it("commits no value derived from the whole set (ADR-214)", () => {
+  it("commits no value derived from the whole set (ADR-216)", () => {
     // A committed hash or count is a line every table- or capability-adding
     // branch rewrites, so two such branches always conflicted on it (#3691).
     const m = buildManifest();

@@ -10,7 +10,7 @@
 // the same committed inputs must always produce byte-identical output.
 //
 // The shape holds no value derived from the whole table or capability set
-// (ADR-214, amending ADR-031's shape). The content hash is
+// (ADR-216, amending ADR-031's shape). The content hash is
 // `contentHashOf(manifest)`, a sha256 over the canonical JSON, and a store's
 // table count is the length of its tables. Both are computed where they are
 // read, because a committed copy of either is a line every table- or

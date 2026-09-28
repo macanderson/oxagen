@@ -49,7 +49,6 @@ import {
 } from "@oxagen/oxagen/steering-repo/paths";
 import {
   formatHuman,
-  runChecks,
   type CheckContext,
   type CheckReport,
   type CheckResult,
@@ -58,6 +57,7 @@ import {
   type IndexRecord,
   type SteeringTree,
 } from "@oxagen/steering-check";
+import { runChecksWithServers } from "@oxagen/steering-check/servers";
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { getConfigDir } from "../lib/config.js";
@@ -609,7 +609,7 @@ export async function check(
     out.warn(NO_BASE);
   }
 
-  const full = runChecks({
+  const full = await runChecksWithServers({
     files: head,
     base: baseTree,
     index: published.index,
