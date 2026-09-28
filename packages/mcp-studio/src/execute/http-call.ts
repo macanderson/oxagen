@@ -12,7 +12,7 @@ import { relayHttpTargetSchema } from "../contract/relay-envelope";
 import type { RecordedExchange } from "../contract/tests-files";
 import { decodeText, isJsonMediaType, parseJson, readBody, transportFailure } from "./body";
 import type { RelayCredential } from "./credentials";
-import { headerValue, recordHttpResponse } from "./exchange";
+import { headerValue, locationWithoutQuery, recordHttpResponse } from "./exchange";
 import { Clock, retryAfterMs, stopError, withRetries, type Attempt } from "./retry";
 import type { SendContext, SendError, SendResult } from "./sender";
 import type { HeaderEntry, HttpTarget, HttpTransportResponse } from "./transport";
@@ -127,17 +127,25 @@ function firstText(value: Record<string, unknown>, keys: readonly string[]): str
 
 /**
  * The error for a response that is not a success. A redirect names its
- * Location, because the gateway never follows one. Any other status takes the
- * RFC 9457 title and detail when the upstream sent them.
+ * Location, because the gateway never follows one. The Location loses its
+ * query and fragment first, since either can echo an API key the request
+ * carried. Any other status takes the RFC 9457 title and detail when the
+ * upstream sent them.
  */
 export function upstreamError(response: HttpTransportResponse, bytes: Uint8Array): SendError {
   const status = response.status;
   if (status >= 300 && status < 400) {
-    const location = headerValue(response.headers, "location");
+    const raw = headerValue(response.headers, "location");
+    const location = raw === undefined ? undefined : locationWithoutQuery(raw);
+    // The note does not depend on whether this Location had a query, so a
+    // replay of the recorded response gives the same detail.
     return {
       title: "Redirect not followed",
       detail:
-        `The upstream answered ${status}${location === undefined ? "" : ` with Location ${location}`}. ` +
+        (location === undefined
+          ? `The upstream answered ${status}. `
+          : `The upstream answered ${status} with Location ${location}. ` +
+            "The gateway leaves out a Location's query and fragment, since either can carry a credential. ") +
         "The gateway does not follow redirects, so set the environment's url to the final address.",
       status,
     };

@@ -21,6 +21,7 @@ import {
   headerNameSchema,
   httpUrlSchema,
   networkSchema,
+  remoteTransportSchema,
   serverNameSchema,
 } from "./primitives";
 
@@ -49,9 +50,9 @@ export const remoteSourceSchema = z
   .object({
     type: z.literal("remote"),
     url: httpUrlSchema.describe("The MCP endpoint."),
-    transport: z
-      .enum(["http", "sse"])
-      .describe("http (streamable HTTP) or sse, which today's connect flow still offers."),
+    transport: remoteTransportSchema.describe(
+      "http, MCP's streamable HTTP transport. Review refuses sse, the older HTTP+SSE transport (ADR-211).",
+    ),
     network: networkField,
   })
   .strict()
