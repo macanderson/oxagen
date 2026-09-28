@@ -262,7 +262,9 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     const result = await execute(
       tool,
       args,
-      { server, name: environment.name, operator: agent.operator },
+      // The run's operator, not the agent file's: an agent names a member or
+      // a team by slug, and only a person holds an operator token.
+      { server, name: environment.name, operator: view.run.operator },
       ports.credentials,
       transport,
       { senders: ports.senders, signal: ports.signal, now: ports.now },

@@ -4572,6 +4572,7 @@
         "postgres:mcp.credential_grants",
         "postgres:mcp.credentials",
         "postgres:mcp.mcp_servers",
+        "postgres:mcp.operator_tokens",
         "postgres:mcp.registries",
         "postgres:mcp.tool_snapshots"
       ]
@@ -19274,6 +19275,137 @@
       "domain": "mcp",
       "id": "postgres:mcp.mcp_servers",
       "name": "mcp_servers",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "server",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "environment",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "credential_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:mcp.credentials",
+          "type": "uuid"
+        },
+        {
+          "name": "client_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "client_secret_enc",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "token_endpoint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "revocation_endpoint",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "access_token_enc",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "refresh_token_enc",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "token_kms_key_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "scopes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_refreshed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.operator_tokens",
+      "name": "operator_tokens",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
