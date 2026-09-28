@@ -4,7 +4,8 @@
 // table, where src/app/globals.css keeps text on one line, and any element
 // marked `data-truncate` elsewhere. One card serves the page, as the mockup's
 // `#rtip` does (mockups/components/src/tooltip.mjs). It listens on the
-// document, so a table a page adds later needs nothing from the page.
+// document, so a table or a marked line a page adds later needs nothing from
+// the page.
 import { useEffect, useRef, useState } from "react";
 import { HoverCard, HoverCardContent } from "@/ui/hover-card";
 
@@ -14,7 +15,7 @@ import { HoverCard, HoverCardContent } from "@/ui/hover-card";
  */
 export const OPEN_DELAY_MS = 300;
 
-/** How often, at most, the keyboard stops follow a table that changes. */
+/** How often, at most, the keyboard stops follow a table or line that changes. */
 const SCAN_INTERVAL_MS = 200;
 
 const BODY_CELL = "tbody :is(td, th):not([colspan])";
@@ -25,10 +26,20 @@ const BODY_CELL = "tbody :is(td, th):not([colspan])";
  */
 const TRUNCATE = "[data-truncate]";
 
-/** Marks a cell `markCutCells` made focusable, so it can give the stop back. */
+/**
+ * Marks a cell or marked element `markCutCells` made focusable, so it can give
+ * the stop back.
+ */
 const CUT = "data-cell-cut";
 
 const FOCUSABLE = `a[href], button, input, select, textarea, summary, [tabindex]:not([${CUT}])`;
+
+/**
+ * A control that acts when focused. A stop nested in one is an accessibility
+ * fault, so a marked element inside one takes none. A box that takes focus only
+ * to scroll, such as an open tab panel or a scroll area, is not a control.
+ */
+const CONTROL = `a[href], button, input, select, textarea, summary, [role="button"], [role="link"], [role="checkbox"], [role="menuitem"], [role="option"], [role="radio"], [role="switch"], [role="tab"]`;
 
 /** Whether `cell`, or anything in it, has text that runs past its own box. */
 function isCut(cell: HTMLElement): boolean {
@@ -40,40 +51,50 @@ function isCut(cell: HTMLElement): boolean {
 
 /**
  * Gives a keyboard stop to each body cell whose text is cut and that holds
- * nothing focusable, so focus can reach it and show the whole value. A cell
- * whose text fits again gives the stop back. It measures every cell before it
- * changes any, so the page lays out once.
+ * nothing focusable, so focus can reach it and show the whole value. An element
+ * marked `data-truncate` outside a body cell takes one the same way, unless it
+ * sits in a control; one inside a cell leaves the stop to the cell. A cell or
+ * element whose text fits again gives the stop back. It measures every one
+ * before it changes any, so the page lays out once.
  * @internal Exported for its component test.
  */
 export function markCutCells(root: ParentNode): void {
   const changes: [HTMLElement, boolean][] = [];
-  for (const cell of root.querySelectorAll<HTMLElement>(BODY_CELL)) {
-    const marked = cell.hasAttribute(CUT);
-    if (!marked && cell.hasAttribute("tabindex")) continue;
-    const wanted = cell.querySelector(FOCUSABLE) === null && isCut(cell);
-    if (wanted !== marked) changes.push([cell, wanted]);
-  }
-  for (const [cell, wanted] of changes)
+  const weigh = (node: HTMLElement, focusable: boolean) => {
+    const marked = node.hasAttribute(CUT);
+    if (!marked && node.hasAttribute("tabindex")) return;
+    const wanted = !focusable && isCut(node);
+    if (wanted !== marked) changes.push([node, wanted]);
+  };
+  for (const cell of root.querySelectorAll<HTMLElement>(BODY_CELL))
+    weigh(cell, cell.querySelector(FOCUSABLE) !== null);
+  for (const line of root.querySelectorAll<HTMLElement>(TRUNCATE))
+    if (line.closest(BODY_CELL) === null)
+      weigh(line, line.parentElement?.closest(CONTROL) != null);
+  for (const [node, wanted] of changes)
     if (wanted) {
-      cell.setAttribute(CUT, "");
-      cell.tabIndex = 0;
+      node.setAttribute(CUT, "");
+      node.tabIndex = 0;
     } else {
-      cell.removeAttribute(CUT);
-      cell.removeAttribute("tabindex");
+      node.removeAttribute(CUT);
+      node.removeAttribute("tabindex");
     }
 }
 
-/** Whether a mutation touched a table, or added one. */
-function touchesTable(record: MutationRecord): boolean {
+/** What the keyboard stops follow: every table, and every marked element. */
+const MEASURED = `table, ${TRUNCATE}`;
+
+/** Whether a mutation touched a table or a marked element, or added one. */
+function touchesMeasured(record: MutationRecord): boolean {
   const at =
     record.target instanceof Element
       ? record.target
       : record.target.parentElement;
-  if (at != null && at.closest("table") !== null) return true;
+  if (at != null && at.closest(MEASURED) !== null) return true;
   return [...record.addedNodes].some(
     (node) =>
       node instanceof Element &&
-      (node.matches("table") || node.querySelector("table") !== null),
+      (node.matches(MEASURED) || node.querySelector(MEASURED) !== null),
   );
 }
 
@@ -188,23 +209,25 @@ export function CellOverflow() {
     };
   }, []);
 
-  // The keyboard stops follow the layout: a table that changes or resizes is
-  // measured again, at most once per interval.
+  // The keyboard stops follow the layout: a table or marked element that
+  // changes or resizes is measured again, at most once per interval. A line a
+  // growing transcript adds is a change, and one a closed section shows
+  // resizes from nothing.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let resized: ResizeObserver | null = null;
-    const tables = new Set<Element>();
+    const watched = new Set<Element>();
     const scan = () => {
       timer = undefined;
-      for (const table of tables)
-        if (!table.isConnected) {
-          resized?.unobserve(table);
-          tables.delete(table);
+      for (const node of watched)
+        if (!node.isConnected) {
+          resized?.unobserve(node);
+          watched.delete(node);
         }
-      for (const table of document.querySelectorAll("table"))
-        if (!tables.has(table)) {
-          tables.add(table);
-          resized?.observe(table);
+      for (const node of document.querySelectorAll(MEASURED))
+        if (!watched.has(node)) {
+          watched.add(node);
+          resized?.observe(node);
         }
       markCutCells(document);
     };
@@ -214,7 +237,7 @@ export function CellOverflow() {
     if (typeof ResizeObserver !== "undefined")
       resized = new ResizeObserver(schedule);
     const changed = new MutationObserver((records) => {
-      if (records.some(touchesTable)) schedule();
+      if (records.some(touchesMeasured)) schedule();
     });
     // A paged table (ui/list-table.tsx) shows a page by changing each row's
     // style, so a style, class, or hidden change counts as a change.

@@ -80,6 +80,14 @@ function page() {
                 {LONG}
               </td>
             </tr>
+            <tr>
+              <td data-testid="holder">
+                <span data-truncate="" data-testid="cell-marked">
+                  {LONG}
+                </span>
+              </td>
+              <td>Fits</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -102,6 +110,11 @@ function page() {
       <code data-truncate={GIVEN} data-testid="given">
         run_01J9Z3K4
       </code>
+      <button type="button">
+        <span data-truncate="" data-testid="in-button">
+          {LONG}
+        </span>
+      </button>
       <CellOverflow />
     </>,
   );
@@ -272,6 +285,35 @@ describe("markCutCells", () => {
     expect(name).not.toHaveAttribute("tabindex");
   });
 
+  it("gives a cut marked line outside a table a stop and takes it back once it fits", () => {
+    page();
+    const marked = screen.getByTestId("marked");
+    measure(marked, 900, 300);
+    markCutCells(document);
+    expect(marked).toHaveAttribute("tabindex", "0");
+    measure(marked, 300, 300);
+    markCutCells(document);
+    expect(marked).not.toHaveAttribute("tabindex");
+  });
+
+  it("leaves a marked value in a cell to the cell's one stop", () => {
+    page();
+    const holder = screen.getByTestId("holder");
+    const inCell = screen.getByTestId("cell-marked");
+    measure(inCell, 900, 300);
+    markCutCells(document);
+    expect(holder).toHaveAttribute("tabindex", "0");
+    expect(inCell).not.toHaveAttribute("tabindex");
+  });
+
+  it("gives no stop to a marked value inside a control", () => {
+    page();
+    const inButton = screen.getByTestId("in-button");
+    measure(inButton, 900, 300);
+    markCutCells(document);
+    expect(inButton).not.toHaveAttribute("tabindex");
+  });
+
   it("reads a cut value nested in a cell that fits", () => {
     page();
     const owner = screen.getByTestId("owner");
@@ -294,5 +336,20 @@ describe("CellOverflow keyboard stops", () => {
     await waitFor(() => {
       expect(description).toHaveAttribute("tabindex", "0");
     });
+  });
+
+  it("gives a stop to a cut line a growing transcript adds later", async () => {
+    page();
+    const transcript = document.createElement("div");
+    document.body.append(transcript);
+    const line = document.createElement("div");
+    line.setAttribute("data-truncate", LONG);
+    line.textContent = LONG;
+    measure(line, 900, 300);
+    transcript.append(line);
+    await waitFor(() => {
+      expect(line).toHaveAttribute("tabindex", "0");
+    });
+    transcript.remove();
   });
 });
