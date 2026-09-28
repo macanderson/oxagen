@@ -117,14 +117,14 @@ type Shown = { anchor: HTMLElement; text: string };
 export function CellOverflow() {
   const [shown, setShown] = useState<Shown | null>(null);
   // The element the last event pointed at, so moving within it keeps the timer.
-  const pending = useRef<HTMLElement | null>(null);
+  const pendingRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const show = (node: HTMLElement | null, delay: number) => {
-      if (node === pending.current) return;
+      if (node === pendingRef.current) return;
       clearTimeout(timer);
-      pending.current = node;
+      pendingRef.current = node;
       if (node === null) {
         setShown(null);
         return;
@@ -216,7 +216,7 @@ export function CellOverflow() {
       open={shown !== null}
       onOpenChange={(open) => {
         if (open) return;
-        pending.current = null;
+        pendingRef.current = null;
         setShown(null);
       }}
     >

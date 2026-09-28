@@ -48,7 +48,7 @@ function page() {
           <tbody>
             <tr>
               <td data-testid="name">
-                <a href="/agents/release-bot">release-bot</a>
+                <a href="#release-bot">release-bot</a>
               </td>
               <td data-testid="description">{LONG}</td>
             </tr>

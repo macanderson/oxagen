@@ -60,21 +60,22 @@ export function OperatorName({
 }) {
   const t = useTranslations("ui.operator");
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const card = useRef<HTMLSpanElement>(null);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const cardRef = useRef<HTMLSpanElement>(null);
   const [place, setPlace] = useState<CSSProperties>({});
   useLayoutEffect(() => {
     if (!open) return;
     // 6px under the name, or over it when the viewport has no room below,
     // and kept 8px inside the viewport's right edge.
     const follow = () => {
-      const rect = root.current?.getBoundingClientRect();
+      const rect = rootRef.current?.getBoundingClientRect();
       if (rect === undefined) return;
-      const width = card.current?.offsetWidth ?? 0;
-      const height = card.current?.offsetHeight ?? 0;
+      const width = cardRef.current?.offsetWidth ?? 0;
+      const height = cardRef.current?.offsetHeight ?? 0;
       const below = rect.bottom + 6;
       const above = rect.top - 6 - height;
       const fitsBelow = below + height <= window.innerHeight - 8;
+      // eslint-disable-next-line @eslint-react/set-state-in-effect -- layout measurement: the card's place comes from the name's box after layout
       setPlace({
         top: fitsBelow || above < 8 ? below : above,
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
@@ -102,7 +103,7 @@ export function OperatorName({
     operator.avatarUrl != null;
   return (
     <span
-      ref={root}
+      ref={rootRef}
       data-testid={testId ?? "operator"}
       data-operator-id={operator.id ?? undefined}
       // The card shows the whole name, so a table cell's tooltip stays shut.
@@ -121,7 +122,7 @@ export function OperatorName({
         const next = event.relatedTarget;
         if (
           !event.currentTarget.contains(next) &&
-          card.current?.contains(next) !== true
+          cardRef.current?.contains(next) !== true
         )
           setOpen(false);
       }}
@@ -135,7 +136,7 @@ export function OperatorName({
       {hasCard && open
         ? createPortal(
             <span
-              ref={card}
+              ref={cardRef}
               role="tooltip"
               data-testid="operator-card"
               style={place}
