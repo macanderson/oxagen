@@ -632,6 +632,7 @@ describe("checkRepoHealth", () => {
   it("goes from healthy to drifted: fails every pull request, comments, and notifies once", async () => {
     const r = rig();
     await r.read();
+    r.reset();
     r.tick(5);
     r.script.observation = MERGES_DELETED;
     const outcome = await r.read(RULESET_DELETED);

@@ -209,7 +209,9 @@ describe("get_steering_repo", () => {
   });
 
   it("refuses a call without a workspace", async () => {
-    await expect(read(deps(), makeCTX({ workspaceId: null }))).rejects.toThrow(
+    // Empty string, not null: `CapabilityContext.workspaceId` is typed
+    // non-nullable, and "" is what the kernel's unscoped path actually carries.
+    await expect(read(deps(), makeCTX({ workspaceId: "" }))).rejects.toThrow(
       /workspaceId is required/,
     );
   });
