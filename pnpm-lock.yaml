@@ -2132,6 +2132,9 @@ importers:
 
   packages/steering-check:
     dependencies:
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../mcp-studio
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen

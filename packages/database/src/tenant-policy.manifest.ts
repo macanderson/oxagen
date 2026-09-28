@@ -73,6 +73,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // workspace_id NOT NULL.
   { table: "agent.steering_versions", policyClass: "standard" },
   { table: "agent.steering_publications", policyClass: "standard" },
+  // A steering repo's health (S2, #4560). The organization repo has no
+  // workspace, so its row has a null workspace_id → workspace_nullable.
+  { table: "agent.steering_repo_health", policyClass: "workspace_nullable" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },

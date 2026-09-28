@@ -2,8 +2,8 @@
 // organization and the gate opens on its first workspace; a registered agent
 // gets a single-use enrollment token; two machines present it at once and
 // exactly one becomes the host; the first frame that host ingests unlocks
-// the gate and stamps the agent; a provisional workspace refuses a context
-// record until the main repository is bound; the gate refuses to skip the
+// the gate and stamps the agent; the gate's workspace publishes a context
+// record before any repository is bound; the gate refuses to skip the
 // run step; concurrent binds leave one main repository; the three
 // role-checked writes refuse a workspace Member and a
 // user outside the organization; a revoked host gives its agent key up to a
@@ -755,19 +755,39 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(after?.firstFrameAt?.getTime()).toBe(before);
   });
 
-  it("a provisional workspace refuses a context record until bind_main_repository closes the window", async () => {
-    const record = {
-      record_id: `rule-${tag}`,
-      title: "No bare unwrap",
-      body: "[rule]\nid = 'no-bare-unwrap'\n",
-      kind: "rule" as const,
-      force: "must" as const,
-      statement: "Never unwrap a Result without handling the error.",
-    };
-    await expect(
-      inScope(() => contextRecordPublishHandler(record, ctxFor(ownerId))),
-    ).rejects.toSatisfy(refusal("conflict", "provisional"));
+  it("the gate's workspace publishes a context record while no repository is bound", async () => {
+    // The gate's workspace refused every context record with
+    // `conflict: provisional` until `bind_main_repository` set
+    // `main_repo_bound_at`. Onboarding no longer binds a repository, so a new
+    // organization's first workspace could never publish one (#4516).
+    const [gate] = await withSystemDb((tx) =>
+      tx
+        .select({
+          workspaceId: schema.onboardingState.workspaceId,
+          mainRepoBoundAt: schema.onboardingState.mainRepoBoundAt,
+        })
+        .from(schema.onboardingState)
+        .where(eq(schema.onboardingState.orgId, orgId)),
+    );
+    expect(gate).toEqual({ workspaceId, mainRepoBoundAt: null });
 
+    const published = await inScope(() =>
+      contextRecordPublishHandler(
+        {
+          record_id: `rule-${tag}`,
+          title: "No bare unwrap",
+          body: "[rule]\nid = 'no-bare-unwrap'\n",
+          kind: "rule",
+          force: "must",
+          statement: "Never unwrap a Result without handling the error.",
+        },
+        ctxFor(ownerId),
+      ),
+    );
+    expect(published.published).toBe(true);
+  });
+
+  it("bind_main_repository refuses a non-admin and an unconnected workspace, and concurrent binds leave one main repository", async () => {
     const seen = new Map<
       string,
       {
@@ -904,11 +924,6 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
 
     const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
     expect(state.provisional?.mainRepoBoundAt).toBe(bound.boundAt);
-
-    const published = await inScope(() =>
-      contextRecordPublishHandler(record, ctxFor(ownerId)),
-    );
-    expect(published.published).toBe(true);
   });
 
   it("a session opened in the bound repository reads linked, one opened elsewhere reads unlinked, and both are recorded", async () => {

@@ -80,8 +80,15 @@ export type SteeringPublishDeps = Omit<PublishDeps, "project">;
 export interface SteeringPublishOptions {
   scope: VersionScope;
   host: SteeringHost;
-  /** The steering repo's health (S2). Every repository reads healthy until S2 lands. */
-  readHealth?: (repo: SteeringRepository) => Promise<RepoHealth>;
+  /**
+   * The steering repo's health (S2). Every repository reads healthy when it
+   * is unset, as in tests. Production passes `readSteeringHealth`
+   * (./health.read), which reads the workspace's stored health.
+   */
+  readHealth?: (
+    repo: SteeringRepository,
+    scope: VersionScope,
+  ) => Promise<RepoHealth>;
   /** The version store. The workspace's Postgres store when unset. */
   store?: VersionStore;
   now?: () => Date;
@@ -191,7 +198,7 @@ export function steeringPublishDeps(
     store: options.store ?? postgresVersionStore(options.scope),
     health: async (repository) => {
       own(repository);
-      return readHealth(repo);
+      return readHealth(repo, options.scope);
     },
     head: async (repository) => {
       own(repository);

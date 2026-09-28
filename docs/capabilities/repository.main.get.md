@@ -2,7 +2,7 @@
 
 What the Workspace settings dialog needs to show, and to unblock, the workspace's main repository (MC spec §10.1; #2967).
 
-The main repo is where `.oxagen/` lives — published steering, the promotion ledger, and every agent definition. A workspace has exactly one, and until it is bound the workspace is provisional: runs record and spend counts, but steering, records and agent definitions stay off.
+The main repo is where `.oxagen/` lives — published steering, the promotion ledger, and every agent definition. A workspace has exactly one. Nothing waits on it: runs record, spend counts, and a published record steers the workspace's agents whether one is bound or not (ADR-212).
 
 `bind_main_repository` is the write, and it refuses `conflict: github_not_connected` unless the workspace already carries a GitHub App installation. Nothing in the app could produce one: the install leg is an HTTP flow the API runs (`/connections/github/auth-url` → GitHub → the HMAC-verified callback), and no capability exposed it, so the only repo a person could ever bind was the git remote the enrolling host happened to report. This read closes that hole. It answers three things at once, because they are three faces of one question — "can this workspace keep its steering in git yet, and if not, what is the next click": the bound repository, whether an installation is attached, and the signed URLs that connect one or change which repositories it reaches.
 

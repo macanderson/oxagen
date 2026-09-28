@@ -170,7 +170,7 @@ describe("steeringPublishDeps", () => {
       readHealth,
     });
     await expect(read.health(KEY)).resolves.toBe("drifted");
-    expect(readHealth).toHaveBeenCalledWith(REPO);
+    expect(readHealth).toHaveBeenCalledWith(REPO, SCOPE);
   });
 
   it("reads the production branch's head, and refuses when the branch is gone", async () => {

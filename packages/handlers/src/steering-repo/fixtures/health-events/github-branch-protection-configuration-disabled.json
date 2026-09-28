@@ -1,0 +1,12 @@
+{
+  "action": "disabled",
+  "repository": {
+    "id": 904211873,
+    "name": "oxagen-steering-platform",
+    "full_name": "acme/oxagen-steering-platform",
+    "private": true
+  },
+  "organization": { "login": "acme", "id": 71300124 },
+  "sender": { "login": "dana-ops", "id": 5412287, "type": "User" },
+  "installation": { "id": 61200044 }
+}
