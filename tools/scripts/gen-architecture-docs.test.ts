@@ -331,6 +331,55 @@ describe("collectors", () => {
     ]);
   });
 
+  it("follows a mount helper to the routes it mounts", () => {
+    const root = scratch();
+    file(
+      root,
+      "apps/api/src/app.ts",
+      [
+        'import { mountHostRoutes } from "./routes/v1/host-routes";',
+        "const hostScoped = new Hono<AppEnv>();",
+        'hostScoped.use("*", hostAuth);',
+        "mountHostRoutes(hostScoped);",
+        'app.route("/v1/host", hostScoped);',
+      ].join("\n"),
+    );
+    file(
+      root,
+      "apps/api/src/routes/v1/host-routes.ts",
+      [
+        'import type { Hono } from "hono";',
+        'import { barRoute } from "./host.bar";',
+        "export function mountHostRoutes(router: Hono<AppEnv>): void {",
+        '  router.route("/", barRoute);',
+        "}",
+      ].join("\n"),
+    );
+    file(
+      root,
+      "apps/api/src/routes/v1/host.bar.ts",
+      'import { hostBar } from "@oxagen/oxagen/contracts/host.bar";\nbarRoute.post("/bar", async (c) => invoke(hostBar.name, {}, ctx));',
+    );
+    const caps: Capability[] = [
+      {
+        name: "send_bar",
+        file: "host.bar.ts",
+        domain: "host",
+        mode: "sync",
+        surfaces: ["api"],
+        layers: {},
+      },
+    ];
+    const { routes } = collectApiRoutes(root, caps);
+    expect(
+      routes.map(
+        (r) => `${r.method} ${r.path} [${r.tier}] ${r.capability ?? "-"} ${r.file}`,
+      ),
+    ).toEqual([
+      "POST /v1/host/bar [hostScoped] send_bar apps/api/src/routes/v1/host.bar.ts",
+    ]);
+  });
+
   it("reads Inngest ids, triggers, crons and sent events from function sources", () => {
     const root = scratch();
     file(
