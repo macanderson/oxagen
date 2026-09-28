@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   checkClosingKeywords,
@@ -203,5 +206,81 @@ describe("formatClosingKeywords", () => {
     expect(text).toContain("### Refs in the description, close in a commit");
     expect(text).toContain('commit abc1234: `Fixes #7` in "Fixes #7"');
     expect(text).not.toContain("### Negated closing keyword");
+  });
+});
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, "..", "..");
+
+// #3680's own witness. #3533 merged with "Refs #2972" in its description and
+// "This PR does not close #2972." further down, and GitHub closed P0 #2972
+// anyway. The fixture is that description, verbatim from the API.
+describe("the body of #3533", () => {
+  const body = readFileSync(join(HERE, "fixtures", "pr-3533-body.txt"), "utf8");
+
+  it("fails the check on the negated close, and on nothing else", () => {
+    const result = checkClosingKeywords([
+      { label: "PR body", text: body, kind: "body" },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.conflicts).toEqual([]);
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        source: "PR body",
+        match: "close #2972",
+        line: expect.stringMatching(/^This PR does not close #2972\./),
+      }),
+    ]);
+  });
+
+  it("passes once the negated sentence is gone, so the Refs line is not the fault", () => {
+    const fixed = body.replace("This PR does not close #2972.", "");
+    expect(
+      checkClosingKeywords([{ label: "PR body", text: fixed, kind: "body" }]),
+    ).toEqual({ ok: true, findings: [], conflicts: [] });
+  });
+
+  it("fails a commit that closes #2972 while the body only references it", () => {
+    const fixed = body.replace("This PR does not close #2972.", "");
+    const result = checkClosingKeywords([
+      { label: "PR body", text: fixed, kind: "body" },
+      { label: "commit e4d9395", text: "fix: scope\n\nCloses #2972", kind: "commit" },
+    ]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({ source: "commit e4d9395", match: "Closes #2972" }),
+    ]);
+  });
+});
+
+// #3680 DoD: the check runs on every pull_request event, from a job no
+// `paths:` filter can skip, so an edit to the description alone is judged.
+describe("dod-check.yml runs the closing-keyword check on every PR event", () => {
+  const workflow = readFileSync(
+    join(REPO_ROOT, ".github", "workflows", "dod-check.yml"),
+    "utf8",
+  );
+  // The `on:` block: from `on:` to the next top-level key.
+  const on = /^on:\n([\s\S]*?)^\S/m.exec(workflow)?.[1] ?? "";
+
+  it("has an on: block with a pull_request trigger", () => {
+    expect(on).toMatch(/^ {2}pull_request:/m);
+  });
+
+  it("filters the trigger by no path", () => {
+    expect(on).not.toMatch(/^\s*paths(-ignore)?\s*:/m);
+  });
+
+  it("fires on a description edit", () => {
+    const types = /types:\s*\[([^\]]*)\]/.exec(on)?.[1] ?? "";
+    expect(types.split(",").map((t) => t.trim())).toEqual(
+      expect.arrayContaining(["opened", "edited", "synchronize"]),
+    );
+  });
+
+  it("imports check-closing-keywords.mjs and hands it the body and every commit", () => {
+    expect(workflow).toContain("tools/scripts/check-closing-keywords.mjs");
+    expect(workflow).toMatch(/kind: 'body'/);
+    expect(workflow).toMatch(/kind: 'commit'/);
+    expect(workflow).toContain("checkClosingKeywords(sources");
   });
 });

@@ -30,17 +30,23 @@
  * `defaultRoles` is parsed whether it spans lines or sits on one. A contract
  * with `platformOnly: true` is skipped: the kernel refuses it before IAM.
  *
- * The handler is found by the registered capability name: the
- * `registerHandler("<name>", … import("./<module>") …)` binding in
- * `packages/handlers/src/register.ts`, or the `<name>: () =>
+ * The handler is found by the registered capability name, whichever rule
+ * restricts the contract: the `registerHandler("<name>", … import("./<module>")
+ * …)` binding in `packages/handlers/src/register.ts`, or the `<name>: () =>
  * import("./<module>")` entry in `LOADERS` in
  * `packages/agent/src/handlers/index.ts`. A contract neither binds falls back
- * to `packages/handlers/src/<contract-stem>.ts`. The handler module must
- * reference a role-gate primitive (`ROLE_ASSERTION_PATTERN`), itself or in a
- * module it imports by a relative path, one hop deep. This is a static,
- * name-based check. It proves a role-aware call exists, not that it is wired
- * correctly. Each handler's own tests and INV-29's `role-check.test.ts` prove
- * that.
+ * to `packages/handlers/src/<contract-stem>.ts`. Before #3490 a high-sensitivity
+ * contract read only the stem path, so `resolve_mcp_servers`, whose handler
+ * lives in packages/agent, was skipped without a word.
+ *
+ * The handler module is parsed with the TypeScript compiler API
+ * (`lib/role-gate-ast.mjs`, the reader INV-29's `role-check.test.ts` uses too).
+ * The exported handler must call a role gate (`ROLE_GATE_CALLS`) or read a
+ * membership role column (`ROLE_GATE_PROPERTIES`): in its own body, in a
+ * same-file function it calls, or in a function it imports by a relative path,
+ * one hop deep. A gate named only in a comment, a string or an unused import
+ * does not count (#3490). This proves a role-aware call is reached, not that it
+ * is wired correctly. Each handler's own tests and INV-29 prove that.
  *
  * v2 contracts (`packages/oxagen/src/contracts/v2/`) are excluded: several of
  * them (`defineTool`, not `registerCapability`) wrap an existing v1
@@ -57,9 +63,14 @@
  * is a fixed, hand-maintained list, so the moment a NEW contract takes on this
  * shape, the check fails and names it, and the only way past it is to add the
  * role assertion (preferred) or correct the contract's declared
- * `sensitivity`/`defaultRoles` to what the handler actually enforces. A stem
- * whose handler now asserts a role is reported as stale and fails the check
- * until it is removed, so a later regression cannot hide behind it.
+ * `sensitivity`/`defaultRoles` to what the handler actually enforces.
+ *
+ * Every baseline stem is checked against its current contract and handler on
+ * each run. A stem is stale, and fails the check until it is removed, when its
+ * handler now calls a role gate, when its contract no longer declares a
+ * restriction, when its contract became platform-only, when its contract is
+ * gone, or when no handler can be found for it. Left in place, a stale stem would absorb a later regression as a known
+ * gap instead of failing the build.
  *
  * Exit codes:
  *   0 — no gap outside the baseline.
@@ -71,6 +82,13 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  agentHandlerModule,
+  handlerBinding,
+  handlerCallsRoleGate,
+  parseSource,
+  soleHandlerExport,
+} from "./lib/role-gate-ast.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CONTRACTS_DIR = join(REPO_ROOT, "packages", "oxagen", "src", "contracts");
@@ -84,13 +102,33 @@ const AGENT_HANDLERS_DIR = join(
 );
 
 /**
- * The role-gate primitives: the shared gates, the IAM role reads, and the
- * membership-role reads an inline check is written with (`orgMembershipRole`,
- * `isOrgAdministrator`, `resolveActorPrincipalAndRole`, or a select of
- * `schema.orgUsers.role` / `schema.workspaceUsers.role`).
+ * The role-gate calls: the shared gates, the IAM role reads, and the
+ * membership-role reads an inline check is written with. A call counts bare
+ * (`assertOrgRole(…)`) or as a member (`iam.assertOrgRole(…)`).
  */
-export const ROLE_ASSERTION_PATTERN =
-  /\bassertCallerRole\b|\bassertContractRole\b|\bassertOrgRole\b|\bassertWorkspaceRole\b|\bassertOrgOrWorkspaceRole\b|\bassertConsequenceRole\b|\bresolveActorOrgRoles?\b|\bresolveActorWorkspaceRoles?\b|\bresolveActorPrincipalAndRole\b|\borgMembershipRole\b|\bisOrgAdministrator\b|\bschema\.(?:orgUsers|workspaceUsers)\.role\b|\brequireRole\b|\bassertRole\b/;
+export const ROLE_GATE_CALLS = Object.freeze([
+  "assertCallerRole",
+  "assertContractRole",
+  "assertOrgRole",
+  "assertWorkspaceRole",
+  "assertOrgOrWorkspaceRole",
+  "assertConsequenceRole",
+  "resolveActorOrgRole",
+  "resolveActorOrgRoles",
+  "resolveActorWorkspaceRole",
+  "resolveActorWorkspaceRoles",
+  "resolveActorPrincipalAndRole",
+  "orgMembershipRole",
+  "isOrgAdministrator",
+  "requireRole",
+  "assertRole",
+]);
+
+/** The membership role columns an inline check selects. */
+export const ROLE_GATE_PROPERTIES = Object.freeze([
+  "schema.orgUsers.role",
+  "schema.workspaceUsers.role",
+]);
 
 /**
  * Contracts whose handler authorizes by something other than a role, by
@@ -226,43 +264,6 @@ export function declaredCapabilityName(src) {
   return m ? m[1] : null;
 }
 
-/**
- * Capability name → handler module path, from the two registries: the
- * `registerHandler` calls in `register.ts` and the `LOADERS` entries in the
- * agent package's `index.ts`. Either source may be null.
- *
- * @param {{
- *   registerSrc?: string | null,
- *   registerDir?: string,
- *   agentIndexSrc?: string | null,
- *   agentDir?: string,
- * }} [sources]
- * @returns {Map<string, string>}
- */
-export function handlerModules({
-  registerSrc = null,
-  registerDir = HANDLERS_DIR,
-  agentIndexSrc = null,
-  agentDir = AGENT_HANDLERS_DIR,
-} = {}) {
-  const modules = new Map();
-  if (registerSrc) {
-    for (const chunk of registerSrc.split(/\bregisterHandler\s*\(/).slice(1)) {
-      const name = chunk.match(/^\s*["']([a-z0-9_]+)["']/)?.[1];
-      const module = chunk.match(/import\(\s*["'](\.\/[^"']+)["']\s*\)/)?.[1];
-      if (name && module) modules.set(name, join(registerDir, module));
-    }
-  }
-  if (agentIndexSrc) {
-    for (const m of agentIndexSrc.matchAll(
-      /["']?([a-z0-9_]+)["']?\s*:\s*\(\)\s*=>\s*import\(\s*["'](\.\/[^"']+)["']\s*\)/g,
-    )) {
-      if (!modules.has(m[1])) modules.set(m[1], join(agentDir, m[2]));
-    }
-  }
-  return modules;
-}
-
 /** A module specifier resolved to a TypeScript file, or null. */
 function resolveModuleFile(fromDir, spec) {
   const base = resolve(fromDir, spec);
@@ -276,31 +277,103 @@ function resolveModuleFile(fromDir, spec) {
 }
 
 /**
- * Whether the handler module, or a module it imports by a relative path, one
- * hop deep, references a role-gate primitive.
+ * Parses each file once per run. The check reads a few hundred handlers and
+ * many import the same helper module.
  */
-export function handlerAssertsRole(handlerFile) {
-  const src = readFileSync(handlerFile, "utf8");
-  if (ROLE_ASSERTION_PATTERN.test(src)) return true;
-  const dir = dirname(handlerFile);
-  for (const m of src.matchAll(/\bfrom\s+["'](\.{1,2}\/[^"']+)["']/g)) {
-    const file = resolveModuleFile(dir, m[1]);
-    if (file && ROLE_ASSERTION_PATTERN.test(readFileSync(file, "utf8"))) {
-      return true;
+function sourceCache() {
+  const cache = new Map();
+  return (file) => {
+    let source = cache.get(file);
+    if (!source) {
+      source = parseSource(file, readFileSync(file, "utf8"));
+      cache.set(file, source);
     }
-  }
-  return false;
+    return source;
+  };
 }
 
-function readIfExists(file) {
-  return existsSync(file) ? readFileSync(file, "utf8") : null;
+/**
+ * The handler file and export for a capability: register.ts first, then
+ * packages/agent's LOADERS, then `<handlersDir>/<stem>.ts`. When the registry
+ * names no export, the module's one `*Handler` is read, which is what
+ * packages/agent's `resolveHandler` falls back to; with none or several, every
+ * export is read (`exportName` null). Null when no handler file exists, which
+ * is check:manifest's gap, not this one.
+ *
+ * @param {{
+ *   name: string,
+ *   stem: string,
+ *   registerSource: import("typescript").SourceFile | null,
+ *   agentIndexSource: import("typescript").SourceFile | null,
+ *   handlersDir: string,
+ *   agentHandlersDir: string,
+ *   read?: (file: string) => import("typescript").SourceFile,
+ * }} args
+ * @returns {{ file: string, exportName: string | null } | null}
+ */
+export function resolveHandler({
+  name,
+  stem,
+  registerSource,
+  agentIndexSource,
+  handlersDir,
+  agentHandlersDir,
+  read = sourceCache(),
+}) {
+  const bound = registerSource ? handlerBinding(registerSource, name) : null;
+  if (bound) {
+    const file = resolveModuleFile(handlersDir, bound.module);
+    if (file) {
+      return {
+        file,
+        exportName: bound.exportName ?? soleHandlerExport(read(file)),
+      };
+    }
+  }
+  const loader = agentIndexSource
+    ? agentHandlerModule(agentIndexSource, name)
+    : null;
+  if (loader) {
+    const file = resolveModuleFile(agentHandlersDir, loader);
+    if (file) return { file, exportName: soleHandlerExport(read(file)) };
+  }
+  const file = join(handlersDir, `${stem}.ts`);
+  if (!existsSync(file)) return null;
+  return { file, exportName: soleHandlerExport(read(file)) };
+}
+
+/**
+ * Whether the handler export calls a role gate: in its body, in a same-file
+ * function it calls, or in a function it imports by a relative path, one hop
+ * deep. `exportName` null reads every export the module declares.
+ */
+export function handlerAssertsRole(
+  handlerFile,
+  exportName = null,
+  read = sourceCache(),
+) {
+  const dir = dirname(handlerFile);
+  return handlerCallsRoleGate(read(handlerFile), exportName, {
+    gates: ROLE_GATE_CALLS,
+    propertyGates: ROLE_GATE_PROPERTIES,
+    followImport: (spec, importedName) => {
+      const file = resolveModuleFile(dir, spec);
+      return file ? { source: read(file), exportName: importedName } : null;
+    },
+  });
+}
+
+function readSourceIfExists(file, read) {
+  return existsSync(file) ? read(file) : null;
 }
 
 /**
  * Scan the contracts directory (excluding `v2/`) and return every gap: a
- * contract that declares a role restriction whose handler exists but carries
- * no role-assertion call, outside `ROLE_ENFORCEMENT_BASELINE`. `checked` is
- * how many contracts declared a restriction and had a handler to read.
+ * contract that declares a role restriction whose handler exists but calls no
+ * role gate, outside `ROLE_ENFORCEMENT_BASELINE`. `checked` is how many
+ * contracts declared a restriction and had a handler to read.
+ * `staleBaselineEntries` names every baseline stem that no longer covers a
+ * gap, with the reason.
  */
 export function findGaps({
   contractsDir = CONTRACTS_DIR,
@@ -309,47 +382,90 @@ export function findGaps({
   baseline = ROLE_ENFORCEMENT_BASELINE,
   exempt = ROLE_ENFORCEMENT_EXEMPT,
 } = {}) {
-  const modules = handlerModules({
-    registerSrc: readIfExists(join(handlersDir, "register.ts")),
-    registerDir: handlersDir,
-    agentIndexSrc: readIfExists(join(agentHandlersDir, "index.ts")),
-    agentDir: agentHandlersDir,
-  });
+  const read = sourceCache();
+  const registerSource = readSourceIfExists(
+    join(handlersDir, "register.ts"),
+    read,
+  );
+  const agentIndexSource = readSourceIfExists(
+    join(agentHandlersDir, "index.ts"),
+    read,
+  );
   const gaps = [];
   const baselineHits = [];
-  // Stems the baseline still lists but whose handler now carries a role
-  // assertion (Codex P2 on #3487). Left in place, a stale entry is a live
-  // hole: if the assertion is later deleted, the stem falls straight back into
-  // `baselineHits` as a known gap instead of a new one, so the regression
-  // never fails the build.
+  // Stems the baseline still lists but that no longer cover a gap (Codex P2
+  // on #3487, widened by #3490). Left in place, a stale entry is a live hole:
+  // if the gap comes back, the stem absorbs it as a known gap instead of a
+  // new one, so the regression never fails the build.
   const staleBaselineEntries = [];
+  const seenStems = new Set();
   let checked = 0;
 
   for (const file of listContractFiles(contractsDir)) {
     const src = readFileSync(file, "utf8");
-    if (/\bplatformOnly\s*:\s*true\b/.test(src)) continue;
-    const agentRule = declaresAgentRoleRestriction(src);
-    if (!agentRule && !declaresRoleRestriction(src)) continue;
-
     const stem = basename(file, ".ts");
-    if (exempt.has(stem)) continue;
+    seenStems.add(stem);
     const name = declaredCapabilityName(src) ?? "?";
-    // An agent-surface contract is found by its registered name, so a handler
-    // in packages/agent or under another file name is read too. The
-    // high-sensitivity rule keeps the path it always read.
-    const bound = agentRule ? modules.get(name) : undefined;
-    const handlerPath =
-      (bound && resolveModuleFile(dirname(bound), basename(bound))) ||
-      join(handlersDir, `${stem}.ts`);
-    if (!existsSync(handlerPath)) continue; // a different gap; check:manifest's job
-    checked += 1;
-
-    if (handlerAssertsRole(handlerPath)) {
-      if (baseline.has(stem)) staleBaselineEntries.push({ stem, name });
+    const listed = baseline.has(stem);
+    if (/\bplatformOnly\s*:\s*true\b/.test(src)) {
+      if (listed) {
+        staleBaselineEntries.push({
+          stem,
+          name,
+          reason:
+            "the contract is platform-only, so the kernel refuses it before IAM",
+        });
+      }
+      continue;
+    }
+    const agentRule = declaresAgentRoleRestriction(src);
+    if (!agentRule && !declaresRoleRestriction(src)) {
+      if (listed) {
+        staleBaselineEntries.push({
+          stem,
+          name,
+          reason: "the contract no longer declares a role restriction",
+        });
+      }
       continue;
     }
 
-    if (baseline.has(stem)) {
+    if (exempt.has(stem)) continue;
+    const handler = resolveHandler({
+      name,
+      stem,
+      registerSource,
+      agentIndexSource,
+      handlersDir,
+      agentHandlersDir,
+      read,
+    });
+    if (!handler) {
+      // A missing handler is check:manifest's gap. A baseline stem for it
+      // covers nothing this check can see.
+      if (listed) {
+        staleBaselineEntries.push({
+          stem,
+          name,
+          reason: "no handler module is bound to the capability",
+        });
+      }
+      continue;
+    }
+    checked += 1;
+
+    if (handlerAssertsRole(handler.file, handler.exportName, read)) {
+      if (listed) {
+        staleBaselineEntries.push({
+          stem,
+          name,
+          reason: "the handler now calls a role gate",
+        });
+      }
+      continue;
+    }
+
+    if (listed) {
       baselineHits.push({ stem, name });
       continue;
     }
@@ -358,8 +474,18 @@ export function findGaps({
       name,
       rule: agentRule ? "agent_surface" : "high_sensitivity",
       contractFile: file,
-      handlerPath,
+      handlerPath: handler.file,
     });
+  }
+
+  for (const stem of baseline) {
+    if (!seenStems.has(stem)) {
+      staleBaselineEntries.push({
+        stem,
+        name: "?",
+        reason: "no contract file has this stem any more",
+      });
+    }
   }
 
   return { gaps, baselineHits, staleBaselineEntries, checked };
@@ -387,14 +513,13 @@ function main() {
 
   if (staleBaselineEntries.length > 0) {
     console.error(
-      "\nSTALE ROLE_ENFORCEMENT_BASELINE ENTRIES: the handler now asserts the role " +
-        "the contract declares, so the exception covers nothing. Left in place, it " +
-        "would absorb a later regression (the assertion removed again) as a known gap " +
+      "\nSTALE ROLE_ENFORCEMENT_BASELINE ENTRIES: these stems no longer cover a " +
+        "gap. Left in place, one would absorb a later regression as a known gap " +
         "instead of failing the build:",
     );
     for (const g of staleBaselineEntries) {
       console.error(
-        `  - ${g.stem} -> ${g.name} (remove from ROLE_ENFORCEMENT_BASELINE)`,
+        `  - ${g.stem} -> ${g.name}: ${g.reason} (remove from ROLE_ENFORCEMENT_BASELINE)`,
       );
     }
   }
@@ -407,7 +532,7 @@ function main() {
     for (const g of gaps) {
       console.error(
         `  - ${g.stem} -> ${g.name} [${g.rule}] (${g.handlerPath.replace(`${REPO_ROOT}/`, "")} ` +
-          "has no assertContractRole/assertOrgRole/… call)",
+          "calls no assertContractRole/assertOrgRole/… gate)",
       );
     }
     console.error(
