@@ -199,13 +199,14 @@ const CASES: ToolCase[] = [
     ],
     readOnly: true,
     args: { runId: LEDGER_ID, frameLimit: 100, waitMs: 0 },
+    // get_run's row is list_runs' row plus the unlinked-repository flag.
     validOutput: {
-      run: LEDGER_ROW,
+      run: { ...LEDGER_ROW, repositoryUnlinked: false },
       frames: { frames: [], cursor: null },
       witnessFor: null,
     },
     invalidOutput: {
-      run: ROW_WITHOUT_HARNESS,
+      run: { ...ROW_WITHOUT_HARNESS, repositoryUnlinked: false },
       frames: { frames: [], cursor: null },
       witnessFor: null,
     },

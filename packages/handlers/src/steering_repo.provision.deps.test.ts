@@ -179,6 +179,7 @@ import {
   GITHUB_STEERING_PROVIDER,
   GITLAB_STEERING_PROVIDER,
   initialSteeringRepoState,
+  keepSteeringConnection,
   readSteeringConnection,
   readSteeringRepoState,
   requestSteeringRepoProvision,
@@ -517,6 +518,34 @@ describe("saveSteeringRepoState", () => {
     expect(render(argOf(write, "where"))).toEqual(
       render(eq(schema.organizations.id, ORG)),
     );
+  });
+});
+
+describe("keepSteeringConnection", () => {
+  it("stores the connection when the organization has none", async () => {
+    mocks.updateResults.push([{ id: ORG }]);
+    await expect(keepSteeringConnection(ORG, GITHUB)).resolves.toBe(true);
+    expect(mocks.dbCalls).toEqual(["system"]);
+    const write = chain(0);
+    expect(write.scope).toBeNull();
+    expect(methods(write)).toEqual(["update", "set", "where", "returning"]);
+    expect(argOf(write, "update")).toBe(schema.organizations);
+    const settings = render(settingsOf(write));
+    // The same merge as the steering_repo write. Only the patch differs.
+    expect(settings.sql).toBe(
+      render(settingsWithSteeringRepo(schema.organizations.settings, STATE))
+        .sql,
+    );
+    expect(savedPatch(write)).toEqual({ steering_connection: GITHUB });
+    expect(argOf(write, "returning")).toEqual({ id: schema.organizations.id });
+  });
+
+  it("writes only a row that has no connection yet (negative)", async () => {
+    await expect(keepSteeringConnection(ORG, GITHUB)).resolves.toBe(false);
+    const where = render(argOf(chain(0), "where"));
+    expect(where.params).toEqual([ORG, "steering_connection"]);
+    const column = render(sql`${schema.organizations.settings}`).sql;
+    expect(where.sql).toContain(`(${column} -> $2::text) IS NULL`);
   });
 });
 

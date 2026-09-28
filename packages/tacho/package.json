@@ -14,7 +14,8 @@
     "./cli": "./src/cli/index.ts",
     "./trace": "./src/trace/index.ts",
     "./policy": "./src/policy/index.ts",
-    "./local-servers": "./src/collector/local-servers/index.ts"
+    "./local-servers": "./src/collector/local-servers/index.ts",
+    "./skills": "./src/skills/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

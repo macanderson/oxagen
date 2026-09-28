@@ -1,10 +1,12 @@
 # link_repository
 
-Link a GitHub repository to the workspace as a linked repository (MC spec §10.1; the §17 M0 acceptance test "a second repo can be linked and unlinked"; ADR-099).
+Propose linking a GitHub repository to the workspace. The link follows the merge of a steering PR (ADR-212, ADR-099).
 
-A workspace has exactly one main repository, the one whose `.oxagen/` steers it, bound when the workspace is created (`create_workspace`). It has any number of linked repositories: the ones its agents work on. This write adds one of the latter. The repository is named by `owner/name` and nothing else. The installation is the one attached to the workspace's GitHub connection, never the caller's choice, for the reason `bind_main_repository` gives: an installation id a caller could choose would let one tenant mint tokens for another account's installation. The handler reads the repository through that installation's token and writes, in one transaction under the workspace's repository lock, a repository binding and a `role = 'linked'` binding head (`ingestion.repository_bindings` / `repository_binding_heads`).
+A workspace has one steering repository, the one whose `.oxagen/` holds its steering record. It can link any number of code repositories: the ones its agents work on. The steering record's `.oxagen/workspace.toml` lists them, so this write writes no binding head. It opens a steering PR on the steering repository that adds the repository to `workspace.toml`. When that PR merges, the steering sync reads the new file and writes the `role = 'linked'` binding head. Until then the repository is not linked.
 
-A repository this connection bound before, linked, unlinked and now linked again, already holds a binding version. The writer reuses it when nothing it records has moved and writes version + 1 when something has, so the unique index on (connection, repository, version) is never violated and the earlier version stays as the evidence it is.
+The repository is named by `owner/name` and nothing else. The installation is the one attached to the workspace's GitHub connection, never the caller's choice. An installation id a caller could choose would let one tenant mint tokens for another account's installation.
+
+One code repository can be linked to many workspaces, in the same organization or not. Each workspace lists it in its own `workspace.toml`, and each gets its own head.
 
 **Surfaces:** api, mcp, cli
 
@@ -14,49 +16,63 @@ A repository this connection bound before, linked, unlinked and now linked again
 
 ## Surface
 
-- API: `POST /v1/:org_slug/:workspace_slug/repository/link` → 201
+- API: `POST /v1/:org_slug/:workspace_slug/repository/link` → 202
 - MCP: `link_repository`, on an API-key context whose key has a live creator (`resolveActingUserId`)
 - CLI: `oxagen repo link <owner/name> [--json]`
-- Authentication: session or API key; org Owner or Admin, or the workspace's Owner, checked by the handler (INV-29)
+- Authentication: session or API key. The handler admits an org Owner or Admin, or the workspace's Owner (INV-29).
 - Capability name: `link_repository`
-- Not billed (`noBillingGate: true`); IAM default-deny; medium sensitivity
+- Not billed (`noBillingGate: true`). IAM default-deny. Medium sensitivity.
 
 ## Input
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `provider` | `"github"` | no | defaults to `github`, the only provider |
-| `owner` | string | yes | a GitHub login, the same shape `bind_main_repository` takes |
-| `name` | string | yes | a GitHub repository name, the same shape `bind_main_repository` takes |
+| `owner` | string | yes | a GitHub login |
+| `name` | string | yes | a GitHub repository name |
 
 ## Output
 
 | Field | Type | Description |
 |---|---|---|
-| `bindingId` | string | `rpb_…`, the binding version the new head points at; what `unlink_repository` takes |
-| `connectionId` | string | `con_…`, the workspace's GitHub connection |
 | `fullName` | string | `owner/name` as GitHub reports it |
-| `defaultRef` | string | GitHub's default branch, recorded as the binding's configured ref |
-| `role` | `"linked"` | always `linked`; the main repository has its own door |
-| `linkedAt` | string | RFC 3339 |
+| `defaultRef` | string | GitHub's default branch. The sync records it as the binding's configured ref. |
+| `status` | `"proposed"` or `"listed"` | `proposed`: a steering PR adds the repository. `listed`: `workspace.toml` lists it already, so no PR was opened and the next steering sync links it. |
+| `steeringPullRequest` | object or null | `{ number, url, reused }` for the steering PR, or null when `status` is `listed`. `reused` is true when an open PR from the same branch already carried the change. |
+
+## How it works
+
+1. The handler checks the caller's role.
+2. It runs the checks the sync applies when it writes the head: the installation, the repository, another workspace's steering claim, and this workspace's heads. A steering PR that could never take effect is refused before it is opened.
+3. It reads `workspace.toml` on the steering repository's production branch.
+   - The file lists the repository: `status: listed`, no PR.
+   - The file is missing: the steering PR creates it with this one entry.
+   - The file reads as `workspace/v1`: the steering PR appends the entry.
+   - The file names another schema, or names `workspace/v1` and does not read against it: `conflict: workspace_toml_unreadable`. The handler does not overwrite a file it cannot read.
+4. It opens the steering PR from `workspace/link-<owner>-<name>-<hash>`. A second call for the same repository reuses the branch and the open PR.
+
+When the steering PR merges, the push to the production branch triggers the steering sync. The sync compares the new `workspace.toml` with the one it last synced. An entry that appears gets a head. An entry that goes away loses its head. Running the sync again at the same commit changes nothing.
 
 ## Refusals
 
 | Code | Reason | When |
 |---|---|---|
-| `forbidden` | `no_principal`, `org_role_required` | no acting user; not an org Owner or Admin or the workspace's Owner |
+| `forbidden` | `no_principal`, `org_role_required` | no acting user, or the caller is not an org Owner or Admin or the workspace's Owner |
 | `conflict` | `github_not_connected` | the workspace has no GitHub connection carrying an installation |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
-| `conflict` | `main_repo_claimed` | the repository is another workspace's main repository |
-| `conflict` | `main_repo_unbound` | this workspace has no main repository yet; bind it first, a linked repository is its second |
-| `conflict` | `main_repo` | the repository is this workspace's main repository, already bound |
+| `conflict` | `main_repo_claimed` | the repository is another workspace's steering repository |
+| `conflict` | `main_repo_unbound` | this workspace has no steering repository to hold `workspace.toml` |
+| `conflict` | `main_repo` | the repository is this workspace's steering repository |
 | `conflict` | `repository_already_linked` | this workspace already links it |
 | `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
+| `conflict` | `workspace_toml_unreadable` | `workspace.toml` on the production branch cannot be read as `workspace/v1` |
+| `not_found` | `workspace_not_found` | the file is missing and the workspace or its organization no longer exists |
+| `conflict` | `github_refused` | GitHub refused a read, the branch, the file, or the pull request |
 
-`main_repo_claimed` is deliberate. §10.1 opens repository-scoped Context PRs on the linked repository itself, and another workspace's main repository holds that workspace's `.oxagen/` governance tree. Linking it here would hand this workspace a door into that tree. A repository that is nobody's main may be linked by any number of workspaces, in the same organization or not. The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. It is checked twice: once by the cross-tenant read for the sentence, and once by the store's trigger `repository_binding_heads_exclusive_main`, which serialises every head write for one repository on a repository-keyed advisory lock and refuses a linked head where a main head exists elsewhere, so a main claim that lands between the read and the write is answered with the same refusal.
+The reason codes that name `main_repo` keep their names because the contract fixes them. They refer to the steering repository.
 
-`main_repo_unbound` closes the one gap in "a workspace is born with its main repository": the organization's first workspace is written without one (ADR-099 §6), and GitHub can be attached to it before `bind_main_repository` runs. Linking then would leave a linked head with no main beside it. Bind the main repository first.
+`main_repo_claimed` is deliberate. A linked repository receives this workspace's Context PRs, and another workspace's steering repository holds that workspace's steering record. Linking it here would hand this workspace a door into that record. The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. The store's trigger `repository_binding_heads_exclusive_main` checks it a second time when the sync writes the head.
 
 ## What this write does not do
 
-The §11.4 follow-through (subscribe the App to events, import issues, build the code graph) is not part of this write. The v2 descriptor at `packages/oxagen/src/contracts/v2/link-repository.ts` carries that target shape until its cutover; ADR-099 records the deferral.
+It writes no binding head. The steering sync writes it after the merge. The §11.4 follow-through (subscribe the App to events, import issues, build the code graph) is not part of this write. The v2 descriptor at `packages/oxagen/src/contracts/v2/link-repository.ts` carries that target shape until its cutover, and ADR-099 records the deferral.

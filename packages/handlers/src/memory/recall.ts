@@ -12,6 +12,7 @@ import {
   MEMORY_RECALL_MAX,
   MEMORY_RECALL_TOKENS_MAX,
 } from "@oxagen/oxagen/steering-repo/tokens";
+import { remoteDigests } from "../lib/remote-digests";
 import { statementWords } from "./statement";
 import type { RecallCandidate, RecallItem, RecallRequest } from "./types";
 
@@ -46,10 +47,22 @@ function eligible(request: RecallRequest, candidate: RecallCandidate): boolean {
   );
 }
 
+/**
+ * Is one of the candidate's repositories the request's? A record names a
+ * repository as `<host>/<owner>/<name>`, and the request carries only the
+ * host's digests of its remote, so the name is digested the same way.
+ */
+function inRepository(request: RecallRequest, repo: string): boolean {
+  if (request.repositoryDigests.length === 0) return false;
+  return remoteDigests(repo).some((digest) =>
+    request.repositoryDigests.includes(digest),
+  );
+}
+
 /** Is the candidate inside the request's repository, tools, and paths? */
 function inScope(request: RecallRequest, candidate: RecallCandidate): boolean {
   return (
-    reaches(candidate.repos, (repo) => repo === request.repository) &&
+    reaches(candidate.repos, (repo) => inRepository(request, repo)) &&
     reaches(candidate.tools, (target) =>
       request.tools.some((tool) => toolTargetMatches(target, tool)),
     ) &&

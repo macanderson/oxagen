@@ -19,6 +19,7 @@ import { useNavigate } from "@/ui/navigation";
 type Refusal =
   | { key: "tokenInvalid" }
   | { key: "groupUnreachable" }
+  | { key: "tokenNotGroup" }
   | { key: "tokenInsufficient" }
   | { key: "forbidden" }
   | { key: "badInput" }
@@ -49,6 +50,8 @@ function refusalOf(status: number, code: string | null): Refusal {
       return { key: "tokenInvalid" };
     case "gitlab_group_unreachable":
       return { key: "groupUnreachable" };
+    case "gitlab_token_not_group":
+      return { key: "tokenNotGroup" };
     case "gitlab_token_insufficient":
       return { key: "tokenInsufficient" };
   }

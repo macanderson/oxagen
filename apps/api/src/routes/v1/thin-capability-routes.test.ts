@@ -1473,7 +1473,7 @@ const ROUTES: ThinRoute[] = [
     expectedInput: { provider: "github", owner: "acme", name: "shared-lib" },
     invalidBody: { owner: "acme", name: "shared lib" },
     jsonGuard: true,
-    status: 201,
+    status: 202,
   },
   {
     file: "repository.unlink",
