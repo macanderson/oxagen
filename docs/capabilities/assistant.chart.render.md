@@ -60,7 +60,7 @@ no chart and no tile, or a serialized spec over 16,384 bytes.
 The app parses the block only after it checks the length, and validates it
 against the same limits (`packages/oxagen/src/chart-spec.ts`). A block that
 fails either check prints as code with one sentence saying the chart could not
-be read. A `null` value draws as a gap and prints as "Not recorded" in the
+be read. A `null` value draws as a gap and prints as "not recorded" in the
 table.
 
 ## SPEC references

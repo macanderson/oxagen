@@ -234,8 +234,8 @@ export function ChartLegendContent({
   );
 }
 
-export type ChartTableColumn = { label: string; numeric?: boolean };
-export type ChartTableRow = { key: string; cells: readonly ReactNode[] };
+type ChartTableColumn = { label: string; numeric?: boolean };
+type ChartTableRow = { key: string; cells: readonly ReactNode[] };
 
 /**
  * The chart's figures as a table, behind a disclosure under the chart. The

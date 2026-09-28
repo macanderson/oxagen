@@ -8047,6 +8047,13 @@ type Messages = {
         recordedWrong: string;
         failed: string;
       };
+      chart: {
+        drawing: string;
+        unreadable: string;
+        source: string;
+        item: string;
+        withUnit: string;
+      };
     };
     approvals: {
       title: string;

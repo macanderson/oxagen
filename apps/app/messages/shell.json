@@ -463,6 +463,13 @@
         "recordedUseful": "Recorded as useful against this run.",
         "recordedWrong": "Recorded as wrong against this run.",
         "failed": "Your rating was not recorded. Try again."
+      },
+      "chart": {
+        "drawing": "Drawing the chart…",
+        "unreadable": "This chart could not be read, so its block prints as sent.",
+        "source": "Source: {source}",
+        "item": "Item",
+        "withUnit": "{value} {unit}"
       }
     },
     "approvals": {

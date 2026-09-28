@@ -5,9 +5,12 @@
 // `<pre>`. Streamdown is the one place that config lives. A reply still
 // streaming in (`assistant-stream-reply.tsx`) passes `streaming: true`, so an
 // unterminated fence or bold marker never renders as broken HTML mid-reply
-// (`parseIncompleteMarkdown`).
+// (`parseIncompleteMarkdown`). An `oxagen-chart` fence, which `render_chart`
+// hands the assistant, draws as a chart instead of code (`assistant-chart.tsx`).
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
+import { CHART_FENCE_LANGUAGE } from "@oxagen/oxagen/chart-spec";
+import { AssistantChartBlock } from "./assistant-chart";
 
 /**
  * Shiki highlighting for fenced code. `[light, dark]` emits both themes as
@@ -18,6 +21,13 @@ import { createCodePlugin } from "@streamdown/code";
 const codePlugin = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
+
+const PLUGINS = {
+  code: codePlugin,
+  renderers: [
+    { language: CHART_FENCE_LANGUAGE, component: AssistantChartBlock },
+  ],
+};
 
 /**
  * An image in a reply renders as its alt text and is never fetched. The reply
@@ -68,7 +78,7 @@ export function AssistantMarkdown({
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
       components={COMPONENTS}
-      plugins={{ code: codePlugin }}
+      plugins={PLUGINS}
       controls={{ code: { copy: true, download: false } }}
       className={PROSE_CLASS}
     >
