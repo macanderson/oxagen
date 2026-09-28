@@ -5,8 +5,8 @@
 - **Owners:** platform, knowledge, tacho
 - **Decided by:** Mac set the direction on 2026-09-28. This record awaits
   acceptance.
-- **Amends:** ADR-214 decisions 1 and 4, and ADR-194 decision 2, for the code
-  graph only. ADR-016, whose local path returns under tachod.
+- **Amends:** ADR-214 decision 4 and ADR-194 decision 2, for the code graph
+  only. ADR-016, whose local path returns under tachod.
 - **Related:** issue #4657, ADR-042 (tenant data planes), ADR-053 §2
   (organization model keys), ADR-101 (four harnesses), ADR-187 (the gateways),
   ADR-211 (no HTTP+SSE), and the code graph spec version 1.2
@@ -86,35 +86,61 @@ into the shared store. A local graph has to avoid that path.
 
    This amends ADR-194 decision 2 for the code graph alone. Every other
    embedding still goes to Voyage on the platform key.
-5. **The endpoint credential is stored like a model credential.**
-   `set_model_credential` gains a purpose, so an organization's embedding
-   endpoint and its language-model key are separate slots, and setting one
-   never replaces the other. The endpoint URL passes the same public-URL check
-   as today's `baseUrl`. A loopback endpoint (`--embed-url
-   http://127.0.0.1:11434/v1/embeddings`) is set only on the machine, is never
-   stored in Oxagen, and its vectors never leave the machine.
-6. **Cards are embedded once per organization.** Local and cloud builds send
-   cards through the code graph's embedding route. That route runs in the
-   code graph's query service until ADR-187 is accepted, then moves to the
-   cloud gateway. Before it calls a provider, it looks up each card hash in
-   the organization's `embeddings` table, so a card is embedded once per
-   embedding space, whichever machine or commit produced it. A build in the
-   custom mode with no stored credential still publishes, without vectors, and
-   marks the copy `embeddings: missing_credential`.
-7. **Every merge is covered, and every release is kept.** A merge to the
-   default branch starts a 5-minute window. A burst of merges builds once, from
-   the last merge, and each earlier merge resolves to that copy through its
-   valid range. A tag builds its exact commit with no window, is keyed by tag
-   so a newer commit cannot cancel it, and is kept forever. The release archive
-   lists each tagged copy with the builds since the last tag and the embedding
-   tokens they used. Every query takes an optional `at`: a commit, a tag, or a
-   PR number.
+5. **The endpoint credential belongs to one workspace and is stored like a
+   model credential.** `set_model_credential` gains a `purpose`. With
+   `purpose: "embeddings"` it also takes a workspace, and the slot is keyed by
+   organization, workspace, and purpose. Two workspaces with different
+   endpoints hold two credentials. Setting one never replaces another
+   workspace's credential or the organization's language-model key. The row
+   sits in `org.model_credentials` under the same KMS envelope, which gains
+   `purpose` and a nullable `workspace_id`. Only an org Owner or Admin sets
+   it, and each change is audited as a security event, as today. The endpoint
+   URL passes the same public-URL check as today's `baseUrl`. A loopback
+   endpoint (`--embed-url http://127.0.0.1:11434/v1/embeddings`) is set only
+   on the machine and is never stored in Oxagen.
+6. **Cards are embedded once per embedding space.** An embedding space is
+   named by its endpoint URL, model, and dimensions. The Oxagen mode is one
+   space, and two workspaces that name the same endpoint and model share
+   another. In the Oxagen mode and with a stored endpoint, builds send cards
+   through the code graph's embedding route, and a local build reaches it
+   through tachod. That route runs in the code graph's query service until
+   ADR-187 is accepted, then moves to the cloud gateway. Before it calls a
+   provider, it looks up each card hash in the organization's `embeddings`
+   table for that space. A card is embedded once per space, whichever machine
+   or commit produced it. Every card passes ADR-214 decision 5's secret
+   scanner before it leaves the machine. A loopback endpoint never uses the
+   route. The local host calls it directly and caches its vectors by card
+   hash in `graph.db`, and on that machine it overrides the workspace's mode.
+   A question the local server forwards to the cloud then searches by name
+   and text, because the cloud holds no vectors in the loopback space, and
+   the answer says so. A build in the custom mode with no stored credential
+   still publishes, without vectors, and marks the copy
+   `embeddings: missing_credential`.
+7. **Every commit on the default branch gets its own copy, and every release
+   is kept.** Commits on the default branch build in order. A squash merge
+   lands one commit, and a rebase merge lands several, each of which builds.
+   Each build starts from the copy before it and reprocesses only the files
+   its commit changed, so a burst of merges costs the files they changed, not
+   a full build each. `at: "<sha>"` answers from that commit's copy and never
+   from a later one. A commit whose build has not finished answers `building`.
+   The workspace-wide stages (schema reads through sqlglot, domain grouping,
+   and enrichment) run at most once every 5 minutes. Each copy names the run
+   of those stages it carries, as part of its freshness. A tag builds its
+   exact commit, is keyed by tag so a newer commit cannot cancel it, and is
+   kept forever. The release archive lists each tagged copy with the builds
+   since the last tag and the embedding tokens they used. Every query takes
+   an optional `at`: a commit on the default branch, a tag, or a PR number. A
+   PR number means the copy of that PR's latest push. A PR branch's own
+   commits are not addressable.
 
 ## Consequences
 
 - An operator gets answers about uncommitted code from any of the four
   harnesses, and the shared graph still changes only through server builds of
   the provider's commits.
+- The default branch builds once per commit. Each build reprocesses only the
+  files its commit changed, and the workspace-wide stages still run at most
+  once every 5 minutes.
 - A laptop now runs builds. The local host runs one worker at low priority
   with a 2 GB memory limit by default, and it runs SCIP only when
   `init --scip` asks for it.
@@ -146,6 +172,11 @@ into the shared store. A local graph has to avoid that path.
   symbol would get one ID locally and another in the cloud, and no local answer
   could be checked against a copy.
 - **Answer only from the cloud copy.** It cannot see uncommitted work.
+- **Build one copy for a burst of merges.** A query at an earlier merge would
+  read a later merge's code, and ADR-214 makes each commit its own copy.
+- **One embedding credential per organization.** Two workspaces with
+  different endpoints would overwrite each other's key, and one of them would
+  send its cards to the other's provider.
 - **Let a custom endpoint write into the Oxagen embedding space.** Vectors from
   two models cannot share an index or be compared. Separate spaces keep each
   index correct, and a workspace that switches back keeps its Voyage vectors.
