@@ -279,6 +279,15 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm --filter @oxagen/app check:messages
 
+      # ADR-015 makes Biome the sole formatter. The pre-commit hook formats
+      # staged files only, so a --no-verify commit or a merged file reached
+      # main unformatted while CI stayed green (#4055). Whole tree, not the
+      # turbo filter: drift can sit in any file. The if: is the one every
+      # check after "Lint and typecheck" carries (#3428).
+      - name: Biome formatting (whole tree, ADR-015)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm format:check
+
       - name: Manifest, contracts, env invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
@@ -644,6 +653,14 @@ jobs:
           else
             pnpm turbo run test:coverage --filter=@oxagen/$LANE
           fi
+
+      # apps/app's coverage report must name only apps/app/src files that
+      # exist. On 2026-09-19 it counted ~80 retired-app files at 0% and failed
+      # the floor while every test passed (#3431). reportOnFailure in
+      # apps/app/vitest.config.ts keeps the report present for this read.
+      - name: Coverage report names only apps/app source
+        if: ${{ !cancelled() && matrix.lane == 'app' && steps.scope.outputs.run == 'true' }}
+        run: node tools/scripts/check-coverage-scope.mjs apps/app
 
   # The required status check. The ruleset on main requires `test`, and
   # migration-gate, deploy-web and deploy-node need it, so it keeps the name
