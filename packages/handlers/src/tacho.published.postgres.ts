@@ -343,9 +343,9 @@ export function createPostgresTachoPublished(
   };
 
   return {
-    // A run's request manifest names the versions it received, but nothing
-    // reads those pins back yet. So a run reads the versions published now,
-    // like a call from outside a run.
+    // The version published now. A run's request manifest names the
+    // versions it received, but nothing reads those pins back yet, so the
+    // port's scope has a null run id and no run can read through it (#4447).
     published: async (scope) => {
       const current = await currentVersion({
         orgId: scope.orgId,

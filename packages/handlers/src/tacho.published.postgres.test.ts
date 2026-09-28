@@ -25,7 +25,6 @@ const OTHER_WORKSPACE: Scope = {
   orgId: SCOPE.orgId,
   workspaceId: "00000000-0000-4000-8000-000000000003",
 };
-const RUN = "00000000-0000-4000-8000-000000000009";
 const COMMIT = "c0ffee0000000000000000000000000000000001";
 const KEY = "github.com/a-intel/steering";
 const MEMORY = "memory/billing-tests.md";
@@ -196,13 +195,6 @@ describe("published", () => {
       expect(t.resolveRepository).not.toHaveBeenCalled();
     },
   );
-
-  it("serves a run the version published now, since nothing reads a run's pins yet", async () => {
-    const t = setup();
-    const delivery = await t.published.published({ ...SCOPE, runId: RUN });
-    expect(delivery.workspace).toEqual(version());
-    expect(t.current).toHaveBeenCalledWith(KEY);
-  });
 
   it("is null before the first publish", async () => {
     const t = setup({ versions: [] });
