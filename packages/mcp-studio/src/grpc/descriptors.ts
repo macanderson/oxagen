@@ -619,6 +619,11 @@ function isExtension(value: ReflectionObject): value is Field {
   return value instanceof protobuf.Field && typeof value.extend === "string";
 }
 
-function isMap(field: Field): field is MapField {
+/**
+ * protobufjs types a message's fields as Field, but a map field is a
+ * MapField, and MapField does not extend Field. The intersection lets the
+ * predicate narrow a Field.
+ */
+function isMap(field: Field): field is Field & MapField {
   return field.map;
 }
