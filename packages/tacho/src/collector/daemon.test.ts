@@ -11,7 +11,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
@@ -19,7 +18,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import { runTachoHook } from "../claude-code/hook-client";
-import { digestBytes } from "../digest";
 import { sessionUuid } from "../ids";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
@@ -1897,12 +1895,10 @@ describe("tachod", () => {
         url: `${host.api_url}${MEMORY_UPLOAD_PATH}`,
         authorization: `Bearer ${host.api_key}`,
         body: {
-          source: "local_gateway",
+          host_enrollment_id: host.host_enrollment_id,
           harness: "claude-code",
           path: file,
           statement: "Use pnpm, not npm.",
-          contentDigest: digestBytes("Use pnpm, not npm."),
-          modifiedAt: new Date(statSync(file).mtimeMs).toISOString(),
         },
       },
     ]);
