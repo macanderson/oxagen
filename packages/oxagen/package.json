@@ -26,6 +26,7 @@
     "./plugins": "./src/plugins/index.ts",
     "./tacho/command-limits": "./src/tacho/command-limits.ts",
     "./tacho/schemas": "./src/tacho/schemas.ts",
+    "./tacho/session-subject": "./src/tacho/session-subject.ts",
     "./mandates/schemas": "./src/mandates/schemas.ts",
     "./approval-rules/schemas": "./src/approval-rules/schemas.ts",
     "./mandates/schemas.sample": "./src/mandates/schemas.sample.ts",

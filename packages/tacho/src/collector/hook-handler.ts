@@ -67,6 +67,12 @@ import {
   raiseInterjection,
   showsRefusedPrompt,
 } from "./interjection";
+import {
+  forgetRecallHints,
+  noteRecallHints,
+  readRepository,
+  recallScope,
+} from "./recall-hints";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -137,8 +143,11 @@ export interface HookHandlerDeps {
    * The repository a session runs in, read from its `origin` remote
    * (`readRepositoryRemote` in `./git-facts`): the digests the host looks
    * for in the bundle's `unbound_repo.bound_remote_digests`, and the name the
-   * create path proposes (#3941). Absent, or answering undefined, the host
-   * asks nothing.
+   * create path proposes (#3941). A memory recall sends the same digests and
+   * names files relative to the root it reads. A session reads it once, and
+   * again only when its `cwd` leaves that repository (`readRepository` in
+   * `./recall-hints`). Absent, or answering undefined, the host asks
+   * nothing, and a recall names no repository and no files.
    */
   repositoryRemote?: (cwd: string) => Promise<RepositoryRemote | undefined>;
   /**
@@ -362,14 +371,10 @@ async function askAboutRepository(
     deps.repositoryRemote === undefined
   )
     return [];
-  let remote: RepositoryRemote | undefined;
-  try {
-    remote = await deps.repositoryRemote(record.cwd);
-  } catch {
-    // A failed read proves nothing about the repository, and the prompt it
-    // was read for must still go through.
-    remote = undefined;
-  }
+  // The read is shared with the memory recall, so a session that started one
+  // at an earlier hook reuses it. A failed read answers undefined, because
+  // it proves nothing about the repository and the prompt must go through.
+  const remote = await readRepository(record, deps.repositoryRemote);
   if (remote === undefined || isBound(clause, remote)) return [];
   return raiseInterjection(record, clause, remote, deps.now(), fields) ?? [];
 }
@@ -1023,6 +1028,21 @@ async function routeHook(
   ) {
     return { events: reopening, response: {}, record };
   }
+  // A memory recall names the session's repository, and the hook queue is
+  // serial, so a prompt must not wait on git. The read starts at the first
+  // live hook that carries a `cwd` and runs while the session works, and a
+  // prompt sends what it has settled. Only a session whose prompts recall
+  // starts one, so a host that recalls nothing runs no extra git.
+  if (
+    replay === undefined &&
+    !record.sealed &&
+    record.pendingTerminal !== true &&
+    input.hook_event_name !== "SessionEnd" &&
+    deps.recallMemories !== undefined &&
+    deps.repositoryRemote !== undefined &&
+    deliversMessages(record.harness, "UserPromptSubmit")
+  )
+    void readRepository(record, deps.repositoryRemote);
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
@@ -1185,8 +1205,10 @@ async function routeHook(
       // operator's messages, in what room the answer has left. Only a live
       // prompt whose answer the harness reads asks, so a replay, Stella, and
       // Cursor never wait on the control plane for text nobody would read.
-      // The daemon keeps no repository name to send: the remote it reads
-      // holds digests and a name, and the owner and host stay on the machine.
+      // The ask names the repository by its remote's digests, so the owner
+      // and host stay on the machine, and adds the tools and files the
+      // session used. It sends only what is already known, so the prompt
+      // never waits on git.
       const recalled =
         block === undefined &&
         replay === undefined &&
@@ -1194,7 +1216,7 @@ async function routeHook(
         deliversMessages(record.harness, input.hook_event_name)
           ? recallContext(
               await deps.recallMemories({
-                repository: null,
+                ...recallScope(record),
                 text: promptText(input) ?? "",
               }),
               delivered.join(CONTEXT_JOINER).length,
@@ -1258,6 +1280,9 @@ async function routeHook(
       const toolName = input.tool_name ?? "unknown";
       const toolInput = input.tool_input;
       noteToolCall(record, toolName, toolInput);
+      // A recall names the tools and files the session used. A call with no
+      // tool name adds its file only, because "unknown" names no tool.
+      noteRecallHints(record, input.tool_name, toolInput);
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
@@ -1632,6 +1657,8 @@ async function routeHook(
     case "SessionEnd": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       deps.registry.seal(record);
+      // The record outlives the session, so its recall hints go now.
+      forgetRecallHints(record);
       const harness = skillsHarness(record);
       if (deps.skills !== undefined && harness !== undefined)
         await deps.skills.remove(harness, record.harnessSessionId, env);

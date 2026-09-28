@@ -106,7 +106,6 @@ const only = (list: HTMLElement[]): HTMLElement => {
 
 const COMPOSITION = [
   "Agent",
-  "Purpose",
   "Owner",
   "Steering",
   "Toolbelt",
@@ -357,7 +356,6 @@ describe("Agents, loaded", () => {
     await renderAgents({ list: agentPage([agentRow()]) });
     expect(cellsOf(only(rows()))).toEqual([
       "reacme.core.release-botClaude Code",
-      "Cuts releases and opens their pull requests.",
       "MBMarcus Bell",
       "not recorded",
       // The belt the agent carries (ADR-198).
@@ -421,7 +419,7 @@ describe("Agents, loaded", () => {
         }),
       ]),
     });
-    expect(rows().map((row) => cellsOf(row)[7])).toEqual([
+    expect(rows().map((row) => cellsOf(row)[6])).toEqual([
       "tamper2 open incidents",
       "not enrolledno hook is installed, so its runs are recorded only",
       "observeenrolled, and nothing is delivered or refused yet",
@@ -437,12 +435,12 @@ describe("Agents, loaded", () => {
     if (pending === undefined) throw new Error("no row");
     // No host, so no runtime kind: the cell names the runtime the agent is
     // bound to (ADR-198), and the line under the dash is the tier alone.
-    expect(cellsOf(pending)[5]).toBe("Build box—not recorded");
+    expect(cellsOf(pending)[4]).toBe("Build box—not recorded");
     expect(
       pending.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
     expect(pending.querySelector('[data-gap="tier"]')).toBeInTheDocument();
-    expect(cellsOf(pending)[6]).toBe("prn_pending");
+    expect(cellsOf(pending)[5]).toBe("prn_pending");
   });
 
   it("reads tamper before retired or suspended, so an open incident is never hidden behind a status", async () => {
@@ -463,7 +461,7 @@ describe("Agents, loaded", () => {
         }),
       ]),
     });
-    expect(rows().map((row) => cellsOf(row)[7])).toEqual([
+    expect(rows().map((row) => cellsOf(row)[6])).toEqual([
       "tamper1 open incident",
       "tamper3 open incidents",
     ]);
@@ -476,7 +474,7 @@ describe("Agents, loaded", () => {
     });
     const [row] = rows();
     if (row === undefined) throw new Error("no row");
-    expect(cellsOf(row)[5]).toBe("Build box—gateway");
+    expect(cellsOf(row)[4]).toBe("Build box—gateway");
     expect(
       row.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
@@ -600,9 +598,7 @@ describe("Agents, loaded", () => {
   it("opens the agent when a row is clicked anywhere but its actions", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
     fireEvent.click(
-      within(only(rows())).getByText(
-        "Cuts releases and opens their pull requests.",
-      ),
+      within(only(rows())).getByText("Marcus Bell"),
     );
     expect(push).toHaveBeenCalledWith("/acme/core-platform/agents/release-bot");
   });
@@ -681,7 +677,7 @@ describe("Agents list controls", () => {
     const empty = screen.getByTestId("agents-no-match");
     expect(empty).toHaveTextContent("No rows match.");
     expect(empty.closest("tbody")).not.toBeNull();
-    expect(empty.querySelector("td")).toHaveAttribute("colspan", "10");
+    expect(empty.querySelector("td")).toHaveAttribute("colspan", "9");
   });
 
   it("sorts by a header and says so with aria-sort", async () => {
@@ -702,7 +698,7 @@ describe("Agents list controls", () => {
       screen
         .getAllByRole("columnheader")
         .map((th) => th.hasAttribute("aria-sort")),
-    ).toEqual([true, true, true, true, true, true, true, true, true, false]);
+    ).toEqual([true, true, true, true, true, true, true, true, false]);
   });
 
   it("sorts Operations by the token total, an agent with none recorded last", async () => {
@@ -1115,19 +1111,19 @@ describe("Agents at phone width", () => {
       table.setAttribute("data-cards", "");
 
       const cells = [...(table.tBodies.item(0)?.rows.item(0)?.cells ?? [])];
-      const [head, purpose] = cells;
+      const [head, owner] = cells;
       const actions = cells.at(-1);
-      if (!head || !purpose || !actions) throw new Error("no cells");
+      if (!head || !owner || !actions) throw new Error("no cells");
       // The Agent cell is labelled like every cell, and phone.css hides that
       // label and sets the agent card at the start edge as the card's head.
       expect(head).toHaveAttribute("data-label", "Agent");
       expect(getComputedStyle(head).justifyContent).toBe("flex-start");
-      expect(getComputedStyle(purpose).justifyContent).toBe("flex-end");
+      expect(getComputedStyle(owner).justifyContent).toBe("flex-end");
       // The unlabelled actions cell sits at the start edge too.
       expect(actions).not.toHaveAttribute("data-label");
       expect(getComputedStyle(actions).justifyContent).toBe("flex-start");
       // A hairline between cells, none under the last.
-      expect(getComputedStyle(purpose).borderBottomStyle).toBe("solid");
+      expect(getComputedStyle(owner).borderBottomStyle).toBe("solid");
       expect(getComputedStyle(actions).borderBottomWidth).toBe("0px");
       // The head's label is hidden by a ::before rule jsdom cannot compute,
       // so the rule itself is asserted present in the phone block.

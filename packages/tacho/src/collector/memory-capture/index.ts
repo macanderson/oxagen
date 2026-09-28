@@ -24,9 +24,14 @@ export {
 } from "./memory-reader";
 export {
   createMemoryRecall,
+  MEMORY_RECALL_DIGESTS_MAX,
   MEMORY_RECALL_PATH,
+  MEMORY_RECALL_PATH_MAX_CHARS,
+  MEMORY_RECALL_PATHS_MAX,
   MEMORY_RECALL_TEXT_MAX_CHARS,
   MEMORY_RECALL_TIMEOUT_MS,
+  MEMORY_RECALL_TOOL_MAX_CHARS,
+  MEMORY_RECALL_TOOLS_MAX,
   type MemoryRecall,
   type MemoryRecallDeps,
   type MemoryRecallRequest,

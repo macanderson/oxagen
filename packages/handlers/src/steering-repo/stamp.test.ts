@@ -12,10 +12,16 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
+  IMPORT_BRANCH,
+  IMPORT_REPLACES_PATH,
+  importBranch,
+  isImportBranch,
   isStampedRecordPath,
   ledgerInstant,
   ledgerPeriodBounds,
   mergeTrailers,
+  parseReplacesFile,
+  renderReplacesFile,
   stampRecordText,
   steeringBranch,
   type LedgerLineInput,
@@ -716,5 +722,151 @@ describe("branchScopeRefusal", () => {
         "steering/promotions/2026-09.jsonl",
       ]),
     ).toMatchObject({ reason: "ledger_owned" });
+  });
+
+  it("accepts many records, skills, and governance.toml on the import branch", () => {
+    expect(IMPORT_BRANCH).toBe("steering/import-oxagen");
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a-intel.core-platform.refunds-over-100.md",
+        "steering/imported/a-intel.core-platform.no-push-to-main.md",
+        "steering/skills/a-intel.core-platform.release-notes/SKILL.md",
+        "steering/skills/a-intel.core-platform.brand-voice/SKILL.md",
+        "steering/governance.toml",
+      ]),
+    ).toBeNull();
+  });
+
+  it("names each import batch after the first with its number", () => {
+    expect(importBranch(1)).toBe(IMPORT_BRANCH);
+    expect(importBranch(2)).toBe("steering/import-oxagen-2");
+    expect(importBranch(12)).toBe("steering/import-oxagen-12");
+    expect(() => importBranch(0)).toThrow(RangeError);
+    expect(() => importBranch(1.5)).toThrow(RangeError);
+    for (const batch of [1, 2, 9, 10, 12, 300]) {
+      expect(isImportBranch(importBranch(batch))).toBe(true);
+    }
+  });
+
+  it("accepts many records on a numbered import batch", () => {
+    expect(
+      branchScopeRefusal("steering/import-oxagen-2", [
+        "steering/imported/a.md",
+        "steering/imported/b.md",
+        IMPORT_REPLACES_PATH,
+      ]),
+    ).toBeNull();
+  });
+
+  it("still refuses two records on a steering/ branch that only looks like an import branch", () => {
+    for (const branch of [
+      "steering/import",
+      "steering/import-oxagen-1",
+      "steering/import-oxagen-02",
+      "steering/import-oxagen-",
+      "steering/import-oxagen-x",
+      "steering/imports/import-oxagen",
+      "Steering/import-oxagen",
+    ]) {
+      expect(isImportBranch(branch)).toBe(false);
+      expect(
+        branchScopeRefusal(branch, [
+          "steering/imported/a.md",
+          "steering/imported/b.md",
+        ]),
+      ).toMatchObject({ reason: branch.startsWith("steering/") ? "one_change" : "branch_prefix" });
+    }
+  });
+
+  it("keeps the folder and ledger rules on the import branch", () => {
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a.md",
+        "workspace.toml",
+      ]),
+    ).toMatchObject({
+      reason: "branch_scope",
+      message: "workspace.toml belongs on a workspace/ branch, not steering/import-oxagen",
+    });
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a.md",
+        "steering/promotions/2026-09.jsonl",
+      ]),
+    ).toMatchObject({ reason: "ledger_owned" });
+  });
+
+  it("refuses the replaces file on any branch but an import branch", () => {
+    expect(
+      branchScopeRefusal("steering/refunds", [
+        "steering/imported/a.md",
+        IMPORT_REPLACES_PATH,
+      ]),
+    ).toEqual({
+      reason: "import_only",
+      message: `${IMPORT_REPLACES_PATH} belongs on an import branch, not steering/refunds`,
+    });
+    expect(
+      branchScopeRefusal(IMPORT_BRANCH, [
+        "steering/imported/a.md",
+        IMPORT_REPLACES_PATH,
+      ]),
+    ).toBeNull();
+  });
+});
+
+describe("the replaces file", () => {
+  const OLD_REFUNDS = "rec_a_intel_refunds_over_100_ec4ece819896";
+  const OLD_PUSH = "rec_a_intel_no_push_to_main_27e708fab014";
+  const REFUNDS = "steering/imported/a-intel.core-platform.refunds-over-100.md";
+  const PUSH = "steering/imported/a-intel.core-platform.no-push-to-main.md";
+
+  it("sits under steering/, so an import branch may carry it", () => {
+    expect(branchPrefixForPath(IMPORT_REPLACES_PATH)).toBe("steering");
+    expect(isStampedRecordPath(IMPORT_REPLACES_PATH)).toBe(false);
+  });
+
+  it("renders one line per record in path order", () => {
+    const text = renderReplacesFile(
+      new Map([
+        [REFUNDS, OLD_REFUNDS],
+        [PUSH, OLD_PUSH],
+      ]),
+    );
+    expect(text).toBe(`${PUSH} ${OLD_PUSH}\n${REFUNDS} ${OLD_REFUNDS}\n`);
+  });
+
+  it("reads back what it renders, with CRLF line ends and blank lines", () => {
+    const replaces = new Map([
+      [REFUNDS, OLD_REFUNDS],
+      [PUSH, OLD_PUSH],
+    ]);
+    const text = `\r\n${renderReplacesFile(replaces).replaceAll("\n", "\r\n")}\r\n`;
+    expect(parseReplacesFile(text)).toEqual({ ok: true, replaces });
+  });
+
+  it("reads an empty file as naming no old ids", () => {
+    expect(parseReplacesFile("")).toEqual({ ok: true, replaces: new Map() });
+    expect(renderReplacesFile(new Map())).toBe("");
+  });
+
+  it("refuses a line that is not a record path and a record id", () => {
+    for (const line of [
+      `${REFUNDS}`,
+      `${REFUNDS} ${OLD_REFUNDS} extra`,
+      `workspace.toml ${OLD_REFUNDS}`,
+      `${REFUNDS} rec_not-an-id`,
+    ]) {
+      expect(parseReplacesFile(`${line}\n`)).toMatchObject({
+        ok: false,
+        message: expect.stringContaining("is not a record path and a record id"),
+      });
+    }
+  });
+
+  it("refuses a path named twice", () => {
+    expect(
+      parseReplacesFile(`${REFUNDS} ${OLD_REFUNDS}\n${REFUNDS} ${OLD_PUSH}\n`),
+    ).toEqual({ ok: false, message: `${REFUNDS} is named twice` });
   });
 });

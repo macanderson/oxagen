@@ -82,7 +82,7 @@ describe("Wasted spend", () => {
             basis: "gateway_observed",
           },
           runs: 1,
-          provingRuns: ["arun_01k5rn8f3j"],
+          provingRuns: [{ runId: "arun_01k5rn8f3j", name: null }],
         },
       ],
     });
@@ -93,6 +93,7 @@ describe("Wasted spend", () => {
       cause?.querySelector('[style*="width"]')?.getAttribute("style"),
     ).toContain("width: 0%");
     expect(screen.getByText("arun_01k5rn8f3j", { exact: false })).toBeTruthy();
+    expect(screen.getByText("Untitled session")).toBeTruthy();
 
     cleanup();
     waste({

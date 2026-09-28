@@ -18,6 +18,10 @@ export const conversations = chatSchema.table(
     ...orgScopeMixin(),
     userId: uuid("user_id").notNull(),
     title: text("title"),
+    // Who wrote the title: 'prompt' (cut from the first question), 'model'
+    // (the fast-tier titler) or 'user' (a rename). The titler replaces only a
+    // 'prompt' title. NULL while the title is NULL.
+    titleSource: text("title_source"),
     status: text("status").notNull(),
     activeLeafMessageId: uuid("active_leaf_message_id"),
     // Archive is a reversible, user-facing soft state distinct from deletion:
@@ -51,6 +55,10 @@ export const conversations = chatSchema.table(
     statusCheck: check(
       "conversations_status_check",
       sql`${t.status} IN ('active', 'archived', 'deleted')`,
+    ),
+    titleSourceCheck: check(
+      "conversations_title_source_check",
+      sql`${t.titleSource} IS NULL OR ${t.titleSource} IN ('prompt', 'model', 'user')`,
     ),
     // The history nav lists a user's non-deleted conversations in a workspace
     // ordered by recency, split by archive state. This composite index serves

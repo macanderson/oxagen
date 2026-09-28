@@ -495,7 +495,39 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(mocks.bootstrapWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Default", slug: "default" }),
     );
-    expect(result.workspace.slug).toBe("default");
+    expect(result.workspace?.slug).toBe("default");
+  });
+
+  it("creates no workspace when the input sends workspace: null", async () => {
+    // The web app sends null so its welcome flow can ask you to name the
+    // first workspace (#4582). The gate opens with no workspace, and
+    // create_workspace fills it in later.
+    const input = organizationCreate.input.parse({
+      name: "Acme Corp",
+      slug: "acme",
+      workspace: null,
+    });
+
+    const result = await organizationCreateHandler(input, CTX);
+
+    expect(mocks.bootstrapWorkspace).not.toHaveBeenCalled();
+    expect(mocks.openOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(mocks.openOnboardingGate.mock.calls[0]?.[1]).toEqual({
+      orgId: "internal_org_id",
+      workspaceId: null,
+      now: ORG_ROW.createdAt,
+    });
+    // Only the organization's steering state is written, and only its
+    // provision job starts.
+    expect(mocks.updates).toHaveLength(1);
+    expect(mocks.updates[0]?.table).toBe(schema.organizations);
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledTimes(1);
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledWith(
+      { orgId: "internal_org_id", workspaceId: null, actorUserId: "u_1" },
+      expect.objectContaining({ status: "provisioning" }),
+    );
+    expect(result.workspace).toBeNull();
+    expect(result.slug).toBe("acme");
   });
 
   it("surfaces a workspace bootstrap failure so the org transaction cannot commit without it", async () => {
@@ -561,7 +593,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     const result = await organizationCreateHandler(INPUT, CTX);
 
     expect(result.slug).toBe("acme");
-    expect(result.workspace.slug).toBe("core");
+    expect(result.workspace?.slug).toBe("core");
   });
 
   it("does not wait for the key before answering the person signing up", async () => {
