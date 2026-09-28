@@ -4236,7 +4236,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8eb6a83211ccb5c8e1cb515996dfe2b6b651fa91dc5b40b7a0a43806cc466de1",
+  "contentHash": "952df88179e42fc4c9718a79357ecfb8b1dad5c3f6068c08dc62458f96f59c15",
   "domains": [
     {
       "name": "agent",
@@ -4288,6 +4288,8 @@
         "postgres:agent.memory_reflections",
         "postgres:agent.memory_rejections",
         "postgres:agent.runtimes",
+        "postgres:agent.steering_publications",
+        "postgres:agent.steering_versions",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
       ]
@@ -4716,7 +4718,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 167
+      "tableCount": 169
     },
     {
       "domains": [
@@ -9011,6 +9013,12 @@
           "type": "jsonb"
         },
         {
+          "name": "merge_claimed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "merged_commit",
           "nullable": true,
           "primaryKey": false,
@@ -10083,6 +10091,140 @@
       "domain": "agent",
       "id": "postgres:agent.runtimes",
       "name": "runtimes",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "published_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "published_commit",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "ledger",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "lease_token",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "lease_until",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.steering_publications",
+      "name": "steering_publications",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "commit_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "bundle",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "published_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.steering_versions",
+      "name": "steering_versions",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

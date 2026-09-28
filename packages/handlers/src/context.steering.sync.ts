@@ -25,7 +25,8 @@
 //      synced head, here and never in step 8. A problem with the file, or a
 //      repository the sync cannot link, is a warning.
 //   6. The Context PRs: a merged one points at its published record, a closed
-//      one is rejected, and one whose head moved has its checks reset.
+//      one is rejected, and one whose head moved has its checks reset. A
+//      proposal a merge from Oxagen has claimed is left to that merge.
 //   7. The sync state, and a check on the head commit naming every problem.
 //   8. The workspace's steering repository published as its next steering
 //      version (#4447), when a publisher is wired. The publisher reads that
@@ -45,6 +46,8 @@ import type {
 } from "./context.steering.github";
 import { createSteeringHost } from "./context.steering.host";
 import {
+  claimCutoff,
+  mergeClaimed,
   postgresSteeringStore,
   type ProposalRow,
   type SteeringStore,
@@ -69,6 +72,8 @@ import {
   listedRepositories,
   readWorkspaceToml,
 } from "./repository.workspace-toml";
+import { withToolProjection } from "./mcp-studio/publish-deps";
+import { steeringSyncPublish } from "./steering-repo/publisher";
 
 /** What one publish of the workspace's steering repository did. */
 export interface SyncPublished {
@@ -88,12 +93,14 @@ export interface SyncPublished {
  * steering version (@oxagen/steering-bundle `publish`). It takes only the
  * sync's scope. The port resolves the steering repository and reads its
  * production head itself, because this sync reads the main code repository
- * (ADR-184), and a code repository's head is never a steering head.
+ * (ADR-184), and a code repository's head is never a steering head. It
+ * answers null when the workspace has no steering repository to publish.
+ * `steeringSyncPublish` (./steering-repo/publisher) builds it.
  */
 export type SyncPublish = (scope: {
   orgId: string;
   workspaceId: string;
-}) => Promise<SyncPublished>;
+}) => Promise<SyncPublished | null>;
 
 export interface SyncDeps {
   github: SteeringHost;
@@ -101,8 +108,8 @@ export interface SyncDeps {
   steering: Pick<SteeringStore, "updateProposal">;
   now: () => Date;
   /**
-   * Unset until the version store is wired, and then the sync publishes
-   * nothing. The publisher builds its publish() deps through
+   * The sync publishes nothing when this is unset, as in tests that do not
+   * exercise step 8. The production deps build it through
    * `withToolProjection` (./mcp-studio/publish-deps), so each version it
    * publishes also writes the workspace's tool registry.
    */
@@ -115,12 +122,16 @@ export interface SyncDeps {
 }
 
 export function syncDeps(): SyncDeps {
+  const github = createSteeringHost();
   return {
-    github: createSteeringHost(),
+    github,
     store: postgresSyncStore,
     steering: postgresSteeringStore,
     now: () => new Date(),
     reconcileLinks: reconcileWorkspaceLinks,
+    // The same publisher merge_context_pr calls, over the same host, so a
+    // merge made on the host reaches the same version sequence.
+    publish: steeringSyncPublish({ host: github, extend: withToolProjection }),
   };
 }
 
@@ -424,11 +435,16 @@ export async function syncWorkspaceSteering(
     const merged: { row: ProposalRow; pr: PullState }[] = [];
     for (const p of pulls) {
       if (!p.pr.merged || p.pr.baseRef !== repo.defaultBranch) continue;
+      // A merge from Oxagen claims the proposal before it stamps the PR, so
+      // the PR's head is the stamp while the row still names the head the
+      // checks ran on. The claim alone defers it, whatever the head (#4504).
       const inGrace =
-        p.row.status === "checks_passed" &&
-        p.pr.headSha === p.row.headSha &&
-        p.pr.mergedAt !== null &&
-        now.getTime() - p.pr.mergedAt.getTime() < MERGE_GRACE_SECONDS * 1000;
+        mergeClaimed(p.row, now) ||
+        (p.row.status === "checks_passed" &&
+          p.pr.headSha === p.row.headSha &&
+          p.pr.mergedAt !== null &&
+          now.getTime() - p.pr.mergedAt.getTime() <
+            MERGE_GRACE_SECONDS * 1000);
       if (inGrace) defer.add(p.row.lineageId);
       else merged.push(p);
     }
@@ -525,7 +541,11 @@ export async function syncWorkspaceSteering(
     outcome.findings = findings;
 
     // 6. The Context PRs.
+    const noClaimSince = claimCutoff(now);
     for (const { row, pr } of pulls) {
+      // A merge from Oxagen is landing this PR. It moves the proposal itself,
+      // and the next sync reads what it left.
+      if (mergeClaimed(row, now)) continue;
       if (pr.merged && pr.baseRef !== repo.defaultBranch) {
         if (
           await reject(
@@ -534,6 +554,7 @@ export async function syncWorkspaceSteering(
             row,
             `Merged on ${hostName(repo)} into ${pr.baseRef}, which is not the production branch ${repo.defaultBranch}`,
             now,
+            noClaimSince,
           )
         )
           outcome.proposals.rejected += 1;
@@ -545,6 +566,7 @@ export async function syncWorkspaceSteering(
             row,
             `Closed on ${hostName(repo)} without merging`,
             now,
+            noClaimSince,
           )
         )
           outcome.proposals.rejected += 1;
@@ -563,7 +585,7 @@ export async function syncWorkspaceSteering(
             row.id,
             { status: "pr_open", headSha: pr.headSha, checks: pendingChecks() },
             [row.status as (typeof STALE_FROM)[number]],
-            { headSha: row.headSha },
+            { headSha: row.headSha, noClaimSince },
           );
           outcome.proposals.stale += 1;
         } catch (err) {
@@ -588,6 +610,7 @@ export async function syncWorkspaceSteering(
           lineageId: row.lineageId,
           mergedCommit: pr.mergeCommitSha ?? head,
           mergedAt: pr.mergedAt ?? now,
+          noClaimSince,
         }));
       if (linked) {
         outcome.proposals.merged += 1;
@@ -604,6 +627,7 @@ export async function syncWorkspaceSteering(
           row,
           `Merged on ${hostName(repo)}, but Oxagen could not publish it: ${why}`,
           now,
+          noClaimSince,
         )
       )
         outcome.proposals.rejected += 1;
@@ -710,15 +734,18 @@ async function reject(
   row: ProposalRow,
   reason: string,
   at: Date,
+  noClaimSince: Date,
 ): Promise<boolean> {
   try {
     await deps.steering.updateProposal(
       row.id,
       { status: "rejected", dismissedAt: at, dismissedReason: reason },
       OPEN_PR,
+      { noClaimSince },
     );
   } catch (err) {
-    // Another call moved it first: a merge from Oxagen, or a dismissal.
+    // Another call moved it first: a merge from Oxagen, or a dismissal. Or a
+    // merge from Oxagen claimed it after this sync read it.
     if (err instanceof HandlerError && err.code === "conflict") return false;
     throw err;
   }

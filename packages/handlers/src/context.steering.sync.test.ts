@@ -29,6 +29,7 @@ import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { syncView } from "./context.steering.freshness";
 import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
+import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
 import {
   MERGE_GRACE_SECONDS,
   SYNC_CHECK_NAME,
@@ -571,6 +572,118 @@ describe("Context PRs on the host", () => {
       mergedByUserId: null,
     });
     expect(r.h.store.versions).toHaveLength(1);
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
+  });
+
+  // ── The merge claim (#4504) ────────────────────────────────────────────────
+
+  /** A claim older than MERGE_CLAIM_SECONDS at the sync's clock. */
+  const lapsed = (r: Rig) =>
+    new Date(r.deps.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000);
+
+  /**
+   * Claims the proposal between the sync's read of the PR and its write, as
+   * a merge from Oxagen can. The sync holds the row it read, so the stored
+   * row is replaced rather than changed in place.
+   */
+  const claimAfterRead = (r: Rig, id: string) => {
+    const realGet = r.h.github.getPullRequest.bind(r.h.github);
+    return vi
+      .spyOn(r.h.github, "getPullRequest")
+      .mockImplementation(async (repo, number) => {
+        const i = r.h.store.proposals.findIndex((p) => p.publicId === id);
+        r.h.store.proposals[i] = {
+          ...r.h.store.proposals[i]!,
+          mergeClaimedAt: r.deps.now(),
+        };
+        return realGet(repo, number);
+      });
+  };
+
+  // A merge from Oxagen stamps the PR, so the host merges a head the row
+  // does not name. While the claim stands, the sync leaves the merge to it.
+  it("defers a PR merged at another head while a merge claims it, and publishes it once the claim lapses", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    r.h.github.commit(
+      `steering/${LINEAGE}`,
+      proposal(r, id).path!,
+      recordText(LINEAGE, "Stamped."),
+    );
+    r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
+    pastGrace(r);
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const claimed = await r.run();
+    expect(claimed.retryAfterSeconds).toBe(MERGE_GRACE_SECONDS);
+    expect(claimed.proposals).toMatchObject({ merged: 0, rejected: 0 });
+    expect(proposal(r, id).status).toBe("checks_passed");
+    expect(active(r)).toEqual([]);
+
+    // A claim taken after the sync read the PR still holds the link and the
+    // rejection off.
+    Object.assign(proposal(r, id), { mergeClaimedAt: null });
+    const spy = claimAfterRead(r, id);
+    const raced = await r.run();
+    spy.mockRestore();
+    expect(raced.proposals).toMatchObject({ merged: 0, rejected: 0 });
+    expect(proposal(r, id).status).toBe("checks_passed");
+
+    Object.assign(proposal(r, id), { mergeClaimedAt: lapsed(r) });
+    const out = await r.run();
+    expect(out.proposals.merged).toBe(1);
+    expect(proposal(r, id)).toMatchObject({
+      status: "merged",
+      mergeClaimedAt: null,
+    });
+    expect(active(r)[0]?.statement).toBe("Stamped.");
+  });
+
+  it("does not reset the checks of a claimed PR whose head moved", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    const checked = proposal(r, id).headSha;
+    r.h.github.commit(
+      `steering/${LINEAGE}`,
+      proposal(r, id).path!,
+      recordText(LINEAGE, "Stamped."),
+    );
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const out = await r.run();
+    expect(out.proposals.stale).toBe(0);
+    expect(proposal(r, id)).toMatchObject({
+      status: "checks_passed",
+      headSha: checked,
+    });
+  });
+
+  it("does not reject a claimed PR closed on the host until the claim lapses", async () => {
+    const r = rig();
+    const id = await openedAndPassed(r);
+    r.h.github.closeOnHost(r.h.github.pulls[0]!.number);
+    Object.assign(proposal(r, id), { mergeClaimedAt: r.deps.now() });
+
+    const claimed = await r.run();
+    expect(claimed.proposals.rejected).toBe(0);
+    expect(proposal(r, id).status).toBe("checks_passed");
+    expect(r.h.github.deletedBranches).not.toContain(`steering/${LINEAGE}`);
+
+    // A claim taken after the sync read the PR refuses the rejection too.
+    Object.assign(proposal(r, id), { mergeClaimedAt: null });
+    const spy = claimAfterRead(r, id);
+    const raced = await r.run();
+    spy.mockRestore();
+    expect(raced.proposals.rejected).toBe(0);
+    expect(proposal(r, id).status).toBe("checks_passed");
+
+    Object.assign(proposal(r, id), { mergeClaimedAt: lapsed(r) });
+    const out = await r.run();
+    expect(out.proposals.rejected).toBe(1);
+    expect(proposal(r, id)).toMatchObject({
+      status: "rejected",
+      dismissedReason: "Closed on GitHub without merging",
+    });
     expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
   });
 });

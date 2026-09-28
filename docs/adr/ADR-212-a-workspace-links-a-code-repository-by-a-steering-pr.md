@@ -79,7 +79,7 @@ checkout cannot name a workspace.
    in never picks its workspace or its scope.
 8. **A run in an unlinked repository runs.** When a session's
    `git_remote_digest` matches no head in its key's workspace, Oxagen refuses
-   nothing and charges the cost to that workspace. Migration 20260927190400
+   nothing and charges the cost to that workspace. Migration 20260928001500
    adds `tacho.sessions.repository_unlinked`, which ingest writes once, on
    the session's genesis row. `get_run` and `get_tacho_session` answer it.
 9. **The steering repository's credential stays with Oxagen.** Oxagen reads
