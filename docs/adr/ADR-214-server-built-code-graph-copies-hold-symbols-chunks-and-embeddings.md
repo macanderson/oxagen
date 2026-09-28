@@ -78,6 +78,20 @@ Those four points are the boundary spec's own launch invariants 1 to 4.
    row-level security by workspace. Graph files in S3 use SSE-KMS with the
    customer's key. Every file, chunk, card, and prompt passes a secret scanner
    before it is stored, embedded, or sent to a model.
+6. **The code graph reuses Stella's graph code instead of writing it again.**
+   Stella's `stella-graph` crate already extracts symbols, imports, call sites,
+   storage schemas (Prisma, Python ORMs, SQL, TypeScript), manifests, and
+   markdown for 13 languages. Its extraction moves into a crate with no
+   database and no I/O, which Stella's local index and Oxagen's server builder
+   both call. New readers that work on one file (environment variables, tests,
+   scripts, CI files, infrastructure files) go into that crate too, so Stella's
+   local graph gains them. Oxagen keeps only what needs a server: Postgres and
+   S3 storage, SCIP runs, history, ranking, domains, the workspace stage,
+   linker agents, and the query service. One extractor also means a symbol has
+   the same ID in Stella's local graph and in Oxagen's graph. Stella is
+   AGPL-3.0-only, so Oxagen links these crates under the commercial license
+   that Stella's contributor agreement lets Mac grant, pinned to a Stella
+   release tag.
 
 ## Consequences
 
@@ -87,6 +101,8 @@ Those four points are the boundary spec's own launch invariants 1 to 4.
   rule stays true for every other feature.
 - The code graph build can start. Its first batch no longer needs to write
   this decision.
+- Stella's graph crate splits in two, and Stella's own review rules apply to
+  every reader added there. Oxagen upgrades by moving its pinned tag.
 - Oxagen now holds customer source text and derived facts in a new place.
   The access rules in the code graph spec apply: answers prune repos the
   caller cannot read before a walk expands them, and derived text such as a
