@@ -1,0 +1,735 @@
+{
+  "auth": [],
+  "document_hash": "sha256:84d173f206eb58ac20407bba45caa23ea3398e194d5f39b1dd84c7f3be7d05e1",
+  "environments": [],
+  "files": [],
+  "listed": [
+    {
+      "kind": "client_stream",
+      "name": "a_intel.ledger.v1.Ledger/UploadEntries",
+      "reason": "A client-streaming method takes a stream of requests, and one tool call sends one, so it never becomes a tool."
+    },
+    {
+      "kind": "bidi_stream",
+      "name": "a_intel.ledger.v1.Ledger/SyncEntries",
+      "reason": "A bidirectional method streams both ways, and one tool call sends one request, so it never becomes a tool."
+    }
+  ],
+  "notes": [],
+  "tools": [
+    {
+      "description": "Read one entry.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Whatever the posting system attached. The ledger stores it unread.",
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "description": "An ISO 4217 code, such as USD.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "NO_SIDE_EFFECTS",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/GetEntry",
+        "request_type": "a_intel.ledger.v1.GetEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "description": "Post an entry. Posting twice posts twice.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "ENTRY_KIND_UNSPECIFIED",
+              "ENTRY_KIND_DEBIT",
+              "ENTRY_KIND_CREDIT"
+            ],
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "additionalProperties": false,
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "description": "An ISO 4217 code, such as USD.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "post_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Whatever the posting system attached. The ledger stores it unread.",
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "description": "An ISO 4217 code, such as USD.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "IDEMPOTENCY_UNKNOWN",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/PostEntry",
+        "request_type": "a_intel.ledger.v1.PostEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "description": "Reverse an entry. Reversing it again changes nothing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "reverse_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Whatever the posting system attached. The ledger stores it unread.",
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "description": "The amount in the currency's minor unit.",
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "description": "An ISO 4217 code, such as USD.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "IDEMPOTENT",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/ReverseEntry",
+        "request_type": "a_intel.ledger.v1.ReverseEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "description": "Stream every entry for an account, oldest first.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_entries",
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "description": "The messages the stream sent, in order.",
+            "items": {
+              "oneOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                },
+                {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "invoiceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "transferId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "manualNote"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "detail": {
+                  "additionalProperties": true,
+                  "description": "Whatever the posting system attached. The ledger stores it unread.",
+                  "properties": {
+                    "@type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "invoiceId": {
+                  "type": "string"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "ENTRY_KIND_UNSPECIFIED",
+                        "ENTRY_KIND_DEBIT",
+                        "ENTRY_KIND_CREDIT"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "description": "A value this definition does not name.",
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "labels": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "manualNote": {
+                  "type": "string"
+                },
+                "money": {
+                  "properties": {
+                    "amount": {
+                      "description": "The amount in the currency's minor unit.",
+                      "format": "int64",
+                      "pattern": "^-?[0-9]+$",
+                      "type": "string"
+                    },
+                    "currency": {
+                      "description": "An ISO 4217 code, such as USD.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "type": "object"
+                },
+                "postedAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "relatedIds": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "reversed": {
+                  "type": "boolean"
+                },
+                "transferId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "kind",
+                "labels",
+                "relatedIds",
+                "reversed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "description": "True when the call stopped at max_items, the size cap, or the deadline before the stream ended.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "NO_SIDE_EFFECTS",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/ListEntries",
+        "request_type": "a_intel.ledger.v1.ListEntriesRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "server"
+      }
+    }
+  ]
+}
