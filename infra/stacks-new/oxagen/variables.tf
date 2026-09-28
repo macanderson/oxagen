@@ -32,7 +32,7 @@ variable "legacy_subdomains" {
 }
 
 variable "caa_issuers" {
-  description = "Certificate authorities permitted to issue for oxagen.sh."
+  description = "Certificate authorities permitted to issue for oxagen.sh and oxagen.ai. The oxagen.app and vanity zones name Amazon alone."
   type        = list(string)
   default     = ["amazon.com", "pki.goog", "sectigo.com", "letsencrypt.org"]
 }
@@ -74,11 +74,9 @@ variable "vanity_domains" {
     redirect_to = string
     delegated   = bool
   }))
+  # oxagen.app left this map for dns-oxagen-app.tf (ADR-215). Its zone and
+  # records moved with it, so dropping the entry destroys nothing it needs.
   default = {
-    "oxagen.app" = {
-      redirect_to = "https://app.oxagen.sh/"
-      delegated   = true
-    }
     "oxagen.dev" = {
       redirect_to = "https://docs.oxagen.sh/"
       delegated   = true

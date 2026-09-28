@@ -199,7 +199,7 @@ export function TokensSection({
                           at.ws,
                           row.key.split(".").pop() ?? row.key,
                         )}
-                        className={`${linkText} ${mono} break-all`}
+                        className={`${linkText} ${mono}`}
                       >
                         {row.key}
                       </SafeLink>

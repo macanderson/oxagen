@@ -54,7 +54,12 @@ export function MandateScope({ tools }: { tools: MandateRow["tools"] }) {
   return (
     <ul data-scope="patterns" className="flex flex-col gap-0.5">
       {tools.map((pattern) => (
-        <li key={pattern} className={`${mono} break-all text-xs`}>
+        // In a table cell a long pattern ends in an ellipsis, and the cell's
+        // tooltip shows it whole (#4665). Elsewhere it breaks onto a new line.
+        <li
+          key={pattern}
+          className={`${mono} break-all text-xs md:[td_&]:truncate`}
+        >
           {pattern}
         </li>
       ))}

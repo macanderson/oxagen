@@ -58,10 +58,19 @@ describe("mcp middleware startup wiring", () => {
     // xmcp exposes no lifecycle hook, so module scope is the only location
     // guaranteed to run on cold start. If a bootstrap call ever moved below
     // the exported middleware, it would run per-request (or not at all).
-    const exportIndex = source.indexOf("export default apiKeyAuthMiddleware");
+    const exportIndex = source.indexOf("export default [");
     expect(exportIndex).toBeGreaterThan(-1);
     for (const [call] of REQUIRED_STARTUP_CALLS) {
       expect(source.indexOf(call)).toBeLessThan(exportIndex);
     }
+  });
+
+  it("runs the served tools after the auth gate", () => {
+    // xmcp runs the array in order. The served tools read the request's key,
+    // so a request without one must be turned away before they run.
+    const exported = source.slice(source.indexOf("export default ["));
+    const gate = exported.indexOf("apiKeyAuthMiddleware({");
+    expect(gate).toBeGreaterThan(-1);
+    expect(exported.indexOf("servedToolsMiddleware,")).toBeGreaterThan(gate);
   });
 });

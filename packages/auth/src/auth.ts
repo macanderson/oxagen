@@ -215,12 +215,18 @@ const envTrustedOrigins: string[] = process.env.BETTER_AUTH_TRUSTED_ORIGINS
       .filter(Boolean)
   : [];
 
-// Production app origins trusted for CSRF / OAuth redirect validation. The
-// brand-domain cutover already landed (both the app and marketing surfaces
-// live under oxagen.sh), so this is a single flat list rather than separate
-// "interim" and "branded" sets. Additional per-environment origins can still
-// be appended via BETTER_AUTH_TRUSTED_ORIGINS.
+// Production app origins trusted for CSRF / OAuth redirect validation.
+// Additional per-environment origins can still be appended via
+// BETTER_AUTH_TRUSTED_ORIGINS.
+//
+// The app is moving from app.oxagen.sh to oxagen.app (ADR-215), and both stay
+// here. BETTER_AUTH_URL comes from Parameter Store at container start, while
+// the page origin is inlined at build, so for part of the move a page on one
+// host can post to Better Auth while its base URL still names the other.
+// Trusting both keeps sign-in working through that window. Remove
+// app.oxagen.sh only once nothing is served from it.
 const PROD_ORIGINS = [
+  "https://oxagen.app",
   "https://app.oxagen.sh",
   "https://www.oxagen.sh",
   "https://api.oxagen.sh",

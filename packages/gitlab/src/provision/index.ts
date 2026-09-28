@@ -37,3 +37,4 @@ export {
   readGitlabSettings,
 } from "./settings";
 export { recordGitlabDeployment } from "./deployment";
+export { ensureSteeringHook } from "./hook";

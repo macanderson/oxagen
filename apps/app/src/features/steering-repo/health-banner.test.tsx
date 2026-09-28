@@ -2,10 +2,11 @@
 // The steering repo health banner over fake repairs (#4518): each unhealthy
 // state and its heading, the table of prescribed settings that differ on
 // GitHub and GitLab, Repair for an owner or admin, Re-authorize for a lost
-// grant, and the reverting steering PR for an unmerged commit. The platform
-// does not register `repair_steering_repo` yet, so the refusal a deployment
-// answers today is covered too. The layout's wrapper draws nothing while the
-// repo is healthy, unread, or not backed by a capability.
+// grant, and the reverting steering PR for an unmerged commit. A deployment
+// that does not register `repair_steering_repo` answers `tool_not_registered`,
+// so that refusal is covered too. The layout's wrapper reads through the
+// DataSource it is handed and draws nothing while the repo is healthy, before
+// its first health read, or when the read fails.
 import {
   cleanup,
   render,
@@ -16,10 +17,15 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readError, readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { settingsDifference, steeringRepoView } from "./steering-repo.builders";
+import {
+  settingsDifference,
+  steeringRepoSource,
+  steeringRepoView,
+} from "./steering-repo.builders";
 import type { SteeringRepoRead } from "./types";
 
 const actions = vi.hoisted(() => ({
@@ -332,17 +338,27 @@ describe("the workspace layout's health banner", () => {
   ) {
     read.readSteeringRepo.mockResolvedValue(answer);
     const viewer = ctx(orgRole);
-    const element = await SteeringRepoHealthBanner({ ctx: viewer });
-    expect(read.readSteeringRepo).toHaveBeenCalledWith(viewer);
+    const { source } = steeringRepoSource(readOk(steeringRepoView()));
+    const element = await SteeringRepoHealthBanner({ ctx: viewer, source });
+    expect(read.readSteeringRepo).toHaveBeenCalledWith(source, viewer);
     if (element !== null) render(<IntlProvider>{element}</IntlProvider>);
     return element;
   }
 
-  it("draws nothing while no capability backs the read (negative)", async () => {
+  it("draws nothing when the read fails (negative)", async () => {
     expect(
       await layoutBanner({
-        kind: "not_backed",
-        capability: "get_steering_repo",
+        kind: "failed",
+        failure: readError("installation_unreachable", 503),
+      }),
+    ).toBeNull();
+  });
+
+  it("draws nothing when the viewer is denied the read (negative)", async () => {
+    expect(
+      await layoutBanner({
+        kind: "failed",
+        failure: { ok: false, reason: "denied", permission: "repository.read" },
       }),
     ).toBeNull();
   });

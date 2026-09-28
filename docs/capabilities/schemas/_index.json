@@ -234,16 +234,6 @@
       "consumes": []
     },
     {
-      "name": "bind_main_repository",
-      "domain": "repository",
-      "surfaces": [
-        "api"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "bisect_runs",
       "domain": "run",
       "surfaces": [
@@ -1894,6 +1884,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_steering_index",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "component": null,
       "produces": [],

@@ -163,6 +163,7 @@ const source: DataSource = {
     memories: vi.fn(),
     tree: vi.fn(),
   },
+  steeringRepo: { get: vi.fn() },
   tools: {
     versions: vi.fn(),
     grants: vi.fn(),

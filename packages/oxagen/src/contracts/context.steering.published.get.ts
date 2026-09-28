@@ -23,7 +23,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryBindingIdSchema } from "./repository.shared";
 import { repositoryRole } from "./repository.list";
 
 /** The most files one pull returns. A tree past this is refused, not cut. */
@@ -48,12 +48,12 @@ export const publishedSteeringGet = registerCapability({
   },
   input: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId.optional(),
+      bindingId: repositoryBindingIdSchema.optional(),
     })
     .strict(),
   output: z
     .object({
-      bindingId: repositoryMainBind.output.shape.bindingId,
+      bindingId: repositoryBindingIdSchema,
       role: repositoryRole,
       fullName: z.string().min(1),
       productionBranch: z.string().min(1),

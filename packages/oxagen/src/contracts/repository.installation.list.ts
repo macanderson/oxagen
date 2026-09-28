@@ -1,21 +1,21 @@
 /**
  * `list_installation_repositories`: the repositories the workspace's GitHub App
- * installation can see, so a person can pick which one becomes the main repo
- * (MC spec §10.1; #2967).
+ * installation can see, so a person can pick one to link (MC spec §10.1;
+ * #2967).
  *
- * This is the picker behind `bind_main_repository`. It exists so the choice on
- * screen and the choice the write accepts are the same set: the bind resolves
- * the repository through the installation's token and answers
- * `not_found: repository_not_installed` for anything that token cannot read, so
- * a picker built from any other list (the user's own repositories, a typed
+ * This is the picker behind `link_repository`. `link_repository` resolves the
+ * repository through the installation's token and answers
+ * `not_found: repository_not_installed` for anything that token cannot read.
+ * A picker built from any other list (the user's own repositories, a typed
  * `owner/name`) would offer options that refuse on submit.
  *
- * Like the bind, the caller names no installation. It is taken from the
- * workspace's GitHub connection — the one the HMAC-verified install callback
- * attached — because an installation id a caller could choose would let one
+ * As with `link_repository`, the caller names no installation. It is taken
+ * from the workspace's GitHub connection, the one the HMAC-verified install
+ * callback attached. An installation id a caller could choose would let one
  * tenant enumerate another account's repositories. A workspace with no
- * installation is `conflict: github_not_connected`, the same refusal the bind
- * gives, which is what `get_main_repository` reports before this is called.
+ * installation is `conflict: github_not_connected`, the same refusal
+ * `link_repository` gives, which is what `get_main_repository` reports before
+ * this is called.
  *
  * `truncated` is honest rather than paginated: the installation token lists
  * repositories a page at a time and this read walks a bounded number of pages.
@@ -23,8 +23,8 @@
  * the surface tells the person to narrow the App's repository access on GitHub
  * (`github.manageUrl`) rather than silently hiding the repository they want.
  *
- * Roles: org Owner or Admin, checked by the handler (INV-29) — the pair that
- * may bind. A settings read: `noBillingGate: true`.
+ * Roles: org Owner or Admin, checked by the handler (INV-29). A settings
+ * read: `noBillingGate: true`.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -33,7 +33,7 @@ export const repositoryInstallationList = registerCapability({
   name: "list_installation_repositories",
   domain: "repository",
   description:
-    "The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept.",
+    "The repositories the workspace's GitHub App installation can reach. The app's link picker offers these to link_repository.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

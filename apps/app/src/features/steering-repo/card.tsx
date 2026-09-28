@@ -1,7 +1,8 @@
 // The steering repo card on the repositories page: the repository, its
 // published version, and its health in one sentence. While the repo is not
-// ready, provisioning takes the health row's place. With no read behind it,
-// the card names the capability it needs. The async read is ./section.
+// ready, provisioning takes the health row's place. When the read fails, the
+// card says who was denied what, or which code the control plane answered.
+// The async read is ./section.
 import { useTranslations } from "next-intl";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -12,10 +13,10 @@ import {
   panel,
   panelBody,
 } from "@/ui/control-styles";
+import { ReadFailure } from "@/ui/read-failure";
 import { SteeringRepoProvisioning } from "./provisioning";
 import { SteeringRepositoryLink } from "./repository-link";
 import type { RepoHealth, SteeringRepoRead } from "./types";
-import { SteeringRepoUnavailable } from "./unavailable";
 
 // The page shows one card, so a fixed id is unique. The card renders on the
 // server, where the app uses no useId.
@@ -57,8 +58,8 @@ export function SteeringRepoCard({
       >
         {t("heading")}
       </h2>
-      {read.kind === "not_backed" ? (
-        <SteeringRepoUnavailable capability={read.capability} />
+      {read.kind === "failed" ? (
+        <ReadFailure read={read.failure} section={t("heading")} />
       ) : (
         <div className={`${panel} ${panelBody} flex flex-col gap-3`}>
           <dl className={kvList}>

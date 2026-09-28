@@ -60,9 +60,10 @@ force = "should"
 - `set_id` is the repository's full name with `/` as `.`, taken from the
   **binding** (`repository_bindings.provider_full_name`) and never from live
   GitHub. A repository rename therefore does not re-stamp later records: the
-  name moves only when an owner re-approves it through `bind_main_repository`,
-  which writes a successor binding — the same rule the production branch
-  follows. A legacy wizard connection has no binding, so there the live name is
+  name moves only when a successor binding is written. #4616 removed
+  `bind_main_repository`, so the one writer that re-reads a bound repository
+  is `set_production_branch`, and it writes a successor only when the branch
+  moves. A legacy wizard connection has no binding, so there the live name is
   the only one available.
 - `origin` is `user` for a proposal a person raised and `inferred` for one an
   agent raised over an API key (the proposal has no `created_by_id`),

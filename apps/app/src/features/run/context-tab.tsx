@@ -32,7 +32,6 @@ import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
-import { cell } from "@/ui/table";
 import {
   type FirstPrompt,
   type FirstRequest,
@@ -72,13 +71,6 @@ function manifestTally(
 
 /** Where "Open the window" lands: the Prompt window panel below. */
 const WINDOW_ANCHOR = "run-context-window";
-
-/**
- * A numeric cell of the narrow context frames table: right-aligned and mono
- * like `numericCell`, but free to wrap, so "not recorded" does not push the
- * last column out of the split's detail column.
- */
-const wrappingNumber = `${cell} text-right font-mono tabular-nums`;
 
 /** How many cut items the spine shows before it folds the rest. */
 const CUTS_SHOWN = 3;
@@ -593,7 +585,10 @@ function frameRow(
       <Badge key="kind" tone="quiet" dot={false} mono>
         {entry.type}
       </Badge>,
-      <span key="frame" className="flex min-w-0 flex-wrap items-baseline gap-2">
+      <span
+        key="frame"
+        className="flex min-w-0 items-baseline gap-2 max-md:flex-wrap"
+      >
         <FrameLink
           seq={entry.seq}
           chainRef={entry.subagent?.chainRef}
@@ -601,7 +596,9 @@ function frameRow(
         />
         {/* A label that only repeats the kind says nothing the Kind column does not. */}
         {entry.label === entry.type ? null : (
-          <span className={`${mono} text-[11.5px] text-foreground`}>
+          <span
+            className={`${mono} min-w-0 text-[11.5px] text-foreground md:truncate`}
+          >
             {entry.label}
           </span>
         )}
@@ -649,15 +646,16 @@ function ContextFrames({
         </PanelBody>
       ) : (
         // `table.narrow`: the split's detail column is narrower than a list
-        // table's minimum, so the columns wrap rather than scroll.
+        // table's minimum, so the table drops that minimum. Each cell stays on
+        // one line and ends a long value in an ellipsis.
         <div className="[&_table]:min-w-0">
           <ListTable
             label={t("title")}
             columns={[
               { label: t("kind") },
               { label: t("frame") },
-              { label: t("tok"), numeric: true, className: wrappingNumber },
-              { label: t("score"), numeric: true, className: wrappingNumber },
+              { label: t("tok"), numeric: true },
+              { label: t("score"), numeric: true },
               { label: t("cited") },
             ]}
             rows={entries.map((entry) =>

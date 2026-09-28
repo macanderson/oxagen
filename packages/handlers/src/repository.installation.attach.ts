@@ -5,11 +5,11 @@
 // reaches repositories through.
 //
 // The id arrives from a caller, which is why it is checked rather than
-// trusted. `bind_main_repository` and `list_installation_repositories` both
+// trusted. `link_repository` and `list_installation_repositories` both
 // mint a token with the platform App's PRIVATE KEY against whatever
 // installation the workspace's connection names, and that token carries no
 // caller entitlement — GitHub asks who the App is, not who asked. So an
-// unverified id here is another account's source code, listed and bindable.
+// unverified id here is another account's source code, listed and linkable.
 // It is matched against `GET /user/installations` answered for this
 // workspace's own stored authorization before a single row is written, which
 // is the same rule the HMAC-verified install callback applies to the

@@ -305,6 +305,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       memories: refuse,
       tree: refuse,
     },
+    steeringRepo: { get: refuse },
     tools: {
       versions: refuse,
       grants: refuse,

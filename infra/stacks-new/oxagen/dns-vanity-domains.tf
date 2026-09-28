@@ -1,10 +1,13 @@
 /**
- * `oxagen.app` and `oxagen.dev`: names bought on 2026-09-27 so that a person
- * who types one of them reaches Oxagen (#4629).
+ * Vanity domains: names Oxagen holds so that a person who types one of them
+ * reaches Oxagen, and that serve nothing of their own. `oxagen.dev`, bought on
+ * 2026-09-27 (#4629), sends its visitors to the docs, per `var.vanity_domains`.
  *
- * Neither serves anything of its own. `oxagen.app` sends its visitors to the
- * app and `oxagen.dev` sends its visitors to the docs, per
- * `var.vanity_domains`. Each domain gets three kinds of record:
+ * `oxagen.app` was bought the same day and began here as a redirect to the
+ * app. It is now the app's own domain, and its zone, records, and certificate
+ * moved to dns-oxagen-app.tf (ADR-215).
+ *
+ * Each vanity domain gets three kinds of record:
  *
  *   - A redirect for the apex and `www`, through `modules/redirect-site`.
  *   - Records that say the domain sends no mail. A domain named like the
@@ -14,12 +17,12 @@
  *     names need.
  *
  * The redirect is a 302, and that is deliberate. Clients may keep a 301
- * forever. If Oxagen later serves the app from `oxagen.app` itself, a browser
- * that cached `oxagen.app -> app.oxagen.sh` as permanent would then bounce
- * between the two hosts. A 302 keeps that decision open. Switch to 301 once
- * the target is settled.
+ * forever. That is what let `oxagen.app` become the app's host: a browser
+ * that had cached `oxagen.app -> app.oxagen.sh` as permanent would bounce
+ * between the two hosts once the app moved. A 302 keeps that decision open.
+ * Switch to 301 once the target is settled.
  *
- * Both domains are registered at Vercel, which Terraform has no credentials
+ * These domains are registered at Vercel, which Terraform has no credentials
  * for here, so a person moves the nameservers by hand. The order matters:
  *
  *   1. Apply with `delegated = false`. This creates each zone and its records

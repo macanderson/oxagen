@@ -4,6 +4,9 @@
 // denied state in place of the page, inside the shell. The shell's workspace reads (the sidebar's counts
 // and the bell's feed) run only after it resolves, with the viewer it
 // resolved, so a failing shell read cannot let a non-member through (F3).
+// The steering repo health banner reads `get_steering_repo` through the same
+// data source, also only after the gate admits the viewer. A refused viewer
+// never reaches it, so a denied page makes no steering repo read.
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -13,6 +16,7 @@ const {
   CreateHost,
   ShellWorkspace,
   WorkspaceDenied,
+  SteeringRepoHealthBanner,
   source,
 } = vi.hoisted(() => ({
   NotFound: class NotFound extends Error {},
@@ -42,11 +46,15 @@ const {
   ShellWorkspace: vi.fn((props: { ctx: { wsSlug: string } }) => (
     <div data-testid="shell-workspace" data-ws={props.ctx.wsSlug} />
   )),
+  SteeringRepoHealthBanner: vi.fn((props: { ctx: { wsSlug: string } }) => (
+    <div data-testid="steering-repo-health-banner" data-ws={props.ctx.wsSlug} />
+  )),
   source: { shell: {} },
 }));
 vi.mock("@/server/viewer", () => ({ resolveWorkspaceViewer }));
 vi.mock("@/features/create", () => ({ CreateHost }));
 vi.mock("@/features/shell", () => ({ ShellWorkspace, WorkspaceDenied }));
+vi.mock("@/features/steering-repo", () => ({ SteeringRepoHealthBanner }));
 vi.mock("@/ui/page-states", () => ({
   PageSkeleton: () => <div data-testid="page-skeleton" />,
 }));
@@ -105,6 +113,15 @@ describe("WorkspaceLayout", () => {
     });
   });
 
+  it("reads the steering repo health with the viewer it resolved and the data source", async () => {
+    const { html } = await render("acme", "core-platform");
+    expect(html).toContain('data-testid="steering-repo-health-banner"');
+    expect(SteeringRepoHealthBanner.mock.calls[0]?.[0]).toMatchObject({
+      ctx: { wsSlug: "core-platform", orgSlug: "acme" },
+      source,
+    });
+  });
+
   it("draws the denied state inside the shell for a workspace it refuses, and the page never renders (negative)", async () => {
     const { html, errors } = await render("acme", "finops");
     expect(errors).toEqual([]);
@@ -117,6 +134,7 @@ describe("WorkspaceLayout", () => {
     expect(html).not.toContain('data-testid="page"');
     expect(html).not.toContain('data-testid="create-host"');
     expect(html).not.toContain('data-testid="shell-workspace"');
+    expect(html).not.toContain('data-testid="steering-repo-health-banner"');
   });
 
   it("is not found for an organization the viewer cannot see, and the page never renders (negative)", async () => {

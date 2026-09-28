@@ -124,10 +124,10 @@ export function CostCentersView({
           {live.map((workspace) => (
             <tr key={workspace.id} data-workspace={workspace.id}>
               <td className={cell}>
-                <div className="font-medium text-foreground">
+                <div className="font-medium text-foreground md:truncate">
                   {workspace.name}
                 </div>
-                <div className={`${mono} text-muted-foreground`}>
+                <div className={`${mono} text-muted-foreground md:truncate`}>
                   {workspace.slug}
                 </div>
               </td>

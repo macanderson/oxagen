@@ -7,12 +7,9 @@
 // viewer): the read cannot rely on an ambient tenant scope because the API's
 // org-only router carries no workspace id and the kernel enters no scope
 // without one. An organization that predates the gate has no row (the
-// migration wrote none): it reads as `unlocked` with no first frame and no
-// provisional window, since it was never provisional.
+// migration wrote none): it reads as `unlocked` with no first frame.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
-  type DetectedRepository,
-  detectedRepositorySchema,
   onboardingStateGet,
   type OnboardingStateGetOutput,
 } from "@oxagen/oxagen/contracts/onboarding.state.get";
@@ -24,14 +21,7 @@ const NO_ORG: OnboardingStateGetOutput = {
   workspace: null,
   firstFrameAt: null,
   firstRunId: null,
-  provisional: null,
 };
-
-/** The stored jsonb, or null when it is absent or not the shape enroll_host writes. */
-function detectedRepositoryOf(value: unknown): DetectedRepository | null {
-  const parsed = detectedRepositorySchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
 
 export const onboardingStateGetHandler: CapabilityHandler<
   typeof onboardingStateGet
@@ -49,9 +39,6 @@ export const onboardingStateGetHandler: CapabilityHandler<
         workspaceId: schema.onboardingState.workspaceId,
         firstFrameAt: schema.onboardingState.firstFrameAt,
         firstRunId: schema.onboardingState.firstRunId,
-        provisionalUntil: schema.onboardingState.provisionalUntil,
-        mainRepoBoundAt: schema.onboardingState.mainRepoBoundAt,
-        detectedRepository: schema.onboardingState.detectedRepository,
         workspacePublicId: schema.workspaces.publicId,
         workspaceSlug: schema.workspaces.slug,
       })
@@ -78,10 +65,5 @@ export const onboardingStateGetHandler: CapabilityHandler<
         : null,
     firstFrameAt: row.firstFrameAt?.toISOString() ?? null,
     firstRunId: row.firstRunId,
-    provisional: {
-      until: row.provisionalUntil.toISOString(),
-      mainRepoBoundAt: row.mainRepoBoundAt?.toISOString() ?? null,
-      detectedRepository: detectedRepositoryOf(row.detectedRepository),
-    },
   };
 };

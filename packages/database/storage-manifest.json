@@ -212,15 +212,6 @@
       "writes": []
     },
     {
-      "domain": "repository",
-      "name": "bind_main_repository",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
       "domain": "run",
       "name": "bisect_runs",
       "reads": [],
@@ -1725,6 +1716,16 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_steering_index",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
       ],
       "writes": []
     },
@@ -4292,7 +4293,7 @@
       "writes": []
     }
   ],
-  "contentHash": "44326c02d2d4ab5ae6a9c1c5b20c3837e53e86614c9a4e4a80e4e381c6406929",
+  "contentHash": "b4b42ee415e839ed1e801375665f5381de20f9895aab2ad0af239284e42d3326",
   "domains": [
     {
       "name": "agent",

@@ -19,21 +19,6 @@ export function toOnboardingGate(
         : { id: out.workspace.id, slug: out.workspace.slug },
     firstFrameAt: out.firstFrameAt,
     firstRunId: out.firstRunId,
-    provisional:
-      out.provisional === null
-        ? null
-        : {
-            until: out.provisional.until,
-            mainRepoBoundAt: out.provisional.mainRepoBoundAt,
-            detectedRepository:
-              out.provisional.detectedRepository === null
-                ? null
-                : {
-                    provider: out.provisional.detectedRepository.provider,
-                    owner: out.provisional.detectedRepository.owner,
-                    name: out.provisional.detectedRepository.name,
-                  },
-          },
   };
 }
 
