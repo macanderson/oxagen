@@ -10,8 +10,18 @@
  *
  * The body is parsed only after the handler has authenticated the delivery, so
  * an unauthenticated caller learns nothing from a malformed body either.
+ *
+ * Provisioning registers a second kind of hook on each GitLab steering project
+ * (#4562), at `POST /webhooks/gitlab/steering/:scopeKind/:scopeId`. Its
+ * token is an HMAC of the scope and the project, and
+ * `@oxagen/handlers/gitlab.steering-webhook` checks it and turns a push or a
+ * merge into a health check and a steering sync.
  */
 import { Hono } from "hono";
+import {
+  gitlabSteeringWebhookDeps,
+  handleGitLabSteeringWebhook,
+} from "@oxagen/handlers/gitlab.steering-webhook";
 import {
   gitlabWebhookDeps,
   handleGitLabWebhook,
@@ -20,15 +30,35 @@ import type { AppEnv } from "../../app";
 
 export const gitlabWebhookRoute = new Hono<AppEnv>();
 
-gitlabWebhookRoute.post("/:connectionId", async (c) => {
-  const raw = await c.req.text();
-  let body: unknown = null;
+/**
+ * The delivery's body as JSON, or null when it does not parse. Null goes to
+ * the handler, which authenticates first and then answers
+ * `ignored_unparseable`, the same as any body it cannot read.
+ */
+async function jsonBody(req: { text(): Promise<string> }): Promise<unknown> {
+  const raw = await req.text();
   try {
-    body = JSON.parse(raw);
+    return JSON.parse(raw) as unknown;
   } catch {
-    // Left null: the handler authenticates first and then answers
-    // `ignored_unparseable`, the same as any body it cannot read.
+    return null;
   }
+}
+
+gitlabWebhookRoute.post("/steering/:scopeKind/:scopeId", async (c) => {
+  const result = await handleGitLabSteeringWebhook(
+    gitlabSteeringWebhookDeps(),
+    {
+      scopeKind: c.req.param("scopeKind"),
+      scopeId: c.req.param("scopeId"),
+      tokenHeader: c.req.header("x-gitlab-token") ?? null,
+      body: await jsonBody(c.req),
+    },
+  );
+  return c.json({ outcome: result.outcome }, result.status);
+});
+
+gitlabWebhookRoute.post("/:connectionId", async (c) => {
+  const body = await jsonBody(c.req);
   const result = await handleGitLabWebhook(gitlabWebhookDeps(), {
     connectionPublicId: c.req.param("connectionId"),
     tokenHeader: c.req.header("x-gitlab-token") ?? null,

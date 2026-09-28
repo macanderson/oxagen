@@ -13,8 +13,10 @@
 //                           repository to the installation.
 //   4. write_first_commit   S0's templates, committed to main.
 //   5. apply_settings       The prescribed settings, read back and compared.
-//   6. publish_version      Version 1, recorded as a deployment to `steering`.
-//   7. bind_repository      Workspace only. A binding head with role steering.
+//   6. register_webhook     GitLab only. A project hook that sends push and
+//                           merge request events to Oxagen (#4562).
+//   7. publish_version      Version 1, recorded as a deployment to `steering`.
+//   8. bind_repository      Workspace only. A binding head with role steering.
 //
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
 // the workspace's settings, or of the organization's for `<org>/oxagen`, and
@@ -46,6 +48,10 @@ import {
   STEERING_APP_UNCONFIGURED_MESSAGE,
   steeringAppFromEnv,
 } from "./lib/steering-app";
+import {
+  steeringHookTarget,
+  type SteeringHookTarget,
+} from "./lib/steering-hook";
 import { logger } from "./logger";
 import {
   workspaceRepositoriesLock,
@@ -80,6 +86,7 @@ export const STEERING_REPO_STEPS = [
   "add_to_installation",
   "write_first_commit",
   "apply_settings",
+  "register_webhook",
   "publish_version",
   "bind_repository",
 ] as const;
@@ -225,6 +232,8 @@ export interface ProvisionDeps {
     scope: SteeringRepoScope,
     provider: "github" | "gitlab",
   ): Promise<void>;
+  /** The URL and token of the hook on a GitLab steering project. */
+  steeringHook(scope: SteeringRepoScope, projectId: number): SteeringHookTarget;
 }
 
 /**
@@ -258,6 +267,7 @@ function stepApplies(
   provider: SteeringConnection["provider"] | null,
 ): boolean {
   if (step === "add_to_installation") return provider === "github";
+  if (step === "register_webhook") return provider === "gitlab";
   if (step === "bind_repository") return scope.kind === "workspace";
   return true;
 }
@@ -566,6 +576,20 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
     );
 }
 
+/**
+ * Register the hook that tells Oxagen about pushes and merges on a GitLab
+ * steering project. A GitHub steering repo skips this step. A rerun writes
+ * the current token onto the same hook, so it also heals a rotated secret.
+ */
+async function registerWebhook(ctx: StepContext): Promise<void> {
+  const connection = requireConnection(ctx);
+  if (connection.provider !== "gitlab") return;
+  const repository = requireRepository(ctx);
+  const rest = await requireGitlab(ctx, connection);
+  const { url, token } = ctx.deps.steeringHook(ctx.scope, repository.id);
+  await gl.ensureSteeringHook(rest, { project_id: repository.id, url, token });
+}
+
 async function publishVersion(ctx: StepContext): Promise<void> {
   const connection = requireConnection(ctx);
   const repository = requireRepository(ctx);
@@ -611,6 +635,7 @@ const STEP_BODIES: Record<SteeringRepoStep, (ctx: StepContext) => Promise<void>>
     add_to_installation: addToInstallation,
     write_first_commit: writeFirstCommitStep,
     apply_settings: applySettingsStep,
+    register_webhook: registerWebhook,
     publish_version: publishVersion,
     bind_repository: bindRepository,
   };
@@ -1223,6 +1248,12 @@ export function steeringRepoProvisionDeps(options: {
         emailHtml: reauthorizeEmail(title, body),
       });
     },
+
+    steeringHook: (scope, projectId) =>
+      steeringHookTarget(
+        { kind: scope.kind, scopeId: scopeId(scope), projectId },
+        options.env ?? process.env,
+      ),
   };
 }
 
