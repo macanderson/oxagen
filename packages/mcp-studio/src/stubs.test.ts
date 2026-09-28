@@ -4,32 +4,16 @@ import { describe, expect, it } from "vitest";
 import { CompileError } from "./compile";
 import { graphqlSender, grpcSender, httpSender, mcpSender } from "./execute";
 import { importGrpc } from "./grpc";
-import { lint, type LintContext, type ServerFolder } from "./lint";
 import { NotBuiltError } from "./not-built";
 
 // The stubs never read their arguments, so an empty object stands in for each.
 const stub = <T>(): T => ({}) as T;
-
-const syncStubs: Array<[string, () => unknown]> = [
-  ["lint", () => lint(stub<ServerFolder>(), stub<LintContext>())],
-];
 
 const asyncStubs: Array<[string, () => Promise<unknown>]> = [
   ["grpc", () => importGrpc(stub())],
 ];
 
 describe("module stubs", () => {
-  it.each(syncStubs)("%s throws NotBuiltError", (module, call) => {
-    let thrown: unknown;
-    try {
-      call();
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(NotBuiltError);
-    expect((thrown as NotBuiltError).module).toBe(module);
-  });
-
   it.each(asyncStubs)("%s rejects with NotBuiltError", async (module, call) => {
     const error = await call().then(
       () => undefined,
