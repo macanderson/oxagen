@@ -166,9 +166,8 @@ into the shared store. A local graph has to avoid that path.
   of embeddings. Oxagen stores the vectors and card hashes.
 - The `codegraph` binary ships the Stella extraction crate to customer
   machines. ADR-214 records a commercial license for Oxagen to link that
-  crate. Whether the 2026-09-28 grant covers shipping it inside a binary that
-  customers run is Mac's question to answer. The local build host does not
-  ship until it is answered.
+  crate. Mac confirmed on 2026-09-28 that the grant covers shipping the crate
+  inside the `codegraph` binary that customers run on their own machines.
 - Stella's own index and the Oxagen local graph can both index one checkout on
   one machine. They share the extraction crate and its IDs but no files, so the
   cost is a second index, not a second set of IDs. Whether Stella reads the
