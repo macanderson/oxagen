@@ -165,6 +165,35 @@ describe("driftReport", () => {
     expect(text).toContain("Run `pnpm schema:manifest`");
   });
 
+  it("shows the end of a committed file that stops short", () => {
+    // A truncated write: every line present matches, and the regenerated file
+    // has one more. The report must say which side ended, not print "null".
+    const committed = regenerated.trimEnd();
+    const text = driftReport(committed, regenerated).join("\n");
+    expect(text).toContain("committed:   (end of file)");
+    expect(text).toContain('regenerated: ""');
+    expect(text).toContain("only its formatting differs");
+  });
+
+  it("tolerates a store entry that is not an object", () => {
+    // withoutDerivedScalars and carriesDerivedScalars both walk `stores`. A
+    // hand-edited null there must reach the report, not throw out of the gate.
+    const regen = canonicalJson({ version: 2, stores: [null], tables: ["a"] });
+    const committed = JSON.stringify({
+      version: 2,
+      stores: [null],
+      tables: ["a"],
+    });
+    const text = driftReport(committed, regen).join("\n");
+    expect(text).toContain("only its formatting differs");
+  });
+
+  it("prints no difference lines when the texts are equal", () => {
+    // `main` never calls it this way, but the report must not invent a line.
+    const text = driftReport(regenerated, regenerated).join("\n");
+    expect(text).not.toContain("first difference");
+  });
+
   it("names a custom file path when given one", () => {
     const text = driftReport("{}", regenerated, "some/other.json").join("\n");
     expect(text).toContain("some/other.json is stale");
