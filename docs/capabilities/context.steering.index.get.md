@@ -44,6 +44,6 @@ None. Send no body.
 
 ## Refusals
 
-None beyond the kernel's. A caller outside the workspace gets 403 from the route before the capability runs.
+The capability adds no refusal beyond the kernel's. The route refuses two callers with 403 before the capability runs: a caller outside the workspace, and an API key for another workspace.
 
-An API key must belong to the workspace the URL names. A key for another workspace gets 403 with `error.reason` `key_scope_mismatch`, and the message names the key's workspace and the one the URL names. The route checks the slug in any case, or the id. A session request resolves its workspace from the URL, so it never gets this refusal.
+An API key must belong to the workspace the URL names. A key for another workspace gets 403 with `error.reason` `key_scope_mismatch`, and the message names the key's workspace and the one the URL names. The route compares slugs without regard to letter case, and it also accepts the ids. A session request resolves its workspace from the URL, so it never gets this refusal.

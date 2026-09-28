@@ -846,7 +846,7 @@ describe("the published index cache", () => {
         const file = join(dir, "workspace.toml");
         const text = readFileSync(file, "utf8");
         expect(text).toContain('workspace = "core-platform"');
-        writeFileSync(file, text.replace('workspace = "core-platform"', 'workspace = "billing"'));
+        writeFileSync(file, text.replace('workspace = "core-platform"', 'workspace = "payments"'));
       },
     ],
     [
@@ -880,7 +880,7 @@ describe("the published index cache", () => {
 
     await run(dir, [], {}, { fetchPublished, cacheDir });
     await run(dir, [], {}, { fetchPublished, cacheDir });
-    vi.stubEnv("OXAGEN_WORKSPACE_ID", "billing");
+    vi.stubEnv("OXAGEN_WORKSPACE_ID", "payments");
     await run(dir, [], {}, { fetchPublished, cacheDir });
 
     expect(fetchPublished).toHaveBeenCalledTimes(2);
