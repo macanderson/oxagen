@@ -7,12 +7,35 @@
 // exactly when registryLaunch refuses the package.
 import type { RegistryArgument, RegistryEntry, RegistryPackage } from "../contract/registry-entry";
 import { REGISTRY_TYPES, templateVariables, type RegistryType } from "../contract/server";
-import { REGISTRY_RUNNERS, type RegistrySource } from "../model/registry-launch";
+import { REGISTRY_RUNNERS, registryLaunch, type RegistrySource } from "../model/registry-launch";
 import type { ServerFolder } from "./index";
 import { orList, type Report } from "./report";
 
 /** A secret's whole value is one variable, so no secret enters the repository. registryLaunch holds the same pattern. */
 const ONE_VARIABLE = /^\$\{[A-Za-z_][A-Za-z0-9_]{0,127}\}$/;
+
+/**
+ * The one remote type the cloud gateway calls. registryLockSource in
+ * src/lock/index.ts pins a streamable-http remote and skips sse (ADR-211).
+ */
+const CALLED_REMOTE = "streamable-http";
+
+/** Whether the entry lists a remote the cloud gateway can call. */
+function callableRemote(entry: RegistryEntry): boolean {
+  return (entry.server.remotes ?? []).some((remote) => remote.type === CALLED_REMOTE);
+}
+
+/**
+ * Whether the local gateway could start the entry's package of this type once
+ * server.toml picks it. registryLaunch refuses on source.registry_type only
+ * for faults in the package itself: none or several of the type, a transport
+ * other than stdio, another runner, or an argument no source.arguments key
+ * can set. Faults on source.env and source.arguments are the operator's to fix.
+ */
+function packageRuns(source: RegistrySource, entry: RegistryEntry, type: RegistryType): boolean {
+  const launch = registryLaunch({ source: { ...source, registry_type: type }, entry, digest: "" });
+  return launch.ok || launch.problems.every((problem) => problem.field !== "source.registry_type");
+}
 
 interface Slot {
   argument: RegistryArgument;
@@ -37,16 +60,16 @@ function slotsOf(pkg: RegistryPackage): Slot[] {
   ];
 }
 
-/** The fix when the chosen package cannot run: another package type, the remote, or another version. */
-function otherChoice(entry: RegistryEntry, current: RegistryType | undefined): string {
-  const packages = entry.server.packages ?? [];
-  const runnable = REGISTRY_TYPES.filter(
-    (type) => type !== current && packages.filter((candidate) => candidate.registryType === type).length === 1,
-  );
+/**
+ * The fix when the chosen package cannot run: another package type that runs,
+ * a remote the cloud gateway calls, or another version.
+ */
+function otherChoice(source: RegistrySource, entry: RegistryEntry, current: RegistryType | undefined): string {
+  const runnable = REGISTRY_TYPES.filter((type) => type !== current && packageRuns(source, entry, type));
   if (runnable.length > 0) {
     return `Set source.registry_type to ${orList(runnable.map((type) => JSON.stringify(type)))} in server.toml.`;
   }
-  if ((entry.server.remotes ?? []).length > 0) {
+  if (callableRemote(entry)) {
     return "Remove source.machines, registry_type, env, and arguments from server.toml and add auth, so the cloud gateway connects to the entry's remote.";
   }
   return "Set source.version to a catalog version whose entry lists one npm, pypi, oci, or nuget package that serves stdio.";
@@ -58,11 +81,14 @@ export function lintRegistry(folder: ServerFolder, report: Report): void {
   const entry = folder.registry_entry;
 
   if (source.machines === undefined) {
-    if (entry !== undefined && (entry.server.remotes ?? []).length === 0) {
+    if (entry !== undefined && !callableRemote(entry)) {
+      const listed = (entry.server.remotes ?? []).length > 0;
       report("registry_without_remote", {
         tool: undefined,
         field: "source.machines",
-        message: `The catalog entry for ${source.server} ${source.version} lists no remote, and source.machines names no machine group, so the server runs nowhere.`,
+        message: listed
+          ? `The catalog entry for ${source.server} ${source.version} lists no streamable-http remote, and source.machines names no machine group, so the server runs nowhere. The cloud gateway calls only streamable-http remotes.`
+          : `The catalog entry for ${source.server} ${source.version} lists no remote, and source.machines names no machine group, so the server runs nowhere.`,
         fix: "Set source.machines to the machine groups whose local gateway runs the package, and source.registry_type to its type. Remove auth and environments, which that server does not take.",
       });
     }
@@ -99,7 +125,7 @@ export function lintRegistry(folder: ServerFolder, report: Report): void {
       fix:
         entry === undefined
           ? "Set source.registry_type to the type of the entry's package: npm, pypi, oci, or nuget."
-          : otherChoice(entry, undefined),
+          : otherChoice(source, entry, undefined),
     });
     return;
   }
@@ -109,7 +135,7 @@ export function lintRegistry(folder: ServerFolder, report: Report): void {
 
 /** The checks registryLaunch makes on the package source.registry_type picks. */
 function lintPackage(source: RegistrySource, entry: RegistryEntry, type: RegistryType, report: Report): void {
-  const other = otherChoice(entry, type);
+  const other = otherChoice(source, entry, type);
   const packages = entry.server.packages ?? [];
   const matches = packages.filter((candidate) => candidate.registryType === type);
   const [pkg] = matches;

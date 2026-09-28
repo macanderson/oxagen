@@ -1,7 +1,8 @@
 // lint: the registry rows of the Tool checks table. Each rule has a folder
 // that trips it and one that does not. A drift table holds lint's registry
 // errors to registryLaunch's problems, field for field, on every case
-// registry-launch.test.ts runs.
+// registry-launch.test.ts runs. Another holds registry_without_remote to the
+// remotes registryLockSource pins.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,7 @@ import { parseServerToml, type ReadResult } from "../contract/parse";
 import { registryEntrySchema, type RegistryEntry } from "../contract/registry-entry";
 import { registrySourceSchema } from "../contract/server";
 import { mcpToolsSchema } from "../contract/tools";
+import { registryLockSource } from "../lock";
 import { registryLaunch, type RegistrySource } from "../model/registry-launch";
 import { lint, LINT_RULES, type Finding, type LintContext, type LintRule, type ServerFolder } from "./index";
 
@@ -59,6 +61,19 @@ function source(fields: Record<string, unknown>): RegistrySource {
 function entry(...packages: Record<string, unknown>[]): RegistryEntry {
   return registryEntrySchema.parse({
     server: { name: catalog.server, description: "Files on the machine.", version: "1.4.0", packages },
+  });
+}
+
+/** A parsed catalog entry at version 1.4.0 with these remotes and one npm package. */
+function withRemotes(...types: string[]): RegistryEntry {
+  return registryEntrySchema.parse({
+    server: {
+      name: catalog.server,
+      description: "Files on the machine.",
+      version: "1.4.0",
+      packages: [npm()],
+      remotes: types.map((type) => ({ type, url: "https://mcp.acme.example/mcp" })),
+    },
   });
 }
 
@@ -144,6 +159,11 @@ const CASES: Case[] = [
     found: [],
   },
   {
+    name: "registry_without_remote: a cloud source whose entry lists only an sse remote",
+    folder: folder(registrySourceSchema.parse(catalog) as RegistrySource, withRemotes("sse")),
+    found: [["registry_without_remote", undefined, "source.machines"]],
+  },
+  {
     name: "registry_without_remote: source.machines that names no group",
     folder: folder(source({ machines: [], registry_type: "npm" }), entry(npm())),
     found: [["registry_without_remote", undefined, "source.machines"]],
@@ -227,6 +247,42 @@ describe("lint's registry checks", () => {
     );
     expect(fixOf(entry())).toBe(
       "Set source.version to a catalog version whose entry lists one npm, pypi, oci, or nuget package that serves stdio.",
+    );
+  });
+
+  it("offers only a package type, or a remote, that would run", () => {
+    const fixOf = (value: RegistryEntry): string | undefined => lint(folder(onNpm(), value), CONTEXT)[0]?.fix;
+    const version =
+      "Set source.version to a catalog version whose entry lists one npm, pypi, oci, or nuget package that serves stdio.";
+    const pypi = (fields: Record<string, unknown>): Record<string, unknown> => ({
+      registryType: "pypi",
+      identifier: "mcp-server-files",
+      transport: stdio,
+      ...fields,
+    });
+
+    expect(fixOf(entry(pypi({ transport: { type: "streamable-http", url: "http://localhost:8080/mcp" } })))).toBe(
+      version,
+    );
+    expect(fixOf(entry(pypi({ runtimeHint: "python" })))).toBe(version);
+    expect(fixOf(entry(pypi({ packageArguments: [{ type: "positional" }] })))).toBe(version);
+    expect(fixOf(entry(pypi({ runtimeHint: "uvx" })))).toBe('Set source.registry_type to "pypi" in server.toml.');
+
+    const sseOnly = registryEntrySchema.parse({
+      server: {
+        name: catalog.server,
+        description: "Files on the machine.",
+        version: "1.4.0",
+        remotes: [{ type: "sse", url: "https://mcp.acme.example/sse" }],
+      },
+    });
+    expect(fixOf(sseOnly)).toBe(version);
+  });
+
+  it("says the cloud gateway calls only streamable-http remotes", () => {
+    const [finding] = lint(folder(registrySourceSchema.parse(catalog) as RegistrySource, withRemotes("sse")), CONTEXT);
+    expect(finding?.message).toBe(
+      "The catalog entry for io.github.acme/files 1.4.0 lists no streamable-http remote, and source.machines names no machine group, so the server runs nowhere. The cloud gateway calls only streamable-http remotes.",
     );
   });
 
@@ -447,5 +503,30 @@ describe("lint and registryLaunch", () => {
     expect(sorted(launch.ok ? [] : launch.problems.map((problem) => problem.field))).toStrictEqual(sorted(fields));
     expect(sorted(errors.map((finding) => finding.field))).toStrictEqual(sorted(fields));
     expectShape(errors);
+  });
+});
+
+// ── lint and registryLockSource ──────────────────────────────────────────────
+
+describe("registry_without_remote and the lock", () => {
+  const cloud = registrySourceSchema.parse(catalog) as RegistrySource;
+  const REMOTES: { name: string; entry: RegistryEntry }[] = [
+    { name: "no remote", entry: withRemotes() },
+    { name: "an sse remote", entry: withRemotes("sse") },
+    { name: "a streamable-http remote", entry: withRemotes("streamable-http") },
+    { name: "an sse and a streamable-http remote", entry: withRemotes("sse", "streamable-http") },
+  ];
+
+  it.each(REMOTES)("reports the rule exactly when the lock refuses $name", ({ entry: value }) => {
+    const refused = (() => {
+      try {
+        registryLockSource({ source: cloud, entry: value, digest: undefined, server_version: undefined });
+        return false;
+      } catch {
+        return true;
+      }
+    })();
+    const reported = lint(folder(cloud, value), CONTEXT).some((finding) => finding.rule === "registry_without_remote");
+    expect(reported).toBe(refused);
   });
 });
