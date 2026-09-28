@@ -47,8 +47,12 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
+  IMPORT_RECORDS_DIR,
+  IMPORT_REPLACES_PATH,
+  isImportBranch,
   isStampedRecordPath,
   mergeTrailers,
+  parseReplacesFile,
   stampRecordText,
 } from "./stamp";
 
@@ -263,9 +267,44 @@ function stampRefused(reason: string, message: string): HandlerError {
 }
 
 /**
+ * The id each record had before the import converted it, by path, read from
+ * {@link IMPORT_REPLACES_PATH} at `head`. Only an import branch may carry the
+ * file, and `branchScopeRefusal` refuses it on any other branch. A branch
+ * without the file names no old ids.
+ */
+async function importReplaces(
+  input: StampInput,
+  changed: readonly { path: string; status: string }[],
+): Promise<Map<string, string>> {
+  const file = changed.find((entry) => entry.path === IMPORT_REPLACES_PATH);
+  if (!file || file.status === "removed") return new Map();
+  const text = await input.host.readFile(
+    input.repo,
+    IMPORT_REPLACES_PATH,
+    input.head,
+  );
+  const parsed =
+    text === null
+      ? { ok: false as const, message: `the file is not at ${input.head}` }
+      : parseReplacesFile(text);
+  if (!parsed.ok) {
+    throw stampRefused(
+      "replaces_unreadable",
+      `${IMPORT_REPLACES_PATH} on ${input.branch} cannot be read: ${parsed.message}`,
+    );
+  }
+  return parsed.replaces;
+}
+
+/**
  * Push the stamp commit on top of `head`: each changed steering record with
- * its `id` and `hash`, and the ledger line that records the merge. The host
- * refuses with `head_moved` when the branch is no longer at `head`.
+ * its `id` and `hash`, and the ledger line that records the merge. On an
+ * import branch, each converted record's ledger change also names the id it
+ * replaces, and the stamp commit deletes {@link IMPORT_REPLACES_PATH}, so the
+ * file never reaches the production branch. An import branch that adds or
+ * changes a record under {@link IMPORT_RECORDS_DIR} without naming its old id
+ * is refused with `replaces_missing`. The host refuses with
+ * `head_moved` when the branch is no longer at `head`.
  */
 export async function stampHead(input: StampInput): Promise<StampResult> {
   const { host, repo, head } = input;
@@ -281,10 +320,17 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
     changed.map((file) => file.path),
   );
   if (scope) throw stampRefused(scope.reason, scope.message);
+  const replaces = await importReplaces(input, changed);
 
   const files: { path: string; content: string | null }[] = [];
   const changes: PromotionChange[] = [];
   for (const file of changed) {
+    if (file.path === IMPORT_REPLACES_PATH) {
+      if (file.status !== "removed") {
+        files.push({ path: IMPORT_REPLACES_PATH, content: null });
+      }
+      continue;
+    }
     if (file.status === "removed" || !isStampedRecordPath(file.path)) {
       changes.push({ path: file.path, action: file.status });
       continue;
@@ -306,13 +352,43 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
     if (stamped.text !== text) {
       files.push({ path: file.path, content: stamped.text });
     }
+    const old = replaces.get(file.path);
     changes.push({
       path: file.path,
       action: file.status,
       lineage: stamped.lineage,
       id: stamped.id,
       hash: stamped.hash,
+      ...(old && old !== stamped.id ? { replaces: old } : {}),
     });
+  }
+  const unmatched = [...replaces.keys()].filter(
+    (path) =>
+      !changes.some((change) => change.path === path && change.id !== undefined),
+  );
+  if (unmatched.length > 0) {
+    throw stampRefused(
+      "replaces_unmatched",
+      `${IMPORT_REPLACES_PATH} names an old id for ${unmatched.sort().join(", ")}, and ${input.branch} adds or changes no steering record there`,
+    );
+  }
+  // Each record an import converts keeps its old id, so its runs follow it.
+  // A batch of only skills or governance.toml adds no record there.
+  if (isImportBranch(input.branch)) {
+    const unnamed = changes
+      .filter(
+        (change) =>
+          change.id !== undefined &&
+          change.path.startsWith(`${IMPORT_RECORDS_DIR}/`) &&
+          !replaces.has(change.path),
+      )
+      .map((change) => change.path);
+    if (unnamed.length > 0) {
+      throw stampRefused(
+        "replaces_missing",
+        `${IMPORT_REPLACES_PATH} names no old id for ${unnamed.sort().join(", ")}, and every record ${input.branch} adds or changes under ${IMPORT_RECORDS_DIR}/ needs one`,
+      );
+    }
   }
 
   const target = await chooseLedgerTarget({

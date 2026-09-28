@@ -1,0 +1,131 @@
+{
+  "url": "https://api.github.com/repos/acme/steering/compare/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1...main",
+  "html_url": "https://github.com/acme/steering/compare/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1...main",
+  "base_commit": {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "node_id": "C_a1a1a1a1",
+    "commit": {
+      "author": {
+        "name": "Oxagen",
+        "email": "steering@oxagen.sh",
+        "date": "2026-09-26T15:00:00Z"
+      },
+      "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-09-26T15:00:00Z"
+      },
+      "message": "Add the review checklist rule (#41)\n\nOxagen-Approved-By: dana\nOxagen-Checks: schema,lineage\nOxagen-Version: 7",
+      "tree": {
+        "sha": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+        "url": "https://api.github.com/repos/acme/steering/git/trees/f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6"
+      },
+      "comment_count": 0
+    },
+    "url": "https://api.github.com/repos/acme/steering/commits/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "html_url": "https://github.com/acme/steering/commit/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "parents": [
+      {
+        "sha": "9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a",
+        "url": "https://api.github.com/repos/acme/steering/commits/9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a"
+      }
+    ]
+  },
+  "merge_base_commit": {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "node_id": "C_a1a1a1a1",
+    "commit": {
+      "author": {
+        "name": "Oxagen",
+        "email": "steering@oxagen.sh",
+        "date": "2026-09-26T15:00:00Z"
+      },
+      "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "date": "2026-09-26T15:00:00Z"
+      },
+      "message": "Add the review checklist rule (#41)\n\nOxagen-Approved-By: dana\nOxagen-Checks: schema,lineage\nOxagen-Version: 7",
+      "tree": {
+        "sha": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+        "url": "https://api.github.com/repos/acme/steering/git/trees/f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6"
+      },
+      "comment_count": 0
+    },
+    "url": "https://api.github.com/repos/acme/steering/commits/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "html_url": "https://github.com/acme/steering/commit/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "parents": [
+      {
+        "sha": "9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a",
+        "url": "https://api.github.com/repos/acme/steering/commits/9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a"
+      }
+    ]
+  },
+  "status": "ahead",
+  "ahead_by": 2,
+  "behind_by": 0,
+  "total_commits": 2,
+  "commits": [
+    {
+      "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "node_id": "C_b2b2b2b2",
+      "commit": {
+        "author": {
+          "name": "Oxagen",
+          "email": "steering@oxagen.sh",
+          "date": "2026-09-26T15:00:00Z"
+        },
+        "committer": {
+          "name": "GitHub",
+          "email": "noreply@github.com",
+          "date": "2026-09-26T15:00:00Z"
+        },
+        "message": "Add the release notes rule (#42)\n\nOxagen-Approved-By: dana\nOxagen-Checks: schema,lineage\nOxagen-Version: 8",
+        "tree": {
+          "sha": "0707070707070707070707070707070707070707",
+          "url": "https://api.github.com/repos/acme/steering/git/trees/0707070707070707070707070707070707070707"
+        },
+        "comment_count": 0
+      },
+      "url": "https://api.github.com/repos/acme/steering/commits/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "html_url": "https://github.com/acme/steering/commit/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "parents": [
+        {
+          "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+          "url": "https://api.github.com/repos/acme/steering/commits/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+        }
+      ]
+    },
+    {
+      "sha": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "node_id": "C_d4d4d4d4",
+      "commit": {
+        "author": {
+          "name": "Oxagen",
+          "email": "steering@oxagen.sh",
+          "date": "2026-09-26T15:00:00Z"
+        },
+        "committer": {
+          "name": "GitHub",
+          "email": "noreply@github.com",
+          "date": "2026-09-26T15:00:00Z"
+        },
+        "message": "Tighten the review checklist (#43)\n\nOxagen-Approved-By: dana\nOxagen-Checks: schema,lineage\nOxagen-Version: 9",
+        "tree": {
+          "sha": "0808080808080808080808080808080808080808",
+          "url": "https://api.github.com/repos/acme/steering/git/trees/0808080808080808080808080808080808080808"
+        },
+        "comment_count": 0
+      },
+      "url": "https://api.github.com/repos/acme/steering/commits/d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "html_url": "https://github.com/acme/steering/commit/d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "parents": [
+        {
+          "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+          "url": "https://api.github.com/repos/acme/steering/commits/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+        }
+      ]
+    }
+  ],
+  "files": []
+}

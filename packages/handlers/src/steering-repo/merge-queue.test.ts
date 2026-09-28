@@ -36,7 +36,14 @@ import {
   type MergeApproval,
   type RecheckResult,
 } from "./merge-queue";
-import { mergeTrailers, steeringBranch } from "./stamp";
+import {
+  IMPORT_BRANCH,
+  IMPORT_REPLACES_PATH,
+  importBranch,
+  mergeTrailers,
+  renderReplacesFile,
+  steeringBranch,
+} from "./stamp";
 
 const LEDGER = "steering/promotions/2026-09.jsonl";
 const CHECKS = ["schema", "lineage", "hash"] as const;
@@ -566,6 +573,205 @@ describe("landSteeringPr: stamping", () => {
     expect(gh.merges).toEqual([
       expect.objectContaining({ sha: pr.head, commitMessage: expect.stringContaining("Oxagen-Version: 21") }),
     ]);
+  });
+});
+
+describe("landSteeringPr: the import branch", () => {
+  const REFUNDS = "a-intel.platform.refunds-over-100";
+  const PUSH = "a-intel.platform.no-push-to-main";
+  const OLD_REFUNDS = "rec_a_intel_refunds_over_100_ec4ece819896";
+  const OLD_PUSH = "rec_a_intel_no_push_to_main_27e708fab014";
+  const importPath = (lineage: string) => `steering/imported/${lineage}.md`;
+
+  /**
+   * Open a PR on `branch` that adds both records and, unless `replaces` is
+   * null, commits it as the replaces file.
+   */
+  async function openImport(
+    gh: FakeGitHub,
+    replaces: string | null,
+    branch = IMPORT_BRANCH,
+  ): Promise<OpenPr> {
+    await gh.ensureBranch(REPO, branch, REPO.defaultBranch);
+    gh.commit(branch, importPath(REFUNDS), record(REFUNDS, "Refunds over $100 need approval."));
+    let head = gh.commit(branch, importPath(PUSH), record(PUSH, "Nobody pushes to main."));
+    if (replaces !== null) head = gh.commit(branch, IMPORT_REPLACES_PATH, replaces);
+    const { number } = await gh.openPullRequest(REPO, {
+      title: "Import .oxagen/",
+      head: branch,
+      base: REPO.defaultBranch,
+      body: "Imports two records.",
+    });
+    return { number, branch, head, path: importPath(REFUNDS) };
+  }
+
+  const replacesFile = renderReplacesFile(
+    new Map([
+      [importPath(REFUNDS), OLD_REFUNDS],
+      [importPath(PUSH), OLD_PUSH],
+    ]),
+  );
+
+  async function expectImported(gh: FakeGitHub, branch: string): Promise<void> {
+    const line = (await ledgerLines(gh)).at(-1)!;
+    expect(line.branch).toBe(branch);
+    expect(line.changes).toEqual([
+      expect.objectContaining({
+        path: importPath(PUSH),
+        action: "added",
+        lineage: PUSH,
+        replaces: OLD_PUSH,
+      }),
+      expect.objectContaining({
+        path: importPath(REFUNDS),
+        action: "added",
+        lineage: REFUNDS,
+        replaces: OLD_REFUNDS,
+      }),
+    ]);
+    for (const change of line.changes) {
+      expect(change.id).not.toBe(change.replaces);
+      const published = (await gh.readFile(REPO, change.path, "main")) ?? "";
+      expect(published).toContain(`id: ${change.id}`);
+    }
+    expect(await gh.readFile(REPO, IMPORT_REPLACES_PATH, "main")).toBeNull();
+  }
+
+  it("lands many records in one steering PR, writes each old id as replaces, and deletes the replaces file", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, replacesFile);
+
+    await land(gh, pr);
+
+    await expectImported(gh, IMPORT_BRANCH);
+    expect(gh.stamps[0]!.files).toContainEqual({
+      path: IMPORT_REPLACES_PATH,
+      content: null,
+    });
+  });
+
+  it("lands a numbered import batch the same way", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, replacesFile, importBranch(2));
+
+    await land(gh, pr);
+
+    await expectImported(gh, "steering/import-oxagen-2");
+  });
+
+  it("reads the replaces file at the head the checks passed on, not the PR body", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, replacesFile);
+    await gh.updatePullRequest(REPO, {
+      number: pr.number,
+      title: "Import .oxagen/",
+      body: ["<!-- oxagen:replaces", `${importPath(REFUNDS)} ${OLD_PUSH}`, "-->"].join("\n"),
+    });
+
+    await land(gh, pr);
+
+    await expectImported(gh, IMPORT_BRANCH);
+  });
+
+  it("refuses imported records that name no old id, before it stamps", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, null);
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_missing" });
+    expect(err.message).toContain(importPath(REFUNDS));
+    expect(err.message).toContain(importPath(PUSH));
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("refuses a replaces file that leaves out one imported record", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(
+      gh,
+      renderReplacesFile(new Map([[importPath(REFUNDS), OLD_REFUNDS]])),
+    );
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_missing" });
+    expect(err.message).toContain(importPath(PUSH));
+    expect(err.message).not.toContain(importPath(REFUNDS));
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("lands an import batch that holds only a skill, with no replaces file", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const skill = `steering/skills/${lineage}/SKILL.md`;
+    const branch = importBranch(2);
+    await gh.ensureBranch(REPO, branch, REPO.defaultBranch);
+    gh.commit(branch, skill, record(lineage, "Write the release notes."));
+    const head = gh.commit(
+      branch,
+      `steering/skills/${lineage}/template.md`,
+      "## Changes\n",
+    );
+    const { number } = await gh.openPullRequest(REPO, {
+      title: "Import .oxagen/",
+      head: branch,
+      base: REPO.defaultBranch,
+      body: "Imports one skill.",
+    });
+
+    await land(gh, { number, branch, head, path: skill });
+
+    expect(gh.merges).toHaveLength(1);
+    const line = (await ledgerLines(gh)).at(-1)!;
+    expect(line.changes).toContainEqual(
+      expect.objectContaining({ path: skill, lineage }),
+    );
+    for (const change of line.changes) expect(change).not.toHaveProperty("replaces");
+  });
+
+  it("refuses the replaces file on any other steering/ branch, before it stamps", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, REFUNDS);
+    const head = gh.commit(
+      pr.branch,
+      IMPORT_REPLACES_PATH,
+      renderReplacesFile(new Map([[pr.path, OLD_REFUNDS]])),
+    );
+
+    const err = await refusal(land(gh, { ...pr, head }));
+
+    expect(err).toMatchObject({ reason: "import_only" });
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("refuses an old id for a path the import PR does not add, and drops nothing on main", async () => {
+    const gh = steeringRepo();
+    const stray = "steering/imported/a-intel.platform.stray.md";
+    const pr = await openImport(
+      gh,
+      renderReplacesFile(new Map([[stray, OLD_REFUNDS]])),
+    );
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_unmatched" });
+    expect(err.message).toContain(stray);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("refuses a replaces file that does not parse, before it stamps", async () => {
+    const gh = steeringRepo();
+    const pr = await openImport(gh, `${importPath(REFUNDS)}\n`);
+
+    const err = await refusal(land(gh, pr));
+
+    expect(err).toMatchObject({ reason: "replaces_unreadable" });
+    expect(err.message).toContain(IMPORT_REPLACES_PATH);
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
   });
 });
 

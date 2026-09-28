@@ -1,0 +1,28 @@
+{
+  "action": "removed",
+  "installation": {
+    "id": 61200044,
+    "account": { "login": "acme", "id": 71300124, "type": "Organization" },
+    "repository_selection": "selected",
+    "app_id": 1120331,
+    "app_slug": "oxagen-steering"
+  },
+  "repository_selection": "selected",
+  "repositories_added": [],
+  "repositories_removed": [
+    {
+      "id": 904211873,
+      "name": "oxagen-steering-platform",
+      "full_name": "acme/oxagen-steering-platform",
+      "private": true
+    },
+    {
+      "id": 904211990,
+      "name": "oxagen",
+      "full_name": "acme/oxagen",
+      "private": true
+    }
+  ],
+  "requester": null,
+  "sender": { "login": "sam-admin", "id": 802211, "type": "User" }
+}

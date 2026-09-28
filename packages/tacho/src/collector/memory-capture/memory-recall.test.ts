@@ -4,12 +4,19 @@
  * failure turns into, the timeout among them.
  */
 import { describe, expect, it } from "vitest";
+import { digestBytes } from "../../digest";
 import type { FetchLike } from "../../host/control-client";
 import {
   createMemoryRecall,
+  MEMORY_RECALL_DIGESTS_MAX,
   MEMORY_RECALL_PATH,
+  MEMORY_RECALL_PATH_MAX_CHARS,
+  MEMORY_RECALL_PATHS_MAX,
   MEMORY_RECALL_TEXT_MAX_CHARS,
   MEMORY_RECALL_TIMEOUT_MS,
+  MEMORY_RECALL_TOOL_MAX_CHARS,
+  MEMORY_RECALL_TOOLS_MAX,
+  type MemoryRecallRequest,
 } from "./memory-recall";
 
 const HOST_ENROLLMENT_ID = "tch_0123456789abcdefghjkmn";
@@ -96,12 +103,37 @@ function recall(fetch: FetchLike, options: { timeoutMs?: number } = {}) {
   };
 }
 
-const REQUEST = { repository: null, text: "How do I install?" };
+const REMOTE = digestBytes("github.com/acme/widgets");
+const FOLDED = digestBytes("github.com/acme/widgets.folded");
+
+const REQUEST: MemoryRecallRequest = {
+  repositoryDigests: [],
+  tools: [],
+  paths: [],
+  text: "How do I install?",
+};
+
+/** The body of the one ask `request` made. */
+async function sent(request: MemoryRecallRequest) {
+  const { fetch, calls } = plane([ok()]);
+  await recall(fetch).ask(request);
+  return calls[0]?.body as {
+    repository_digests: string[];
+    tools: string[];
+    paths: string[];
+    text: string;
+  };
+}
 
 describe("a recall", () => {
-  it("posts the host, the prompt, and no tools or paths with the host key", async () => {
+  it("posts the whole body with the host key", async () => {
     const { fetch, calls } = plane([ok()]);
-    await recall(fetch).ask(REQUEST);
+    await recall(fetch).ask({
+      repositoryDigests: [REMOTE, FOLDED],
+      tools: ["Edit", "Bash"],
+      paths: ["src/app.ts", "README.md"],
+      text: "How do I install?",
+    });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       url: `https://api.oxagen.test${MEMORY_RECALL_PATH}`,
@@ -110,15 +142,83 @@ describe("a recall", () => {
         Authorization: "Bearer oxk_host",
         "Content-Type": "application/json",
       },
-      body: {
-        host_enrollment_id: HOST_ENROLLMENT_ID,
-        repository: null,
-        tools: [],
-        paths: [],
-        text: "How do I install?",
-      },
+    });
+    // The whole body, so a field the route no longer takes fails here.
+    expect(calls[0]?.body).toEqual({
+      host_enrollment_id: HOST_ENROLLMENT_ID,
+      repository_digests: [REMOTE, FOLDED],
+      tools: ["Edit", "Bash"],
+      paths: ["src/app.ts", "README.md"],
+      text: "How do I install?",
     });
     expect(calls[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("posts empty lists when the session has none", async () => {
+    expect(await sent(REQUEST)).toEqual({
+      host_enrollment_id: HOST_ENROLLMENT_ID,
+      repository_digests: [],
+      tools: [],
+      paths: [],
+      text: "How do I install?",
+    });
+  });
+
+  it("sends each digest once, drops a non-digest, and keeps 8", async () => {
+    const many = Array.from({ length: MEMORY_RECALL_DIGESTS_MAX + 3 }, (_, i) =>
+      digestBytes(`remote-${i}`),
+    );
+    const body = await sent({
+      ...REQUEST,
+      repositoryDigests: [REMOTE, REMOTE, "github.com/acme/widgets", ...many],
+    });
+    expect(body.repository_digests).toEqual([
+      REMOTE,
+      ...many.slice(0, MEMORY_RECALL_DIGESTS_MAX - 1),
+    ]);
+  });
+
+  it("keeps 64 tools, each once, and drops an empty or long one", async () => {
+    const many = Array.from(
+      { length: MEMORY_RECALL_TOOLS_MAX + 5 },
+      (_, i) => `tool_${i}`,
+    );
+    const body = await sent({
+      ...REQUEST,
+      tools: [
+        "Edit",
+        "",
+        "t".repeat(MEMORY_RECALL_TOOL_MAX_CHARS + 1),
+        "Edit",
+        "t".repeat(MEMORY_RECALL_TOOL_MAX_CHARS),
+        ...many,
+      ],
+    });
+    expect(body.tools).toHaveLength(MEMORY_RECALL_TOOLS_MAX);
+    expect(body.tools.slice(0, 3)).toEqual([
+      "Edit",
+      "t".repeat(MEMORY_RECALL_TOOL_MAX_CHARS),
+      "tool_0",
+    ]);
+    expect(body.tools.at(-1)).toBe(`tool_${MEMORY_RECALL_TOOLS_MAX - 3}`);
+  });
+
+  it("keeps 64 paths, each once, and drops an empty or long one", async () => {
+    const many = Array.from(
+      { length: MEMORY_RECALL_PATHS_MAX + 5 },
+      (_, i) => `src/file-${i}.ts`,
+    );
+    const long = `src/${"p".repeat(MEMORY_RECALL_PATH_MAX_CHARS)}`;
+    const body = await sent({
+      ...REQUEST,
+      paths: ["src/app.ts", "", long, "src/app.ts", ...many],
+    });
+    expect(body.paths).toHaveLength(MEMORY_RECALL_PATHS_MAX);
+    expect(body.paths.slice(0, 2)).toEqual(["src/app.ts", "src/file-0.ts"]);
+    expect(body.paths.at(-1)).toBe(
+      `src/file-${MEMORY_RECALL_PATHS_MAX - 2}.ts`,
+    );
+    expect(body.paths).not.toContain(long);
   });
 
   it("returns the memories in the order the control plane ranked them", async () => {
@@ -134,7 +234,7 @@ describe("a recall", () => {
   it("cuts a long prompt to what the route takes", async () => {
     const { fetch, calls } = plane([ok()]);
     await recall(fetch).ask({
-      repository: null,
+      ...REQUEST,
       text: "x".repeat(MEMORY_RECALL_TEXT_MAX_CHARS + 50),
     });
     const body = calls[0]?.body as { text: string };
@@ -144,7 +244,7 @@ describe("a recall", () => {
   it("never ends the cut prompt on half a surrogate pair", async () => {
     const { fetch, calls } = plane([ok()]);
     await recall(fetch).ask({
-      repository: null,
+      ...REQUEST,
       text: `${"x".repeat(MEMORY_RECALL_TEXT_MAX_CHARS - 1)}😀`,
     });
     const body = calls[0]?.body as { text: string };
@@ -168,8 +268,8 @@ describe("a recall", () => {
     ]);
   });
 
-  it("waits one second by default", () => {
-    expect(MEMORY_RECALL_TIMEOUT_MS).toBe(1_000);
+  it("waits 500 ms by default", () => {
+    expect(MEMORY_RECALL_TIMEOUT_MS).toBe(500);
   });
 
   it("returns nothing when the control plane is unreachable, and logs the failure once", async () => {

@@ -8,6 +8,11 @@ output "oxagen_ai_nameservers" {
   value       = aws_route53_zone.oxagen_ai.name_servers
 }
 
+output "vanity_domain_nameservers" {
+  description = "Delegate each domain to these at Vercel, then set `delegated = true` for it in var.vanity_domains. See dns-vanity-domains.tf for the order."
+  value       = { for domain, zone in aws_route53_zone.vanity : domain => zone.name_servers }
+}
+
 output "zone_id" {
   description = "For stacks-new/stella's parent_zone_id and any future subdomain owned by another brand."
   value       = aws_route53_zone.oxagen_sh.zone_id

@@ -15,6 +15,9 @@
  *   changes the response
  * - pull_request → the pull request's state is stored (ADR-192) once per
  *   delivery with an installation; its failure never changes the response
+ * - a delivery from the Oxagen Steering app is verified with its own secret,
+ *   fails closed without it, and asks for one health read per scope (S2,
+ *   #4560); it never reaches the lifecycle, sync, or ingestion paths
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -35,6 +38,23 @@ const mocks = vi.hoisted(() => ({
   githubSyncTargets: vi.fn(),
   requestSteeringSync: vi.fn(),
   recordGithubPullRequestState: vi.fn(),
+  findHealthScopes: vi.fn(),
+  // Mirrors the real healthRequests, so the test reads the events it sends.
+  healthRequests: vi.fn(
+    (
+      scopes: { orgId: string; workspaceId: string | null }[],
+      trigger: unknown,
+    ) =>
+      scopes.map((scope) => ({
+        name: "steering-repo/health.requested",
+        data: {
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          key: `${scope.orgId}:${scope.workspaceId ?? "org"}`,
+          trigger,
+        },
+      })),
+  ),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -112,6 +132,13 @@ vi.mock("@oxagen/handlers/context.steering.sync.request", () => ({
 vi.mock("@oxagen/handlers/github.pull-request.webhook", () => ({
   githubPullRequestStateDeps: { tag: "real-deps" },
   recordGithubPullRequestState: mocks.recordGithubPullRequestState,
+}));
+
+// The steering repo health scope lookup reads Postgres and has its own suite.
+// Here it is a seam. The event mapping (health.events) is the real one.
+vi.mock("@oxagen/handlers/steering-repo/health", () => ({
+  findHealthScopes: mocks.findHealthScopes,
+  healthRequests: mocks.healthRequests,
 }));
 
 import { app } from "../app";
@@ -198,6 +225,8 @@ afterEach(() => {
   delete process.env.GITHUB_APP_WEBHOOK_SECRET;
   delete process.env.GITHUB_WEBHOOK_SECRET;
   delete process.env.GITHUB_APP_ID;
+  delete process.env.OXAGEN_STEERING_APP_ID;
+  delete process.env.OXAGEN_STEERING_APP_WEBHOOK_SECRET;
 });
 
 describe("github app webhook – configuration & signature", () => {
@@ -830,5 +859,215 @@ describe("github app webhook – pull request state (ADR-192)", () => {
       expect.objectContaining({ eventName: "pull_request" }),
       expect.stringContaining("pull request's state"),
     );
+  });
+});
+
+describe("github app webhook – Oxagen Steering app (S2, #4560)", () => {
+  const PRIMARY_APP_ID = "4168398";
+  const STEERING_APP_ID = "4230117";
+  const STEERING_SECRET = "steering-app-webhook-secret-for-tests";
+  const STEERING_REPO_ID = 904211873;
+  const RULESET_DELETED = {
+    action: "deleted",
+    repository_ruleset: {
+      id: 3071,
+      name: "Oxagen merges",
+      updated_at: "2026-09-26T21:02:48Z",
+    },
+    repository: { id: STEERING_REPO_ID, full_name: "acme/oxagen" },
+    installation: { id: 61200044 },
+    sender: { login: "dana-ops" },
+  };
+  const SCOPES = [
+    { orgId: "org-1", workspaceId: null },
+    { orgId: "org-1", workspaceId: "ws-1" },
+  ];
+
+  beforeEach(() => {
+    process.env.GITHUB_APP_ID = PRIMARY_APP_ID;
+    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+    process.env.OXAGEN_STEERING_APP_ID = STEERING_APP_ID;
+    process.env.OXAGEN_STEERING_APP_WEBHOOK_SECRET = STEERING_SECRET;
+    mocks.findHealthScopes.mockResolvedValue(SCOPES);
+  });
+
+  const fromSteeringApp = (
+    event: string,
+    body: unknown,
+    opts: { secret?: string; badSig?: boolean } = {},
+  ) =>
+    app.fetch(
+      signedPost(event, body, {
+        secret: opts.secret ?? STEERING_SECRET,
+        targetId: STEERING_APP_ID,
+        ...(opts.badSig ? { badSig: true } : {}),
+      }),
+    );
+
+  /** None of the paths a primary or second App delivery takes ran. */
+  function expectOtherPathsUntouched() {
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(mocks.githubSyncTargets).not.toHaveBeenCalled();
+    expect(mocks.requestSteeringSync).not.toHaveBeenCalled();
+    expect(mocks.recordGithubPullRequestState).not.toHaveBeenCalled();
+    expect(mocks.getConnector).not.toHaveBeenCalled();
+  }
+
+  it("verifies with the steering secret and asks for one health read per scope", async () => {
+    const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, dispatched: 2 });
+    expect(mocks.findHealthScopes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "github",
+        repository_ids: [STEERING_REPO_ID],
+        installation_id: null,
+      }),
+    );
+    const trigger = expect.objectContaining({
+      reason: "repository_ruleset.deleted",
+      actor: "dana-ops",
+      at: "2026-09-26T21:02:48.000Z",
+    });
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+    expect(mocks.inngestSend).toHaveBeenCalledWith([
+      {
+        name: "steering-repo/health.requested",
+        data: { orgId: "org-1", workspaceId: null, key: "org-1:org", trigger },
+      },
+      {
+        name: "steering-repo/health.requested",
+        data: {
+          orgId: "org-1",
+          workspaceId: "ws-1",
+          key: "org-1:ws-1",
+          trigger,
+        },
+      },
+    ]);
+    expectOtherPathsUntouched();
+  });
+
+  it("refuses a steering app delivery signed with another App's secret", async () => {
+    for (const secret of [SECRET, SECOND_SECRET]) {
+      const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED, {
+        secret,
+      });
+      expect(res.status).toBe(401);
+    }
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 on a bad signature", async () => {
+    const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED, {
+      badSig: true,
+    });
+    expect(res.status).toBe(401);
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("fails closed and logs when the steering secret is unset", async () => {
+    delete process.env.OXAGEN_STEERING_APP_WEBHOOK_SECRET;
+    // Signed with the primary secret: without its own secret, a steering app
+    // delivery must not fall through to another App's verification.
+    const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED, {
+      secret: SECRET,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, dispatched: 0 });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "steering_app_webhook_secret_missing",
+        targetId: STEERING_APP_ID,
+      }),
+      expect.stringContaining("OXAGEN_STEERING_APP_WEBHOOK_SECRET"),
+    );
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expectOtherPathsUntouched();
+  });
+
+  it("acks a ping", async () => {
+    const res = await fromSteeringApp("ping", { zen: "Design for failure." });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, pong: true });
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, unknown]>([
+    ["issues", { action: "opened", repository: { id: STEERING_REPO_ID } }],
+    [
+      "pull_request",
+      {
+        action: "labeled",
+        repository: { id: STEERING_REPO_ID },
+        pull_request: { number: 42, head: { sha: "c3d2e1f0" } },
+      },
+    ],
+    [
+      "push",
+      { ref: "refs/heads/context/x", repository: { id: STEERING_REPO_ID } },
+    ],
+    ["repository_ruleset", [RULESET_DELETED]],
+  ])(
+    "dispatches nothing for a %s delivery that cannot change health",
+    async (event, body) => {
+      const res = await fromSteeringApp(event, body);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ received: true, dispatched: 0 });
+      expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+      expect(mocks.inngestSend).not.toHaveBeenCalled();
+      expectOtherPathsUntouched();
+    },
+  );
+
+  it("sends nothing when no scope holds the repository", async () => {
+    mocks.findHealthScopes.mockResolvedValue([]);
+    const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED);
+    expect(await res.json()).toEqual({ received: true, dispatched: 0 });
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("acks and logs when the request cannot be sent", async () => {
+    mocks.inngestSend.mockRejectedValue(new Error("event bus down"));
+    const res = await fromSteeringApp("repository_ruleset", RULESET_DELETED);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, dispatched: 0 });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "repository_ruleset.deleted" }),
+      expect.stringContaining("could not request a steering repo health check"),
+    );
+  });
+
+  it("leaves a primary App delivery on its own path", async () => {
+    const res = await app.fetch(
+      signedPost(
+        "pull_request",
+        {
+          action: "opened",
+          installation: { id: 555 },
+          repository: { id: 90210, full_name: "acme/widgets" },
+          pull_request: { number: 7, head: { sha: "abc123" } },
+        },
+        { secret: SECRET, targetId: PRIMARY_APP_ID },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { dispatched: number }).dispatched).toBe(1);
+    expect(mocks.recordGithubPullRequestState).toHaveBeenCalledTimes(1);
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+  });
+
+  it("does not verify a primary App delivery with the steering secret", async () => {
+    const res = await app.fetch(
+      signedPost("pull_request", RULESET_DELETED, {
+        secret: STEERING_SECRET,
+        targetId: PRIMARY_APP_ID,
+      }),
+    );
+    expect(res.status).toBe(401);
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@
 //
 // A steering PR runs the checks in @oxagen/steering-check. checkSteeringChange()
 // reads the PR's head and base trees through a SteeringTreeHost and passes
-// them to that package's runChecks(). It adds no rule of its own.
+// them to that package's runChecksWithServers(). It adds no rule of its own.
 //
 // A PR that Oxagen opens for one record file under rules/ (ADR-061) still runs
 // the six §10.3 checks below, the same rules as `stella context validate`:
@@ -34,11 +34,11 @@ import {
 } from "@oxagen/oxagen/steering-repo/paths";
 import {
   findSecretsAndPii,
-  runChecks as runSteeringChecks,
   type CheckInput,
   type CheckReport,
   type SteeringTree,
 } from "@oxagen/steering-check";
+import { runChecksWithServers } from "@oxagen/steering-check/servers";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -640,7 +640,7 @@ export async function loadSteeringTree(
   return new Map(paths.map((path, index) => [path, texts[index] as string]));
 }
 
-/** What checkSteeringChange() reads: two commits and what runChecks() takes besides the trees. */
+/** What checkSteeringChange() reads: two commits and what the checks take besides the trees. */
 export interface SteeringChangeInput extends Omit<CheckInput, "files" | "base"> {
   host: SteeringTreeHost;
   /** The steering PR's head commit. */
@@ -654,9 +654,10 @@ export interface SteeringChangeInput extends Omit<CheckInput, "files" | "base"> 
 
 /**
  * Run the steering PR checks on one change. It loads the head tree, then the
- * base tree, and passes both to @oxagen/steering-check's runChecks(). The
- * report passes when no finding is an error. It throws only when a tree
- * cannot be read.
+ * base tree, and passes both to @oxagen/steering-check's
+ * runChecksWithServers(), which also compiles and replays each changed server
+ * folder. The report passes when no finding is an error. It throws only when
+ * a tree cannot be read.
  */
 export async function checkSteeringChange(
   input: SteeringChangeInput,
@@ -664,5 +665,5 @@ export async function checkSteeringChange(
   const { host, head, base, ...rest } = input;
   const files = await loadSteeringTree(host, head);
   const baseTree = base === null ? null : await loadSteeringTree(host, base);
-  return runSteeringChecks({ ...rest, files, base: baseTree });
+  return runChecksWithServers({ ...rest, files, base: baseTree });
 }

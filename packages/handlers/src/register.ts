@@ -1,3 +1,4 @@
+import { setConversationOpenedSender } from "@oxagen/agent/runtime/conversation-opened-event";
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
@@ -5,6 +6,7 @@ import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
@@ -27,6 +29,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
   // the assistant's seal sends `cost/run.sealed` as every other seal does
   // (#4167). The client is imported on first send, not at boot.
   setRunSealedSender(async (event) => {
+    const { eventClient } = await import("./event-client");
+    await eventClient.send(event);
+  });
+  // A new conversation is named from its first prompt inside @oxagen/agent,
+  // and `chat/conversation.opened` asks the titler for a better name. The
+  // sender is handed in here for the same reason as the seal's above.
+  setConversationOpenedSender(async (event) => {
     const { eventClient } = await import("./event-client");
     await eventClient.send(event);
   });
@@ -83,6 +92,23 @@ registerHandlersOnce("@oxagen/handlers", () => {
             },
         step,
       );
+    },
+  });
+  // The steering repo health jobs (lane S2, #4560) read and act through
+  // ./steering-repo/health, which @oxagen/inngest-functions cannot import.
+  setSteeringRepoHealthRunner({
+    sweepRequests: async () => {
+      const health = await import("./steering-repo/health");
+      return health.healthRequests(
+        await health.listHealthScopes(),
+        health.SWEEP_TRIGGER,
+      );
+    },
+    check: async (scope, trigger) => {
+      const outcome = await (
+        await import("./steering-repo/health")
+      ).refreshRepoHealth(scope, trigger);
+      return outcome === null ? null : { health: outcome.health };
     },
   });
   // The durable Model fit reading (#3893, ADR-201) reads the run the way the
@@ -1028,6 +1054,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.steering.deliveries"))
         .getSteeringDeliveriesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_steering_repo",
+    async () =>
+      (await import("./steering_repo.read"))
+        .getSteeringRepoHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repair_steering_repo",
+    async () =>
+      (await import("./steering_repo.repair"))
+        .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_steering_freshness",

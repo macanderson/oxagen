@@ -1,6 +1,10 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
 import { steeringRepoProvision } from "./functions/steering-repo.provision";
+import {
+  steeringRepoHealthCheck,
+  steeringRepoSweep,
+} from "./functions/steering-repo.sweep";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
@@ -73,6 +77,7 @@ import {
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
+import { conversationTitle } from "./functions/conversation.title";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -84,6 +89,8 @@ export const functions: any[] = [
   steeringSync,
   steeringSyncSweep,
   steeringRepoProvision,
+  steeringRepoSweep,
+  steeringRepoHealthCheck,
   billingDunningSweep,
   billingGauClose,
   billingUsageDelivery,
@@ -142,4 +149,5 @@ export const functions: any[] = [
   runPullRequestBackfill,
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
+  conversationTitle,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

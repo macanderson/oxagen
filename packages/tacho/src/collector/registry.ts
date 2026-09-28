@@ -17,6 +17,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
+import type { RepositoryRemote } from "./git-facts";
 import type { PreexistingPaths } from "./session-changes";
 import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
@@ -259,6 +260,37 @@ export interface SessionFacts {
   closedIdle?: boolean;
 }
 
+/** One read of the repository a directory is in (`readRepositoryRemote`). */
+export interface RepositoryRead {
+  /** The directory the read ran in. */
+  cwd: string;
+  /**
+   * Settles with the answer, or with undefined on any failure. It never
+   * rejects, so a read nobody awaits cannot end the daemon.
+   */
+  answer: Promise<RepositoryRemote | undefined>;
+  /** True once `answer` has settled. */
+  settled: boolean;
+  /** The answer, once `answer` settled with one. */
+  remote?: RepositoryRemote;
+}
+
+/** What a session's memory recalls are scoped by (see `recall-hints.ts`). */
+export interface RecallHints {
+  /** The tools the session called, most recent first, each once. */
+  tools: string[];
+  /**
+   * The absolute paths the session's tools named, most recent first, each
+   * once. A recall names them relative to the repository's root.
+   */
+  paths: string[];
+  /**
+   * The latest read of the session's repository. The repository question
+   * (#3941) shares it, so a session reads its remote once.
+   */
+  repository?: RepositoryRead;
+}
+
 export interface SessionRecord extends SessionFacts {
   harnessSessionId: string;
   recorder: SessionRecorder;
@@ -305,6 +337,13 @@ export interface SessionRecord extends SessionFacts {
    * backstop. See `sawHookId` and `rememberHookId`.
    */
   hookIds: Map<string, number>;
+  /**
+   * The tools, files, and repository a memory recall names (see
+   * `recall-hints.ts`). Kept in memory only, so a restarted daemon starts
+   * it empty and the session's next hooks fill it again. `SessionEnd` and
+   * the sweep clear it, because neither deletes the record.
+   */
+  recallHints?: RecallHints;
 }
 
 /** A chain the sweep is about to close, and how it ends. */

@@ -52,12 +52,12 @@ function findingKey(finding: Finding): string {
   return JSON.stringify([finding.check, finding.rule, finding.path, finding.field, finding.message]);
 }
 
-function byPlace(a: Finding, b: Finding): number {
+export function byPlace(a: Finding, b: Finding): number {
   if (a.path !== b.path) return a.path < b.path ? -1 : 1;
   return (a.line ?? Number.MAX_SAFE_INTEGER) - (b.line ?? Number.MAX_SAFE_INTEGER);
 }
 
-function internalFinding(check: SteeringCheckName, error: unknown): Finding {
+export function internalFinding(check: SteeringCheckName, error: unknown): Finding {
   const reason = error instanceof Error ? error.message : String(error);
   return {
     check,
@@ -72,7 +72,7 @@ function internalFinding(check: SteeringCheckName, error: unknown): Finding {
   };
 }
 
-function countText(findings: readonly Finding[]): string {
+export function countText(findings: readonly Finding[]): string {
   const errors = findings.filter((finding) => finding.severity === "error").length;
   const warnings = findings.length - errors;
   const parts: string[] = [];
@@ -81,7 +81,7 @@ function countText(findings: readonly Finding[]): string {
   return parts.length === 0 ? "No findings." : `${parts.join(" and ")}.`;
 }
 
-function statusOf(findings: readonly Finding[]): CheckStatus {
+export function statusOf(findings: readonly Finding[]): CheckStatus {
   if (findings.some((finding) => finding.severity === "error")) return "failed";
   return findings.length > 0 ? "warned" : "passed";
 }
@@ -96,7 +96,7 @@ function result(check: SteeringCheckName, outcome: ChangeOutcome): CheckResult {
 }
 
 /** What the steering PR brings: every head finding in a changed file, and any other head finding the base does not have. */
-function brought(
+export function brought(
   head: readonly Finding[],
   base: readonly Finding[],
   changed: ReadonlySet<string>,

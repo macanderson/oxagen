@@ -237,21 +237,27 @@ export interface RepositoryRemote {
    */
   name?: string;
   head_sha?: string;
+  /**
+   * The top of the worktree that holds the directory, as `readGitRoot` reads
+   * it. A memory recall names the session's files relative to it.
+   */
+  root?: string;
 }
 
 /**
- * The digests of the `origin` remote and its repository's name, or undefined
- * when the directory is in no repository or has no `origin`. The two reads
- * answer independent questions, so they are asked at once: this runs while a
- * harness waits on its first prompt.
+ * The digests of the `origin` remote, its repository's name, and the
+ * worktree's top, or undefined when the directory is in no repository or has
+ * no `origin`. The three reads answer independent questions, so they are
+ * asked at once: this runs while a harness waits on its first prompt.
  */
 export async function readRepositoryRemote(
   exec: ExecAsync,
   cwd: string,
 ): Promise<RepositoryRemote | undefined> {
-  const [remote, head] = await Promise.all([
+  const [remote, head, root] = await Promise.all([
     git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
     git(exec, cwd, ["rev-parse", "HEAD"]).then(firstLine),
+    git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
   if (remote === undefined) return undefined;
   const canonical = canonicalRemote(remote);
@@ -262,6 +268,7 @@ export async function readRepositoryRemote(
     remote_digest_folded: digestBytes(foldedRemote(canonical)),
     ...(name.length > 0 ? { name } : {}),
     ...(head !== undefined ? { head_sha: head } : {}),
+    ...(root !== undefined ? { root } : {}),
   };
 }
 

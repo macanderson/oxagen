@@ -55,3 +55,7 @@ amendment.
 The Ontology page is cut from `apps/app` (`apps/app/ARCHITECTURE.md` §9,
 the scale-back decision of 2026-09-14). That cut removes the page, not
 the store: graph reads stay on the API and MCP surfaces.
+
+## Amendment 2026-09-28: the code graph uses pgvector
+
+[ADR-214](./ADR-214-server-built-code-graph-copies-hold-symbols-chunks-and-embeddings.md) puts the code graph's vectors in pgvector, beside its rows in Postgres. This ADR still governs every other vector: documents, agent memories, and messages stay in Neo4j.

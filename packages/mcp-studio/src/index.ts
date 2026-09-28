@@ -41,3 +41,6 @@ export * from "./diff";
 export * from "./suggest";
 export * from "./lint";
 export * from "./execute";
+
+// Replay of recorded calls (lane M16).
+export * from "./replay";
