@@ -3196,6 +3196,7 @@ type Messages = {
           errors: {
             tokenInvalid: string;
             groupUnreachable: string;
+            tokenNotGroup: string;
             tokenInsufficient: string;
             forbidden: string;
             badInput: string;
