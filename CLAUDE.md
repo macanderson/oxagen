@@ -24,7 +24,7 @@ Use the code to establish what ships. Specs record intent, ADRs record decisions
 
 ## Operating mode
 
-- Start from fresh remote refs. Create a branch from current `origin/main`, use an isolated worktree for large changes, and push the branch immediately. Never commit or push directly to `main`.
+- Start from fresh remote refs. Create a branch from current `origin/main`, use an isolated worktree for large changes, and push the branch immediately. Never commit or push directly to `main`, except to repair a red `main` under a P0 outage issue, which AGENTS.md under Git Workflow sets out.
 - Commit and push at meaningful increments. Open a PR against `main` and keep its description aligned with the final change. Follow `CONTRIBUTING.md`.
 - Fix defects encountered within the task. Investigate the cause, fix related instances, and provide verification. Follow SCR-004 when a fix cannot responsibly ride the PR.
 - Delegate independent work with explicit file ownership. Keep dependent edits sequential. Use agents that can edit when the task needs edits, and verify their changes before committing.
@@ -176,7 +176,7 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - A PR that changes a schema carries `migration-required` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
 - Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
 - Add no attribution to an issue, an issue comment, or a PR: no "Generated with Claude Code" footer, no `claude.ai/code` session link, and no co-author line. Mac had them stripped from every issue on 2026-09-25.
-- CI files a `P0` issue labelled `deployment-failure` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies; `triage-guard.yml` exempts it. Record the root cause and fixing PR in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
+- CI files a `P0` issue labelled `deployment-failure` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies; `triage-guard.yml` exempts it. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `agent-monitored-pr`, the pass rule replaces the round rule.
 
