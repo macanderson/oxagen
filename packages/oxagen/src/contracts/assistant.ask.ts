@@ -20,7 +20,9 @@
  * in-process loop, ADR-053 §4), `assistant_run_not_recorded` (the ledger
  * could not admit the turn or a receipt could not be written; the assistant
  * does not answer from a path that was not recorded), `engine_aborted` (the
- * turn was cancelled before it answered), and the credit gate's codes. A
+ * turn was cancelled before it answered), `attachment_refused` (an attached
+ * file is not the caller's, passes a cap, or is a kind the model cannot read;
+ * the reason names which), and the credit gate's codes. A
  * governed write the turn opened that is waiting on a person is returned as
  * the parked card, and the turn still completes. Every tool call the turn
  * made comes back in `toolCalls` with its outcome and duration, so a surface
@@ -40,6 +42,10 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  ASSISTANT_ATTACHMENT_MAX_FILES,
+  assistantAttachmentIdSchema,
+} from "./assistant.attachment.upload";
 import { CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
 import { conversationPublicIdSchema } from "./conversation.list";
 
@@ -216,6 +222,20 @@ export const assistantAsk = registerCapability({
        * turn can still end on a budget stop, but nobody can stop it by name.
        */
       turnId: z.string().uuid().optional(),
+      /**
+       * Files the person attached, by the `gen_` ids
+       * `upload_assistant_attachment` returned, in the order they were
+       * attached. The turn refuses with `attachment_refused` when an id is
+       * not the caller's upload in this workspace, when the files together
+       * pass the turn's caps, or when the model cannot read one of them.
+       */
+      attachments: z
+        .array(assistantAttachmentIdSchema)
+        .max(
+          ASSISTANT_ATTACHMENT_MAX_FILES,
+          `A message carries at most ${ASSISTANT_ATTACHMENT_MAX_FILES} files.`,
+        )
+        .optional(),
     })
     .strict(),
   output: z
