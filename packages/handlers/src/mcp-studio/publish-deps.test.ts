@@ -17,9 +17,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   project: vi.fn(),
+  warmSearch: vi.fn(),
 }));
 
 vi.mock("./project", () => ({ project: mocks.project }));
+vi.mock("./search-warm", () => ({ warmSearch: mocks.warmSearch }));
 
 import { withToolProjection } from "./publish-deps";
 
@@ -54,6 +56,8 @@ describe("withToolProjection", () => {
   beforeEach(() => {
     mocks.project.mockReset();
     mocks.project.mockResolvedValue(null);
+    mocks.warmSearch.mockReset();
+    mocks.warmSearch.mockResolvedValue(undefined);
   });
 
   it("makes publish() project the bundle it just built", async () => {
@@ -67,6 +71,32 @@ describe("withToolProjection", () => {
     });
     expect(result.bundle.commit).toBe(COMMIT);
     expect(result.warnings.filter((w) => w.startsWith("The tool registry"))).toEqual([]);
+  });
+
+  it("embeds the search entries of the bundle it projected, after the projection", async () => {
+    const order: string[] = [];
+    mocks.project.mockImplementation(() => {
+      order.push("project");
+      return Promise.resolve(null);
+    });
+    mocks.warmSearch.mockImplementation(() => {
+      order.push("warm");
+      return Promise.resolve();
+    });
+
+    const result = await publish(deps(), IDENTITY, COMMIT);
+
+    if (result.status !== "published") throw new Error(`The publish ended ${result.status}.`);
+    expect(mocks.warmSearch).toHaveBeenCalledTimes(1);
+    expect(mocks.warmSearch).toHaveBeenCalledWith(result.bundle);
+    expect(order).toEqual(["project", "warm"]);
+  });
+
+  it("embeds nothing when the projection fails", async () => {
+    mocks.project.mockRejectedValueOnce(new Error("connection reset"));
+
+    await expect(publish(deps(), IDENTITY, COMMIT)).rejects.toThrow("connection reset");
+    expect(mocks.warmSearch).not.toHaveBeenCalled();
   });
 
   it("publishes nothing when the projection fails", async () => {

@@ -3,9 +3,9 @@
 //
 // A publish can change hundreds of entries, and several searches can ask for
 // the same entries at once. The queue cuts the texts into batches and sends
-// one batch at a time, so one workspace never holds more than one request
-// open at its provider. A failed batch fails its caller only. The next batch
-// still runs.
+// one batch at a time, so one index never holds more than one document
+// request open at its provider. A failed batch fails its caller only. The
+// next batch still runs.
 import type { Embedder } from "./embedder";
 
 /** The most entries one embeddings request carries. Voyage AI takes 1,000. */
