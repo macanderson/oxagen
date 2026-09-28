@@ -138,6 +138,20 @@ const NOT_A_STEERING_REPO =
 const BAD_INDEX =
   "Oxagen could not fetch the published index. The index Oxagen returned does not have the records and context the checks read.";
 
+/** The 403 the API answers a key for another workspace with, as apiGetOrThrow throws it. */
+function scopeRefusal(): ApiError {
+  const body = JSON.stringify({
+    error: {
+      code: "forbidden",
+      reason: "key_scope_mismatch",
+      message:
+        "This API key belongs to workspace a-intel/other, and the request names a-intel/core-platform. Use a key for a-intel/core-platform, or request a-intel/other.",
+    },
+    requestId: "req_1",
+  });
+  return new ApiError(`Error 403 from context/steering/index: ${body}`, 403);
+}
+
 let work: string;
 let origin: string;
 let made = 0;
@@ -157,6 +171,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   process.exitCode = undefined;
 });
 
@@ -622,6 +637,78 @@ describe("exit 2", () => {
     expect(result.code).toBe(2);
   });
 
+  it("when the login is for another workspace than workspace.toml names", async () => {
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockRejectedValue(scopeRefusal());
+
+    const result = await runRaw(clone(), [], {}, { cacheDir: null });
+
+    expect(result.err).toEqual([
+      "✗ Oxagen could not fetch the published index. Your login is for another workspace than a-intel/core-platform, the one workspace.toml names. Run oxagen login --org a-intel --workspace core-platform, or fix workspace.toml to name the workspace you logged in to.",
+    ]);
+    expect(result.out).toEqual([]);
+    expect(result.code).toBe(2);
+  });
+
+  it("with the scope_mismatch code in --json", async () => {
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockRejectedValue(scopeRefusal());
+
+    const result = await runRaw(clone(), [], { json: true }, { cacheDir: null });
+
+    expect(result.err.map((line) => JSON.parse(line) as unknown)).toEqual([
+      expect.objectContaining({ type: "error", code: "scope_mismatch" }),
+    ]);
+    expect(result.code).toBe(2);
+  });
+
+  it("when the login is for another workspace than the CLI has selected", async () => {
+    vi.stubEnv("OXAGEN_ORG_ID", "a-intel");
+    vi.stubEnv("OXAGEN_WORKSPACE_ID", "core-platform");
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockRejectedValue(scopeRefusal());
+    const dir = commitTree(fresh("org"), organizationFixtureRepo());
+
+    const result = await runRaw(dir, [], {}, { cacheDir: null });
+
+    expect(api.apiGetOrThrow).toHaveBeenCalledWith(
+      "context/steering/index",
+      undefined,
+      undefined,
+    );
+    expect(result.err).toEqual([
+      "✗ Oxagen could not fetch the published index. Your login is for another workspace than a-intel/core-platform, the one the CLI has selected. Run oxagen login --org a-intel --workspace core-platform.",
+    ]);
+    expect(result.code).toBe(2);
+  });
+
+  it.each<[string, Error]>([
+    ["an error that is not the API's", new Error("The socket closed.")],
+    ["a body that is not JSON", new ApiError("Error 403 from context/steering/index: {forbidden}", 403)],
+    ["a body with no error object", new ApiError('Error 403 from context/steering/index: {"error":"forbidden"}', 403)],
+    [
+      "another reason",
+      new ApiError(
+        'Error 403 from context/steering/index: {"error":{"code":"forbidden","reason":"not_member","message":"No."}}',
+        403,
+      ),
+    ],
+  ])("as index_unavailable for %s", async (_name, error) => {
+    api.apiGetOrThrow.mockReset();
+    api.apiGetOrThrow.mockRejectedValue(error);
+
+    const result = await runRaw(clone(), [], { json: true }, { cacheDir: null });
+
+    expect(result.err.map((line) => JSON.parse(line) as unknown)).toEqual([
+      {
+        type: "error",
+        code: "index_unavailable",
+        message: `Oxagen could not fetch the published index. ${error.message}`,
+      },
+    ]);
+    expect(result.code).toBe(2);
+  });
+
   it("when the fetch fails", async () => {
     const result = await run(clone(), [], {}, {
       fetchPublished: () => Promise.reject(new Error("The API answered 503.")),
@@ -659,6 +746,13 @@ describe("exit 2", () => {
 // ── The cache ────────────────────────────────────────────────────────────────
 
 describe("the published index cache", () => {
+  // The cache key reads the API address and the token. Stub both, so no
+  // test reads the config file of the machine it runs on.
+  beforeEach(() => {
+    vi.stubEnv("OXAGEN_API_URL", "https://api.example.invalid");
+    vi.stubEnv("OXAGEN_API_TOKEN", "oxk_first");
+  });
+
   function fetcher(inputs: PublishedInputs = published()) {
     return vi.fn<CheckDeps["fetchPublished"]>(() => Promise.resolve(inputs));
   }
@@ -720,6 +814,87 @@ describe("the published index cache", () => {
     await run(dir, [], {}, { fetchPublished, cacheDir });
 
     expect(fetchPublished).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the cache again with the same API, workspace, and login", async () => {
+    const dir = clone();
+    const cacheDir = join(work, `cache-${(made += 1)}`);
+    const fetchPublished = fetcher();
+
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+
+    expect(fetchPublished).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<[string, (dir: string) => void]>([
+    [
+      "another login",
+      () => {
+        vi.stubEnv("OXAGEN_API_TOKEN", "oxk_second");
+      },
+    ],
+    [
+      "another API",
+      () => {
+        vi.stubEnv("OXAGEN_API_URL", "https://api.other.invalid");
+      },
+    ],
+    [
+      "another workspace in workspace.toml",
+      (dir) => {
+        const file = join(dir, "workspace.toml");
+        const text = readFileSync(file, "utf8");
+        expect(text).toContain('workspace = "core-platform"');
+        writeFileSync(file, text.replace('workspace = "core-platform"', 'workspace = "billing"'));
+      },
+    ],
+    [
+      "another organization in workspace.toml",
+      (dir) => {
+        const file = join(dir, "workspace.toml");
+        const text = readFileSync(file, "utf8");
+        expect(text).toContain('organization = "a-intel"');
+        writeFileSync(file, text.replace('organization = "a-intel"', 'organization = "b-intel"'));
+      },
+    ],
+  ])("fetches again under %s", async (_name, change) => {
+    const dir = clone();
+    const cacheDir = join(work, `cache-${(made += 1)}`);
+    const fetchPublished = fetcher();
+
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+    change(dir);
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+
+    expect(fetchPublished).toHaveBeenCalledTimes(2);
+    expect(readdirSync(cacheDir)).toHaveLength(2);
+  });
+
+  it("fetches again when the CLI selects another workspace for an organization repo", async () => {
+    vi.stubEnv("OXAGEN_ORG_ID", "a-intel");
+    vi.stubEnv("OXAGEN_WORKSPACE_ID", "core-platform");
+    const dir = commitTree(fresh("org"), organizationFixtureRepo());
+    const cacheDir = join(work, `cache-${(made += 1)}`);
+    const fetchPublished = fetcher();
+
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+    vi.stubEnv("OXAGEN_WORKSPACE_ID", "billing");
+    await run(dir, [], {}, { fetchPublished, cacheDir });
+
+    expect(fetchPublished).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the token out of the cache", async () => {
+    const dir = clone();
+    const cacheDir = join(work, `cache-${(made += 1)}`);
+
+    await run(dir, [], {}, { fetchPublished: fetcher(), cacheDir });
+
+    const [name] = readdirSync(cacheDir);
+    expect(name).not.toContain("oxk_first");
+    expect(readFileSync(join(cacheDir, name ?? ""), "utf8")).not.toContain("oxk_first");
   });
 
   it("fetches again with --refresh", async () => {

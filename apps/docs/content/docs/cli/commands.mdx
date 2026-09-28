@@ -154,9 +154,9 @@ Run `check` inside a clone of a steering repo to see what the steering PR check 
 
 Paths narrow the report. The checks still read the whole tree, and the report keeps the findings in the files and folders you name.
 
-Some checks read more than the tree. The hash, conflicts, and references checks compare your change with the records the workspace has published. The references check also looks up each runtime, operator, reviewer group, and credential your repo names. `check` fetches the published index and this context from Oxagen in one call and caches the answer for ten minutes. `--refresh` fetches it again.
+Some checks read more than the tree. The hash, conflicts, and references checks compare your change with the records the workspace has published. The references check also looks up each runtime, operator, reviewer group, and credential your repo names. `check` fetches the published index and this context from Oxagen in one call and caches the answer for ten minutes. `--refresh` fetches it again. The cache keeps one answer for each API address, organization, workspace, and login, so a run after `oxagen login` to another workspace fetches again.
 
-- A workspace repo reads the workspace its `workspace.toml` names.
+- A workspace repo reads the workspace its `workspace.toml` names. Your login must be for that workspace. If it is for another one, `check` stops with `scope_mismatch` and exits 2. Run `oxagen login --org <org> --workspace <workspace>` for the workspace `workspace.toml` names, or fix `workspace.toml`.
 - An organization repo reads the context of the workspace the CLI has selected. It reads no index, because no organization version is published yet, so its records check as a first publish.
 
 Oxagen does not store member handles, teams, or reviewer group slugs yet. Until it does, the references check reports each agent's `operator` and each reviewer group as missing.
@@ -165,7 +165,7 @@ Two checks do less on your machine. The settings check is skipped, and the compi
 
 `--json` prints one finding per line on stdout and the result line on stderr.
 
-The command exits 0 when no finding is an error and 1 when at least one is. It exits 2 when the checks cannot run: outside a steering repo or a git clone, with a `--base` that names no commit, or when `check` cannot fetch the index and context, for example before you log in.
+The command exits 0 when no finding is an error and 1 when at least one is. It exits 2 when the checks cannot run: outside a steering repo or a git clone, with a `--base` that names no commit, when your login is for another workspace than the one `check` reads, or when `check` cannot fetch the index and context, for example before you log in.
 
 ## oxagen agent: the agent identity
 
