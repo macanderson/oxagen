@@ -317,8 +317,9 @@ describe("what a recall names", () => {
     for (const call of calls) await handleHookEvent(call, {}, h.deps);
     expect(await recallFor(h)).toEqual({
       repositoryDigests: DIGESTS,
-      // The second Read moved its tool back to the front.
-      tools: ["Read", "mcp__github__get_issue"],
+      // The second Read moved its tool back to the front, and the MCP tool is
+      // named as a memory names it, without Claude Code's `mcp__` prefix.
+      tools: ["Read", "github__get_issue"],
       paths: ["nb/analysis.ipynb", "docs/guide.md", "src/a.ts"],
       text: "How do I install?",
     });
@@ -336,9 +337,9 @@ describe("what a recall names", () => {
     const { tools } = await recallFor(h);
     expect(RECALL_TOOLS_KEPT).toBe(32);
     expect(tools).toHaveLength(RECALL_TOOLS_KEPT);
-    expect(tools[0]).toBe(`mcp__github__tool_${RECALL_TOOLS_KEPT}`);
-    expect(tools.at(-1)).toBe("mcp__github__tool_1");
-    expect(tools).not.toContain("mcp__github__tool_0");
+    expect(tools[0]).toBe(`github__tool_${RECALL_TOOLS_KEPT}`);
+    expect(tools.at(-1)).toBe("github__tool_1");
+    expect(tools).not.toContain("github__tool_0");
   });
 
   it("keeps the newest 64 files", async () => {

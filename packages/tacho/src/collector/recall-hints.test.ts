@@ -62,6 +62,20 @@ describe("noteRecallHints", () => {
     });
   });
 
+  it("notes an MCP tool as the memory names it, without Claude Code's mcp__ prefix", () => {
+    const holder = session();
+    noteRecallHints(holder, "mcp__github__get_issue", undefined);
+    noteRecallHints(holder, "mcp__query", undefined);
+    noteRecallHints(holder, "Bash", undefined);
+    // The same tool from a harness that names it without the prefix is one entry.
+    noteRecallHints(holder, "github__get_issue", undefined);
+    expect(holder.recallHints?.tools).toEqual([
+      "github__get_issue",
+      "Bash",
+      "mcp__query",
+    ]);
+  });
+
   it("reads a file from file_path, path, and notebook_path only", () => {
     const holder = session();
     noteRecallHints(holder, "Tool", {
