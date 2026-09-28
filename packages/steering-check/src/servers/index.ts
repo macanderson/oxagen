@@ -21,6 +21,7 @@
 import {
   compile,
   CompileError,
+  lint as toolChecks,
   mcpToolsLockSchema,
   parseLock,
   parseRecordedCalls,
@@ -34,7 +35,6 @@ import {
   type CompileIssue,
   type DefinitionLock,
   type FileIssue,
-  lint as toolChecks,
   type LintContext,
   type Finding as LintFinding,
   type ServerFolder as LintServerFolder,
