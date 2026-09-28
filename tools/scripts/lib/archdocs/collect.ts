@@ -7,6 +7,7 @@
  * the same tree always produces the same model — that is what lets
  * `--check` diff the output in CI.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { sendersIn, triggersIn } from "../../check-inngest-senders";
@@ -36,6 +37,11 @@ export interface ManifestTable {
   columns: ManifestColumn[];
   meta?: Record<string, string>;
 }
+/**
+ * The storage manifest as the atlas reads it. `contentHash` and each store's
+ * `tableCount` are not in the committed file (ADR-216); `collectManifest`
+ * computes them when it reads it.
+ */
 export interface StorageManifest {
   version: number;
   contentHash: string;
@@ -206,10 +212,27 @@ export function collectWorkspace(root: string): WorkspacePackage[] {
 
 // ── Storage manifest (ADR-031) ───────────────────────────────────────────────
 
+/**
+ * Read the committed manifest and compute the two values it no longer
+ * commits (ADR-216). The file is canonical JSON kept current by
+ * `pnpm schema:manifest:check`, so the sha256 of its bytes is the content hash
+ * `pnpm schema:manifest` prints.
+ */
 export function collectManifest(root: string): StorageManifest {
-  return JSON.parse(
-    read(join(root, "packages/database/storage-manifest.json")),
-  ) as StorageManifest;
+  const text = read(join(root, "packages/database/storage-manifest.json"));
+  const committed = JSON.parse(text) as Omit<
+    StorageManifest,
+    "contentHash" | "stores"
+  > & { stores: Omit<StorageManifest["stores"][number], "tableCount">[] };
+  return {
+    ...committed,
+    contentHash: createHash("sha256").update(text).digest("hex"),
+    stores: committed.stores.map((store) => ({
+      ...store,
+      tableCount: committed.tables.filter((t) => t.store === store.kind)
+        .length,
+    })),
+  };
 }
 
 export function collectPgSchemas(

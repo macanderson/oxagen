@@ -20,7 +20,13 @@
 
      A keyword anywhere in this body counts, not only here. So a sentence like
      "the operator's next command closes #123" closes #123 on merge, whether or
-     not that was meant. Phrase such prose as "finishes #123" instead. -->
+     not that was meant. Phrase such prose as "finishes #123" instead.
+
+     GitHub ignores negation too: "does not close #N" still closes #N. And a
+     commit message counts like this body, because a squash merge copies it
+     to main. If this body says Refs #N, no commit on the branch may say
+     Closes #N. Reword the commit. The `dod` check fails both cases
+     (#3680). -->
 
 Closes #
 
