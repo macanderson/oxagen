@@ -14,7 +14,7 @@
     },
     "workspace": {
       "type": "string",
-      "pattern": "^wrk_[0-9a-z]{1,64}$",
+      "pattern": "^wrk_[0-9a-hjkmnp-tv-z]{22}$",
       "description": "The public id of the workspace the relay belongs to. The relay refuses an envelope for any other workspace."
     },
     "nonce": {
