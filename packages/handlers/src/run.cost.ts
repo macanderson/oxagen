@@ -11,7 +11,13 @@
 // Beside the row it answers the agent's baseline (#3984, ADR-199): the median
 // cost and productive ratio of the agent's sealed runs in the 30 days before
 // this run started. Each tool's result cost is an estimate of input the run's
-// cost already counts, so it always carries the `estimated` basis.
+// cost already counts, so it always carries the `estimated` basis. So does
+// the standing context by source (#4537, spec detector 2).
+import {
+  standingContextBySource,
+  standingSourcesOf,
+  type StandingSourcePrice,
+} from "@oxagen/billing";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runCostGet,
@@ -19,6 +25,7 @@ import {
   type RunCostByClass,
   type RunCostGetOutput,
   type RunCostProvisional,
+  type RunCostStandingContext,
 } from "@oxagen/oxagen/contracts/run.cost";
 import {
   costBasisSchema,
@@ -162,6 +169,33 @@ export function costByClassOf(
   };
 }
 
+/**
+ * The context every model call after the first re-sent, by source. The
+ * recorder estimates the tokens, so every figure carries the `estimated`
+ * basis. Null when the row reports no source, which is every row the rollup
+ * built before the sources were recorded (#4493).
+ */
+export function standingContextOf(
+  row: Parameters<typeof standingContextBySource>[0] & {
+    currency: string;
+  },
+): RunCostStandingContext | null {
+  const sources = standingContextBySource(row, standingSourcesOf(row));
+  if (sources === null) return null;
+  const wire = (source: StandingSourcePrice | null) =>
+    source === null
+      ? null
+      : {
+          resentTokens: source.resentTokens,
+          cost: cost(source.micros, row.currency, "estimated"),
+        };
+  return {
+    toolDefinitions: wire(sources.toolDefinitionTokens),
+    steering: wire(sources.steeringTokens),
+    contextFrames: wire(sources.contextFrameTokens),
+  };
+}
+
 export function createRunCostHandler(
   deps: RunCostDeps,
 ): CapabilityHandler<typeof runCostGet> {
@@ -229,6 +263,7 @@ export function createRunCostHandler(
           resultTokens: t.resultTokens,
           cost: cost(t.costMicros, row.currency, "estimated"),
         })),
+        standingContext: standingContextOf(row),
         priceEntryIds: row.priceEntryIds,
         rolledUpAt: row.rolledUpAt.toISOString(),
         isEstimate: row.sealedAt === null,

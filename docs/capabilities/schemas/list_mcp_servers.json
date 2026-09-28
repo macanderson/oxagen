@@ -1,7 +1,7 @@
 {
   "name": "list_mcp_servers",
   "domain": "agent",
-  "description": "List registered external MCP servers in the active workspace with their current health",
+  "description": "List registered external MCP servers in the active workspace with their current health, the tokens each server's tool definitions add to a model call, and an estimate of what those tokens cost the workspace a week",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -139,6 +139,52 @@
                     "expiresAt",
                     "refreshable",
                     "lastRefreshedAt"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "contextTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "weeklyPrice": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "micros": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "basis": {
+                      "type": "string",
+                      "enum": [
+                        "gateway_observed",
+                        "client_attested",
+                        "mixed",
+                        "estimated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "micros",
+                    "currency",
+                    "basis"
                   ],
                   "additionalProperties": false
                 },

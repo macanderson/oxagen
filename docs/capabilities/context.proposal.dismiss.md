@@ -13,7 +13,7 @@
 
 ## Intent
 
-Reject a proposal with a reason ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md)). A proposal with an open Context PR has the PR closed on GitHub and its branch `context/<lineage>` deleted before the row changes, so the next proposal on the lineage opens a fresh branch and PR. A proposal whose open failed after GitHub opened the PR carries the branch and no PR number; its PR is found on the branch and closed, with the branch deleted, when the PR's body names this proposal and no other proposal on the lineage has recorded a PR there; a PR another proposal opened is left open. The `rejected` write applies only to a proposal that is not merged, so a merge that publishes while GitHub is being called keeps its proposal and the dismissal is refused `proposal_merged`. A merged proposal is published and cannot be dismissed; retirement is its own Context PR and is outside this release.
+Reject a proposal with a reason ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md)). A proposal with an open Context PR has the PR closed on GitHub and its branch `context/<lineage>` deleted before the row changes, so the next proposal on the lineage opens a fresh branch and PR. A proposal whose open failed after GitHub opened the PR carries the branch and no PR number; its PR is found on the branch and closed, with the branch deleted, when the PR's body names this proposal and no other proposal on the lineage has recorded a PR there; a PR another proposal opened is left open. The `rejected` write applies only to a proposal that is not merged, so a merge that publishes while GitHub is being called keeps its proposal and the dismissal is refused `proposal_merged`. A proposal that `merge_context_pr` is landing is refused `merge_in_progress` before GitHub is called, and a merge that starts while GitHub is called makes the `rejected` write refuse the same way. A merged proposal is published and cannot be dismissed; retirement is its own Context PR and is outside this release.
 
 ## Input
 
@@ -37,4 +37,4 @@ Reject a proposal with a reason ([ADR-061](../adr/ADR-061-steering-governance-mo
 | `forbidden` | `org_role_required` / `no_principal` | The caller holds none of the accepted roles. |
 | `not_found` | `proposal_not_found` | |
 | `not_found` | `workspace_repository_missing` | The proposal has a PR and the workspace no longer has a connected repository. |
-| `conflict` | `proposal_merged` / `github_refused` | GitHub's message travels on `github_refused`. |
+| `conflict` | `proposal_merged` / `github_refused` / `merge_in_progress` | GitHub's message travels on `github_refused`. `merge_in_progress`: `merge_context_pr` is landing the PR. Try again when it finishes. |

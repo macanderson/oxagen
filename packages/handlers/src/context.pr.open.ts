@@ -56,7 +56,13 @@ import {
   type SteeringRepository,
 } from "./context.steering.github";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
-import { proposalMoved, type ProposalRow } from "./context.steering.store";
+import {
+  claimCutoff,
+  mergeClaimed,
+  mergeInProgress,
+  proposalMoved,
+  type ProposalRow,
+} from "./context.steering.store";
 import { isRepositoryRecord } from "./context.steering.sync.plan";
 import {
   bodyNamesProposal,
@@ -223,6 +229,11 @@ export function createOpenContextPrHandler(
       );
     } else {
       assertSameHost(repo, row.provider, row.prUrl);
+      // A merge from Oxagen is landing this PR: its stamp commit is the PR's
+      // head until the host merges it. Checks run on that head would move
+      // the row the merge is about to publish (#4504).
+      if (mergeClaimed(row, deps.now()))
+        throw mergeInProgress(row.publicId, row.mergeClaimedAt);
       const pr = await deps.github.getPullRequest(repo, row.prNumber!);
       assertProductionBase(repo, pr.baseRef, row.prUrl);
       // A PR merged on the host at the commit the checks passed on is still
@@ -242,6 +253,7 @@ export function createOpenContextPrHandler(
           updatedById: actingUserId,
         },
         OPEN_PR,
+        { noClaimSince: claimCutoff(deps.now()) },
       );
     }
 
@@ -249,6 +261,7 @@ export function createOpenContextPrHandler(
       row.id,
       { status: "checks_running" },
       OPEN_PR,
+      { noClaimSince: claimCutoff(deps.now()) },
     );
     const headSha = row.headSha;
     if (!headSha) {

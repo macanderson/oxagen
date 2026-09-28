@@ -79,6 +79,7 @@ describe("get_run_cost contract", () => {
         },
       ],
       byTool: [{ name: "Bash", calls: 5, resultTokens: null, cost: null }],
+      standingContext: null,
       priceEntryIds: ["0f2c2a3e-1b6a-4c1d-9c3e-1234567890ab"],
       rolledUpAt: "2026-09-14T10:06:31.000Z",
       isEstimate: false,
@@ -154,6 +155,7 @@ describe("get_run_cost contract", () => {
           cost: { micros: "3600", currency: "USD", basis: "estimated" },
         },
       ],
+      standingContext: null,
       priceEntryIds: [],
       rolledUpAt: "2026-09-14T10:06:31.000Z",
       isEstimate: false,
@@ -202,6 +204,65 @@ describe("get_run_cost contract", () => {
       runCostGet.output.safeParse({
         ...answer,
         rollup: { ...graded, byTool: [{ name: "Read", calls: 3 }] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("carries the standing context by source, and reads a rollup without it as null (#4537)", () => {
+    const base = {
+      cost: usd("41265"),
+      tokens,
+      cacheHitRate: null,
+      turns: 3,
+      steps: 9,
+      modelCalls: 4,
+      toolCalls: 5,
+      retries: 0,
+      productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
+      byModel: [],
+      byTool: [],
+      priceEntryIds: [],
+      rolledUpAt: "2026-09-14T10:06:31.000Z",
+      isEstimate: false,
+    };
+    const standingContext = {
+      toolDefinitions: {
+        resentTokens: 60_000,
+        cost: { micros: "18000", currency: "USD", basis: "estimated" },
+      },
+      steering: { resentTokens: 15_000, cost: null },
+      contextFrames: null,
+    };
+    const answer = {
+      runId: "tse_abc123",
+      rollup: { ...base, standingContext },
+      baseline: null,
+    };
+    expect(runCostGet.output.parse(answer)).toEqual(answer);
+    expect(
+      runCostGet.output.parse({ runId: "tse_abc123", rollup: base, baseline: null })
+        .rollup?.standingContext,
+    ).toBeNull();
+    // A source must carry its tokens, and no fourth source exists (negative).
+    expect(
+      runCostGet.output.safeParse({
+        ...answer,
+        rollup: {
+          ...base,
+          standingContext: { ...standingContext, steering: { cost: null } },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      runCostGet.output.safeParse({
+        ...answer,
+        rollup: {
+          ...base,
+          standingContext: { ...standingContext, systemPrompt: null },
+        },
       }).success,
     ).toBe(false);
   });
