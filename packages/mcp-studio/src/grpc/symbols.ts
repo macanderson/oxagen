@@ -73,6 +73,12 @@ export class Symbols {
     return undefined;
   }
 
+  /** The file that declares this full name, visible or not, for a refusal that names a missing import. */
+  declaredIn(name: string): string | undefined {
+    const [first] = this.entries.get(name)?.files ?? [];
+    return first;
+  }
+
   private addMessage(scope: string, message: DescriptorProto, file: string): void {
     const name = `${scope}${message.name}`;
     this.add(name, "message", file);
