@@ -105,10 +105,14 @@ export function inputContextOf(frame: PricedRequestFrame): number | null {
  * frames after it on its chain, up to the chain's first compaction after the
  * call, and up to the first frame whose input context falls at least
  * `resultTokens` below the frame before it. `chain` and `compactions` are the
- * chain's own, and `chain` is in time order.
+ * chain's own, `chain` is in time order, and `seq` is the call's position on
+ * the chain.
  *
- * A frame at the compaction's own instant is taken to come after it. Between
- * compactions a chain's input context only grows, so a drop that large means
+ * A frame at the compaction's own instant is taken to come after it. The store
+ * keeps a wrapped run's instants to the millisecond, so a compaction can share
+ * the call's instant. The chain's `seq` then orders the two: a compaction at
+ * that instant with a later `seq` ends the carry before any frame (#4585).
+ * Between compactions a chain's input context only grows, so a drop that large means
  * the context shed at least the result's size: a compaction the store has no
  * record of, or a cleared result. Clearing some other result ends the carry
  * early. The drop compares input context alone (#4544): a request's output
@@ -121,11 +125,13 @@ export function carriesOf(
   at: number,
   resultTokens: number,
   compactions: readonly RunCompaction[] = [],
+  seq?: number,
 ): PricedRequestFrame[] {
   let end = Number.POSITIVE_INFINITY;
   for (const c of compactions) {
     const t = timeOf(c);
-    if (t > at && t < end) end = t;
+    const after = t > at || (t === at && seq !== undefined && c.seq > seq);
+    if (after && t < end) end = t;
   }
   const out: PricedRequestFrame[] = [];
   let before: PricedRequestFrame | null = null;
@@ -246,6 +252,7 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         timeOf(c.call),
         tokens,
         compactions.get(chainKey),
+        c.call.seq,
       );
       for (let i = 0; i < carries.length; i += 1)
         ctx.groups.add(

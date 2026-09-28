@@ -755,6 +755,14 @@ describe("carriesOf", () => {
     ]);
   });
 
+  // #4585, https://github.com/macanderson/oxagen/pull/4585#discussion_r4116779690
+  it("orders a compaction at the call's instant by seq", () => {
+    const chain = [frame(r, 0.5, 40_000), frame(r, 2, 47_000)];
+    const tied = (seq: number) => ({ ...compaction(r, 1), seq });
+    expect(carriesOf(chain, at(1), 6_000, [tied(8)], 5)).toEqual([]);
+    expect(carriesOf(chain, at(1), 6_000, [tied(3)], 5)).toEqual([chain[1]]);
+  });
+
   it("never ends the carry at a frame with no class tokens", () => {
     const chain = [
       frame(r, 0.5, 40_000, { bare: true }),
