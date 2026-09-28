@@ -7,12 +7,7 @@
     "CLAUDE_CODE_MAX_PARALLEL_AGENTS": "6",
     "CLAUDE_CODE_WORKTREE_BASE_DIR": "${CLAUDE_PROJECT_DIR}/.worktrees",
     "CLAUDE_CODE_AGENT_TEAM_SIZE": "6",
-    "CLAUDE_CODE_BACKGROUND_AGENTS": "1",
-    "CLAUDE_TELEMETRY_LOGGER": "${CLAUDE_PROJECT_DIR}/tools/scripts/claude-telemetry-logger.ts",
-    "POSTHOG_LLMA_CC_ENABLED": "true",
-    "POSTHOG_API_KEY": "phc_mnBFDvrZmhrSGwU4MbPddzjj7fL8tCNfEfe4iNJXz4wo",
-    "POSTHOG_HOST": "https://us.i.posthog.com",
-    "POSTHOG_LLMA_CUSTOM_PROPERTIES": "{\"ai_product\": \"oxagen\", \"repo\": \"monorepo\"}"
+    "CLAUDE_CODE_BACKGROUND_AGENTS": "1"
   },
   "mcpServers": {
     "github": {
@@ -21,14 +16,6 @@
       "headers": {
         "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
-    },
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
-    },
-    "vercel": {
-      "type": "http",
-      "url": "https://mcp.vercel.com"
     }
   },
   "permissions": {
@@ -82,13 +69,6 @@
             "timeout": 60,
             "statusMessage": "Linting changed packages...",
             "async": true
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_TELEMETRY_LOGGER",
-            "timeout": 3,
-            "statusMessage": "Recording telemetry...",
-            "async": true
           }
         ]
       },
@@ -100,13 +80,6 @@
             "command": "echo '\u2139 CI runs the authoritative full gate on every push/PR (GitHub Actions). The local pre-commit/push full-gate hook is intentionally disabled \u2014 running turbo test:coverage+build on every commit across concurrent sessions saturated RAM and ballooned swap/compressor to ~100GB. Run `pnpm gate` manually before marking a body of work ready to merge.'",
             "timeout": 5,
             "statusMessage": "CI gate runs on push/PR (local full-gate hook disabled)...",
-            "async": true
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_TELEMETRY_LOGGER",
-            "timeout": 3,
-            "statusMessage": "Recording telemetry...",
             "async": true
           }
         ]
@@ -203,3 +176,13 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true
 }
+P1 · Issue Kind (Bug|Feature|Improvement|Chore) · Functional Area · Issue summary (short)
+Labels must include: 1 priority label, at least 1 kind label (defect/feature etc), and at least one area label  and at least
+
+EXAMPLES
+
+P0 · Bug · CI · Main is red on ci caused by test failures
+
+PO Bug XS (CI) XS: Name of the issue
+P1 Feature L (Mission Control): Bulk import memories from markdown files
+P2 Feature M (CLI): Add bulk import memories to CLI surface
