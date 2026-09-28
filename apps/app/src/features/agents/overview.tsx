@@ -10,7 +10,8 @@
 // that split yet (G3), so the six input classes say so and the two classes
 // the rollup does record, output and reasoning, carry their figures. Coaching
 // is derived from that split, so it waits on the same gap and says so rather
-// than claiming there is nothing to change.
+// than claiming there is nothing to change. The one exception is the cache
+// TTL, which the idle cache finding proposes from the request frames.
 import { useLocale, useTranslations } from "next-intl";
 import type {
   AgentDetail,
@@ -20,10 +21,12 @@ import type {
 import type { MandateList } from "@/data/contracts/mandates";
 import { divMicros } from "@/data/contracts/money";
 import type { RunRow } from "@/data/contracts/runs";
+import type { SpendFindings } from "@/data/contracts/spend";
 import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { tamperOf } from "./agent-reads";
+import { type CacheTtlAdvice, cacheTtlOf } from "./cache-ttl";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
@@ -229,8 +232,73 @@ function PerRunCost({
   return value === null ? <NotRecordedValue /> : <Money value={value} />;
 }
 
-function Coaching({ org, ws }: { org: string; ws: string }) {
+/** The TTL line's sentence for each proposal: keep the TTL in effect, or set the other one. */
+const TTL_WORDS = {
+  "1h": { keep: "keepOneHour", set: "setOneHour" },
+  "5m": { keep: "keepFiveMinutes", set: "setFiveMinutes" },
+} as const;
+
+/**
+ * The cache TTL the newest idle cache finding proposes for this agent, with a
+ * link to that finding's evidence.
+ */
+function CacheTtlLine({
+  advice,
+  org,
+  ws,
+}: {
+  advice: CacheTtlAdvice;
+  org: string;
+  ws: string;
+}) {
+  const t = useTranslations("agents.detail.overview.coaching.ttl");
+  const words = TTL_WORDS[advice.value];
+  return (
+    <div data-testid="cache-ttl">
+      <Facts
+        rows={[
+          {
+            term: t("term"),
+            value: (
+              <>
+                {t(advice.current === advice.value ? words.keep : words.set)}
+                {advice.current === null ? ` ${t("mixed")}` : null}
+                <Sub>
+                  <SafeLink
+                    to={routes.spend(org, ws, {
+                      tab: "findings",
+                      finding: advice.findingId,
+                    })}
+                    className={linkText}
+                  >
+                    {t("open")}
+                  </SafeLink>
+                </Sub>
+              </>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function Coaching({
+  org,
+  ws,
+  agentKey,
+  findings,
+}: {
+  org: string;
+  ws: string;
+  agentKey: string | null;
+  findings: Read<SpendFindings> | null;
+}) {
   const t = useTranslations("agents.detail.overview.coaching");
+  // Nothing when the tab read no findings or none proposes a TTL. A failed
+  // read is named.
+  const advice =
+    findings?.ok === true ? cacheTtlOf(findings.value, agentKey) : null;
   return (
     <Panel
       id="agent-coaching"
@@ -241,7 +309,15 @@ function Coaching({ org, ws }: { org: string; ws: string }) {
         </Badge>
       }
     >
-      <NotBacked gap="G3">{t("notBacked")}</NotBacked>
+      {findings !== null && !findings.ok ? (
+        <ReadFailure read={findings} section={t("ttl.term")} />
+      ) : null}
+      {advice === null ? null : (
+        <CacheTtlLine advice={advice} org={org} ws={ws} />
+      )}
+      <NotBacked gap="G3">
+        {advice === null ? t("notBacked") : t("ttl.rest")}
+      </NotBacked>
       <div className="-mx-4 -mb-4 border-t border-border px-4 py-3">
         <SafeLink
           to={routes.spend(org, ws, { tab: "findings" })}
@@ -539,6 +615,7 @@ export function Overview({
   deliveries,
   spend,
   spendRow,
+  findings,
   lastRun,
   operatorName,
   place,
@@ -550,6 +627,8 @@ export function Overview({
   deliveries: Read<SteeringDeliveries> | null;
   spend: Read<unknown> | null;
   spendRow: AgentSpendRow | null;
+  /** The open findings, for the cache TTL line; null when the tab read none. */
+  findings: Read<SpendFindings> | null;
   lastRun: RunRow | null;
   operatorName: string | null;
   place: Place;
@@ -559,7 +638,12 @@ export function Overview({
     <div className="flex flex-col gap-4" data-testid="agent-overview">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <TokenUse row={spendRow} spend={spend} />
-        <Coaching org={place.org} ws={place.ws} />
+        <Coaching
+          org={place.org}
+          ws={place.ws}
+          agentKey={detail.identity.agentKey}
+          findings={findings}
+        />
       </div>
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Composition

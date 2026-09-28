@@ -491,15 +491,20 @@ export const assistantModelKeys = orgSchema.table(
 // until` with `main_repo_bound_at` null; `bind_main_repository` closes it. An
 // organization created before this table existed has no row: it was never
 // provisional and no first frame is known for it, and every reader treats the
-// missing row as an open gate with no window. Org-only RLS.
+// missing row as an open gate with no window. `workspace_id` is null when
+// `create_org` made no workspace (`workspace: null`), and the organization's
+// first `create_workspace` fills it (#4582). Org-only RLS.
 export const PROVISIONAL_DAYS = 14;
 
 export const onboardingState = orgSchema.table(
   "onboarding_state",
   {
     orgId: uuid("org_id").primaryKey(),
-    // The gate's workspace: the first one, made by create_org. App-enforced.
-    workspaceId: uuid("workspace_id").notNull(),
+    // The gate's workspace: the organization's first one. create_org sets it
+    // when it makes that workspace. When create_org makes none (the web app
+    // sends `workspace: null`), the column stays null until create_workspace
+    // fills it with the first workspace it makes. App-enforced.
+    workspaceId: uuid("workspace_id"),
     step: text("step").notNull().default("wrap"),
     firstFrameAt: timestamp("first_frame_at", {
       withTimezone: true,

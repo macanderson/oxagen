@@ -187,6 +187,7 @@ function tabBody({
           deliveries={reads.deliveries}
           spend={reads.spend}
           spendRow={spendRow}
+          findings={reads.findings}
           lastRun={lastRun}
           operatorName={operatorName}
           place={place}

@@ -657,6 +657,16 @@ type Messages = {
           badge: string;
           notBacked: string;
           all: string;
+          ttl: {
+            term: string;
+            setOneHour: string;
+            setFiveMinutes: string;
+            keepOneHour: string;
+            keepFiveMinutes: string;
+            mixed: string;
+            open: string;
+            rest: string;
+          };
         };
         composition: {
           title: string;

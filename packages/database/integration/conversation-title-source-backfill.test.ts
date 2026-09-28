@@ -1,7 +1,7 @@
 /**
  * Conversation title backfill (#4571)
  *
- * Replays 20260928013000_conversation_title_source.sql against conversations
+ * Replays 20260928061500_conversation_title_source.sql against conversations
  * written before the column existed, and proves the backfill: an untitled
  * conversation, or one whose title the old code cut from its first question,
  * is named again from that first question in at most 72 characters and marked
@@ -25,7 +25,7 @@ const LONG =
 it("names old conversations from their first question and keeps renames", async () => {
   const migration = readFileSync(
     new URL(
-      "../atlas/migrations/20260928013000_conversation_title_source.sql",
+      "../atlas/migrations/20260928061500_conversation_title_source.sql",
       import.meta.url,
     ),
     "utf8",
