@@ -65,13 +65,18 @@ export function OperatorName({
   const [place, setPlace] = useState<CSSProperties>({});
   useLayoutEffect(() => {
     if (!open) return;
-    // 6px under the name, kept 8px inside the viewport's right edge.
+    // 6px under the name, or over it when the viewport has no room below,
+    // and kept 8px inside the viewport's right edge.
     const follow = () => {
       const rect = root.current?.getBoundingClientRect();
       if (rect === undefined) return;
       const width = card.current?.offsetWidth ?? 0;
+      const height = card.current?.offsetHeight ?? 0;
+      const below = rect.bottom + 6;
+      const above = rect.top - 6 - height;
+      const fitsBelow = below + height <= window.innerHeight - 8;
       setPlace({
-        top: rect.bottom + 6,
+        top: fitsBelow || above < 8 ? below : above,
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
       });
     };

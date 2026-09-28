@@ -12,7 +12,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
-import { CellOverflow, clippedElement, OPEN_DELAY_MS } from "./cell-overflow";
+import {
+  CellOverflow,
+  clippedElement,
+  markCutCells,
+  OPEN_DELAY_MS,
+} from "./cell-overflow";
 
 const LONG =
   "Watches the release branch and cuts a tag when every required check passes";
@@ -132,6 +137,16 @@ describe("CellOverflow", () => {
     );
   });
 
+  it("shows a cut plain-text value when the keyboard reaches its cell", async () => {
+    page();
+    const description = screen.getByTestId("description");
+    measure(description, 640, 320);
+    markCutCells(document);
+    expect(description).toHaveAttribute("tabindex", "0");
+    fireEvent.focusIn(description);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(LONG);
+  });
+
   it("hides the value when the pointer moves to a value that fits", async () => {
     page();
     const description = screen.getByTestId("description");
@@ -201,5 +216,35 @@ describe("clippedElement", () => {
     measure(outside, 900, 300);
     expect(clippedElement(spanning)).toBeNull();
     expect(clippedElement(outside)).toBeNull();
+  });
+});
+
+describe("markCutCells", () => {
+  it("gives a cut cell a keyboard stop and takes it back once the value fits", () => {
+    page();
+    const description = screen.getByTestId("description");
+    measure(description, 640, 320);
+    markCutCells(document);
+    expect(description).toHaveAttribute("tabindex", "0");
+    measure(description, 300, 320);
+    markCutCells(document);
+    expect(description).not.toHaveAttribute("tabindex");
+  });
+
+  it("leaves a cell that holds a link to the link's own stop", () => {
+    page();
+    const name = screen.getByTestId("name");
+    measure(name, 400, 120);
+    markCutCells(document);
+    expect(name).not.toHaveAttribute("tabindex");
+  });
+
+  it("reads a cut value nested in a cell that fits", () => {
+    page();
+    const owner = screen.getByTestId("owner");
+    measure(screen.getByTestId("owner-name"), 180, 90);
+    markCutCells(document);
+    expect(owner).toHaveAttribute("tabindex", "0");
+    expect(clippedElement(owner)).toBe(owner);
   });
 });
