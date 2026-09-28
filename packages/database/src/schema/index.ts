@@ -14,6 +14,7 @@ export * from "./billing";
 export * from "./security";
 export * from "./iam";
 export * from "./mcp";
+export * from "./mcp-studio-drafts";
 export * from "./plugin";
 export * from "./notification";
 export * from "./privacy";
