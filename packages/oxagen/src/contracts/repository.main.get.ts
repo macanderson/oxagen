@@ -3,9 +3,9 @@
  * to unblock, the workspace's main repository (MC spec §10.1; #2967).
  *
  * The main repo is where `.oxagen/` lives — published steering, the promotion
- * ledger, and every agent definition (spec §10.2). A workspace has exactly one,
- * and until it is bound the workspace is provisional: runs record and spend
- * counts, but steering, records and agent definitions stay off.
+ * ledger, and every agent definition (spec §10.2). A workspace has exactly one.
+ * Nothing waits on it: runs record, spend counts, and a published record
+ * steers the workspace's agents whether one is bound or not (ADR-212).
  *
  * `link_repository` refuses `conflict: github_not_connected` unless the
  * workspace already carries a GitHub App installation. Nothing in the app

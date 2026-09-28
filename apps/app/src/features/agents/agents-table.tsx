@@ -288,19 +288,6 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
   if (set === "composition")
     return [
       agent(harness),
-      {
-        key: "purpose",
-        label: t("list.columns.purpose"),
-        sort: (row) => row.description,
-        render: (row) =>
-          row.description === null ? (
-            <NotRecordedValue />
-          ) : (
-            <span className="block max-w-[26ch] text-xs">
-              {row.description}
-            </span>
-          ),
-      },
       owner("owner"),
       {
         key: "steering",

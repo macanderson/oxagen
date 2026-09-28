@@ -2,7 +2,7 @@
 
 What the Workspace settings dialog needs to show, and to unblock, the workspace's main repository (MC spec §10.1; #2967).
 
-The main repo is where `.oxagen/` lives — published steering, the promotion ledger, and every agent definition. A workspace has exactly one. Until it is bound, runs record and spend counts, but steering, records and agent definitions stay off.
+The main repo is where `.oxagen/` lives: published steering, the promotion ledger, and every agent definition. A workspace has exactly one. Nothing waits on it: runs record, spend counts, and a published record steers the workspace's agents whether one is bound or not (ADR-212).
 
 The steering repo job writes the steering repository when the workspace is created (ADR-212), and `link_repository` adds a linked repository through a steering PR. `link_repository` refuses `conflict: github_not_connected` unless the workspace already carries a GitHub App installation. The install leg is an HTTP flow the API runs (`/connections/github/auth-url` → GitHub → the HMAC-verified callback), and this read is the capability that exposes it. It answers three things at once, because they are three faces of one question ("can this workspace keep its steering in git yet, and if not, what is the next click"): the bound repository, whether an installation is attached, and the signed URLs that connect one or change which repositories it reaches.
 

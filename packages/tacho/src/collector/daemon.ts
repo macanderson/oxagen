@@ -147,6 +147,7 @@ import {
 import { createMemoryRecall } from "./memory-capture/memory-recall";
 import { createMemoryUpload } from "./memory-capture/memory-upload";
 import { pushCredentialBasis } from "./push-basis";
+import { forgetRecallHints } from "./recall-hints";
 import { sessionSkills } from "./session-skills";
 import { issueRunToken } from "./credential-issuer";
 import { utcDay } from "./day-spend";
@@ -623,7 +624,8 @@ async function initializeDaemon(
   for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
   // The memories each live prompt recalls, asked of the control plane with
-  // the host key and given at most a second (`./memory-capture/memory-recall`).
+  // the host key and given at most 500 ms, because the hook queue is serial
+  // and every later hook waits on the ask (`./memory-capture/memory-recall`).
   const recallMemories =
     (options.memoryRecall ?? options.listen ?? true)
       ? createMemoryRecall({
@@ -3831,6 +3833,9 @@ async function initializeDaemon(
               continue;
             }
             registry.settleSwept(candidate);
+            // The sweep keeps the record, so its recall hints go here. A
+            // session the next hook reopens builds them again.
+            forgetRecallHints(candidate.record);
             await removeSweptSkills(candidate.record, candidate.closedIdle);
           }
           registry.forgetSealed(timers.walRetainMs);

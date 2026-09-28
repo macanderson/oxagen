@@ -3,9 +3,11 @@
  * plane's `/v1/tacho/memories/recall` (`recall_tacho_memories`),
  * authenticated by the host API key the way the memory upload is. The answer
  * lists the workspace's memories most relevant to the prompt, most relevant
- * first, and the hook hands them to the agent with the prompt.
+ * first, and the hook hands them to the agent with the prompt. The ask names
+ * the session's repository by its remote's digests, and the tools and files
+ * the session used, so the control plane can rank the memories scoped to them.
  *
- * The prompt waits for the answer, so the ask gets at most one second
+ * The prompt waits for the answer, so the ask gets at most 500 ms
  * (`MEMORY_RECALL_TIMEOUT_MS`). A timeout, an unreachable control plane, an
  * error status, or an answer this collector cannot read each recall nothing,
  * and the prompt goes on without memories. A failure is logged when it
@@ -14,15 +16,34 @@
  * minutes, so an older control plane costs no prompt a round trip.
  */
 import { z } from "zod";
+import { isSha256Digest } from "../../digest";
 import type { FetchLike } from "../../host/control-client";
 
 export const MEMORY_RECALL_PATH = "/v1/tacho/memories/recall";
 
-/** How long a prompt waits for its memories. */
-export const MEMORY_RECALL_TIMEOUT_MS = 1_000;
+/**
+ * How long a prompt waits for its memories. The hook queue is serial, so
+ * every session's hooks wait behind a slow answer too.
+ */
+export const MEMORY_RECALL_TIMEOUT_MS = 500;
 
 /** The most prompt text the route takes (`recall_tacho_memories`). */
 export const MEMORY_RECALL_TEXT_MAX_CHARS = 8_000;
+
+/** The most repository digests the route takes. */
+export const MEMORY_RECALL_DIGESTS_MAX = 8;
+
+/** The most tool names the route takes. */
+export const MEMORY_RECALL_TOOLS_MAX = 64;
+
+/** The longest tool name the route takes. */
+export const MEMORY_RECALL_TOOL_MAX_CHARS = 200;
+
+/** The most file paths the route takes. */
+export const MEMORY_RECALL_PATHS_MAX = 64;
+
+/** The longest file path the route takes. */
+export const MEMORY_RECALL_PATH_MAX_CHARS = 512;
 
 /** How long the daemon stops asking after the control plane answers 404. */
 const ROUTE_MISSING_PAUSE_MS = 15 * 60_000;
@@ -36,10 +57,25 @@ export interface RecalledMemory {
 
 export interface MemoryRecallRequest {
   /**
-   * The code repository the prompt runs in, as `<host>/<owner>/<name>` in
-   * lowercase, or null when the daemon does not know it.
+   * The digests of the repository's `origin` remote, as `readRepositoryRemote`
+   * reads them (`sha256:<64 hex>`), or none when the daemon does not know the
+   * remote. The owner and host stay on the machine. The ask sends at most
+   * `MEMORY_RECALL_DIGESTS_MAX`, once each, and drops any other string.
    */
-  repository: string | null;
+  repositoryDigests: string[];
+  /**
+   * The tools the session called, most recent first. The ask sends at most
+   * `MEMORY_RECALL_TOOLS_MAX`, once each, and drops an empty name or one
+   * past `MEMORY_RECALL_TOOL_MAX_CHARS`.
+   */
+  tools: string[];
+  /**
+   * The files the session's tools named, relative to the repository root with
+   * `/` separators, most recent first. The ask sends at most
+   * `MEMORY_RECALL_PATHS_MAX`, once each, and drops an empty path or one
+   * past `MEMORY_RECALL_PATH_MAX_CHARS`.
+   */
+  paths: string[];
   /** The prompt's text. Past `MEMORY_RECALL_TEXT_MAX_CHARS` it is cut. */
   text: string;
 }
@@ -85,6 +121,26 @@ function cut(text: string, max: number): string {
   return last >= 0xd800 && last <= 0xdbff ? head.slice(0, -1) : head;
 }
 
+/**
+ * The first `max` distinct entries of `list` that are 1 to `maxChars` long,
+ * in their order. The route refuses the whole ask over one entry past its
+ * caps, so an entry past them is dropped here rather than sent. A cut name
+ * would match no record, so a long entry is dropped, not cut.
+ */
+function bounded(
+  list: readonly string[],
+  max: number,
+  maxChars: number,
+): string[] {
+  const kept: string[] = [];
+  for (const entry of list) {
+    if (kept.length === max) break;
+    if (entry.length === 0 || entry.length > maxChars) continue;
+    if (!kept.includes(entry)) kept.push(entry);
+  }
+  return kept;
+}
+
 export function createMemoryRecall(deps: MemoryRecallDeps): MemoryRecall {
   const now = deps.now ?? Date.now;
   const timeoutMs = deps.timeoutMs ?? MEMORY_RECALL_TIMEOUT_MS;
@@ -123,11 +179,21 @@ export function createMemoryRecall(deps: MemoryRecallDeps): MemoryRecall {
           },
           body: JSON.stringify({
             host_enrollment_id: host.host_enrollment_id,
-            repository: request.repository,
-            // The daemon keeps no list of a session's tools or files yet, so
-            // a record scoped to either is left out.
-            tools: [],
-            paths: [],
+            repository_digests: bounded(
+              request.repositoryDigests.filter(isSha256Digest),
+              MEMORY_RECALL_DIGESTS_MAX,
+              Number.POSITIVE_INFINITY,
+            ),
+            tools: bounded(
+              request.tools,
+              MEMORY_RECALL_TOOLS_MAX,
+              MEMORY_RECALL_TOOL_MAX_CHARS,
+            ),
+            paths: bounded(
+              request.paths,
+              MEMORY_RECALL_PATHS_MAX,
+              MEMORY_RECALL_PATH_MAX_CHARS,
+            ),
             text: cut(request.text, MEMORY_RECALL_TEXT_MAX_CHARS),
           }),
           signal,
