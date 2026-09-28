@@ -102,6 +102,20 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(css).not.toMatch(/\[data-shell-page\] table \{[^}]*background/);
   });
 
+  it("`td { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }`: a body cell ends in an ellipsis", () => {
+    // #4665: no table text wraps. The cap is per cell through `--cell-max`,
+    // and a cell that spans columns keeps its own layout.
+    const css = read("src/app/globals.css");
+    const td = css.match(
+      /\[data-shell-page\] table tbody :is\(td, th\):not\(\[colspan\]\) \{[^}]*\}/,
+    )?.[0];
+    expect(td).toBeDefined();
+    expect(td).toMatch(/white-space:\s*nowrap/);
+    expect(td).toMatch(/overflow:\s*hidden/);
+    expect(td).toMatch(/text-overflow:\s*ellipsis/);
+    expect(td).toMatch(/max-width:\s*var\(--cell-max,/);
+  });
+
   it("the dark theme's page body is the ink, and the panel grey stays on panels", () => {
     const css = read("src/app/globals.css");
     // The `.dark` block and the no-JS `prefers-color-scheme` copy of it.
