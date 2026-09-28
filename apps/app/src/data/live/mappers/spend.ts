@@ -120,7 +120,10 @@ export function toSpendWaste(
       cause: cause.cause,
       wasted: cause.wasted,
       runs: cause.runs,
-      provingRuns: cause.runIds,
+      provingRuns: cause.provingRuns.map((run) => ({
+        runId: run.runId,
+        name: run.name,
+      })),
     })),
   };
 }
@@ -214,6 +217,7 @@ export function toSpendFindingEvidence(
     counterfactual: out.evidence.counterfactual,
     runs: out.evidence.runs.map((run) => ({
       runId: run.runId,
+      name: run.name,
       startedAt: run.startedAt,
       calls: run.calls,
       measuredTokens: run.measuredTokens,

@@ -95,8 +95,9 @@
         "counterfactual": "What the alternative would have cost",
         "runs": "The cited runs with the largest saving",
         "runsEmpty": "The evidence lists no run for this finding.",
+        "untitled": "Untitled session",
         "columns": {
-          "run": "Run",
+          "run": "Session name",
           "startedAt": "Started",
           "measured": "Measured",
           "counterfactual": "Alternative estimate"
@@ -273,7 +274,8 @@
       "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",
       "none": "No run in this period shows waste in its frames.",
       "openRun": "Open the run",
-      "showFrames": "Show the frames"
+      "showFrames": "Show the frames",
+      "untitled": "Untitled session"
     },
     "budgets": {
       "title": "Budgets",

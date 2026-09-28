@@ -60,6 +60,32 @@ variable "oxagen_ai_redirect_to" {
   default = "https://oxagen.sh/"
 }
 
+variable "vanity_domains" {
+  description = <<-EOT
+    Domain -> where its apex and `www` redirect, and whether its nameservers
+    already point at the Route 53 zone this stack creates for it.
+
+    Leave `delegated` false until `dig NS <domain>` returns `awsdns` hosts.
+    Setting it creates an ACM certificate validated through the zone, and
+    while the registrar still delegates elsewhere that validation waits until
+    it times out. dns-vanity-domains.tf has the full order.
+  EOT
+  type = map(object({
+    redirect_to = string
+    delegated   = bool
+  }))
+  default = {
+    "oxagen.app" = {
+      redirect_to = "https://app.oxagen.sh/"
+      delegated   = false
+    }
+    "oxagen.dev" = {
+      redirect_to = "https://docs.oxagen.sh/"
+      delegated   = false
+    }
+  }
+}
+
 # One pin for both instances, because they run the same image and there is no
 # reason for the NAT and the app node to drift apart. Bumping this replaces
 # both, which is the honest shape: an AMI change IS an instance replacement,
