@@ -5,9 +5,9 @@
 //
 // The main repo is where `.oxagen/` lives — published steering records and
 // the promotion ledger. An agent is an identity on a runtime, not a file
-// there (ADR-198). A workspace has exactly one main repo, and until it is
-// bound the workspace is provisional: runs record and spend counts, but
-// steering stays off.
+// there (ADR-198). A workspace has exactly one main repo. Nothing waits on
+// it: runs record, spend counts, and a published record steers the
+// workspace's agents whether one is bound or not (ADR-212).
 //
 // These are types rather than zod schemas, and deliberately so. Every other
 // view model in this directory exists because its port maps a contract record
@@ -189,8 +189,7 @@ type BoundRepositoryRow = {
 /**
  * Every repository the workspace binds, main first, linked ones after by full
  * name. A local read: nothing here came from GitHub, so the list draws while
- * GitHub is down. An empty list is a workspace that binds nothing yet, which
- * the org's first workspace is until its provisional window is closed.
+ * GitHub is down. An empty list is a workspace that binds nothing yet.
  */
 export type WorkspaceRepositories = {
   repositories: BoundRepositoryRow[];
