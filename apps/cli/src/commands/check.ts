@@ -12,8 +12,10 @@
  *
  * The cross-file checks read the published index and what Oxagen knows
  * outside the repository: runtimes, members, teams, reviewer groups, and
- * credentials. The command fetches both once and caches them for ten minutes
- * under the CLI's config directory. `--refresh` fetches them again.
+ * credentials. The command fetches both once from `get_steering_index`
+ * (GET context/steering/index) and caches them for ten minutes under the
+ * CLI's config directory. The cache keeps one entry for each API address,
+ * organization, workspace, and login. `--refresh` fetches them again.
  *
  * Two inputs the PR check can take stay out on a laptop. Nothing reads the
  * host's settings, so the settings check is skipped. No Cedar evaluator is
@@ -47,6 +49,8 @@ import {
   TOOLS_DIR,
   WORKSPACE_TOML_PATH,
 } from "@oxagen/oxagen/steering-repo/paths";
+import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
+import { workspaceSchema } from "@oxagen/oxagen/steering-repo/workspace";
 import {
   formatHuman,
   type CheckContext,
@@ -58,9 +62,16 @@ import {
   type SteeringTree,
 } from "@oxagen/steering-check";
 import { runChecksWithServers } from "@oxagen/steering-check/servers";
+import { ApiError, apiGetOrThrow } from "../lib/api.js";
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
-import { getConfigDir } from "../lib/config.js";
+import {
+  getApiUrl,
+  getConfigDir,
+  getOrgId,
+  getToken,
+  getWorkspaceId,
+} from "../lib/config.js";
 import { createOutput, errorMessage, type Output } from "../lib/output.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -121,9 +132,6 @@ const DEFAULT_BASES: readonly string[] = ["origin/HEAD", "origin/main"];
 
 const NOT_A_STEERING_REPO =
   "This directory is not in a steering repo. Run oxagen check inside a clone that holds workspace.toml, or AGENTS.md and steering/ for an organization repo.";
-
-const NO_INDEX_ROUTE =
-  "No Oxagen API route serves the published index and the workspace context to the CLI. Push the branch, and the steering PR check runs the checks.";
 
 const NO_BASE = `No production branch to compare with. ${DEFAULT_BASES.join(" and ")} do not resolve in this clone, so the checks read the working tree whole. Pass --base <ref> to compare with a branch.`;
 
@@ -414,8 +422,27 @@ function asPublished(value: unknown): PublishedInputs | null {
   };
 }
 
+/**
+ * The cache file for the steering repo at `root`. Its name hashes the root
+ * with who the fetch asks and for which workspace: the API address, the
+ * organization and workspace, and a hash of the token. A run under another
+ * login, another API, or another scope reads its own entry, so it never
+ * reads an index fetched with another key. No file holds the token.
+ */
 function cacheFile(cacheDir: string, root: string): string {
-  const key = createHash("sha256").update(root).digest("hex").slice(0, 32);
+  const token = getToken();
+  const identity = {
+    api: getApiUrl(),
+    ...targetOf(root),
+    key:
+      token === undefined
+        ? null
+        : createHash("sha256").update(token).digest("hex").slice(0, 16),
+  };
+  const key = createHash("sha256")
+    .update(JSON.stringify([root, identity]))
+    .digest("hex")
+    .slice(0, 32);
   return join(cacheDir, `${key}.json`);
 }
 
@@ -470,9 +497,107 @@ async function publishedInputs(
   return fetched;
 }
 
+/** The two slugs the index is read for. The schema check reports the rest of workspace.toml. */
+const workspaceSlugs = workspaceSchema
+  .pick({ organization: true, workspace: true })
+  .passthrough();
+
+/**
+ * The organization and workspace a steering repo's workspace.toml names, or
+ * undefined for an organization repo, which has no workspace.toml. Throws
+ * when the file names no organization or no workspace, since then no one
+ * index is the right one.
+ */
+function workspaceOf(root: string): { org: string; ws: string } | undefined {
+  const text = readWorkingFile(root, WORKSPACE_TOML_PATH);
+  if (text === null) return undefined;
+  const read = readTomlFile(text, "workspace/v1", workspaceSlugs);
+  if (!read.ok) {
+    const [issue] = read.issues;
+    throw new Error(
+      `${WORKSPACE_TOML_PATH} does not name the organization and workspace to read the index for${issue === undefined ? "" : `: ${issue.message}`}. Fix ${WORKSPACE_TOML_PATH}, then run oxagen check again.`,
+    );
+  }
+  return { org: read.value.organization, ws: read.value.workspace };
+}
+
+/**
+ * The organization and workspace a fetch for `root` reads: the ones
+ * workspace.toml names, else the ones the CLI has selected, as
+ * `apiGetOrThrow` resolves them.
+ */
+function targetOf(root: string): { org: string | null; ws: string | null } {
+  return (
+    workspaceOf(root) ?? {
+      org: getOrgId() ?? null,
+      ws: getWorkspaceId() ?? null,
+    }
+  );
+}
+
+/** The `reason` the API refuses a key with when it belongs to another workspace than the URL names. */
+const KEY_SCOPE_MISMATCH = "key_scope_mismatch";
+
+/** The login is for another workspace than the one the fetch reads. */
+class ScopeMismatchError extends Error {}
+
+/** The `error.reason` of an API refusal, read from the JSON body its message carries, or null. */
+function refusalReason(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const start = err.message.indexOf("{");
+  const end = err.message.lastIndexOf("}");
+  if (start < 0 || end < start) return null;
+  let body: unknown;
+  try {
+    body = JSON.parse(err.message.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!isObject(body) || !isObject(body.error)) return null;
+  return typeof body.error.reason === "string" ? body.error.reason : null;
+}
+
+/**
+ * The published index and context from `get_steering_index`. A workspace
+ * repo reads the workspace its workspace.toml names. An organization repo
+ * reads the context of the workspace the CLI has selected and no index, since
+ * no organization version publishes yet, so its records check as a first
+ * publish. The caller checks the answer's shape.
+ *
+ * The API refuses a key for another workspace than the one the URL names.
+ * That refusal becomes a ScopeMismatchError that says how to log in to the
+ * right workspace.
+ */
+async function fetchSteeringIndex(root: string): Promise<PublishedInputs> {
+  const scope = workspaceOf(root);
+  let answer: PublishedInputs;
+  try {
+    answer = await apiGetOrThrow<PublishedInputs>(
+      "context/steering/index",
+      undefined,
+      scope,
+    );
+  } catch (err) {
+    if (refusalReason(err) !== KEY_SCOPE_MISMATCH) throw err;
+    const { org, ws } = scope ?? targetOf(root);
+    const named =
+      scope === undefined
+        ? "the one the CLI has selected"
+        : `the one ${WORKSPACE_TOML_PATH} names`;
+    const fix =
+      scope === undefined
+        ? ""
+        : `, or fix ${WORKSPACE_TOML_PATH} to name the workspace you logged in to`;
+    throw new ScopeMismatchError(
+      `Your login is for another workspace than ${org}/${ws}, ${named}. Run oxagen login --org ${org} --workspace ${ws}${fix}.`,
+    );
+  }
+  return scope === undefined ? { ...answer, index: null } : answer;
+}
+
 function defaultDeps(): CheckDeps {
   return {
-    fetchPublished: () => Promise.reject(new Error(NO_INDEX_ROUTE)),
+    fetchPublished: fetchSteeringIndex,
     cacheDir: join(getConfigDir(), "cache", "steering-check"),
     now: () => Date.now(),
   };
@@ -598,7 +723,9 @@ export async function check(
   } catch (err) {
     stop(
       `Oxagen could not fetch the published index. ${errorMessage(err)}`,
-      "index_unavailable",
+      err instanceof ScopeMismatchError
+        ? "scope_mismatch"
+        : "index_unavailable",
     );
     return;
   }

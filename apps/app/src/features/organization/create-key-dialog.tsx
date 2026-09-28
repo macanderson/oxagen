@@ -437,7 +437,7 @@ export function KeyRowActions({
   const subtitle =
     keyPrefix === undefined ? keyName : `${keyName} ${keyPrefix}…`;
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex gap-2 max-md:flex-wrap">
       {rotatable ? (
         <KeyWriteDialog
           open={t("rotate.open")}

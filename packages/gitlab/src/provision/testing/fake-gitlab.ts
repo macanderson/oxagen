@@ -42,6 +42,16 @@ export interface FakeAccessSnapshot {
   group_id: number | null;
 }
 
+/** One project hook with its id and token, as `hooks()` returns it. */
+export interface FakeHook {
+  id: number;
+  url: string;
+  token: string;
+  push_events: boolean;
+  merge_requests_events: boolean;
+  enable_ssl_verification: boolean;
+}
+
 /** One project as the snapshot holds it. Ids are left out. */
 export interface FakeProjectSnapshot {
   name: string;
@@ -66,6 +76,13 @@ export interface FakeProjectSnapshot {
     }
   >;
   deployments: { environment: string; ref: string; sha: string; status: string }[];
+  /** Each hook without its id or token, so a snapshot never holds a secret. */
+  hooks: {
+    url: string;
+    push_events: boolean;
+    merge_requests_events: boolean;
+    enable_ssl_verification: boolean;
+  }[];
 }
 
 /** The fake's state, keyed by path_with_namespace. It holds no ids, tokens, or call logs. */
@@ -112,6 +129,7 @@ interface FakeProject {
   branches: Map<string, FakeBranch>;
   protected_branches: Map<string, FakeProtectedBranch>;
   deployments: FakeDeployment[];
+  hooks: FakeHook[];
 }
 
 interface Reply {
@@ -294,6 +312,18 @@ function deploymentJson(d: FakeDeployment): Json {
   };
 }
 
+/** A project hook as GitLab answers it. GitLab never sends the token back. */
+function hookJson(project_id: number, h: FakeHook): Json {
+  return {
+    id: h.id,
+    url: h.url,
+    project_id,
+    push_events: h.push_events,
+    merge_requests_events: h.merge_requests_events,
+    enable_ssl_verification: h.enable_ssl_verification,
+  };
+}
+
 interface RuleEntry {
   rule: FakeFailRule;
   left: number;
@@ -323,6 +353,7 @@ export class FakeGitlab {
   private nextProjectId = 1;
   private nextProtectionId = 1;
   private nextDeploymentId = 1;
+  private nextHookId = 1;
 
   constructor(opts: {
     group: SteeringGroup;
@@ -359,6 +390,16 @@ export class FakeGitlab {
       description: input.description ?? "",
       visibility: "private",
     }).id;
+  }
+
+  /**
+   * The hooks on one project, with their ids and tokens, in id order. GET and
+   * the snapshot leave the token out, so a test that checks the secret reads
+   * it here. A project the fake does not hold has no hooks.
+   */
+  hooks(project_id: number): FakeHook[] {
+    const project = this.projects.find((p) => p.id === project_id);
+    return (project?.hooks ?? []).map((h) => ({ ...h }));
   }
 
   /**
@@ -406,6 +447,16 @@ export class FakeGitlab {
         protected_branches,
         deployments: p.deployments
           .map(({ environment, ref, sha, status }) => ({ environment, ref, sha, status }))
+          .sort((a, b) =>
+            JSON.stringify(a) < JSON.stringify(b) ? -1 : 1,
+          ),
+        hooks: p.hooks
+          .map(({ url, push_events, merge_requests_events, enable_ssl_verification }) => ({
+            url,
+            push_events,
+            merge_requests_events,
+            enable_ssl_verification,
+          }))
           .sort((a, b) =>
             JSON.stringify(a) < JSON.stringify(b) ? -1 : 1,
           ),
@@ -501,6 +552,7 @@ export class FakeGitlab {
       branches: new Map(),
       protected_branches: new Map(),
       deployments: [],
+      hooks: [],
     };
     this.projects.push(project);
     return project;
@@ -640,6 +692,17 @@ export class FakeGitlab {
           d.status = text(req.body, "status");
           return ok(deploymentJson(d));
         }),
+      ),
+      on("GET", "/projects/:id/hooks", (req) =>
+        this.withProject(req, (p) =>
+          ok(page(p.hooks.map((h) => hookJson(p.id, h)), req.query)),
+        ),
+      ),
+      on("POST", "/projects/:id/hooks", (req) =>
+        this.withProject(req, (p) => this.createHook(p, req.body)),
+      ),
+      on("PUT", "/projects/:id/hooks/:hook_id", (req) =>
+        this.withProject(req, (p) => this.updateHook(p, req)),
       ),
     ];
   }
@@ -789,5 +852,38 @@ export class FakeGitlab {
     };
     p.deployments.push(deployment);
     return ok(deploymentJson(deployment), 201);
+  }
+
+  private createHook(p: FakeProject, body: Json): Reply {
+    const bad = need(body, ["url"]);
+    if (bad !== null) return bad;
+    // GitLab sends push events, verifies SSL, and leaves merge request
+    // events off when the request leaves those fields out.
+    const hook: FakeHook = {
+      id: this.nextHookId++,
+      url: text(body, "url"),
+      token: text(body, "token"),
+      push_events: bool(body, "push_events") ?? true,
+      merge_requests_events: bool(body, "merge_requests_events") ?? false,
+      enable_ssl_verification: bool(body, "enable_ssl_verification") ?? true,
+    };
+    p.hooks.push(hook);
+    return ok(hookJson(p.id, hook), 201);
+  }
+
+  /** GitLab needs the url on an edit and keeps each other field the request leaves out. */
+  private updateHook(p: FakeProject, req: FakeRequest): Reply {
+    const hook = p.hooks.find((h) => String(h.id) === req.param("hook_id"));
+    if (hook === undefined) return notFound("Hook");
+    const bad = need(req.body, ["url"]);
+    if (bad !== null) return bad;
+    hook.url = text(req.body, "url");
+    hook.token = str(req.body, "token") ?? hook.token;
+    hook.push_events = bool(req.body, "push_events") ?? hook.push_events;
+    hook.merge_requests_events =
+      bool(req.body, "merge_requests_events") ?? hook.merge_requests_events;
+    hook.enable_ssl_verification =
+      bool(req.body, "enable_ssl_verification") ?? hook.enable_ssl_verification;
+    return ok(hookJson(p.id, hook));
   }
 }

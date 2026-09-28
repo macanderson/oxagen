@@ -145,10 +145,10 @@ function Savings({
   }
   return (
     <span className="flex flex-col items-end gap-0.5">
-      <span className="text-link">
+      <span className="max-w-full text-link md:truncate">
         <Money value={saving} />
       </span>
-      <span className="font-sans text-[11px] text-muted-foreground">
+      <span className="max-w-full font-sans text-[11px] text-muted-foreground md:truncate">
         {t("findings", {
           count: own.length,
           n: formatCount(own.length, locale),
@@ -316,7 +316,7 @@ export function AgentTable({
               <tr key={row.key} data-key={row.key}>
                 <th scope="row" className={`${cell} text-left font-normal`}>
                   <DrillLink at={at} kind="agent" keyOf={row.key}>
-                    <span className={`${mono} break-all`}>{row.key}</span>
+                    <span className={mono}>{row.key}</span>
                   </DrillLink>
                 </th>
                 <td className={numericCell}>{formatCount(row.runs, locale)}</td>
@@ -394,7 +394,7 @@ export function ModelTable({ month, at }: { month: SpendReport; at: SpendAt }) {
               <span className="flex flex-col">
                 <NotRecordedValue />
                 {row.provider === null ? null : (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground md:truncate">
                     {row.provider}
                   </span>
                 )}
@@ -504,7 +504,7 @@ export function ToolSection({
                 <tr key={row.key} data-key={row.key}>
                   <th scope="row" className={`${cell} text-left font-normal`}>
                     <DrillLink at={at} kind="tool" keyOf={row.key}>
-                      <span className={`${mono} break-all`}>{row.key}</span>
+                      <span className={mono}>{row.key}</span>
                     </DrillLink>
                   </th>
                   <td className={cell}>
@@ -693,7 +693,7 @@ export function BudgetsTable({
                         style={{ width: ratioWidth(budget.ratio) }}
                       />
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground md:truncate">
                       {t("budgets.position", {
                         ratio: formatRatio(budget.ratio, locale),
                         state: t(`budgets.state.${budget.state}`),

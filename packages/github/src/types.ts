@@ -518,9 +518,9 @@ export interface GitHubClient {
    * user OAuth token answers 403, because the endpoint is scoped to the
    * installation the token was minted for and to no other.
    *
-   * This is exactly the set `bind_main_repository` accepts: the bind resolves
-   * a repository through the same installation's token, so a picker built
-   * from any other list would offer options that refuse on submit.
+   * `link_repository` resolves a repository through the same installation's
+   * token, so a picker built from any other list would offer options that
+   * refuse on submit.
    *
    * Walks a bounded number of pages and reports `truncated` rather than
    * paginating; see `GitHubInstallationRepositories`. `maxPages` raises the

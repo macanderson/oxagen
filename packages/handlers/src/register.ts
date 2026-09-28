@@ -2281,12 +2281,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .onboardingFirstFrameGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "bind_main_repository",
-    async () =>
-      (await import("./repository.main.bind"))
-        .repositoryMainBindHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "link_repository",
     async () =>
       (await import("./repository.link"))
@@ -2321,6 +2315,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.steering.published.get"))
         .publishedSteeringGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_steering_index",
+    async () =>
+      (await import("./context.steering.index.get"))
+        .steeringIndexGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_production_branch",

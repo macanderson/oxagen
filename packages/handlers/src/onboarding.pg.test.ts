@@ -2,10 +2,10 @@
 // organization and the gate opens on its first workspace; a registered agent
 // gets a single-use enrollment token; two machines present it at once and
 // exactly one becomes the host; the first frame that host ingests unlocks
-// the gate and stamps the agent; a provisional workspace refuses a context
-// record until the main repository is bound; the gate refuses to skip the
-// run step; concurrent binds leave one main repository; the three
-// role-checked writes refuse a workspace Member and a
+// the gate and stamps the agent; the gate's workspace publishes a context
+// record before any repository is bound; the gate refuses to skip the
+// run step; a session opened in the workspace's steering repository reads
+// linked; the role-checked writes refuse a workspace Member and a
 // user outside the organization; a revoked host gives its agent key up to a
 // new enrollment. Runs wherever DATABASE_URL points at a
 // migrated database (CI's `test` job; a local run without one is skipped).
@@ -18,7 +18,12 @@ import {
 } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
-import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import {
+  closeDatabase,
+  schema,
+  withSystemDb,
+  withTenantDb,
+} from "@oxagen/database";
 import {
   GENESIS_CURSOR,
   type ChainCursor,
@@ -49,14 +54,15 @@ vi.mock("@oxagen/database/security", () => ({
 
 import { contextRecordPublishHandler } from "./context.record.publish";
 import { hashEnrollmentToken } from "./lib/onboarding";
+import { GITHUB_STEERING_PROVIDER } from "./lib/steering-app";
 import { onboardingAdvanceHandler } from "./onboarding.advance";
 import { onboardingFirstFrameGetHandler } from "./onboarding.first_frame.get";
 import { onboardingStateGetHandler } from "./onboarding.state.get";
 import { organizationCreateHandler } from "./org.create";
 import {
-  createMainRepositoryBindHandler,
-  type MainRepositoryDeps,
-} from "./repository.main.bind";
+  workspaceRepositoriesLock,
+  writeRepositoryHead,
+} from "./repository.binding-write";
 import { tachoEnrollmentRevokeHandler } from "./tacho.enrollment.revoke";
 import { tachoEnrollmentTokenCreateHandler } from "./tacho.enrollment_token.create";
 import { tachoEventsIngestHandler } from "./tacho.events.ingest";
@@ -76,7 +82,6 @@ import { tachoHostEnrollHandler } from "./tacho.host.enroll";
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const enabled = Boolean(process.env.DATABASE_URL);
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const refusal = (code: HandlerError["code"], reason: string) => (e: unknown) =>
   isHandlerError(e) && e.code === code && e.reason === reason;
@@ -236,7 +241,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
   // transaction; under coverage, with the other pg files bootstrapping
   // organizations over the same shared IAM rows, it outlasts vitest's 5s
   // default.
-  it("create_org opens the gate at wrap on the first workspace with a 14-day provisional window", async () => {
+  it("create_org opens the gate at wrap on the first workspace", async () => {
     const out = await organizationCreateHandler(
       organizationCreate.input.parse({
         name: `G2967 ${tag}`,
@@ -276,18 +281,13 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
       step: "wrap",
       firstFrameAt: null,
       firstRunId: null,
-      mainRepoBoundAt: null,
       detectedRepository: null,
     });
-    expect(gate?.provisionalUntil.getTime()).toBe(
-      org.createdAt.getTime() + 14 * DAY_MS,
-    );
 
     const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
     expect(state).toMatchObject({
       step: "wrap",
       workspace: { id: first.publicId, slug: "core" },
-      provisional: { mainRepoBoundAt: null, detectedRepository: null },
     });
     expect(
       await onboardingStateGetHandler({}, { ...ctxFor(ownerId), orgId: "" }),
@@ -587,8 +587,16 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     );
     expect(hosts).toHaveLength(1);
 
-    const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
-    expect(state.provisional?.detectedRepository).toEqual({
+    // enroll_host records the remote the host reported on the gate's row.
+    const [detected] = await withSystemDb((tx) =>
+      tx
+        .select({
+          detectedRepository: schema.onboardingState.detectedRepository,
+        })
+        .from(schema.onboardingState)
+        .where(eq(schema.onboardingState.orgId, orgId)),
+    );
+    expect(detected?.detectedRepository).toEqual({
       provider: "github",
       owner: "acme",
       name: "widgets",
@@ -755,174 +763,81 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     expect(after?.firstFrameAt?.getTime()).toBe(before);
   });
 
-  it("a provisional workspace refuses a context record until bind_main_repository closes the window", async () => {
-    const record = {
-      record_id: `rule-${tag}`,
-      title: "No bare unwrap",
-      body: "[rule]\nid = 'no-bare-unwrap'\n",
-      kind: "rule" as const,
-      force: "must" as const,
-      statement: "Never unwrap a Result without handling the error.",
-    };
-    await expect(
-      inScope(() => contextRecordPublishHandler(record, ctxFor(ownerId))),
-    ).rejects.toSatisfy(refusal("conflict", "provisional"));
-
-    const seen = new Map<
-      string,
-      {
-        id: string;
-        owner: string;
-        name: string;
-        fullName: string;
-        htmlUrl: string;
-        defaultBranch: string;
-      }
-    >([
-      [
-        "acme/widgets",
-        {
-          id: "1296269",
-          owner: "acme",
-          name: "widgets",
-          fullName: "acme/widgets",
-          htmlUrl: "https://github.com/acme/widgets",
-          defaultBranch: "main",
-        },
-      ],
-      [
-        "acme/other",
-        {
-          id: "7777777",
-          owner: "acme",
-          name: "other",
-          fullName: "acme/other",
-          htmlUrl: "https://github.com/acme/other",
-          defaultBranch: "main",
-        },
-      ],
-    ]);
-    const calls: string[] = [];
-    const deps: MainRepositoryDeps = {
-      repository: async (installationId, owner, name) => {
-        calls.push(installationId);
-        return seen.get(`${owner}/${name}`) ?? null;
-      },
-    };
-    const bind = createMainRepositoryBindHandler(deps);
-
-    for (const userId of [memberId, strangerId]) {
-      await expect(
-        inScope(() => bind({ owner: "acme", name: "widgets" }, ctxFor(userId))),
-      ).rejects.toSatisfy(refusal("forbidden", "org_role_required"));
-    }
-    await expect(
-      inScope(() => bind({ owner: "acme", name: "widgets" }, ctxFor(ownerId))),
-    ).rejects.toSatisfy(refusal("conflict", "github_not_connected"));
-    expect(calls).toEqual([]);
-
-    // The installation the HMAC-verified callback attached to the workspace's connection.
-    await withSystemDb((tx) =>
-      tx.insert(schema.sourceConnections).values({
-        orgId,
-        workspaceId,
-        connectorId: "github",
-        displayName: "GitHub",
-        authScheme: "github_app",
-        deliveryMethod: "webhook",
-        deliveryConfig: { installationId: "424242" },
-        status: "pending_setup",
-      }),
+  it("the gate's workspace publishes a context record while no repository is bound", async () => {
+    // The gate's workspace once refused every context record with
+    // `conflict: provisional` until a bound main repository closed the
+    // window, and onboarding no longer binds one, so a new organization's
+    // first workspace could never publish (#4516). #4616 dropped the window.
+    const [gate] = await withSystemDb((tx) =>
+      tx
+        .select({ workspaceId: schema.onboardingState.workspaceId })
+        .from(schema.onboardingState)
+        .where(eq(schema.onboardingState.orgId, orgId)),
     );
-    await expect(
-      inScope(() => bind({ owner: "acme", name: "missing" }, ctxFor(ownerId))),
-    ).rejects.toSatisfy(refusal("not_found", "repository_not_installed"));
-    expect(calls).toEqual(["424242"]);
-
-    // Three binds at once: two of acme/widgets and one of acme/other. One
-    // repository wins; its calls answer the same binding, the other
-    // repository's calls are main_repo_bound, and the workspace has one head.
-    const raced = await Promise.allSettled(
-      (["widgets", "widgets", "other"] as const).map((name) =>
-        inScope(() => bind({ owner: "acme", name }, ctxFor(ownerId))),
-      ),
-    );
-    const won = raced.flatMap((r) =>
-      r.status === "fulfilled" ? [r.value] : [],
-    );
-    const lost = raced.flatMap((r) =>
-      r.status === "rejected" ? [r.reason] : [],
-    );
-    const winner = won[0]?.fullName;
-    const loser = winner === "acme/widgets" ? "other" : "widgets";
-    expect(won).toHaveLength(winner === "acme/widgets" ? 2 : 1);
-    expect(lost.every(refusal("conflict", "main_repo_bound"))).toBe(true);
-    expect(new Set(won.map((b) => b.bindingId)).size).toBe(1);
-    expect(new Set(won.map((b) => b.boundAt)).size).toBe(1);
-    expect(won.filter((b) => b.provisionalClosed)).toHaveLength(1);
-    const bound = won.find((b) => b.provisionalClosed);
-    if (!bound) throw new Error("no bind closed the provisional window");
-    expect(bound).toMatchObject({ defaultRef: "main" });
-    expect(bound.bindingId).toMatch(/^rpb_[0-9a-f]+$/);
+    expect(gate).toEqual({ workspaceId });
     const heads = await withSystemDb((tx) =>
       tx
-        .select()
+        .select({ id: schema.repositoryBindingHeads.id })
         .from(schema.repositoryBindingHeads)
         .where(eq(schema.repositoryBindingHeads.workspaceId, workspaceId)),
     );
-    expect(heads).toHaveLength(1);
-    expect(heads[0]?.providerRepositoryId).toBe(seen.get(bound.fullName)?.id);
-    const bindings = await withSystemDb((tx) =>
-      tx
-        .select({ id: schema.repositoryBindings.id })
-        .from(schema.repositoryBindings)
-        .where(eq(schema.repositoryBindings.workspaceId, workspaceId)),
-    );
-    expect(bindings).toHaveLength(1);
-    const [connection] = await withSystemDb((tx) =>
-      tx
-        .select({ status: schema.sourceConnections.status })
-        .from(schema.sourceConnections)
-        .where(eq(schema.sourceConnections.workspaceId, workspaceId)),
-    );
-    expect(connection?.status).toBe("connected");
-
-    const again = await inScope(() =>
-      bind(
-        { owner: "acme", name: bound.fullName.slice("acme/".length) },
-        ctxFor(ownerId),
-      ),
-    );
-    expect(again).toMatchObject({
-      bindingId: bound.bindingId,
-      boundAt: bound.boundAt,
-      provisionalClosed: false,
-    });
-    await expect(
-      inScope(() => bind({ owner: "acme", name: loser }, ctxFor(ownerId))),
-    ).rejects.toSatisfy(refusal("conflict", "main_repo_bound"));
-
-    const state = await onboardingStateGetHandler({}, ctxFor(ownerId));
-    expect(state.provisional?.mainRepoBoundAt).toBe(bound.boundAt);
+    expect(heads).toEqual([]);
 
     const published = await inScope(() =>
-      contextRecordPublishHandler(record, ctxFor(ownerId)),
+      contextRecordPublishHandler(
+        {
+          record_id: `rule-${tag}`,
+          title: "No bare unwrap",
+          body: "[rule]\nid = 'no-bare-unwrap'\n",
+          kind: "rule",
+          force: "must",
+          statement: "Never unwrap a Result without handling the error.",
+        },
+        ctxFor(ownerId),
+      ),
     );
     expect(published.published).toBe(true);
   });
 
-  it("a session opened in the bound repository reads linked, one opened elsewhere reads unlinked, and both are recorded", async () => {
-    // The repository the test above bound: it is linked to this workspace now.
-    const [binding] = await withSystemDb((tx) =>
-      tx
-        .select({
-          owner: schema.repositoryBindings.providerOwner,
-          name: schema.repositoryBindings.providerName,
-        })
-        .from(schema.repositoryBindings)
-        .where(eq(schema.repositoryBindings.workspaceId, workspaceId)),
+  it("a session opened in the steering repository reads linked, one opened elsewhere reads unlinked, and both are recorded", async () => {
+    // The steering head the steering repo job's bind step writes (ADR-212):
+    // a `github_steering` connection, created connected, and a head with the
+    // steering role on it.
+    const binding = { owner: "acme", name: `steering-${tag}` };
+    await inScope(() =>
+      withTenantDb(async (tx) => {
+        await tx.execute(workspaceRepositoriesLock(workspaceId));
+        const [connection] = await tx
+          .insert(schema.sourceConnections)
+          .values({
+            orgId,
+            workspaceId,
+            connectorId: GITHUB_STEERING_PROVIDER,
+            displayName: "GitHub steering",
+            authScheme: "github_app_installation",
+            deliveryMethod: "webhook",
+            deliveryConfig: { installationId: "424242", owner: "acme" },
+            status: "connected",
+            createdById: ownerId,
+          })
+          .returning({ id: schema.sourceConnections.id });
+        if (!connection) throw new Error("no steering connection written");
+        await writeRepositoryHead(tx, {
+          scope: { orgId, workspaceId },
+          connectionId: connection.id,
+          repo: {
+            id: "1296269",
+            owner: binding.owner,
+            name: binding.name,
+            fullName: `${binding.owner}/${binding.name}`,
+            defaultBranch: "main",
+          },
+          role: "steering",
+          userId: ownerId,
+          now: new Date(),
+        });
+      }),
     );
-    if (!binding) throw new Error("the bind test left no repository binding");
     // The digests the host computes from `git remote get-url origin`
     // (`collector/git-facts.ts`), so this proves the host's rule and the
     // server's rule agree.
@@ -1099,7 +1014,7 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
     ).rejects.toSatisfy(refusal("conflict", "agent_retired"));
   });
 
-  it("an organization that predates the gate has no row: it reads as unlocked with no window and publishes", async () => {
+  it("an organization that predates the gate has no row: it reads as unlocked and publishes", async () => {
     // The migration writes no row for an existing organization; this is
     // that shape: an organization and its workspace, nothing in
     // org.onboarding_state.
@@ -1159,7 +1074,6 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
         workspace: null,
         firstFrameAt: null,
         firstRunId: null,
-        provisional: null,
       });
       const published = await inPreScope(() =>
         contextRecordPublishHandler(

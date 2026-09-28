@@ -48,7 +48,7 @@ async function WorkspaceGate({
   return (
     <>
       <Suspense fallback={null}>
-        <SteeringRepoHealthBanner ctx={ctx} />
+        <SteeringRepoHealthBanner ctx={ctx} source={dataSource()} />
       </Suspense>
       {children}
       <CreateHost org={ctx.orgSlug} ws={ctx.wsSlug} wsName={ctx.wsName} />

@@ -400,6 +400,7 @@ interface GithubPullFixture {
   number: number;
   state: string;
   head: { ref: string };
+  base: { ref: string };
 }
 
 const DEPLOYMENTS = `GET ${GH}/deployments?environment=steering&per_page=30`;
@@ -680,6 +681,53 @@ describe("githubOpenRevert", () => {
     ).resolves.toBe(12);
     expect(gh.sent(`PATCH ${GH}/pulls/11`)[0]!.body).toEqual({ state: "closed" });
   });
+
+  it("closes a revert pull request retargeted away from main and opens one into main", async () => {
+    const moved = { ...pull(12, BRANCH), base: { ref: "release" } };
+    const gh = github({
+      [COMMIT_P]: ok(fixture("github-git-commit-published")),
+      [REF]: fail(404, "Not Found"),
+      [`POST ${GH}/git/commits`]: ok({ sha: R }, 201),
+      [`POST ${GH}/git/refs`]: ok({ ref: `refs/heads/${BRANCH}` }, 201),
+      [`GET ${GH}/pulls/12`]: [ok(moved), ok({ ...moved, state: "closed" })],
+      [PULLS]: ok([moved]),
+      [`PATCH ${GH}/pulls/12`]: ok({ ...moved, state: "closed" }),
+      [`POST ${GH}/pulls`]: ok(pull(13, BRANCH), 201),
+      [`POST ${GH}/check-runs`]: ok({ id: 82 }, 201),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, 12),
+    ).resolves.toBe(13);
+    expect(gh.sent(`PATCH ${GH}/pulls/12`)[0]!.body).toEqual({ state: "closed" });
+    expect(gh.sent(`POST ${GH}/pulls`)[0]!.body).toMatchObject({
+      head: BRANCH,
+      base: "main",
+    });
+    expect(gh.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `POST ${GH}/git/commits`,
+      `POST ${GH}/git/refs`,
+      `PATCH ${GH}/pulls/12`,
+      `POST ${GH}/pulls`,
+      `POST ${GH}/check-runs`,
+    ]);
+  });
+
+  it("reuses a listed pull request into main without closing it", async () => {
+    const gh = github({
+      [COMMIT_P]: ok(fixture("github-git-commit-published")),
+      [REF]: ok({ ref: `refs/heads/${BRANCH}`, object: { sha: R, type: "commit" } }),
+      [COMMIT_R]: REVERT_TIP,
+      [PULLS]: ok([fixture("github-pull")]),
+      [CHECK_RUNS]: ok({
+        total_count: 1,
+        check_runs: [{ conclusion: "success", external_id: "oxagen-steering-revert" }],
+      }),
+    });
+    await expect(
+      githubOpenRevert(gh.target, PUBLISHED, DIVERGENCE, null),
+    ).resolves.toBe(12);
+    expect(gh.writes()).toEqual([]);
+  });
 });
 
 describe("githubCloseRevert", () => {
@@ -901,8 +949,8 @@ describe("gitlabOpenRevert", () => {
     return `GET ${GL}/repository/files/${encodeURIComponent(path)}?ref=${P}`;
   }
 
-  function request(iid: number, source: string, state = "opened") {
-    return { iid, state, source_branch: source, target_branch: "main", title: "Revert main" };
+  function request(iid: number, source: string, state = "opened", target = "main") {
+    return { iid, state, source_branch: source, target_branch: target, title: "Revert main" };
   }
 
   it("writes the commit, the merge request, and the status", async () => {
@@ -993,6 +1041,46 @@ describe("gitlabOpenRevert", () => {
       gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 3),
     ).resolves.toBe(5);
     expect(gl.sent(`PUT ${GL}/merge_requests/3`)[0]!.body).toEqual({ state_event: "close" });
+  });
+
+  it("closes a revert merge request retargeted away from main and opens one into main", async () => {
+    const moved = request(5, BRANCH, "opened", "release");
+    const closed = request(5, BRANCH, "closed", "release");
+    const gl = gitlab({
+      [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
+      [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
+      [`GET ${GL}/merge_requests/5`]: [ok(moved), ok(closed)],
+      [REQUESTS]: ok([moved]),
+      [`PUT ${GL}/merge_requests/5`]: ok(closed),
+      [`POST ${GL}/merge_requests`]: ok(request(6, BRANCH), 201),
+      [STATUS]: ok({ id: 4 }, 201),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, 5),
+    ).resolves.toBe(6);
+    expect(gl.sent(`PUT ${GL}/merge_requests/5`)[0]!.body).toEqual({ state_event: "close" });
+    expect(gl.sent(`POST ${GL}/merge_requests`)[0]!.body).toMatchObject({
+      source_branch: BRANCH,
+      target_branch: "main",
+    });
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([
+      `PUT ${GL}/merge_requests/5`,
+      `POST ${GL}/merge_requests`,
+      STATUS,
+    ]);
+  });
+
+  it("reuses a listed merge request into main without closing it", async () => {
+    const gl = gitlab({
+      [BRANCH_GET]: glBranch(BRANCH, R, [S2]),
+      [`GET ${GL}/repository/compare?from=${R}&to=${P}&straight=true`]: sameFiles(),
+      [REQUESTS]: ok([request(5, BRANCH)]),
+      [STATUS]: fail(400, "Cannot transition status via :run from :success"),
+    });
+    await expect(
+      gitlabOpenRevert(gl.target, PUBLISHED, DIVERGENCE, null),
+    ).resolves.toBe(5);
+    expect(gl.writes().map((c) => `${c.method} ${c.path}`)).toEqual([STATUS]);
   });
 
   it("refuses to write an empty revert commit", async () => {

@@ -1,20 +1,27 @@
-// repository.main.get.ts — `get_main_repository` (#2967).
+// repository.main.get.ts: `get_main_repository` (#2967, #4516).
 //
-// The read behind the Workspace settings dialog's Repository section, and the
-// read that unblocks it. `bind_main_repository` refuses
-// `conflict: github_not_connected` unless the workspace already carries a
-// GitHub App installation, and nothing in the app could produce one: the
-// install leg is an HTTP flow the API runs, and no capability handed out its
-// signed URL. This answers all three faces of "can this workspace keep its
-// steering in git yet, and if not, what is the next click".
+// Answers the workspace's steering repo: the one repository whose steering
+// head the workspace's steering records live in (ADR-212). The code
+// repositories linked to the workspace are `list_repositories`' answer, not
+// this one's. The capability id still says "main". Renaming it changes the
+// contract, the app, the MCP tool, and the CLI, which other lanes own (#4616).
+//
+// It is also the read that gets a workspace to a GitHub App installation.
+// `link_repository` refuses `conflict: github_not_connected` unless the
+// workspace already carries a GitHub App installation, and nothing in the app
+// could produce one: the install leg is an HTTP flow the API runs, and no
+// capability handed out its signed URL. This answers all three faces of "can
+// this workspace keep its steering in git yet, and if not, what is the next
+// click".
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner or Admin (INV-29), the pair the
-//      bind admits, because the install URL here is the first half of that write.
-//   2. The binding: the workspace's binding head and the binding version it
-//      points at — the same rows the bind writes — left-joined to the
-//      connection the head names, so the answer says whether that connection
-//      is still live (`repository.connectionLive`). A retired connection is
+//   1. Role gate: assertOrgRole, org Owner or Admin (INV-29), the pair
+//      `attach_github_installation` admits, because the install URL here
+//      leads to the same installation write.
+//   2. The binding: the workspace's steering head and the binding version it
+//      points at, left-joined to the connection the head names, so the
+//      answer says whether that connection is still live
+//      (`repository.connectionLive`). A retired connection is
 //      the state in which steering silently stops resolving, and reporting the
 //      repository without it is what made that state invisible.
 //   3. The installation: the workspace's GitHub connection, through the one
@@ -82,7 +89,7 @@ export interface GithubAppUrls {
  * "Finish its round trip" is the whole flow, not the redirect. A deployment
  * holding the OAuth half and not the App's signing half mints a working Connect
  * URL, completes OAuth, and reports the installation attached — and then every
- * `list_installation_repositories` and every `bind_main_repository` throws,
+ * `list_installation_repositories` and every `link_repository` throws,
  * because both mint a token with `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`
  * and refuse without them. That strands the operator PAST the point of no
  * return, which is worse than refusing at the door.
@@ -104,7 +111,7 @@ export const REQUIRED_GITHUB_APP_ENV = [
   "GITHUB_APP_CLIENT_SECRET",
   // Neither of these is needed to START the flow, and both are needed for
   // anything the flow is FOR: `getInstallationToken` signs a JWT with them
-  // (packages/handlers/src/repository.main.bind.ts,
+  // (packages/handlers/src/repository.binding-write.ts,
   // repository.installation.list.ts), and throws
   // "GitHub App is not configured" without them.
   "GITHUB_APP_ID",
@@ -252,7 +259,7 @@ export function createMainRepositoryGetHandler(
             name: binding.name,
             fullName: binding.fullName,
             defaultRef: binding.defaultRef,
-            // The bind persists no html url — the provider's canonical one is
+            // A binding persists no html url. The provider's canonical one is
             // derived from the full name it does persist, so a rename that
             // has not been re-observed still links somewhere GitHub redirects.
             // GitLab likewise redirects a moved project's old path.

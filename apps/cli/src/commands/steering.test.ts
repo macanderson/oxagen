@@ -483,6 +483,43 @@ describe("resolveContext", () => {
     expect(ctx.warnings.join(" ")).toContain("acme/some-other");
   });
 
+  // ADR-212: the workspace's steering repository is its own repository, and
+  // a code repository linked to the workspace has no remote pointing at it.
+  // The platform's answer is about the steering repository, so its gates stay
+  // off in the code checkout. The line that says so must not send the
+  // developer to fix a link that is correct.
+  it("keeps the steering gates off in a linked code checkout, without blaming the link", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({ orgSlug: "acme", workspaceSlug: "payments" }),
+      "utf8",
+    );
+    remotes({ origin: "git@github.com:acme/app.git" });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: "c1",
+      repository: "acme/acme-steering",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/freshness",
+      {},
+      { org: "acme", ws: "payments" },
+      expect.anything(),
+    );
+    expect(ctx.platform).toBeNull();
+    expect(ctx.policy.blockStaleRuns).toBe(false);
+    const said = ctx.warnings.join("\n");
+    expect(said).toContain("acme/acme-steering");
+    expect(said).toContain("steering gates do not apply here");
+    expect(said).not.toContain("workspace.json");
+    expect(said).not.toContain("oxagen init");
+  });
+
   it("keeps the answer when the repository matches, whatever the URL shape", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });

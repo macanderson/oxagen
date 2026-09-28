@@ -1,7 +1,7 @@
 {
   "name": "list_installation_repositories",
   "domain": "repository",
-  "description": "The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept.",
+  "description": "The repositories the workspace's GitHub App installation can reach. The app's link picker offers these to link_repository.",
   "mode": "sync",
   "surfaces": [
     "api",

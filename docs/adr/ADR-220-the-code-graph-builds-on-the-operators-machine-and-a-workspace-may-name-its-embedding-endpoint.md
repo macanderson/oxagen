@@ -1,4 +1,4 @@
-# ADR-215: The code graph builds on the operator's machine, and a workspace may name its embedding endpoint
+# ADR-220: The code graph builds on the operator's machine, and a workspace may name its embedding endpoint
 
 - **Status:** Proposed
 - **Date:** 2026-09-28

@@ -89,7 +89,7 @@
         "notMerged": "The PR has not merged into the approved production branch. Merge it there, then publish again.",
         "unrelatedPr": "That pull request did not change .oxagen/skills.toml. Publish the pull request that carries the configuration change.",
         "superseded": "The production configuration changed after that pull request merged. Publish the pull request that carries the current configuration.",
-        "repositoryMissing": "Bind a repository in workspace Repositories before configuring skills.",
+        "repositoryMissing": "This workspace has no steering repository yet, so there is nowhere to configure skills. Oxagen creates one when it provisions the workspace.",
         "repositoryChanged": "The repository binding changed. Reload the configuration for the current repository.",
         "identityChanged": "The repository identity no longer matches its approved binding. Ask an owner to review the repository connection.",
         "branchMissing": "The approved production branch is missing. Review the repository settings.",

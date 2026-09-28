@@ -1,10 +1,10 @@
 // The workspace's steering repo, as the repositories card, the health banner,
-// and onboarding read it. No capability answers it yet, so the read makes no
-// kernel call: an unregistered name reports to error tracking on every page
-// view. It answers `not_backed` and names the capability instead.
+// and onboarding read it: `get_steering_repo` through the DataSource's
+// `steeringRepo` port (data/live/steering-repo.ts), which calls kernelRead on
+// the workspace ctx. The port is the only way a render-time read reaches the
+// kernel: a feature may call kernelRead only from a "use server" module.
 //
-// `get_steering_repo` takes `{}` in the workspace scope and returns one
-// SteeringRepoView (./types):
+// The read answers one SteeringRepoView (./types):
 //   status            "provisioning" | "ready" | "failed" | "blocked"
 //   step              the last provisioning step that finished, or null
 //   failedStep        the step that failed or stopped, or null
@@ -16,18 +16,20 @@
 //   health            "healthy" | "drifted" | "disconnected" | "diverged" | null
 //   differences       [{ setting, expected, actual, changedBy, changedAt }]
 //
-// Lane S1 owns the provisioning and settings state (status through
-// publishedVersion). Lane S2 owns health and differences.
+// A failed read stays whole, so the card and onboarding can say who was
+// denied what, or which code the control plane answered.
 import "server-only";
+import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
-import type { SteeringRepoRead } from "./types";
+import type { SteeringRepoRead, SteeringRepoView } from "./types";
 
-const STEERING_REPO_CAPABILITY = "get_steering_repo";
-
-/** The steering repo of the viewer's workspace. It stays a promise so callers keep their shape once the capability exists. */
-export function readSteeringRepo(_ctx: WsCtx): Promise<SteeringRepoRead> {
-  return Promise.resolve({
-    kind: "not_backed",
-    capability: STEERING_REPO_CAPABILITY,
-  });
+/** The steering repo of the viewer's workspace. */
+export async function readSteeringRepo(
+  source: DataSource,
+  ctx: WsCtx,
+): Promise<SteeringRepoRead> {
+  const read = await source.steeringRepo.get(ctx);
+  if (!read.ok) return { kind: "failed", failure: read };
+  const view: SteeringRepoView = read.value;
+  return { kind: "ok", view };
 }

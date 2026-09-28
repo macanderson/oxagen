@@ -1,7 +1,7 @@
 // The provisioning steps a person sees, derived from the last step that
 // finished and the step that failed or stopped. The job skips
-// `bind_repository` for an organization and `add_to_installation` on GitLab,
-// so the list leaves those out.
+// `bind_repository` for an organization, `add_to_installation` on GitLab, and
+// `register_webhook` on GitHub, so the list leaves those out.
 import { describe, expect, it } from "vitest";
 import { provisioningSteps } from "./steps";
 import type { SteeringRepoView } from "./types";
@@ -108,6 +108,26 @@ describe("the provisioning steps", () => {
       ["create_repository", "done"],
       ["write_first_commit", "running"],
       ["apply_settings", "waiting"],
+      ["register_webhook", "waiting"],
+      ["publish_version", "waiting"],
+      ["bind_repository", "waiting"],
+    ]);
+  });
+
+  it("marks the hook step failed on GitLab", () => {
+    expect(
+      states({
+        status: "failed",
+        step: "apply_settings",
+        failedStep: "register_webhook",
+        provider: "gitlab",
+      }),
+    ).toEqual([
+      ["pick_connection", "done"],
+      ["create_repository", "done"],
+      ["write_first_commit", "done"],
+      ["apply_settings", "done"],
+      ["register_webhook", "failed"],
       ["publish_version", "waiting"],
       ["bind_repository", "waiting"],
     ]);
@@ -140,7 +160,40 @@ describe("the provisioning steps", () => {
       ["create_repository", "done"],
       ["write_first_commit", "done"],
       ["apply_settings", "done"],
+      ["register_webhook", "done"],
       ["publish_version", "done"],
     ]);
+  });
+
+  it("runs the project hook step after the settings on GitLab and leaves it out on GitHub", () => {
+    const afterSettings = {
+      status: "provisioning",
+      step: "apply_settings",
+      failedStep: null,
+    } as const;
+    expect(states({ ...afterSettings, provider: "gitlab" })).toEqual([
+      ["pick_connection", "done"],
+      ["create_repository", "done"],
+      ["write_first_commit", "done"],
+      ["apply_settings", "done"],
+      ["register_webhook", "running"],
+      ["publish_version", "waiting"],
+      ["bind_repository", "waiting"],
+    ]);
+    expect(states({ ...afterSettings, provider: "github" })).toEqual([
+      ["pick_connection", "done"],
+      ["create_repository", "done"],
+      ["add_to_installation", "done"],
+      ["write_first_commit", "done"],
+      ["apply_settings", "done"],
+      ["publish_version", "running"],
+      ["bind_repository", "waiting"],
+    ]);
+    // A connection not yet picked reads as GitHub, the default host.
+    expect(
+      states({ ...afterSettings, step: null, provider: null }).map(
+        ([step]) => step,
+      ),
+    ).not.toContain("register_webhook");
   });
 });
