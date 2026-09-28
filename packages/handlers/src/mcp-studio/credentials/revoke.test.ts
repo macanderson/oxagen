@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FetchLike } from "./oauth";
-import type { StoredOperatorToken } from "./store";
+import type { CredentialScope, CredentialStore, StoredOperatorToken } from "./store";
 import { basicClient, json, MemoryCredentialStore, noFetch, scriptedFetch, testKms } from "./test-support";
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +17,13 @@ vi.mock("./store", async (importOriginal) => {
   return { ...real, postgresCredentialStore: mocks.postgresCredentialStore };
 });
 
-import { revokeAtServer, revokeDepartedOperator, revokeOperatorToken, revokeOperatorTokens } from "./revoke";
+import {
+  revokeAtServer,
+  revokeDepartedMember,
+  revokeDepartedOperator,
+  revokeOperatorToken,
+  revokeOperatorTokens,
+} from "./revoke";
 
 const kms = testKms();
 const USER = randomUUID();
@@ -194,5 +200,68 @@ describe("revokeDepartedOperator", () => {
       "refresh_token",
       "access_token",
     ]);
+  });
+});
+
+describe("revokeDepartedMember", () => {
+  const orgId = randomUUID();
+
+  it("revokes the person's tokens in every workspace where they hold one", async () => {
+    const [first, second] = [randomUUID(), randomUUID()];
+    const other = new MemoryCredentialStore(kms);
+    const stores = new Map<string, CredentialStore>([
+      [first, store],
+      [second, other],
+    ]);
+    mocks.postgresCredentialStore.mockImplementation((scope: CredentialScope) => stores.get(scope.workspaceId));
+    const billing = await connected();
+    const crm = await other.addOperatorToken({
+      ...KEY,
+      server: "crm",
+      accessToken: "crm-at",
+      refreshToken: "crm-rt",
+      revocationEndpoint: REVOKE_URL,
+    });
+    const workspacesOf = vi.fn(async (_orgId: string, _userId: string) => [first, second]);
+    const fetch = accepting();
+
+    expect(await revokeDepartedMember({ orgId, userId: USER }, { kms, fetch, workspacesOf })).toEqual({
+      revoked: 2,
+      failed: [],
+    });
+    expect(workspacesOf).toHaveBeenCalledWith(orgId, USER);
+    expect(mocks.postgresCredentialStore.mock.calls.map(([scope]) => scope)).toEqual([
+      { orgId, workspaceId: first },
+      { orgId, workspaceId: second },
+    ]);
+    expect(store.tokens.has(billing.id)).toBe(false);
+    expect(other.tokens.has(crm.id)).toBe(false);
+    expect(fetch.sent.map((request) => request.form?.get("token"))).toEqual(["op-rt", "op-at", "crm-rt", "crm-at"]);
+  });
+
+  it("goes on past a workspace that fails, and names it", async () => {
+    const [broken, fine] = [randomUUID(), randomUUID()];
+    const failing = {
+      operatorTokensOf: () => Promise.reject(new Error("connection reset")),
+    } as unknown as CredentialStore;
+    mocks.postgresCredentialStore.mockImplementation((scope: CredentialScope) =>
+      scope.workspaceId === broken ? failing : store,
+    );
+    const row = await connected();
+
+    expect(
+      await revokeDepartedMember(
+        { orgId, userId: USER },
+        { kms, fetch: accepting(), workspacesOf: async () => [broken, fine] },
+      ),
+    ).toEqual({ revoked: 1, failed: [{ workspaceId: broken, error: "connection reset" }] });
+    expect(store.tokens.has(row.id)).toBe(false);
+  });
+
+  it("sends nothing for a person who holds no token", async () => {
+    expect(
+      await revokeDepartedMember({ orgId, userId: USER }, { kms, fetch: noFetch(), workspacesOf: async () => [] }),
+    ).toEqual({ revoked: 0, failed: [] });
+    expect(mocks.postgresCredentialStore).not.toHaveBeenCalled();
   });
 });

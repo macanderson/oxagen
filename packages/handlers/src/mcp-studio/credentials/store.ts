@@ -10,7 +10,8 @@
 //
 // Every read and write filters by the store's org and workspace and runs under
 // row-level security, so a row from another workspace reads as absent.
-import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
+import { schema, type Tx, withOrgDb, withSystemDb, withTenantDb } from "@oxagen/database";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -330,6 +331,25 @@ export function postgresCredentialStore(scope: CredentialScope): CredentialStore
       return rows.length > 0;
     },
   };
+}
+
+/**
+ * The workspaces of one organization where a person holds an operator token.
+ * The paths that remove a person from an organization read this after the
+ * removal commits, when the person belongs to no workspace there. It runs as
+ * an organization-wide read (ADR-086): RLS still fences org_id, and the read
+ * reaches every workspace of the organization.
+ */
+export function operatorTokenWorkspaces(orgId: string, userId: string): Promise<string[]> {
+  return runInTenantScope({ orgId, workspaceId: ORG_ONLY_WORKSPACE_ID }, () =>
+    withOrgDb(async (tx) => {
+      const rows = await tx
+        .selectDistinct({ workspaceId: operatorTokens.workspaceId })
+        .from(operatorTokens)
+        .where(and(eq(operatorTokens.orgId, orgId), eq(operatorTokens.userId, userId)));
+      return rows.map((row) => row.workspaceId);
+    }),
+  );
 }
 
 /**

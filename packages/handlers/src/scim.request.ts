@@ -15,6 +15,32 @@ import {
 import { serveScim } from "./lib/scim/service";
 import { scimBaseUrl } from "./lib/scim/token-store";
 import { logger } from "./logger";
+import { revokeDepartedMember } from "./mcp-studio/credentials/revoke";
+
+/**
+ * Revoke every MCP server token the removed people connected in this
+ * organization's workspaces, after the removal committed. A failure is logged
+ * and never fails the SCIM request: the removal already happened, and the
+ * credential source revokes a departed operator's tokens on its next resolve.
+ */
+async function revokeMcpTokens(orgId: string, userIds: string[]): Promise<void> {
+  for (const userId of new Set(userIds)) {
+    try {
+      const revocation = await revokeDepartedMember({ orgId, userId });
+      if (revocation.failed.length > 0) {
+        logger.warn(
+          { orgId, revoked: revocation.revoked, failed: revocation.failed },
+          "scim.request: some MCP server tokens were not revoked",
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        { orgId, error: err instanceof Error ? err.message : String(err) },
+        "scim.request: MCP server tokens were not revoked",
+      );
+    }
+  }
+}
 
 /**
  * execute_scim_request: answer one SCIM request for the organization whose token
@@ -118,10 +144,14 @@ export const scimRequestHandler: CapabilityHandler<typeof scimRequest> = async (
 
   const baseUrl = scimBaseUrl(ssoAuthBaseUrl());
   try {
+    // The people this request removed. Read only once the transaction commits.
+    const removed: string[] = [];
     // tenancy: every statement in the SCIM store is filtered by orgId = ctx.orgId, the organization the verified token names.
     const response = await withSystemDb((tx) =>
       serveScim(
-        createPgScimStore(tx, ctx.orgId, ctx.requestId ?? null),
+        createPgScimStore(tx, ctx.orgId, ctx.requestId ?? null, (userId) =>
+          removed.push(userId),
+        ),
         {
           method: input.method,
           path: input.path,
@@ -140,6 +170,7 @@ export const scimRequestHandler: CapabilityHandler<typeof scimRequest> = async (
       },
       "scim.request: served",
     );
+    await revokeMcpTokens(ctx.orgId, removed);
     return {
       status: response.status,
       body: response.body ?? null,
