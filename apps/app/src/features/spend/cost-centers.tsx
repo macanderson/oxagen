@@ -58,10 +58,7 @@ export function CostCenterTable({ report }: { report: SpendReport }) {
                   data-key={row.key}
                   data-unassigned={unassigned ? "true" : undefined}
                 >
-                  <th
-                    scope="row"
-                    className={`${cell} max-w-72 break-words font-normal`}
-                  >
+                  <th scope="row" className={`${cell} font-normal`}>
                     {unassigned ? (
                       <span className="text-muted-foreground">
                         {t("groups.cost_center.unassigned")}

@@ -429,7 +429,7 @@ function LedgerTable({
             <MoneyText value={ledger.cost} />
           )}
         </td>
-        <td className={`${numericCell} whitespace-normal font-normal text-dim`}>
+        <td className={`${numericCell} font-normal text-dim`}>
           {metrics.cost === null ? (
             <NoValue />
           ) : (

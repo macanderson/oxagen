@@ -388,7 +388,9 @@ function Loaded({
                       {t(`results.${check.status}`)}
                     </Badge>
                   </td>
-                  <td className={`${cell} text-muted-foreground`}>
+                  <td
+                    className={`${cell} text-muted-foreground [--cell-max:32rem]`}
+                  >
                     {check.summary.trim() !== ""
                       ? check.summary
                       : failed !== null && check.status === "pending"

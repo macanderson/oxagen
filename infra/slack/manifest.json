@@ -1,0 +1,39 @@
+{
+  "_metadata": {
+    "major_version": 2,
+    "minor_version": 1
+  },
+  "display_information": {
+    "name": "Oxagen",
+    "description": "Posts notices from your Oxagen workspace to the Slack channel you pick.",
+    "long_description": "An owner or admin of your Oxagen organization connects Slack in Organization settings. Each Oxagen workspace then picks one channel and chooses which notices go there. The first notice Oxagen sends is a change in the health of your steering repository. Oxagen asks for four permissions: post messages, post in public channels it has not joined, and list public and private channels so you can pick one.",
+    "background_color": "#09090b"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Oxagen",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://app.oxagen.sh/api/slack/oauth/callback",
+      "https://app.staging.oxagen.sh/api/slack/oauth/callback",
+      "https://preview-app.oxagen.sh/api/slack/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "chat:write.public",
+        "channels:read",
+        "groups:read"
+      ]
+    }
+  },
+  "settings": {
+    "is_mcp_enabled": false,
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

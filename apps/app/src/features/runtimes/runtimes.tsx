@@ -150,9 +150,9 @@ function RuntimeName({
         to={routes.runtime(org, ws, host.id)}
         aria-label={t("open", { hostname: host.hostname })}
         data-touch-target=""
-        className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+        className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
       >
-        {host.hostname}
+        <span className="min-w-0 md:truncate">{host.hostname}</span>
       </SafeLink>
       <Sub monoFace>
         <OsLine host={host} />

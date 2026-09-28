@@ -367,11 +367,11 @@ export function MemoryShelfBody({
                 setOpen({ ref: memory.ref, step: "memory" });
               }}
             >
-              <td className={`${cell} max-w-[46ch]`}>
+              <td className={`${cell} [--cell-max:32rem]`}>
                 {/* The row's keyboard way in: a button answers Enter and Space. */}
                 <button
                   type="button"
-                  className="block text-left font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="block max-w-full text-left font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:truncate"
                   aria-label={t("open", { ref: memory.publicRef })}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -380,7 +380,7 @@ export function MemoryShelfBody({
                 >
                   {memory.body}
                 </button>
-                <span className="mt-0.5 block break-all font-mono text-[11px] text-dim">
+                <span className="mt-0.5 block font-mono text-[11px] text-dim md:truncate">
                   {t("provenance", {
                     ref: memory.publicRef,
                     source: memory.source,

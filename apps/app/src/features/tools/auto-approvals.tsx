@@ -83,7 +83,7 @@ function Requires({ rule }: { rule: ApprovalRule }) {
   return (
     <ul className="flex flex-col gap-0.5 text-xs text-foreground">
       {lines.map((line) => (
-        <li key={line.key} data-requires={line.key}>
+        <li key={line.key} data-requires={line.key} className="md:truncate">
           {line.text}
         </li>
       ))}
@@ -107,10 +107,12 @@ function Row({
     <tr data-rule={rule.slug} data-enabled={rule.enabled ? "true" : "false"}>
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium text-foreground">{rule.name}</span>
+          <span className="font-medium text-foreground md:truncate">
+            {rule.name}
+          </span>
           {rule.disabledReason && (
             <span
-              className="text-xs text-muted-foreground"
+              className="text-xs text-muted-foreground md:truncate"
               data-testid="rule-disabled-reason"
             >
               {t(`disabledReason.${rule.disabledReason.code}`, {
@@ -118,10 +120,10 @@ function Row({
               })}
             </span>
           )}
-          <span className={`${mono} text-xs text-muted-foreground`}>
+          <span className={`${mono} text-xs text-muted-foreground md:truncate`}>
             {t("slug", { slug: rule.slug })}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground md:truncate">
             {rule.lastWrittenBy === null
               ? t("writtenUnattributed", { at: date(rule.lastWrittenAt) })
               : t("written", {
@@ -133,7 +135,7 @@ function Row({
       </td>
       <td className={cell}>
         <span className="flex flex-col gap-1.5">
-          <span className="flex flex-wrap gap-1">
+          <span className="flex gap-1 max-md:flex-wrap">
             {rule.tools.map((glob) => (
               <Chip key={glob}>{glob}</Chip>
             ))}
@@ -143,12 +145,12 @@ function Row({
             // the row says the rule releases nothing until it is saved again.
             <span
               data-state="unstamped"
-              className="text-xs text-muted-foreground"
+              className="text-xs text-muted-foreground md:truncate"
             >
               {t("unstamped")}
             </span>
           ) : rule.authoredConsequences.length === 0 ? null : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground md:truncate">
               {t("checkedAgainst", {
                 tags: rule.authoredConsequences.join(", "),
               })}
@@ -173,7 +175,7 @@ function Row({
       </td>
       {canWrite ? (
         <td className={cell}>
-          <span className="flex flex-wrap gap-2">
+          <span className="flex gap-2 max-md:flex-wrap">
             <RuleEditor at={at} existing={rule} />
             <RuleDelete at={at} rule={rule} />
           </span>
