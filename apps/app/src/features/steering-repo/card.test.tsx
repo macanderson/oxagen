@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 // The steering repo card on the repositories page (#4518): the repository
 // link, the published version, and the health row once the repo is ready.
-// While it provisions, the step list takes the health row's place. With no
-// capability behind the read, the card names `get_steering_repo` and draws no
-// state. The page's section decides that only an owner or admin may retry.
+// While it provisions, the step list takes the health row's place. When the
+// read fails, the card says who was denied what, or which code the control
+// plane answered, and draws no state. The page's section reads through the
+// DataSource it is handed and decides that only an owner or admin may retry.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readError, readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -14,6 +16,7 @@ import {
   failedSteeringRepo,
   GITHUB_REPOSITORY,
   GITLAB_REPOSITORY,
+  steeringRepoSource,
   steeringRepoView,
 } from "./steering-repo.builders";
 import type { SteeringRepoRead } from "./types";
@@ -45,9 +48,14 @@ const { SteeringRepoSection } = await import("./section");
 
 const RETURN_TO = routes.repositories("acme", "core-platform");
 
-const NOT_BACKED: SteeringRepoRead = {
-  kind: "not_backed",
-  capability: "get_steering_repo",
+const UNREACHABLE: SteeringRepoRead = {
+  kind: "failed",
+  failure: readError("installation_unreachable", 503),
+};
+
+const DENIED: SteeringRepoRead = {
+  kind: "failed",
+  failure: { ok: false, reason: "denied", permission: "repository.read" },
 };
 
 const FAILED = failedSteeringRepo("create_repository", {
@@ -84,24 +92,33 @@ afterEach(async () => {
 });
 
 describe("the steering repo card", () => {
-  it("names the capability the read needs and draws no state while none answers it", () => {
-    const root = card(NOT_BACKED);
-    expect(root).toHaveAttribute("data-kind", "not_backed");
+  it("names the code the control plane answered and draws no state when the read fails", () => {
+    const root = card(UNREACHABLE);
+    expect(root).toHaveAttribute("data-kind", "failed");
     expect(root).not.toHaveAttribute("data-health");
     expect(
       within(root).getByRole("heading", { level: 2, name: "Steering repo" }),
     ).toBeInTheDocument();
-    const unavailable = screen.getByTestId("steering-repo-unavailable");
-    expect(unavailable).toHaveAttribute("data-capability", "get_steering_repo");
-    expect(unavailable).toHaveTextContent(
-      "No capability answers the steering repo read yet, so this panel shows no state.",
-    );
-    expect(unavailable).toHaveTextContent("The read needs get_steering_repo.");
-    expect(unavailable.querySelector("code")).toHaveTextContent(
-      "get_steering_repo",
+    const failure = root.querySelector("[data-reason]");
+    expect(failure).toHaveAttribute("data-reason", "error");
+    expect(failure).toHaveTextContent(
+      "Steering repo could not be loaded: the control plane answered installation_unreachable. Nothing was changed, and runs kept recording.",
     );
     expect(screen.queryByTestId("steering-repo-version")).toBeNull();
     expect(screen.queryByTestId("steering-repo-health")).toBeNull();
+    expect(screen.queryByTestId("steering-repo-provisioning")).toBeNull();
+  });
+
+  it("names the permission a denied viewer lacks and draws no state", () => {
+    const root = card(DENIED);
+    expect(root).toHaveAttribute("data-kind", "failed");
+    const failure = root.querySelector("[data-reason]");
+    expect(failure).toHaveAttribute("data-reason", "denied");
+    expect(failure).toHaveTextContent(
+      "You cannot see Steering repo in this workspace. Your roles do not include repository.read; an organization owner can grant it.",
+    );
+    expect(screen.queryByTestId("steering-repo-link")).toBeNull();
+    expect(screen.queryByTestId("steering-repo-version")).toBeNull();
   });
 
   it("links a ready repository on GitHub and shows its version and health", () => {
@@ -248,19 +265,22 @@ describe("the repositories page's steering repo section", () => {
   ) {
     read.readSteeringRepo.mockResolvedValue(answer);
     const viewer = ctx(orgRole);
+    const { source } = steeringRepoSource(readOk(steeringRepoView()));
     render(
-      <IntlProvider>{await SteeringRepoSection({ ctx: viewer })}</IntlProvider>,
+      <IntlProvider>
+        {await SteeringRepoSection({ ctx: viewer, source })}
+      </IntlProvider>,
     );
-    expect(read.readSteeringRepo).toHaveBeenCalledWith(viewer);
+    expect(read.readSteeringRepo).toHaveBeenCalledWith(source, viewer);
     return screen.getByTestId("steering-repo-card");
   }
 
-  it("names the missing capability while no read backs the card", async () => {
-    const root = await section(NOT_BACKED, "owner");
-    expect(root).toHaveAttribute("data-kind", "not_backed");
-    expect(screen.getByTestId("steering-repo-unavailable")).toHaveAttribute(
-      "data-capability",
-      "get_steering_repo",
+  it("says why the card has no state when the read fails", async () => {
+    const root = await section(DENIED, "owner");
+    expect(root).toHaveAttribute("data-kind", "failed");
+    expect(root.querySelector("[data-reason]")).toHaveAttribute(
+      "data-reason",
+      "denied",
     );
   });
 

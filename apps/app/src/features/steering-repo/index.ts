@@ -8,5 +8,4 @@ export { SteeringRepoHealthBanner } from "./health-banner";
 export { SteeringRepoProvisioning } from "./provisioning";
 export { readSteeringRepo } from "./read";
 export { SteeringRepoSection } from "./section";
-export { SteeringRepoUnavailable } from "./unavailable";
 export type { SteeringRepoRead } from "./types";

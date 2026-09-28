@@ -5646,10 +5646,6 @@ type Messages = {
     steeringRepo: {
       heading: string;
       loading: string;
-      unavailable: {
-        body: string;
-        capability: string;
-      };
       card: {
         repository: string;
         notCreated: string;
