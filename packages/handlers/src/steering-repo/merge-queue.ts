@@ -47,10 +47,10 @@ import {
   branchScopeRefusal,
   buildLedgerLine,
   chooseLedgerTarget,
-  IMPORT_BRANCH,
+  IMPORT_REPLACES_PATH,
   isStampedRecordPath,
   mergeTrailers,
-  parseReplacesBlock,
+  parseReplacesFile,
   stampRecordText,
 } from "./stamp";
 
@@ -250,12 +250,6 @@ export interface StampInput {
   at: Date;
   approval: MergeApproval;
   mergedBy: string;
-  /**
-   * The id each record had before a format change, by path. The stamp writes
-   * it as `replaces` on the record's ledger change. Only the import PR on
-   * {@link IMPORT_BRANCH} carries it.
-   */
-  replaces?: ReadonlyMap<string, string>;
 }
 
 export interface StampResult {
@@ -271,9 +265,42 @@ function stampRefused(reason: string, message: string): HandlerError {
 }
 
 /**
+ * The id each record had before the import converted it, by path, read from
+ * {@link IMPORT_REPLACES_PATH} at `head`. Only an import branch may carry the
+ * file, and `branchScopeRefusal` refuses it on any other branch. A branch
+ * without the file names no old ids.
+ */
+async function importReplaces(
+  input: StampInput,
+  changed: readonly { path: string; status: string }[],
+): Promise<Map<string, string>> {
+  const file = changed.find((entry) => entry.path === IMPORT_REPLACES_PATH);
+  if (!file || file.status === "removed") return new Map();
+  const text = await input.host.readFile(
+    input.repo,
+    IMPORT_REPLACES_PATH,
+    input.head,
+  );
+  const parsed =
+    text === null
+      ? { ok: false as const, message: `the file is not at ${input.head}` }
+      : parseReplacesFile(text);
+  if (!parsed.ok) {
+    throw stampRefused(
+      "replaces_unreadable",
+      `${IMPORT_REPLACES_PATH} on ${input.branch} cannot be read: ${parsed.message}`,
+    );
+  }
+  return parsed.replaces;
+}
+
+/**
  * Push the stamp commit on top of `head`: each changed steering record with
- * its `id` and `hash`, and the ledger line that records the merge. The host
- * refuses with `head_moved` when the branch is no longer at `head`.
+ * its `id` and `hash`, and the ledger line that records the merge. On an
+ * import branch, each converted record's ledger change also names the id it
+ * replaces, and the stamp commit deletes {@link IMPORT_REPLACES_PATH}, so the
+ * file never reaches the production branch. The host refuses with
+ * `head_moved` when the branch is no longer at `head`.
  */
 export async function stampHead(input: StampInput): Promise<StampResult> {
   const { host, repo, head } = input;
@@ -289,10 +316,17 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
     changed.map((file) => file.path),
   );
   if (scope) throw stampRefused(scope.reason, scope.message);
+  const replaces = await importReplaces(input, changed);
 
   const files: { path: string; content: string | null }[] = [];
   const changes: PromotionChange[] = [];
   for (const file of changed) {
+    if (file.path === IMPORT_REPLACES_PATH) {
+      if (file.status !== "removed") {
+        files.push({ path: IMPORT_REPLACES_PATH, content: null });
+      }
+      continue;
+    }
     if (file.status === "removed" || !isStampedRecordPath(file.path)) {
       changes.push({ path: file.path, action: file.status });
       continue;
@@ -314,24 +348,24 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
     if (stamped.text !== text) {
       files.push({ path: file.path, content: stamped.text });
     }
-    const replaces = input.replaces?.get(file.path);
+    const old = replaces.get(file.path);
     changes.push({
       path: file.path,
       action: file.status,
       lineage: stamped.lineage,
       id: stamped.id,
       hash: stamped.hash,
-      ...(replaces && replaces !== stamped.id ? { replaces } : {}),
+      ...(old && old !== stamped.id ? { replaces: old } : {}),
     });
   }
-  const unmatched = [...(input.replaces?.keys() ?? [])].filter(
+  const unmatched = [...replaces.keys()].filter(
     (path) =>
       !changes.some((change) => change.path === path && change.id !== undefined),
   );
   if (unmatched.length > 0) {
     throw stampRefused(
       "replaces_unmatched",
-      `#${input.number} names an old id for ${unmatched.sort().join(", ")}, and ${input.branch} adds or changes no steering record there`,
+      `${IMPORT_REPLACES_PATH} names an old id for ${unmatched.sort().join(", ")}, and ${input.branch} adds or changes no steering record there`,
     );
   }
 
@@ -379,34 +413,6 @@ export async function stampHead(input: StampInput): Promise<StampResult> {
 }
 
 // ── Landing a PR ─────────────────────────────────────────────────────────────
-
-/**
- * The old id of each record the import PR converted, read from the replaces
- * block in its body. Refuses when the PR is no longer the open one on its
- * branch, or when the block does not parse.
- */
-async function importReplaces(input: LandInput): Promise<Map<string, string>> {
-  const pr = await input.host.findOpenPullRequest(input.repo, {
-    head: input.branch,
-    base: input.repo.defaultBranch,
-  });
-  if (pr === null || pr.number !== input.number) {
-    throw new HandlerError({
-      code: "conflict",
-      reason: "pull_request_missing",
-      message: `#${input.number} is not the open pull request from ${input.branch}`,
-    });
-  }
-  const block = parseReplacesBlock(pr.body);
-  if (!block.ok) {
-    throw new HandlerError({
-      code: "conflict",
-      reason: "replaces_unreadable",
-      message: `The body of #${input.number} cannot be read: ${block.message}`,
-    });
-  }
-  return block.replaces;
-}
 
 /** What a re-check after an update found: whether it passed, and which checks ran. */
 export interface RecheckResult {
@@ -503,10 +509,6 @@ function headsAfterUpdate(
 export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
   const attempts = input.maxAttempts ?? LAND_ATTEMPTS;
-  const replaces =
-    input.layout.layout === "steering" && input.branch === IMPORT_BRANCH
-      ? await importReplaces(input)
-      : undefined;
   let head = input.checkedHead;
   let heads: string[] = [head];
   let checks = input.checks;
@@ -560,7 +562,6 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
           at,
           approval,
           mergedBy: input.mergedBy,
-          replaces,
         });
         await host.reportCheckRun(repo, {
           name: REQUIRED_CHECK_NAME,
