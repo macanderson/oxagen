@@ -597,11 +597,7 @@ describe("Agents, loaded", () => {
 
   it("opens the agent when a row is clicked anywhere but its actions", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
-    fireEvent.click(
-      within(only(rows())).getByText(
-        "Cuts releases and opens their pull requests.",
-      ),
-    );
+    fireEvent.click(within(only(rows())).getByText("prn_91"));
     expect(push).toHaveBeenCalledWith("/acme/core-platform/agents/release-bot");
   });
 });
@@ -679,7 +675,7 @@ describe("Agents list controls", () => {
     const empty = screen.getByTestId("agents-no-match");
     expect(empty).toHaveTextContent("No rows match.");
     expect(empty.closest("tbody")).not.toBeNull();
-    expect(empty.querySelector("td")).toHaveAttribute("colspan", "10");
+    expect(empty.querySelector("td")).toHaveAttribute("colspan", "9");
   });
 
   it("sorts by a header and says so with aria-sort", async () => {
@@ -700,7 +696,7 @@ describe("Agents list controls", () => {
       screen
         .getAllByRole("columnheader")
         .map((th) => th.hasAttribute("aria-sort")),
-    ).toEqual([true, true, true, true, true, true, true, true, true, false]);
+    ).toEqual([true, true, true, true, true, true, true, true, false]);
   });
 
   it("sorts Operations by the token total, an agent with none recorded last", async () => {
