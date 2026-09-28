@@ -616,8 +616,9 @@ async function saveRow(scope: HealthScope, row: HealthRow): Promise<void> {
     updatedAt: row.checkedAt,
   };
   const { orgId: _org, workspaceId: _ws, ...set } = values;
-  // tenancy: the row is keyed by orgId and workspaceId from the scope the
-  // caller resolved from the steering repo's own settings.
+  // tenancy: scoped to one row. The insert and its conflict target both use
+  // the orgId and workspaceId the caller resolved from the steering repo's
+  // own settings, so the upsert writes only that scope's row.
   await withSystemDb((tx) =>
     tx
       .insert(table)
@@ -716,9 +717,12 @@ export async function findHealthScopes(
   const ids = [...new Set(signal.repository_ids)];
   const w = schema.workspaces;
   const o = schema.organizations;
-  // tenancy: a webhook names a repository or an installation, not a tenant.
-  // The query maps it to the organizations and workspaces whose own settings
-  // name that steering repo, and returns only their ids.
+  // tenancy: cross-tenant lookup for a verified webhook. The GitHub route
+  // checks the x-hub-signature-256 HMAC and the GitLab handler checks the
+  // X-Gitlab-Token before this runs. A webhook names a repository or an
+  // installation, not a tenant, so the query is filtered by those ids to the
+  // organizations and workspaces whose own settings name that steering repo,
+  // and it returns only their orgId and workspaceId.
   return withSystemDb(async (tx) => {
     const scopes: HealthScope[] = [];
     let orgIds: string[] = [];
@@ -766,8 +770,9 @@ export async function findHealthScopes(
 export async function listHealthScopes(): Promise<HealthScope[]> {
   const w = schema.workspaces;
   const o = schema.organizations;
-  // tenancy: the sweep reads every steering repo on purpose. It returns only
-  // ids, and each health read then works inside the scope it names.
+  // tenancy: global read for the scheduled 10-minute sweep. It lists every
+  // ready steering repo across all organizations on purpose and returns only
+  // orgId and workspaceId pairs. Each health read then runs scoped to one pair.
   return withSystemDb(async (tx) => {
     const workspaceRows = await tx
       .select({ id: w.id, orgId: w.orgId })
