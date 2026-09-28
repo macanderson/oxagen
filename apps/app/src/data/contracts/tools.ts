@@ -12,6 +12,7 @@
 // the page prints the kind rather than the uuid (CLAUDE.md, citing nodes).
 import { z } from "zod";
 import { PublicId } from "./common";
+import { Cost } from "./money";
 
 const Instant = z.iso.datetime();
 const Count = z.number().int().nonnegative();
@@ -406,6 +407,17 @@ export const McpServer = z.object({
   iconUrl: z.url({ protocol: /^https$/ }).nullable(),
   /** Null unless `authKind` is `oauth`. */
   authorization: McpAuthorization.nullable(),
+  /**
+   * The tokens its tool definitions add to every model call, from the newest
+   * listing of the last 7 days that names it (#4537). Null when none does.
+   */
+  contextTokens: Count.nullable().default(null),
+  /**
+   * What those tokens cost the workspace over the last 7 days, an estimate
+   * the server priced from the book at each call's rate (#4537, ADR-060).
+   * Null when `contextTokens` is null or the week has no priced call.
+   */
+  weeklyPrice: Cost.nullable().default(null),
 });
 export type McpServer = z.infer<typeof McpServer>;
 

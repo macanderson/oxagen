@@ -1100,6 +1100,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "merge_pr_without_review": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the Merge without review button on an unapproved steering PR (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "testid": "merge-without-review",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-09-27",
+      "verifiedBy": "3f363c89"
+    },
     "open_context_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
