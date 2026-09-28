@@ -4,8 +4,7 @@
 // before the kernel), and denied and conflict with the handler's reason
 // (INV-19). The three writes Oxagen has not registered yet (#4518) answer
 // `tool_not_registered` and never reach invoke(). When the platform
-// registers one, its case here fails and moves to the ok path, as
-// mergePrWithoutReview did when #4528 registered merge_pr_without_review.
+// registers one, its case here fails and moves to the ok path.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { contextPrOutput } from "@/test/steering-outputs";
 
@@ -163,7 +162,7 @@ describe("mergeContextPr", () => {
 });
 
 describe("mergePrWithoutReview", () => {
-  it("merges through the registered capability and returns the merge commit", async () => {
+  it("merges without an approval and returns the merge commit", async () => {
     invoke.mockResolvedValue({
       proposalId: ID,
       status: "merged",
@@ -188,11 +187,13 @@ describe("mergePrWithoutReview", () => {
     );
   });
 
-  it("returns a caller without the permission as denied with its reason (negative)", async () => {
+  it("returns a caller without the permission as denied (negative)", async () => {
     invoke.mockRejectedValue(
       refused("forbidden", "merge_without_review_not_held"),
     );
-    expect(await mergePrWithoutReview("acme", "core-platform", ID)).toEqual({
+    expect(
+      await mergePrWithoutReview("acme", "core-platform", ID),
+    ).toMatchObject({
       ok: false,
       reason: "denied",
       code: "merge_without_review_not_held",

@@ -20,10 +20,10 @@
  */
 import {
   priceInputTokens,
-  runInputPrice,
   type InputPrice,
   type RunTotalsRecord,
 } from "../cost-rollup";
+import { standingReadPrice } from "../standing-context-price";
 import type { ViewCall } from "./requests";
 import {
   PAGE_TOKENS,
@@ -48,25 +48,6 @@ function citableRepeat(c: ViewCall, run: RunTotalsRecord): boolean {
     c.repeat === "shell" ||
     (c.repeat === "read" && (run.agentKey !== null || run.operatorKey !== null))
   );
-}
-
-/**
- * What a run paid to re-read one token already in its context: its cache
- * reads' cost over their tokens. A run that read no cache re-sent every
- * token, so its uncached input price is the read price. Null when nothing
- * priced the reads, and for an estimated or unpriced run, as
- * `runInputPrice` rules.
- */
-export function runReadPrice(run: RunTotalsRecord): InputPrice | null {
-  if (run.costBasis === null || run.costBasis === "estimated") return null;
-  let micros = 0n;
-  let tokens = 0n;
-  for (const m of run.breakdown.models) {
-    micros += m.costByClass.cache_read;
-    tokens += BigInt(m.tokens.cache_read);
-  }
-  if (tokens === 0n) return runInputPrice(run);
-  return micros === 0n ? null : { micros, tokens };
 }
 
 /**
@@ -141,7 +122,7 @@ function carryMeasure(price: InputPrice | null, tokens: number): Measure {
 function detect(input: DetectInput, ctx: DetectContext): void {
   for (const view of ctx.views) {
     const chains = chainsOf(input.frames?.get(view.run.runId));
-    const readPrice = runReadPrice(view.run);
+    const readPrice = standingReadPrice(view.run);
     for (const c of view.calls) {
       if (ctx.taken.has(c.call) || citableRepeat(c, view.run)) continue;
       const tokens = c.call.resultTokens;

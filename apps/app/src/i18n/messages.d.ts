@@ -6224,11 +6224,18 @@ type Messages = {
         byCalls: string;
         byCost: string;
         resultsTitle: string;
+        standingTitle: string;
+        sources: {
+          toolDefinitions: string;
+          steering: string;
+          contextFrames: string;
+        };
         noTools: string;
         toolsNotRead: string;
         unnamedTool: string;
         note: string;
         noteWithResults: string;
+        noteWithStanding: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -10550,6 +10557,7 @@ type Messages = {
         provider: string;
         transport: string;
         tools: string;
+        weeklyPrice: string;
         toolbelts: string;
         agents: string;
         health: string;
@@ -10558,6 +10566,11 @@ type Messages = {
         lastImport: string;
         actions: string;
       };
+      weeklyAbsent: string;
+      weeklyUnpriced: string;
+      weeklyTokenCount: string;
+      weeklyTokens: string;
+      weeklyTitle: string;
       transportNote: string;
       open: string;
       openNamed: string;

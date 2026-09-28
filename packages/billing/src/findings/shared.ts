@@ -421,6 +421,12 @@ export interface CallFrame {
 interface RunAcc {
   run: RunTotalsRecord;
   calls: number;
+  /**
+   * The cited items in this run the counterfactual priced. The measured and
+   * counterfactual sums below count only these, so prose that splits the
+   * sums reads the runs where this is above 0.
+   */
+  covered: number;
   measuredTokens: number;
   counterfactualTokens: number;
   measuredMicros: bigint;
@@ -508,6 +514,7 @@ export class Groups {
       acc = {
         run,
         calls: 0,
+        covered: 0,
         measuredTokens: 0,
         counterfactualTokens: 0,
         measuredMicros: 0n,
@@ -524,6 +531,7 @@ export class Groups {
     const basis = measure.basis === undefined ? run.costBasis : measure.basis;
     if (measure.micros === null || basis === null) return;
     group.covered += 1;
+    acc.covered += 1;
     group.basis = foldBasis(group.basis, basis);
     acc.measuredTokens += measure.measuredTokens;
     acc.counterfactualTokens += measure.counterfactualTokens;

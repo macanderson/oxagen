@@ -181,6 +181,58 @@ describe("Providers › roster", () => {
     expect(screen.queryByTestId("tools-import-open")).not.toBeInTheDocument();
   });
 
+  it("prints each provider's weekly price as the server priced it, and says not recorded for one no listing names (#4537)", () => {
+    const github = nth(mcpServerListOutput().servers, 1, "GitHub server");
+    renderProviders({
+      servers: readOk(
+        mcpServerList({
+          servers: [
+            {
+              ...stripeServer(),
+              contextTokens: 12_000,
+              weeklyPrice: {
+                micros: "600000",
+                currency: "USD",
+                basis: "estimated",
+              },
+            },
+            { ...github, contextTokens: null, weeklyPrice: null },
+          ],
+        }),
+      ),
+    });
+    // The row prints the server's figure and multiplies nothing (ADR-060).
+    const stripe = screen.getByTestId("provider-weekly-mcs_01k5s1");
+    expect(stripe).toHaveTextContent("$0.60");
+    expect(stripe).toHaveTextContent(
+      providers("weeklyTokens", { tokens: "12,000" }),
+    );
+    expect(stripe).not.toHaveAttribute("data-state");
+    const unlisted = screen.getByTestId("provider-weekly-mcs_01k5s2");
+    expect(unlisted).toHaveAttribute("data-state", "absent");
+    expect(unlisted).toHaveTextContent(providers("weeklyAbsent"));
+    expect(unlisted).not.toHaveTextContent("$");
+  });
+
+  it("says not priced with the token count when the week has no priced call (negative)", () => {
+    renderProviders({
+      servers: readOk(
+        mcpServerList({
+          servers: [
+            { ...stripeServer(), contextTokens: 12_000, weeklyPrice: null },
+          ],
+        }),
+      ),
+    });
+    const stripe = screen.getByTestId("provider-weekly-mcs_01k5s1");
+    expect(stripe).toHaveAttribute("data-state", "unpriced");
+    expect(stripe).toHaveTextContent(providers("weeklyUnpriced"));
+    expect(stripe).toHaveTextContent(
+      providers("weeklyTokenCount", { tokens: "12,000" }),
+    );
+    expect(stripe).not.toHaveTextContent("$");
+  });
+
   it("says no provider is registered rather than drawing an empty table", () => {
     renderProviders({
       servers: readOk(mcpServerList({ servers: [] })),
