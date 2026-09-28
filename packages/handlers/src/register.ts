@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
@@ -149,6 +150,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
     ]);
     return runInTenantScope(scope, () =>
       refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
+    );
+  });
+  // The findings pass (detector 6, prompt habits) opens a steering record
+  // proposal for each instruction operators repeat. The proposal path lives
+  // in this package, which @oxagen/billing cannot import. It runs in the
+  // workspace's tenant scope, and is loaded on the first pass that opens one.
+  setInstructionProposalOpener(async (scope, proposals) => {
+    const [{ runInTenantScope }, open] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/instruction-proposals"),
+    ]);
+    await runInTenantScope(scope, () =>
+      open.openInstructionProposalsFor(scope, proposals),
     );
   });
   // The interjection timeout (#3941) lives there too, and is loaded on its
@@ -1691,6 +1705,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_waste",
     async () =>
       (await import("./spend.waste")).spendWasteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_operator_ranking",
+    async () =>
+      (await import("./spend.operator_ranking"))
+        .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_operator_pseudonyms",
+    async () =>
+      (await import("./spend.operator_pseudonyms.set"))
+        .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_clone_draft",

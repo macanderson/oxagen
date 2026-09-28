@@ -563,6 +563,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [export_cost_center_statement](spend.cost_center_statement.export.md) | [spend.cost_center_statement.export.ts](../../packages/oxagen/src/contracts/spend.cost_center_statement.export.ts) | api, mcp |
 | [export_statement](spend.statement.export.md) | [spend.statement.export.ts](../../packages/oxagen/src/contracts/spend.statement.export.ts) | api, mcp |
 | [get_finding_evidence](finding.evidence.get.md) | [finding.evidence.get.ts](../../packages/oxagen/src/contracts/finding.evidence.get.ts) | api, mcp |
+| [get_operator_ranking](spend.operator_ranking.md) | [spend.operator_ranking.ts](../../packages/oxagen/src/contracts/spend.operator_ranking.ts) | api |
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp |
@@ -570,6 +571,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |
 | [record_finding_fix](finding.fix.record.md) | [finding.fix.record.ts](../../packages/oxagen/src/contracts/finding.fix.record.ts) | api, mcp, agent |
 | [set_cost_center](cost_center.set.md) | [cost_center.set.ts](../../packages/oxagen/src/contracts/cost_center.set.ts) | api, mcp |
+| [set_operator_pseudonyms](spend.operator_pseudonyms.set.md) | [spend.operator_pseudonyms.set.ts](../../packages/oxagen/src/contracts/spend.operator_pseudonyms.set.ts) | api |
 
 ## System
 
