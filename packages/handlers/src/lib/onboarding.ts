@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
 import { PROVISIONAL_DAYS } from "@oxagen/database/schema";
 import type { DetectedRepository } from "@oxagen/oxagen/contracts/onboarding.state.get";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
