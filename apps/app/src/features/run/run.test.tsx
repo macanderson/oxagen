@@ -274,26 +274,75 @@ afterEach(() => {
 });
 
 describe("header", () => {
-  it("heads the page with the eyebrow and the run id as a mono h1", async () => {
+  // #4571: the session name is the heading. The id is a small mono line
+  // under it that copies, never the label a person reads first.
+  it("heads the page with the eyebrow and the session name, with the run id to copy below it", async () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     const h1 = screen.getByRole("heading", { level: 1 });
-    expect(h1).toHaveTextContent(/^tse_7k2m9q$/);
-    expect(h1.className).toContain("font-mono");
+    expect(h1).toHaveTextContent(/^Cut the 3.2 release branch$/);
+    expect(h1.className).not.toContain("font-mono");
+    const id = screen.getByTestId("run-id");
+    expect(id).toHaveTextContent(/^tse_7k2m9q$/);
+    expect(id).toHaveAccessibleName("Copy tse_7k2m9q");
+    expect(id.className).toContain("font-mono");
     expect(
       within(screen.getByTestId("run-header")).getByText("Run"),
     ).toBeTruthy();
     await expectNoAxe(container);
   });
 
-  it("titles the when line with the generated name and draws the model's summary as generated", async () => {
+  it("copies the run id and says so, and says the copy failed when the clipboard refuses (negative)", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    try {
+      await renderRun({
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+      });
+      const id = screen.getByTestId("run-id");
+      const status = () => {
+        const found = id.parentElement?.querySelector("[role=status]");
+        if (!found) throw new Error("no copy status beside the run id");
+        return found;
+      };
+      await act(async () => {
+        fireEvent.click(id);
+        await Promise.resolve();
+      });
+      expect(writeText).toHaveBeenCalledWith("tse_7k2m9q");
+      expect(status()).toHaveTextContent("Copied tse_7k2m9q");
+      writeText.mockImplementationOnce(() =>
+        Promise.reject(new Error("NotAllowedError")),
+      );
+      await act(async () => {
+        fireEvent.click(id);
+        await Promise.resolve();
+      });
+      expect(status()).toHaveTextContent(
+        "Copy failed. Select the text and copy it.",
+      );
+      // The id stays on screen to select by hand.
+      expect(id).toHaveTextContent("tse_7k2m9q");
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("heads the page with the generated name and draws the model's summary as generated", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Cut the 3.2 release branch",
+    );
+    expect(screen.getByTestId("run-when")).not.toHaveTextContent(
       "Cut the 3.2 release branch",
     );
     const summary = within(screen.getByTestId("run-summary"));
@@ -304,13 +353,67 @@ describe("header", () => {
     expect(summary.getByText("z-ai/glm-flash-latest")).toBeTruthy();
   });
 
+  // #4571: run.enrich stores at most 400 characters. A longer summary was
+  // written before the cap, and the panel cuts it to three sentences.
+  it("cuts a summary stored before the cap to its first three sentences", async () => {
+    const first = [
+      "Cut release/3.2 from main and bumped eleven package versions across the workspace.",
+      "Opened the release pull request and linked it to the milestone for the quarter.",
+      "Waited for the pipeline and read each failed job before retrying the unit lane.",
+    ];
+    const rest = [
+      "Fixed a stale lockfile entry that the coverage step read and pushed the fix to the branch.",
+      "Tagged the release candidate and posted the notes to the channel the maintainers read.",
+      "Closed the milestone and archived the planning board.",
+    ];
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            summary: {
+              text: [...first, ...rest].join(" "),
+              generatedAt: "2026-09-15T08:58:00.000Z",
+              model: "z-ai/glm-flash-latest",
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const shown = screen.getByTestId("generated-summary");
+    expect(shown).toHaveTextContent(new RegExp(`^${first.join(" ")}$`));
+    expect(shown).not.toHaveTextContent("stale lockfile");
+  });
+
+  it("shows a summary within the cap as stored, its fourth sentence included (negative)", async () => {
+    const text =
+      "Cut the branch. Opened the pull request. Read the failed jobs. The account is partial because 2 of 9 turns were read.";
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            summary: {
+              text,
+              generatedAt: "2026-09-15T08:58:00.000Z",
+              model: "z-ai/glm-flash-latest",
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("generated-summary")).toHaveTextContent(
+      new RegExp(`^${text}$`),
+    );
+  });
+
   it("titles a run with its task reference when no generated name exists", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
-      "ENG-4121 cut the 3.2 release",
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^ENG-4121 cut the 3.2 release$/,
     );
     expect(screen.queryByTestId("generated-summary")).toBeNull();
     expect(
@@ -407,12 +510,9 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
-      "Fix the billing proration",
-    );
-    expect(screen.getByTestId("run-when")).not.toHaveTextContent(
-      "A derived project label",
-    );
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1).toHaveTextContent(/^Fix the billing proration$/);
+    expect(h1).not.toHaveTextContent("A derived project label");
     expect(
       within(screen.getByTestId("run-summary")).getByRole("checkbox", {
         name: "Automatic run names and summaries",
@@ -464,8 +564,8 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    expect(screen.getByTestId("run-when")).toHaveTextContent(
-      "A derived project label",
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^A derived project label$/,
     );
   });
 
@@ -1579,7 +1679,7 @@ describe("header", () => {
     }
   });
 
-  it("leaves the title off the when line when the run has neither a name nor a task reference (negative)", async () => {
+  it("heads a run with neither a name nor a task reference as an untitled session, never its id (negative)", async () => {
     await renderRun({
       detail: ok(
         runDetail({
@@ -1588,6 +1688,10 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Untitled session$/,
+    );
+    expect(screen.getByTestId("run-id")).toHaveTextContent(/^tse_7k2m9q$/);
     expect(screen.getByTestId("run-when")).toHaveTextContent(/^started /);
     expect(screen.queryByTestId("run-task")).toBeNull();
   });

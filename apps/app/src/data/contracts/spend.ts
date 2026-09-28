@@ -10,9 +10,12 @@ import { Cost, Money } from "./money";
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-/** A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one). */
+/**
+ * A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one).
+ * Fields narrow `PublicId` with it rather than alias it, so INV-11
+ * (`src/test/arch/public-ids.test.ts`) still reads each one as a PublicId.
+ */
 const RUN_PUBLIC_ID = /^(arun|tse)_[0-9a-z]+$/;
-const RunPublicId = z.string().regex(RUN_PUBLIC_ID);
 
 /** An inclusive range of UTC days. */
 export const DayRange = z.object({ from: Day, to: Day });
@@ -153,8 +156,16 @@ export const SpendWaste = z.object({
       cause: z.enum(["cache_write_never_read"]),
       wasted: Cost,
       runs: Count,
-      /** The runs that prove the cause, largest waste first. */
-      provingRuns: z.array(RunPublicId),
+      /**
+       * The runs that prove the cause, largest waste first, each with the
+       * session name the Fleet board shows, or null when it has none (#4571).
+       */
+      provingRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          name: z.string().nullable(),
+        }),
+      ),
     }),
   ),
 });
@@ -307,6 +318,8 @@ export const SpendFindingEvidence = z.object({
   runs: z.array(
     z.object({
       runId: PublicId,
+      /** The session name the Fleet board shows, or null when the run has none (#4571). */
+      name: z.string().nullable(),
       startedAt: Instant,
       calls: Count,
       measuredTokens: Count,

@@ -215,13 +215,17 @@ describe("toSpendWaste", () => {
           },
           runs: 2,
           runIds: ["arun_01k5rn8f3j", "tse_01k5rn9t4"],
+          provingRuns: [
+            { runId: "arun_01k5rn8f3j", name: "Repair the login redirect" },
+            { runId: "tse_01k5rn9t4", name: null },
+          ],
         },
       ],
     });
     const view = SpendWaste.parse(toSpendWaste(out));
     expect(view.causes[0]?.provingRuns).toEqual([
-      "arun_01k5rn8f3j",
-      "tse_01k5rn9t4",
+      { runId: "arun_01k5rn8f3j", name: "Repair the login redirect" },
+      { runId: "tse_01k5rn9t4", name: null },
     ]);
     expect(view.wasted?.basis).toBe("gateway_observed");
   });
@@ -396,6 +400,7 @@ describe("toSpendFindings", () => {
         runs: [
           {
             runId: "arun_01k5rn8f3j",
+            name: "Repair the login redirect",
             startedAt: "2026-09-11T06:00:00.000Z",
             calls: 36,
             measuredTokens: 41200,
@@ -413,6 +418,7 @@ describe("toSpendFindings", () => {
     expect(view.runs).toEqual([
       {
         runId: "arun_01k5rn8f3j",
+        name: "Repair the login redirect",
         startedAt: "2026-09-11T06:00:00.000Z",
         calls: 36,
         measuredTokens: 41200,

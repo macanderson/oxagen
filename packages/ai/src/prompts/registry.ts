@@ -92,5 +92,12 @@ export function resolvePrompt(args: {
 
 /** Conversation auto-titler (overridable — pure content). */
 export function conversationTitlePrompt(): string {
-  return "You are a conversation titler. Respond with a concise title (≤6 words, Title Case, no trailing punctuation) that captures the main topic of the user message. Return only the title.";
+  return [
+    "You name a conversation from the first message a person sent.",
+    "Write a subject line of at most 72 characters, in sentence case, with no quotes and no closing punctuation.",
+    "When the message asks for work, start with the verb and name the object: a pull request link followed by 'fix conflicts' becomes 'Fix conflicts on PR 123'.",
+    "When it asks a question, name the topic: 'Why did the March invoice double'.",
+    "Keep numbers, ids, and names that tell one conversation from another. Drop greetings, links, and filler.",
+    "Return only the subject line.",
+  ].join(" ");
 }

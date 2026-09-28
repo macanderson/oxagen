@@ -9,6 +9,8 @@
 // hidden from every person who ever saved a choice. Anything in the cookie
 // this build does not know (a retired column, a size the select no longer
 // offers, a value from a future format) is ignored, and the default stands.
+// The Summary column retired in #4571, so a saved `summary` is dropped this
+// way and the rest of the choice still loads.
 //
 // Format: `v1|<page size>|<hidden column>~<hidden column>…`. Every character
 // is a cookie-octet (RFC 6265 §4.1.1), so the value needs no encoding.
@@ -16,7 +18,6 @@
 /** Every column the table can show, in the order it draws them. */
 export const FLEET_COLUMNS = [
   "run",
-  "summary",
   "agent",
   "operator",
   "status",
@@ -32,8 +33,9 @@ export const FLEET_COLUMNS = [
 export type FleetColumn = (typeof FLEET_COLUMNS)[number];
 
 /**
- * The column that names the run. It opens the run and carries its id, so a
- * table without it would list rows nobody can tell apart; it cannot be hidden.
+ * The column that names the run: its session name, with its id under it. It
+ * opens the run, so a table without it would list rows nobody can tell apart;
+ * it cannot be hidden.
  */
 export const FIXED_COLUMN: FleetColumn = "run";
 
