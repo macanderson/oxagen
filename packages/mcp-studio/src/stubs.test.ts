@@ -6,7 +6,6 @@ import { graphqlSender, grpcSender, httpSender, mcpSender } from "./execute";
 import { importGrpc } from "./grpc";
 import { lint, type LintContext, type ServerFolder } from "./lint";
 import { NotBuiltError } from "./not-built";
-import { importOpenApi } from "./openapi";
 
 // The stubs never read their arguments, so an empty object stands in for each.
 const stub = <T>(): T => ({}) as T;
@@ -16,7 +15,6 @@ const syncStubs: Array<[string, () => unknown]> = [
 ];
 
 const asyncStubs: Array<[string, () => Promise<unknown>]> = [
-  ["openapi", () => importOpenApi(stub())],
   ["grpc", () => importGrpc(stub())],
 ];
 

@@ -25,7 +25,7 @@ None (`{}`).
 | Field | Type | Description |
 |---|---|---|
 | `step` | enum | `organization`, `wrap`, `run`, `unlocked` |
-| `workspace` | object or null | `{ id: wrk_…, slug }`, the gate's workspace (the first one); null before an organization exists |
+| `workspace` | object or null | `{ id: wrk_…, slug }`, the gate's workspace (the first one); null until the organization's first workspace exists |
 | `firstFrameAt` | string or null | RFC 3339; the first frame's arrival, null until then and for an organization that predates the gate |
 | `firstRunId` | string or null | the run the first frame opened (`tse_…`) |
 | `provisional` | object or null | `{ until, mainRepoBoundAt, detectedRepository }`; open while `mainRepoBoundAt` is null; null before an organization exists and for an organization that predates the gate. `detectedRepository` is `{ provider: "github", owner, name }` from the git remote the enrolling host reported, or null |

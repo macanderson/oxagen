@@ -598,7 +598,17 @@
           "title": "Coaching",
           "badge": "waits on the token classes",
           "notBacked": "Coaching is read off the token classes, and the record does not split input by class yet. Nothing is suggested until it does.",
-          "all": "All coaching for this workspace →"
+          "all": "All coaching for this workspace →",
+          "ttl": {
+            "term": "Cache TTL",
+            "setOneHour": "Set the cache TTL to 1 hour.",
+            "setFiveMinutes": "Set the cache TTL to 5 minutes.",
+            "keepOneHour": "Keep the 1-hour cache TTL.",
+            "keepFiveMinutes": "Keep the 5-minute cache TTL.",
+            "mixed": "Its cache writes use both TTLs now.",
+            "open": "Open the finding",
+            "rest": "Other coaching is read off the token classes, and the record does not split input by class yet."
+          }
         },
         "composition": {
           "title": "Composition",
@@ -894,8 +904,9 @@
           "empty": "No run of this agent is on the newest page of runs. It has {count} in the last 30 days, and every one of them is in the audit record.",
           "emptyNoRollup": "No run of this agent is on the newest page of runs, and the 30-day rollup holds none.",
           "audit": "Open the audit record",
+          "untitled": "Untitled session",
           "columns": {
-            "run": "Run",
+            "run": "Session name",
             "status": "Status",
             "tokens": "Tokens",
             "cost": "Cost",

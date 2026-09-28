@@ -377,6 +377,14 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
   },
+  // The Run page's Summary cuts a summary stored before the cap with the
+  // same pure clip run.enrich applies when it writes one (#4571).
+  "src/features/run/stats.tsx": {
+    "@oxagen/oxagen/tacho/session-subject": [
+      "clipSummary",
+      "SUMMARY_MAX_CHARS",
+    ],
+  },
   // ⌘K's pause dialog caps its reason at the limit pause_workspace_runs enforces.
   "src/features/shell/pause-workspace-dialog.tsx": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
