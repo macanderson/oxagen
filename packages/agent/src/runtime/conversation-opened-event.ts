@@ -26,11 +26,24 @@ const logger = pino({
   base: { pkg: "agent.conversation-opened-event" },
 });
 
-/** The event the conversation titler names a new conversation on. */
+/**
+ * The event the conversation titler names a new conversation on. `id` is the
+ * dedup key the sender sets (`conversationOpenedEventId`).
+ */
 export type ConversationOpenedEvent = {
   name: "chat/conversation.opened";
   data: { conversationId: string; orgId: string; workspaceId: string };
+  id?: string;
 };
+
+/**
+ * One key per conversation. A conversation opens once, so the event bus drops
+ * a repeat send inside its dedup window (24 hours on Inngest), and a retried
+ * turn does not pay for a second title call.
+ */
+export function conversationOpenedEventId(conversationId: string): string {
+  return `chat/conversation.opened:${conversationId}`;
+}
 
 export type ConversationOpenedSender = (
   event: ConversationOpenedEvent,
@@ -61,7 +74,10 @@ export async function sendConversationOpened(
     return;
   }
   try {
-    await sender(event);
+    await sender({
+      ...event,
+      id: conversationOpenedEventId(event.data.conversationId),
+    });
   } catch (err) {
     logger.error(
       { err, conversationId: event.data.conversationId },

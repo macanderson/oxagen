@@ -384,10 +384,13 @@ export function accountName(name: string): string | null {
 /**
  * The stored summary: the model's first sentences, then the notes. The notes
  * are kept whole and the model's text gives way, so the stored field never
- * passes `SUMMARY_MAX_CHARS` and never loses the note that says the account
- * is partial (#4571).
+ * passes `SUMMARY_MAX_CHARS` or `SUMMARY_MAX_SENTENCES` and never loses the
+ * note that says the account is partial (#4571). Each note is one sentence
+ * and takes one of the three, but the model always keeps its first.
  */
 export function accountSummary(summary: string, notes: string): string {
   const room = SUMMARY_MAX_CHARS - Array.from(notes).length;
-  return `${clipSummary(summary, SUMMARY_MAX_SENTENCES, room) ?? ""}${notes}`;
+  const noteSentences = notes.match(/[.?!]+(?=\s|$)/gu)?.length ?? 0;
+  const kept = Math.max(1, SUMMARY_MAX_SENTENCES - noteSentences);
+  return `${clipSummary(summary, kept, room) ?? ""}${notes}`;
 }

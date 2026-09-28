@@ -10,7 +10,7 @@ vi.mock("./event-client", () => ({ eventClient: { send } }));
 await import("./register");
 
 describe("the handler registrations", () => {
-  it("send a new conversation's opened event through the event client", async () => {
+  it("send a new conversation's opened event through the event client, keyed by conversation", async () => {
     const event: ConversationOpenedEvent = {
       name: "chat/conversation.opened",
       data: {
@@ -20,6 +20,9 @@ describe("the handler registrations", () => {
       },
     };
     await sendConversationOpened(event);
-    expect(send).toHaveBeenCalledWith(event);
+    expect(send).toHaveBeenCalledWith({
+      ...event,
+      id: "chat/conversation.opened:0192d4a8-7c1e-7a00-8000-0000000c0a01",
+    });
   });
 });

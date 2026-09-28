@@ -67,6 +67,21 @@ describe("accountSummary", () => {
     expect(points(summary)).toBeLessThanOrEqual(400);
     expect(summary.endsWith(notes)).toBe(true);
     expect(summary).toContain("Sentence 1");
+    expect(summary).not.toContain("Sentence 2");
+  });
+
+  it("counts each note toward the three-sentence cap", () => {
+    expect(accountSummary("One. Two. Three.", partialEvidenceNote(2))).toBe(
+      "One. Two. Evidence is partial: 2 recorded bodies were unavailable.",
+    );
+    expect(
+      accountSummary(
+        "One. Two. Three.",
+        partialEvidenceNote(2) + ENRICHMENT_BUDGET_NOTE,
+      ),
+    ).toBe(
+      `One. Evidence is partial: 2 recorded bodies were unavailable.${ENRICHMENT_BUDGET_NOTE}`,
+    );
   });
 });
 

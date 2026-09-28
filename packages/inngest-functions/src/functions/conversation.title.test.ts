@@ -18,6 +18,10 @@ const state = vi.hoisted(() => ({
   /** Whether the guarded update still matches a prompt-titled row. */
   stillPromptTitled: true,
   writes: [] as Record<string, unknown>[],
+  /** How many tenant scopes are open around the current call. */
+  scopeDepth: 0,
+  /** Whether each funding resolution ran inside a tenant scope. */
+  fundingInScope: [] as boolean[],
 }));
 
 vi.mock("../logger", () => ({
@@ -31,13 +35,23 @@ vi.mock("@oxagen/ai", () => ({
   conversationTitlePrompt: () => "Name the conversation.",
   generateObjectFor: state.generate,
   loadWorkspacePromptConfigSafe: async () => null,
-  resolveModelFundingSource: async () => ({ kind: "platform" }),
+  resolveModelFundingSource: async () => {
+    state.fundingInScope.push(state.scopeDepth > 0);
+    return { kind: "platform" };
+  },
   resolvePrompt: ({ baseline }: { baseline: string }) => baseline,
   selectModelFromFunding: () => ({ model: "fast-model", fundedBy: "platform" }),
 }));
 vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: state.gate }));
 vi.mock("@oxagen/tenancy", () => ({
-  runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
+  runInTenantScope: async (_scope: unknown, fn: () => unknown) => {
+    state.scopeDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      state.scopeDepth -= 1;
+    }
+  },
 }));
 vi.mock("@oxagen/database", async (original) => {
   const actual = await original<typeof import("@oxagen/database")>();
@@ -123,13 +137,15 @@ describe("conversation.title", () => {
       "https://github.com/macanderson/oxagen/pull/123 fix conflicts";
     state.stillPromptTitled = true;
     state.writes = [];
+    state.scopeDepth = 0;
+    state.fundingInScope = [];
     steps.length = 0;
   });
 
   it("names one conversation at a time, on the event a new conversation sends", () => {
     expect(config?.id).toBe("conversation.title");
     expect(config?.concurrency).toEqual({
-      limit: 5,
+      limit: 1,
       key: "event.data.conversationId",
     });
     expect(trigger?.event).toBe("chat/conversation.opened");
@@ -156,6 +172,18 @@ describe("conversation.title", () => {
       }),
     );
     expect(steps).toEqual(["read-question", "name-conversation", "write-title"]);
+  });
+
+  it("resolves funding and admits the call inside the tenant scope", async () => {
+    let gateInScope = false;
+    state.gate.mockImplementation(async () => {
+      gateInScope = state.scopeDepth > 0;
+      return { ok: true };
+    });
+    state.generate.mockResolvedValue({ object: { title: "Fix conflicts" } });
+    await run(EVENT);
+    expect(state.fundingInScope).toEqual([true]);
+    expect(gateInScope).toBe(true);
   });
 
   it("sends the model at most 500 characters of the question", async () => {

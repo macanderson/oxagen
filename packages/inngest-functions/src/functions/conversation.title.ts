@@ -110,19 +110,27 @@ async function readQuestion(
 /**
  * One fast-tier call that names the conversation. It runs outside any
  * database transaction, and only after the credit gate admits it.
+ *
+ * The funding resolver and the credit gate read inside the tenant scope. An
+ * Inngest step runs on its own, so both reads meet a cold cache: outside the
+ * scope the credential read throws `TenantScopeError` and the gate's read
+ * fails open. The scope opens no transaction.
  */
 async function nameQuestion(
   scope: TenantScope,
   question: string,
 ): Promise<{ title: string | null; outcome: ConversationTitleOutcome }> {
-  const funding = await resolveModelFundingSource(scope.orgId);
-  const selection = selectModelFromFunding(scope.orgId, funding, {
-    tier: "fast",
+  const selection = await runInTenantScope(scope, async () => {
+    const funding = await resolveModelFundingSource(scope.orgId);
+    const chosen = selectModelFromFunding(scope.orgId, funding, {
+      tier: "fast",
+    });
+    const gate = await evaluateTurnCreditGate(scope.orgId, {
+      fundedBy: chosen.fundedBy,
+    });
+    return gate.ok ? chosen : null;
   });
-  const gate = await evaluateTurnCreditGate(scope.orgId, {
-    fundedBy: selection.fundedBy,
-  });
-  if (!gate.ok) return { title: null, outcome: "credit_refused" };
+  if (selection === null) return { title: null, outcome: "credit_refused" };
   const config = await runInTenantScope(scope, () =>
     loadWorkspacePromptConfigSafe(scope.workspaceId),
   );
@@ -199,12 +207,16 @@ async function writeTitle(
  * still `prompt`, so a rename that lands while the model is thinking wins.
  * The model call runs in its own step, outside any transaction, so a retried
  * write does not pay for a second call.
+ *
+ * One run per conversation at a time. The sender keys the event by
+ * conversation, so the bus drops a repeat send. A repeat that still arrives
+ * waits for the first run's write, then finds no prompt title and stops.
  */
 export const [conversationTitle] = createFunction(
   {
     id: "conversation.title",
     retries: 1,
-    concurrency: { limit: 5, key: "event.data.conversationId" },
+    concurrency: { limit: 1, key: "event.data.conversationId" },
   },
   { event: CONVERSATION_OPENED_EVENT },
   async ({ event, step }) => {
