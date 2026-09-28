@@ -15,6 +15,7 @@ import { type FetchLike, type OAuthClient, revokeToken } from "./oauth";
 import {
   type CredentialScope,
   type CredentialStore,
+  operatorTokenWorkspaces,
   postgresCredentialStore,
   type StoredOperatorToken,
 } from "./store";
@@ -118,4 +119,46 @@ export function revokeDepartedOperator(
 ): Promise<number> {
   const store = postgresCredentialStore({ orgId: input.orgId, workspaceId: input.workspaceId });
   return revokeOperatorTokens(input.userId, { ...deps, store });
+}
+
+export interface DepartedMemberDeps extends Omit<RevokeDeps, "store"> {
+  /** The workspaces where the person holds a token. Defaults to operatorTokenWorkspaces. */
+  workspacesOf?: (orgId: string, userId: string) => Promise<string[]>;
+}
+
+/** What revokeDepartedMember did. */
+export interface DepartedMemberRevocation {
+  /** Tokens revoked and deleted, across every workspace. */
+  revoked: number;
+  /** Workspaces whose tokens could not be revoked, with the error. */
+  failed: { workspaceId: string; error: string }[];
+}
+
+/**
+ * The call for the paths that remove a person from an organization
+ * (org.member.remove.ts and scim.request.ts): revoke every server token the
+ * person connected in any of its workspaces. Run it after the removal
+ * commits, so a removal that rolls back keeps the tokens. A workspace that
+ * fails does not stop the others. The credential source also revokes a
+ * departed operator's tokens on its next resolve, so a failure here delays
+ * the revocation and does not skip it.
+ */
+export async function revokeDepartedMember(
+  input: { orgId: string; userId: string },
+  deps: DepartedMemberDeps = {},
+): Promise<DepartedMemberRevocation> {
+  const { workspacesOf = operatorTokenWorkspaces, ...revokeDeps } = deps;
+  const workspaceIds = await workspacesOf(input.orgId, input.userId);
+  let revoked = 0;
+  const failed: DepartedMemberRevocation["failed"] = [];
+  for (const workspaceId of workspaceIds) {
+    try {
+      revoked += await revokeDepartedOperator({ orgId: input.orgId, workspaceId, userId: input.userId }, revokeDeps);
+    } catch (error) {
+      // No error on this path carries a token: the stores hold ciphertext,
+      // and an OAuth error names the server's origin and its error code.
+      failed.push({ workspaceId, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { revoked, failed };
 }

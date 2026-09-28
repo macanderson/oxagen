@@ -13,7 +13,9 @@
 //      sign-in and SCIM deprovisioning, @oxagen/database/member-lifecycle):
 //      role assignments at every scope, the principal, the org_users and
 //      workspace_users rows, and the target's CLI session keys.
-//   6. Emit org.member_removed security event (fire-and-forget).
+//   6. After the commit, revoke every MCP server token the target connected
+//      in this org's workspaces (mcp-studio/credentials/revoke.ts).
+//   7. Emit org.member_removed security event (fire-and-forget).
 //
 // WHY withSystemDb AND NOT withTenantDb: removal is an organization-level act
 // and the app invokes it with the org-only workspace sentinel as ctx.workspaceId
@@ -57,6 +59,7 @@ import { removeOrgMemberInTx } from "@oxagen/database/member-lifecycle";
 import { and, eq, isNull, count } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
+import { revokeDepartedMember } from "./mcp-studio/credentials/revoke";
 
 // System org role names that carry Owner privileges.
 const OWNER_ROLE_NAME = "Owner";
@@ -163,7 +166,7 @@ export const orgMemberRemoveHandler: CapabilityHandler<
   // HandlerError to the surface. Every statement fences on ctx.orgId — see the
   // header for why that fence, not RLS, is the isolation here.
   // tenancy: every statement is filtered by orgId = ctx.orgId after the verified Owner or Admin membership check above.
-  await withSystemDb(async (tx) => {
+  const removedUserId = await withSystemDb(async (tx) => {
     // ── Resolve the target's user id ────────────────────────────────────────────
     // The console names a member by public id (`usr_…`) and never by uuid, which
     // org_users.user_id is; lib/org-member.ts resolves one form into the other,
@@ -311,7 +314,30 @@ export const orgMemberRemoveHandler: CapabilityHandler<
       },
       "org.member.remove: membership, roles and CLI session keys removed",
     );
+    return target;
   });
+
+  // ── Revoke the person's MCP server tokens (after commit) ──────────────────
+  // An operator's OAuth grant with an MCP server outlives the membership
+  // unless the authorization server is told (mcp-studio-spec, Authentication).
+  // This runs after the transaction commits, so a removal that rolled back
+  // keeps the tokens. A failure must not fail the capability, because the
+  // removal already happened, and the credential source revokes a departed
+  // operator's tokens on its next resolve.
+  try {
+    const revocation = await revokeDepartedMember({ orgId: ctx.orgId, userId: removedUserId });
+    if (revocation.failed.length > 0) {
+      logger.warn(
+        { orgId: ctx.orgId, revoked: revocation.revoked, failed: revocation.failed },
+        "org.member.remove: some MCP server tokens were not revoked",
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      { orgId: ctx.orgId, error: err instanceof Error ? err.message : String(err) },
+      "org.member.remove: MCP server tokens were not revoked",
+    );
+  }
 
   // ── Emit audit event (fire-and-forget; must not fail the capability) ──────────
   emitSecurityEvent({

@@ -106,3 +106,51 @@ stop the org from noticing that its steering corpus has drifted.
 - **Publish the shared logic as an npm package.** Rejected: it adds a release
   cycle and a registry dependency between
   "fix the check" and "the check is fixed", to avoid a sparse checkout.
+
+## Amendment: the DoD collector reads subheadings (#3678, 2026-09-28)
+
+`dodStatus` in `tools/scripts/scr-dod-check.mjs` used to end a DoD section at
+the next heading of any level. An issue that grouped its boxes under `###`
+subheadings inside `## Definition of done` read as having no boxes, so the
+gate failed every close with "nothing in it is a checkbox". #3536 was the
+case: three subheadings and fourteen boxes, all invisible to the check.
+
+The collector now ends a heading's section at the next heading of the same or
+a higher level, so boxes under any `###` or deeper subheading count, ticked
+or not. A bold `**Definition of done**` label ranks below every heading, so
+any heading still ends it. A section with no task-list item anywhere beneath
+it still gets the same "nothing in it is a checkbox" message and remedy.
+
+`dod-check.yml`, `dod-close-guard.yml` and `dod-recheck.yml` all import this
+one module, so they share the change. A consumer repository needs no re-pin:
+every caller fetches the checker module from oxagen's `main`, even while its
+workflow steps are pinned (ADR-045, "What it does not do").
+`scr-dod-check.test.ts` holds #3536's body verbatim as its witness.
+
+#3618 cannot re-run its `dod / dod` check against #3536. It merged on
+2026-09-21 with the link demoted to `Refs #3536`, and a `Refs` link does not
+gate the issue. The witness test above stands in for that re-run.
+
+## Amendment: the closing-keyword check is shared, not copied (#3680, 2026-09-28)
+
+`tools/scripts/check-closing-keywords.mjs` fails a pull request in two cases.
+The first is a negation in front of a closing keyword in the body or a commit
+message ("This PR does not close #2972"): GitHub ignores the negation and
+closes the issue, which is how #3533 closed P0 #2972. The second is a body
+that names an issue only with `Refs` while a commit message still says
+`Closes`, `Fixes` or `Resolves` for it, because a squash merge closes the
+issue from the commit message.
+
+The check runs inside the reusable `dod-check.yml`, in the same job as the
+DoD verdict, and it shares `CLOSING_PATTERN`, `NEGATION_WORDS` and
+`withoutNonProse` with `scr-dod-check.mjs`. It reads the whole sentence before
+a closing keyword for a negation, where the DoD verdict reads only the few words
+in the same clause, so "does not, by itself, close #12" fails the check. It
+follows this record's decision:
+one implementation in oxagen, reached by every repository that calls
+`dod-check.yml`, and floating on `main` with the DoD checker. No repository
+carries a copy. A sibling repository that grew its own closing-keyword script
+before its stub called `dod-check.yml` can retire that script in its own pull
+request. `check-closing-keywords.test.ts` runs #3533's body verbatim, and it
+reads `dod-check.yml` to confirm the `pull_request` trigger has no `paths`
+filter and fires on `edited`.
