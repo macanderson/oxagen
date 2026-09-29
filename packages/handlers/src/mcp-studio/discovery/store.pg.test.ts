@@ -69,6 +69,7 @@ describe("readWithheldTools over a given store", () => {
     workspaceId: randomUUID(),
   };
   const row: DiscoveryRow = {
+    id: randomUUID(),
     server: "github",
     mcpServerId: null,
     status: "succeeded",
@@ -213,6 +214,7 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       const scope = newScope();
       await store.request(scope, "github", "manual", USER, T0);
       expect(await store.read(scope, "github")).toEqual({
+        id: expect.any(String),
         server: "github",
         mcpServerId: null,
         status: "queued",
@@ -241,6 +243,19 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
         offered: [],
         withheldUpstream: [],
       });
+    });
+
+    it("keeps one id for the server across requests, runs, and finishes", async () => {
+      const scope = newScope();
+      await store.request(scope, "github", "manual", USER, T0);
+      const first = await store.read(scope, "github");
+      await store.begin(scope, "github", "manual", USER, T1);
+      await store.finish(scope, "github", finished(), T2);
+      await store.request(scope, "github", "schedule", null, T3);
+
+      expect(first?.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect((await store.read(scope, "github"))?.id).toBe(first?.id);
+      expect(await rawRow(scope, "github")).toMatchObject({ id: first?.id });
     });
 
     it("request stores every trigger the type names", async () => {
@@ -422,6 +437,7 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
         T1,
       );
       expect(await store.read(scope, "github")).toEqual({
+        id: expect.any(String),
         server: "github",
         mcpServerId: null,
         status: "succeeded",

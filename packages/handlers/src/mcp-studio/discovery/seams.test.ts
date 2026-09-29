@@ -13,6 +13,7 @@ import type {
   ServerSource,
   Transport,
 } from "@oxagen/mcp-studio";
+import { importGrpc } from "@oxagen/mcp-studio";
 import {
   deliveryId,
   digestMismatch,
@@ -34,7 +35,6 @@ import {
   hostSteeringFiles,
   installDiscoverySeams,
   noCredentials,
-  noGrpcDiscovery,
   noLocalReporter,
   noToolsPullRequestOpener,
   resetDiscoverySeams,
@@ -43,6 +43,7 @@ import {
   type DefinitionGitHub,
   type DefinitionLocation,
   type GatewayLocalReporterDeps,
+  type GrpcImporter,
   type ToolsPullRequestOpener,
 } from "./seams";
 import { DiscoveryRefused, type DiscoveryScope } from "./types";
@@ -512,24 +513,6 @@ describe("gatewayLocalReporter", () => {
   });
 });
 
-// ── gRPC ─────────────────────────────────────────────────────────────────────
-
-describe("noGrpcDiscovery", () => {
-  it("refuses every gRPC server", async () => {
-    const refusal = await refusalOf(
-      noGrpcDiscovery.discover({
-        scope: SCOPE,
-        server: "billing",
-        signal: signal(),
-      }),
-    );
-    expect(refusal).toMatchObject({
-      code: "unsupported",
-      message: "gRPC discovery is not available yet.",
-    });
-  });
-});
-
 // ── Definitions in a linked repository ───────────────────────────────────────
 
 const DEFINITION = "openapi: 3.1.0\n";
@@ -835,9 +818,13 @@ describe("discoverySeams", () => {
   it("gives the refusing defaults for the lanes not yet installed", async () => {
     const seams = await discoverySeams();
     expect(seams.local).toBe(noLocalReporter);
-    expect(seams.grpc).toBe(noGrpcDiscovery);
     expect(seams.opener).toBe(noToolsPullRequestOpener);
     expect(typeof seams.credentials(SCOPE).resolve).toBe("function");
+  });
+
+  it("reads gRPC definitions with lane M3's importer", async () => {
+    const seams = await discoverySeams();
+    expect(seams.grpc).toBe(importGrpc);
   });
 
   it("keeps one cloud Transport and one set of defaults", async () => {
@@ -898,19 +885,20 @@ describe("discoverySeams", () => {
     const seams = await discoverySeams();
     expect(seams.opener).toBe(opener);
     expect(seams.local).toBe(noLocalReporter);
-    expect(seams.grpc).toBe(noGrpcDiscovery);
+    expect(seams.grpc).toBe(importGrpc);
   });
 
   it("merges a second install with the first", async () => {
     const early = new Date("2026-09-28T08:00:00.000Z");
     const late = new Date("2026-09-28T09:00:00.000Z");
+    const grpc: GrpcImporter = () => Promise.reject(new Error("no gRPC"));
     installDiscoverySeams({ now: () => early, local: noLocalReporter });
-    installDiscoverySeams({ grpc: noGrpcDiscovery, now: () => late });
+    installDiscoverySeams({ grpc, now: () => late });
 
     const seams = await discoverySeams();
     expect(seams.now()).toBe(late);
     expect(seams.local).toBe(noLocalReporter);
-    expect(seams.grpc).toBe(noGrpcDiscovery);
+    expect(seams.grpc).toBe(grpc);
   });
 
   it("drops every installed seam on reset", async () => {

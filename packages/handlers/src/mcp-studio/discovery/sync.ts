@@ -59,7 +59,13 @@ import {
   type SteeringCheckout,
   type ToolsPullRequestFile,
 } from "./seams";
-import { discover, NeedsDigest, snapshotsOf, type Discovered } from "./sources";
+import {
+  discover,
+  NeedsDigest,
+  servedDescriptorSet,
+  snapshotsOf,
+  type Discovered,
+} from "./sources";
 import {
   postgresDiscoveryStore,
   type DiscoveryFinish,
@@ -125,7 +131,7 @@ interface Run {
 }
 
 /** The three files of a server folder, parsed. */
-interface ServerFiles {
+export interface ServerFiles {
   parsed: McpServer;
   serverText: string;
   tools: McpTools;
@@ -202,7 +208,12 @@ function parsedFile<T>(path: string, result: ReadResult<T>): T {
   return result.value;
 }
 
-async function readServerFiles(
+/**
+ * server.toml, tools.toml, and tools.lock.json for one server at the
+ * checkout's commit, parsed. Refuses a folder that lacks one or does not
+ * parse.
+ */
+export async function readServerFiles(
   checkout: SteeringCheckout,
   server: string,
 ): Promise<ServerFiles> {
@@ -357,15 +368,22 @@ export function moveSourceVersion(
 
 // ── Compiling ────────────────────────────────────────────────────────────────
 
-/** What the gateway serves now, compiled from the production branch. */
-function compileServed(server: string, files: ServerFiles): ManifestServer {
+/**
+ * What the gateway serves now, compiled from the production branch. A gRPC
+ * server passes the descriptor set its proto/ files give.
+ */
+function compileServed(
+  server: string,
+  files: ServerFiles,
+  descriptorSet: Uint8Array | undefined,
+): ManifestServer {
   try {
     const compiled = compile({
       server: files.parsed,
       tools: files.tools,
       upstream: lockedUpstreamTools(files.lock),
       security_schemes: lockedSecuritySchemes(files.lock),
-      descriptor_set: undefined,
+      descriptor_set: descriptorSet,
     });
     return toManifestServer(compiled, files.lock);
   } catch (error) {
@@ -588,12 +606,13 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     return finished(kept, "skipped");
   }
 
-  // compile() refuses a gRPC server without its descriptor set, and only
-  // lane M3's reflection reads one, so gRPC stops at its seam.
-  if (files.parsed.source.type === "grpc") {
-    await seams.grpc.discover({ scope, server, signal: run.signal });
-  }
-  const served = compileServed(server, files);
+  // compile() refuses a gRPC server without its descriptor set, which the
+  // folder's proto/ files give through lane M3's importer.
+  const servedDescriptors =
+    files.parsed.source.type === "grpc"
+      ? await servedDescriptorSet(checkout, server, seams.grpc)
+      : undefined;
+  const served = compileServed(server, files, servedDescriptors);
 
   const discovered = await discover({
     scope,

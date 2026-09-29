@@ -38,6 +38,11 @@ export type DiscoveryStatus = "queued" | "running" | "succeeded" | "failed";
 
 /** One server's discovery state. */
 export interface DiscoveryRow {
+  /**
+   * The row's id. The upsert never sets it, so it stays the same across
+   * every discovery of the server and serves as the discovery id.
+   */
+  id: string;
   server: string;
   mcpServerId: string | null;
   status: DiscoveryStatus;
@@ -226,6 +231,7 @@ function toRow(row: Row): DiscoveryRow {
       ? { number: row.prNumber, url: row.prUrl, branch: row.prBranch }
       : null;
   return {
+    id: row.id,
     server: row.server,
     mcpServerId: row.mcpServerId,
     status: row.status as DiscoveryStatus,

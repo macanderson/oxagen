@@ -37,7 +37,6 @@ import {
 import { REDACTED } from "./scrub";
 import {
   noCredentials,
-  noGrpcDiscovery,
   noToolsPullRequestOpener,
   type DiscoveryCredentials,
   type DiscoverySeams,
@@ -301,6 +300,7 @@ function stripeTree(
 /** A row in mcp.server_discoveries after a finished run. */
 function row(overrides: Partial<DiscoveryRow> = {}): DiscoveryRow {
   return {
+    id: "0191d0a0-0000-7000-8000-00000000d15c",
     server: "stripe",
     mcpServerId: "srv-1",
     status: "succeeded",
@@ -599,7 +599,7 @@ function harness(options: HarnessOptions = {}) {
     credentials: options.credentials ?? creds.credentials,
     transport: () => wire.transport,
     local: { report },
-    grpc: noGrpcDiscovery,
+    grpc: () => Promise.reject(new Error("This case imports no .proto files.")),
     definitions: {
       read: () => Promise.reject(new Error("This case reads no definition.")),
     },

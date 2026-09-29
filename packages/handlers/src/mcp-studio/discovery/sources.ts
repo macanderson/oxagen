@@ -7,7 +7,8 @@
 // - local, and registry with machines: the local gateway's report.
 // - openapi and graphql: the definition from a linked repository, a url, the
 //   folder, or an introspection query at the first environment's endpoint.
-// - grpc: lane M3's reflection and descriptor reads, through its seam.
+// - grpc: the .proto files from a linked repository, a url, or the folder's
+//   proto/, through lane M3's importer. Reflection is refused for now.
 //
 // Each returns the tools the source offers and the lock source a new lock
 // records. None of them writes anything.
@@ -41,7 +42,7 @@ import {
   type McpListResult,
 } from "./mcp-client";
 import type { Scrubber } from "./scrub";
-import type { DiscoverySeams, SteeringCheckout } from "./seams";
+import type { DiscoverySeams, GrpcImporter, SteeringCheckout } from "./seams";
 import type { SnapshotDescriptor } from "./store";
 import {
   DiscoveryRefused,
@@ -56,6 +57,7 @@ type DefinitionSource = Extract<
   ServerSource,
   { type: "openapi" | "graphql" | "grpc" }
 >;
+type GrpcSource = Extract<ServerSource, { type: "grpc" }>;
 
 /** What one discovery knows before it reads the source. */
 export interface SourceContext {
@@ -474,6 +476,28 @@ function required(
   return value;
 }
 
+/** The Accept header a definition url is fetched with. */
+const URL_ACCEPT: Record<DefinitionSource["type"], string> = {
+  openapi:
+    "application/yaml, application/json;q=0.9, text/plain;q=0.5, */*;q=0.1",
+  graphql: "application/graphql, text/plain;q=0.9, */*;q=0.1",
+  grpc: "text/plain, */*;q=0.1",
+};
+
+/** The name import reads a fetched definition by. */
+function urlEntry(type: DefinitionSource["type"], pathname: string): string {
+  switch (type) {
+    case "graphql":
+      return "schema.graphql";
+    case "grpc": {
+      const name = basename(pathname);
+      return /^[A-Za-z0-9_.-]+\.proto$/.test(name) ? name : "service.proto";
+    }
+    case "openapi":
+      return /\.json$/i.test(pathname) ? "openapi.json" : "openapi.yaml";
+  }
+}
+
 async function readDefinition(
   ctx: SourceContext,
   source: DefinitionSource,
@@ -500,25 +524,17 @@ async function readDefinition(
     }
     case "url": {
       const url = required(ctx, source.url, "url");
-      const graphql = source.type === "graphql";
       const text = await fetchText({
         url,
         network: source.network ?? "cloud",
         transport: ctx.seams.transport(),
         signal: ctx.signal,
-        accept: graphql
-          ? "application/graphql, text/plain;q=0.9, */*;q=0.1"
-          : "application/yaml, application/json;q=0.9, text/plain;q=0.5, */*;q=0.1",
+        accept: URL_ACCEPT[source.type],
         maxBytes: DEFINITION_BYTES_MAX,
       });
-      const json = /\.json$/i.test(new URL(url).pathname);
       return {
         from: "url",
-        entry: graphql
-          ? "schema.graphql"
-          : json
-            ? "openapi.json"
-            : "openapi.yaml",
+        entry: urlEntry(source.type, new URL(url).pathname),
         text,
         location: { url },
         origin: `${url} changed at ${utc(ctx.seams.now())}`,
@@ -600,17 +616,158 @@ async function introspect(
   return { result, origin: `introspection changed at ${utc(ctx.seams.now())}` };
 }
 
+// ── gRPC ─────────────────────────────────────────────────────────────────────
+
+/** Where a gRPC server's .proto files live in its folder. */
+const PROTO_DIR = "proto";
+
+/**
+ * Every file under the server's proto/ at the checkout's commit, by path
+ * relative to the folder, as import wrote them. Sorted by path.
+ */
+export async function folderProtoFiles(
+  checkout: SteeringCheckout,
+  server: string,
+): Promise<ImportedFile[]> {
+  const folder = serverFolderPath(server);
+  const prefix = `${folder}/`;
+  const paths = (await checkout.list(`${folder}/${PROTO_DIR}`))
+    .filter((path) => path.startsWith(`${prefix}${PROTO_DIR}/`))
+    .sort();
+  const files = await Promise.all(
+    paths.map(async (path) => {
+      const text = await checkout.read(path);
+      return text === null ? null : { path: path.slice(prefix.length), text };
+    }),
+  );
+  return files.filter((file): file is ImportedFile => file !== null);
+}
+
+/**
+ * The descriptor set compile needs to serve a gRPC server, read from the
+ * .proto files the production branch holds under the folder's proto/.
+ */
+export async function servedDescriptorSet(
+  checkout: SteeringCheckout,
+  server: string,
+  grpc: GrpcImporter,
+): Promise<Uint8Array> {
+  const folder = serverFolderPath(server);
+  const files = await folderProtoFiles(checkout, server);
+  if (files.length === 0) {
+    throw new DiscoveryRefused(
+      "server_file",
+      `${folder}/${PROTO_DIR} holds no files, and a gRPC server needs its .proto files there. Import the server in Studio to write them.`,
+    );
+  }
+  let result: ImportResult;
+  try {
+    result = await grpc({ files });
+  } catch (error) {
+    throw new DiscoveryRefused(
+      "server_file",
+      `${folder}/${PROTO_DIR} does not import on the production branch: ${messageOf(error)}`,
+    );
+  }
+  if (result.descriptor_set === undefined) {
+    throw new DiscoveryRefused(
+      "server_file",
+      `${folder}/${PROTO_DIR} gave no descriptor set on the production branch.`,
+    );
+  }
+  return result.descriptor_set;
+}
+
+/**
+ * A gRPC server. An uploaded definition is the folder's proto/ as the
+ * production branch holds it. A linked repository or a url gives one .proto
+ * file, which is imported with the rest of the folder's proto/ and which the
+ * steering PR writes over the folder's copy of that file.
+ * Server reflection needs a gRPC client discovery does not have yet, so it
+ * is refused.
+ */
+async function discoverGrpc(
+  ctx: SourceContext,
+  source: GrpcSource,
+): Promise<Discovered> {
+  const folder = serverFolderPath(ctx.server);
+  let files: ImportedFile[];
+  let written: ImportedFile[];
+  let from: DefinitionText["from"];
+  let location: DefinitionText["location"];
+  let origin: string;
+  switch (source.from) {
+    case "reflection":
+      throw new DiscoveryRefused(
+        "unsupported",
+        `${ctx.server} reads its gRPC definition by server reflection, and discovery cannot call reflection yet. Import the server again in Studio to pick up a change.`,
+      );
+    case "upload": {
+      files = await folderProtoFiles(ctx.checkout, ctx.server);
+      if (files.length === 0) {
+        throw new DiscoveryRefused(
+          "source",
+          `${folder}/${PROTO_DIR} holds no .proto files.`,
+        );
+      }
+      written = [];
+      from = "upload";
+      location = {};
+      origin = `${PROTO_DIR}/ changed at ${ctx.checkout.commit.slice(0, 7)}`;
+      break;
+    }
+    default: {
+      const read = await readDefinition(ctx, source);
+      // Write over the folder's copy of the file when import put it deeper
+      // under proto/, so the folder never holds the package twice. The
+      // folder's other files go to the importer too: the read file may
+      // import them, and import hashed the whole bundle.
+      const held = await folderProtoFiles(ctx.checkout, ctx.server);
+      const path =
+        held.find((file) => basename(file.path) === read.entry)?.path ??
+        `${PROTO_DIR}/${read.entry}`;
+      const file: ImportedFile = { path, text: read.text };
+      files = [...held.filter((other) => other.path !== path), file].sort(
+        (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+      );
+      written = [file];
+      from = read.from;
+      location = read.location;
+      origin = read.origin;
+    }
+  }
+  const result = await imported(() => ctx.seams.grpc({ files }));
+  if (result.descriptor_set === undefined) {
+    throw new DiscoveryRefused(
+      "source",
+      "The gRPC definition imported with no descriptor set.",
+    );
+  }
+  return {
+    offered: result.tools,
+    lockSource: {
+      type: "grpc",
+      from,
+      document_hash: result.document_hash,
+      ...location,
+    },
+    securitySchemes: {},
+    descriptorSet: result.descriptor_set,
+    version: undefined,
+    latestVersion: undefined,
+    files: written,
+    machine: null,
+    origin,
+  };
+}
+
+// ── Definition discovery ─────────────────────────────────────────────────────
+
 async function discoverDefinition(
   ctx: SourceContext,
   source: DefinitionSource,
 ): Promise<Discovered> {
-  if (source.type === "grpc") {
-    return ctx.seams.grpc.discover({
-      scope: ctx.scope,
-      server: ctx.server,
-      signal: ctx.signal,
-    });
-  }
+  if (source.type === "grpc") return discoverGrpc(ctx, source);
   const base = {
     descriptorSet: undefined,
     version: undefined,
