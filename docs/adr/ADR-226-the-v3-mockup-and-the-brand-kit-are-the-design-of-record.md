@@ -49,20 +49,27 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-macanderson/oxagen-roadmap @ ce2f80de220813875cc7a922669c7c3943f812ff, path mockups/
+macanderson/oxagen-roadmap @ 41cb720584b4829f213eb5910f634452ea21f53a, path mockups/
 ```
 
-This is the last `main` commit that touched `mockups/` (roadmap #267,
-2026-09-29 19:06 UTC). Every other file that sends an agent to the mockup
+This is the last `main` commit that touched `mockups/` (roadmap #273,
+2026-09-29 23:11 UTC). Every other file that sends an agent to the mockup
 points here instead of repeating the SHA.
 
 Amended 2026-09-29: the pin moves from roadmap #261 (`8a4c0a45`) to roadmap
 #267. The new commit fills light-theme popups at 55% over a 16px blur, as
 ADR-221 §3 now states. The dark theme keeps 70% over 40px.
 
+Amended 2026-09-29 (later): the pin moves from roadmap #267 (`ce2f80de`) to
+roadmap #273 (`41cb7205`). The new commit folds the Tools area into Agents:
+one Agents header over five tabs (Agents, Tool servers, Policies, Runtimes,
+Off switches), with Connect an agent as its one primary action, and a server
+page at `agents/<server>`. It also carries the Agent work phase pages of
+roadmap #269 and #270.
+
 To read a file at the pin, run
-`git -C ../oxagen-roadmap show ce2f80de220813875cc7a922669c7c3943f812ff:mockups/README.md`,
-or open `https://github.com/macanderson/oxagen-roadmap/tree/ce2f80de220813875cc7a922669c7c3943f812ff/mockups`.
+`git -C ../oxagen-roadmap show 41cb720584b4829f213eb5910f634452ea21f53a:mockups/README.md`,
+or open `https://github.com/macanderson/oxagen-roadmap/tree/41cb720584b4829f213eb5910f634452ea21f53a/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit
