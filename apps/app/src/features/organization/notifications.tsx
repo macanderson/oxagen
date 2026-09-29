@@ -68,19 +68,23 @@ export function NotificationsTab({
   );
 }
 
-/** The header badge: connected, not connected, or no Slack app here. */
+/**
+ * The header badge: connected, not connected, or no Slack app here. A stored
+ * connection reads connected even on a deployment that lost its Slack app
+ * settings, because posting needs only the stored bot token.
+ */
 function SlackStatus({ connection }: { connection: SlackConnection }) {
   const t = useTranslations("organization.notifications.status");
-  if (!connection.configured)
-    return (
-      <Badge tone="quiet" dot={false} data-slack="unavailable">
-        {t("unavailable")}
-      </Badge>
-    );
   if (connection.connected)
     return (
       <Badge tone="allowed" data-slack="connected">
         {t("connected")}
+      </Badge>
+    );
+  if (!connection.configured)
+    return (
+      <Badge tone="quiet" dot={false} data-slack="unavailable">
+        {t("unavailable")}
       </Badge>
     );
   return (
@@ -98,15 +102,15 @@ function Connection({
   connection: SlackConnection;
 }) {
   const t = useTranslations("organization.notifications");
-  // A deployment with no Slack app credentials has nothing to connect to, so
-  // it offers no Connect Slack.
-  if (!connection.configured)
-    return (
-      <p className={emptyLine} data-testid="slack-unavailable">
-        {t("unavailable")}
-      </p>
-    );
-  if (!connection.connected)
+  if (!connection.connected) {
+    // A deployment with no Slack app credentials cannot start a connection,
+    // so it offers no Connect Slack.
+    if (!connection.configured)
+      return (
+        <p className={emptyLine} data-testid="slack-unavailable">
+          {t("unavailable")}
+        </p>
+      );
     return (
       <div className="flex flex-col gap-3">
         <p className={emptyLine} data-testid="slack-not-connected">
@@ -115,6 +119,11 @@ function Connection({
         <NotificationsControls org={org} connected={false} channel={null} />
       </div>
     );
+  }
+  // A stored connection stays manageable whatever `configured` says. The
+  // channel picker, the post, and Disconnect use the stored bot token, not
+  // the Slack app's OAuth settings, so an owner can still see where notices
+  // go, change the channel, and stop them.
   const { channel, lastFailure } = connection;
   return (
     <div className="flex flex-col gap-3.5">

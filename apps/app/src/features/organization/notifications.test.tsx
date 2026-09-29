@@ -3,7 +3,8 @@
 // repo health notices post through, and the writes on it.
 //
 // The cases the tab turns on:
-//   - a deployment with no Slack app offers no Connect Slack;
+//   - a deployment with no Slack app offers no Connect Slack, but a stored
+//     connection on it still shows its channel and keeps Disconnect;
 //   - the connection shows the workspace, the channel, when it was made, and
 //     the last post Slack refused, with what to do about it;
 //   - the outcome the OAuth callback put on the URL is one fixed sentence;
@@ -98,6 +99,40 @@ describe("NotificationsTab", () => {
     );
     expect(screen.queryByTestId("slack-connect")).toBeNull();
     await expectNoAxe(container);
+  });
+
+  it("keeps a stored connection manageable on a deployment that lost its Slack app", async () => {
+    const { container } = renderTab(readOk({ ...CONNECTED, configured: false }));
+    expect(screen.getByText("connected").closest("[data-slack]")).toHaveAttribute(
+      "data-slack",
+      "connected",
+    );
+    expect(screen.queryByTestId("slack-unavailable")).toBeNull();
+    expect(screen.getByTestId("slack-facts")).toHaveTextContent("Acme");
+    expect(screen.getByTestId("slack-channel")).toHaveTextContent(
+      "#eng-alerts",
+    );
+    expect(
+      screen.getByRole("button", { name: "Change channel" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(screen.queryByTestId("slack-connect")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("disconnects a stored connection on a deployment that lost its Slack app", async () => {
+    mocks.disconnectSlack.mockResolvedValue({ ok: true, value: null });
+    renderTab(readOk({ ...CONNECTED, configured: false }));
+    await userEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Disconnect" }),
+    );
+    expect(mocks.disconnectSlack).toHaveBeenCalledWith("acme");
+    await waitFor(() => {
+      expect(mocks.router.replace).toHaveBeenCalledWith(
+        "/acme?tab=notifications",
+      );
+    });
   });
 
   it("offers Connect Slack when no workspace is connected", async () => {

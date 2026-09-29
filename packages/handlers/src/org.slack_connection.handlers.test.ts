@@ -372,6 +372,19 @@ describe("get_slack_connection", () => {
     expect(mocks.open).not.toHaveBeenCalled();
     expect(JSON.stringify(view)).not.toContain("ciphertext");
   });
+
+  it("returns a stored connection on a deployment that lost its Slack app settings", async () => {
+    // The app panel keys its manage controls on `connected`, so the view must
+    // carry the connection whatever `configured` says (#4719 review).
+    mocks.load.mockResolvedValue(connection());
+    vi.stubEnv("SLACK_APP_CLIENT_SECRET", "");
+    await expect(get({}, CTX)).resolves.toMatchObject({
+      configured: false,
+      connected: true,
+      teamName: "Acme",
+      channel: { id: "C0000001", name: "alerts", isPrivate: false },
+    });
+  });
 });
 
 describe("list_slack_channels", () => {
@@ -552,5 +565,17 @@ describe("delete_slack_connection", () => {
       detail: { removed: 1, revokedAtSlack: 0 },
     });
     expect(mocks.log.warn).toHaveBeenCalled();
+  });
+
+  it("disconnects and revokes on a deployment that lost its Slack app settings", async () => {
+    vi.stubEnv("SLACK_APP_CLIENT_ID", "");
+    vi.stubEnv("SLACK_APP_CLIENT_SECRET", "");
+    mocks.remove.mockResolvedValue({ removedTokenEnvelopes: [ENVELOPE] });
+    await expect(disconnect({}, CTX)).resolves.toMatchObject({
+      configured: false,
+      connected: false,
+    });
+    expect(mocks.remove).toHaveBeenCalledWith(CTX.orgId);
+    expect(mocks.revoke).toHaveBeenCalledWith("xoxb-stored-token");
   });
 });
