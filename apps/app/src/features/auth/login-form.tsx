@@ -29,7 +29,7 @@ import { type FieldErrors, LoginSchema, fieldErrors } from "./schemas";
 import { Field, PasswordField } from "@/ui/field";
 import { OutcomePanel, SubmitButton } from "@/ui/form-feedback";
 import { linkText, mono } from "@/ui/control-styles";
-import { ToastStack, useToasts } from "@/ui/toast";
+import { toast } from "@/ui/toast";
 import { formText } from "./form-text";
 import { AuthAlert, AuthPanel } from "./ui/auth-card";
 import { OAuthButtons } from "./ui/oauth-buttons";
@@ -75,7 +75,6 @@ export function LoginForm({
   );
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState("");
-  const { toasts, toast } = useToasts();
 
   // A notice another screen left (a password just set) shows once as a toast,
   // after hydration, the way the design's `toast()` does (reset-password.md,
@@ -89,7 +88,7 @@ export function LoginForm({
     if (takeNotice() === "passwordSet")
       toast(t("login.passwordSet"), "allowed");
     takeSignedIn();
-  }, [t, toast]);
+  }, [t]);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -236,7 +235,6 @@ export function LoginForm({
       </AuthPanel>
       {ssoOpen ? null : sso}
       {footer}
-      <ToastStack toasts={toasts} testId="login-toasts" />
     </>
   );
 }

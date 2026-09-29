@@ -35,8 +35,6 @@ function renderBar(props: Partial<Parameters<typeof RunsListBar>[0]> = {}): {
   const base = {
     list: list(),
     onList,
-    pageSize: 25 as const,
-    onPageSize: vi.fn(),
     pullRequests: "any" as const,
     onPullRequests: vi.fn(),
     onColumns: vi.fn(),
@@ -71,8 +69,6 @@ describe("RunsListBar", () => {
         <RunsListBar
           list={list()}
           onList={vi.fn()}
-          pageSize={25}
-          onPageSize={vi.fn()}
           pullRequests="any"
           onPullRequests={vi.fn()}
           onColumns={vi.fn()}

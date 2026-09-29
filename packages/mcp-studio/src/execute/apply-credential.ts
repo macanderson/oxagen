@@ -5,7 +5,9 @@
 // this, so a recorded exchange never holds the secret. A bearer token or a
 // basic pair goes in Authorization. An API key goes in the header, query
 // parameter, or cookie that the server's scheme names. A relay credential
-// travels beside the request, and the relay adds it itself.
+// travels beside the request, and the relay adds it itself. A mutual TLS
+// server takes only a relay's client certificate, which the relay presents in
+// its TLS handshake.
 //
 // A secret leaves the vault only inside a ResolvedCredential, which lives for
 // one call. Nothing here logs it, and no error message quotes it.
@@ -35,12 +37,30 @@ function checked(value: string, what: string): string {
   return value;
 }
 
+/**
+ * Why the credential and a mutual TLS scheme do not fit, or undefined when
+ * they do. A mutual TLS server takes only a client certificate that a relay
+ * holds, and a relay's client certificate fits only a mutual TLS server. The
+ * HTTP and gRPC placements both ask this first.
+ */
+export function mutualTlsMismatch(auth: ManifestAuth | null, credential: SendCredential): string | undefined {
+  const server = auth?.apply.type === "mutual_tls";
+  const certificate = credential.type === "relay" && credential.credential.scheme === "mutual_tls";
+  if (server === certificate) return undefined;
+  if (server) {
+    return "A mutual TLS server needs a client certificate that a relay holds, and this call's credential is not one.";
+  }
+  return `A relay's client certificate fits only a mutual TLS server, and this server's scheme is ${auth?.apply.type ?? "none"}.`;
+}
+
 /** Place the credential by its type and the server's scheme. Throws BuildError when the two do not fit. */
 export function placeCredential(
   auth: ManifestAuth | null,
   credential: SendCredential,
   network: string,
 ): PlacedCredential {
+  const mismatch = mutualTlsMismatch(auth, credential);
+  if (mismatch !== undefined) throw new BuildError("Invalid credential", mismatch);
   switch (credential.type) {
     case "none":
       return { headers: [], query: [], cookies: [], relay_credential: undefined };

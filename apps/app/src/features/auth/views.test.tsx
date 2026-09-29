@@ -7,6 +7,7 @@ import { isValidElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
+import { Toaster } from "@/ui/toast";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -391,10 +392,19 @@ describe("SignedInNotice", () => {
     sessionStorage.clear();
   });
 
+  // The notice sends its line to the app's toaster, which the root layout
+  // mounts before the page. Each test mounts one ahead of the notice the same
+  // way, so the toaster is listening when the notice's effect runs.
+
   it("names the signed-in person on the page a sign-in just landed on", async () => {
     session.getAuthUser.mockResolvedValue(user);
     sessionStorage.setItem("oxagen.auth.signedIn", "1");
-    await renderServer(await SignedInNotice());
+    await renderServer(
+      <>
+        <Toaster />
+        {await SignedInNotice()}
+      </>,
+    );
     expect(
       await screen.findByText(sentence("Marcus Bell")),
     ).toBeInTheDocument();
@@ -403,7 +413,12 @@ describe("SignedInNotice", () => {
   it("an account with a blank name is named by its address", async () => {
     session.getAuthUser.mockResolvedValue({ ...user, name: "  " });
     sessionStorage.setItem("oxagen.auth.signedIn", "1");
-    await renderServer(await SignedInNotice());
+    await renderServer(
+      <>
+        <Toaster />
+        {await SignedInNotice()}
+      </>,
+    );
     expect(
       await screen.findByText(sentence("marcus.bell@acme.example")),
     ).toBeInTheDocument();
