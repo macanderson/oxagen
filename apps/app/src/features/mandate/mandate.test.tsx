@@ -681,9 +681,9 @@ describe("Mandate › the ledger's search, facet and pager", () => {
     const empty = document.querySelector<HTMLElement>(
       '[data-state="filtered-empty"]',
     );
-    expect(empty).not.toBeNull();
+    if (!empty) throw new Error("the search draws its empty state");
     expect(
-      within(empty as HTMLElement).getByRole("link", {
+      within(empty).getByRole("link", {
         name: "Clear the search",
       }),
     ).toHaveAttribute("href", `${BASE}?rows=50`);

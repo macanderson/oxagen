@@ -570,7 +570,7 @@ describe("Pricing › The price book", () => {
     expect(panel.querySelector("[data-rows-pager]")).toBeNull();
     expect(within(panel).queryByRole("combobox", { name: "Rows" })).toBeNull();
     expect(
-      within(panel).queryByRole("navigation", { name: "Pages" }),
+      within(panel).queryByRole("navigation", { name: "Price book pages" }),
     ).toBeNull();
   });
 
@@ -595,7 +595,16 @@ describe("Pricing › The price book", () => {
       "[data-rows-pager]",
     );
     expect(pagers).toHaveLength(2);
-    const later = within(scheduled).getByRole("navigation", { name: "Pages" });
+    // Each pager names its own table, so a landmark list tells them apart.
+    expect(
+      screen.getAllByRole("navigation", { name: "Price book pages" }),
+    ).toHaveLength(1);
+    expect(
+      within(scheduled).queryByRole("navigation", { name: "Price book pages" }),
+    ).toBeNull();
+    const later = within(scheduled).getByRole("navigation", {
+      name: "Scheduled rate pages",
+    });
     expect(later.closest("[data-rows-pager]")).toHaveTextContent("1–1 of 1");
 
     await userEvent
