@@ -743,11 +743,14 @@ describe("compile resolves auth", () => {
     expect(compiled.auth).toStrictEqual({ mode: "service", scheme: "acme_key", apply: scheme });
   });
 
-  /** An OpenAPI server whose auth.scheme names a mutual TLS scheme, with these environments. */
-  function mutualTls(environments: Record<string, Record<string, unknown>>): CompileInput {
+  /** An OpenAPI server whose auth.scheme names a mutual TLS scheme, with these environments and this mode. */
+  function mutualTls(
+    environments: Record<string, Record<string, unknown>>,
+    mode: "service" | "operator-oauth" = "service",
+  ): CompileInput {
     const openapi = server({
       ...definitionServer("openapi"),
-      auth: { mode: "service", scheme: "mtls", credential: "oxagen:credential/acme" },
+      auth: { mode, scheme: "mtls", credential: "oxagen:credential/acme" },
       environments,
     });
     return input({ server: openapi, tools: none, upstream: [], security_schemes: { mtls: { type: "mutual_tls" } } });
@@ -777,6 +780,45 @@ describe("compile resolves auth", () => {
         field: "auth.scheme",
         message:
           "auth.scheme mtls is mutual TLS, which only a relay that holds the client certificate can present. Environment live routes over cloud. Set each environment's network to relay:<name>.",
+      },
+    ]);
+  });
+
+  it("refuses a mutual TLS scheme when a relay environment's url is http, and names that environment", () => {
+    expect(
+      issues(
+        mutualTls({
+          test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+          live: { url: "http://api.acme.internal/v1", network: "relay:acme-west" },
+        }),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.scheme",
+        message:
+          "auth.scheme mtls is mutual TLS, which presents the client certificate in a TLS handshake. Environment live has no https url. Set each environment's url to an https:// endpoint.",
+      },
+    ]);
+  });
+
+  it("refuses a mutual TLS scheme in operator-oauth mode, even when every route is a relay", () => {
+    expect(
+      issues(
+        mutualTls(
+          {
+            test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+            live: { url: "https://api.acme.example/v1", network: "relay:acme-west" },
+          },
+          "operator-oauth",
+        ),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.mode",
+        message:
+          "auth.mode operator-oauth cannot present mutual TLS scheme mtls, because the operator's OAuth token carries no client certificate. Set auth.mode to service.",
       },
     ]);
   });

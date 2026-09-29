@@ -9,9 +9,10 @@
 // imported tool behind them. It assigns no version: lock() does, and
 // toManifestServer() joins the two.
 //
-// compile accepts a mutual_tls scheme only when every environment routes
-// through a relay. The relay holds the client certificate and presents it in
-// the TLS handshake, so a cloud or local route could never send it.
+// compile accepts a mutual_tls scheme only in service mode, and only when every
+// environment routes through a relay to an https:// url. The relay holds the
+// client certificate and presents it in the TLS handshake, so a cloud or local
+// route, a cleartext url, or an operator's OAuth token could never send it.
 import { toolName } from "@oxagen/oxagen/steering-repo/names";
 import { DEFAULT_SERVER_DEFINITION_BUDGET } from "@oxagen/oxagen/steering-repo/tokens";
 import { effectiveAnnotations } from "../contract/classification";
@@ -548,14 +549,35 @@ function resolveAuth(
     }
   }
   if (apply.type === "mutual_tls") {
+    const before = issues.length;
+    // The operator's own credential is an OAuth token, which carries no client
+    // certificate. Only a service credential names the relay that holds one.
+    if (mode !== "service") {
+      issues.push({
+        tool: undefined,
+        field: "auth.mode",
+        message: `auth.mode ${mode} cannot present mutual TLS scheme ${scheme}, because the operator's OAuth token carries no client certificate. Set auth.mode to service.`,
+      });
+    }
     // Only a relay holds the client certificate, so every route must be one.
     const offRelay = Object.entries(environments).filter(([, env]) => !env.network.startsWith("relay:"));
     if (offRelay.length > 0) {
       const routes = offRelay.map(([name, env]) => `Environment ${name} routes over ${env.network}.`).join(" ");
-      return fail(
+      fail(
         `auth.scheme ${scheme} is mutual TLS, which only a relay that holds the client certificate can present. ${routes} Set each environment's network to relay:<name>.`,
       );
     }
+    // The relay presents the certificate in a TLS handshake, which a cleartext
+    // http:// endpoint never starts. The relay refuses such an envelope, so
+    // compile refuses it first. The message names the environment, not its url.
+    const cleartext = Object.entries(environments).filter(([, env]) => !env.url?.startsWith("https://"));
+    if (cleartext.length > 0) {
+      const names = cleartext.map(([name]) => `Environment ${name} has no https url.`).join(" ");
+      fail(
+        `auth.scheme ${scheme} is mutual TLS, which presents the client certificate in a TLS handshake. ${names} Set each environment's url to an https:// endpoint.`,
+      );
+    }
+    if (issues.length > before) return null;
   }
   return { mode, scheme, apply };
 }
