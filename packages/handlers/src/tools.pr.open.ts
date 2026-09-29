@@ -12,7 +12,9 @@
 //      branch that already exists is refused, so two writers never share one.
 //   3. Write every file in one commit on that commit. Null content deletes.
 //   4. Open the PR into the production branch with OXAGEN_PR_LABELS. When
-//      the PR does not open, delete the branch, so a retry can create it.
+//      the create call fails, look for an open PR on the branch. Adopt one
+//      if it exists. Delete the branch only when none does, so a retry can
+//      create it. Keep the branch when the lookup fails too.
 //   5. Run the steering PR checks on the new head and report the result as
 //      the "Oxagen steering" check. A report that fails is logged. The PR is
 //      open, and the missing required check blocks its merge.
@@ -252,6 +254,55 @@ export function createToolsPullRequestOpener(
     }
   }
 
+  /**
+   * The PR on `branch` after its create call failed, or null once the branch
+   * is dealt with. GitHub and GitLab can open the PR and still fail the call,
+   * such as when the answer times out. Deleting that PR's branch would close
+   * it on GitHub and strand it on GitLab, so the branch goes only when the
+   * lookup finds no PR. When the lookup fails too, the branch stays: a retry
+   * is refused as tools_branch_exists, which is safer than a closed PR.
+   */
+  async function afterFailedOpen(
+    host: ToolsPullRequestHost,
+    repo: SteeringRepository,
+    scope: ToolsPullRequestScope,
+    branch: string,
+    base: string,
+  ): Promise<{ number: number; htmlUrl: string } | null> {
+    const context = {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      branch,
+    };
+    let open: Awaited<ReturnType<ToolsPullRequestHost["findOpenPullRequest"]>>;
+    try {
+      open = await host.findOpenPullRequest(repo, { head: branch, base });
+    } catch (lookupErr) {
+      logger.error(
+        { ...context, err: lookupErr },
+        "tools.pr.open: the branch was kept because the PR lookup failed after the PR did not open",
+      );
+      return null;
+    }
+    if (open !== null) {
+      logger.warn(
+        { ...context, number: open.number },
+        "tools.pr.open: the PR opened although its create call failed, so the opener adopted it",
+      );
+      return { number: open.number, htmlUrl: open.htmlUrl };
+    }
+    // A branch with no PR would refuse every retry as tools_branch_exists.
+    try {
+      await host.deleteBranch(repo, branch);
+    } catch (cleanupErr) {
+      logger.error(
+        { ...context, err: cleanupErr },
+        "tools.pr.open: the branch of a PR that did not open was not deleted",
+      );
+    }
+    return null;
+  }
+
   return {
     async open(scope, args) {
       const refusal = toolsPullRequestRefusal(args);
@@ -305,22 +356,15 @@ export function createToolsPullRequestOpener(
             labels: OXAGEN_PR_LABELS,
           });
         } catch (err) {
-          // A branch with no PR would refuse every retry as
-          // tools_branch_exists. Delete it, then report the first failure.
-          try {
-            await host.deleteBranch(repo, args.branch);
-          } catch (cleanupErr) {
-            logger.error(
-              {
-                err: cleanupErr,
-                orgId: scope.orgId,
-                workspaceId: scope.workspaceId,
-                branch: args.branch,
-              },
-              "tools.pr.open: the branch of a PR that did not open was not deleted",
-            );
-          }
-          throw err;
+          const adopted = await afterFailedOpen(
+            host,
+            repo,
+            scope,
+            args.branch,
+            production,
+          );
+          if (adopted === null) throw err;
+          pr = adopted;
         }
         await reportChecks(host, repo, scope, sha, base);
         return {
