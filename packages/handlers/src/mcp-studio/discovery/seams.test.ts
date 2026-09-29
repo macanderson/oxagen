@@ -165,13 +165,31 @@ describe("hostSteeringFiles", () => {
     expect(mocks.steering.listFiles).toHaveBeenCalledWith(REPO, HEAD, "mcp");
   });
 
-  it("answers only whether a steering PR is open and whether it merged", async () => {
+  it("answers whether a steering PR is open, whether it merged, and its branch head", async () => {
     const checkout = await files.open(SCOPE);
     await expect(checkout.pullRequest(42)).resolves.toEqual({
       open: false,
       merged: true,
+      headSha: HEAD,
     });
     expect(mocks.steering.getPullRequest).toHaveBeenCalledWith(REPO, 42);
+  });
+
+  it("answers a null branch head when the host does not know it", async () => {
+    mocks.steering.getPullRequest.mockResolvedValueOnce({
+      baseRef: "production",
+      headSha: null,
+      open: true,
+      merged: false,
+      mergeCommitSha: null,
+      mergedAt: null,
+    });
+    const checkout = await files.open(SCOPE);
+    await expect(checkout.pullRequest(7)).resolves.toEqual({
+      open: true,
+      merged: false,
+      headSha: null,
+    });
   });
 
   it("refuses a steering repository with no production branch", async () => {

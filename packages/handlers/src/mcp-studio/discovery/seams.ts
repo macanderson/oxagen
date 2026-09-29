@@ -49,8 +49,16 @@ export interface SteeringCheckout {
   read(path: string): Promise<string | null>;
   /** Every file path under dir at the commit. */
   list(dir: string): Promise<string[]>;
-  /** Whether a steering PR is still open, and whether it merged. */
-  pullRequest(number: number): Promise<{ open: boolean; merged: boolean }>;
+  /**
+   * Whether a steering PR is still open, whether it merged, and the head of
+   * its branch. The head is what a commit onto an open PR is pinned to, so
+   * the opener refuses one whose branch moved since the files were built. A
+   * host that cannot tell the head answers null, and the commit goes
+   * unpinned, as it did before the head was read.
+   */
+  pullRequest(
+    number: number,
+  ): Promise<{ open: boolean; merged: boolean; headSha: string | null }>;
 }
 
 export interface SteeringFiles {
@@ -75,7 +83,7 @@ export function hostSteeringFiles(host: SteeringHost): SteeringFiles {
         list: (dir) => host.listFiles(repo, commit, dir),
         async pullRequest(number) {
           const pr = await host.getPullRequest(repo, number);
-          return { open: pr.open, merged: pr.merged };
+          return { open: pr.open, merged: pr.merged, headSha: pr.headSha };
         },
       };
     },
@@ -434,6 +442,14 @@ export interface ToolsPullRequestInput {
   files: ToolsPullRequestFile[];
   /** The open steering PR to update in place. */
   existing?: { number: number };
+  /**
+   * The commit the caller read to build `files`. A new branch starts here
+   * rather than at the production head, so a commit that merged in between is
+   * not reverted by a whole-file write. With `existing`, this is the head of
+   * that PR's branch, and the opener refuses the call when the branch has
+   * moved since.
+   */
+  at?: string;
 }
 
 export interface ToolsPullRequest {

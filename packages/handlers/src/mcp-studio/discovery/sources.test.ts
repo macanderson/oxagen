@@ -340,7 +340,8 @@ function setup(options: Setup) {
     commit: COMMIT,
     read,
     list: () => Promise.resolve([...files.keys()]),
-    pullRequest: () => Promise.resolve({ open: true, merged: false }),
+    pullRequest: () =>
+      Promise.resolve({ open: true, merged: false, headSha: null }),
   };
   const seams: DiscoverySeams = {
     steering: { open: () => Promise.resolve(checkout) },
