@@ -1,17 +1,19 @@
 "use client";
 // The four list controls every list in the mockup carries (engine.js
-// `ltBar`, `ltPager`, `ltCards`): a search box, a sort or a column filter, a
-// rows-per-page select, and a pager. The state is local to the list: a search
-// narrows what is on screen and changes nothing it reads.
+// `ltBar`, `ltPager`, `ltCards`): a search box, a sort or a column filter, and
+// under the rows a pager that holds the rows-per-page select (ui/pagination).
+// The state is local to the list: a search narrows what is on screen and
+// changes nothing it reads.
 //
 // Strings arrive as props, already translated by the caller, so the kit
 // carries no catalogue of its own for a control whose words differ per list
 // ("Search records", "Search this list").
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
+import { RowsPager } from "@/ui/pagination";
 
-/** The mockup's rows-per-page choices. */
-const PER_PAGE = [10, 25, 50] as const;
+/** The rows-per-page choices, as shadcn's pagination example offers them. */
+const PER_PAGE = [10, 25, 50, 100] as const;
+const DEFAULT_PER_PAGE = 25;
 
 export type ListSort<T> = {
   value: string;
@@ -58,7 +60,7 @@ export function useList<T>(
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState(options.sorts?.[0]?.value ?? "");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [perPage, setPerPage] = useState<number>(PER_PAGE[0]);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
   const [page, setPage] = useState(1);
   const { text, sorts, filters: facets } = options;
 
@@ -119,7 +121,7 @@ export function useList<T>(
 const select =
   "min-h-9 rounded-md border border-input-border bg-input-bg px-2 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-input-ring sm:text-[13px]";
 
-/** `.lt-bar`: search, then the filters or the sort, then Rows. */
+/** `.lt-bar`: search, then the filters or the sort. */
 export function ListBar<T>({
   list,
   searchLabel,
@@ -127,7 +129,6 @@ export function ListBar<T>({
   sorts,
   filters,
   allLabel,
-  rowsLabel,
 }: {
   list: ListState<T>;
   searchLabel: string;
@@ -137,7 +138,6 @@ export function ListBar<T>({
   filters?: readonly ListFilter<T>[];
   /** Formats a filter's empty option: "All · Role". */
   allLabel?: (column: string) => string;
-  rowsLabel: string;
 }) {
   const id = useId();
   return (
@@ -192,80 +192,56 @@ export function ListBar<T>({
           </select>
         </label>
       ) : null}
-      <label htmlFor={`${id}-rows`} className="flex items-center gap-2">
-        {rowsLabel}
-        <select
-          id={`${id}-rows`}
-          value={list.perPage}
-          onChange={(event) => {
-            list.setPerPage(Number(event.target.value));
-          }}
-          className={select}
-        >
-          {PER_PAGE.map((count) => (
-            <option key={count} value={count}>
-              {count}
-            </option>
-          ))}
-        </select>
-      </label>
     </div>
   );
 }
 
-/** `.lt-pager`: the range on the left, previous, the page, next on the right. */
+/**
+ * `.lt-pager`: Rows per page and the range on the left, previous and next on
+ * the right. Changing the rows goes back to page 1 (`useList`).
+ */
 export function ListPager<T>({
   list,
+  label,
+  rowsLabel,
   range,
   previousLabel,
   nextLabel,
 }: {
   list: ListState<T>;
+  /** The pager's name: "Pages". */
+  label: string;
+  /** "Rows per page". */
+  rowsLabel: string;
   /** "1–3 of 3", formatted by the caller. */
   range: (from: number, to: number, total: number) => string;
   previousLabel: string;
   nextLabel: string;
 }) {
-  const button =
-    "grid min-h-7 min-w-7 place-items-center rounded-md border border-border px-2 text-[11.5px] text-muted-foreground disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11";
   return (
-    <div
-      data-list-pager=""
-      className="flex items-center justify-between gap-3 px-3 py-2.5"
-    >
-      <span className="font-mono text-[11.5px] text-dim">
-        {range(list.from, list.to, list.total)}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <button
-          type="button"
-          aria-label={previousLabel}
-          disabled={list.page <= 1}
-          onClick={() => {
-            list.setPage(list.page - 1);
-          }}
-          className={button}
-        >
-          <ChevronLeft aria-hidden="true" className="size-3" />
-        </button>
-        <span
-          aria-current="page"
-          className={`${button} border-gold text-foreground`}
-        >
-          {list.page}
-        </span>
-        <button
-          type="button"
-          aria-label={nextLabel}
-          disabled={list.page >= list.pages}
-          onClick={() => {
-            list.setPage(list.page + 1);
-          }}
-          className={button}
-        >
-          <ChevronRight aria-hidden="true" className="size-3" />
-        </button>
-      </span>
-    </div>
+    <RowsPager
+      label={label}
+      rowsLabel={rowsLabel}
+      perPage={list.perPage}
+      sizes={PER_PAGE}
+      onPerPage={list.setPerPage}
+      range={range(list.from, list.to, list.total)}
+      previousLabel={previousLabel}
+      nextLabel={nextLabel}
+      previous={
+        list.page <= 1
+          ? null
+          : () => {
+              list.setPage(list.page - 1);
+            }
+      }
+      next={
+        list.page >= list.pages
+          ? null
+          : () => {
+              list.setPage(list.page + 1);
+            }
+      }
+    />
   );
 }

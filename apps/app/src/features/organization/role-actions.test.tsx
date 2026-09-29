@@ -7,11 +7,12 @@
 // and a built-in role opens read-only with Duplicate as custom. Merge without
 // review is its own checkbox, live only while the catalogue lists
 // `pr.merge_without_review`.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { renderToaster } from "@/test/toaster";
 
 const { router, createRole, deleteRole, setRolePermissions } = vi.hoisted(
   () => ({
@@ -26,7 +27,6 @@ vi.mock("./actions", () => ({ createRole, deleteRole, setRolePermissions }));
 
 const { permissionEntry, roleRow } = await import("./organization.builders");
 const { DeleteRole, RoleEditor } = await import("./role-actions");
-const { Receipts } = await import("./receipt");
 
 const catalog = [
   permissionEntry(),
@@ -159,6 +159,8 @@ describe("RoleEditor: edit", () => {
   const id = "rol_7k2m9q4x8r1t5v3w6y0z2a";
 
   it("opens on what the role allows, names its holders and sends the new set", async () => {
+    // The root layout's toaster, where the receipt lands (ADR-221).
+    renderToaster();
     setRolePermissions.mockResolvedValue({
       ok: true,
       value: { id, name: "agent.release" },
@@ -185,14 +187,11 @@ describe("RoleEditor: edit", () => {
       "budget.set",
     ]);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("toasts")).toHaveTextContent(
+        "was saved. Each holder's permission changes at their next call. Recorded in the audit record.",
+      );
+    });
   });
 
   it("names a ceiling refusal and changes nothing (negative)", async () => {
@@ -406,6 +405,8 @@ describe("DeleteRole", () => {
   const free = roleRow({ heldBy: 0 });
 
   it("deletes a role nobody holds and reloads the page", async () => {
+    // The root layout's toaster, where the receipt lands (ADR-221).
+    renderToaster();
     deleteRole.mockResolvedValue({
       ok: true,
       value: { id: free.id, name: "agent.release" },
@@ -424,14 +425,11 @@ describe("DeleteRole", () => {
     );
     expect(deleteRole).toHaveBeenCalledWith("acme", free.id);
     expect(router.replace).toHaveBeenCalledWith("/acme/roles");
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "agent.release was deleted. Its definition and grants stay in the audit record.",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("toasts")).toHaveTextContent(
+        "agent.release was deleted. Its definition and grants stay in the audit record.",
+      );
+    });
   });
 
   it("names a refusal and deletes nothing (negative)", async () => {

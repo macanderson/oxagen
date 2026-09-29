@@ -919,7 +919,7 @@ describe("Record › related records", () => {
     ]);
     expect(within(panel).getByLabelText("Search records")).toBeDefined();
     expect(within(panel).getByText("Sort")).toBeDefined();
-    expect(within(panel).getByText("Rows")).toBeDefined();
+    expect(within(panel).getByText("Rows per page")).toBeDefined();
     expect(panel.textContent).toContain("1–3 of 3");
   });
 

@@ -386,7 +386,7 @@ describe("saved columns", () => {
       "Started",
       "Actions",
     ]);
-    expect(screen.getByTestId("rows-per-page")).toHaveValue("50");
+    expect(screen.getByTestId("rows-per-page")).toHaveTextContent("50");
     // Each row draws one cell per column shown, plus its action.
     expect(within(rowOf("arun_1")).getAllByRole("cell")).toHaveLength(11);
   });

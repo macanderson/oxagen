@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { renderToaster } from "@/test/toaster";
 
 const { router, sendInvitation } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -33,7 +34,6 @@ vi.mock("./actions", () => ({
 }));
 
 const { InviteDialog } = await import("./invite-dialog");
-const { Receipts } = await import("./receipt");
 const { phoneWidth } = await import("@/test/phone");
 
 const HERE = routes.people("acme");
@@ -317,15 +317,12 @@ describe("the design's labels, the receipt and the phone", () => {
   });
 
   it("leaves a receipt naming the audit record once the invitation is sent", async () => {
+    // The root layout's toaster, where the receipt lands (ADR-221).
+    renderToaster();
     sendInvitation.mockResolvedValue(answered(FRESH));
     await fillAndSend("new@acme.example");
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
     await waitFor(() => {
-      expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+      expect(screen.getByTestId("toasts")).toHaveTextContent(
         "Invitation sent to new@acme.example. Recorded in the audit record.",
       );
     });

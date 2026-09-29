@@ -1,9 +1,10 @@
 "use client";
 // The Runs panel's pager (fleet.md, "1–10 of 279" with page buttons to the
-// last page). The total is the read's: every run the filters and the search
-// let through, across the workspace (#3837). Past the read's count bound the
-// total reads as the bound with a plus sign, and the buttons stop at the last
-// page an offset can reach.
+// last page), with Runs per page on its left (ADR-221: the rows select sits
+// under the rows, as shadcn's pagination example draws it). The total is the
+// read's: every run the filters and the search let through, across the
+// workspace (#3837). Past the read's count bound the total reads as the bound
+// with a plus sign, and the buttons stop at the last page an offset can reach.
 //
 // A read that did not count (a pull-request filter, which only the frames
 // answer, or a count that failed) has no total to page against, and a page
@@ -16,6 +17,7 @@ import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { RowsField } from "@/ui/pagination";
 import {
   type FleetListQuery,
   isNewestFirst,
@@ -23,6 +25,7 @@ import {
   listQueryToRoute,
   pageRange,
 } from "./list-query";
+import { PAGE_SIZES, type PageSize, pageSizeOf } from "./prefs";
 
 /** Pages shown either side of the current one before a gap. */
 const WINDOW = 1;
@@ -61,6 +64,7 @@ export function pageButtons(
 export function RunsPager({
   list,
   pageSize,
+  onPageSize,
   rows,
   total,
   totalBound,
@@ -71,7 +75,8 @@ export function RunsPager({
   ws,
 }: {
   list: FleetListQuery;
-  pageSize: number;
+  pageSize: PageSize;
+  onPageSize: (size: PageSize) => void;
   /** Rows this read returned. */
   rows: number;
   /** The read's total; null past `totalBound`; absent when it did not count. */
@@ -84,11 +89,26 @@ export function RunsPager({
   ws: string;
 }) {
   const t = useTranslations("fleet.runs.pager");
+  const runs = useTranslations("fleet.runs");
   const locale = useLocale();
   const count = (n: number) => formatCount(n, locale);
   const toPage = (page: number) =>
     routes.fleet(org, ws, listQueryToRoute({ ...list, page }, pullRequests));
   const { from, to } = pageRange(list, pageSize, rows);
+  const perPage = (
+    <RowsField
+      label={runs("rows")}
+      perPage={pageSize}
+      sizes={PAGE_SIZES}
+      onPerPage={(size) => {
+        onPageSize(pageSizeOf(String(size)));
+      }}
+      testId="rows-per-page"
+    />
+  );
+  const frame = "flex flex-wrap items-center justify-between gap-4 px-3 py-2";
+  const nav =
+    "flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground";
 
   // A page read by cursor has no position in the counted list, even when a
   // count came back with it: the cursor page after page 3 is not rows 1 to 10,
@@ -105,37 +125,37 @@ export function RunsPager({
     // link that kept it stayed on page 3 (#4381).
     const firstPage = listQueryToRoute({ ...list, page: 1 }, pullRequests);
     return (
-      <nav
-        aria-label={t("label")}
-        className="flex flex-wrap items-center gap-2 px-3 py-2 text-[11.5px] text-muted-foreground"
-      >
-        <span data-testid="pager-range" className="font-mono tabular-nums">
-          {range}
-        </span>
-        <span className="ms-auto flex flex-wrap items-center gap-3">
-          {cursor === null && list.page === 1 ? null : (
-            // Page 1 of the list in its own order. That is the newest runs
-            // only in the newest-first order; in another order it may hold
-            // the oldest or the costliest, so the link says first page.
-            <SafeLink
-              to={routes.fleet(org, ws, firstPage)}
-              data-touch-target=""
-              className={`${linkText} inline-flex items-center`}
-            >
-              {isNewestFirst(list) ? t("newest") : t("first")}
-            </SafeLink>
-          )}
-          {nextCursor === null ? null : (
-            <SafeLink
-              to={routes.fleet(org, ws, { ...firstPage, cursor: nextCursor })}
-              data-touch-target=""
-              className={`${linkText} inline-flex items-center`}
-            >
-              {t("older")}
-            </SafeLink>
-          )}
-        </span>
-      </nav>
+      <div className={frame}>
+        {perPage}
+        <nav aria-label={t("label")} className={nav}>
+          <span data-testid="pager-range" className="font-mono tabular-nums">
+            {range}
+          </span>
+          <span className="ms-auto flex flex-wrap items-center gap-3">
+            {cursor === null && list.page === 1 ? null : (
+              // Page 1 of the list in its own order. That is the newest runs
+              // only in the newest-first order; in another order it may hold
+              // the oldest or the costliest, so the link says first page.
+              <SafeLink
+                to={routes.fleet(org, ws, firstPage)}
+                data-touch-target=""
+                className={`${linkText} inline-flex items-center`}
+              >
+                {isNewestFirst(list) ? t("newest") : t("first")}
+              </SafeLink>
+            )}
+            {nextCursor === null ? null : (
+              <SafeLink
+                to={routes.fleet(org, ws, { ...firstPage, cursor: nextCursor })}
+                data-touch-target=""
+                className={`${linkText} inline-flex items-center`}
+              >
+                {t("older")}
+              </SafeLink>
+            )}
+          </span>
+        </nav>
+      </div>
     );
   }
 
@@ -162,69 +182,69 @@ export function RunsPager({
   const hasNext = page < pages && (total !== null || rows === pageSize);
   const link = `${linkText} inline-flex min-w-6 items-center justify-center`;
   return (
-    <nav
-      aria-label={t("label")}
-      className="flex flex-wrap items-center gap-2 px-3 py-2 text-[11.5px] text-muted-foreground"
-    >
-      <span data-testid="pager-range" className="font-mono tabular-nums">
-        {range}
-      </span>
-      <ol
-        data-testid="pager-pages"
-        className="ms-auto flex flex-wrap items-center gap-2"
-      >
-        {page > 1 ? (
-          <li>
-            <SafeLink
-              to={toPage(page - 1)}
-              data-touch-target=""
-              className={link}
-            >
-              {t("previous")}
-            </SafeLink>
-          </li>
-        ) : null}
-        {pageButtons(page, pages, total !== null).map((button) =>
-          "gapAfter" in button ? (
-            // A gap has no page of its own, so it is a mark and not a link.
-            <li key={`gap-${String(button.gapAfter)}`} aria-hidden>
-              …
+    <div className={frame}>
+      {perPage}
+      <nav aria-label={t("label")} className={nav}>
+        <span data-testid="pager-range" className="font-mono tabular-nums">
+          {range}
+        </span>
+        <ol
+          data-testid="pager-pages"
+          className="ms-auto flex flex-wrap items-center gap-2"
+        >
+          {page > 1 ? (
+            <li>
+              <SafeLink
+                to={toPage(page - 1)}
+                data-touch-target=""
+                className={link}
+              >
+                {t("previous")}
+              </SafeLink>
             </li>
-          ) : (
-            <li key={button.page}>
-              {button.page === page ? (
-                <span
-                  aria-current="page"
-                  data-testid="pager-current"
-                  className="inline-flex min-w-6 items-center justify-center rounded border border-rule px-1 font-mono font-semibold text-foreground tabular-nums"
-                >
-                  {count(button.page)}
-                </span>
-              ) : (
-                <SafeLink
-                  to={toPage(button.page)}
-                  aria-label={t("page", { page: count(button.page) })}
-                  data-touch-target=""
-                  className={`${link} font-mono tabular-nums`}
-                >
-                  {count(button.page)}
-                </SafeLink>
-              )}
+          ) : null}
+          {pageButtons(page, pages, total !== null).map((button) =>
+            "gapAfter" in button ? (
+              // A gap has no page of its own, so it is a mark and not a link.
+              <li key={`gap-${String(button.gapAfter)}`} aria-hidden>
+                …
+              </li>
+            ) : (
+              <li key={button.page}>
+                {button.page === page ? (
+                  <span
+                    aria-current="page"
+                    data-testid="pager-current"
+                    className="inline-flex min-w-6 items-center justify-center rounded border border-rule px-1 font-mono font-semibold text-foreground tabular-nums"
+                  >
+                    {count(button.page)}
+                  </span>
+                ) : (
+                  <SafeLink
+                    to={toPage(button.page)}
+                    aria-label={t("page", { page: count(button.page) })}
+                    data-touch-target=""
+                    className={`${link} font-mono tabular-nums`}
+                  >
+                    {count(button.page)}
+                  </SafeLink>
+                )}
+              </li>
+            ),
+          )}
+          {hasNext ? (
+            <li>
+              <SafeLink
+                to={toPage(page + 1)}
+                data-touch-target=""
+                className={link}
+              >
+                {t("next")}
+              </SafeLink>
             </li>
-          ),
-        )}
-        {hasNext ? (
-          <li>
-            <SafeLink
-              to={toPage(page + 1)}
-              data-touch-target=""
-              className={link}
-            >
-              {t("next")}
-            </SafeLink>
-          </li>
-        ) : null}
-      </ol>
-    </nav>
+          ) : null}
+        </ol>
+      </nav>
+    </div>
   );
 }
