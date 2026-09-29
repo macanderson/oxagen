@@ -23,6 +23,9 @@ vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mocks.runInTenantScope }))
 vi.mock("@oxagen/database", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/database")>()),
   withTenantDb: mocks.withTenantDb,
+  // check:db-mock-seams: a mock that replaces the tenant seam replaces the
+  // organization seam with the same function.
+  withOrgDb: mocks.withTenantDb,
 }));
 vi.mock("drizzle-orm", async (importOriginal) => ({
   ...(await importOriginal<typeof import("drizzle-orm")>()),
