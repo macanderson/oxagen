@@ -70,6 +70,7 @@ import {
 } from "./context.steering.github";
 import { readMainRepositoryProvider } from "./context.steering.host";
 import { readMainBoundRepository } from "./context.steering.published.get";
+import type { SyncPublish } from "./context.steering.sync";
 import { GITHUB_STEERING_PROVIDER } from "./lib/steering-app";
 import {
   repositoryHeadConflict,
@@ -1270,8 +1271,15 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     // Oxagen Steering installation on `acme`.
     const app = { symbol: OXAGEN_STEERING_APP, id: 9001, slug: "oxagen-steering-test" };
     const hub = new FakeGithub({ org: "acme", app });
+    // The production publish port mints a token for the real GitHub App,
+    // which a test run has no key for. A spy stands in for it, so the test
+    // checks that bind_repository publishes the first version once (#4732).
+    const publishFirst = vi.fn<SyncPublish>(() =>
+      Promise.resolve({ status: "published", version: 1 }),
+    );
     const deps: ProvisionDeps = {
       ...steeringRepoProvisionDeps({ actorUserId: userId, env: {} }),
+      publishFirst,
       github: () => ({
         app,
         installation: () => Promise.resolve(hub.appRest()),
@@ -1294,6 +1302,8 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         workspaceId: legacyId,
       }),
     ).resolves.toBe("ready");
+    expect(publishFirst).toHaveBeenCalledOnce();
+    expect(publishFirst).toHaveBeenCalledWith({ orgId, workspaceId: legacyId });
 
     const [row] = await withSystemDb((tx) =>
       tx
