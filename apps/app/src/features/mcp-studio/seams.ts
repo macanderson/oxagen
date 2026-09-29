@@ -13,7 +13,8 @@
 //     action and Draft bills as in-app agent spend, both through the kernel.
 //   - saveStudioDraft, getStudioDraft and openStudioReview: Review, lane M11
 //     (#4686), whose capabilities save_studio_draft, get_studio_draft and
-//     open_studio_review these mirror. Not built until #4688 merges.
+//     open_studio_review these mirror. #4688 shipped them, and the second
+//     PR of this lane wires these seams to them.
 //
 // A credential never crosses any of these. Try it names an environment and
 // the gateway adds the credential after the request is recorded, and a saved
