@@ -11,7 +11,7 @@ import type { HealthSignal } from "@oxagen/handlers/steering-repo/health";
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
-  deps: { marker: "deps" },
+  deps: { marker: "deps", findConnection: vi.fn() },
   handleSteering: vi.fn(),
   steeringDeps: { marker: "steering-deps" },
   findHealthScopes: vi.fn(),
@@ -82,7 +82,8 @@ describe("POST /webhooks/gitlab/:connectionId", () => {
     expect(await res.json()).toEqual({ outcome: "proposal_rejected" });
     expect(mocks.handle).toHaveBeenCalledWith(
       expect.objectContaining({
-        ...mocks.deps,
+        marker: "deps",
+        findConnection: expect.any(Function),
         requestHealthCheck: expect.any(Function),
       }),
       {
@@ -119,39 +120,73 @@ describe("POST /webhooks/gitlab/:connectionId: MCP server discovery (M10)", () =
     after: "5f1c0e7a9b3d2c4e6f8a0b1c2d3e4f5a6b7c8d9e",
     ref: "refs/heads/main",
     project: {
+      id: 42,
       path_with_namespace: "platform/billing",
       web_url: "https://gitlab.example.com/platform/billing",
     },
     commits: [{ added: [], modified: ["api/billing.yaml"], removed: [] }],
   };
+  const CONNECTION = {
+    id: "conn_1",
+    orgId: "org_1",
+    workspaceId: "ws_1",
+    projectId: "42",
+    projectPath: "platform/billing",
+    token: "glpat",
+    webhookSecret: "whsec",
+  };
   const postPush = () =>
     post(JSON.stringify(PUSH), { "X-Gitlab-Token": "whsec" });
 
+  // The handler double looks the connection up through the route's deps,
+  // as the real handler does, then answers the given outcome.
+  function answer(outcome: string) {
+    mocks.handle.mockImplementation(
+      async (deps: { findConnection(id: string): Promise<unknown> }) => {
+        await deps.findConnection("con_gl1");
+        return { status: 202, outcome };
+      },
+    );
+  }
+
   beforeEach(() => {
     mocks.handle.mockReset();
+    mocks.deps.findConnection.mockReset();
+    mocks.deps.findConnection.mockResolvedValue(CONNECTION);
     mocks.routeGitlabDiscoveryPush.mockReset();
     mocks.routeGitlabDiscoveryPush.mockResolvedValue(1);
   });
 
-  it("hands a verified delivery's body to the discovery route", async () => {
-    mocks.handle.mockResolvedValue({ status: 202, outcome: "ignored_event" });
+  it("hands a verified delivery to discovery with the connection's project", async () => {
+    answer("ignored_event");
     const res = await postPush();
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ outcome: "ignored_event" });
-    expect(mocks.routeGitlabDiscoveryPush).toHaveBeenCalledWith(PUSH);
+    expect(mocks.deps.findConnection).toHaveBeenCalledWith("con_gl1");
+    expect(mocks.routeGitlabDiscoveryPush).toHaveBeenCalledWith(PUSH, {
+      id: "42",
+      path: "platform/billing",
+    });
+  });
+
+  it("hands over nothing when no connection answers the delivery", async () => {
+    mocks.deps.findConnection.mockResolvedValue(null);
+    answer("ignored_event");
+    await postPush();
+    expect(mocks.routeGitlabDiscoveryPush).not.toHaveBeenCalled();
   });
 
   it.each(["unauthenticated", "ignored_unparseable", "ignored_other_project"])(
     "does not hand over a delivery the handler answered %s",
     async (outcome) => {
-      mocks.handle.mockResolvedValue({ status: 202, outcome });
+      answer(outcome);
       await postPush();
       expect(mocks.routeGitlabDiscoveryPush).not.toHaveBeenCalled();
     },
   );
 
   it("answers as usual and logs when the discovery route fails", async () => {
-    mocks.handle.mockResolvedValue({ status: 202, outcome: "ignored_event" });
+    answer("ignored_event");
     mocks.routeGitlabDiscoveryPush.mockRejectedValueOnce(new Error("pg down"));
     const res = await postPush();
     expect(res.status).toBe(202);
