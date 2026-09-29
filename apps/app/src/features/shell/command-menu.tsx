@@ -3,7 +3,7 @@
 // over every page and action in the mockup's groups, and, inside a workspace,
 // what `search_tools` answers for the query (runs, agents, approvals and the
 // tools on the belt). The search is a governed read through the kernel, and
-// the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘5 open the five
+// the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘4 open the four
 // pages that carry them, Esc closes. On a phone it rises from the bottom edge
 // as a sheet (src/ui/phone.css).
 //
@@ -206,7 +206,10 @@ function CommandPalette({
       <SheetHandle />
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
       <div className="flex items-center gap-2.5 border-b border-foreground/5 px-4 py-3">
-        <MagnifyingGlassIcon aria-hidden="true" className="size-4 text-muted-foreground" />
+        <MagnifyingGlassIcon
+          aria-hidden="true"
+          className="size-4 text-muted-foreground"
+        />
         <input
           ref={inputRef}
           role="combobox"
@@ -279,9 +282,7 @@ function CommandPalette({
               >
                 <span>{t(`commands.groups.${group}.label`)}</span>
                 {notes[group] === undefined ? null : (
-                  <span className="font-normal">
-                    {notes[group]}
-                  </span>
+                  <span className="font-normal">{notes[group]}</span>
                 )}
               </div>
               {items.map((c) => {

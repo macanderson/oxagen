@@ -27,7 +27,7 @@ export function CloneToolbelt({
   at,
   source,
   label,
-  gold = false,
+  isNew = false,
   testId,
 }: {
   at: ToolsAt;
@@ -35,8 +35,12 @@ export function CloneToolbelt({
   source: { id: string; name: string };
   /** The button's text: "New toolbelt" in the panel header, "Clone" on a row. */
   label: string;
-  /** Gold for the tab's one primary action. */
-  gold?: boolean;
+  /**
+   * The panel header's New toolbelt, whose text says what it does. A row's
+   * Clone names its belt in the accessible label instead. Both are drawn in
+   * the default style: Connect an agent is the page's one gold action.
+   */
+  isNew?: boolean;
   testId: string;
 }) {
   const t = useTranslations("tools.toolbelts.clone");
@@ -119,8 +123,8 @@ export function CloneToolbelt({
         data-testid={testId}
         data-touch-target=""
         aria-haspopup="dialog"
-        aria-label={gold ? undefined : t("openLabel", { name: source.name })}
-        className={gold ? buttonPrimary : buttonSecondary}
+        aria-label={isNew ? undefined : t("openLabel", { name: source.name })}
+        className={buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}

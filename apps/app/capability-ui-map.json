@@ -111,9 +111,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "create_connection": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
       "testid": "connection-add-open",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -179,9 +179,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "delete_approval_rule": {
-      "route": "/[org]/[ws]/tools/policy",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Policy › Auto-approval rules › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=policies",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Policies › Auto-approval rules › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -372,9 +372,9 @@
       "verifiedBy": "skills-lifecycle-ci-witness"
     },
     "get_connection": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
       "testid": "connection-open-con_01k5n1",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -656,17 +656,17 @@
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "grant_mandate": {
-      "route": "/[org]/[ws]/tools/policy",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Policy › Mandates ledger: Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=policies",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Policies › Mandates ledger: Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
       "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "import_tools": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools header, Tools panel and Providers: “Import a provider” and “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=tools",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents header, the Tools view and Tool servers: “Import a provider” and “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -722,9 +722,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_approval_rules": {
-      "route": "/[org]/[ws]/tools/policy",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Policy: the auto-approval rules table (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=policies",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Policies: the auto-approval rules table (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/policy.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -773,9 +773,9 @@
       ]
     },
     "list_connections": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -790,9 +790,9 @@
       "verifiedBy": "session-2ce52f08-stella-session-list"
     },
     "list_credential_grants": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -874,9 +874,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_kill_switches": {
-      "route": "/[org]/[ws]/tools/switches",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Kill switches: the class and scoped switches with the deny generation, and the tab's count of switches on (features/tools/switches.tsx, data/live/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=switches",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Off switches: the class and scoped switches with the deny generation, and the tab's count of switches on (features/tools/switches.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -890,9 +890,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_mcp_servers": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1017,8 +1017,8 @@
       ]
     },
     "list_tacho_hosts": {
-      "route": "/[org]/[ws]/runtimes",
-      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "route": "/[org]/[ws]/agents?tab=runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
       "entry": "/[org]/[ws]/runtimes \u2014 the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
       "testid": "runtime-row",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
@@ -1035,9 +1035,9 @@
       ]
     },
     "list_tool_versions": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
+      "route": "/[org]/[ws]/agents?tab=tools",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1200,27 +1200,27 @@
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "register_mcp_server": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: “Add a provider” (and “Import a provider” in the header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: “Add a provider” (and “Import a provider” in the header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
       "testid": "tools-import-open",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "search_mcp_registry": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
       "testid": "registry-browser",
       "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
     },
     "start_mcp_authorization": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
       "testid": "tools-import-connect",
       "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
       "verifiedAt": "2026-09-24",
@@ -1439,17 +1439,17 @@
       "verifiedBy": "session-mc3-invite"
     },
     "set_approval_rule_enabled": {
-      "route": "/[org]/[ws]/tools/policy",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Policy › Auto-approval rules: Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=policies",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Policies › Auto-approval rules: Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "set_approval_rules": {
-      "route": "/[org]/[ws]/tools/policy",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Policy › Auto-approval rules: Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=policies",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Policies › Auto-approval rules: Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
       "testid": "rule-create-open",
       "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -1472,9 +1472,9 @@
       "verifiedBy": "session-1818a309-workspace-governance-mode"
     },
     "set_kill_switch": {
-      "route": "/[org]/[ws]/tools/switches",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools header “Flip a kill switch”, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=switches",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents header on Off switches “Flip a kill switch”, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1554,9 +1554,9 @@
       "verifiedBy": "session-enterprise-sso"
     },
     "set_tool_classification": {
-      "route": "/[org]/[ws]/tools",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=tools",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1871,9 +1871,9 @@
       "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
     },
     "delete_mcp_server": {
-      "route": "/[org]/[ws]/tools/providers",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Providers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=servers",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1903,9 +1903,9 @@
       "verifiedBy": "session-scim-provisioning"
     },
     "create_runtime": {
-      "route": "/[org]/[ws]/runtimes",
-      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
-      "entry": "Runtimes › Add a runtime: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Runtimes › Add a runtime: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
       "testid": "runtimes-add",
       "proof": "apps/app/src/features/runtimes/actions.test.ts",
       "verifiedAt": "2026-09-26",
@@ -1921,9 +1921,9 @@
       "verifiedBy": "runtime-containment (#4372)"
     },
     "list_runtimes": {
-      "route": "/[org]/[ws]/runtimes",
-      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
-      "entry": "Runtimes › the Runtimes panel: each named runtime with its agents by harness (data/live/runtimes.ts, features/runtimes/named.tsx)",
+      "route": "/[org]/[ws]/agents?tab=runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Runtimes › the Runtimes panel: each named runtime with its agents by harness (data/live/runtimes.ts, features/runtimes/named.tsx)",
       "testid": "named-runtime",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
       "verifiedAt": "2026-09-26",
@@ -1964,9 +1964,9 @@
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "list_toolbelts": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
       "proof": "apps/app/src/features/tools/toolbelts.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)",
@@ -1988,41 +1988,41 @@
       ]
     },
     "get_toolbelt": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "clone_toolbelt": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
       "proof": "apps/app/src/features/tools/clone-toolbelt.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "update_toolbelt": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "delete_toolbelt": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "set_tool_state": {
-      "route": "/[org]/[ws]/tools/toolbelts",
-      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
-      "entry": "Tools › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
+      "route": "/[org]/[ws]/agents?tab=toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Tool servers › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"

@@ -27,7 +27,6 @@ type Messages = {
     agents: string;
     agent: string;
     mandate: string;
-    tools: string;
     record: string;
     steering: string;
     repositories: string;
@@ -1285,6 +1284,19 @@ type Messages = {
       gateway: string;
       harness: string;
       observe: string;
+    };
+    area: {
+      description: string;
+      tabs: {
+        label: string;
+        agents: string;
+        servers: string;
+        policies: string;
+        runtimes: string;
+        switches: string;
+        switchesOn: string;
+        switchesOnAtLeast: string;
+      };
     };
   };
   audit: {
@@ -8012,9 +8024,7 @@ type Messages = {
     nav: {
       fleet: string;
       agents: string;
-      tools: string;
       steering: string;
-      runtimes: string;
       repositories: string;
       spend: string;
       organization: string;
@@ -8139,7 +8149,6 @@ type Messages = {
       slots: {
         fleet: string;
         agents: string;
-        tools: string;
         spend: string;
       };
       more: string;
@@ -8148,7 +8157,6 @@ type Messages = {
       tileWaiting: string;
       sub: {
         steering: string;
-        runtimes: string;
         repositories: string;
         organization: string;
         billing: string;
@@ -10147,8 +10155,6 @@ type Messages = {
     };
   };
   tools: {
-    eyebrow: string;
-    lede: string;
     loading: string;
     notCarried: string;
     nextPage: string;
@@ -10159,17 +10165,6 @@ type Messages = {
       billing: string;
       compliance: string;
       viewer: string;
-    };
-    tabs: {
-      label: string;
-      tools: string;
-      toolbelts: string;
-      providers: string;
-      policy: string;
-      switches: string;
-      atLeast: string;
-      switchesOn: string;
-      switchesOnAtLeast: string;
     };
     gate: {
       open: string;
@@ -11313,6 +11308,13 @@ type Messages = {
       failedTitle: string;
       denied: string;
       failed: string;
+    };
+    views: {
+      label: string;
+      providers: string;
+      tools: string;
+      toolbelts: string;
+      atLeast: string;
     };
   };
   ui: {

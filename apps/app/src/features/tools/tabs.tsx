@@ -1,101 +1,85 @@
-// The Tools page's five tabs (mockup `tools.md`): Tools, Toolbelts, Providers,
-// Policy and Kill switches, each a path segment. The strip is a tablist of
-// links, each marked with `aria-selected` and `aria-current`, and it scrolls in
-// its own row on a phone rather than wrapping.
+// The Tool servers tab's three views. The Agents page absorbed the Tools page,
+// and its tab strip names five tabs (Agents, Tool servers, Policies, Runtimes,
+// Off switches). The tool registry and the toolbelts carry no tab of their
+// own: they are views of Tool servers, beside the servers list, so the chain
+// the Tools page made readable (Provider → Tool → Toolbelt → Agent) stays one
+// click apart. The row is links marked with `aria-current`, drawn smaller than
+// the tab strip so it reads as part of the tab, not a second row of tabs.
 //
-// Each count is one the record can stand behind. Tools counts the versions of
-// the registry's first page, with a plus when a later page exists, because the
-// read carries no total. Providers counts the roster. Kill switches counts the
-// switches denying right now, the one count that waits on a person. Toolbelts
-// carries none because the belts are read on their own tab only, not on every
-// tab's load. Policy carries none: no store holds a policy version yet, and a
-// zero would say none exists.
+// Each count is one the record can stand behind. Servers counts the roster.
+// Tools counts the versions of the registry's first page, with a plus when a
+// later page exists, because the read carries no total. Toolbelts carries none
+// because the belts are read on their own view only.
 import { useLocale, useTranslations } from "next-intl";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { tabCount, tabLink } from "@/ui/route-tabs";
-import { TOOLS_TABS, type ToolsAt, type ToolsTab, toolsLink } from "./view";
+import { type ToolsAt, type ToolsTab, toolsLink } from "./view";
 
-export function ToolsTabs({
+/** The Tool servers views, in the order the row draws them. */
+const SERVER_VIEWS = ["providers", "tools", "toolbelts"] as const;
+type ServerView = (typeof SERVER_VIEWS)[number];
+
+export function isServerView(tab: ToolsTab): tab is ServerView {
+  return SERVER_VIEWS.some((view) => view === tab);
+}
+
+const pill =
+  "inline-flex min-h-7 max-md:min-h-11 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition-colors " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+const pillIdle =
+  "border-border text-muted-foreground hover:bg-hl hover:text-foreground";
+const pillCurrent = "border-foreground/30 bg-hl text-foreground";
+
+export function ServerViews({
   at,
   current,
   versions,
   providers,
-  switchesOn,
-  switchesOnIsFloor,
 }: {
   at: ToolsAt;
-  current: ToolsTab;
+  current: ServerView;
   /** The registry's first page: how many versions, and whether that is all. */
-  versions: { count: number; complete: boolean };
+  versions: { count: number; complete: boolean } | null;
   /** How many providers the roster holds, or null when it did not answer. */
   providers: number | null;
-  /** How many switches are denying, or null when the read did not answer. */
-  switchesOn: number | null;
-  /** True when the board was truncated, so the count is a floor. */
-  switchesOnIsFloor: boolean;
 }) {
-  const t = useTranslations("tools.tabs");
+  const t = useTranslations("tools.views");
   const locale = useLocale();
-  const count = (tab: ToolsTab): { text: string; tone?: string } | null => {
-    switch (tab) {
-      case "tools":
-        return {
-          text: versions.complete
-            ? formatCount(versions.count, locale)
-            : t("atLeast", { count: versions.count }),
-        };
+  const count = (view: ServerView): string | null => {
+    switch (view) {
       case "providers":
-        return providers === null
-          ? null
-          : { text: formatCount(providers, locale) };
-      case "switches":
-        if (switchesOn === null) return null;
-        return {
-          text: switchesOnIsFloor
-            ? t("switchesOnAtLeast", { count: switchesOn })
-            : t("switchesOn", { count: switchesOn }),
-          ...(switchesOn > 0 ? { tone: "text-error-ink" } : {}),
-        };
+        return providers === null ? null : formatCount(providers, locale);
+      case "tools":
+        if (versions === null) return null;
+        return versions.complete
+          ? formatCount(versions.count, locale)
+          : t("atLeast", { count: versions.count });
       case "toolbelts":
-      case "policy":
         return null;
     }
   };
   return (
-    <div className="min-w-0 overflow-x-auto border-b border-border">
-      <div
-        role="tablist"
-        aria-label={t("label")}
-        className="flex w-max min-w-full gap-0.5"
-      >
-        {TOOLS_TABS.map((tab) => {
-          const n = count(tab);
-          return (
-            <SafeLink
-              key={tab}
-              id={`tools-tab-${tab}`}
-              role="tab"
-              to={toolsLink(at, { tab })}
-              data-tab={tab}
-              aria-selected={tab === current}
-              aria-controls={tab === current ? `tools-panel-${tab}` : undefined}
-              aria-current={tab === current ? "page" : undefined}
-              className={tabLink}
-            >
-              {t(tab)}
-              {n === null ? null : (
-                <span
-                  data-count={tab}
-                  className={`${tabCount} ${n.tone ?? ""}`}
-                >
-                  {n.text}
-                </span>
-              )}
-            </SafeLink>
-          );
-        })}
-      </div>
-    </div>
+    <nav aria-label={t("label")} className="flex flex-wrap gap-1.5">
+      {SERVER_VIEWS.map((view) => {
+        const n = count(view);
+        const here = view === current;
+        return (
+          <SafeLink
+            key={view}
+            to={toolsLink(at, { tab: view })}
+            data-view={view}
+            aria-current={here ? "page" : undefined}
+            className={`${pill} ${here ? pillCurrent : pillIdle}`}
+          >
+            {t(view)}
+            {n === null ? null : (
+              <span data-count={view} className="text-muted-foreground">
+                {n}
+              </span>
+            )}
+          </SafeLink>
+        );
+      })}
+    </nav>
   );
 }
