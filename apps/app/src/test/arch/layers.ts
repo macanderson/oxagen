@@ -419,6 +419,15 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   "src/features/create/record-file.ts": {
     "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
+    // The wizard's preview needs the same record path and branch
+    // open_context_pr writes (#4765), for both repository layouts. These are
+    // the dependency-free path primitives, not the handler layer.
+    "@oxagen/oxagen/steering-repo/paths": [
+      "LEGACY_RULES_DIR",
+      "MEMORY_DIR",
+      "STEERING_DIR",
+      "recordFileName",
+    ],
   },
   // The On disk panel strips the steering tree's folder from each path, and
   // reads the folder's name from the one module that names every steering
