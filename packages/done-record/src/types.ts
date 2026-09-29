@@ -154,7 +154,10 @@ export interface DoneRecord {
 export const CRITERION_STATES = ["open", "claimed", "held", "proven", "failed"] as const;
 export type CriterionState = (typeof CRITERION_STATES)[number];
 
-/** Where the whole record stands. A held record is done. Proven is the verifier's word. */
+/**
+ * Where the whole record stands. A held record is done. Proven is the verifier's word.
+ * WORK_VERDICTS in @oxagen/database repeats this list. Change both together.
+ */
 export const DONE_VERDICTS = ["pending", "held", "proven", "broken"] as const;
 export type DoneVerdict = (typeof DONE_VERDICTS)[number];
 

@@ -43,6 +43,12 @@ import { workSchema } from "./_schemas";
 const ts = (name: string) =>
   timestamp(name, { withTimezone: true, mode: "date" });
 
+// The value lists below back this file's check constraints. @oxagen/work and
+// @oxagen/done-record declare the same lists (COLLECTOR_TYPES,
+// COLLECTOR_HEALTH, DONE_VERDICTS, AUTONOMY_CAUSES, and the rest), and
+// @oxagen/ingestion repeats the collector types as CollectorType. This package
+// depends on none of them, so a change to one list changes every copy.
+
 /** The collector types (agent-work-spec.html, Collectors). */
 export const WORK_COLLECTOR_TYPES = [
   "github",

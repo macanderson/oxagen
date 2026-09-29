@@ -15,7 +15,11 @@ import type { Sha256Digest } from "@oxagen/run-evidence";
 /** The value of `schema` in a collector file. */
 export const COLLECTOR_SCHEMA = "collector/v1" as const;
 
-/** The collector types. Each is one module at packages/ingestion/src/collectors/<type>.ts. */
+/**
+ * The collector types. Each is one module at packages/ingestion/src/collectors/<type>.ts.
+ * WORK_COLLECTOR_TYPES in @oxagen/database and CollectorType in @oxagen/ingestion
+ * repeat this list. Change all three together.
+ */
 export const COLLECTOR_TYPES = [
   "github",
   "jira",
