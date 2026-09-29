@@ -1,5 +1,7 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
+import { mcpServerDiscover } from "./functions/mcp-server.discover";
+import { mcpServerSync } from "./functions/mcp-server.sync";
 import { steeringRepoProvision } from "./functions/steering-repo.provision";
 import {
   steeringRepoHealthCheck,
@@ -131,6 +133,8 @@ export const functions: any[] = [
   ingestionWebhookProvision,
   ingestionWebhookRenew,
   mcpToolSnapshotRetention,
+  mcpServerDiscover,
+  mcpServerSync,
   mcpCredentialGrantRetention,
   pluginCatalogSync,
   schemaReconcile,

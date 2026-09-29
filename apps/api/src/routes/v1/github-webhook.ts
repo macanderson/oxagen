@@ -63,6 +63,7 @@ import {
   healthRequests,
 } from "@oxagen/handlers/steering-repo/health";
 import { githubHealthSignal } from "@oxagen/handlers/steering-repo/health.events";
+import { routeGithubDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -70,6 +71,23 @@ import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 export const githubAppWebhookRoute = new Hono<AppEnv>();
+
+/**
+ * Ask for the discovery of every on-change MCP server whose definition a
+ * push changed (lane M10). It logs a failure and never throws.
+ */
+async function requestDefinitionDiscovery(
+  body: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await routeGithubDiscoveryPush(body);
+  } catch (err) {
+    logger.error(
+      { err },
+      "GitHub App webhook: could not request an MCP server discovery; the server's next scheduled discovery will read the definition",
+    );
+  }
+}
 
 type EntityReceivedEvent = {
   name: "ingestion/entity.received";
@@ -370,6 +388,12 @@ githubAppWebhookRoute.post("/", async (c) => {
       );
     }
   }
+
+  // ── MCP Studio: definition pushes (lane M10, #4682) ─────────────────────
+  // A push that changes an on-change server's OpenAPI, GraphQL, or gRPC
+  // definition asks for that server's discovery. A failure never fails the
+  // delivery: the server's next discovery reads the definition anyway.
+  if (eventName === "push") await requestDefinitionDiscovery(body);
 
   // ── Pull request state (ADR-192) ────────────────────────────────────────
   // Fleet and the Run page show each pull request a run names with the state

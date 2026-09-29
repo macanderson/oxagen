@@ -26,8 +26,11 @@ export type DiscoveryOutcome = (typeof schema.MCP_DISCOVERY_OUTCOMES)[number];
 /** A server's sync.schedule, from server.toml. */
 export type SyncSchedule = "on-change" | "daily" | "manual";
 
-/** One `mcp-server/discover.requested` event's data. */
-export interface DiscoveryEventData {
+/**
+ * One `mcp-server/discover.requested` event's data. A type alias, not an
+ * interface, so it is assignable to an event payload's record type.
+ */
+export type DiscoveryEventData = {
   orgId: string;
   workspaceId: string;
   /** The folder name under tools/servers/. */
@@ -37,7 +40,7 @@ export interface DiscoveryEventData {
   key: string;
   /** The person who asked, for a manual discovery. */
   requestedBy?: string;
-}
+};
 
 /** The concurrency key for one server. */
 export function discoveryKey(scope: DiscoveryScope, server: string): string {
