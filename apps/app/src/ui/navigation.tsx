@@ -91,6 +91,18 @@ export function DownloadLink({
 }
 
 /**
+ * A file this app serves, opened in a new tab without handing it this window.
+ * A plain anchor for the reason `DownloadLink` gives: `next/link` would
+ * prefetch the private file before anyone clicked.
+ */
+export function FileTabLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & { to: SafePath }) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/**
  * A run export bundle on the API's signed download route, fetched when the
  * person asks for it. It is not a route of this app, so it takes its own brand
  * rather than a SafePath.

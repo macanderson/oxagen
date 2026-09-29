@@ -348,3 +348,54 @@ describe("conversation linkage (resolveConversationId)", () => {
     expect(row.conversationId).toBeUndefined();
   });
 });
+
+describe("assistant attachment options", () => {
+  it("writes under keyPrefix instead of the generated folder", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "spreadsheet",
+      bytes: new Uint8Array([1]),
+      mimeType: "text/csv",
+      keyPrefix: "attachments/org-1/ws-1",
+    });
+    const put = mocks.put.mock.calls[0]?.[0] as { key: string };
+    expect(put.key).toMatch(/^attachments\/org-1\/ws-1\/[0-9a-f-]+\.csv$/);
+  });
+
+  it("names a JSON file .json", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "document",
+      bytes: new Uint8Array([1]),
+      mimeType: "application/json",
+    });
+    const put = mocks.put.mock.calls[0]?.[0] as { key: string };
+    expect(put.key).toMatch(/\.json$/);
+  });
+
+  it("keeps sha256 in metadata beside the display name", async () => {
+    const sha256 = "a".repeat(64);
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "pdf",
+      bytes: new Uint8Array([1]),
+      mimeType: "application/pdf",
+      displayName: "brief.pdf",
+      sha256,
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toEqual({ displayName: "brief.pdf", sha256 });
+  });
+
+  it("keeps sha256 alone when no display name is given", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      sha256: "b".repeat(64),
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toEqual({ sha256: "b".repeat(64) });
+  });
+});

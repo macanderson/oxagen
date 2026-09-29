@@ -124,6 +124,9 @@ const ROLE_CHECKED_CONTRACTS = [
   // A verdict on an assistant reply (#4169) takes ask_assistant's roles, and
   // ask_assistant asserts them in its turn, so this handler asserts them too.
   "record_reply_feedback",
+  // A file attached to an assistant message (#4690) takes the contract's
+  // roles, which are ask_assistant's, so a person who cannot ask cannot store.
+  "upload_assistant_attachment",
   // Thirty agent-surface contracts that granted only narrow roles while their
   // handlers checked none (#4194). A workspace Member could reach each one
   // over the API, over MCP, and through stella's search_tools and

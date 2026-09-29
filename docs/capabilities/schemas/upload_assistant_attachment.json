@@ -1,0 +1,83 @@
+{
+  "name": "upload_assistant_attachment",
+  "domain": "assistant",
+  "description": "Store one image, PDF or text file a person attaches to a message for the in-app assistant, after checking its bytes match its type and size cap, and return the id the message sends in ask_assistant's attachments.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "conversation"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "mediaType": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 127
+      },
+      "data": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 5592408
+      }
+    },
+    "required": [
+      "name",
+      "mediaType",
+      "data"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "mediaType": {
+        "type": "string",
+        "minLength": 1
+      },
+      "sizeBytes": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "sha256": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "publicId",
+      "name",
+      "mediaType",
+      "sizeBytes",
+      "sha256"
+    ],
+    "additionalProperties": false
+  }
+}

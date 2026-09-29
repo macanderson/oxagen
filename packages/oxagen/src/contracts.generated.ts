@@ -73,6 +73,7 @@ import "./contracts/approval_rule.list";
 import "./contracts/approval_rule.set";
 import "./contracts/asset.upload";
 import "./contracts/assistant.ask";
+import "./contracts/assistant.attachment.upload";
 import "./contracts/assistant.engine.get";
 import "./contracts/assistant.reply.get";
 import "./contracts/assistant.reply_feedback.record";
