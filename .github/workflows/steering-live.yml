@@ -118,7 +118,7 @@ jobs:
           private-key: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY }}
           owner: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
 
-      - name: Delete this run's workspace and repository
+      - name: Archive this run's workspace and delete its repository
         if: always() && steps.cleanup-token.outcome == 'success'
         working-directory: apps/app
         env:
