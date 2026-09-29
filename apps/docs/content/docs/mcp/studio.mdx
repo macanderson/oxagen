@@ -1,0 +1,94 @@
+---
+title: Studio drafts and review
+description: "Save your edits to one MCP server's tools as a draft, then open one steering PR that a reviewer can judge."
+---
+
+You import an MCP server's tools in Studio, sort them, and shape them. Oxagen keeps those edits as a draft, so a closed tab loses nothing. When the edits are ready, Review writes the server's folder to your workspace's steering repo as one steering PR. Nothing reaches production until that PR merges.
+
+Three capabilities hold the draft and open the PR. You can call each one over the API or as an MCP tool.
+
+| Capability | API route | What it does |
+|---|---|---|
+| `save_studio_draft` | `POST /v1/{org}/{ws}/tools/studio/draft` | Saves the staged edits for one server folder |
+| `get_studio_draft` | `POST /v1/{org}/{ws}/tools/studio/draft/get` | Reads the stored draft |
+| `open_studio_review` | `POST /v1/{org}/{ws}/tools/studio/review` | Opens the steering PR, or adds a commit to the open one |
+
+An org Owner or Admin, or a workspace Owner, can call all three. An API key acts as the person who created it. That role check is what each call enforces, on the API and through the MCP tool alike.
+
+## Save a draft
+
+Each server folder has one draft. The folder name is the server's name under `tools/servers/`.
+
+1. Stage your edits as `ops`. An edit imports a tool, removes one, classifies one, rewrites its description, or saves a test call.
+2. Send `server.toml` and the source the tools import from, such as an OpenAPI document, a GraphQL schema, `.proto` files, or an MCP server's `tools/list` result. Omit either one to keep the stored copy.
+3. Call `save_studio_draft` with the revision you started from.
+
+The revision stops two tabs from overwriting each other:
+
+- `revision: 0` starts a new draft. It never overwrites a stored one.
+- `revision: N` saves only when the stored draft is at `N`. Otherwise the save answers `conflict` with `draft_revision_stale`. Read the draft again with `get_studio_draft`, then save.
+- No revision saves over whatever is stored.
+
+Each save raises the revision by one. The save runs every check before it writes, so a refused save stores nothing.
+
+A draft holds at most 2,000 edits in 8 MiB, a 256 KiB `server.toml`, and a 25 MiB source. The API answers a request body over 36 MiB with `413` before it reads it.
+
+## Keep credentials out
+
+A saved test becomes a line of `tests/calls.jsonl` in the steering repo, and a credential in git history costs a rotation. So Oxagen refuses a credential it can recognize by name.
+
+- `server.toml` names a credential by reference only, as `oxagen:credential/<name>`.
+- A saved test keeps the request as Studio built it, before the gateway added the credential.
+- The save refuses a test whose request carries an `authorization`, `proxy-authorization`, or `cookie` header, with `test_holds_credential`. Remove the header and save the test again.
+- It refuses the same way when any other header or query parameter has a name that reads like a credential, such as `X-Api-Key` or `?access_token=`. A server may place its key anywhere, and the draft does not say where.
+- Review checks the saved tests again before it writes anything. A draft stored before the save checked tests still opens no PR while a test in it carries one.
+
+What this does not catch is a credential under a name that reads like nothing, such as `?v=`. Read a saved test before you open the review.
+
+## Open the review
+
+Call `open_studio_review` with the server name and the revision you reviewed. Review takes these steps:
+
+1. It reads the draft and refuses when the stored revision differs from yours.
+2. It resolves the steering repo's production branch to one commit and reads the server's folder at that commit.
+3. It imports the draft's source again, so the PR is built from the source and not from what Studio showed you.
+4. It builds the folder and runs the tool checks.
+5. It writes `server.toml`, `tools.toml`, `tools.lock.json`, the vendored definition (`openapi.yaml`, `schema.graphql`, or `proto/`), and `tests/calls.jsonl` under `tools/servers/<server>/`, on the branch `tools/<server>`.
+6. It records the PR on the draft.
+
+A second Review adds one commit to the PR already open on `tools/<server>`. That commit holds only the files that differ from the branch. When the PR Review recorded is gone, Review opens a new one.
+
+Review refuses while any imported tool has no `risk`, `side_effect`, or `egress`, so the PR never carries a tool a reviewer cannot judge.
+
+## What the PR body shows
+
+- The imported, removed, and reclassified tools, the changed descriptions, and the saved tests.
+- The token total of every imported tool's definition against the budget, which is `definition_budget` in `server.toml` or the default.
+- The tool checks' findings, errors first, then warnings, then info.
+
+Each list shows at most 200 tools. A body over 60,000 characters falls back to shorter lists, and then ends with a line that points to the `Oxagen steering` check.
+
+## When Review refuses
+
+Each refusal answers `conflict` (409) unless the table says otherwise.
+
+| Reason | What happened | What to do |
+|---|---|---|
+| `draft_not_found` (404) | The server folder has no draft | Save a draft first |
+| `draft_revision_stale` | The stored draft is at another revision | Read the draft again, then Review |
+| `draft_unchanged` | The open PR or the production branch already holds every edit | Nothing to do |
+| `tools_branch_moved` | A commit landed on `tools/<server>` while Review built the folder | Review again |
+| `tools_unclassified` | An imported tool has no `risk`, `side_effect`, or `egress` | Classify the tool, save, and Review |
+| `test_holds_credential` | A saved test carries a credential header | Remove the header, save, and Review |
+| `test_invalid` | A saved test does not make one recorded exchange | Record the test again, save, and Review |
+| `folder_invalid`, `definition_path_invalid` | The folder does not validate or lock, or the definition names a file outside the folder | Fix the edit the message names |
+| `server_toml_missing`, `server_toml_invalid`, `server_name_mismatch` | `server.toml` is absent, does not parse, or names another server | Save a valid `server.toml` for this server |
+| `source_required`, `source_invalid`, `importer_not_built` | Review needs the source, the source does not import, or its importer has not shipped | Save the source again, or wait for the importer |
+| `tool_not_offered`, `tool_not_found`, `tool_key_collision` | The source does not offer an imported tool, an edit names an unknown tool, or two tools make one key | Remove or rename the edit the message names |
+| `production_branch_missing` | The steering repo has no production branch | Restore the branch, then Review |
+
+## Other writers of the folder
+
+Oxagen's MCP server discovery also opens steering PRs under `tools/`. It uses the same writer as Review, so every tools steering PR follows the same branch rule, file limit, labels, and `Oxagen steering` check. ADR-224 (`docs/adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md` in the repository) records the design.
+
+See [External MCP servers](/docs/mcp/external-servers) to register a server, and [Credentials](/docs/mcp/credentials) for the credentials `server.toml` names.

@@ -397,15 +397,25 @@ function fakeStore(
 
 type StoreFns = ReturnType<typeof fakeStore>["fns"];
 
+/** The production commit every read in a run is pinned to. */
+const STEERING_COMMIT = "9f1c2e4b7a0d3f6e8c5b2a1d4e7f0c3b6a9d2e5f";
+/** The head of an open sync PR's branch, which a commit onto it is pinned to. */
+const PR_HEAD = "4c7e1a90b2d5f83e6017c4b9a2d8e5f30c6b1a94";
+
 /** The production branch as a map of paths, read at the time of each read. */
 function fakeSteering(files: Record<string, string>) {
   const tree = new Map(Object.entries(files));
-  const prs = new Map<number, { open: boolean; merged: boolean }>();
+  const prs = new Map<
+    number,
+    { open: boolean; merged: boolean; headSha: string | null }
+  >();
   const pullRequest = vi.fn<SteeringCheckout["pullRequest"]>((number) =>
-    Promise.resolve(prs.get(number) ?? { open: true, merged: false }),
+    Promise.resolve(
+      prs.get(number) ?? { open: true, merged: false, headSha: PR_HEAD },
+    ),
   );
   const checkout: SteeringCheckout = {
-    commit: "9f1c2e4b7a0d3f6e8c5b2a1d4e7f0c3b6a9d2e5f",
+    commit: STEERING_COMMIT,
     read: (path) => Promise.resolve(tree.get(path) ?? null),
     list: (dir) =>
       Promise.resolve(
@@ -420,7 +430,7 @@ function fakeSteering(files: Record<string, string>) {
       if (file.content === null) tree.delete(file.path);
       else tree.set(file.path, file.content);
     }
-    prs.set(number, { open: false, merged: true });
+    prs.set(number, { open: false, merged: true, headSha: PR_HEAD });
   };
   return { tree, prs, pullRequest, open, land };
 }
@@ -694,6 +704,64 @@ function recorded(
     open.mock.calls,
   ];
 }
+
+// ── What each write is pinned to ─────────────────────────────────────────────
+
+describe("runDiscovery pins the steering PR's commit", () => {
+  /** A prior row whose sync PR #41 is still open on its branch. */
+  function priorWithOpenPr(): DiscoveryRow {
+    return row({
+      outcome: "pr_opened",
+      pr: { number: 41, url: PR_URL, branch: "tools/sync-stripe-earlier" },
+    });
+  }
+
+  it("starts a new branch at the production commit it read the files from", async () => {
+    const h = harness({ tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES] });
+
+    await h.run("manual");
+
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    const input = h.pr.open.mock.calls[0]?.[1];
+    // Without this, the opener starts the branch at whatever production is
+    // now, and the whole-file writes revert anything merged in between.
+    expect(input?.at).toBe(STEERING_COMMIT);
+    expect(input?.existing).toBeUndefined();
+  });
+
+  it("pins a commit onto an open PR to that branch's head", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES],
+      prior: priorWithOpenPr(),
+    });
+
+    await h.run("manual");
+
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    const input = h.pr.open.mock.calls[0]?.[1];
+    // The branch's head, not the production commit: the opener's guard
+    // compares this against the head of the branch it commits to.
+    expect(input?.at).toBe(PR_HEAD);
+    expect(input?.existing).toEqual({ number: 41 });
+  });
+
+  it("sends no pin for an open PR whose branch head the host does not know", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES],
+      prior: priorWithOpenPr(),
+    });
+    h.steering.prs.set(41, { open: true, merged: false, headSha: null });
+
+    await h.run("manual");
+
+    // Fail open: the commit goes unpinned, as every commit did before the
+    // head was read, rather than refusing the update.
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    const input = h.pr.open.mock.calls[0]?.[1];
+    expect(input?.existing).toEqual({ number: 41 });
+    expect(input?.at).toBeUndefined();
+  });
+});
 
 // ── A run with no opener ─────────────────────────────────────────────────────
 
@@ -1283,7 +1351,7 @@ describe("runDiscovery across runs", () => {
       tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
     });
     await h.run("schedule");
-    h.steering.prs.set(41, { open: false, merged: false });
+    h.steering.prs.set(41, { open: false, merged: false, headSha: PR_HEAD });
 
     const closed = await h.run("schedule");
 
