@@ -8,11 +8,20 @@
 // The facet options are the closed vocabularies the read filters on
 // (`list-query.ts`), so a facet can pick a tier no run on this page carries.
 // The search sends what was typed once typing pauses, or at once on Enter.
+// Each select is the app's Select, so its list opens on the translucent menu
+// surface.
 import { ColumnsIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/ui/select";
 import {
   type FleetListQuery,
   REPLAY_FACET,
@@ -31,8 +40,50 @@ export const SEARCH_PAUSE_MS = 400;
 
 const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
 
-const selectBase =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-xs text-input-fg max-md:min-h-11 max-md:text-base focus-visible:outline-2 focus-visible:outline-input-ring";
+const triggerSize = "text-xs max-md:min-h-11 max-md:text-base";
+
+type Choice = { value: string; label: string };
+
+/** A small select over `items`, handing on the value picked. */
+function BarSelect({
+  items,
+  value,
+  onValue,
+  label,
+  testId,
+}: {
+  items: readonly Choice[];
+  value: string;
+  onValue: (next: string) => void;
+  label: string;
+  testId: string;
+}) {
+  return (
+    <Select
+      items={items}
+      value={value}
+      onValueChange={(next) => {
+        if (next !== null && next !== value) onValue(next);
+      }}
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label={label}
+        data-testid={testId}
+        className={triggerSize}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 type Facet = "status" | "tier" | "replay";
 
@@ -58,28 +109,24 @@ function FacetSelect<T extends string>({
 }) {
   const t = useTranslations("fleet.runs");
   const combined = chosen.length > 1 ? chosen.join(",") : null;
+  const items: Choice[] = [
+    { value: "", label: t("facetAll", { facet: label }) },
+    ...(combined === null
+      ? []
+      : [{ value: combined, label: chosen.map(wordOf).join(", ") }]),
+    ...options.map((value) => ({ value, label: wordOf(value) })),
+  ];
   return (
-    <select
-      aria-label={t("facetLabel", { facet: label })}
-      data-testid={`facet-${facet}`}
+    <BarSelect
+      items={items}
       value={combined ?? chosen[0] ?? ""}
-      onChange={(event) => {
-        const value = event.target.value;
+      label={t("facetLabel", { facet: label })}
+      testId={`facet-${facet}`}
+      onValue={(value) => {
         const picked = options.find((option) => option === value);
         onChange(picked === undefined ? [] : [picked]);
       }}
-      className={selectBase}
-    >
-      <option value="">{t("facetAll", { facet: label })}</option>
-      {combined === null ? null : (
-        <option value={combined}>{chosen.map(wordOf).join(", ")}</option>
-      )}
-      {options.map((value) => (
-        <option key={value} value={value}>
-          {wordOf(value)}
-        </option>
-      ))}
-    </select>
+    />
   );
 }
 
@@ -211,22 +258,19 @@ export function RunsListBar({
           onList(withList(list, { status: next }));
         }}
       />
-      <select
-        aria-label={t("prFilter.label")}
-        data-testid="pr-filter"
+      <BarSelect
+        items={PR_FILTERS.map((filter) => ({
+          value: filter,
+          label: t(`prFilter.${filter}`),
+        }))}
         value={pullRequests}
-        onChange={(event) => {
-          const next = PR_FILTERS.find((f) => f === event.target.value);
+        label={t("prFilter.label")}
+        testId="pr-filter"
+        onValue={(value) => {
+          const next = PR_FILTERS.find((f) => f === value);
           if (next !== undefined) onPullRequests(next);
         }}
-        className={selectBase}
-      >
-        {PR_FILTERS.map((filter) => (
-          <option key={filter} value={filter}>
-            {t(`prFilter.${filter}`)}
-          </option>
-        ))}
-      </select>
+      />
       <button
         type="button"
         data-testid="columns-open"
