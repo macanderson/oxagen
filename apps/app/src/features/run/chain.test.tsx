@@ -465,10 +465,11 @@ describe("ChainSection", () => {
       "href",
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=200",
     );
-    expect(within(first).getByText("dddddddd…")).toHaveAttribute(
-      "title",
-      CHECKPOINT.chainHead,
-    );
+    // The cell carries the whole head for its hover card, which a title
+    // would show to a pointer alone (#4692).
+    const head = within(first).getByText("dddddddd…");
+    expect(head).toHaveAttribute("data-truncate", CHECKPOINT.chainHead);
+    expect(head).not.toHaveAttribute("title");
     expect(within(first).getByText("countersigned")).toBeTruthy();
     expect(within(first).getByText("pk_01k4qj9e")).toBeTruthy();
     expect(

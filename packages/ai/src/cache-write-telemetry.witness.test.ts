@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   recordSpend: vi.fn(),
   streamText: vi.fn(),
   generateObject: vi.fn(),
-  insertTokenUsage: vi.fn(),
+  stagedUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerFromModelId: vi.fn(),
   defaultModel: vi.fn(),
@@ -21,7 +21,6 @@ vi.mock("ai", () => ({
 }));
 vi.mock("@oxagen/telemetry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
-  insertTokenUsage: mocks.insertTokenUsage,
   hashPrompt: mocks.hashPrompt,
   providerFromModelId: mocks.providerFromModelId,
 }));
@@ -32,7 +31,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => ({
   admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
   finalizeUsage: vi.fn(
     async ({ row, charge }: { row: unknown; charge?: unknown }) => {
-      await mocks.insertTokenUsage([row]);
+      await mocks.stagedUsage([row]);
       if (charge) await mocks.chargeUsageCredits(charge);
     },
   ),
@@ -74,7 +73,7 @@ beforeEach(() => {
   mocks.defaultModel.mockReturnValue({ modelId: "anthropic/claude-sonnet-5" });
   mocks.providerFromModelId.mockReturnValue("anthropic");
   mocks.hashPrompt.mockResolvedValue("prompt-hash");
-  mocks.insertTokenUsage.mockResolvedValue(undefined);
+  mocks.stagedUsage.mockResolvedValue(undefined);
   mocks.providerCostUsdMicros.mockReturnValue(1);
   mocks.chargeUsageCredits.mockResolvedValue({
     costUsdMicros: 1,
@@ -111,7 +110,7 @@ describe("cache-write token telemetry", () => {
       finishReason: "stop",
     });
 
-    const rows = mocks.insertTokenUsage.mock.calls[0]?.[0] as Array<
+    const rows = mocks.stagedUsage.mock.calls[0]?.[0] as Array<
       Record<string, unknown>
     >;
     expect(rows[0]?.cache_write_tokens).toBe(25);
@@ -140,7 +139,7 @@ describe("cache-write token telemetry", () => {
       telemetry,
     });
 
-    const rows = mocks.insertTokenUsage.mock.calls[0]?.[0] as Array<
+    const rows = mocks.stagedUsage.mock.calls[0]?.[0] as Array<
       Record<string, unknown>
     >;
     expect(rows[0]?.cache_write_tokens).toBe(12);

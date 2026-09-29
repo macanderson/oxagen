@@ -1231,6 +1231,20 @@ describe("CostTab's tool costs (#3892)", () => {
       }),
     );
     const tools = screen.getAllByTestId("dearest-tool");
+    // A long tool name ends in an ellipsis and shows whole in the hover card.
+    // The name is the marked element's own text, so the mark sits on the name
+    // alone and holds no value of its own (#4692).
+    const names = tools.map((tool) => tool.firstElementChild);
+    for (const name of names) expect(name).toHaveAttribute("data-truncate", "");
+    expect(names.map((name) => name?.textContent)).toEqual([
+      "mcp__github__list_pull_requests",
+      "Read",
+      "Grep",
+    ]);
+    for (const tool of tools) {
+      expect(tool.querySelectorAll("[data-truncate]")).toHaveLength(1);
+      expect(tool.querySelector("[title]")).toBeNull();
+    }
     expect(tools.map((row) => row.textContent)).toEqual([
       "mcp__github__list_pull_requests1 call · $0.45",
       "Read5 calls · $0.30",

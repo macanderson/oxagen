@@ -13,7 +13,11 @@ import {
   type HookDraft,
   type HookInput,
 } from "../claude-code/hooks";
-import { digestText } from "../claude-code/context";
+import {
+  type DeliveredContext,
+  digestText,
+  readDeliveredContext,
+} from "../claude-code/context";
 import { classifyShellEffect } from "../claude-code/tools";
 import type { TachoEvent } from "../envelope";
 import {
@@ -184,6 +188,12 @@ export interface HookReplay {
   receivedAt: string;
   /** The decision `tacho-hook` made from the cached bundle. */
   evaluation?: Evaluation;
+  /**
+   * The steering text `tacho-hook` handed the agent when it answered a
+   * `SessionStart` from the cached bundle. A replayed start seals this, not
+   * the bundle the daemon holds when it replays.
+   */
+  deliveredContext?: DeliveredContext;
   /**
    * The daemon received the hook live and deferred it (a SessionEnd waiting
    * for its git read). The frame carries `hook.received_at` and not
@@ -1087,18 +1097,42 @@ async function routeHook(
               .filter((s) => s.length > 0)
               .join(CONTEXT_JOINER)
           : "";
+      // A replayed start was answered by `tacho-hook` from its cached
+      // bundle, and the daemon's bundle may have changed since. So a replay
+      // seals the text the client recorded handing the agent. A spool
+      // written before the client recorded it carries nothing, and its
+      // replay seals neither attribute, because the current bundle's digest
+      // would claim text nobody can show the agent saw.
+      const delivered =
+        replay === undefined
+          ? undefined
+          : readDeliveredContext(replay.deliveredContext);
+      const deliveryAttrs: Record<string, string> =
+        replay === undefined
+          ? {
+              // A blocked start hands the agent nothing, so it names no text.
+              ...(context !== null && block === undefined
+                ? { "oxagen.context_digest": digestText(context) }
+                : {}),
+              // How much text this answer hands the agent, prefix and
+              // messages together, to set against Claude Code's limit.
+              "oxagen.delivered_chars": String(additional.length),
+            }
+          : delivered === undefined
+            ? {}
+            : {
+                ...(delivered.digest !== undefined
+                  ? { "oxagen.context_digest": delivered.digest }
+                  : {}),
+                "oxagen.delivered_chars": String(delivered.chars),
+              };
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
             ...draft,
             attrs: {
               ...draft.attrs,
-              ...(context !== null
-                ? { "oxagen.context_digest": digestText(context) }
-                : {}),
-              // How much text this answer hands the agent, prefix and
-              // messages together, to set against Claude Code's limit.
-              "oxagen.delivered_chars": String(additional.length),
+              ...deliveryAttrs,
               ...(block !== undefined
                 ? { "policy.reason_code": block.code }
                 : {}),
@@ -1137,8 +1171,19 @@ async function routeHook(
       // delivered with the prefix. A bundle from a control plane that signs
       // no manifest seals no frame, and the start event's context digest is
       // still the record of the text.
+      //
+      // A replay seals the current bundle's manifest only when the client
+      // answered from this same bundle. Equal text is not enough: a newer
+      // bundle can keep the text and change a permission, a skill or a cut
+      // record, and its frame would credit that mandate to the earlier run.
+      // A replay whose spool names no bundle seals no frame.
       const manifest = view.bundle.context.manifest;
-      if (manifest !== undefined) {
+      if (
+        manifest !== undefined &&
+        (replay === undefined ||
+          (delivered?.bundle_etag === view.bundle.etag &&
+            manifest.text_digest === (delivered.digest ?? null)))
+      ) {
         events.push(
           record.recorder.sealCollectorEvent(
             "steering.manifest",

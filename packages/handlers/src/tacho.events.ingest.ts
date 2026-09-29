@@ -49,8 +49,12 @@
 // counts, the chain verdict and the host's own gaps, and writes
 // `replay_grade` and `completeness_gaps` on the session row.
 
-import type { CapabilityHandler } from "@oxagen/oxagen";
-import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
+import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
+import {
+  tachoEventsIngest,
+  type TachoEventsIngestInput,
+  type TachoEventsIngestOutput,
+} from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { TachoSealSource } from "@oxagen/database/schema";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
@@ -130,6 +134,10 @@ import {
   unstorableBatch,
 } from "./lib/tacho-host";
 import {
+  type HostSkillsReader,
+  hostSkillsReader,
+} from "./lib/tacho-host-skills";
+import {
   continuesRecordedChain,
   readSuccessionHosts,
   succeedsHost,
@@ -143,6 +151,10 @@ import {
   type VerifiedBody,
 } from "./lib/tacho-replay";
 import { logger } from "./logger";
+import {
+  type TachoPublished,
+  VERSION_STORE_PUBLISHED,
+} from "./tacho.published";
 
 type Body = Record<string, unknown>;
 
@@ -1361,17 +1373,35 @@ export function firstRootPrompts(
   return new Map([...first].map(([root, { text }]) => [root, text]));
 }
 
-export const tachoEventsIngestHandler: CapabilityHandler<
-  typeof tachoEventsIngest
-> = (input, ctx) =>
-  ingestBatch(input, ctx).catch((err: unknown) => {
-    throw unstorableBatch("ingest_tacho_events", err) ?? err;
-  });
+export interface TachoEventsIngestDeps {
+  /** The workspace's and the organization's published steering, for the skills the envelope's etag covers. */
+  published: TachoPublished;
+}
 
-const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
-  input,
-  ctx,
-) => {
+/** The same version store `get_tacho_bundle` reads, so both serve one etag. */
+export const defaultTachoEventsIngestDeps: TachoEventsIngestDeps = {
+  published: VERSION_STORE_PUBLISHED,
+};
+
+export function createTachoEventsIngestHandler(
+  deps: TachoEventsIngestDeps,
+): CapabilityHandler<typeof tachoEventsIngest> {
+  const skillsReader = hostSkillsReader(deps.published);
+  return (input, ctx) =>
+    ingestBatch(input, ctx, skillsReader).catch((err: unknown) => {
+      throw unstorableBatch("ingest_tacho_events", err) ?? err;
+    });
+}
+
+export const tachoEventsIngestHandler = createTachoEventsIngestHandler(
+  defaultTachoEventsIngestDeps,
+);
+
+const ingestBatch = async (
+  input: TachoEventsIngestInput,
+  ctx: CheckedContext,
+  skillsReader: HostSkillsReader,
+): Promise<TachoEventsIngestOutput> => {
   const now = new Date();
   const capability = "ingest_tacho_events";
 
@@ -3039,8 +3069,13 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
   // billing step) left commands marked `sent` in a response the host never
   // received: a pause or a steer held back for that lease. Drained here, any
   // earlier failure leaves them queued, and the re-sent batch delivers them.
+  //
+  // The envelope's etag covers the host's published skills, as the bundle's
+  // does, so they are read first, outside any tenant transaction
+  // (./lib/tacho-host-skills.ts says why).
+  const skills = await skillsReader.read(capability, ctx, result.seen);
   const control = await withTenantDb((tx) =>
-    controlEnvelope(tx as never, ctx, result.seen, new Date()),
+    controlEnvelope(tx as never, ctx, result.seen, new Date(), skills),
   );
 
   return {

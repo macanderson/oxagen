@@ -315,3 +315,32 @@ describe("a role that may not write membership", () => {
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
   });
 });
+
+// The member table clips a body cell unless the cell holds `[data-actions]`.
+// Both branches must mark the group that holds their controls. This file
+// renders the row actions alone, so it checks the mark and leaves the cell to
+// the table.
+describe("the row actions", () => {
+  it("marks the row actions so the cell shows every button (#4674)", () => {
+    renderActions({}, true, "Org role facts");
+    const group = screen
+      .getByRole("button", { name: "Remove" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Open" }),
+    );
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Change role" }),
+    );
+  });
+
+  it("marks the row actions for a role that may not write membership (#4674)", () => {
+    renderActions({}, false, "Org role facts");
+    const group = screen
+      .getByRole("button", { name: "Open" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(screen.getByTestId("member-actions-denied"));
+  });
+});

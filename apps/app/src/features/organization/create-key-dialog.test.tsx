@@ -448,6 +448,22 @@ describe("a key that may not be rotated", () => {
   });
 });
 
+// The key table clips a body cell unless the cell holds `[data-actions]`, so
+// Rotate and Revoke must share that one marked group. This file renders the
+// row actions alone, so it checks the mark and leaves the cell to the table.
+describe("the row actions", () => {
+  it("marks the row actions so the cell shows every button (#4674)", () => {
+    renderRow();
+    const group = screen
+      .getByRole("button", { name: "Rotate" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Revoke" }),
+    );
+  });
+});
+
 describe("revoke", () => {
   it("ends the key and reloads the page, showing no secret", async () => {
     // The root layout's toaster, where the receipt lands (ADR-221).

@@ -700,6 +700,19 @@ describe("Tools › auto-approvals", () => {
     ).not.toBeNull();
   });
 
+  // The rules table clips a body cell unless the cell holds `[data-actions]`,
+  // so Edit and Delete must share that one marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderRules(readOk(approvalRuleSet()));
+    const row = within(ruleRow("small-refunds"));
+    const group = row
+      .getByTestId("rule-delete-small-refunds")
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(row.getByTestId("rule-edit-small-refunds"));
+    expect(group?.closest("td")).not.toBeNull();
+  });
+
   // A rule with no stamp does not qualify until it is written again. The row
   // says so rather than printing an empty list of consequences.
   it("says a rule with no consequence stamp releases nothing until it is saved again", async () => {

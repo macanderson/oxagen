@@ -236,7 +236,16 @@ describe("toolDetail", () => {
         group: "read",
         headline: "…/src/kernel.ts",
         detail: "lines 10–29",
+        // The hover card's line keeps the path whole (#4692).
+        whole: "/repo/apps/app/src/kernel.ts · lines 10–29",
       });
+    });
+
+    it("carries no whole line when the path was already short (negative)", () => {
+      expect(
+        read("Read", body({ input: { file_path: "a.ts", offset: 4 } }))?.whole,
+      ).toBeNull();
+      expect(read("Read", body({ input: {} }))?.whole).toBeNull();
     });
 
     it("says an open-ended range, and nothing when none was recorded", () => {
@@ -273,6 +282,7 @@ describe("toolDetail", () => {
       );
       expect(detail?.headline).toBe("…/src/a.ts");
       expect(detail?.detail).toBeNull();
+      expect(detail?.whole).toBe("/repo/src/a.ts");
       expect(detail?.diffs).toHaveLength(1);
       expect(detail?.diffs[0]).toMatchObject({
         path: "/repo/src/a.ts",
@@ -340,6 +350,7 @@ describe("toolDetail", () => {
         }),
       );
       expect(detail?.headline).toBe("…/docs/NOTES.md");
+      expect(detail?.whole).toBe("/repo/docs/NOTES.md");
       expect(detail?.diffs[0]).toMatchObject({
         path: "/repo/docs/NOTES.md",
         created: true,
@@ -362,10 +373,11 @@ describe("toolDetail", () => {
         group: "search",
         headline: "TODO",
         detail: "in …/a/src",
+        whole: "TODO · in /r/a/src",
       });
       expect(
         read("Glob", body({ input: { pattern: "**/*.ts" } })),
-      ).toMatchObject({ headline: "**/*.ts", detail: null });
+      ).toMatchObject({ headline: "**/*.ts", detail: null, whole: null });
     });
 
     it("heads a fetch with its URL, and keeps what it was asked in the call", () => {
