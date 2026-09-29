@@ -25,6 +25,7 @@ describe("@oxagen/notifications public surface", () => {
     expect(typeof pkg.createSmtpTransport).toBe("function");
     expect(typeof pkg.createNotification).toBe("function");
     expect(typeof pkg.notifyOrgManagers).toBe("function");
+    expect(typeof pkg.notifyOrgSlack).toBe("function");
     expect(typeof pkg.reauthEmailTemplate).toBe("function");
   });
 
