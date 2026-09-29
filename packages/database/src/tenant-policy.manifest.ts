@@ -251,6 +251,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // One embedding per search entry of a search-mode server (M15, ADR-217):
   // orgScopeMixin → standard.
   { table: "mcp.search_embeddings", policyClass: "standard" },
+  // Relays for servers in a private network (M12, #4685): org_id +
+  // workspace_id NOT NULL → standard. Every reader goes through withSystemDb
+  // on the shared plane, because the broker looks a token up before any org
+  // is known, so the policy is the backstop, not the filter.
+  { table: "mcp.relays", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
