@@ -1,0 +1,51 @@
+# The v0.3 workflow in agent-work-spec.html (Workflows), copied verbatim.
+schema = "oxagen-workflow/v0.3"
+name = "Fix, test, verify, review"
+owner = "priya"
+
+[match]
+labels = ["Bug"]
+collectors = ["support-zendesk", "github-core"]
+
+[done]
+criteria = [
+  "A test fails before the change and passes after it.",
+  "CI passes on the pull request.",
+]
+
+[[stage]]
+role = "Fix"
+kind = "build"
+agent = "aintel.core.bug-fixer"     # harness claude-code
+owns = ["code"]
+on_fail = "stop"
+
+[[stage]]
+role = "Test"
+kind = "test"
+agent = "aintel.core.test-writer"   # harness codex
+needs = ["Fix"]
+owns = ["test"]
+on_fail = "return"
+return_to = "Fix"
+max_returns = 2
+
+[[stage]]
+role = "Verify"
+kind = "verify"
+agent = "aintel.core.verifier"      # harness stella, runtime contained
+needs = ["Test"]
+model = "verify-route"
+
+[[stage]]
+role = "Review"
+kind = "review"
+agent = "aintel.core.architect"
+needs = ["Verify"]
+owns = ["review"]
+on_fail = "return"
+return_to = "Fix"
+max_returns = 1
+
+[accept]
+by = "operator"   # or "proven", at level 2 and above

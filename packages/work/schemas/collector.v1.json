@@ -1,0 +1,533 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/collector/v1.json",
+  "title": "Collector",
+  "description": "work/collectors/<name>.toml: one outside system a workspace reads work items from, the part of it the collector reads, and what Oxagen writes back. The file names a connection and never holds a credential.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "label",
+    "type",
+    "scope"
+  ],
+  "properties": {
+    "schema": {
+      "const": "collector/v1"
+    },
+    "name": {
+      "$ref": "#/$defs/slug",
+      "description": "The collector's name. It matches the file name."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "The name people see."
+    },
+    "type": {
+      "enum": [
+        "github",
+        "jira",
+        "linear",
+        "zendesk",
+        "servicenow",
+        "salesforce",
+        "slack",
+        "email"
+      ],
+      "description": "The collector module, packages/ingestion/src/collectors/<type>.ts."
+    },
+    "connection": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The id of the source connection that holds the OAuth token or signing secret. Email has none."
+    },
+    "scope": {
+      "type": "object",
+      "description": "The part of the provider the collector reads. Its keys depend on type."
+    },
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "write_back": {
+      "$ref": "#/$defs/writeBack"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "github"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/githubScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "jira"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/jiraScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "linear"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/linearScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "zendesk"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/zendeskScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "servicenow"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/servicenowScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "salesforce"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/salesforceScope"
+          }
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "slack"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/slackScope"
+          },
+          "write_back": false
+        },
+        "required": [
+          "connection"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "email"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "#/$defs/emailScope"
+          },
+          "connection": false,
+          "write_back": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64,
+      "description": "Lowercase words joined by single hyphens."
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What every work item from this collector starts with.",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "workflow": {
+          "$ref": "#/$defs/slug",
+          "description": "The workflow file's slug in work/workflows/."
+        }
+      }
+    },
+    "writeBack": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What Oxagen writes back to the provider. Slack and email have no write-back.",
+      "properties": {
+        "certify_note": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add a note when a person certifies the work item."
+        },
+        "send_note": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add a note when a work order is sent."
+        },
+        "status": {
+          "type": "boolean",
+          "default": false,
+          "description": "Move the provider status as the work moves."
+        },
+        "close": {
+          "type": "boolean",
+          "default": false,
+          "description": "Close the provider item when the work is accepted."
+        },
+        "labels": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write the Priority and Type labels triage chose."
+        }
+      }
+    },
+    "githubScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repos"
+      ],
+      "properties": {
+        "repos": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$"
+          },
+          "description": "One or more owner/name repositories."
+        }
+      }
+    },
+    "jiraScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "site",
+        "projects"
+      ],
+      "properties": {
+        "site": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The Jira Cloud site, such as aintel.atlassian.net."
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "description": "Project keys."
+        },
+        "jql": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A JQL filter applied inside the projects."
+        }
+      }
+    },
+    "linearScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "teams"
+      ],
+      "properties": {
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "description": "Team keys."
+        }
+      }
+    },
+    "zendeskScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subdomain"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "views"
+          ]
+        },
+        {
+          "required": [
+            "groups"
+          ]
+        }
+      ],
+      "properties": {
+        "subdomain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      }
+    },
+    "servicenowScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance"
+      ],
+      "properties": {
+        "instance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "table": {
+          "type": "string",
+          "minLength": 1,
+          "default": "incident"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An encoded query."
+        }
+      }
+    },
+    "salesforceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "my_domain"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "record_types"
+          ]
+        },
+        {
+          "required": [
+            "queues"
+          ]
+        }
+      ],
+      "properties": {
+        "my_domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "record_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "queues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        }
+      }
+    },
+    "slackScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel"
+      ],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "pattern": "^[CG][0-9A-Z]+$",
+          "description": "A channel id."
+        },
+        "trigger": {
+          "enum": [
+            "reaction",
+            "every_message"
+          ],
+          "default": "reaction",
+          "description": "reaction reads a message when someone adds the collector's reaction. every_message reads every top-level message."
+        },
+        "allow_bots": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^B[0-9A-Z]+$"
+          },
+          "description": "Bot ids whose messages the collector reads. Every other bot is ignored."
+        }
+      }
+    },
+    "emailScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow"
+      ],
+      "properties": {
+        "allow": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sender"
+          },
+          "description": "Senders whose mail becomes a work item: an address, or @domain for a whole domain."
+        },
+        "forwarders": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sender"
+          },
+          "description": "Addresses that forward mail from an allowed sender."
+        }
+      }
+    },
+    "sender": {
+      "type": "string",
+      "pattern": "^(@[^@\\s]+|[^@\\s]+@[^@\\s]+)$"
+    }
+  }
+}

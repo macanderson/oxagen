@@ -1,0 +1,32 @@
+schema: done-record/v1
+item: wi_01K5ZQ4M8T2DXW
+lineage: aintel.platform.invoice-export-timeout
+drafted_by:
+  model: triage-second
+  decision: tri_01K5ZQ5A1C9E
+criteria:
+  - id: c1
+    text: Invoice export finishes for an account with 10,000 invoices.
+    tag: code
+    check: { run: "pnpm --filter @aintel/billing test -- export.large" }
+    oracle: { class: executable, witness: "tests/billing/export.large.test.ts" }
+    negative: An account with 10,001 invoices exports in two pages.
+  - id: c2
+    text: The change touches only billing code and its tests.
+    tag: code
+    check: { diff: { allow: ["src/billing/**", "tests/billing/**"], deny: ["migrations/**"] } }
+    oracle: { class: structural }
+    negative: A change to src/auth/session.ts fails.
+  - id: c3
+    text: The export writes one row per invoice, voided invoices included.
+    tag: test
+    oracle: { class: predicate, witness: "witness/export-rows.json" }
+    negative: An account with one voided invoice gets 3 rows for 3 invoices.
+  - id: c4
+    text: The billing owner signs off on the page size.
+    tag: review
+    check: { human: "sam" }
+lock:
+  digest: sha256:0e5a9c2d7b41f83e6a0c9d1b5f27e4a8c3d60b9f1e2a7c54d8b0f3e6a19c2d7b
+  by: priya
+  at: 2026-09-26T18:04:11Z

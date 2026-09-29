@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/triage/v1.json",
+  "title": "Triage decision",
+  "description": "work.triage_decisions.output: one triage decision on one work item. The triage agent writes it as structured output, and Oxagen rejects output that fails this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "item",
+    "state",
+    "priority",
+    "labels",
+    "estimate_minutes",
+    "claims",
+    "duplicates",
+    "related",
+    "workflow",
+    "done_record",
+    "questions",
+    "conflicts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "triage/v1"
+    },
+    "item": {
+      "$ref": "#/$defs/workItemId"
+    },
+    "state": {
+      "enum": [
+        "triaged",
+        "needs_info",
+        "duplicate",
+        "out_of_scope"
+      ]
+    },
+    "priority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "reason",
+        "cites"
+      ],
+      "properties": {
+        "label": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cites": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]#[0-9]+$"
+          },
+          "description": "Rules of the priorities record, as <lineage>#<number>."
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "estimate_minutes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Estimated agent minutes."
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "description": "Path globs the agent predicts the work will change."
+    },
+    "duplicates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/workItemId"
+      }
+    },
+    "related": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/workItemId"
+      }
+    },
+    "workflow": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/slug"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The workflow's slug. Null only when the state is not triaged."
+    },
+    "done_record": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "criteria"
+          ],
+          "properties": {
+            "criteria": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The criteria of the drafted done record. Null only when the state is not triaged."
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Questions for the people in the workspace. Never for the requester."
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Conflicts with open work the agent found."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "triaged"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "workflow": {
+            "$ref": "#/$defs/slug"
+          },
+          "done_record": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "needs_info"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "duplicate"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "duplicates": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "out_of_scope"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "done_record": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64,
+      "description": "Lowercase words joined by single hyphens."
+    },
+    "workItemId": {
+      "type": "string",
+      "pattern": "^wi_[0-9A-Za-z]+$",
+      "description": "A work item's public id."
+    }
+  }
+}
