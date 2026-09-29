@@ -138,6 +138,35 @@ describe("createFunction adapter", () => {
       );
     });
 
+    it("passes throttle through in Inngest's own shape", () => {
+      createFunction(
+        {
+          id: "work.triage.item",
+          throttle: {
+            limit: 60,
+            period: "1m",
+            key: "event.data.workspace_id",
+            burst: 2,
+          },
+        },
+        { event: "work/item.received" },
+        async () => undefined,
+      );
+      expect((capturedConfigs[0] as Record<string, unknown>).throttle).toEqual({
+        limit: 60,
+        period: "1m",
+        key: "event.data.workspace_id",
+        burst: 2,
+      });
+    });
+
+    it("sends no throttle for a function that sets none (negative)", () => {
+      createFunction({ id: "plain" }, { event: "x/y" }, async () => undefined);
+      expect(capturedConfigs[0] as Record<string, unknown>).not.toHaveProperty(
+        "throttle",
+      );
+    });
+
     it("translates event trigger to Inngest format", () => {
       const config: DurableFunctionConfig = { id: "test" };
       const trigger: DurableFunctionTrigger = { event: "my/event" };
