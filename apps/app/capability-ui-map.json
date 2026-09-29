@@ -1252,6 +1252,15 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-cost-price-book-autoseed"
     },
+    "render_chart": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The shell's assistant flyout draws the oxagen-chart block the assistant pastes into its reply as a chart, a small dashboard of tiles, and a table of every value (features/shell/assistant-markdown.tsx, features/shell/assistant-chart.tsx)",
+      "testid": "assistant-chart",
+      "proof": "apps/app/src/features/shell/assistant-chart.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "session-3c9a5306"
+    },
     "repair_steering_repo": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",

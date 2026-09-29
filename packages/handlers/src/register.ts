@@ -764,6 +764,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./assistant.reply_feedback.record"))
         .assistantReplyFeedbackRecordHandler as CapabilityHandlerFn,
   );
+  // A chart or small dashboard the assistant draws in its reply. It reads no
+  // store: the handler checks the spec and returns it as a fenced block.
+  registerHandler(
+    "render_chart",
+    async () =>
+      (await import("./assistant.chart.render"))
+        .assistantChartRenderHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "export_data",
     async () =>

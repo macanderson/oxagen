@@ -165,6 +165,7 @@ import { assistantEngineGet } from "./assistant.engine.get";
 import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
 import { assistantTurnCancel } from "./assistant.turn.cancel";
+import { assistantChartRender } from "./assistant.chart.render";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -826,6 +827,7 @@ export {
   assistantReplyGet,
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
+  assistantChartRender,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1252,6 +1254,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assistantReplyGet,
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
+  assistantChartRender,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,

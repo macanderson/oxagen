@@ -281,6 +281,10 @@
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
     },
+    "chart": {
+      "notRecorded": "not recorded",
+      "table": "Table"
+    },
     "toast": {
       "region": "Notifications",
       "close": "Close"

@@ -8079,6 +8079,13 @@ type Messages = {
         recordedWrong: string;
         failed: string;
       };
+      chart: {
+        drawing: string;
+        unreadable: string;
+        source: string;
+        item: string;
+        withUnit: string;
+      };
     };
     approvals: {
       title: string;
@@ -8773,6 +8780,9 @@ type Messages = {
       on: string;
       average: string;
       sparkline: string;
+      noPricedDay: string;
+      day: string;
+      spend: string;
       cross: {
         tool: string;
         agent: string;
@@ -9042,6 +9052,12 @@ type Messages = {
         failed: string;
       };
     };
+    agentChart: {
+      title: string;
+      label: string;
+      footer: string;
+      otherCurrency: string;
+    };
     toolChart: {
       metric: {
         cumulative: string;
@@ -9052,6 +9068,7 @@ type Messages = {
       label: string;
       empty: string;
       footer: string;
+      otherCurrency: string;
     };
   };
   steering: {
@@ -11174,6 +11191,10 @@ type Messages = {
       };
       failed: string;
       photoPlaceholder: string;
+    };
+    chart: {
+      notRecorded: string;
+      table: string;
     };
     toast: {
       region: string;

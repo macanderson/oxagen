@@ -3477,6 +3477,16 @@
       "consumes": []
     },
     {
+      "name": "render_chart",
+      "domain": "assistant",
+      "surfaces": [
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "repair_steering_repo",
       "domain": "repository",
       "surfaces": [
