@@ -53,8 +53,9 @@ lane S1, #4450) runs seven steps, one at a time:
 | 3 | `add_to_installation` | GitHub only. Uses the owner's user token to add the new repository to the installation. |
 | 4 | `write_first_commit` | Commits "Seed the steering repo" to `main`. |
 | 5 | `apply_settings` | Applies the prescribed settings, then reads them back and compares. |
-| 6 | `publish_version` | Publishes version 1 and records a deployment to the `steering` environment. |
-| 7 | `bind_repository` | Workspace only. Writes a head with role `steering`. |
+| 6 | `register_webhook` | GitLab only. Adds a project hook that sends push and merge request events to Oxagen. A URL GitLab refuses logs a warning and does not stop the run. |
+| 7 | `publish_version` | Records version 1 as a deployment to the `steering` environment. |
+| 8 | `bind_repository` | Workspace only. Writes a head with role `steering`, then publishes the first commit through the version store as version 1, so the first steering PR publishes version 2 (#4732). |
 
 `create_workspace` (`workspace.create.ts`), the organization create, and the
 GitHub OAuth callback start the job with `steering-repo/provision.requested`.
