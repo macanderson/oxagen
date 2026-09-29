@@ -140,6 +140,11 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 
 - The **Callback URL** must exactly match `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. Localhost
   is valid here because the *browser* performs the redirect (GitHub's servers don't call it).
+- **The first Callback URL is the one GitHub uses.** `buildInstallAuthUrl` and
+  `buildIdentityAuthUrl` (`packages/github/src/install-url.ts`) pass no `redirect_uri`, so GitHub
+  returns every connect to the first URL in the list. A second or wildcard entry never receives a
+  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first until ADR-215 step A3 puts
+  `https://api.oxagen.app/oauth/github/callback` there.
 - **Expire user authorization tokens — leave OFF for now.** The callback stores a `refresh_token`
   when present, but there is **no token-refresh job wired yet**. Non-expiring user tokens avoid
   silent sync failures until refresh is implemented. (Revisit when installation tokens land.)

@@ -80,7 +80,7 @@ does not survive a redirect.
 |---|---|---|
 | 1 | CI | The PR that adds this record merges. `infra.yml` moves `oxagen.app` out of the vanity set, adds its certificate to the ALB, and points both names at the ALB. `oxagen.app` keeps redirecting to `app.oxagen.sh`, now from the ALB. |
 | 2 | Mac | Run `infra/tools/install-node-scripts.sh`, so Caddy routes `oxagen.app` and `www.oxagen.app` to the app. |
-| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, the GitHub App (callback and setup URL), Linear, and each preregistered MCP client. |
+| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, Linear, and each preregistered MCP client, and set the GitHub App's Setup URL to `https://oxagen.app/github/setup`. The API serves the GitHub App's callback and webhook, so they follow the API (step A3). |
 | 4 | Agent | Open the cutover PR: `APP_PROD_URL` and the `app.oxagen.sh` fallbacks in code become `https://oxagen.app`, the listener rule goes, and links and deploy probes move to `oxagen.app`. |
 | 5 | Mac | After the cutover PR merges and before its `deploy app.oxagen.sh` job starts, set `BETTER_AUTH_URL`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and `OAUTH_PROXY_PRODUCTION_URL` under `/oxagen/production` to `https://oxagen.app` where they exist. Add it to `BETTER_AUTH_TRUSTED_ORIGINS` if that exists. Move the GitHub sign-in OAuth app's one callback URL to `https://oxagen.app/api/auth/callback/github`. |
 
@@ -138,3 +138,28 @@ deploy lands.
 - **The mail records stay.** `oxagen.app` keeps the null MX, `v=spf1 -all`,
   and `p=reject` DMARC records it had as a vanity domain. Remove all three
   together if the app starts sending mail from it.
+
+## Amendment 2026-09-28: the API moves to api.oxagen.app
+
+Mac decided on 2026-09-28 that the API is served at `api.oxagen.app` (#4709).
+The record above moved only the web app. No decision moves `mcp.oxagen.sh` or
+`docs.oxagen.sh`.
+
+- **Both names answer.** `api.oxagen.app` serves the API beside
+  `api.oxagen.sh`, and neither redirects to the other. A webhook POST and an
+  `Authorization` header do not survive a redirect, so `api.oxagen.sh` stays
+  for the CLIs, webhooks, and OAuth callbacks that call it until a later
+  record retires it.
+- **The name has its own certificate.** `dns-oxagen-app.tf` issues one for
+  `api.oxagen.app` and adds it to the ALB's HTTPS listener. A new name on
+  `aws_acm_certificate.app` or `aws_acm_certificate.oxagen_app` would replace
+  a certificate the ALB serves.
+- **Caddy routes both names to the API.** Until `Caddyfile.alb` is installed
+  with the new name, Caddy answers `api.oxagen.app` with a 404.
+
+| Step | Who | What |
+|---|---|---|
+| A1 | CI | The PR that adds this amendment merges. `infra.yml` issues the `api.oxagen.app` certificate, adds it to the ALB, and points the name at the ALB. |
+| A2 | Mac | Run `infra/tools/install-node-scripts.sh`, the same run as step 2. Then `curl -s https://api.oxagen.app/health` answers from the API. |
+| A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. |
+| A4 | Agent | Open the API cutover PR: `API_PROD_URL`, `DEFAULT_API_ORIGIN`, the docs, the CLI, and the desktop app name `https://api.oxagen.app`, and the deploy probes check it. |
