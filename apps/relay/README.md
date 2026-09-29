@@ -41,6 +41,23 @@ docker push <your-registry>/oxagen-relay:$TAG
 
 The image holds Node 24 and one bundled file, `/opt/oxagen-relay/relay.cjs`. It runs as user 1000 and exposes no port.
 
+## Get a relay token
+
+Register the relay with Oxagen's API. The API key acts as the person who created it, and that person must be an Owner or Admin of the organization:
+
+```sh
+curl -X POST "https://api.oxagen.sh/v1/$ORG_SLUG/$WORKSPACE_SLUG/tools/relays" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "billing"}'
+```
+
+The answer holds the relay's `publicId`, `name`, `createdAt`, and `token`. The token starts with `oxr_`. Copy it into your secret store now. Oxagen keeps only its SHA-256 and cannot show the token again. Set `RELAY_NAME` to the name you registered.
+
+A workspace holds one live relay per name. To register a name again, revoke the old relay first.
+
+To revoke a relay, post its name to `/tools/relays/revoke` under the same base URL, or call the `revoke_relay` MCP tool. Revoked tokens below says what the relay then does.
+
 ## Run with Docker
 
 ```sh
@@ -61,7 +78,7 @@ docker run --rm \
 | Variable | Required | Meaning |
 |---|---|---|
 | `RELAY_BROKER_URL` | Yes | The broker's `wss://` address. A URL with no path gets `/relay/v1/connect`. |
-| `RELAY_TOKEN` | Yes | The relay token. It holds no spaces or line breaks. |
+| `RELAY_TOKEN` | Yes | The relay token from Get a relay token. It holds no spaces or line breaks. |
 | `RELAY_NAME` | Yes | The relay's name in Oxagen: up to 63 lowercase letters, digits, and hyphens. |
 | `RELAY_WORKSPACE` | Yes | The workspace id, `wrk_` and 22 characters. |
 | `RELAY_TRUSTED_KEYS` | Yes | One or more PEM public keys. A value with `\n` escapes on one line also works. |
@@ -167,7 +184,7 @@ The relay trusts Node's built-in certificate authorities. When your servers use 
 
 When Oxagen revokes a relay token, the broker refuses the next connect with 401. A relay that is already connected stops within 30 seconds. The broker checks each live connection's token every 30 seconds and closes the connection with WebSocket code 4001 once the token no longer checks. The relay then logs `"event":"token_revoked"` and keeps dialing, and the broker answers each dial with 401.
 
-To bring the relay back, create a new relay token, set `RELAY_TOKEN` to it, and restart the relay.
+To bring the relay back, get a new relay token as Get a relay token describes, set `RELAY_TOKEN` to it, and restart the relay.
 
 ## Start and stop
 
