@@ -5,7 +5,7 @@
 // workspace's published steering version and calls them through the
 // executor. Everything that touches the database, the vault, or the network
 // is a port here, so list, call, and search run in tests with fakes.
-import type { CredentialSource, ManifestServer, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
+import type { CredentialSource, ManifestServer, ResolvedCredential, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
 import type { CedarRuntime, PolicyFile } from "@oxagen/policy";
 import type { Ranker } from "./search";
 
@@ -68,6 +68,18 @@ export interface ServedRoute {
   run: ServedRun;
 }
 
+/** A route's Transport, which can say before any send that it would refuse the call. */
+export interface ServedTransport extends Transport {
+  /**
+   * Why this route would refuse the call before sending it, or null when it
+   * would take it. It gets the credential runTool read, or null when the
+   * server needs none. runTool asks before it claims an approval, so a call
+   * the route cannot send leaves the approval for the retry. It sends
+   * nothing. A route without it is checked only when the call is sent.
+   */
+  refusal?(credential: ResolvedCredential | null): Promise<string | null>;
+}
+
 /** The servers and tools a person switched off in Oxagen. */
 export interface OffSwitches {
   /** Server names. */
@@ -78,7 +90,13 @@ export interface OffSwitches {
 
 /** Where a parked call's approval stands. */
 export type ApprovalState =
-  | { state: "approved"; id: string }
+  | {
+      state: "approved";
+      /** The first approval that answers for the call. */
+      id: string;
+      /** The distinct people who approved the call. A rule can ask for more than one. */
+      approvers: number;
+    }
   | { state: "pending"; id: string }
   | { state: "refused"; id: string };
 
@@ -107,10 +125,49 @@ export interface ApprovalRequest {
 
 export interface ServedApprovals {
   /**
-   * Find the approval for this exact call, or open one. An approved
-   * approval is claimed, so it lets one call through.
+   * Where the approvals for this exact call stand, opening one when there is
+   * none. A refusal outweighs a pending approval, and a pending approval
+   * outweighs the approved ones. Settling uses no approval: only claim does.
    */
   settle(request: ApprovalRequest): Promise<ApprovalState>;
+  /**
+   * Open one more approval for a call whose approvals are too few for its
+   * rule. When one is already pending, that one answers.
+   */
+  requestAnother(request: ApprovalRequest): Promise<{ id: string }>;
+  /**
+   * Use every approval that answers for the call, so they let this one call
+   * through and no other. False when fewer than `approvers` people still
+   * answer for it, because another call used them or they expired.
+   */
+  claim(request: ApprovalRequest, approvers: number): Promise<boolean>;
+}
+
+/** The facts about one call that a kill switch can name. */
+export interface EmergencyCall {
+  /** The server's name in the manifest: billing. */
+  server: string;
+  /** The full tool name: billing__create_refund. */
+  tool: string;
+  /**
+   * The credential reference the call's environment names
+   * (oxagen:credential/<name>). Null when the server takes no credential.
+   */
+  credential: string | null;
+  /** True when the tool only reads. A read is checked against the switches the request last read. */
+  readOnly: boolean;
+}
+
+/** The kill switch that stops a call. */
+export interface EmergencyDeny {
+  /** The switch's public id. */
+  id: string;
+  /** What the switch names: tool_version, tool_server, connection, operator, workspace, org, or class. */
+  targetKind: string;
+  /** The id the switch was set on. */
+  targetId: string;
+  /** The reason the person who set the switch gave. */
+  reason: string;
 }
 
 export type MeterKind = "call" | "search" | "describe";
@@ -141,10 +198,11 @@ export interface ServedLog {
   warn(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type ServedRouteCode = "relay_not_built" | "local_unavailable";
+export type ServedRouteCode = "local_unavailable";
 
 /**
- * A network route Oxagen cannot carry a call on yet. The call ends with an
+ * A network route that cannot carry this call, such as a local route with no
+ * signing key, no enrolled machine, or no launch spec. The call ends with an
  * isError result that says so, and nothing is sent.
  */
 export class ServedRouteError extends Error {
@@ -164,10 +222,15 @@ export interface ServedPorts {
   withheld(run: ServedRun): Promise<ReadonlySet<string>>;
   /** Billing's admission for one governed action. Throws when billing cannot be read. */
   admit(run: ServedRun): Promise<Admission>;
+  /**
+   * The kill switch that stops this call, or null when none does. Throws
+   * when the switches cannot be read.
+   */
+  emergencyDeny(call: EmergencyCall): Promise<EmergencyDeny | null>;
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */
-  transport(route: ServedRoute): Transport;
+  transport(route: ServedRoute): ServedTransport;
   meter(event: MeterEvent): Promise<void>;
   /** Cedar's evaluator, or null when it is not installed. */
   cedar(): Promise<CedarRuntime | null>;

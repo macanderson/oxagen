@@ -1,6 +1,6 @@
 # ADR-132: The mockup's CSS is the app's design of record
 
-Status: Accepted
+Status: Superseded by [ADR-226](./ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md)
 Date: 2026-09-20
 
 ## Context

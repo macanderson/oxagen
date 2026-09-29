@@ -117,6 +117,15 @@ export interface RelayBroker {
   handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
   /** The Transport for calls on relay:<name> networks, acting for one caller. */
   transport(scope: RelayScope): Transport;
+  /**
+   * Refuse a call the broker would refuse before sending it, with the same
+   * TransportError a send raises: a network that names no relay, a relay
+   * credential the plan does not allow, a plan check that fails, or a relay
+   * that is not connected. It sends nothing. A caller runs it before it
+   * spends something the call needs, such as a person's approval. The relay
+   * can still disconnect between this check and the send.
+   */
+  ready(scope: RelayScope, network: string, credential: RelayCredential | undefined): Promise<void>;
   status(scope: Pick<RelayScope, "orgId" | "workspaceId">, relay: string): RelayStatus;
   /** Close every connection and stop the heartbeat check. */
   close(): Promise<void>;
@@ -254,6 +263,14 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
   }
 
   /** The next ready connection for a relay, in turn. */
+  function notConnected(relay: string): TransportError {
+    return new TransportError(
+      "disconnected",
+      `Relay ${relay} is not connected to Oxagen. Start the relay in your network, or read its logs for why it cannot connect.`,
+      false,
+    );
+  }
+
   function pick(key: string): RelayConnection | undefined {
     const list = routes.get(key);
     if (!list || list.length === 0) return undefined;
@@ -370,10 +387,12 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
     let allowed: boolean;
     try {
       allowed = await entitled(scope.orgId, scope.planTier);
-    } catch (error) {
+    } catch {
+      // The failure's own message can quote a query or a connection string,
+      // and this text reaches the agent, so it names only what failed.
       throw new TransportError(
         "not_sent",
-        `The plan check for relay credential ${credential.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Oxagen could not check the plan for relay credential ${credential.name}, so it sent nothing. Call the tool again in a minute.`,
         false,
       );
     }
@@ -411,13 +430,7 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
       );
     }
     const connection = pick(routeKey(scope.orgId, scope.workspaceId, relay));
-    if (!connection) {
-      throw new TransportError(
-        "disconnected",
-        `Relay ${relay} is not connected to Oxagen. Start the relay in your network, or read its logs for why it cannot connect.`,
-        false,
-      );
-    }
+    if (!connection) throw notConnected(relay);
 
     const issued = now();
     const unsigned: UnsignedRelayEnvelope = {
@@ -539,6 +552,13 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
 
     status(scope, relay) {
       return routes.has(routeKey(scope.orgId, scope.workspaceId, relay)) ? "up" : "down";
+    },
+
+    async ready(scope, network, credential) {
+      const relay = relayNameOf(network);
+      await checkCredential(scope, credential);
+      // routes.has, not pick: a check must not move the round robin on.
+      if (!routes.has(routeKey(scope.orgId, scope.workspaceId, relay))) throw notConnected(relay);
     },
 
     close() {

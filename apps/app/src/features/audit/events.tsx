@@ -1,5 +1,7 @@
 // Audit › Events (rev1 audit.md, Events): four tiles over the window, then the
-// "Control-plane events" panel with its filters, the table and the note.
+// "Control-plane events" panel with its filters, the table, the pager under
+// the table and the note. Rows per page sits in the pager with Previous and
+// Next (#4693), as it does under every other list.
 //
 // The tiles count the rows of one read of the window (query_audit_log, up to
 // the contract's 200), through the same outcome the table prints, so the strip
@@ -20,6 +22,7 @@ import "server-only";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {
+  AUDIT_DEFAULT_ROWS,
   AUDIT_RANGES,
   AUDIT_ROWS,
   type AuditEvent,
@@ -43,13 +46,13 @@ import {
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
-import { SafeForm, SafeLink } from "@/ui/navigation";
-import { type PageListItem, pageList, pagerButton } from "@/ui/page-list";
+import { SafeForm } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
 import { CsvDialog } from "./dialogs";
 import { FilterSelect } from "./filter-select";
 import { AUDIT_OUTCOMES, auditQueryParams } from "./filters";
 import { AUDIT_GAPS } from "./gaps";
+import { AuditPager } from "./pager";
 
 /** An actor the record names, as the filter and the table print them. */
 export type AuditActor = { id: string; name: string };
@@ -237,33 +240,23 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          {t("rows")}
-          <FilterSelect
-            name="rows"
-            defaultValue={String(query.rows)}
-            className={select}
-          >
-            {AUDIT_ROWS.map((rows) => (
-              <option key={rows} value={rows}>
-                {rows}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
         <noscript>
           <button type="submit" className={buttonSecondary}>
             {t("apply")}
           </button>
         </noscript>
       </span>
-      {/* The actor and range the header's selects set travel with this form
-          too, so changing a result keeps them. */}
+      {/* The actor and range the header's selects set, and the size the
+          pager's Rows set, travel with this form too, so changing a result
+          keeps them. */}
       {query.actor === null ? null : (
         <input type="hidden" name="actor" value={query.actor} />
       )}
       {query.range === "30d" ? null : (
         <input type="hidden" name="range" value={query.range} />
+      )}
+      {query.rows === AUDIT_DEFAULT_ROWS ? null : (
+        <input type="hidden" name="rows" value={query.rows} />
       )}
       <span
         data-testid="audit-not-recorded"
@@ -341,7 +334,7 @@ function HeaderFilters({
       {query.outcome === null ? null : (
         <input type="hidden" name="outcome" value={query.outcome} />
       )}
-      {query.rows === 10 ? null : (
+      {query.rows === AUDIT_DEFAULT_ROWS ? null : (
         <input type="hidden" name="rows" value={query.rows} />
       )}
       <noscript>
@@ -455,11 +448,15 @@ function selected(query: AuditQuery, rows: AuditWindowRows): number {
 }
 
 /**
- * Where this page sits in the filtered record, and the design's numbered pager
- * (`‹ 1 2 … 45 ›`), each page a link at the Rows size that keeps the filters.
- * The page count is known only when the window read held every row; when it
- * did not, the pager numbers the pages read so far, then the next page and an
- * ellipsis while an older page exists, and claims no last page.
+ * The pager under the table: Rows per page, where this page sits in the
+ * filtered record, and Previous and Next, each a link at the Rows size that
+ * keeps the filters. The total is known only when the window read held every
+ * row. When it did not, the range names no total and Next leads on while the
+ * page read reports an older page.
+ *
+ * Every address is built here on the server. A server component cannot hand a
+ * function to a client one, so the client pager gets each size Rows offers as
+ * the address of that size's first page, and turns a pick into a visit.
  */
 function Pager({
   org,
@@ -477,84 +474,35 @@ function Pager({
   const end = page.offset + page.events.length;
   const total = rows.complete ? selected(query, rows) : null;
   const size = Math.max(1, page.limit);
-  const current = Math.floor(page.offset / size) + 1;
-  const pages =
-    total === null
-      ? current + (page.hasMore ? 1 : 0)
-      : Math.max(current, Math.ceil(total / size));
-  const numbers: (PageListItem | "more")[] = pageList(current, pages);
-  if (total === null && page.hasMore) numbers.push("more");
-  const hasOlder = total === null ? page.hasMore : current < pages;
-  const to = (n: number) =>
-    routes.audit(org, auditQueryParams(query, { offset: (n - 1) * size }));
+  // This page's place in the record, counted from zero.
+  const index = Math.floor(page.offset / size);
+  const hasOlder = total === null ? page.hasMore : (index + 1) * size < total;
+  const at = (n: number) =>
+    routes.audit(org, auditQueryParams(query, { offset: n * size }));
   return (
-    <nav
-      aria-label={t("pager")}
-      className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-muted-foreground"
-    >
-      <span data-testid="audit-shown" className={mono}>
-        {total === null
-          ? t("shownOpen", { start, end })
-          : t("shown", { start, end, total })}
-      </span>
-      <span className="flex flex-wrap items-center gap-1">
-        {current > 1 ? (
-          <SafeLink
-            to={to(current - 1)}
-            data-page="previous"
-            aria-label={t("previous")}
-            className={pagerButton}
-          >
-            ‹
-          </SafeLink>
-        ) : (
-          <button
-            type="button"
-            disabled
-            aria-label={t("previous")}
-            className={pagerButton}
-          >
-            ‹
-          </button>
-        )}
-        {numbers.map((n) =>
-          typeof n === "string" ? (
-            <span key={n} aria-hidden="true" className="px-1 text-dim">
-              …
-            </span>
-          ) : (
-            <SafeLink
-              key={n}
-              to={to(n)}
-              data-page={n}
-              aria-current={n === current ? "page" : undefined}
-              className={pagerButton}
-            >
-              {n}
-            </SafeLink>
-          ),
-        )}
-        {hasOlder ? (
-          <SafeLink
-            to={to(current + 1)}
-            data-page="next"
-            aria-label={t("next")}
-            className={pagerButton}
-          >
-            ›
-          </SafeLink>
-        ) : (
-          <button
-            type="button"
-            disabled
-            aria-label={t("next")}
-            className={pagerButton}
-          >
-            ›
-          </button>
-        )}
-      </span>
-    </nav>
+    <AuditPager
+      label={t("pager")}
+      rowsLabel={t("rows")}
+      previousLabel={t("previous")}
+      nextLabel={t("next")}
+      perPage={query.rows}
+      sizes={AUDIT_ROWS.map((option) => ({
+        size: option,
+        first: routes.audit(
+          org,
+          auditQueryParams({ ...query, rows: option }, { offset: 0 }),
+        ),
+      }))}
+      range={
+        <span data-testid="audit-shown">
+          {total === null
+            ? t("shownOpen", { start, end })
+            : t("shown", { start, end, total })}
+        </span>
+      }
+      previous={index > 0 ? at(index - 1) : null}
+      next={hasOlder ? at(index + 1) : null}
+    />
   );
 }
 

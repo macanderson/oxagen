@@ -12,9 +12,11 @@ import {
   SearchIndexError,
   effectiveAnnotations,
   execute,
+  inputRefusal,
   type CallToolResult,
+  type CredentialSource,
   type ManifestServer,
-  type Transport,
+  type ResolvedCredential,
 } from "@oxagen/mcp-studio";
 import { decideToolCall, type ToolCallVerdict } from "@oxagen/policy";
 import { findInServer, resolveName } from "./names";
@@ -23,12 +25,15 @@ import { unserved, visibleTools, type ServedTool, type ServedView } from "./snap
 import {
   ServedRouteError,
   type Admission,
+  type ApprovalRequest,
   type ApprovalState,
+  type EmergencyDeny,
   type MeterKind,
   type MeterOutcome,
   type ServedAgent,
   type ServedPorts,
   type ServedRoute,
+  type ServedTransport,
 } from "./types";
 
 interface Answer {
@@ -127,21 +132,7 @@ export function sandboxOf(server: ManifestServer): { name: string; network: stri
   return sandbox === undefined ? null : { name: sandbox[0], network: sandbox[1].network };
 }
 
-/**
- * The refusal for a network Oxagen cannot carry a call on yet. A relay
- * waits for lane M12, so nothing is sent over one.
- */
-export function unbuiltRoute(network: string): ServedRouteError | null {
-  if (!network.startsWith("relay:")) return null;
-  return new ServedRouteError(
-    "relay_not_built",
-    `Oxagen cannot send calls over ${network} yet, so it sent nothing. Ask a workspace admin to give the server a cloud or local sandbox environment.`,
-  );
-}
-
-function transportFor(ports: ServedPorts, route: ServedRoute): Transport | ServedRouteError {
-  const unbuilt = unbuiltRoute(route.network);
-  if (unbuilt !== null) return unbuilt;
+function transportFor(ports: ServedPorts, route: ServedRoute): ServedTransport | ServedRouteError {
   try {
     return ports.transport(route);
   } catch (error) {
@@ -177,6 +168,78 @@ function unservedRefusal(view: ServedView, entry: ServedTool, agent: ServedAgent
   }
 }
 
+/** Text as one sentence that ends in a single period, whether or not it had one. */
+function sentenceOf(text: string): string {
+  let end = text.trimEnd();
+  while (end.endsWith(".")) end = end.slice(0, -1).trimEnd();
+  return `${end}.`;
+}
+
+/** A switch's target kind in words: tool_server reads "tool server". */
+function targetWords(deny: EmergencyDeny): string {
+  return deny.targetKind.replaceAll("_", " ");
+}
+
+/**
+ * The refusal for a call a kill switch stops, or null when none does. A
+ * failed read stops the call too, since Oxagen cannot tell that no switch
+ * is on.
+ */
+async function emergencyRefusal(
+  ports: ServedPorts,
+  entry: ServedTool,
+  environment: { name: string } | null,
+): Promise<Answer | null> {
+  const { server, tool } = entry;
+  // The connection a switch can name: the sandbox environment's credential,
+  // and only in service mode. An operator-oauth environment's reference names
+  // a preregistered OAuth client rather than a connection, and the token the
+  // call runs on is the operator's own, so a connection switch must not reach
+  // it. Every other scope still does.
+  const credential =
+    environment === null || server.auth === null || server.auth.mode !== "service"
+      ? null
+      : (server.environments[environment.name]?.credential ?? null);
+  let deny: EmergencyDeny | null;
+  try {
+    deny = await ports.emergencyDeny({
+      server: server.name,
+      tool: tool.name,
+      credential,
+      readOnly: tool.classification.side_effect === "read",
+    });
+  } catch (error) {
+    ports.log.warn("Oxagen could not read the kill switches, so the call was not sent.", {
+      tool: tool.name,
+      error: errorName(error),
+    });
+    return refusal(
+      `Oxagen could not check the kill switches for ${tool.name}, so it did not send the call. Call it again in a minute.`,
+      "failed",
+    );
+  }
+  if (deny === null) return null;
+  return refusal(
+    `Kill switch ${deny.id} on ${targetWords(deny)} ${deny.targetId} stops ${tool.name}, so Oxagen did not send it. Reason: ${sentenceOf(deny.reason)} Ask an admin to turn the switch off if the call must run.`,
+    "denied",
+  );
+}
+
+/** The refusal for an approval Oxagen could not read or open. Logs only the error's name. */
+function approvalFailed(ports: ServedPorts, tool: string, error: unknown): Answer {
+  ports.log.warn("Oxagen could not open an approval, so the call was not sent.", { tool, error: errorName(error) });
+  return refusal(`Oxagen could not open an approval for ${tool}, so it was not sent. Call it again in a minute.`, "failed");
+}
+
+/**
+ * How many people approved a call so far, as a sentence. An approval an
+ * auto-approval rule resolved names no person, so it counts none.
+ */
+function peopleApproved(approvers: number): string {
+  if (approvers === 0) return "No person has approved it yet.";
+  return approvers === 1 ? "One person has approved it so far." : `${approvers} people have approved it so far.`;
+}
+
 /** Decide one call to an imported tool, park it or run it, and say how it ended. */
 async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, args: Record<string, unknown>): Promise<Answer> {
   const { server, tool } = entry;
@@ -199,6 +262,24 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   const refused = unservedRefusal(view, entry, agent);
   if (refused !== null) return refused;
 
+  // The kill switches come before the policy, so a stopped call opens no
+  // approval, reads no credential, and sends nothing.
+  const environment = sandboxOf(server);
+  const stopped = await emergencyRefusal(ports, entry, environment);
+  if (stopped !== null) return stopped;
+
+  // Five live facts a rule can name have no source on the served path yet,
+  // so both decisions leave them out (#4666):
+  // - rate: the governed action ledger records no outcome, so a count read
+  //   from it would include denied and parked retries.
+  // - taint: nothing on the served path marks a run's data as tainted.
+  // - run: nothing records which served calls a run has made or read.
+  // - budget_remaining_cents: nothing records what a served agent has spent.
+  //   A spend budget caps model spend in micros, which is not this fact.
+  // - mandate_remaining_cents: no mandate reaches a served call.
+  // A rule on one of them reads the policy's default: an untainted run, no
+  // calls in the last hour or minute, no prior calls, the budget the agent
+  // file declares or none, and no mandate.
   const decide = (approval?: { granted: boolean; approvers: number }): ToolCallVerdict =>
     decideToolCall({
       runtime: decider.runtime,
@@ -214,27 +295,28 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     });
 
   let verdict = decide();
+  // The approvals the call is sent on. Claimed after every other check and
+  // after the credential is read, so a call that fails any of them leaves the
+  // approvals for the retry.
+  let approved: { request: ApprovalRequest; id: string; approvers: number } | null = null;
   if (verdict.decision === "require_approval" && verdict.errors.length === 0) {
+    const request: ApprovalRequest = {
+      run: view.run,
+      agent,
+      tool: tool.name,
+      version: tool.version,
+      publication:
+        view.published === null ? null : { repository: view.published.repository, version: view.published.version },
+      server: server.name,
+      args,
+      reasons: verdict.reasons,
+      risk: tool.classification.risk,
+    };
     let approval: ApprovalState;
     try {
-      approval = await ports.approvals.settle({
-        run: view.run,
-        agent,
-        tool: tool.name,
-        version: tool.version,
-        publication:
-          view.published === null ? null : { repository: view.published.repository, version: view.published.version },
-        server: server.name,
-        args,
-        reasons: verdict.reasons,
-        risk: tool.classification.risk,
-      });
+      approval = await ports.approvals.settle(request);
     } catch (error) {
-      ports.log.warn("Oxagen could not open an approval, so the call was not sent.", {
-        tool: tool.name,
-        error: errorName(error),
-      });
-      return refusal(`Oxagen could not open an approval for ${tool.name}, so it was not sent. Call it again in a minute.`, "failed");
+      return approvalFailed(ports, tool.name, error);
     }
     if (approval.state === "pending") {
       return refusal(
@@ -245,7 +327,22 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     if (approval.state === "refused") {
       return refusal(`A person refused ${tool.name} under approval ${approval.id}, so it was not sent.`, "denied");
     }
-    verdict = decide({ granted: true, approvers: 1 });
+    // The second decision reads how many distinct people approved, so a rule
+    // that asks for two people parks the call again after one.
+    verdict = decide({ granted: true, approvers: approval.approvers });
+    if (verdict.decision === "require_approval" && verdict.errors.length === 0) {
+      let another: { id: string };
+      try {
+        another = await ports.approvals.requestAnother({ ...request, reasons: verdict.reasons });
+      } catch (error) {
+        return approvalFailed(ports, tool.name, error);
+      }
+      return refusal(
+        `${tool.name} needs approval from another person under ${verdict.reasons.join(", ")}. ${peopleApproved(approval.approvers)} Oxagen opened approval ${another.id}. Call the tool again with the same arguments once another person approves it.`,
+        "parked",
+      );
+    }
+    approved = { request, id: approval.id, approvers: approval.approvers };
   }
   if (verdict.errors.length > 0) {
     return refusal(
@@ -255,7 +352,13 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   }
   if (verdict.decision !== "allow") return refusal(denial(agent, tool.name, verdict), "denied");
 
-  const environment = sandboxOf(server);
+  // The executor's schema check, run here so it comes before the claim. An
+  // approved call whose arguments the tool's input schema refuses sends
+  // nothing, so it leaves the approval for the retry instead of spending it.
+  // It sits after the decision, so a policy denial is still reported as one.
+  const badArguments = inputRefusal(tool.definition.inputSchema, args);
+  if (badArguments !== null) return refusal(badArguments, "failed");
+
   if (environment === null) {
     return refusal(
       `${server.name} has no sandbox environment, so Oxagen cannot send ${tool.name}. Ask a workspace admin to mark one environment as the sandbox.`,
@@ -265,29 +368,87 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   const transport = transportFor(ports, { network: environment.network, server, run: view.run });
   if (transport instanceof ServedRouteError) return refusal(transport.message, "failed");
 
-  try {
-    const result = await execute(
-      tool,
-      args,
-      // The run's operator, not the agent file's: an agent names a member or
-      // a team by slug, and only a person holds an operator token.
-      { server, name: environment.name, operator: view.run.operator },
-      ports.credentials,
-      transport,
-      { senders: ports.senders, signal: ports.signal, now: ports.now },
-    );
-    return { result, outcome: result.isError === true ? "failed" : "allowed" };
-  } catch (error) {
-    // Only the error's name: a credential lookup's message can quote the secret it read.
-    ports.log.warn("The credential lookup failed, so the call was not sent.", {
-      tool: tool.name,
-      error: errorName(error),
-    });
-    return refusal(
-      `Oxagen could not read the credential for ${server.name}, so it did not send ${tool.name}. Call it again in a minute, and ask a workspace admin to reconnect ${server.label} if it fails again.`,
-      "failed",
-    );
+  // The credential is read here, before the claim, so a failed lookup leaves
+  // the approval unused. The executor then gets the credential already read.
+  // The request is the one the executor would build.
+  let credentials: CredentialSource = ports.credentials;
+  let credentialRead: ResolvedCredential | null = null;
+  if (server.auth !== null) {
+    let credential: ResolvedCredential;
+    try {
+      credential = await ports.credentials.resolve(
+        {
+          server: server.name,
+          environment: environment.name,
+          reference: server.environments[environment.name]?.credential,
+          auth: server.auth,
+          // The run's operator, not the agent file's: an agent names a member
+          // or a team by slug, and only a person holds an operator token.
+          operator: view.run.operator,
+        },
+        ports.signal ?? new AbortController().signal,
+      );
+    } catch (error) {
+      // Only the error's name: a credential lookup's message can quote the secret it read.
+      ports.log.warn("The credential lookup failed, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      return refusal(
+        `Oxagen could not read the credential for ${server.name}, so it did not send ${tool.name}. Call it again in a minute, and ask a workspace admin to reconnect ${server.label} if it fails again.`,
+        "failed",
+      );
+    }
+    if (credential.type === "missing") return refusal(`${credential.message}\n${credential.connect_url}`, "failed");
+    const read = credential;
+    credentialRead = read;
+    credentials = { resolve: () => Promise.resolve(read) };
   }
+
+  if (approved !== null) {
+    // A route that can tell it would refuse the call, such as a relay that is
+    // not connected, says so here, before the claim, so the approval stays
+    // for the retry. A route can still fail after the claim: a relay can
+    // drop between this check and the send.
+    let refused: string | null;
+    try {
+      refused = (await transport.refusal?.(credentialRead)) ?? null;
+    } catch (error) {
+      ports.log.warn("Oxagen could not check the route, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      refused = `Oxagen could not check the route for ${tool.name}, so it did not send it. Call it again in a minute.`;
+    }
+    if (refused !== null) return refusal(refused, "failed");
+
+    let claimed: boolean;
+    try {
+      claimed = await ports.approvals.claim(approved.request, approved.approvers);
+    } catch (error) {
+      ports.log.warn("Oxagen could not use the approval, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      return refusal(`Oxagen could not use approval ${approved.id} for ${tool.name}, so it was not sent. Call it again in a minute.`, "failed");
+    }
+    if (!claimed) {
+      return refusal(
+        `Approval ${approved.id} no longer covers ${tool.name}, because another call used it or it expired. Oxagen did not send the call. Call the tool again with the same arguments to ask for a new approval.`,
+        "failed",
+      );
+    }
+  }
+
+  const result = await execute(
+    tool,
+    args,
+    { server, name: environment.name, operator: view.run.operator },
+    credentials,
+    transport,
+    { senders: ports.senders, signal: ports.signal, now: ports.now },
+  );
+  return { result, outcome: result.isError === true ? "failed" : "allowed" };
 }
 
 function describeTool(entry: ServedTool): CallToolResult {

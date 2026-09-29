@@ -29,12 +29,15 @@ import type {
   Admission,
   ApprovalRequest,
   ApprovalState,
+  EmergencyCall,
+  EmergencyDeny,
   MeterEvent,
   PublishedTools,
   ServedAgent,
   ServedPorts,
   ServedRoute,
   ServedRun,
+  ServedTransport,
 } from "../types";
 
 export const HASH = `sha256:${"a".repeat(64)}`;
@@ -132,9 +135,13 @@ export interface ServerSpec {
   tools: ToolSpec[];
   network?: string;
   /** The environments by name. Defaults to one sandbox on the network. */
-  environments?: Record<string, { sandbox: boolean; network: string }>;
+  environments?: Record<string, { sandbox: boolean; network: string; credential?: string }>;
+  /** The credential reference the default sandbox names: oxagen:credential/<name>. */
+  credential?: string;
   mode?: "direct" | "search";
   auth?: boolean;
+  /** The auth mode when auth is set. Defaults to service. */
+  authMode?: "service" | "operator-oauth";
 }
 
 function pinnedFor(source: ServerSpec["source"]): Record<string, unknown> {
@@ -171,7 +178,13 @@ export function searchDefinitions(server: string): EffectiveDefinition[] {
 
 export function server(spec: ServerSpec): ManifestServer {
   const network = spec.network ?? (spec.source === "local" ? "local" : "cloud");
-  const environments = spec.environments ?? { [spec.source === "local" ? "default" : "sandbox"]: { sandbox: true, network } };
+  const environments = spec.environments ?? {
+    [spec.source === "local" ? "default" : "sandbox"]: {
+      sandbox: true,
+      network,
+      ...(spec.credential === undefined ? {} : { credential: spec.credential }),
+    },
+  };
   const tools: Record<string, ManifestTool> = {};
   for (const entry of spec.tools) tools[entry.key] = tool(spec.name, spec.source, entry);
   const mode = spec.mode ?? "direct";
@@ -181,7 +194,12 @@ export function server(spec: ServerSpec): ManifestServer {
     description: `The ${spec.name} server.`,
     source: { type: spec.source },
     pinned: pinnedFor(spec.source),
-    auth: spec.auth === true ? { mode: "service", scheme: "bearer", apply: { type: "http_bearer" } } : null,
+    auth:
+      spec.auth === true
+        ? spec.authMode === "operator-oauth"
+          ? { mode: "operator-oauth", scheme: "oauth", apply: { type: "http_bearer" } }
+          : { mode: "service", scheme: "bearer", apply: { type: "http_bearer" } }
+        : null,
     environments,
     exposure: { mode, definition_budget: 8000 },
     tokens: { definitions: 10 * spec.tools.length, request: 10 * spec.tools.length },
@@ -197,6 +215,7 @@ export const SOURCES: readonly ServerSpec[] = [
     name: "billing",
     source: "openapi",
     auth: true,
+    credential: "oxagen:credential/billing-sandbox",
     tools: [
       {
         key: "list_charges",
@@ -329,6 +348,12 @@ export interface Recorded {
   meter: MeterEvent[];
   logs: LogLine[];
   approvals: ApprovalRequest[];
+  /** The calls that asked for one more approval. */
+  requested: ApprovalRequest[];
+  /** The approvals a call used, with the number of people it needed. */
+  claims: Array<{ request: ApprovalRequest; approvers: number }>;
+  /** The calls checked against the kill switches. */
+  emergencyDenies: EmergencyCall[];
   credentials: CredentialRequest[];
   routes: ServedRoute[];
   local: LocalCall[];
@@ -340,9 +365,15 @@ export interface PortOptions {
   withheld?: string[];
   admit?: (run: ServedRun) => Promise<Admission>;
   approval?: (request: ApprovalRequest) => Promise<ApprovalState>;
+  /** Answers requestAnother. Defaults to a new pending approval, apr_4. */
+  another?: (request: ApprovalRequest) => Promise<{ id: string }>;
+  /** Answers claim. Defaults to true. */
+  claim?: (request: ApprovalRequest, approvers: number) => Promise<boolean>;
+  /** The kill switch that stops a call. Defaults to none. */
+  emergencyDeny?: (call: EmergencyCall) => Promise<EmergencyDeny | null>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
-  /** Replaces the Transport lookup, such as to throw for a route. */
-  transport?: (route: ServedRoute) => Transport;
+  /** Replaces the Transport lookup, such as to throw for a route or to refuse a call before the claim. */
+  transport?: (route: ServedRoute) => ServedTransport;
   local?: (call: LocalCall) => Promise<CallToolResult>;
   answer?: (kind: RequestKind) => SendResult;
   meter?: (event: MeterEvent) => Promise<void>;
@@ -359,7 +390,19 @@ function unreached(): Promise<never> {
 }
 
 export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; recorded: Recorded } {
-  const recorded: Recorded = { admitted: [], meter: [], logs: [], approvals: [], credentials: [], routes: [], local: [], sent: [] };
+  const recorded: Recorded = {
+    admitted: [],
+    meter: [],
+    logs: [],
+    approvals: [],
+    requested: [],
+    claims: [],
+    emergencyDenies: [],
+    credentials: [],
+    routes: [],
+    local: [],
+    sent: [],
+  };
   let actions = 0;
   function sender<K extends RequestKind>(kind: K): Sender<K> {
     return {
@@ -387,10 +430,22 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
       recorded.admitted.push(served);
       return options.admit?.(served) ?? Promise.resolve({ admitted: true });
     },
+    emergencyDeny: (call) => {
+      recorded.emergencyDenies.push(call);
+      return options.emergencyDeny?.(call) ?? Promise.resolve(null);
+    },
     approvals: {
       settle: (request) => {
         recorded.approvals.push(request);
         return options.approval?.(request) ?? Promise.resolve({ state: "pending", id: "apr_1" });
+      },
+      requestAnother: (request) => {
+        recorded.requested.push(request);
+        return options.another?.(request) ?? Promise.resolve({ id: "apr_4" });
+      },
+      claim: (request, approvers) => {
+        recorded.claims.push({ request, approvers });
+        return options.claim?.(request, approvers) ?? Promise.resolve(true);
       },
     },
     credentials: {

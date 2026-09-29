@@ -1,0 +1,44 @@
+{
+  "schema": "training-example/v1",
+  "item": "wi_01K5ZQ4M8T2DXW",
+  "record": "sha256:0e5a9c2d7b41f83e6a0c9d1b5f27e4a8c3d60b9f1e2a7c54d8b0f3e6a19c2d7b",
+  "label": "positive",
+  "stage": "build",
+  "messages": [
+    {
+      "role": "system",
+      "content": "…steering records the session received…"
+    },
+    {
+      "role": "user",
+      "content": "…the work order brief and the done record…"
+    },
+    {
+      "role": "assistant",
+      "content": "…",
+      "tool_calls": [
+        {
+          "…": "…"
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "…",
+      "content": "…"
+    }
+  ],
+  "tools": [
+    {
+      "…": "…"
+    }
+  ],
+  "diff": "…",
+  "corrections": [
+    {
+      "field": "priority",
+      "before": "P2",
+      "after": "P1"
+    }
+  ]
+}

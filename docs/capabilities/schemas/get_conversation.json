@@ -192,6 +192,42 @@
                     },
                     "stopped": {
                       "type": "boolean"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "publicId": {
+                            "type": "string",
+                            "maxLength": 64
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "mediaType": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "sizeBytes": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "sha256": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "publicId",
+                          "name",
+                          "mediaType",
+                          "sizeBytes",
+                          "sha256"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
@@ -202,7 +238,8 @@
                     "runId",
                     "parkedCards",
                     "toolCalls",
-                    "stopped"
+                    "stopped",
+                    "attachments"
                   ],
                   "additionalProperties": false
                 }

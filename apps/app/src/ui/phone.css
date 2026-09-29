@@ -1,5 +1,5 @@
 /*
- * The phone shell (ARCHITECTURE.md §1.2; Mockups origin/main mc.html, "mobile:
+ * The phone shell (ARCHITECTURE.md §1.2; the rev1 mockup's mc.html, now history, "mobile:
  * the thumb bar, the More sheet, bottom-sheet dialogs, card tables"). Below the
  * md breakpoint everything an operator does is reachable from the bottom third
  * of the screen. Each rule keys on a data attribute the shell or src/ui sets,

@@ -68,7 +68,7 @@
       "authorityDeclared": "A file declares a grant of authority, which the init tree never carries. Nothing was pushed. Take it out and open the pull request again.",
       "githubRefused": "GitHub refused the write. Nothing reached the production branch. Check that the App can write to this repository, then try again.",
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
-      "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
+      "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
       "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab.",
       "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."

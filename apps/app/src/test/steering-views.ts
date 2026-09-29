@@ -417,6 +417,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },
