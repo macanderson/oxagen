@@ -377,7 +377,10 @@ describe("the hub", () => {
   it("keeps the freshness gates on Gates and reads them there only", async () => {
     const calls = await renderSteering("/gates");
     expect(calls.freshness).toEqual([[ctx]]);
-    expect(section("Steering freshness")).toBeVisible();
+    const panel = section("Steering freshness");
+    expect(panel).toBeVisible();
+    expect(panel).toHaveTextContent("acme/platform");
+    expect(panel).toHaveTextContent("9a41c0e");
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(screen.getByTestId("gates-not-backed")).toBeInTheDocument();
   });

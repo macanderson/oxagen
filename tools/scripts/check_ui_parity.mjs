@@ -342,6 +342,14 @@ export function isAppSource(path) {
 }
 
 /**
+ * The rg pattern that picks which app files resolveInvoked reads. It must
+ * match every call shape resolveInvoked resolves, or rg drops the file before
+ * the resolver sees it while the directory walk, which reads every file,
+ * still finds it. Exported so a test holds the two together.
+ */
+export const APP_SOURCE_PATTERN = "invoke\\(|contract:|kernelWrite";
+
+/**
  * Concatenated source of every shipping .ts/.tsx under apps/app/src that
  * mentions `invoke(`, `contract:`, or `kernelWrite`, found via rg when it is
  * available and a directory walk otherwise.
@@ -364,7 +372,7 @@ function readAppSource() {
         "*.ts",
         "-g",
         "*.tsx",
-        "invoke\\(|contract:|kernelWrite",
+        APP_SOURCE_PATTERN,
         APP_SRC,
       ],
       { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },

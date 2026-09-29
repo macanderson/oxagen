@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APP_SOURCE_PATTERN,
   computeParity,
   isAppSource,
   parseContract,
@@ -73,12 +74,40 @@ describe("resolveInvoked", () => {
   });
 
   it("ignores a contract key or kernelWrite argument that names no contract (negative)", () => {
+    // Each line puts a registered contract where the resolver must not read
+    // one: a type, a third argument, a key that only ends in "contract", a
+    // longer function name, and a longer identifier.
     const src = `
       type Call = { contract: ReadContract<I, O>; input: I };
-      await kernelWrite(ctx, somethingElse, input);
-      const options = { contract: undefined };
+      await kernelWrite(ctx, input, apiKeyCreate);
+      const options = { subcontract: graphStats };
+      await kernelWriteMany(ctx, auditLogQuery);
+      await kernelWrite(ctx, apiKeyCreateV2, input);
     `;
     expect(resolveInvoked(src, VALID, IDENT_TO_NAME).size).toBe(0);
+  });
+});
+
+// rg picks the files resolveInvoked reads by this pattern, so a call shape it
+// misses is a call the fast path never sees. The directory walk reads every
+// file and would still find it, and the two paths would disagree.
+describe("APP_SOURCE_PATTERN", () => {
+  const SHAPES = [
+    "await invoke(apiKeyCreate.name, input, ctx);",
+    'await invoke("get_graph_stats", input, ctx);',
+    "await kernelRead(ctx, { contract: graphStats, input: {} });",
+    "await kernelWrite(ctx, apiKeyCreate, input);",
+    "await kernelWrite<AuditPage>(ctx, auditLogQuery, { cursor });",
+  ];
+
+  it.each(SHAPES)("selects a file that holds %s", (src) => {
+    expect(resolveInvoked(src, VALID, IDENT_TO_NAME).size).toBe(1);
+    expect(new RegExp(APP_SOURCE_PATTERN).test(src)).toBe(true);
+  });
+
+  it("passes over a file that calls no contract (negative)", () => {
+    const src = "export const view = (ctx: Ctx) => render(ctx.page);";
+    expect(new RegExp(APP_SOURCE_PATTERN).test(src)).toBe(false);
   });
 });
 
