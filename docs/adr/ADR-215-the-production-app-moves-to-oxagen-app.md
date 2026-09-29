@@ -160,6 +160,6 @@ The record above moved only the web app. No decision moves `mcp.oxagen.sh` or
 | Step | Who | What |
 |---|---|---|
 | A1 | CI | The PR that adds this amendment merges. `infra.yml` issues the `api.oxagen.app` certificate, adds it to the ALB, and points the name at the ALB. |
-| A2 | Mac | Run `infra/tools/install-node-scripts.sh`, the same run as step 2. Then `curl -s https://api.oxagen.app/health` answers from the API. |
-| A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. |
+| A2 | Mac | Run `infra/tools/install-node-scripts.sh` after A1, even if step 2 already ran. Then `curl -s https://api.oxagen.app/health` answers from the API. |
+| A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. Do the same for the Oxagen Steering app with `/oauth/github/steering`. |
 | A4 | Agent | Open the API cutover PR: `API_PROD_URL`, `DEFAULT_API_ORIGIN`, the docs, the CLI, and the desktop app name `https://api.oxagen.app`, and the deploy probes check it. |
