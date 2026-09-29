@@ -164,7 +164,7 @@ describe("repair", () => {
     expect(deps.host).not.toHaveBeenCalled();
   });
 
-  it("refuses when the deployment has no Oxagen Steering app", async () => {
+  it("refuses when the deployment has no Oxagen GitHub App", async () => {
     const deps = fakeDeps({ host: null });
 
     const err = await repair(SCOPE, INPUT, deps).catch((e: unknown) => e);
@@ -258,7 +258,7 @@ describe("repair", () => {
     ["GitHub 404", new GitHubApiError(404, "Not Found")],
     ["GitLab 401", new gl.SteeringGitlabReauthorizeError("401 Unauthorized")],
     ["GitLab 403", new gl.GitLabApiError(403, "403 Forbidden")],
-    ["a refused token mint", new Error("Oxagen Steering token mint failed (404): Not Found")],
+    ["a refused token mint", new Error("GitHub App token mint failed (404): Not Found")],
   ])("reads the repo again and refuses on %s", async (_, error) => {
     const host = fakeHost({ applyBaseline: vi.fn(() => Promise.reject(error)) });
     const deps = fakeDeps({
@@ -815,9 +815,9 @@ describe("gitlabRepairHost.mergeRevert", () => {
 // ── Production ───────────────────────────────────────────────────────────────
 
 const APP_ENV = {
-  OXAGEN_STEERING_APP_ID: "4242",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "private-key",
-  OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+  GITHUB_APP_ID: "4242",
+  GITHUB_APP_PRIVATE_KEY: "private-key",
+  GITHUB_APP_SLUG: "oxagen-steering",
 };
 const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
@@ -847,7 +847,7 @@ describe("repairHostFor", () => {
     });
   });
 
-  it("returns null when the deployment has no Oxagen Steering app", () => {
+  it("returns null when the deployment has no Oxagen GitHub App", () => {
     expect(repairHostFor(located("github", GITHUB_CONNECTION), {})).toBeNull();
   });
 

@@ -3521,12 +3521,10 @@ type Messages = {
         lead: string;
         github: {
           heading: string;
-          steeringName: string;
-          steeringBody: string;
-          steeringInstall: string;
-          oxagenName: string;
-          oxagenBody: string;
-          oxagenInstall: string;
+          name: string;
+          body: string;
+          install: string;
+          authorize: string;
         };
         gitlab: {
           heading: string;

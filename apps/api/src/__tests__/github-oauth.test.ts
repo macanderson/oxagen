@@ -34,21 +34,21 @@
  *   - happy path → returns repositories list with totalCount
  *
  * - GET /v1/:org/connections/steering/github (the steering connect start)
- *   - each unset key → 503 naming it
+ *   - each unset GITHUB_APP_* key → 503 naming it
  *   - a member, or a caller with no user → 403
  *   - return_to that is not a path on the app → 400
- *   - install and authorize redirects carry a signed steering state
- *   - app=oxagen installs the Oxagen app with an install state
+ *   - install and authorize redirects carry a signed steering state and no
+ *     redirect_uri; the retired app parameter is ignored (ADR-228)
  *
- * - GET /oauth/github/steering (the Oxagen Steering callback)
- *   - each unset key → 503; a bad, expired or wrongly purposed state → 400
- *   - stores the token as github_steering and resends each waiting scope
+ * - GET /oauth/github/callback with a steering state (ADR-228)
+ *   - each unset key → 503; a bad or expired state → 400
+ *   - a state signed for any other purpose, or with malformed fields → 400
+ *   - records the installation, stores the token as github_steering, and
+ *     resends each waiting scope
  *   - keeps the installation the install leg named, only when the owner's
  *     token lists it on a GitHub organization
  *
- * - GET /oauth/github/callback with a purpose state
- *   - an install state binds nothing and returns to return_to
- *   - a steering state → 400
+ * - GET /oauth/github/steering (retired) → 404
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -2910,38 +2910,33 @@ describe("OAuth token resolution for /installations", () => {
 // ── Steering connect ──────────────────────────────────────────────────────────
 
 const STEERING_BASE = `/v1/${ORG}/connections/steering`;
-const STEERING_CALLBACK_PATH = "/oauth/github/steering";
-const STEERING_SLUG = "oxagen-steering-test";
-const STEERING_CLIENT_ID = "Iv1.test_steering_client_id";
-const STEERING_CLIENT_SECRET = "test_steering_client_secret";
+/** The steering callback the second app used before ADR-228. Nothing serves it. */
+const RETIRED_STEERING_CALLBACK_PATH = "/oauth/github/steering";
 const STEERING_USER_ID = "user-id-test";
 const STEERING_RETURN_TO = "/onboarding/steering";
 
+/** Steering runs on the Oxagen GitHub App, so it reads only `GITHUB_APP_*` (ADR-228). */
 const STEERING_ENV: Record<string, string | undefined> = {
   ...DEFAULT_ENV,
-  OXAGEN_STEERING_APP_SLUG: STEERING_SLUG,
-  OXAGEN_STEERING_APP_CLIENT_ID: STEERING_CLIENT_ID,
-  OXAGEN_STEERING_APP_CLIENT_SECRET: STEERING_CLIENT_SECRET,
-  OXAGEN_STEERING_APP_ID: "123456",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "test-steering-private-key",
+  GITHUB_APP_ID: "123456",
+  GITHUB_APP_PRIVATE_KEY: "test-app-private-key",
 };
 
 /** The keys the start route checks, in the order its 503 names them. */
 const STEERING_START_KEYS = [
-  "OXAGEN_STEERING_APP_SLUG",
-  "OXAGEN_STEERING_APP_CLIENT_ID",
-  "OXAGEN_STEERING_APP_CLIENT_SECRET",
-  "OXAGEN_STEERING_APP_ID",
-  "OXAGEN_STEERING_APP_PRIVATE_KEY",
+  "GITHUB_APP_SLUG",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
   "GITHUB_APP_INSTALL_STATE_SECRET",
 ] as const;
 
-/** The keys the steering callback checks. */
-const STEERING_CALLBACK_KEYS = [
-  "OXAGEN_STEERING_APP_CLIENT_ID",
-  "OXAGEN_STEERING_APP_CLIENT_SECRET",
+/** The keys the callback refuses to run without, for any state. */
+const CALLBACK_KEYS = [
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
   "GITHUB_APP_INSTALL_STATE_SECRET",
-  "NEXT_PUBLIC_APP_URL",
 ] as const;
 
 /** A state signed the way the start route signs one, steering by default. */
@@ -3060,9 +3055,8 @@ describe("GET /v1/:org/connections/steering/github", () => {
     mocks.requireEnv.mockReturnValue(STEERING_ENV);
   });
 
-  it("redirects an install to the Oxagen Steering app with a signed steering state", async () => {
+  it("redirects an install to the Oxagen GitHub App with a signed steering state", async () => {
     const res = await startSteering({
-      app: "steering",
       mode: "install",
       return_to: STEERING_RETURN_TO,
     });
@@ -3071,8 +3065,13 @@ describe("GET /v1/:org/connections/steering/github", () => {
     const location = res.headers.get("location");
     expect(location).toMatch(
       new RegExp(
-        `^https://github\\.com/apps/${STEERING_SLUG}/installations/new\\?state=`,
+        `^https://github\\.com/apps/${APP_SLUG}/installations/new\\?state=`,
       ),
+    );
+    // GitHub's install page takes no redirect_uri. The app's first Callback
+    // URL answers it (ADR-228).
+    expect(new URL(location as string).searchParams.has("redirect_uri")).toBe(
+      false,
     );
     const state = readRedirectState(location);
     expect(state).toMatchObject({
@@ -3095,9 +3094,8 @@ describe("GET /v1/:org/connections/steering/github", () => {
     );
   });
 
-  it("redirects an authorize to GitHub's OAuth page with the steering client id", async () => {
+  it("redirects an authorize to GitHub's OAuth page with the app's client id and no redirect_uri", async () => {
     const res = await startSteering({
-      app: "steering",
       mode: "authorize",
       return_to: STEERING_RETURN_TO,
     });
@@ -3107,9 +3105,11 @@ describe("GET /v1/:org/connections/steering/github", () => {
     expect(location.startsWith("https://github.com/login/oauth/authorize?")).toBe(
       true,
     );
-    expect(new URL(location).searchParams.get("client_id")).toBe(
-      STEERING_CLIENT_ID,
-    );
+    const params = new URL(location).searchParams;
+    expect(params.get("client_id")).toBe(CLIENT_ID);
+    // GitHub refuses a redirect_uri that is not a registered Callback URL,
+    // so the authorize leg sends none and returns to the first one.
+    expect(params.has("redirect_uri")).toBe(false);
     expect(readRedirectState(location)).toMatchObject({
       purpose: "steering",
       orgId: TEST_ORG_ID,
@@ -3117,24 +3117,59 @@ describe("GET /v1/:org/connections/steering/github", () => {
     });
   });
 
+  it.each(["steering", "oxagen", "gitlab"])(
+    "ignores the retired app=%s parameter and installs the one app",
+    async (appParam) => {
+      const res = await startSteering({
+        app: appParam,
+        mode: "install",
+        return_to: STEERING_RETURN_TO,
+      });
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("location");
+      expect(location).toMatch(
+        new RegExp(`^https://github\\.com/apps/${APP_SLUG}/installations/new`),
+      );
+      expect(readRedirectState(location).purpose).toBe("steering");
+    },
+  );
+
   it.each(STEERING_START_KEYS)(
     "answers 503 naming %s when it is unset",
     async (key) => {
       mocks.requireEnv.mockReturnValue({ ...STEERING_ENV, [key]: undefined });
 
       const res = await startSteering({
-        app: "steering",
         mode: "install",
         return_to: STEERING_RETURN_TO,
       });
 
       expect(res.status).toBe(503);
       const body = (await res.json()) as SteeringErrorBody;
-      expect(body.error?.code).toBe("steering_app_unconfigured");
+      expect(body.error?.code).toBe("github_app_unconfigured");
       expect(body.error?.message).toContain(key);
       expect(res.headers.get("location")).toBeNull();
     },
   );
+
+  it("reads none of the retired steering app's settings", async () => {
+    mocks.requireEnv.mockReturnValue({
+      ...STEERING_ENV,
+      OXAGEN_STEERING_APP_SLUG: "oxagen-steering-retired",
+      OXAGEN_STEERING_APP_CLIENT_ID: "Iv1.retired",
+    });
+
+    const res = await startSteering({
+      mode: "authorize",
+      return_to: STEERING_RETURN_TO,
+    });
+
+    expect(res.status).toBe(302);
+    const location = res.headers.get("location") ?? "";
+    expect(location).not.toContain("retired");
+    expect(new URL(location).searchParams.get("client_id")).toBe(CLIENT_ID);
+  });
 
   it("answers 403 to an org member, with no GitHub URL", async () => {
     mocks.assertOrgRole.mockRejectedValueOnce(
@@ -3146,7 +3181,6 @@ describe("GET /v1/:org/connections/steering/github", () => {
     );
 
     const res = await startSteering({
-      app: "steering",
       mode: "install",
       return_to: STEERING_RETURN_TO,
     });
@@ -3172,7 +3206,6 @@ describe("GET /v1/:org/connections/steering/github", () => {
     mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
 
     const res = await startSteering({
-      app: "steering",
       mode: "install",
       return_to: STEERING_RETURN_TO,
     });
@@ -3183,29 +3216,19 @@ describe("GET /v1/:org/connections/steering/github", () => {
     expect(mocks.assertOrgRole).not.toHaveBeenCalled();
   });
 
-  it("answers 400 to an app other than steering or oxagen", async () => {
-    const res = await startSteering({
-      app: "gitlab",
-      mode: "install",
-      return_to: STEERING_RETURN_TO,
-    });
+  it.each([undefined, "uninstall"])(
+    "answers 400 to the mode %s",
+    async (mode) => {
+      const res = await startSteering({
+        mode,
+        return_to: STEERING_RETURN_TO,
+      });
 
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("validation_error");
-  });
-
-  it("answers 400 to a mode other than install or authorize", async () => {
-    const res = await startSteering({
-      app: "steering",
-      mode: "uninstall",
-      return_to: STEERING_RETURN_TO,
-    });
-
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("validation_error");
-  });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as SteeringErrorBody;
+      expect(body.error?.code).toBe("validation_error");
+    },
+  );
 
   it.each([
     { name: "a missing return_to", returnTo: undefined },
@@ -3218,7 +3241,6 @@ describe("GET /v1/:org/connections/steering/github", () => {
     { name: "513 characters", returnTo: `/${"a".repeat(512)}` },
   ])("answers 400 to $name", async ({ returnTo }) => {
     const res = await startSteering({
-      app: "steering",
       mode: "install",
       return_to: returnTo,
     });
@@ -3232,7 +3254,6 @@ describe("GET /v1/:org/connections/steering/github", () => {
   it("accepts a return_to of exactly 512 characters", async () => {
     const returnTo = `/${"a".repeat(511)}`;
     const res = await startSteering({
-      app: "steering",
       mode: "install",
       return_to: returnTo,
     });
@@ -3242,64 +3263,12 @@ describe("GET /v1/:org/connections/steering/github", () => {
       returnTo,
     );
   });
-
-  it("answers 400 to authorizing the Oxagen app from onboarding", async () => {
-    const res = await startSteering({
-      app: "oxagen",
-      mode: "authorize",
-      return_to: STEERING_RETURN_TO,
-    });
-
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("validation_error");
-  });
-
-  it("redirects an Oxagen app install to its install page with an install state", async () => {
-    const res = await startSteering({
-      app: "oxagen",
-      mode: "install",
-      return_to: STEERING_RETURN_TO,
-    });
-
-    expect(res.status).toBe(302);
-    const location = res.headers.get("location");
-    expect(location).toMatch(
-      new RegExp(
-        `^https://github\\.com/apps/${APP_SLUG}/installations/new\\?state=`,
-      ),
-    );
-    expect(readRedirectState(location)).toMatchObject({
-      purpose: "install",
-      orgId: TEST_ORG_ID,
-      userId: STEERING_USER_ID,
-      returnTo: STEERING_RETURN_TO,
-    });
-  });
-
-  it("answers 503 to an Oxagen app install when GITHUB_APP_SLUG is unset", async () => {
-    mocks.requireEnv.mockReturnValue({
-      ...STEERING_ENV,
-      GITHUB_APP_SLUG: undefined,
-    });
-
-    const res = await startSteering({
-      app: "oxagen",
-      mode: "install",
-      return_to: STEERING_RETURN_TO,
-    });
-
-    expect(res.status).toBe(503);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("github_app_unconfigured");
-    expect(body.error?.message).toContain("GITHUB_APP_SLUG");
-  });
 });
 
-describe("GET /oauth/github/steering", () => {
+describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
   function steeringCallback(params: Record<string, string> = {}) {
     const qs = new URLSearchParams(params).toString();
-    return app.fetch(makeRequest(`${STEERING_CALLBACK_PATH}?${qs}`));
+    return app.fetch(makeRequest(`${CALLBACK_PATH}?${qs}`));
   }
 
   /** What GitHub answers for the token exchange and then for /user. */
@@ -3352,7 +3321,7 @@ describe("GET /oauth/github/steering", () => {
     mocks.requireEnv.mockReturnValue(STEERING_ENV);
   });
 
-  it.each(STEERING_CALLBACK_KEYS)(
+  it.each(CALLBACK_KEYS)(
     "answers 503 naming %s when it is unset",
     async (key) => {
       mocks.requireEnv.mockReturnValue({ ...STEERING_ENV, [key]: undefined });
@@ -3363,50 +3332,45 @@ describe("GET /oauth/github/steering", () => {
       });
 
       expect(res.status).toBe(503);
-      const body = (await res.json()) as SteeringErrorBody;
-      expect(body.error?.code).toBe("steering_app_unconfigured");
-      expect(body.error?.message).toContain(key);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toContain(key);
       expect(mocks.fetch).not.toHaveBeenCalled();
     },
   );
 
-  it("answers 400 invalid_state when GitHub returns without a state", async () => {
-    const res = await steeringCallback({ code: "steering-code" });
-
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("invalid_state");
-  });
-
-  it("answers 400 invalid_state to a state whose signature does not match", async () => {
+  it("answers 400 to a steering state whose signature does not match", async () => {
     const good = buildPurposeState();
     const forged = `${good.slice(0, good.lastIndexOf("."))}.${"0".repeat(64)}`;
 
     const res = await steeringCallback({ code: "steering-code", state: forged });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("invalid_state");
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toBe("Invalid state signature");
     expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
-  it("answers 400 invalid_state to an expired state", async () => {
+  it("answers 400 to an expired steering state", async () => {
     const res = await steeringCallback({
       code: "steering-code",
       state: buildPurposeState({ expiresAt: Date.now() - 1000 }),
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("invalid_state");
-    expect(body.error?.message).toContain("expired");
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain("expired");
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it.each([
-    { name: "a workspace connect state", state: () => buildValidState() },
     {
-      name: "an install state",
+      name: "an install state, which only the retired install leg signed",
       state: () => buildPurposeState({ purpose: "install" }),
+    },
+    {
+      name: "a state with an unknown purpose",
+      state: () => buildPurposeState({ purpose: "tools" }),
     },
     {
       name: "a steering state whose returnTo leaves the app",
@@ -3416,17 +3380,41 @@ describe("GET /oauth/github/steering", () => {
       name: "a steering state with no user",
       state: () => buildPurposeState({ userId: "" }),
     },
-  ])("answers 400 wrong_state_purpose to $name", async ({ state }) => {
+    {
+      name: "a steering state with no organization",
+      state: () => buildPurposeState({ orgId: "" }),
+    },
+  ])("answers 400 to $name and touches nothing", async ({ state }) => {
     const res = await steeringCallback({
       code: "steering-code",
+      installation_id: "987654",
+      setup_action: "install",
       state: state(),
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as SteeringErrorBody;
-    expect(body.error?.code).toBe("wrong_state_purpose");
+    expect(res.headers.get("location")).toBeNull();
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain("not started for this callback");
+    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.encrypt).not.toHaveBeenCalled();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("serves nothing at the retired steering callback", async () => {
+    const res = await app.fetch(
+      makeRequest(
+        `${RETIRED_STEERING_CALLBACK_PATH}?${new URLSearchParams({
+          code: "steering-code",
+          state: buildPurposeState(),
+        }).toString()}`,
+      ),
+    );
+
+    expect(res.status).toBe(404);
+    expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
@@ -3469,6 +3457,20 @@ describe("GET /oauth/github/steering", () => {
       errorRedirect("github_token_exchange_failed"),
     );
     expect(mocks.encrypt).not.toHaveBeenCalled();
+  });
+
+  it("sends the person back with github_token_exchange_failed when the exchange throws", async () => {
+    mocks.fetch.mockRejectedValueOnce(new Error("socket hang up"));
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      errorRedirect("github_token_exchange_failed"),
+    );
   });
 
   it("sends the person back with github_user_unreadable when /user fails", async () => {
@@ -3533,20 +3535,25 @@ describe("GET /oauth/github/steering", () => {
       `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
     );
 
-    // The code went to GitHub with the steering app's own client.
+    // The code went to GitHub with the Oxagen GitHub App's client, the same
+    // one a workspace connect uses (ADR-228), and with no redirect_uri.
     const [tokenUrl, tokenInit] = mocks.fetch.mock.calls[0] as [
       string,
       { body: URLSearchParams },
     ];
     expect(tokenUrl).toBe("https://github.com/login/oauth/access_token");
-    expect(tokenInit.body.get("client_id")).toBe(STEERING_CLIENT_ID);
-    expect(tokenInit.body.get("client_secret")).toBe(STEERING_CLIENT_SECRET);
+    expect(tokenInit.body.get("client_id")).toBe(CLIENT_ID);
+    expect(tokenInit.body.get("client_secret")).toBe(CLIENT_SECRET);
     expect(tokenInit.body.get("code")).toBe("steering-code");
+    expect(tokenInit.body.has("redirect_uri")).toBe(false);
     expect(mocks.fetch.mock.calls[1]?.[0]).toBe("https://api.github.com/user");
     // No installation_id came back, so nothing lists installations and the
     // job picks the connection itself.
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
     expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
+    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
+    // A steering state never reaches the workspace connect's tenant writes.
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
 
     expect(mocks.encrypt).toHaveBeenCalledWith(
       "gho_steering_token",
@@ -3644,7 +3651,7 @@ describe("GET /oauth/github/steering", () => {
     );
   });
 
-  it("keeps the installation the owner picked before it resends provisioning", async () => {
+  it("records the installation and keeps the one the owner picked before it resends provisioning", async () => {
     mockGithubExchange();
     mockInstallations([
       { id: 101, account: { login: "acme", type: "Organization" } },
@@ -3664,6 +3671,11 @@ describe("GET /oauth/github/steering", () => {
     expect(res.headers.get("location")).toBe(
       `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
     );
+    // The install goes into the platform registry, as a direct install does.
+    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith({
+      installationId: "202",
+      reactivate: true,
+    });
     // The id was checked against the owner's own token, not taken on trust.
     const [listUrl, listInit] = mocks.fetch.mock.calls[2] as [
       string,
@@ -3684,6 +3696,31 @@ describe("GET /oauth/github/steering", () => {
     const kept = mocks.keepSteeringConnection.mock.invocationCallOrder[0];
     const sent = mocks.startSteeringRepoProvision.mock.invocationCallOrder[0];
     expect(kept).toBeLessThan(sent as number);
+  });
+
+  it("still connects when the registry write fails", async () => {
+    vi.mocked(upsertGithubInstallation).mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
+    mockGithubExchange();
+    mockInstallations([
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx, makeRowsTx([{ settings: {} }]), makeRowsTx([]));
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+    );
+    expect(mocks.keepSteeringConnection).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -3741,7 +3778,7 @@ describe("GET /oauth/github/steering", () => {
   );
 
   it.each(["12abc", "0", "-5", "99999999999999999999"])(
-    "asks GitHub nothing about a malformed installation_id %s (negative)",
+    "asks GitHub nothing and records nothing about a malformed installation_id %s (negative)",
     async (installationId) => {
       mockGithubExchange();
       const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
@@ -3760,6 +3797,7 @@ describe("GET /oauth/github/steering", () => {
       );
       expect(mocks.fetch).toHaveBeenCalledTimes(2);
       expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
+      expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
     },
   );
 
@@ -3784,72 +3822,5 @@ describe("GET /oauth/github/steering", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(errorRedirect("store_failed"));
     expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
-  });
-});
-
-describe("GET /oauth/github/callback with a purpose state", () => {
-  function makeCallbackReq(params: Record<string, string> = {}) {
-    const qs = new URLSearchParams(params).toString();
-    return app.fetch(makeRequest(`${CALLBACK_PATH}?${qs}`));
-  }
-
-  it("records the installation for an install state and binds nothing", async () => {
-    const res = await makeCallbackReq({
-      code: "oxagen-code",
-      installation_id: "987654",
-      setup_action: "install",
-      state: buildPurposeState({ purpose: "install" }),
-    });
-
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe(`${APP_URL}${STEERING_RETURN_TO}`);
-    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith({
-      installationId: "987654",
-      reactivate: true,
-    });
-    // No token exchange, no token stored, no connection or workspace touched.
-    expect(mocks.fetch).not.toHaveBeenCalled();
-    expect(mocks.encrypt).not.toHaveBeenCalled();
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-    expect(mocks.withTenantDb).not.toHaveBeenCalled();
-  });
-
-  it("returns to return_to for an install state with no installation id", async () => {
-    const res = await makeCallbackReq({
-      state: buildPurposeState({ purpose: "install" }),
-    });
-
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe(`${APP_URL}${STEERING_RETURN_TO}`);
-    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
-  });
-
-  it("answers 400 to a steering state, which completes only on /oauth/github/steering", async () => {
-    const res = await makeCallbackReq({
-      code: "steering-code",
-      installation_id: "987654",
-      state: buildPurposeState(),
-    });
-
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toContain("not started for this callback");
-    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
-    expect(mocks.fetch).not.toHaveBeenCalled();
-    expect(mocks.withSystemDb).not.toHaveBeenCalled();
-  });
-
-  it("answers 400 to an install state whose returnTo leaves the app", async () => {
-    const res = await makeCallbackReq({
-      installation_id: "987654",
-      state: buildPurposeState({
-        purpose: "install",
-        returnTo: "https://evil.test",
-      }),
-    });
-
-    expect(res.status).toBe(400);
-    expect(res.headers.get("location")).toBeNull();
-    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
   });
 });

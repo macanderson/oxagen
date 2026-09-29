@@ -615,7 +615,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_WEBHOOK_SECRET: {
     group: "github",
     description:
-      "GitHub App webhook signing secret — validates inbound webhook payloads.",
+      "GitHub App webhook signing secret — validates inbound webhook payloads. " +
+      "A verified delivery that can change a steering repo's health also asks for a health read (S2, ADR-228).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -627,7 +628,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "Webhook signing secret for the SECOND GitHub App (oxagen-sh, app id " +
       "4055615), which delivers to the same /webhooks/github/app endpoint as " +
-      "oxagen-code-agent. Optional: unset means that App's deliveries are rejected.",
+      "the Oxagen GitHub App (oxagen-connect). Optional: unset means that App's deliveries are rejected.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -651,7 +652,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "github",
     description:
       "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation. " +
-      "Also minted by envGithubUrls (see GITHUB_APP_CLIENT_ID) in-process from app and mcp.",
+      "Also minted by envGithubUrls (see GITHUB_APP_CLIENT_ID) in-process from app and mcp. " +
+      "The steering connect in api sends an install to this slug, and the steering repo health read compares a check's app against it (ADR-228).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -680,7 +682,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page. " +
       "Also required in-process by app: repository.binding-write.ts (behind " +
       "link_repository) and repository.installation.list.ts mint installation " +
-      "tokens directly when the app invokes them, not only from api/mcp.",
+      "tokens directly when the app invokes them, not only from api/mcp. " +
+      "Steering repos run on the same App (ADR-228): the steering repo provision " +
+      "job, repair, and health read mint their installation tokens with it.",
     secret: false,
     clientExposed: false,
     services: ["api", "mcp", "app"],
@@ -696,80 +700,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     secret: true,
     clientExposed: false,
     services: ["api", "mcp", "app"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-
-  // The Oxagen Steering app (#4450, docs/specs/github-app/github-app-setup.md).
-  // A second GitHub App with the Oxagen app's permissions plus Administration
-  // and Deployments write, used only on steering repos. The steering repo
-  // provision job reads the ID, the private key and the slug, and stops with a
-  // typed error when any is missing. The steering connect in api
-  // (/v1/:org_slug/connections/steering/github and /oauth/github/steering)
-  // reads all five plus GITHUB_APP_INSTALL_STATE_SECRET, and answers 503 naming
-  // the first that is unset.
-  OXAGEN_STEERING_APP_ID: {
-    group: "github",
-    description:
-      "The Oxagen Steering GitHub App's numeric ID. The steering repo provision job uses it with OXAGEN_STEERING_APP_PRIVATE_KEY to mint installation tokens for steering repos. Find it on the app's settings page.",
-    secret: false,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_STEERING_APP_CLIENT_ID: {
-    group: "github",
-    description:
-      "The Oxagen Steering GitHub App's OAuth client ID. The steering connect sends it to GitHub to authorize the app and exchanges the returned code with it. Find it on the app's settings page.",
-    secret: false,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_STEERING_APP_CLIENT_SECRET: {
-    group: "github",
-    description:
-      "The Oxagen Steering GitHub App's OAuth client secret. The steering callback at /oauth/github/steering uses it to exchange GitHub's code for a user token. Generate it under the app's settings, Client secrets.",
-    secret: true,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_STEERING_APP_PRIVATE_KEY: {
-    group: "github",
-    description:
-      "PEM-encoded RSA private key for the Oxagen Steering GitHub App. Generate it under the app's settings, Private keys.",
-    secret: true,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_STEERING_APP_SLUG: {
-    group: "github",
-    description:
-      "The Oxagen Steering GitHub App's public slug, the path segment in https://github.com/apps/<slug>. The provision job pins the steering check and the ruleset bypass to this app.",
-    secret: false,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  // The steering health read (lane S2, #4560). The api's GitHub webhook route
-  // routes a delivery from the steering app (its target id is
-  // OXAGEN_STEERING_APP_ID) to the health request, and verifies it with this
-  // secret alone. With the secret unset, it acks every such delivery and
-  // asks for no health read.
-  OXAGEN_STEERING_APP_WEBHOOK_SECRET: {
-    group: "github",
-    description:
-      "The Oxagen Steering GitHub App's webhook secret. The api verifies the steering app's webhook deliveries with it, and each verified delivery asks for a steering repo health read. While it is unset, the api answers every delivery from the steering app with 200, logs an error, and asks for no health read. Set it under the app's settings, Webhook secret.",
-    secret: true,
-    clientExposed: false,
-    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
   },

@@ -1,7 +1,7 @@
 // steering_repo.provision.deps.test.ts: the production wiring of the steering
 // repo job (lane S1, #4450). steering_repo.provision.test.ts runs the steps on
 // in-memory deps. This file covers what those deps stand in for: the settings
-// readers, the Oxagen Steering app config, the stored-token reader, the
+// readers, the Oxagen GitHub App config, the stored-token reader, the
 // database writes, the steering binding, the Re-authorize notice, and the
 // provision event.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -207,9 +207,9 @@ const ACTOR = "0192d4a8-7c1e-7a00-8000-0000000a0701";
 const CONN = "0192d4a8-7c1e-7a00-8000-0000000c0c01";
 
 const ENV = {
-  OXAGEN_STEERING_APP_ID: "123",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "pem",
-  OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+  GITHUB_APP_ID: "123",
+  GITHUB_APP_PRIVATE_KEY: "pem",
+  GITHUB_APP_SLUG: "oxagen-steering",
 };
 
 const WORKSPACE: Extract<SteeringRepoScope, { kind: "workspace" }> = {
@@ -249,9 +249,9 @@ const REQUEST: SteeringRepoProvisionRequest = {
   actorUserId: ACTOR,
 };
 
-const GITHUB_TITLE = "Authorize Oxagen Steering again";
+const GITHUB_TITLE = "Authorize the Oxagen GitHub App again";
 const GITHUB_BODY =
-  "Oxagen could not finish setting up a steering repo because the Oxagen Steering authorization is missing or GitHub refused it. An organization owner must authorize Oxagen Steering again.";
+  "Oxagen could not finish setting up a steering repo because its GitHub authorization is missing or GitHub refused it. An organization owner must authorize the Oxagen GitHub App again.";
 const GITLAB_TITLE = "Connect your GitLab group again";
 const GITLAB_BODY =
   "Oxagen could not finish setting up a steering repo because the GitLab group token is missing or GitLab refused it. An organization owner must connect the group again.";
@@ -403,19 +403,19 @@ describe("steeringAppFromEnv", () => {
   it("returns null for an app id that is not a positive integer", () => {
     for (const id of ["abc", "0", "-4", "1.5", ""])
       expect(
-        steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_ID: id }),
+        steeringAppFromEnv({ ...ENV, GITHUB_APP_ID: id }),
       ).toBeNull();
   });
 
   it("returns null when the private key or the slug is missing", () => {
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_PRIVATE_KEY: undefined }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_PRIVATE_KEY: undefined }),
     ).toBeNull();
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_PRIVATE_KEY: "" }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_PRIVATE_KEY: "" }),
     ).toBeNull();
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_SLUG: undefined }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_SLUG: undefined }),
     ).toBeNull();
   });
 
@@ -427,9 +427,9 @@ describe("steeringAppFromEnv", () => {
   });
 
   it("reads process.env when no env is given", () => {
-    vi.stubEnv("OXAGEN_STEERING_APP_ID", "321");
-    vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "pem-from-process");
-    vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "steering-from-process");
+    vi.stubEnv("GITHUB_APP_ID", "321");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem-from-process");
+    vi.stubEnv("GITHUB_APP_SLUG", "steering-from-process");
     expect(steeringAppFromEnv()).toEqual({
       app: {
         symbol: OXAGEN_STEERING_APP,
@@ -681,19 +681,19 @@ describe("steeringRepoProvisionDeps", () => {
   });
 
   describe("github", () => {
-    it("returns null when the Oxagen Steering app is not configured", () => {
+    it("returns null when the Oxagen GitHub App is not configured", () => {
       expect(deps({}).github(WORKSPACE)).toBeNull();
       expect(
-        deps({ ...ENV, OXAGEN_STEERING_APP_SLUG: undefined }).github(
+        deps({ ...ENV, GITHUB_APP_SLUG: undefined }).github(
           ORGANIZATION,
         ),
       ).toBeNull();
     });
 
     it("reads the app from process.env when no env is given", () => {
-      vi.stubEnv("OXAGEN_STEERING_APP_ID", "321");
-      vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "pem-from-process");
-      vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "steering-from-process");
+      vi.stubEnv("GITHUB_APP_ID", "321");
+      vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem-from-process");
+      vi.stubEnv("GITHUB_APP_SLUG", "steering-from-process");
       const clients = steeringRepoProvisionDeps({ actorUserId: ACTOR }).github(
         WORKSPACE,
       );
@@ -1191,7 +1191,7 @@ describe("steeringRepoProvisionDeps", () => {
   });
 
   describe("notifyReauthorize", () => {
-    it("asks the workspace's organization managers to authorize Oxagen Steering again", async () => {
+    it("asks the workspace's organization managers to authorize the Oxagen GitHub App again", async () => {
       mocks.results.push(
         [orgRow(null)],
         [{ slug: "platform", name: "Platform", settings: null }],

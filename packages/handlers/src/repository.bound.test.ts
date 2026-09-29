@@ -212,7 +212,7 @@ describe("workspaceGithub.client", () => {
     ["a number", 4242],
     ["a string of digits", "4242"],
   ])(
-    "mints the Oxagen Steering token for a github_steering head whose installation id is %s",
+    "mints the Oxagen GitHub App token for a github_steering head whose installation id is %s",
     async (_label, installationId) => {
       // A workspace whose only repository is its steering repository has no
       // installation of its own. The steering head must still read.

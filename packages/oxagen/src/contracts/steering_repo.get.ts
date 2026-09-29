@@ -52,7 +52,7 @@ export const steeringRepoView = z.object({
     .object({ code: z.string(), message: z.string() })
     .nullable()
     .describe(
-      "Why the step failed or stopped. The code steering_reauthorize asks an organization owner to authorize Oxagen Steering again.",
+      "Why the step failed or stopped. The code steering_reauthorize asks an organization owner to authorize the Oxagen GitHub App again.",
     ),
   provider: z.enum(["github", "gitlab"]).nullable(),
   repository: z

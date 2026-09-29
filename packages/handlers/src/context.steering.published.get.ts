@@ -10,7 +10,7 @@
 //      and the repository as GitHub reports it, checked against the immutable
 //      id the binding was made against (`not_found: repository_not_installed`).
 //      A steering repository the provisioner created hangs from a
-//      `github_steering` connection, and only the Oxagen Steering app can
+//      `github_steering` connection, and only the Oxagen GitHub App can
 //      read it, so that connection mints the app's installation token. This
 //      is a server-side read. No agent receives the token.
 //   3. The production branch's head. A branch GitHub no longer has answers
@@ -148,7 +148,7 @@ export function createPublishedSteeringGetHandler(
         ? await deps.readMain(scope)
         : await deps.readBound(scope, input.bindingId);
     // The head's connection picks the credential, so a provisioned steering
-    // repository reads through the Oxagen Steering app and not through the
+    // repository reads through the Oxagen GitHub App and not through the
     // workspace installation, which cannot see it.
     const gh = await requireWorkspaceGithub(
       deps.github,

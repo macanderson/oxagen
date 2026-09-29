@@ -8,7 +8,7 @@
 // today. Every operation runs with the workspace's own token (ADR-020:
 // installation token, then the connecting user's OAuth token, then the
 // local-only PAT). A steering repository the provisioner created is the one
-// exception: only the Oxagen Steering app can reach it, so the seam mints that
+// exception: only the Oxagen GitHub App can reach it, so the seam mints that
 // app's installation token for it.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
@@ -392,7 +392,7 @@ interface DeliveryConfig {
   owner?: unknown;
   repo?: unknown;
   /**
-   * The Oxagen Steering app's installation id, on a `github_steering`
+   * The Oxagen GitHub App's installation id, on a `github_steering`
    * connection the steering repo provisioner wrote.
    */
   installationId?: unknown;
@@ -579,7 +579,7 @@ export async function readGitHubConnection(scope: {
       };
       if (bound.connectorId !== GITHUB_STEERING_PROVIDER) return answer;
       // A provisioned steering repository. The workspace's own GitHub token
-      // cannot see it, so the seam needs the Oxagen Steering installation the
+      // cannot see it, so the seam needs the Oxagen GitHub App installation the
       // provisioner recorded. Without one, every call would fail on GitHub
       // with a 404 that names no cause, so the read refuses here instead.
       const installationId = steeringInstallationIdOf(
@@ -589,7 +589,7 @@ export async function readGitHubConnection(scope: {
         throw new HandlerError({
           code: "conflict",
           reason: "steering_installation_missing",
-          message: `The steering repository ${bound.approvedFullName} hangs from an Oxagen Steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
+          message: `The steering repository ${bound.approvedFullName} hangs from a steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
         });
       return { ...answer, steeringInstallationId: installationId };
     }
@@ -649,7 +649,7 @@ interface SteeringGitHubDeps {
   }) => Promise<string>;
   client: (token: string) => GitHubClient;
   /**
-   * The Oxagen Steering app's token for one installation, used when the
+   * The Oxagen GitHub App's token for one installation, used when the
    * steering head hangs from a `github_steering` connection. Defaults to
    * {@link mintSteeringInstallationToken}.
    */
@@ -979,7 +979,7 @@ export function createSteeringGitHub(
             "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
         });
       }
-      // A provisioned steering repository answers only to the Oxagen Steering
+      // A provisioned steering repository answers only to the the Oxagen GitHub App
       // app. Every other head uses the workspace's own token.
       const token =
         connection.source === "binding" &&

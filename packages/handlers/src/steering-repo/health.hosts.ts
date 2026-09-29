@@ -2,7 +2,7 @@
 // #4560).
 //
 // It loads a scope's steering repo from the settings provisioning wrote,
-// binds `HealthHost` to GitHub through the Oxagen Steering app and to GitLab
+// binds `HealthHost` to GitHub through the Oxagen GitHub App and to GitLab
 // through the group access token, and tells the organization's owners and
 // admins when the repo changes state. health.ts holds the decisions, and
 // ./diverged.ts holds the history reads and the revert pull request.
@@ -173,11 +173,11 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
         const status = mintStatus(err);
         if (status === 404)
           return disconnected(
-            `Oxagen Steering is no longer installed on ${input.account}.`,
+            `The Oxagen GitHub App is no longer installed on ${input.account}.`,
           );
         if (status === 403)
           return disconnected(
-            `The Oxagen Steering installation on ${input.account} is suspended.`,
+            `The Oxagen GitHub App installation on ${input.account} is suspended.`,
           );
         throw err;
       }
@@ -188,7 +188,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
       }>("GET", `/repositories/${seg(input.repositoryId)}`, undefined, [403, 404]);
       if (found.data === null)
         return disconnected(
-          `The repository ${fullName()} was deleted, or Oxagen Steering can no longer see it.`,
+          `The repository ${fullName()} was deleted, or the Oxagen GitHub App can no longer see it.`,
         );
       address = { owner: found.data.owner.login, name: found.data.name };
       let actual: gh.ObservedGithubSettings;
@@ -202,7 +202,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
       } catch (err) {
         if (!refused(err)) throw err;
         return disconnected(
-          `GitHub refused to show Oxagen Steering the settings of ${found.data.full_name}.`,
+          `GitHub refused to show the Oxagen GitHub App the settings of ${found.data.full_name}.`,
         );
       }
       return {
@@ -624,7 +624,7 @@ export function healthHostFor(
     if (config === null) {
       logger.warn(
         { orgId: target.scope.orgId, workspaceId: target.scope.workspaceId },
-        "steering-repo.health: the Oxagen Steering app is not configured, so this deployment cannot read the steering repo",
+        "steering-repo.health: the Oxagen GitHub App is not configured, so this deployment cannot read the steering repo",
       );
       return null;
     }

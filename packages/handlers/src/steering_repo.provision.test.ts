@@ -1105,7 +1105,7 @@ describe("pick_connection", () => {
       code: "no_connection",
       isNonRetriable: true,
       message:
-        "This organization has no GitHub organization with Oxagen Steering installed and no GitLab group token. Connect one, then retry.",
+        "This organization has no GitHub organization with the Oxagen GitHub App installed and no GitLab group token. Connect one, then retry.",
     });
     expect(h.state(WS)).toMatchObject({
       status: "blocked",
@@ -1224,7 +1224,7 @@ describe("reauthorize", () => {
     await runSteeringRepoStep(deps, WS, "create_repository");
     const err = await expectReauthorize(h, "add_to_installation", "github");
     expect(err.message).toBe(
-      "No organization owner has authorized Oxagen Steering. An owner must authorize it.",
+      "No organization owner has authorized the Oxagen GitHub App for steering. An owner must authorize it.",
     );
     expect(h.state(WS)?.step).toBe("create_repository");
   });
@@ -1292,7 +1292,7 @@ describe("reauthorize", () => {
     await runSteeringRepoStep(deps, WS, "create_repository");
     const err = await expectReauthorize(h, "add_to_installation", "github");
     expect(err.message).toBe(
-      "The stored Oxagen Steering authorization cannot reach the installation on acme. An owner must authorize it again.",
+      "The stored steering authorization cannot reach the Oxagen GitHub App installation on acme. An owner must authorize it again.",
     );
   });
 
@@ -1330,7 +1330,7 @@ describe("reauthorize", () => {
 });
 
 describe("other stops", () => {
-  it("blocks without a banner when the Oxagen Steering app is not configured", async () => {
+  it("blocks without a banner when the Oxagen GitHub App is not configured", async () => {
     const h = new Harness(githubFake(), null);
     h.connections.set("org_1", GITHUB_CONNECTION);
     h.githubConfigured = false;
