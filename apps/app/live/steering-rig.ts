@@ -178,14 +178,10 @@ export async function signIn(settings: Settings): Promise<Oxagen> {
     body: JSON.stringify({ email: settings.email, password: settings.password }),
   });
   if (!res.ok) {
-    let code: string | null = null;
-    try {
-      const json: unknown = await res.json();
-      const parsed = authError.safeParse(json);
-      code = parsed.success ? parsed.data.code : null;
-    } catch {
-      code = null;
-    }
+    // An error body that is not JSON names no code.
+    const json: unknown = await res.json().catch(() => null);
+    const parsed = authError.safeParse(json);
+    const code = parsed.success ? parsed.data.code : null;
     throw new Error(
       `Sign-in as the test Oxagen user answered ${String(res.status)}${code === null ? "" : ` (${code})`}. Check STEERING_LIVE_OXAGEN_EMAIL and STEERING_LIVE_OXAGEN_PASSWORD.`,
     );
