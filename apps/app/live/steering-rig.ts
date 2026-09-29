@@ -1,0 +1,816 @@
+/**
+ * The rig for the steering repo live test (lane S11, #4723).
+ *
+ * It signs in to production Oxagen as the test user, calls the API over HTTP,
+ * and calls GitHub over REST with the rig app's installation token. It opens
+ * no browser and imports nothing from Playwright, so the cleanup script runs
+ * it under tsx as well.
+ *
+ * It never prints a secret. An error names the method, the path, the status,
+ * and at most 500 characters of the response body. No request header appears
+ * in any message.
+ */
+import { setTimeout as sleep } from "node:timers/promises";
+import { z } from "zod";
+import type { ContextPrGetOutput } from "@oxagen/oxagen/contracts/context.pr.get";
+import type { ContextPrMergeOutput } from "@oxagen/oxagen/contracts/context.pr.merge";
+import type { ContextPrOpenOutput } from "@oxagen/oxagen/contracts/context.pr.open";
+import type { ContextProposalCreateOutput } from "@oxagen/oxagen/contracts/context.proposal.create";
+import type { ContextProposalListOutput } from "@oxagen/oxagen/contracts/context.proposal.list";
+import type { SteeringRepoGetOutput } from "@oxagen/oxagen/contracts/steering_repo.get";
+import type { SteeringRepoRepairOutput } from "@oxagen/oxagen/contracts/steering_repo.repair";
+import type { WorkspaceArchiveOutput } from "@oxagen/oxagen/contracts/workspace.archive";
+import type { WorkspaceCreateOutput } from "@oxagen/oxagen/contracts/workspace.create";
+import type { WorkspaceListOutput } from "@oxagen/oxagen/contracts/workspace.list";
+
+export const SECOND = 1000;
+export const MINUTE = 60 * SECOND;
+
+/** The check Oxagen posts on steering PRs and fails on every open PR when health drifts. */
+export const STEERING_CHECK = "Oxagen steering";
+/** The `external_id` of a check run a health read posted. */
+export const HEALTH_CHECK_ID = "oxagen-steering-health";
+/** The ruleset that lets only Oxagen update main. */
+export const OXAGEN_MERGES = "Oxagen merges";
+/** That ruleset's path in the settings baseline, as a health difference names it. */
+export const OXAGEN_MERGES_SETTING = "rulesets.oxagen_merges";
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+/** Each value the rig reads from the environment. The workflow's first step checks the same names. */
+const REQUIRED = [
+  "STEERING_LIVE_OXAGEN_EMAIL",
+  "STEERING_LIVE_OXAGEN_PASSWORD",
+  "STEERING_LIVE_OXAGEN_ORG",
+  "STEERING_LIVE_GITHUB_ORG",
+  "STEERING_LIVE_GITHUB_TOKEN",
+  "GITHUB_RUN_ID",
+  "GITHUB_RUN_ATTEMPT",
+] as const;
+
+export interface Settings {
+  email: string;
+  password: string;
+  /** The test Oxagen organization's slug. */
+  oxagenOrg: string;
+  /** The GitHub test organization's login. */
+  githubOrg: string;
+  githubToken: string;
+  apiUrl: string;
+  appUrl: string;
+  /** This run's workspace slug, `live-<run id>-<attempt>`. Its steering repo is `oxagen-<slug>`. */
+  runSlug: string;
+}
+
+/** Reads the settings and names every missing one in a single error. */
+export function readSettings(env: NodeJS.ProcessEnv = process.env): Settings {
+  const missing = REQUIRED.filter((name) => (env[name] ?? "") === "");
+  if (missing.length > 0) {
+    throw new Error(
+      `The steering live test is missing ${missing.join(", ")}. Issue #4724 names where each one comes from.`,
+    );
+  }
+  const value = (name: (typeof REQUIRED)[number]): string => env[name] ?? "";
+  const runId = value("GITHUB_RUN_ID");
+  const attempt = value("GITHUB_RUN_ATTEMPT");
+  if (!/^\d+$/.test(runId) || !/^\d+$/.test(attempt)) {
+    throw new Error("GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT must be digits.");
+  }
+  return {
+    email: value("STEERING_LIVE_OXAGEN_EMAIL"),
+    password: value("STEERING_LIVE_OXAGEN_PASSWORD"),
+    oxagenOrg: value("STEERING_LIVE_OXAGEN_ORG"),
+    githubOrg: value("STEERING_LIVE_GITHUB_ORG"),
+    githubToken: value("STEERING_LIVE_GITHUB_TOKEN"),
+    apiUrl: optional(env, "STEERING_LIVE_API_URL", "https://api.oxagen.sh"),
+    appUrl: optional(env, "STEERING_LIVE_APP_URL", "https://app.oxagen.sh"),
+    runSlug: `live-${runId}-${attempt}`,
+  };
+}
+
+/** An optional URL: unset or empty means the production default. */
+function optional(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
+  const url = env[name];
+  return (url === undefined || url === "" ? fallback : url).replace(/\/+$/, "");
+}
+
+/** A workspace some run of this suite created. */
+const RUN_SLUG = /^live-\d+-\d+$/;
+/** A steering repo some run of this suite created, with the `-2` suffix a name collision adds. */
+const RUN_REPO = /^oxagen-live-\d+-\d+(?:-\d+)?$/;
+
+/** Matches this run's steering repo name, with or without a collision suffix. */
+export function runRepoName(settings: Settings): RegExp {
+  return new RegExp(`^oxagen-${settings.runSlug}(?:-\\d+)?$`);
+}
+
+/** Matches this run's steering repo full name, `<github org>/oxagen-<slug>`. */
+export function runRepoFullName(settings: Settings): RegExp {
+  return new RegExp(`^${settings.githubOrg}/oxagen-${settings.runSlug}(?:-\\d+)?$`, "i");
+}
+
+// ── HTTP ─────────────────────────────────────────────────────────────────────
+
+/** A response outside 2xx. */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function excerpt(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 500 ? `${flat.slice(0, 500)}...` : flat;
+}
+
+function parseBody<S extends z.ZodType>(
+  what: string,
+  text: string,
+  schema: S,
+): z.output<S> {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`${what} answered a body that is not JSON: ${excerpt(text)}`);
+  }
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error(
+      `${what} answered a body the suite does not recognize: ${z.prettifyError(parsed.error)}`,
+    );
+  }
+  return parsed.data;
+}
+
+// ── Oxagen ───────────────────────────────────────────────────────────────────
+
+export interface Oxagen {
+  call<S extends z.ZodType>(
+    method: "GET" | "POST",
+    path: string,
+    body: unknown,
+    schema: S,
+  ): Promise<z.output<S>>;
+}
+
+/** better-auth names the cookie with the `__Secure-` prefix over https. */
+const SESSION_COOKIE = /^(?:__Secure-)?oxagen\.session_token=/;
+
+const authError = z.object({ code: z.string() });
+
+/**
+ * Signs in with email and password and keeps the session cookie for the API.
+ * A failure names the status and the better-auth error code, never the body.
+ */
+export async function signIn(settings: Settings): Promise<Oxagen> {
+  const res = await fetch(`${settings.appUrl}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: settings.appUrl },
+    body: JSON.stringify({ email: settings.email, password: settings.password }),
+  });
+  if (!res.ok) {
+    // An error body that is not JSON names no code.
+    const json: unknown = await res.json().catch(() => null);
+    const parsed = authError.safeParse(json);
+    const code = parsed.success ? parsed.data.code : null;
+    throw new Error(
+      `Sign-in as the test Oxagen user answered ${String(res.status)}${code === null ? "" : ` (${code})`}. Check STEERING_LIVE_OXAGEN_EMAIL and STEERING_LIVE_OXAGEN_PASSWORD.`,
+    );
+  }
+  const cookie = res.headers
+    .getSetCookie()
+    .map((line) => line.split(";")[0] ?? "")
+    .find((pair) => SESSION_COOKIE.test(pair));
+  if (cookie === undefined) {
+    throw new Error(
+      "Sign-in answered 200 with no session cookie. Turn off two-factor sign-in for the test Oxagen user.",
+    );
+  }
+
+  return {
+    async call<S extends z.ZodType>(
+      method: "GET" | "POST",
+      path: string,
+      body: unknown,
+      schema: S,
+    ): Promise<z.output<S>> {
+      const res = await fetch(`${settings.apiUrl}${path}`, {
+        method,
+        headers: {
+          accept: "application/json",
+          cookie,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await res.text();
+      const what = `${method} ${path}`;
+      if (!res.ok) {
+        throw new HttpError(res.status, `${what} answered ${String(res.status)}: ${excerpt(text)}`);
+      }
+      return parseBody(what, text, schema);
+    },
+  };
+}
+
+/** Signs in, or reports why not, so cleanup can still delete repositories. */
+export async function trySignIn(
+  settings: Settings,
+): Promise<{ ox: Oxagen | null; problem: string | null }> {
+  try {
+    return { ox: await signIn(settings), problem: null };
+  } catch (error) {
+    return { ox: null, problem: messageOf(error) };
+  }
+}
+
+// Local schemas for the fields the suite reads. Each Fits line below fails
+// the typecheck when a shared contract stops fitting its local schema, so a
+// contract change breaks CI on the pull request instead of the live run.
+
+const provisionStatus = z.enum(["provisioning", "ready", "failed", "blocked"]);
+const healthState = z.enum(["healthy", "drifted", "disconnected", "diverged"]);
+export type HealthState = z.infer<typeof healthState>;
+
+export const steeringRepoView = z.object({
+  status: provisionStatus,
+  failedStep: z.string().nullable(),
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+  repository: z.object({ fullName: z.string(), url: z.string() }).nullable(),
+  publishedVersion: z.number().int().nullable(),
+  health: healthState.nullable(),
+  differences: z.array(
+    z.object({ setting: z.string(), expected: z.string(), actual: z.string() }),
+  ),
+});
+export type SteeringRepoView = z.output<typeof steeringRepoView>;
+
+const repairResult = z.object({ health: healthState });
+
+const steeringPrView = z.object({
+  proposalId: z.string(),
+  lineageId: z.string(),
+  status: z.enum([
+    "proposed",
+    "pr_open",
+    "checks_running",
+    "checks_passed",
+    "checks_failed",
+    "merged",
+    "rejected",
+  ]),
+  pr: z
+    .object({
+      number: z.number().int(),
+      url: z.string(),
+      repository: z.string(),
+      branch: z.string(),
+      headSha: z.string().nullable(),
+      path: z.string(),
+    })
+    .nullable(),
+  checks: z.array(
+    z.object({
+      name: z.string(),
+      status: z.enum(["pending", "running", "passed", "failed"]),
+      summary: z.string(),
+    }),
+  ),
+});
+export type SteeringPrView = z.output<typeof steeringPrView>;
+
+const mergeResult = z.object({
+  proposalId: z.string(),
+  status: z.literal("merged"),
+  record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
+  mergedCommit: z.string(),
+  bundleVersion: z.object({ before: z.number().int(), after: z.number().int() }),
+});
+
+const proposalCreated = z.object({
+  proposalId: z.string(),
+  lineageId: z.string(),
+  status: z.literal("proposed"),
+});
+
+const proposalList = z.object({
+  proposals: z.array(z.object({ id: z.string(), lineageId: z.string() })),
+});
+
+const workspaceCreated = z.object({
+  publicId: z.string(),
+  slug: z.string(),
+  steering_repo: z.object({ status: provisionStatus }),
+});
+
+const workspaceList = z.object({
+  workspaces: z.array(z.object({ publicId: z.string(), slug: z.string() })),
+});
+
+const workspaceArchived = z.object({ id: z.string(), slug: z.string(), archivedAt: z.string() });
+
+type Fits<Contract, Local> = [Contract] extends [Local] ? true : false;
+type Assert<T extends true> = T;
+
+/** One entry per route the suite calls. An entry that stops fitting fails the typecheck. */
+export type ContractFit = [
+  Assert<Fits<SteeringRepoGetOutput, SteeringRepoView>>,
+  Assert<Fits<SteeringRepoRepairOutput, z.output<typeof repairResult>>>,
+  Assert<Fits<ContextPrOpenOutput, SteeringPrView>>,
+  Assert<Fits<ContextPrGetOutput, SteeringPrView>>,
+  Assert<Fits<ContextPrMergeOutput, z.output<typeof mergeResult>>>,
+  Assert<Fits<ContextProposalCreateOutput, z.output<typeof proposalCreated>>>,
+  Assert<Fits<ContextProposalListOutput, z.output<typeof proposalList>>>,
+  Assert<Fits<WorkspaceCreateOutput, z.output<typeof workspaceCreated>>>,
+  Assert<Fits<WorkspaceListOutput, z.output<typeof workspaceList>>>,
+  Assert<Fits<WorkspaceArchiveOutput, z.output<typeof workspaceArchived>>>,
+];
+
+function orgPath(settings: Settings): string {
+  return `/v1/${encodeURIComponent(settings.oxagenOrg)}`;
+}
+
+function workspacePath(settings: Settings, slug: string, rest: string): string {
+  return `${orgPath(settings)}/${encodeURIComponent(slug)}${rest}`;
+}
+
+export function createWorkspace(ox: Oxagen, settings: Settings) {
+  return ox.call(
+    "POST",
+    `${orgPath(settings)}/workspaces`,
+    { name: `Steering live test ${settings.runSlug}`, slug: settings.runSlug },
+    workspaceCreated,
+  );
+}
+
+export function readSteeringRepo(ox: Oxagen, settings: Settings): Promise<SteeringRepoView> {
+  return ox.call(
+    "GET",
+    workspacePath(settings, settings.runSlug, "/context/steering/repo"),
+    undefined,
+    steeringRepoView,
+  );
+}
+
+export function repairSteeringRepo(ox: Oxagen, settings: Settings) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/steering/repo/repair"),
+    {},
+    repairResult,
+  );
+}
+
+/** Proposes one steering record, a workspace rule, on a lineage this run owns. */
+export function proposeRecord(
+  ox: Oxagen,
+  settings: Settings,
+  lineageId: string,
+  statement: string,
+) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/proposals/create"),
+    {
+      record: {
+        lineageId,
+        kind: "rule",
+        force: "should",
+        sharingScope: "workspace",
+        statement,
+      },
+      rationale: `The steering live test run ${settings.runSlug} proposes this steering record. The run deletes its repository when it ends.`,
+      source: "steering-live-test",
+      createOnly: true,
+    },
+    proposalCreated,
+  );
+}
+
+/** Finds the newest proposal on a lineage, or null when there is none. */
+export async function findProposal(
+  ox: Oxagen,
+  settings: Settings,
+  lineageId: string,
+): Promise<string | null> {
+  const listed = await ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/proposals"),
+    { lineageId, limit: 1 },
+    proposalList,
+  );
+  return listed.proposals[0]?.id ?? null;
+}
+
+export function openSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/prs/open"),
+    { proposalId },
+    steeringPrView,
+  );
+}
+
+export function readSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/prs/get"),
+    { proposalId },
+    steeringPrView,
+  );
+}
+
+export function mergeSteeringPr(ox: Oxagen, settings: Settings, proposalId: string) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, settings.runSlug, "/context/prs/merge"),
+    { proposalId },
+    mergeResult,
+  );
+}
+
+function listWorkspaces(ox: Oxagen, settings: Settings) {
+  return ox.call(
+    "POST",
+    "/v1/user/workspaces",
+    { orgSlug: settings.oxagenOrg, includeArchived: false },
+    workspaceList,
+  );
+}
+
+function archiveWorkspace(
+  ox: Oxagen,
+  settings: Settings,
+  workspace: { publicId: string; slug: string },
+) {
+  return ox.call(
+    "POST",
+    workspacePath(settings, workspace.slug, "/workspaces/archive"),
+    { workspaceId: workspace.publicId },
+    workspaceArchived,
+  );
+}
+
+// ── GitHub ───────────────────────────────────────────────────────────────────
+
+const githubRepo = z.object({ name: z.string(), full_name: z.string(), created_at: z.string() });
+export type GithubRepo = z.output<typeof githubRepo>;
+
+const githubRuleset = z.object({ id: z.number().int(), name: z.string() });
+
+const githubPull = z.object({
+  number: z.number().int(),
+  state: z.string(),
+  merged: z.boolean().optional(),
+  head: z.object({ sha: z.string() }),
+});
+
+const githubCheckRun = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  status: z.string(),
+  conclusion: z.string().nullable(),
+  external_id: z.string().nullable().optional(),
+});
+export type GithubCheckRun = z.output<typeof githubCheckRun>;
+
+const PAGE = 100;
+
+export interface GithubRig {
+  orgRepos(org: string): Promise<GithubRepo[]>;
+  findRuleset(fullName: string, name: string): Promise<{ id: number; name: string } | null>;
+  deleteRuleset(fullName: string, id: number): Promise<void>;
+  approvePr(fullName: string, number: number): Promise<void>;
+  getPr(fullName: string, number: number): Promise<z.output<typeof githubPull>>;
+  openPulls(fullName: string): Promise<Array<{ number: number; headSha: string }>>;
+  steeringCheckRuns(fullName: string, sha: string): Promise<GithubCheckRun[]>;
+  /** Deletes a repository. Answers false when it was already gone. */
+  deleteRepo(fullName: string): Promise<boolean>;
+}
+
+function repoPath(fullName: string): string {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(fullName)) {
+    throw new Error(`"${fullName}" is not an owner/name repository name.`);
+  }
+  return `/repos/${fullName}`;
+}
+
+export function githubRig(token: string): GithubRig {
+  async function send(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    body?: unknown,
+  ): Promise<{ status: number; text: string }> {
+    const res = await fetch(`https://api.github.com${path}`, {
+      method,
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${token}`,
+        "x-github-api-version": "2022-11-28",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: res.status, text: await res.text() };
+  }
+
+  async function call<S extends z.ZodType>(
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    body: unknown,
+    schema: S,
+  ): Promise<z.output<S>> {
+    const res = await send(method, path, body);
+    const what = `GitHub ${method} ${path}`;
+    if (res.status < 200 || res.status > 299) {
+      throw new HttpError(res.status, `${what} answered ${String(res.status)}: ${excerpt(res.text)}`);
+    }
+    return parseBody(what, res.text, schema);
+  }
+
+  async function noContent(method: "DELETE", path: string): Promise<number> {
+    const res = await send(method, path);
+    if (res.status !== 204 && res.status !== 404) {
+      throw new HttpError(
+        res.status,
+        `GitHub ${method} ${path} answered ${String(res.status)}: ${excerpt(res.text)}`,
+      );
+    }
+    return res.status;
+  }
+
+  return {
+    async orgRepos(org) {
+      const repos: GithubRepo[] = [];
+      for (let page = 1; ; page += 1) {
+        const batch = await call(
+          "GET",
+          `/orgs/${encodeURIComponent(org)}/repos?type=all&per_page=${String(PAGE)}&page=${String(page)}`,
+          undefined,
+          z.array(githubRepo),
+        );
+        repos.push(...batch);
+        if (batch.length < PAGE) return repos;
+      }
+    },
+
+    async findRuleset(fullName, name) {
+      const rulesets = await call(
+        "GET",
+        `${repoPath(fullName)}/rulesets?includes_parents=false&per_page=${String(PAGE)}`,
+        undefined,
+        z.array(githubRuleset),
+      );
+      return rulesets.find((r) => r.name === name) ?? null;
+    },
+
+    async deleteRuleset(fullName, id) {
+      const status = await noContent("DELETE", `${repoPath(fullName)}/rulesets/${String(id)}`);
+      if (status === 404) throw new Error(`Ruleset ${String(id)} on ${fullName} was not found.`);
+    },
+
+    async approvePr(fullName, number) {
+      await call(
+        "POST",
+        `${repoPath(fullName)}/pulls/${String(number)}/reviews`,
+        { event: "APPROVE", body: "The steering live test approves this steering PR." },
+        z.object({ id: z.number().int() }),
+      );
+    },
+
+    getPr(fullName, number) {
+      return call("GET", `${repoPath(fullName)}/pulls/${String(number)}`, undefined, githubPull);
+    },
+
+    async openPulls(fullName) {
+      const pulls = await call(
+        "GET",
+        `${repoPath(fullName)}/pulls?state=open&per_page=${String(PAGE)}`,
+        undefined,
+        z.array(githubPull),
+      );
+      return pulls.map((p) => ({ number: p.number, headSha: p.head.sha }));
+    },
+
+    async steeringCheckRuns(fullName, sha) {
+      const runs = await call(
+        "GET",
+        `${repoPath(fullName)}/commits/${encodeURIComponent(sha)}/check-runs?check_name=${encodeURIComponent(STEERING_CHECK)}&filter=all&per_page=${String(PAGE)}`,
+        undefined,
+        z.object({ check_runs: z.array(githubCheckRun) }),
+      );
+      return runs.check_runs;
+    },
+
+    async deleteRepo(fullName) {
+      return (await noContent("DELETE", repoPath(fullName))) === 204;
+    },
+  };
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+
+export type Probe<T> = { done: true; value: T } | { done: false; state: string };
+
+/** A probe that reached its goal. */
+export function reached<T>(value: T): Probe<T> {
+  return { done: true, value };
+}
+
+/** A probe that has not, with the state it saw. */
+export function waiting(state: string): Probe<never> {
+  return { done: false, state };
+}
+
+/**
+ * Probes until the probe answers done or the time runs out. The last probe
+ * runs at the deadline, and the error names the last state it saw. A probe
+ * that throws fails the poll at once.
+ */
+export async function poll<T>(
+  what: string,
+  options: { timeoutMs: number; intervalMs: number; since?: number },
+  probe: () => Promise<Probe<T>>,
+): Promise<T> {
+  const start = options.since ?? Date.now();
+  const deadline = start + options.timeoutMs;
+  for (;;) {
+    const result = await probe();
+    if (result.done) return result.value;
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      const waited = Math.round((Date.now() - start) / SECOND);
+      throw new Error(`${what}: not reached after ${String(waited)} s. Last state: ${result.state}`);
+    }
+    await sleep(Math.min(options.intervalMs, left));
+  }
+}
+
+export function describeRepo(view: SteeringRepoView): string {
+  return [
+    `status ${view.status}`,
+    `health ${view.health ?? "unread"}`,
+    `published version ${view.publishedVersion === null ? "none" : String(view.publishedVersion)}`,
+    `differences [${view.differences.map((d) => d.setting).join(", ")}]`,
+  ].join(", ");
+}
+
+/** Waits for the steering repo to read a health state. */
+export function waitForHealth(
+  ox: Oxagen,
+  settings: Settings,
+  health: HealthState,
+  timeoutMs: number,
+): Promise<SteeringRepoView> {
+  return poll(`steering repo health ${health}`, { timeoutMs, intervalMs: 5 * SECOND }, async () => {
+    const view = await readSteeringRepo(ox, settings);
+    return view.health === health ? reached(view) : waiting(describeRepo(view));
+  });
+}
+
+const SETTLED = new Set(["checks_passed", "checks_failed", "merged", "rejected"]);
+
+/** Waits for a steering PR's checks to finish. Answers the PR whatever the outcome. */
+export function waitForChecks(
+  ox: Oxagen,
+  settings: Settings,
+  proposalId: string,
+): Promise<SteeringPrView> {
+  return poll(
+    `steering PR ${proposalId} checks finished`,
+    { timeoutMs: 5 * MINUTE, intervalMs: 5 * SECOND },
+    async () => {
+      const pr = await readSteeringPr(ox, settings, proposalId);
+      return SETTLED.has(pr.status) ? reached(pr) : waiting(`status ${pr.status}`);
+    },
+  );
+}
+
+export function describeChecks(pr: SteeringPrView): string {
+  return pr.checks
+    .map((c) => `${c.name} ${c.status}${c.summary === "" ? "" : `: ${c.summary}`}`)
+    .join("; ");
+}
+
+/** The newest "Oxagen steering" check run on a commit, or null when it has none. */
+export function newestRun(runs: GithubCheckRun[]): GithubCheckRun | null {
+  return runs.reduce<GithubCheckRun | null>(
+    (newest, run) => (newest === null || run.id > newest.id ? run : newest),
+    null,
+  );
+}
+
+// ── Cleanup ──────────────────────────────────────────────────────────────────
+
+/** How old a leftover test repository is before the sweep deletes it. */
+const SWEEP_AGE_MS = 24 * 60 * MINUTE;
+
+function summarize(problems: string[]): Error {
+  return new Error(`Cleanup left work behind:\n- ${problems.join("\n- ")}`);
+}
+
+/**
+ * Archives this run's workspace and deletes its steering repo. It runs twice
+ * on every run, in the suite teardown and in the workflow's always() step,
+ * so a second pass finds nothing and succeeds.
+ */
+export async function cleanupRun(
+  ox: Oxagen | null,
+  gh: GithubRig,
+  settings: Settings,
+): Promise<string[]> {
+  const done: string[] = [];
+  const problems: string[] = [];
+
+  if (ox !== null) {
+    try {
+      const listed = await listWorkspaces(ox, settings);
+      const mine = listed.workspaces.find((w) => w.slug === settings.runSlug);
+      if (mine !== undefined) {
+        await archiveWorkspace(ox, settings, mine);
+        done.push(`Archived workspace ${mine.slug}.`);
+      }
+    } catch (error) {
+      problems.push(`Archive workspace ${settings.runSlug}: ${messageOf(error)}`);
+    }
+  }
+
+  try {
+    const pattern = runRepoName(settings);
+    const repos = await gh.orgRepos(settings.githubOrg);
+    for (const repo of repos.filter((r) => pattern.test(r.name))) {
+      try {
+        if (await gh.deleteRepo(repo.full_name)) done.push(`Deleted repository ${repo.full_name}.`);
+      } catch (error) {
+        problems.push(`Delete repository ${repo.full_name}: ${messageOf(error)}`);
+      }
+    }
+  } catch (error) {
+    problems.push(`List repositories in ${settings.githubOrg}: ${messageOf(error)}`);
+  }
+
+  if (problems.length > 0) throw summarize(problems);
+  return done;
+}
+
+/**
+ * Clears what earlier runs left behind. It archives every other active
+ * workspace this suite created, since the workflow runs one job at a time.
+ * It deletes test repositories older than one day.
+ */
+export async function sweepOld(
+  ox: Oxagen | null,
+  gh: GithubRig,
+  settings: Settings,
+): Promise<string[]> {
+  const done: string[] = [];
+  const problems: string[] = [];
+
+  if (ox !== null) {
+    try {
+      const listed = await listWorkspaces(ox, settings);
+      const leftovers = listed.workspaces.filter(
+        (w) => RUN_SLUG.test(w.slug) && w.slug !== settings.runSlug,
+      );
+      for (const workspace of leftovers) {
+        try {
+          await archiveWorkspace(ox, settings, workspace);
+          done.push(`Archived leftover workspace ${workspace.slug}.`);
+        } catch (error) {
+          problems.push(`Archive workspace ${workspace.slug}: ${messageOf(error)}`);
+        }
+      }
+    } catch (error) {
+      problems.push(`List workspaces in ${settings.oxagenOrg}: ${messageOf(error)}`);
+    }
+  }
+
+  try {
+    const cutoff = Date.now() - SWEEP_AGE_MS;
+    const repos = await gh.orgRepos(settings.githubOrg);
+    const old = repos.filter((r) => RUN_REPO.test(r.name) && Date.parse(r.created_at) < cutoff);
+    for (const repo of old) {
+      try {
+        if (await gh.deleteRepo(repo.full_name)) {
+          done.push(`Deleted leftover repository ${repo.full_name}.`);
+        }
+      } catch (error) {
+        problems.push(`Delete repository ${repo.full_name}: ${messageOf(error)}`);
+      }
+    }
+  } catch (error) {
+    problems.push(`List repositories in ${settings.githubOrg}: ${messageOf(error)}`);
+  }
+
+  if (problems.length > 0) throw summarize(problems);
+  return done;
+}

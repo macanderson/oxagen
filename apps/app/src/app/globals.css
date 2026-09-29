@@ -113,8 +113,11 @@
     /* Chart series (ui/chart.tsx), assigned in this order and never cycled:
        violet, magenta, blue, orange, aqua. They are the frame-kind family
        above in a fixed series order, checked for colour-vision separation on
-       the white panel and on ink. No gold (identity) and no state hue. The
-       kit's chart tokens use ember, gold and the state colours, so the app
+       the white panel and on ink. No series is gold (identity) or a state
+       token. Three share a hue with a state colour: chart-3 with approval
+       (213 degrees), chart-4 with denied (16 to 17), and chart-5 with allowed
+       (147 to 159). Issue #4700 holds that question open. The kit's chart
+       tokens are ember, gold and the state colours themselves, so the app
        sets its own here. */
     --chart-1: #4a3aa7;
     --chart-2: #e87ba4;
@@ -138,7 +141,7 @@
     --ui-radius: 0.45rem;
     --muted-surface: var(--_stone-100);
     --data-surface: var(--ox-paper-hl);
-    /* A panel header is a light grey band over the white panel (ADR-170). */
+    /* A panel header is a light grey band over the white panel (ADR-226). */
     --panel-head: var(--ox-paper-hl);
     --banner-bg: var(--hl);
     --button-disabled-bg: var(--muted-surface);

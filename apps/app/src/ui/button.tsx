@@ -11,7 +11,7 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "./cn";
 
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all select-none " +
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
     "active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 " +

@@ -4,11 +4,12 @@
 //
 // Today the one source read into it is the record registry (list_records,
 // status active), read whole (./library-read.ts) so the assembler's order
-// holds across the list and the list tools (@/ui/faceted-list-table: search, the
-// Scope, Compiles to and Force filters, sortable headers, a Rows select and a
-// numbered pager) work over every row. Every row is a record. Token cost and the enforcement
-// grant have no field on that contract, so the Compiles to and Token cost
-// cells and the Compiled size and Carry a grant tiles print "not recorded"
+// holds across the list and the list tools (@/ui/faceted-list-table: search,
+// the Scope, Compiles to and Force filters, sortable headers, and the pager
+// under the table with Rows, Previous and Next) work over every row. Every row
+// is a record. Token cost and the enforcement grant have no field on that
+// contract, so the Compiles to and Token cost cells and the Compiled size and
+// Carry a grant tiles print "not recorded"
 // rather than a figure nobody measured, and the repository a repository-scoped
 // record names prints "not recorded" under its scope. Instructions, skills,
 // memory and ontology notes join the list when the steering registry reads

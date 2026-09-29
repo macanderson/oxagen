@@ -1,7 +1,9 @@
 "use client";
 // The Library's Records shelf body (roadmap pages/steering-records.md): the
-// Published records panel with its kind chips, Sort, Rows and a numbered
-// pager over record cards, newest first, and the closing note.
+// Published records panel with its kind chips and Sort over record cards,
+// newest first, the pager every list draws under the cards (ui/pagination):
+// Rows and the range on the left, Previous and Next on the right, and the
+// closing note.
 //
 // The shelf reads every record in force once (./library-read.ts) and the list
 // tools work over those rows in the browser, as the design's do. The kind
@@ -41,9 +43,9 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { pageNumbers } from "@/ui/faceted-list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { RowsPager } from "@/ui/pagination";
 import { CloneButton } from "@/ui/clone-button";
 import { PressLink } from "@/ui/press-link";
 import { STEERING_GAPS } from "./gaps";
@@ -473,24 +475,6 @@ export function RecordsList({
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          {list("rows")}
-          <select
-            className={select}
-            data-rows=""
-            value={per}
-            onChange={(event) => {
-              setPer(Number(event.target.value));
-              setPage(1);
-            }}
-          >
-            {PER_PAGE.map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? list("allRows") : n}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       {slice.length === 0 ? (
         <p
@@ -511,65 +495,45 @@ export function RecordsList({
           ))}
         </div>
       )}
-      <nav
-        aria-label={list("pager")}
-        data-testid="records-pager"
-        className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[12px]"
-      >
-        <span className="font-mono text-dim" data-range="">
-          {count === 0
+      {/* Every card carries its own bottom rule, so the pager adds no top
+          one. Pages count from 1. */}
+      <RowsPager
+        className="px-4"
+        label={list("pager")}
+        rowsLabel={list("rows")}
+        perPage={per}
+        sizes={PER_PAGE}
+        onPerPage={(size) => {
+          setPer(size);
+          setPage(1);
+        }}
+        sizeLabel={(size) => (size === 0 ? list("allRows") : String(size))}
+        range={
+          count === 0
             ? list("rangeEmpty")
             : list("range", {
                 from: formatCount(from, locale),
                 to: formatCount(to, locale),
                 total: formatCount(count, locale),
-              })}
-        </span>
-        <span className="flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={list("previous")}
-            disabled={current === 1}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            ‹
-          </button>
-          {pageNumbers(current, pages).map((n, index) =>
-            n === "gap" ? (
-              <span key={`gap-${String(index)}`} className="px-1 text-dim">
-                …
-              </span>
-            ) : (
-              <button
-                key={n}
-                type="button"
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px] aria-[current=page]:border-gold`}
-                aria-label={list("page", { page: String(n) })}
-                aria-current={n === current ? "page" : undefined}
-                onClick={() => {
-                  setPage(n);
-                }}
-              >
-                {n}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={list("next")}
-            disabled={current === pages}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            ›
-          </button>
-        </span>
-      </nav>
+              })
+        }
+        previousLabel={list("previous")}
+        nextLabel={list("next")}
+        previous={
+          current <= 1
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+      />
       {records.length < total ? (
         <p
           data-testid="records-truncated"
