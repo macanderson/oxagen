@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
-import { TOAST_MS } from "@/ui/toast";
+import { TOAST_MS, Toaster } from "@/ui/toast";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
@@ -327,8 +327,13 @@ describe("LoginForm", () => {
 
   it("after a reset it toasts that the password is set, once, and draws no status line", async () => {
     live.takeNotice.mockReturnValue("passwordSet");
-    renderStrict(<LoginForm next={routes.root()} />);
-    const stack = screen.getByTestId("login-toasts");
+    renderStrict(
+      <>
+        <Toaster />
+        <LoginForm next={routes.root()} />
+      </>,
+    );
+    const stack = screen.getByTestId("toasts");
     await waitFor(() => {
       expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
     });
@@ -344,8 +349,15 @@ describe("LoginForm", () => {
   });
 
   it("with no notice left the toast stack is empty (negative)", () => {
-    renderWithIntl(<LoginForm next={routes.root()} />);
-    expect(screen.getByTestId("login-toasts")).toBeEmptyDOMElement();
+    renderWithIntl(
+      <>
+        <Toaster />
+        <LoginForm next={routes.root()} />
+      </>,
+    );
+    expect(
+      screen.getByTestId("toasts").querySelectorAll("[data-toast]"),
+    ).toHaveLength(0);
   });
 
   it("a second press while signing in sends nothing more (negative)", async () => {
@@ -1436,11 +1448,17 @@ describe("InviteDecision", () => {
       ok: true,
       value: { invitationPublicId: "invi_1", status: "declined" },
     });
-    renderWithIntl(<InviteDecision token="invi_1" />);
-    // The stack is mounted before the decline, so the polite region announces the row.
-    const stack = screen.getByTestId("invite-toasts");
+    renderWithIntl(
+      <>
+        <Toaster />
+        <InviteDecision token="invi_1" />
+      </>,
+    );
+    // The layout's toaster is mounted before the decline, so the polite
+    // region announces the row.
+    const stack = screen.getByTestId("toasts");
     expect(stack).toHaveAttribute("aria-live", "polite");
-    expect(stack).toBeEmptyDOMElement();
+    expect(stack.querySelectorAll("[data-toast]")).toHaveLength(0);
     const decline = screen.getByRole("button", { name: "Decline" });
     await userEvent.click(decline);
     await waitFor(() => {
@@ -1467,10 +1485,17 @@ describe("InviteDecision", () => {
       ok: true,
       value: { invitationPublicId: "invi_1", status: "declined" },
     });
-    renderWithIntl(<InviteDecision token="invi_1" />);
+    renderWithIntl(
+      <>
+        <Toaster />
+        <InviteDecision token="invi_1" />
+      </>,
+    );
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     await waitFor(() => {
-      expect(screen.getByTestId("invite-toasts")).not.toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("toasts").querySelectorAll("[data-toast]"),
+      ).toHaveLength(1);
     });
     await userEvent.click(screen.getByRole("button", { name: "Decline" }));
     await userEvent.click(
@@ -1666,37 +1691,54 @@ describe("SignedInToast", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       live.takeSignedIn.mockReturnValue(true);
-      renderWithIntl(<SignedInToast name="Marcus Bell" />);
-      const stack = screen.getByTestId("signed-in-toast");
+      renderWithIntl(
+        <>
+          <Toaster />
+          <SignedInToast name="Marcus Bell" />
+        </>,
+      );
+      const stack = screen.getByRole("region", { name: "Notifications" });
       expect(await within(stack).findByText(sentence)).toBeInTheDocument();
       expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
-      expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+      expect(stack).toHaveAttribute("aria-live", "polite");
       await act(async () => {
         await vi.advanceTimersByTimeAsync(TOAST_MS);
       });
-      expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
+      expect(stack.querySelectorAll("[data-toast]")).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // Dismissal is asserted above without StrictMode: under a root StrictMode the
-  // simulated unmount in useToasts clears the row's timer, and the guarded
-  // re-run does not re-arm it, so the row stays (a development-only defect in
-  // @/ui/toast, reported with this change).
+  // Dismissal is asserted above without StrictMode: under a root StrictMode
+  // the simulated unmount runs Base UI's toast store cleanup, which clears the
+  // row's timer, and the guarded re-run does not re-arm it. The row then stays
+  // until it is closed. Production runs each effect once, so this is
+  // development only.
   it("takes the mark once and shows one row, even when React runs effects twice", async () => {
     live.takeSignedIn.mockReturnValue(true);
-    renderStrict(<SignedInToast name="Marcus Bell" />);
-    const stack = screen.getByTestId("signed-in-toast");
+    renderStrict(
+      <>
+        <Toaster />
+        <SignedInToast name="Marcus Bell" />
+      </>,
+    );
+    const stack = screen.getByTestId("toasts");
     expect(await within(stack).findByText(sentence)).toBeInTheDocument();
     expect(stack.querySelectorAll("[data-toast]")).toHaveLength(1);
     expect(live.takeSignedIn).toHaveBeenCalledTimes(1);
   });
 
   it("shows nothing on a page no sign-in landed on (negative)", () => {
-    renderWithIntl(<SignedInToast name="Marcus Bell" />);
-    expect(screen.getByTestId("signed-in-toast")).toBeEmptyDOMElement();
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    // Two roots: the toaster's portal would leave nodes in a shared container.
+    renderWithIntl(<Toaster />);
+    const { container } = renderWithIntl(<SignedInToast name="Marcus Bell" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(
+      screen
+        .getByRole("region", { name: "Notifications" })
+        .querySelectorAll("[data-toast]"),
+    ).toHaveLength(0);
   });
 });
 

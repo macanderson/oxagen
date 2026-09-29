@@ -4,12 +4,13 @@
 // refusal is named and nothing navigates. Create asks for a name only, then
 // holds the dialog open to say where the new workspace's steering repo stands
 // and to link to its Repositories page.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { renderToaster } from "@/test/toaster";
 
 const { router, archiveWorkspace, createWorkspace, editWorkspace } =
   vi.hoisted(() => ({
@@ -31,7 +32,6 @@ vi.mock("./actions", () => ({
 }));
 
 const { workspaceRow } = await import("./organization.builders");
-const { Receipts } = await import("./receipt");
 const { ArchiveWorkspace, CreateWorkspace, EditWorkspace } = await import(
   "./workspace-actions"
 );
@@ -101,6 +101,8 @@ describe("CreateWorkspace", () => {
   // WL-62: the write answers with the new workspace's slug, and closing the
   // panel lands the operator in it.
   it("sends the name alone, holds the dialog open on the result, and opens the new workspace's Fleet on Done", async () => {
+    // The root layout's toaster, where the receipt lands (ADR-221).
+    renderToaster();
     createWorkspace.mockResolvedValue({
       ok: true,
       value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
@@ -118,15 +120,12 @@ describe("CreateWorkspace", () => {
     // The form gave way to the result: no Create is left to press twice.
     expect(within(dialog).queryByRole("button", { name: "Create" })).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
-    // The write leaves its receipt in the Organization frame's live region.
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "The workspace was created. Recorded in the audit record.",
-    );
+    // The write leaves its receipt in the app's toast region.
+    await waitFor(() => {
+      expect(screen.getByTestId("toasts")).toHaveTextContent(
+        "The workspace was created. Recorded in the audit record.",
+      );
+    });
     await userEvent.click(within(dialog).getByRole("button", { name: "Done" }));
     expect(router.replace).toHaveBeenCalledWith("/acme/research");
   });

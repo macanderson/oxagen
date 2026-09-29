@@ -10,7 +10,11 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
-import { STELLA_ARCHIVE_AFTER_DAYS_SETTING } from "@oxagen/oxagen/steering-repo/workspace";
+import {
+  EMBEDDINGS_SETTING,
+  STELLA_ARCHIVE_AFTER_DAYS_SETTING,
+  type EmbeddingsSetting,
+} from "@oxagen/oxagen/steering-repo/workspace";
 import {
   and,
   desc,
@@ -22,6 +26,7 @@ import {
   max,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import {
@@ -87,6 +92,8 @@ export interface AppliedSync {
 export interface PublishedWorkspaceSettings {
   /** `[stella] archive_after_days`, or null when the file sets none. */
   stellaArchiveAfterDays: number | null;
+  /** `[embeddings]`, or null when the file sets none (ADR-217). */
+  embeddings: EmbeddingsSetting | null;
 }
 
 export interface SyncStore {
@@ -491,31 +498,36 @@ export const postgresSyncStore: SyncStore = {
   },
 
   async publishWorkspaceSettings(scope, settings) {
-    const key = STELLA_ARCHIVE_AFTER_DAYS_SETTING;
-    const days = settings.stellaArchiveAfterDays;
     const column = schema.workspaces.settings;
-    // The bag holds keys other writers own, so this merges one key in or
-    // takes one out. A bag that is not an object becomes one, as it does in
+    // The bag holds keys other writers own, so this merges each key in or
+    // takes it out. A bag that is not an object becomes one, as it does in
     // `workspace.settings.write`. The WHERE clause skips a row that already
-    // holds the value, so a sync with nothing new writes nothing.
-    const bag = sql`CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END`;
+    // holds every value, so a sync with nothing new writes nothing.
+    let next: SQL = sql`CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END`;
+    const changed: SQL[] = [];
+    const values: ReadonlyArray<[key: string, value: unknown]> = [
+      [STELLA_ARCHIVE_AFTER_DAYS_SETTING, settings.stellaArchiveAfterDays],
+      [EMBEDDINGS_SETTING, settings.embeddings],
+    ];
+    for (const [key, value] of values) {
+      if (value === null) {
+        next = sql`(${next}) - ${key}::text`;
+        changed.push(sql`${column} -> ${key}::text is not null`);
+      } else {
+        const json = JSON.stringify(value);
+        next = sql`(${next}) || jsonb_build_object(${key}::text, ${json}::jsonb)`;
+        changed.push(sql`${column} -> ${key}::text is distinct from ${json}::jsonb`);
+      }
+    }
     await withTenantDb((tx) =>
       tx
         .update(schema.workspaces)
-        .set({
-          settings:
-            days === null
-              ? sql`${bag} - ${key}::text`
-              : sql`${bag} || jsonb_build_object(${key}::text, ${days}::int)`,
-          updatedAt: new Date(),
-        })
+        .set({ settings: next, updatedAt: new Date() })
         .where(
           and(
             eq(schema.workspaces.id, scope.workspaceId),
             eq(schema.workspaces.orgId, scope.orgId),
-            days === null
-              ? sql`${column} -> ${key}::text is not null`
-              : sql`${column} -> ${key}::text is distinct from to_jsonb(${days}::int)`,
+            or(...changed),
           ),
         ),
     );

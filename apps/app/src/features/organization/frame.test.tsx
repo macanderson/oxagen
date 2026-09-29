@@ -185,11 +185,9 @@ describe("loaded", () => {
       expect(tabs[2]).toHaveAttribute("href", "/acme?tab=invitations");
       expect(tabs[5]).toHaveAttribute("href", "/acme?tab=dataPlane");
       expect(screen.getByTestId("tab-body")).toBeInTheDocument();
-      // A write's receipt lands in the frame's live region, whichever tab made it.
-      expect(screen.getByTestId("organization-receipts")).toHaveAttribute(
-        "aria-live",
-        "polite",
-      );
+      // A write's receipt goes to the root layout's toaster (ADR-221), so the
+      // frame mounts no stack of its own.
+      expect(screen.queryByTestId("toasts")).toBeNull();
       expect(body).toHaveBeenCalledWith({
         members: roster,
         roles: loaded.roles.ok ? loaded.roles.value : null,

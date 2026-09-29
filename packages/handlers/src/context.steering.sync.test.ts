@@ -709,14 +709,48 @@ describe("workspace.toml settings (#4435)", () => {
       workspaceToml("archive_after_days = 30"),
     );
     const out = await r.run();
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30 }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30, embeddings: null }]);
     expect(out.findings).toEqual([]);
+  });
+
+  it("publishes the embeddings provider workspace.toml sets, and clears it when unset (ADR-217)", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      [
+        workspaceToml(),
+        "[embeddings]",
+        'provider = "custom"',
+        'url = "https://embed.example.com/v1/embeddings"',
+        'model = "embed-small"',
+        'credential = "oxagen:credential/embed-key"',
+        "",
+      ].join("\n"),
+    );
+    const out = await r.run();
+    expect(out.findings).toEqual([]);
+    expect(r.sync.published).toEqual([
+      {
+        stellaArchiveAfterDays: null,
+        embeddings: {
+          provider: "custom",
+          url: "https://embed.example.com/v1/embeddings",
+          model: "embed-small",
+          credential: "oxagen:credential/embed-key",
+        },
+      },
+    ]);
+
+    r.h.github.commit("main", "workspace.toml", workspaceToml());
+    await r.run();
+    expect(r.sync.published.at(-1)).toEqual({ stellaArchiveAfterDays: null, embeddings: null });
   });
 
   it("clears the window when workspace.toml sets none or is removed", async () => {
     const r = rig();
     await r.run();
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null, embeddings: null }]);
     r.h.github.commit(
       "main",
       "workspace.toml",
@@ -753,7 +787,7 @@ describe("workspace.toml settings (#4435)", () => {
     const r = rig();
     r.h.github.commit("main", "workspace.toml", '[tool]\nname = "other"\n');
     const out = await r.run();
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null, embeddings: null }]);
     expect(out.findings).toEqual([]);
   });
 
@@ -773,7 +807,7 @@ describe("workspace.toml settings (#4435)", () => {
       workspaceToml("archive_after_days = 0"),
     );
     const out = await r.run();
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30 }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30, embeddings: null }]);
     expect(out.outcome).toBe("problems");
     expect(r.sync.state?.findings).toEqual([
       expect.objectContaining({
@@ -804,7 +838,7 @@ describe("workspace.toml settings (#4435)", () => {
       workspaceToml("archive_after_days = 45"),
     );
     await r.run();
-    expect(r.sync.published.at(-1)).toEqual({ stellaArchiveAfterDays: 45 });
+    expect(r.sync.published.at(-1)).toEqual({ stellaArchiveAfterDays: 45, embeddings: null });
     expect(r.sync.state?.findings).toEqual([]);
   });
 
@@ -1186,7 +1220,7 @@ describe("workspace.toml repositories (ADR-212)", () => {
       headSha: r.h.github.heads.get("main"),
     });
     expect(r.sync.state?.findings).toEqual(out.findings);
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null, embeddings: null }]);
   });
 
   it("keeps the link warning at the same head and clears it when the next head links cleanly", async () => {
@@ -1214,7 +1248,7 @@ describe("workspace.toml repositories (ADR-212)", () => {
     const out = await r.run();
     expect(out.findings).toEqual([]);
     expect(r.sync.state).toMatchObject({ status: "synced", error: null });
-    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null, embeddings: null }]);
   });
 
   // Step 8 publishes the steering repository on every run, but the linked

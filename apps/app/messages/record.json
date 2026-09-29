@@ -146,7 +146,8 @@
         "az": "Label A–Z",
         "za": "Label Z–A"
       },
-      "rows": "Rows",
+      "rows": "Rows per page",
+      "pager": "Pages",
       "nothing": "Nothing matches.",
       "range": "{from}–{to} of {total}",
       "previous": "Previous page",

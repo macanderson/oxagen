@@ -700,7 +700,7 @@ function CallsRow({
       testId="transcript-calls"
       pause={pause}
       line={
-        <div className="tx-ln tx-say tx-quiet truncate" title={line}>
+        <div className="tx-ln tx-say tx-quiet truncate" data-truncate={line}>
           <span className="sr-only">{t("agent")}</span>
           {line}
         </div>
@@ -730,7 +730,7 @@ function ThinkingRow({
         testId="step-thinking-unkept"
         pause={pause}
         line={
-          <div className="tx-ln tx-think truncate" title={unkept}>
+          <div className="tx-ln tx-think truncate" data-truncate={unkept}>
             {unkept}
           </div>
         }
@@ -1007,7 +1007,7 @@ function UsageRow({
       testId="tx-usage"
       pause={pause}
       line={
-        <div className="tx-ln tx-quiet truncate" title={line}>
+        <div className="tx-ln tx-quiet truncate" data-truncate={line}>
           {line}
         </div>
       }
@@ -1190,7 +1190,7 @@ function SealRow({
                 })}
           </span>
           {row.label === null ? null : (
-            <span className="tx-dim min-w-0 truncate" title={row.label}>
+            <span className="tx-dim min-w-0 truncate" data-truncate={row.label}>
               <Hi text={closedLine(row.label)} q={q} />
             </span>
           )}

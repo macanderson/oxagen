@@ -307,7 +307,7 @@ function ChangesBody({
                 key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
                 className="flex min-w-0 justify-between gap-2.5 border-b border-border py-[5px] text-[11.5px]"
               >
-                <span className="min-w-0 truncate font-mono" title={node.name}>
+                <span className="min-w-0 truncate font-mono" data-truncate={node.name}>
                   {node.name}
                 </span>
                 <Stat

@@ -1,73 +1,91 @@
 // @vitest-environment jsdom
-// The receipt a governed write leaves (receipt.tsx): a line in a polite live
-// region, kept in the module so a stack mounted after the write's re-read
-// still shows it, and gone after the toast's 4.2 seconds.
+// The receipt a governed write leaves (receipt.tsx): one allowed line in the
+// toaster the root layout mounts, so it outlives the dialog or tab the write
+// was made from, gone after the toast's 4.2 seconds.
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type ReactNode, useState } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
-import { TOAST_MS } from "@/ui/toast";
-import { Receipts, recordReceipt } from "./receipt";
+import { IntlProvider } from "@/test/intl";
+import { TOAST_MS, Toaster } from "@/ui/toast";
+import { recordReceipt } from "./receipt";
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
+function withToaster(ui: ReactNode) {
+  return render(
+    <IntlProvider>
+      <Toaster />
+      {ui}
+    </IntlProvider>,
+  );
+}
+
 afterEach(() => {
-  act(() => {
-    vi.runOnlyPendingTimers();
-  });
-  vi.useRealTimers();
   cleanup();
+  vi.useRealTimers();
 });
 
-describe("Receipts", () => {
-  it("shows a write's line in a polite live region", () => {
-    render(<Receipts />);
+describe("recordReceipt", () => {
+  it("shows a write's line in the app's polite toast region, as an allowed line", () => {
+    withToaster(null);
     act(() => {
       recordReceipt("Role saved. Recorded in the audit record.");
     });
-    const stack = screen.getByTestId("organization-receipts");
+    const stack = screen.getByTestId("toasts");
     expect(stack).toHaveAttribute("aria-live", "polite");
-    expect(stack).toHaveTextContent(
-      "Role saved. Recorded in the audit record.",
+    expect(stack).toHaveTextContent("Role saved. Recorded in the audit record.");
+    expect(stack.querySelector("[data-toast]")).toHaveAttribute(
+      "data-tone",
+      "allowed",
     );
   });
 
-  it("keeps a line recorded before the stack mounted, as after a re-read remounts the tab", () => {
+  it("keeps the line after the dialog that made the write closes", () => {
+    function Dialog() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <button
+          type="button"
+          onClick={() => {
+            recordReceipt("Invitation revoked. Recorded in the audit record.");
+            setOpen(false);
+          }}
+        >
+          Revoke
+        </button>
+      ) : null;
+    }
+    withToaster(<Dialog />);
     act(() => {
-      recordReceipt("Invitation revoked. Recorded in the audit record.");
+      screen.getByRole("button", { name: "Revoke" }).click();
     });
-    render(<Receipts />);
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
+    expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();
+    expect(screen.getByTestId("toasts")).toHaveTextContent(
       "Invitation revoked. Recorded in the audit record.",
     );
   });
 
   it("drops the line after the toast's time, and not before (negative)", () => {
-    render(<Receipts />);
+    vi.useFakeTimers();
+    withToaster(null);
     act(() => {
       recordReceipt("Key revoked. Recorded in the audit record.");
     });
     act(() => {
       vi.advanceTimersByTime(TOAST_MS - 1);
     });
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "Key revoked.",
-    );
+    expect(screen.getByTestId("toasts")).toHaveTextContent("Key revoked.");
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(screen.getByTestId("organization-receipts")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("toasts")).not.toHaveTextContent("Key revoked.");
+    expect(document.querySelectorAll("[data-toast]")).toHaveLength(0);
   });
 
   it("passes the accessibility check with a line showing", async () => {
-    // axe schedules its own work on timers, so this case runs on real ones
-    // and hands fake ones back for the shared teardown.
-    vi.useRealTimers();
-    const view = render(<Receipts />);
+    withToaster(null);
     act(() => {
       recordReceipt("Key created. Recorded in the audit record.");
     });
-    await expectNoAxe(view.container);
-    vi.useFakeTimers();
+    await expectNoAxe(screen.getByTestId("toasts"));
   });
 });

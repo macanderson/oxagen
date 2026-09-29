@@ -72,7 +72,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { LiveRefresh } from "@/ui/live-refresh";
-import { ToastStack, useToasts } from "@/ui/toast";
+import { toast } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import {
   DiffCell,
@@ -1094,7 +1094,6 @@ export function FleetBoard({
   const [picking, setPicking] = useState(false);
   const [reading, startReading] = useTransition();
   const [pausing, setPausing] = useState<RunRow | null>(null);
-  const { toasts, toast } = useToasts();
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [, startExport] = useTransition();
   const columns = shownColumns(prefs);
@@ -1208,8 +1207,6 @@ export function FleetBoard({
           onList={(next) => {
             readList(next);
           }}
-          pageSize={prefs.pageSize}
-          onPageSize={changePageSize}
           pullRequests={pullRequests}
           onPullRequests={changeFilter}
           onColumns={() => {
@@ -1344,6 +1341,7 @@ export function FleetBoard({
         <RunsPager
           list={list}
           pageSize={prefs.pageSize}
+          onPageSize={changePageSize}
           rows={runs.length}
           {...(total === undefined ? {} : { total })}
           {...(totalBound === undefined ? {} : { totalBound })}
@@ -1360,8 +1358,6 @@ export function FleetBoard({
         prefs={prefs}
         onChange={save}
       />
-      {/* The design confirms an export or a queued pause with a toast. */}
-      <ToastStack toasts={toasts} testId="runs-toasts" />
       {/* One dialog per run it opens on, so nothing one run's dialog showed
           carries into the next. */}
       <PauseDialog
