@@ -17,7 +17,7 @@
 //   - A custom option, such as (google.api.http), is left out, with a note.
 //     The executor reads no custom option.
 import protobuf from "protobufjs";
-import type { Enum, Field, MapField, Method, NamespaceBase, OneOf, ReflectionObject, Service, Type } from "protobufjs";
+import type { Enum, Field, ITokenizerHandle, MapField, Method, NamespaceBase, OneOf, ReflectionObject, Service, Type } from "protobufjs";
 import { create, fromJson, toBinary, type DescMessage, type JsonObject, type MessageShape } from "@bufbuild/protobuf";
 import {
   DescriptorProtoSchema,
@@ -109,7 +109,11 @@ const INTEGER_TYPES = new Set([
 
 /** The highest field number protobuf allows: 2^29 - 1. */
 const FIELD_NUMBER_MAX = 536_870_911;
-/** protobufjs reads `max` in any reserved range as FIELD_NUMBER_MAX. In an enum it means INT32_MAX. */
+/**
+ * INT32_MAX, what `max` means in an enum's reserved range. protobufjs reads
+ * `max` as FIELD_NUMBER_MAX in every range, so enumOf uses this only where
+ * the text wrote `max`.
+ */
 const ENUM_VALUE_MAX = 2_147_483_647;
 
 /** Options protobufjs keeps in a field's options that are not FieldOptions. */
@@ -124,10 +128,13 @@ interface Build {
   notes: Notes;
   /** String and bytes defaults the file writes with an escape, after protobufjs unescaped them. */
   escapedDefaults: Set<string>;
+  /** The enum reserved ranges the file ends with `max`, keyed <enum>#<index in its reserved list>. */
+  enumMaxRanges: Set<string>;
 }
 
 /** The file's descriptor, with every type reference pending. */
 export function buildFile(parsed: ParsedProto, notes: Notes): BuiltFile {
+  const pkg = parsed.package ?? "";
   const build: Build = {
     file: parsed.name,
     syntax: parsed.header.syntax,
@@ -136,8 +143,8 @@ export function buildFile(parsed: ParsedProto, notes: Notes): BuiltFile {
     customOptions: new Set(),
     notes,
     escapedDefaults: escapedDefaults(parsed.text),
+    enumMaxRanges: enumMaxRanges(parsed.text, pkg),
   };
-  const pkg = parsed.package ?? "";
   const holder = packageNamespace(parsed.root, pkg);
   const prefix = pkg === "" ? "" : `${pkg}.`;
 
@@ -212,15 +219,17 @@ function messageOf(type: Type, scope: string, build: Build): DescriptorProto {
   }
   keepComment(build, full, type.comment);
   const message = create(DescriptorProtoSchema, { name: type.name });
-  const [realOneofs, syntheticOneofs] = partitionOneofs(type.oneofsArray);
+  // protobufjs wraps a proto3 optional extension in a oneof, as it does a field. protoc makes no oneof for it.
+  const fieldOneofs = type.oneofsArray.filter((oneof) => !oneof.fieldsArray.some((field) => typeof field.extend === "string"));
+  const [realOneofs, syntheticOneofs] = partitionOneofs(fieldOneofs);
   const oneofs = [...realOneofs, ...syntheticOneofs];
   const mapEntries: DescriptorProto[] = [];
 
   for (const field of type.fieldsArray) {
     // protobufjs adds a copy of each extension to the message it extends, named with a leading dot.
     if (field.name.startsWith(".")) continue;
-    checkNumber(field, full, build);
     const where = `${full}.${field.name}`;
+    checkNumber(field, `the field ${where}`, build);
     keepComment(build, where, field.comment);
     const descriptor = fieldOf(field, full, where, build);
     if (field.partOf !== null) descriptor.oneofIndex = oneofs.indexOf(field.partOf);
@@ -261,7 +270,16 @@ function messageOf(type: Type, scope: string, build: Build): DescriptorProto {
     }
   }
 
-  const options = optionsOf(MessageOptionsSchema, recordOf(type.options), [], full, build);
+  const messageOptions = recordOf(type.options);
+  // protoc sets map_entry only on the entry message it makes for a map field. Written by hand, it is refused.
+  if (messageOptions?.map_entry === true) {
+    throw new GrpcImportError(
+      "invalid",
+      `${build.file} sets map_entry on the message ${full}. protoc sets it only on the entry message it makes for a map field, so remove the option and declare a map<K, V> field instead.`,
+      build.file,
+    );
+  }
+  const options = optionsOf(MessageOptionsSchema, messageOptions, [], full, build);
   if (options !== undefined) message.options = options;
   return message;
 }
@@ -295,12 +313,13 @@ function checkJsonNames(message: DescriptorProto, full: string, build: Build): v
   }
 }
 
-function checkNumber(field: Field, full: string, build: Build): void {
+/** Refuses a field or extension number protoc refuses. `holder` names it: the field p.M.x or the extension p.x. */
+function checkNumber(field: Field, holder: string, build: Build): void {
   const { id } = field;
   if (Number.isInteger(id) && id >= 1 && id <= FIELD_NUMBER_MAX && (id < 19_000 || id > 19_999)) return;
   throw new GrpcImportError(
     "invalid",
-    `${build.file} numbers the field ${full}.${field.name} ${id}. A field number runs from 1 to 536,870,911 and skips 19,000 to 19,999, which protobuf reserves, so renumber it.`,
+    `${build.file} numbers ${holder} ${id}. A field number runs from 1 to 536,870,911 and skips 19,000 to 19,999, which protobuf reserves, so renumber it.`,
     build.file,
   );
 }
@@ -388,6 +407,7 @@ function mapEntryOf(field: MapField, scope: string, mapField: FieldDescriptorPro
 
 function extensionOf(field: Field, scope: string, build: Build): FieldDescriptorProto {
   const where = scope === "" ? field.name : `${scope}.${field.name}`;
+  checkNumber(field, `the extension ${where}`, build);
   keepComment(build, where, field.comment);
   const descriptor = fieldOf(field, scope, where, build);
   const extendee = field.extend ?? "";
@@ -430,14 +450,48 @@ function defaultOf(field: Field, where: string, build: Build): string | undefine
     if (Number.isNaN(raw)) return "nan";
     if (raw === Infinity) return "inf";
     if (raw === -Infinity) return "-inf";
-    if (INTEGER_TYPES.has(field.type) && !Number.isSafeInteger(raw)) return drop("past 2^53, which protobufjs rounds");
-    return String(raw);
+    if (INTEGER_TYPES.has(field.type)) {
+      return Number.isSafeInteger(raw) ? String(raw) : drop("past 2^53, which protobufjs rounds");
+    }
+    return doubleText(raw);
   }
   if (typeof raw !== "string") return drop("import cannot read");
   if ((field.type === "string" || field.type === "bytes") && build.escapedDefaults.has(raw)) {
     return drop("written with an escape, which protobufjs does not read exactly");
   }
   return field.type === "bytes" ? cEscape(raw) : raw;
+}
+
+/**
+ * A float or double as protoc writes it in default_value: C's %.15g, or
+ * %.17g when %.15g does not read back as the same number. 1e20 is "1e+20",
+ * 0.1 is "0.1", and -0 is "-0". JavaScript rounds an exact tie away from
+ * zero and C rounds it to even, so a value that falls exactly halfway at the
+ * last digit kept, such as 1234567890123456.25, can end one digit off.
+ */
+export function doubleText(value: number): string {
+  if (Number.isNaN(value)) return "nan";
+  if (value === Infinity) return "inf";
+  if (value === -Infinity) return "-inf";
+  if (Object.is(value, -0)) return "-0";
+  const short = formatG(value, 15);
+  return Number(short) === value ? short : formatG(value, 17);
+}
+
+/** C's %.<precision>g for a finite number. */
+function formatG(value: number, precision: number): string {
+  const [mantissa = "", exp = "0"] = value.toExponential(precision - 1).split("e");
+  const exponent = Number(exp);
+  if (exponent < -4 || exponent >= precision) {
+    const sign = exponent < 0 ? "-" : "+";
+    return `${trimZeros(mantissa)}e${sign}${String(Math.abs(exponent)).padStart(2, "0")}`;
+  }
+  return trimZeros(value.toFixed(precision - 1 - exponent));
+}
+
+/** Drops the trailing zeros after a decimal point, and the point when nothing follows it. */
+function trimZeros(text: string): string {
+  return text.includes(".") ? text.replace(/\.?0+$/, "") : text;
 }
 
 /** The string and bytes defaults a file writes with a backslash, as protobufjs unescapes them. */
@@ -480,23 +534,99 @@ function enumOf(type: Enum, scope: string, build: Build): EnumDescriptorProto {
   if (build.syntax === "proto3" && first !== undefined && first.number !== 0) {
     throw new GrpcImportError(
       "invalid",
-      `${build.file} starts the enum ${full} at ${first.name} = ${first.number}. A proto3 enum's first value must be 0, so add a value such as ${type.name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}_UNSPECIFIED = 0 before it.`,
+      `${build.file} starts the enum ${full} at ${first.name} = ${first.number}. A proto3 enum's first value must be 0, so add a value such as ${constantCaseOf(type.name)}_UNSPECIFIED = 0 before it.`,
       build.file,
     );
   }
-  for (const entry of type.reserved ?? []) {
+  (type.reserved ?? []).forEach((entry, index) => {
     if (typeof entry === "string") {
       descriptor.reservedName.push(entry);
-    } else {
-      const [start = 0, end = start] = entry;
-      descriptor.reservedRange.push(
-        create(EnumDescriptorProto_EnumReservedRangeSchema, { start, end: end === FIELD_NUMBER_MAX ? ENUM_VALUE_MAX : end }),
-      );
+      return;
     }
-  }
+    const [start = 0, end = start] = entry;
+    const max = build.enumMaxRanges.has(`${full}#${index}`);
+    descriptor.reservedRange.push(create(EnumDescriptorProto_EnumReservedRangeSchema, { start, end: max ? ENUM_VALUE_MAX : end }));
+  });
   const options = optionsOf(EnumOptionsSchema, recordOf(type.options), [], full, build);
   if (options !== undefined) descriptor.options = options;
   return descriptor;
+}
+
+/** An enum name in constant case, as a value name starts: HTTPCode is HTTP_CODE. */
+function constantCaseOf(name: string): string {
+  return name
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toUpperCase();
+}
+
+interface Block {
+  kind: "message" | "enum" | "other";
+  full: string;
+  /** The items the enum's reserved statements have listed so far. */
+  entries: number;
+}
+
+/**
+ * The enum reserved ranges the text ends with `max`, keyed
+ * <enum>#<index in its reserved list>. protobufjs reads `max` and 536870911
+ * as the same number, so only the text tells them apart. The index counts
+ * every item of every reserved statement in the enum, names included, in the
+ * order protobufjs lists them.
+ */
+function enumMaxRanges(text: string, pkg: string): Set<string> {
+  const out = new Set<string>();
+  const tokens = protobuf.tokenize(text, true);
+  const blocks: Block[] = [];
+  let last = "";
+  let beforeLast = "";
+  for (let token = tokens.next(); token !== null; token = tokens.next()) {
+    const top = blocks[blocks.length - 1];
+    if (token === '"' || token === "'") {
+      // The string's contents, then its closing quote.
+      tokens.next();
+      tokens.next();
+    } else if (token === "{") {
+      const opens = beforeLast === "message" || beforeLast === "enum";
+      if (opens && (top === undefined || top.kind === "message")) {
+        const scope = top === undefined ? (pkg === "" ? "" : `${pkg}.`) : `${top.full}.`;
+        blocks.push({ kind: beforeLast === "message" ? "message" : "enum", full: `${scope}${last}`, entries: 0 });
+      } else {
+        blocks.push({ kind: "other", full: "", entries: 0 });
+      }
+    } else if (token === "}") {
+      blocks.pop();
+    } else if (token === "reserved" && top?.kind === "enum" && (last === "{" || last === ";" || last === "}")) {
+      readReserved(tokens, top, out);
+      token = ";";
+    }
+    beforeLast = last;
+    last = token;
+  }
+  return out;
+}
+
+/** Reads an enum's reserved statement up to its semicolon, and adds each range that ends with `max`. */
+function readReserved(tokens: ITokenizerHandle, block: Block, out: Set<string>): void {
+  let item: string[] = [];
+  const close = (): void => {
+    const [, to, end = ""] = item;
+    if (item.length === 3 && to === "to" && /^(?:max|MAX|Max)$/.test(end)) out.add(`${block.full}#${block.entries}`);
+    block.entries += 1;
+    item = [];
+  };
+  for (let token = tokens.next(); token !== null && token !== ";"; token = tokens.next()) {
+    if (token === ",") {
+      close();
+    } else if (token === '"' || token === "'") {
+      tokens.next();
+      tokens.next();
+      item.push(token);
+    } else {
+      item.push(token);
+    }
+  }
+  close();
 }
 
 // ── Services ─────────────────────────────────────────────────────────────────
@@ -540,8 +670,9 @@ function methodOf(method: Method, service: string, build: Build): MethodDescript
 
 /**
  * The built-in options as the options message, or undefined when none is set.
- * A custom option is left out and recorded. A built-in option protobuf does
- * not define, or a value of the wrong type, is refused.
+ * A custom option is left out and recorded. A feature, an option protobuf
+ * does not define, and a value of the wrong type are each refused in their
+ * own words.
  */
 function optionsOf<Desc extends DescMessage>(
   schema: Desc,
@@ -558,6 +689,15 @@ function optionsOf<Desc extends DescMessage>(
       build.customOptions.add(key.slice(0, key.indexOf(")") + 1));
       continue;
     }
+    if (key === "features") {
+      // protobufjs reads features in any syntax. protoc refuses them outside an editions file.
+      const [feature] = Object.keys(recordOf(value) ?? {});
+      throw new GrpcImportError(
+        "invalid",
+        `${build.file} sets ${feature === undefined ? "features" : `features.${feature}`} on ${where}. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.`,
+        build.file,
+      );
+    }
     rest[key] = value as JsonObject[string];
   }
   if (Object.keys(rest).length === 0) return undefined;
@@ -565,6 +705,14 @@ function optionsOf<Desc extends DescMessage>(
   try {
     options = fromJson(schema, rest);
   } catch (error) {
+    const known = new Set(schema.fields.flatMap((field) => [field.name, field.jsonName]));
+    if (Object.keys(rest).every((key) => known.has(key))) {
+      throw new GrpcImportError(
+        "invalid",
+        `${build.file} sets an option on ${where} to a value of the wrong type for ${schema.typeName}: ${errorText(error)}. Correct the value.`,
+        build.file,
+      );
+    }
     throw new GrpcImportError(
       "unsupported",
       `${build.file} sets an option on ${where} that ${schema.typeName} does not define: ${errorText(error)}. Correct or remove the option.`,

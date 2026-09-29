@@ -129,6 +129,27 @@ function grpcMetadataProblem(metadata: readonly HeaderEntry[]): string | undefin
   return undefined;
 }
 
+/**
+ * Headers a header credential may not name. The relay adds the credential
+ * after it checks the signed headers, so the credential's header gets its own
+ * check here. A credential that set host, for example, could send the request
+ * to another virtual host behind an allowed proxy.
+ */
+const CREDENTIAL_HTTP_RESERVED = new Set([...CONNECTION_HEADERS, "content-length"]);
+const CREDENTIAL_GRPC_RESERVED = new Set([...CONNECTION_HEADERS, "content-length", "content-type"]);
+
+/** Why the relay cannot send a header credential's header. The message names the header, never its value. */
+function credentialHeaderProblem(credential: RelayEnvelope["credential"], kind: "http" | "grpc"): string | undefined {
+  if (credential?.scheme !== "header" || credential.header === undefined) return undefined;
+  const lower = credential.header.toLowerCase();
+  const reserved =
+    kind === "http"
+      ? CREDENTIAL_HTTP_RESERVED.has(lower)
+      : CREDENTIAL_GRPC_RESERVED.has(lower) || !GRPC_KEY.test(lower) || lower.startsWith("grpc-") || lower.endsWith("-bin");
+  if (!reserved) return undefined;
+  return `Credential ${credential.name} names the ${lower} header, which a credential cannot set. Name another header for the credential.`;
+}
+
 function defaultPort(scheme: "https" | "http"): number {
   return scheme === "https" ? 443 : 80;
 }
@@ -204,7 +225,8 @@ export function verifyRequest(frame: Pick<RequestFrame, "envelope" | "headers" |
 
   const { target } = envelope;
   const headerProblem =
-    target.kind === "http" ? httpHeaderProblem(frame.headers, body.byteLength) : grpcMetadataProblem(frame.headers);
+    (target.kind === "http" ? httpHeaderProblem(frame.headers, body.byteLength) : grpcMetadataProblem(frame.headers)) ??
+    credentialHeaderProblem(envelope.credential, target.kind);
   if (headerProblem !== undefined) return refuse("invalid", headerProblem);
 
   if (!hostAllowed(target, config)) {
@@ -214,6 +236,12 @@ export function verifyRequest(frame: Pick<RequestFrame, "envelope" | "headers" |
 
   const credential = addCredential(frame.headers, envelope.credential, config.credentials, target.kind);
   if (!credential.ok) return refuse("credential_missing", credential.message);
+  // The headers as sent, credential included, pass the same rules as the
+  // signed ones. Only the content-length message quotes a value, and a
+  // credential cannot name content-length, so no refusal here quotes a secret.
+  const sentProblem =
+    target.kind === "http" ? httpHeaderProblem(credential.headers, body.byteLength) : grpcMetadataProblem(credential.headers);
+  if (sentProblem !== undefined) return refuse("invalid", sentProblem);
 
   return {
     ok: true,

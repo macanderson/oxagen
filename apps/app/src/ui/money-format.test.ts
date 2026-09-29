@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 import {
   formatByteSize,
   formatClock,
+  formatCompactNumber,
   formatCount,
+  formatCurrencyAmount,
+  formatDecimal,
   formatDuration,
   formatMoney,
   formatRatio,
@@ -189,5 +192,32 @@ describe("formatByteSize", () => {
     expect(formatByteSize(48_210, "en")).toBe("48.2 kB");
     expect(formatByteSize(3_100_000, "en")).toBe("3.1 MB");
     expect(formatByteSize(2_000_000_000, "en")).toBe("2 GB");
+  });
+});
+
+describe("formatDecimal", () => {
+  it("prints a measured number with at most two decimals, grouped by the locale", () => {
+    expect(formatDecimal(1234.5678, "en")).toBe("1,234.57");
+    expect(formatDecimal(3, "en")).toBe("3");
+    expect(formatDecimal(1234.5, "de")).toBe("1.234,5");
+  });
+});
+
+describe("formatCompactNumber", () => {
+  it("shortens a large number for an axis tick", () => {
+    expect(formatCompactNumber(1250, "en")).toBe("1.3K");
+    expect(formatCompactNumber(3_400_000, "en")).toBe("3.4M");
+    expect(formatCompactNumber(12, "en")).toBe("12");
+  });
+});
+
+describe("formatCurrencyAmount", () => {
+  it("prints a decimal amount in the currency it names", () => {
+    expect(formatCurrencyAmount(12.5, "USD", "en-US")).toBe("$12.50");
+    expect(formatCurrencyAmount(1234, "EUR", "en-US")).toBe("€1,234.00");
+  });
+
+  it("shortens the amount for an axis tick when asked", () => {
+    expect(formatCurrencyAmount(12_500, "USD", "en-US", true)).toBe("$12.5K");
   });
 });

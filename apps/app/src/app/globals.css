@@ -110,6 +110,19 @@
     --fk-gov: #1baf7a;
     --fk-ctx: #4a3aa7;
     --fk-op: #e87ba4;
+    /* Chart series (ui/chart.tsx), assigned in this order and never cycled:
+       violet, magenta, blue, orange, aqua. They are the frame-kind family
+       above in a fixed series order, checked for colour-vision separation on
+       the white panel and on ink. No gold (identity) and no state hue. The
+       kit's chart tokens use ember, gold and the state colours, so the app
+       sets its own here. */
+    --chart-1: #4a3aa7;
+    --chart-2: #e87ba4;
+    --chart-3: #2a78d6;
+    --chart-4: #eb6834;
+    --chart-5: #1baf7a;
+    --chart-grid: color-mix(in oklab, var(--border) 70%, transparent);
+    --chart-baseline: var(--border);
     --k-constraint: #a0397f;
     --k-procedure: #5f7a1f;
     --k-fact: #1e7392;
@@ -190,6 +203,11 @@
     --fk-gov: #199e70;
     --fk-ctx: #9085e9;
     --fk-op: #d55181;
+    --chart-1: #9085e9;
+    --chart-2: #d55181;
+    --chart-3: #3987e5;
+    --chart-4: #d95926;
+    --chart-5: #199e70;
     --k-constraint: #d677b5;
     --k-procedure: #a6b95e;
     --k-fact: #5cb5d6;
@@ -231,6 +249,11 @@
       --fk-gov: #199e70;
       --fk-ctx: #9085e9;
       --fk-op: #d55181;
+      --chart-1: #9085e9;
+      --chart-2: #d55181;
+      --chart-3: #3987e5;
+      --chart-4: #d95926;
+      --chart-5: #199e70;
       --k-constraint: #d677b5;
       --k-procedure: #a6b95e;
       --k-fact: #5cb5d6;

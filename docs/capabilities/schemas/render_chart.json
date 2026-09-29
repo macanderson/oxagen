@@ -1,0 +1,432 @@
+{
+  "name": "render_chart",
+  "domain": "assistant",
+  "description": "Draw a chart, graph, or plot, or a small dashboard of stat tiles and charts, in your reply. Use it when a trend over time, a ranking, or a part-of-a-whole comparison reads faster as a picture. Kinds: line, area, bar, stacked_bar. Every figure must come from a tool result in this conversation: name those results in `source`, and send null for a value the record does not hold. Never invent or estimate a figure. Returns `block`: paste it into your reply unchanged where the chart belongs.",
+  "mode": "sync",
+  "surfaces": [
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "read"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "maxLength": 120
+      },
+      "source": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "The tool results the figures came from, such as `get_spend, 1-28 September`"
+      },
+      "tiles": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "format": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "number",
+                    "currency",
+                    "percent",
+                    "duration"
+                  ],
+                  "description": "number; currency (a decimal amount); percent (a 0..1 ratio); duration (milliseconds)"
+                },
+                "currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "label",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 8,
+        "default": []
+      },
+      "charts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "line",
+                "area",
+                "bar",
+                "stacked_bar"
+              ],
+              "description": "line or area for a value over time; bar to compare items; stacked_bar for parts of a whole"
+            },
+            "series": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "label"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 5
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "The x-axis category: a date, an agent, a tool"
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "description": "One value per series, in series order"
+                  }
+                },
+                "required": [
+                  "label",
+                  "values"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 100
+            },
+            "format": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "number",
+                    "currency",
+                    "percent",
+                    "duration"
+                  ],
+                  "description": "number; currency (a decimal amount); percent (a 0..1 ratio); duration (milliseconds)"
+                },
+                "currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "unit": {
+              "type": "string",
+              "maxLength": 24
+            }
+          },
+          "required": [
+            "title",
+            "kind",
+            "series",
+            "rows",
+            "format"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 6,
+        "default": []
+      }
+    },
+    "required": [
+      "source"
+    ],
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "render": {
+        "type": "object",
+        "properties": {
+          "componentId": {
+            "const": "chart"
+          },
+          "props": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "The tool results the figures came from, such as `get_spend, 1-28 September`"
+              },
+              "tiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "format": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "number",
+                            "currency",
+                            "percent",
+                            "duration"
+                          ],
+                          "description": "number; currency (a decimal amount); percent (a 0..1 ratio); duration (milliseconds)"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "note": {
+                      "type": "string",
+                      "maxLength": 120
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 8,
+                "default": []
+              },
+              "charts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "line",
+                        "area",
+                        "bar",
+                        "stacked_bar"
+                      ],
+                      "description": "line or area for a value over time; bar to compare items; stacked_bar for parts of a whole"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80
+                          }
+                        },
+                        "required": [
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1,
+                      "maxItems": 5
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 80,
+                            "description": "The x-axis category: a date, an agent, a tool"
+                          },
+                          "values": {
+                            "type": "array",
+                            "items": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "minItems": 1,
+                            "maxItems": 5,
+                            "description": "One value per series, in series order"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "values"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "minItems": 1,
+                      "maxItems": 100
+                    },
+                    "format": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "number",
+                            "currency",
+                            "percent",
+                            "duration"
+                          ],
+                          "description": "number; currency (a decimal amount); percent (a 0..1 ratio); duration (milliseconds)"
+                        },
+                        "currency": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "unit": {
+                      "type": "string",
+                      "maxLength": 24
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "kind",
+                    "series",
+                    "rows",
+                    "format"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 6,
+                "default": []
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "componentId",
+          "props"
+        ],
+        "additionalProperties": false
+      },
+      "block": {
+        "type": "string",
+        "description": "A fenced oxagen-chart block. Paste it into the reply unchanged"
+      }
+    },
+    "required": [
+      "render",
+      "block"
+    ],
+    "additionalProperties": false
+  }
+}

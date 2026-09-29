@@ -1,7 +1,7 @@
 // The designed-avatar spec (mockup `avatarHtml`/`avatarBody`): what a stored
 // `avatar:v1:<json>` value can say, and the total parser that reads one.
 //
-// A person's avatar is one of three kinds. An `icon` is a Lucide glyph, the
+// A person's avatar is one of three kinds. An `icon` is a Phosphor glyph, the
 // set the product ships, drawn at one line weight in the tone's ink. `initials`
 // are up to six letters in one of three typefaces. A `photo` is an `https://`
 // URL and is not a spec string at all: it is stored as the bare URL, the

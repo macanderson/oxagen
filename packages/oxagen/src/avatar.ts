@@ -11,7 +11,7 @@ import { z } from "zod";
  *    JSON is one of
  *      `{"kind":"icon","icon":"rocket","tone":"solid"}`
  *      `{"kind":"initials","text":"MB","font":"sans","tone":"soft"}`
- *    `icon` is a name from the Lucide set the app ships, `text` is up to six
+ *    `icon` is a name from the Phosphor set the app ships, `text` is up to six
  *    letters, `font` is `sans | serif | mono`, and `tone` is `solid | soft |
  *    line | gold | gold-deep`: three relations to the theme and the brand
  *    gold in two shades, never a free colour. The app's parser and constants

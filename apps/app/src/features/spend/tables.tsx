@@ -37,6 +37,8 @@ import {
   UnmeteredNote,
 } from "./figures";
 import { NotBacked } from "./not-backed";
+import { rankInOneCurrency } from "./rank-in-one-currency";
+import { RankedSpendChart } from "./ranked-spend-chart";
 import {
   cacheHitRate,
   classesOf,
@@ -272,6 +274,15 @@ export function OperatorTable({
   );
 }
 
+/** How many agents the chart beside the By agent table holds. */
+const CHART_MAX = 12;
+
+/**
+ * By agent: the table, and beside it the leading agents by recorded spend as
+ * a ranked bar. The chart answers which few agents carry the period's spend.
+ * The table holds every agent, so it is the chart's text equivalent. With no
+ * recorded amount there is nothing to rank, and the table takes the width.
+ */
 export function AgentTable({
   report,
   findings,
@@ -283,7 +294,7 @@ export function AgentTable({
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
-  return (
+  const table = (
     <Panel
       id="spend-agent"
       title={t("groups.agent.title")}
@@ -348,6 +359,44 @@ export function AgentTable({
         </Table>
       )}
     </Panel>
+  );
+  const { ranked, otherCurrency } = rankInOneCurrency(
+    report.rows.flatMap((row) =>
+      row.cost === null ? [] : [{ key: row.key, value: row.cost }],
+    ),
+  );
+  if (ranked.length === 0) return table;
+  const shown = ranked.slice(0, CHART_MAX);
+  return (
+    <div className="grid items-start gap-3.5 lg:grid-cols-3">
+      <div className="min-w-0 lg:col-span-2">{table}</div>
+      <section
+        aria-labelledby="spend-agent-chart"
+        data-testid="spend-agent-chart"
+        className={panel}
+      >
+        <div className={panelHeader}>
+          <h2 id="spend-agent-chart" className={panelTitle}>
+            {t("agentChart.title")}
+          </h2>
+        </div>
+        <RankedSpendChart
+          items={shown}
+          label={t("agentChart.label")}
+          seriesLabel={t("agentChart.title")}
+          precision="cents"
+        />
+        <p className={panelFooter}>
+          {t("agentChart.footer", {
+            shown: formatCount(shown.length, locale),
+            total: formatCount(report.rows.length, locale),
+          })}
+          {otherCurrency > 0
+            ? ` ${t("agentChart.otherCurrency", { count: otherCurrency })}`
+            : null}
+        </p>
+      </section>
+    </div>
   );
 }
 

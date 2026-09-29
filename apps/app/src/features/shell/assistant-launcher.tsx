@@ -30,7 +30,7 @@
 // (`noteAssistantReply` in `shell-state.tsx`). It then shines gold around its
 // border until the flyout opens, and says "New reply" to a screen reader, so
 // the cue is never colour or motion alone.
-import { ChevronRight } from "lucide-react";
+import { CaretRightIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { StellaIcon } from "@/ui/stella-mark";
@@ -102,7 +102,7 @@ export function AssistantLauncher({
           </span>
         ) : null}
       </span>
-      <ChevronRight
+      <CaretRightIcon
         aria-hidden="true"
         className={`size-3.5 flex-none transition-transform motion-reduce:transition-none ${
           assistantOpen
