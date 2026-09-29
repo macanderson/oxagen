@@ -82,7 +82,7 @@ describe("ToolbeltChoice", () => {
     renderBelt();
     expect(
       screen.getByRole("link", { name: "Manage toolbelts" }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/toolbelts");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=toolbelts");
     const save = screen.getByTestId("agent-belt-save");
     // The belt it carries is chosen, so Save has nothing to write yet.
     expect(save).toHaveAttribute("aria-disabled", "true");
