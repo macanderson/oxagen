@@ -1,0 +1,11 @@
+# The Slack collector in agent-work-spec.html (Slack), copied verbatim.
+schema = "collector/v1"
+name = "eng-requests"
+label = "#eng-requests"
+type = "slack"
+connection = "conn_01K5ZS2V8W"
+
+[scope]
+channel = "C07ENGREQ"
+trigger = "reaction"
+allow_bots = ["B05PAGERDUTY"]

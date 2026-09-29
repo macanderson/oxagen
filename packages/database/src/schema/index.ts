@@ -36,6 +36,7 @@ export * from "./memory";
 export * from "./steering";
 export * from "./steering-repo-health";
 export * from "./machine-groups";
+export * from "./work";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

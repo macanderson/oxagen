@@ -59,3 +59,6 @@ export const toolsSchema = pgSchema("tools");
 // ebook). Not tenant-scoped; bypass-only RLS. See schema/cms.ts and ADR-154.
 export const cmsSchema = pgSchema("cms");
 export const skillsSchema = pgSchema("skills");
+// work: work items, the collectors that bring them in, triage, done records,
+// and autonomy (agent-work-spec.html, Storage). See schema/work.ts.
+export const workSchema = pgSchema("work");
