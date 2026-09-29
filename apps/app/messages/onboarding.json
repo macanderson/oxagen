@@ -73,12 +73,10 @@
         "lead": "Each workspace keeps its steering record in a steering repo on GitHub or GitLab, so connect one before you create the first workspace.",
         "github": {
           "heading": "GitHub",
-          "steeringName": "Oxagen Steering",
-          "steeringBody": "Creates your steering repos and holds admin only on the repositories Oxagen creates.",
-          "steeringInstall": "Install Oxagen Steering",
-          "oxagenName": "Oxagen",
-          "oxagenBody": "Reads and checks your code repositories.",
-          "oxagenInstall": "Install Oxagen"
+          "name": "Oxagen",
+          "body": "Creates your steering repos and reads and checks your code repositories. Install it on a GitHub organization, or authorize it again when the organization already has it.",
+          "install": "Install Oxagen",
+          "authorize": "Authorize Oxagen"
         },
         "gitlab": {
           "heading": "GitLab",

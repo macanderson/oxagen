@@ -9,7 +9,7 @@
 //   step              the last provisioning step that finished, or null
 //   failedStep        the step that failed or stopped, or null
 //   error             { code, message } or null; `steering_reauthorize` asks
-//                     an owner to authorize Oxagen Steering again
+//                     an owner to authorize Oxagen again
 //   provider          "github" | "gitlab" | null
 //   repository        { fullName, url } or null before create_repository
 //   publishedVersion  the published version, or null

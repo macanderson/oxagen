@@ -176,7 +176,7 @@ describe("the steering repo card", () => {
     [
       "disconnected",
       "Disconnected",
-      "Oxagen Steering lost its grant, so Oxagen merges and publishes nothing until an owner or admin authorizes it again.",
+      "Oxagen lost its grant on the host, so it merges and publishes nothing until an owner or admin authorizes it again.",
     ],
     [
       "diverged",
@@ -312,7 +312,7 @@ describe("the repositories page's steering repo section", () => {
           {
             code: "steering_reauthorize",
             message:
-              "Oxagen Steering can no longer create repositories on this account.",
+              "Oxagen can no longer create repositories on this account.",
           },
           { status: "blocked" },
         ),

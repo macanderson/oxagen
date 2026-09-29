@@ -168,7 +168,7 @@ describe("once every check passed", () => {
       [...(onMerge?.querySelectorAll("li") ?? [])].map((li) => li.textContent),
     ).toEqual([
       "Publish .oxagen/rules/ctx.release.no-reread-changelog.toml as a record in force",
-      "Move this workspace from steering version 41 to 42",
+      "Take the workspace's promotion ledger from 41 entries to 42",
       "Write the promotion event to the ledger and a steering_published audit event",
       "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
     ]);

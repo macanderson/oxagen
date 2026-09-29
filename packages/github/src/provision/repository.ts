@@ -1,5 +1,5 @@
 // repository.ts: create a steering repo, find it again on a rerun, and add it
-// to the Oxagen Steering installation.
+// to the Oxagen GitHub App installation.
 import { GitHubApiError } from "../fetch-client";
 import { seg, type GithubRest } from "./http";
 import type { ProvisionedRepository, RepoAddress } from "./types";
@@ -7,7 +7,7 @@ import type { ProvisionedRepository, RepoAddress } from "./types";
 /**
  * A step that needs a person. The owner's user token that adds a repository
  * to the installation is missing, expired, or revoked, so an owner must
- * authorize Oxagen Steering again before provisioning can continue.
+ * authorize the Oxagen GitHub App again before provisioning can continue.
  */
 export class SteeringReauthorizeError extends Error {
   readonly code = "steering_reauthorize";
@@ -169,7 +169,7 @@ export async function createOrAdoptRepository(
   );
 }
 
-/** An installation of Oxagen Steering that the owner's token can see. */
+/** An installation of the Oxagen GitHub App that the owner's token can see. */
 export interface SteeringInstallation {
   id: number;
   account_login: string;
@@ -186,12 +186,12 @@ interface GhInstallation {
 
 function reauthorize(status: number): SteeringReauthorizeError {
   return new SteeringReauthorizeError(
-    `GitHub refused the organization owner's Oxagen Steering authorization (status ${status}). An owner must authorize Oxagen Steering again.`,
+    `GitHub refused the organization owner's steering authorization (status ${status}). An owner must authorize the Oxagen GitHub App again.`,
   );
 }
 
 /**
- * The installations of Oxagen Steering the owner's user token can reach. A
+ * The installations of the Oxagen GitHub App the owner's user token can reach. A
  * user token only lists installations of the app that issued it.
  */
 export async function listSteeringInstallations(

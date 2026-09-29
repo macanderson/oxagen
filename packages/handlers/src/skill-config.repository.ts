@@ -41,7 +41,7 @@ export async function readSkillRepositoryBinding(scope: SkillScope) {
         productionBranch: binding.configuredDefaultRef,
         // The connection's kind picks the credential. A steering repository
         // the provisioner created hangs from a `github_steering` connection,
-        // and its delivery config names the Oxagen Steering installation.
+        // and its delivery config names the Oxagen GitHub App installation.
         connectorId: connection.connectorId,
         deliveryConfig: connection.deliveryConfig,
       })
@@ -112,7 +112,7 @@ export function createSkillRepositoryResolver(deps: {
 
 /**
  * The token that reaches the bound repository. A steering repository the
- * provisioner created answers only to the Oxagen Steering app, so its
+ * provisioner created answers only to the Oxagen GitHub App, so its
  * installation mints the token. Every other head uses the workspace's own
  * token for its connection.
  */
