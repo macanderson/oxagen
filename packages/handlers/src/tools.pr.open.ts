@@ -328,7 +328,7 @@ export function createToolsPullRequestOpener(
 }
 
 /** The workspace's steering host, built on first use, so importing this file opens no host client. */
-const lazySteeringHost: () => ToolsPullRequestHost = (() => {
+export const toolsSteeringHost: () => ToolsPullRequestHost = (() => {
   let host: ToolsPullRequestHost | null = null;
   return () => (host ??= createSteeringHost());
 })();
@@ -336,7 +336,7 @@ const lazySteeringHost: () => ToolsPullRequestHost = (() => {
 /** The opener over the workspace's steering host and published index. */
 export const toolsPullRequestOpener: ToolsPullRequestOpener =
   createToolsPullRequestOpener({
-    host: lazySteeringHost,
+    host: toolsSteeringHost,
     readIndex: async (scope) => {
       const { postgresTachoPublished } = await import(
         "./tacho.published.postgres"
@@ -415,5 +415,5 @@ export function createSteeringPrOpener(
 /** The SteeringPrOpener boot registers for M13's server folder writer. */
 export const steeringPrOpener: SteeringPrOpener = createSteeringPrOpener(
   toolsPullRequestOpener,
-  lazySteeringHost,
+  toolsSteeringHost,
 );

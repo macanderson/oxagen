@@ -1484,6 +1484,25 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/local-calls/machine-group.list"))
         .tachoMachineGroupListHandler as CapabilityHandlerFn,
   );
+  // Studio's drafts and Review (lane M11, ADR-224).
+  registerHandler(
+    "save_studio_draft",
+    async () =>
+      (await import("./mcp-studio/import/draft.save"))
+        .saveStudioDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_studio_draft",
+    async () =>
+      (await import("./mcp-studio/import/draft.get"))
+        .getStudioDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "open_studio_review",
+    async () =>
+      (await import("./mcp-studio/import/review.open"))
+        .openStudioReviewHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "fetch_commands",
     async () =>
