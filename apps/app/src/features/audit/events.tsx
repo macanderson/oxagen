@@ -45,6 +45,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { LinkPager } from "@/ui/link-pager";
 import { formatCount } from "@/ui/money-format";
 import { SafeForm } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
@@ -52,7 +53,6 @@ import { CsvDialog } from "./dialogs";
 import { FilterSelect } from "./filter-select";
 import { AUDIT_OUTCOMES, auditQueryParams } from "./filters";
 import { AUDIT_GAPS } from "./gaps";
-import { AuditPager } from "./pager";
 
 /** An actor the record names, as the filter and the table print them. */
 export type AuditActor = { id: string; name: string };
@@ -480,7 +480,7 @@ function Pager({
   const at = (n: number) =>
     routes.audit(org, auditQueryParams(query, { offset: n * size }));
   return (
-    <AuditPager
+    <LinkPager
       label={t("pager")}
       rowsLabel={t("rows")}
       previousLabel={t("previous")}
@@ -502,6 +502,9 @@ function Pager({
       }
       previous={index > 0 ? at(index - 1) : null}
       next={hasOlder ? at(index + 1) : null}
+      // The panel's 16 px inset, which the filters above and the note below
+      // keep too.
+      className="px-4"
     />
   );
 }

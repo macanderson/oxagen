@@ -288,19 +288,21 @@ export const routes = {
    * from the record instead: the page's header links to the agent the mandate was
    * granted to.
    *
-   * `q` searches the ledger, `state` narrows it to one movement kind and
-   * `offset` opens a later page of it. All three are query values, not routes,
-   * for the reason every other filter and page here is.
+   * `q` searches the ledger, `state` narrows it to one movement kind, `rows`
+   * sets how many movements a page holds and `offset` opens a later page of
+   * it. All four are query values, not routes, for the reason every other
+   * filter and page here is.
    */
   mandate: (
     org: string,
     ws: string,
     mandate: string,
-    q?: { search?: string; state?: string; offset?: string },
+    q?: { search?: string; state?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "mandates", mandate), {
       q: q?.search,
       state: q?.state,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
@@ -491,7 +493,8 @@ export const routes = {
    * id written before the rename still maps to where it lives now: `policy`,
    * `settings` and `freshness` are Gates, `deliveries` is Assignments,
    * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, a selected proposal and a Skills cursor stay query values.
+   * page offset, the rows a page of proposals holds, a selected proposal and a
+   * Skills cursor stay query values.
    */
   steering: (
     org: string,
@@ -503,6 +506,8 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
+      /** How many proposals a page holds; only on Proposals (#4693). */
+      rows?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
@@ -521,6 +526,7 @@ export const routes = {
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
+      rows: q.rows,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,

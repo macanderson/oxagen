@@ -171,6 +171,17 @@ describe("steering.proposals", () => {
     expect(read.ok && read.value.proposals[0]?.status).toBe("checks_passed");
   });
 
+  // #4693: Rows per page under the Proposals list sets the page size.
+  it("reads the page size the caller names", async () => {
+    kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
+    await steering.proposals(ctx, { offset: 20, limit: 10 });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextProposalList,
+      input: { limit: 10, offset: 20 },
+      page: "steering",
+    });
+  });
+
   it("passes an error through (negative)", async () => {
     const down = readError("record_index_unavailable", 503);
     kernelRead.mockResolvedValue(down);

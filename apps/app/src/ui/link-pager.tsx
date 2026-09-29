@@ -1,22 +1,23 @@
 "use client";
-// The pager under the audit record (#4693): the shared RowsPager, with Rows
-// per page on the left beside the range, and Previous and Next on the right.
+// The pager under a list that pages by address (#4693): the shared RowsPager,
+// with Rows per page on the left beside the range, and Previous and Next on
+// the right.
 //
-// The record pages by address, so the server works out every page this pager
-// can reach (events.tsx). Previous and Next arrive as addresses and draw as
-// links, which keeps a middle click, a copied link and a browser with no
-// script working. A server component cannot pass a function to this one, so
-// each size Rows offers arrives as the address of its first page, and picking
-// a size visits that address.
+// The server works out every page this pager can reach, as the audit record
+// does in features/audit/events.tsx. Previous and Next arrive as addresses and
+// draw as links, which keeps a middle click, a copied link and a browser with
+// no script working. A server component cannot pass a function to this one,
+// so each size Rows offers arrives as the address of its first page, and
+// picking a size visits that address.
 import type { ReactNode } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { useNavigate } from "@/ui/navigation";
 import { RowsPager } from "@/ui/pagination";
 
-/** A size Rows offers, and the first page of the record at that size. */
-type AuditPagerSize = { size: number; first: SafePath };
+/** A size Rows offers, and the first page of the list at that size. */
+type LinkPagerSize = { size: number; first: SafePath };
 
-export function AuditPager({
+export function LinkPager({
   label,
   rowsLabel,
   previousLabel,
@@ -26,6 +27,7 @@ export function AuditPager({
   range,
   previous,
   next,
+  className,
 }: {
   /** The pager's name as a landmark. */
   label: string;
@@ -34,12 +36,14 @@ export function AuditPager({
   nextLabel: string;
   /** The size this page was read at, one of `sizes`. */
   perPage: number;
-  sizes: readonly AuditPagerSize[];
-  range: ReactNode;
-  /** The newer page, or null on the first page. */
+  sizes: readonly LinkPagerSize[];
+  range?: ReactNode;
+  /** The page before this one, or null on the first page. */
   previous: SafePath | null;
-  /** The older page, or null when no older page is known. */
+  /** The page after this one, or null when no later page is known. */
   next: SafePath | null;
+  /** Classes on the pager's row, such as the inset of the panel it sits in. */
+  className?: string;
 }) {
   const navigate = useNavigate();
   return (
@@ -59,9 +63,7 @@ export function AuditPager({
       nextLabel={nextLabel}
       previous={previous}
       next={next}
-      // The panel's 16 px inset, which the filters above and the note below
-      // keep too.
-      className="px-4"
+      className={className}
     />
   );
 }

@@ -17,6 +17,7 @@ import { type SteeringAt, steeringLink } from "./view";
 export function ContextPrs({
   at,
   offset,
+  rows,
   read,
   selected,
   pr,
@@ -24,6 +25,8 @@ export function ContextPrs({
 }: {
   at: SteeringAt;
   offset: number;
+  /** How many proposals a page holds, one of PROPOSAL_ROWS. */
+  rows: number;
   read: Read<ProposalPage>;
   /** The proposal the URL selects; null shows the table alone. */
   selected: string | null;
@@ -64,6 +67,7 @@ export function ContextPrs({
                   <SafeLink
                     to={steeringLink(at, {
                       tab: "prs",
+                      rows,
                       offset,
                       proposal: proposal.id,
                     })}
@@ -94,9 +98,10 @@ export function ContextPrs({
         )}
         <Pager
           offset={offset}
+          rows={rows}
           shown={read.value.proposals.length}
           total={read.value.total}
-          link={(to) => steeringLink(at, { tab: "prs", offset: to })}
+          link={(to) => steeringLink(at, { tab: "prs", ...to })}
         />
       </>
     );

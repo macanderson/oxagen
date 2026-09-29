@@ -2988,7 +2988,6 @@ type Messages = {
         label: string;
         newer: string;
         older: string;
-        end: string;
       };
       emptyBodyEffective: string;
     };
@@ -9007,10 +9006,6 @@ type Messages = {
         anyRegion: string;
         platformPriced: string;
         scheduled: string;
-        pagination: string;
-        previous: string;
-        next: string;
-        page: string;
       };
       dialog: {
         open: string;

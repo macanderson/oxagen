@@ -641,7 +641,12 @@ export interface DataSource {
      */
     proposals(
       ctx: WsCtx,
-      q: { offset: number; lineage?: string },
+      q: {
+        offset: number;
+        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
+        limit?: number;
+        lineage?: string;
+      },
     ): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
