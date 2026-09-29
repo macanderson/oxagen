@@ -119,7 +119,7 @@ describe("the oracle status", () => {
     expect(result.negative.status).toBe("unrunnable");
   });
 
-  it("is unbuilt for a class with no evaluator, so the criterion stays held", () => {
+  it("is unbuilt for a class with no evaluator, so no oracle runs", () => {
     const criterion: Criterion = { ...total, oracle: { class: "differential" } };
     const result = evaluateCriterion({
       criterion,
