@@ -51,7 +51,7 @@ export function RuntimesEmpty({
       testId="runtimes-empty"
       actions={
         <>
-          {canAdd ? <AddRuntime org={org} ws={ws} /> : null}
+          {canAdd ? <AddRuntime org={org} ws={ws} gold={false} /> : null}
           <CliPath />
         </>
       }

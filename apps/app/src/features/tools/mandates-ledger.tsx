@@ -35,8 +35,8 @@
 // the office reading this ledger a table it could not open a row of.
 //
 // The registry, connections, kill switches and auto-approval rules are the
-// other tabs of this page, drawn by their own files; the tab bar is
-// `tabs.tsx`.
+// other Tools views of the Agents page, drawn by their own files; the tab
+// strip is the Agents page's (`features/agents/area.tsx`).
 import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
