@@ -1,0 +1,337 @@
+{
+  "mcpStudio": {
+    "title": "MCP server",
+    "eyebrow": "{workspace}",
+    "lede": "Choose which of this server's tools agents can call, and how each one is described and shaped.",
+    "loading": "Loading the server",
+    "notRecorded": "not recorded",
+    "providerLink": "Studio",
+    "boardFailed": "The kill switch board did not load, so this page cannot show which switches are on or turn one off.",
+    "truncated": "The kill switch board holds more switches than one read returns, so a switch on this server may be missing here.",
+    "missing": {
+      "title": "Server not found",
+      "body": "This workspace holds no MCP server with that id. It may have been removed.",
+      "back": "Back to providers"
+    },
+    "off": {
+      "badge": "Off",
+      "flippedBy": "Turned off by",
+      "reason": "Reason",
+      "clearedBy": "Turned back on by",
+      "unrecorded": "not recorded"
+    },
+    "tabs": {
+      "label": "Server sections",
+      "atLeast": "{count}+",
+      "tools": "Tools",
+      "connection": "Connection",
+      "try": "Try it",
+      "changes": "Changes"
+    },
+    "tools": {
+      "title": "Tools",
+      "missing": "Discovery has not listed this server's tools yet. The table shows the tools the registry holds.",
+      "readOnly": "Only an organization owner or admin can import tools or change their classification.",
+      "refused": "The draft cannot hold that edit, so it was not kept. Remove an edit on the Changes tab or discard the draft first.",
+      "unclassified": "Unclassified",
+      "suggested": "Suggested",
+      "offBadge": "Off",
+      "search": "Search tools",
+      "rows": "Rows per page",
+      "pager": "Tool pages",
+      "noMatch": "No tool matches these filters.",
+      "importNamed": "Import {tool}",
+      "range": "{from}–{to} of {total}",
+      "previous": "Previous page",
+      "next": "Next page",
+      "empty": {
+        "title": "No tools",
+        "body": "The server listed no tools the last time Oxagen read it."
+      },
+      "filters": {
+        "state": "State",
+        "risk": "Risk",
+        "sideEffect": "Side effect"
+      },
+      "states": {
+        "imported": "Imported",
+        "available": "Available",
+        "stagedImport": "Staged import",
+        "stagedRemove": "Staged removal"
+      },
+      "columns": {
+        "import": "Import",
+        "tool": "Tool",
+        "state": "State",
+        "risk": "Risk",
+        "sideEffect": "Side effect",
+        "tokens": "Definition tokens",
+        "off": "Kill switch"
+      },
+      "budget": {
+        "title": "Definition budget",
+        "missing": "The definition budget is set in tools.toml, and Oxagen has not read this server's tools.toml yet.",
+        "over": "Over budget",
+        "unmeasured": "The budget is {budget} tokens. Some imported tools have no measured definition, so the total is not known.",
+        "used": "{used} of {budget} tokens",
+        "meter": "{used} of {budget} definition tokens used",
+        "before": "Before this draft: {before} tokens"
+      }
+    },
+    "panel": {
+      "classification": "Classification",
+      "unclassified": "This tool has no classification yet.",
+      "risk": "Risk",
+      "sideEffect": "Side effect",
+      "egress": "Egress",
+      "impacts": "Impacts",
+      "none": "None",
+      "staged": "In the draft",
+      "suggested": "Suggested",
+      "basis": {
+        "source_hint": "From a hint in the source definition.",
+        "annotations": "From the server's tool annotations.",
+        "http_method": "From the operation's HTTP method.",
+        "graphql_operation": "From the GraphQL operation type.",
+        "grpc_idempotency": "From the gRPC method's idempotency level.",
+        "fail_safe": "No signal was found, so the most cautious class was chosen."
+      },
+      "importFirst": "Import this tool before you change its classification or description.",
+      "choose": "Choose",
+      "confirm": "Confirm suggestion",
+      "stage": "Add to draft",
+      "description": "Description",
+      "draftHint": "Draft asks a model to write the description. Its cost is billed as in-app agent spend.",
+      "draft": "Draft",
+      "draftNotBuilt": "Draft is not available yet. You can write the description yourself.",
+      "draftFailed": "Draft failed: {message}",
+      "draftError": "Draft did not finish. Try again.",
+      "shaping": "Shaping",
+      "shapingMissing": "Shaping is set in tools.toml, and Oxagen has not read this server's tools.toml yet.",
+      "hidden": "Hidden inputs",
+      "fixed": "Fixed inputs",
+      "returns": "Returns",
+      "whole": "The whole result",
+      "selection": "GraphQL selection set",
+      "server": "Server's own description",
+      "serverMissing": "Oxagen has not recorded what the server says about this tool yet.",
+      "annotations": "Annotations",
+      "feedback": "Agent feedback",
+      "feedbackMissing": "Oxagen has not recorded how agents use this tool yet.",
+      "calls": "Calls",
+      "schemaRejections": "Schema rejections",
+      "errorResults": "Error results",
+      "retries": "Retries",
+      "notes": "Agent notes",
+      "refused": "The draft cannot hold that edit, so it was not kept. Remove an edit on the Changes tab or discard the draft first.",
+      "off": "Kill switch",
+      "offNone": "The registry holds no version of this tool, so it has no switch to turn off."
+    },
+    "connection": {
+      "cloud": "Oxagen cloud",
+      "none": "None",
+      "noMachines": "No machine groups",
+      "withheld": "Hidden because it is not a vault reference",
+      "facts": {
+        "url": "URL",
+        "transport": "Transport",
+        "network": "Network route",
+        "registry": "Registry",
+        "server": "Server",
+        "version": "Version",
+        "packageType": "Package type",
+        "machines": "Machine groups",
+        "env": "Environment variables",
+        "command": "Command",
+        "from": "Read from",
+        "repo": "Repository",
+        "path": "Path",
+        "ref": "Ref",
+        "type": "Source",
+        "endpoint": "Endpoint",
+        "auth": "Sign-in",
+        "status": "Status"
+      },
+      "from": {
+        "repository": "Repository file",
+        "url": "URL",
+        "upload": "Uploaded file",
+        "introspection": "GraphQL introspection",
+        "reflection": "gRPC reflection"
+      },
+      "sourceTypes": {
+        "remote": "Remote server",
+        "registry": "Registry entry",
+        "local": "Local command",
+        "openapi": "OpenAPI definition",
+        "graphql": "GraphQL schema",
+        "grpc": "gRPC service"
+      },
+      "source": {
+        "title": "Source",
+        "missing": "Oxagen has not recorded where this server came from yet. The facts below come from the registry."
+      },
+      "environments": {
+        "title": "Environments",
+        "agentsUnset": "No environment is set for agents yet.",
+        "agentsCall": "Agents call the {name} environment.",
+        "sandbox": "Sandbox",
+        "agentBadge": "Agents",
+        "noCredential": "No credential",
+        "columns": {
+          "name": "Environment",
+          "url": "URL",
+          "network": "Network route",
+          "credential": "Credential",
+          "agents": "Agents"
+        }
+      },
+      "auth": {
+        "title": "Authentication",
+        "mode": "Mode",
+        "scheme": "Scheme",
+        "credential": "Credential",
+        "replace": "Replace credential",
+        "note": "A credential stays in the Oxagen vault. This page shows only its reference, and a steering PR never carries it.",
+        "modes": {
+          "none": "None",
+          "service": "Service credential",
+          "operatorOauth": "Each operator signs in"
+        }
+      },
+      "machines": {
+        "title": "Machines",
+        "body": "The local gateway runs this server on enrolled machines. Oxagen sends it no credential.",
+        "none": "No machine groups"
+      },
+      "sync": {
+        "title": "Sync",
+        "schedule": "Schedule",
+        "lastAt": "Last sync",
+        "never": "Never",
+        "schedules": {
+          "onChange": "When the source changes",
+          "daily": "Daily",
+          "manual": "Manual"
+        }
+      }
+    },
+    "try": {
+      "title": "Try a tool",
+      "environment": "Environment",
+      "sandboxOption": "{name} (sandbox)",
+      "tool": "Tool",
+      "liveBadge": "Live",
+      "live": "This environment is not a sandbox. The call reaches the real service.",
+      "args": "Arguments",
+      "argsHint": "A JSON object with the tool's arguments.",
+      "badJson": "The arguments are not a JSON object.",
+      "run": "Run",
+      "running": "Running",
+      "credentialNote": "The call is recorded and metered like an agent's. The gateway adds the credential after the request is recorded, so the request shown never holds it.",
+      "request": "Upstream request",
+      "raw": "Raw result",
+      "shaped": "Shaped result",
+      "save": "Save as test",
+      "saved": "Saved to the draft",
+      "tooLarge": "The test was not saved. It is larger than a draft allows, or the draft is full.",
+      "badRecord": "This call's record is not in the shape a saved test needs, so the test was not saved.",
+      "stripped": "Removed the {headers} {count, plural, one {header} other {headers}} before saving, because a saved test never holds a credential.",
+      "notBuilt": "Try it is not available yet.",
+      "denied": "The call was denied: {message}",
+      "failed": "The call failed: {message}",
+      "error": "The call did not finish. Try again.",
+      "empty": {
+        "title": "No imported tools",
+        "body": "Import a tool on the Tools tab to try it here."
+      }
+    },
+    "changes": {
+      "empty": {
+        "title": "No changes",
+        "body": "Edits you make on the Tools tab and tests you save on Try it collect here."
+      },
+      "edits": {
+        "title": "Edits",
+        "unstage": "Remove",
+        "unstageNamed": "Remove the edit to {tool}"
+      },
+      "ops": {
+        "import": "Import {tool}",
+        "remove": "Remove {tool}",
+        "classify": "Classify {tool}: risk {risk}, side effect {sideEffect}",
+        "describe": "Describe {tool}",
+        "test": "Add a test call to {tool} in {environment}"
+      },
+      "files": {
+        "title": "Files",
+        "folderMissing": "Oxagen has not recorded this server's steering folder yet, so the paths are the defaults."
+      },
+      "surface": {
+        "title": "Tool surface",
+        "tokens": "Definition tokens",
+        "to": "to",
+        "none": "The tools agents see do not change.",
+        "tokensUnmeasured": "not measured",
+        "tokensAdded": "+{tokens} tokens",
+        "tokensRemoved": "−{tokens} tokens",
+        "columns": {
+          "change": "Change",
+          "tool": "Tool",
+          "detail": "Detail"
+        },
+        "kinds": {
+          "added": "Added",
+          "removed": "Removed",
+          "changed": "Changed"
+        },
+        "fields": {
+          "classification": "classification",
+          "description": "description"
+        }
+      },
+      "findings": {
+        "title": "Findings",
+        "missing": "The tool checks have not run on this draft yet.",
+        "none": "The tool checks found nothing.",
+        "server": "Server",
+        "columns": {
+          "level": "Level",
+          "rule": "Rule",
+          "tool": "Tool",
+          "message": "Message",
+          "fix": "Fix"
+        },
+        "levels": {
+          "error": "Error",
+          "warning": "Warning",
+          "info": "Info"
+        }
+      },
+      "pr": {
+        "title": "Steering PR",
+        "body": "Open steering PR writes the draft to the server's steering folder as a pull request. A person merges it before agents see the change.",
+        "open": "Open steering PR",
+        "opening": "Opening",
+        "discard": "Discard draft",
+        "readOnly": "Only an organization owner or admin can open a steering PR.",
+        "opened": "Opened steering PR #{number}",
+        "notBuilt": "Opening a steering PR from Studio is not available yet.",
+        "failed": "The steering PR did not open: {message}",
+        "updated": "Updated steering PR #{number}",
+        "conflict": "Someone saved this server's draft after you last did. Your edits are now staged on top of theirs. Check the edits, then open the steering PR again.",
+        "conflictDropped": "{count, plural, one {# edit did not fit the saved draft and was left out.} other {# edits did not fit the saved draft and were left out.}}",
+        "folderMissing": "Oxagen has not recorded this server's steering folder yet, so a steering PR cannot be opened from here.",
+        "sourceMissing": "The steering PR needs the server's definition to go with this draft, and Oxagen has not recorded it yet."
+      },
+      "review": {
+        "title": "Steering PR summary",
+        "imported": "Imported tools",
+        "removed": "Removed tools",
+        "reclassified": "Reclassified tools",
+        "tokens": "Definition tokens",
+        "tokensValue": "{definitions} of {budget}"
+      }
+    }
+  }
+}

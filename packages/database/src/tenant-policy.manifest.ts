@@ -251,6 +251,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // One embedding per search entry of a search-mode server (M15, ADR-217):
   // orgScopeMixin → standard.
   { table: "mcp.search_embeddings", policyClass: "standard" },
+  // The last tool discovery of each steering server (M10, #4682).
+  { table: "mcp.server_discoveries", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },

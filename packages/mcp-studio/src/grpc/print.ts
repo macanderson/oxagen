@@ -38,7 +38,7 @@ import {
   type ServiceDescriptorProto,
 } from "@bufbuild/protobuf/wkt";
 import type { Notes } from "../graphql/notes";
-import { doubleText, jsonNameOf, mapEntryNameOf } from "./descriptors";
+import { doubleText, floatText, jsonNameOf, mapEntryNameOf } from "./descriptors";
 import { GrpcImportError } from "./errors";
 import type { Symbols } from "./symbols";
 
@@ -552,11 +552,12 @@ class Printer {
       default: {
         if (!NUMBER.test(value) && !FLOAT_WORDS.has(value)) return drop(`protobufjs does not read ${value} as a number`);
         const float = type === T.FLOAT || type === T.DOUBLE;
-        const back = numberReadBack(value, float);
+        const back = numberReadBack(value, type);
         if (back !== undefined && back !== value) {
+          const same = type === T.FLOAT ? "Both read as the same 32-bit float" : "Both are the same number";
           this.notes.add(
             undefined,
-            `The .proto text import writes for ${this.file.name} changes the default value of ${where} from ${value} to ${back}. Both are the same number, and the second is how protoc writes it.`,
+            `The .proto text import writes for ${this.file.name} changes the default value of ${where} from ${value} to ${back}. ${same}, and the second is how protoc writes it.`,
           );
         }
         // protobufjs reads -0 as 0 and -0.0 as -0.
@@ -795,13 +796,15 @@ function isPlainEntryField(field: FieldDescriptorProto, name: string, number: nu
 /**
  * The default_value import gives a number default after reading `value` back
  * from the text, or undefined when descriptors.ts leaves it out with a note
- * of its own. A float or double comes back in protoc's form: 1e+10 is
- * 10000000000.
+ * of its own. A float or double comes back in protoc's form. A double 1e+10
+ * is 10000000000. A float is cast to 32 bits first, so 0.3333333333333333 is
+ * 0.333333343.
  */
-function numberReadBack(value: string, float: boolean): string | undefined {
+function numberReadBack(value: string, type: FieldDescriptorProto_Type): string | undefined {
   if (FLOAT_WORDS.has(value)) return value;
   const number = Number(value);
-  if (float) return doubleText(number);
+  if (type === T.FLOAT) return floatText(number);
+  if (type === T.DOUBLE) return doubleText(number);
   return Number.isSafeInteger(number) ? String(number) : undefined;
 }
 
