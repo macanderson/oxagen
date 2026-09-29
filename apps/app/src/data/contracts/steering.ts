@@ -154,7 +154,11 @@ export const ContextPr = z.object({
   onMerge: z.object({
     /** The record file merge publishes. */
     path: z.string().min(1),
-    /** The workspace's steering version, the promotion ledger's length, now and after merge. */
+    /**
+     * The promotion ledger's length now and after merge. It is not the
+     * steering version: a steering repo's first commit and each sync publish
+     * add a version and no ledger entry (#4732).
+     */
     bundleVersion: z.object({ current: Count, afterMerge: Count }),
   }),
   merged: z

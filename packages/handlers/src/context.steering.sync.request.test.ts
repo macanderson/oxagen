@@ -111,6 +111,35 @@ describe("githubDeliveryBranch", () => {
     },
   );
 
+  // open_context_pr opens a Context PR on steering/<lineage>, or on
+  // memory/<lineage> for a memory. A PR from before the steering layout may
+  // sit on context/<lineage>. Only the last was read before, so a
+  // Context PR closed unmerged never asked for the sync that settles it.
+  it.each([
+    "steering/ctx.release.no-reread-changelog",
+    "memory/ctx.release.no-reread-changelog",
+    "context/use-pnpm",
+  ])("reads the base branch of a Context PR on %s", (head) => {
+    expect(
+      githubDeliveryBranch("pull_request", {
+        action: "closed",
+        pull_request: { base: { ref: "main" }, head: { ref: head } },
+      }),
+    ).toBe("main");
+  });
+
+  it.each(["tools/github", "steeringx/use-pnpm", "feature/steering/x"])(
+    "ignores a pull request on %s, which no Context PR uses",
+    (head) => {
+      expect(
+        githubDeliveryBranch("pull_request", {
+          action: "closed",
+          pull_request: { base: { ref: "main" }, head: { ref: head } },
+        }),
+      ).toBeNull();
+    },
+  );
+
   it.each(["opened", "labeled", "assigned", "review_requested"])(
     "ignores a pull request that was %s",
     (action) => {
