@@ -199,7 +199,7 @@ describe("AssignRole", () => {
     expect(
       await within(dialog).findByTestId("assign-role-receipt"),
     ).toHaveTextContent(
-      "Agent Observer assigned to release-bot · “Audit prep”. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
+      "Agent Observer assigned to release-bot for “Audit prep”. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
     );
   });
 

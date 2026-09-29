@@ -103,7 +103,7 @@
       },
       "controls": {
         "search": "Search this list",
-        "facetAll": "All · {column}",
+        "facetAll": "All ({column})",
         "facetLabel": "Filter by {column}",
         "rows": "Rows",
         "all": "All",

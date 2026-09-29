@@ -373,10 +373,10 @@ describe("Tools › mandates ledger", () => {
     async (role) => {
       await renderLedger(mandateList([]), role);
       expect(
-        within(ledger()).getByText(/not every mandate this workspace has/),
+        within(ledger()).getByText(/You see the mandates of the agents you created/),
       ).toHaveAttribute("data-blind-spot", "reader_scope");
       expect(
-        within(ledger()).getByText(/not a statement that the workspace/),
+        within(ledger()).getByText(/may hold mandates you cannot see/),
       ).toHaveAttribute("data-state", "empty");
       expect(within(ledger()).queryByText(/recorded no mandate/)).toBeNull();
     },
@@ -389,10 +389,12 @@ describe("Tools › mandates ledger", () => {
     async (role) => {
       await renderLedger(mandateList([mandateRow()]), role);
       expect(
-        within(ledger()).getByText(/not every mandate this workspace has/),
+        within(ledger()).getByText(/You see the mandates of the agents you created/),
       ).toHaveAttribute("data-blind-spot", "reader_scope");
       expect(within(ledger()).getByRole("table")).toBeInTheDocument();
-      expect(within(ledger()).queryByText(/not a statement/)).toBeNull();
+      expect(
+        within(ledger()).queryByText(/may hold mandates you cannot see/),
+      ).toBeNull();
     },
   );
 
@@ -424,7 +426,7 @@ describe("Tools › mandates ledger", () => {
   it("says nothing of the sort to an accountable reader answered rows", async () => {
     await renderLedger(mandateList([mandateRow()]), "owner");
     expect(
-      within(ledger()).queryByText(/not every mandate this workspace has/),
+      within(ledger()).queryByText(/You see the mandates of the agents you created/),
     ).toBeNull();
   });
 

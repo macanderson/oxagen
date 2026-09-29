@@ -170,7 +170,7 @@ describe("Workspaces", () => {
       "",
     ]);
     expect(panel).toHaveTextContent(
-      "Changing which repository is main is an org-owner action with approval, recorded as a security event.",
+      "Changing which repository is main is an org-owner action with approval and is recorded as a security event.",
     );
   });
 

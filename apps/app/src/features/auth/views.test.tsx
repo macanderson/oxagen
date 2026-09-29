@@ -191,7 +191,9 @@ describe("InvitationBody", () => {
         />,
       );
       const card = screen.getByTestId("invite-card");
-      expect(card).toHaveTextContent("invited you on 10 Sep 2026");
+      expect(card).toHaveTextContent(
+        "Invited you as organization owner on 10 Sep 2026",
+      );
       expect(card).toHaveTextContent("11 Sep 2026");
       expect(card).not.toHaveTextContent("12 Sep 2026");
     },

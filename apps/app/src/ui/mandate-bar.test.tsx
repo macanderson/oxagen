@@ -281,8 +281,8 @@ describe("MandateBar", () => {
     const headings = screen
       .getAllByTestId("mandate-bar")
       .map((el) => el.textContent);
-    expect(headings[0]).toContain("· amount ·");
-    expect(headings[1]).toContain("· tax ·");
+    expect(headings[0]).toContain("for amount (");
+    expect(headings[1]).toContain("for tax (");
     const names = screen
       .getAllByRole("img")
       .map((el) => el.getAttribute("aria-label"));

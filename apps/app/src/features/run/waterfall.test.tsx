@@ -157,7 +157,7 @@ describe("WaterfallPanel", () => {
     // The run recorded more than its turns carry: both figures stand.
     expect(total.children[5]).toHaveTextContent("of $4.13 recorded");
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "2 turns · $4.13 gateway_observed",
+      "2 turns ($4.13 gateway_observed)",
     );
   });
 
@@ -228,7 +228,7 @@ describe("WaterfallPanel", () => {
       overrides: { cost: { micros: "4130000", currency: "USD", basis: null } },
     });
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "1 turn · $4.13 basis not recorded",
+      "1 turn ($4.13 basis not recorded)",
     );
   });
 

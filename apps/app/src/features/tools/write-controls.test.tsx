@@ -595,7 +595,7 @@ describe("FlipControls", () => {
     const radius = within(dialog).getByTestId("tools-flip-blast-radius");
     expect(radius).toHaveTextContent("Blast radius");
     expect(radius).toHaveTextContent(
-      "Every tool version carrying this impact",
+      "Every tool version in the organization that carries this impact",
     );
     // The blast radius is above the confirming button in the document.
     expect(
