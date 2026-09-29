@@ -41,6 +41,7 @@ import { createListRecordsHandler } from "./context.records.list";
 import { stringify } from "smol-toml";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
 import {
   memoryVersionStore,
   publish as publishBundle,
@@ -77,25 +78,6 @@ const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
 const BRANCH = `steering/${LINEAGE}`;
 const GOVERNANCE = ".oxagen/rules/governance.toml";
-
-/** A steering record as an author writes one: no id or hash yet. */
-function steeringRecord(lineage: string): string {
-  return [
-    "---",
-    "schema: steering-record/v1",
-    `lineage: ${lineage}`,
-    "label: A rule",
-    "kind: rule",
-    "force: should",
-    "scope: workspace",
-    "status: active",
-    "origin: user",
-    "---",
-    "",
-    "Do not re-read CHANGELOG.md more than once in a run.",
-    "",
-  ].join("\n");
-}
 
 /**
  * The fixture steering repo on main, with a clock after its ledger's last
@@ -2061,27 +2043,212 @@ describe("merge_context_pr", () => {
         conclusion: "success",
       }),
     ]);
+    // The file is a steering record with no id or hash: the merge stamps both.
+    const text = await h.github.readFile(REPO, out.pr!.path, BRANCH);
+    const read = readSteeringRecord(text!);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.record).toMatchObject({
+      schema: "steering-record/v1",
+      lineage: LINEAGE,
+      kind: "business-rule",
+      force: "should",
+      scope: "workspace",
+      status: "active",
+      origin: "user",
+      provenance: { source: "proposal", uri: `oxagen:proposal/${id}` },
+    });
+    expect(read.record.id).toBeUndefined();
+    expect(read.record.hash).toBeUndefined();
+  });
+
+  it("in a steering repo, retries onto the PR GitHub opened when recording it failed, at the same steering path and branch", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h);
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let fail = true;
+    store.updateProposal = async (rowId, patch, from, guard) => {
+      if (fail && patch.status === "pr_open") {
+        fail = false;
+        throw new Error("db blip");
+      }
+      return update(rowId, patch, from, guard);
+    };
+    const open = createOpenContextPrHandler(h);
+    await expect(open({ proposalId: id }, ctx())).rejects.toThrow("db blip");
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "proposed",
+      prNumber: null,
+      branch: BRANCH,
+      path: null,
+    });
+
+    const out = await open({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      number: 519,
+      branch: BRANCH,
+      path: `steering/business-rules/${LINEAGE}.md`,
+      headSha: "head2",
+    });
+    // Both attempts wrote the one file on the one branch.
+    expect(h.github.commits.map((c) => [c.branch, c.path])).toEqual([
+      [BRANCH, `steering/business-rules/${LINEAGE}.md`],
+      [BRANCH, `steering/business-rules/${LINEAGE}.md`],
+    ]);
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.checkRuns).toHaveLength(1);
+    expect(h.github.checkRuns[0]!.headSha).toBe("head2");
+  });
+
+  it("in a steering repo, writes a revision where the record lives now and keeps the fields the proposal does not set", async () => {
+    const h = steeringHarness();
+    const lineage = "a-intel.platform.tenant-queries";
+    const recordAt = `steering/platform/${lineage}.md`;
+    const at = new Date("2026-09-20T12:00:00.000Z");
+    h.store.records.push({
+      id: "id-tenant-queries",
+      publicId: "ctr_tenant_queries",
+      createdAt: at,
+      createdById: null,
+      updatedById: null,
+      updatedAt: at,
+      deletedAt: null,
+      deletedById: null,
+      orgId: SCOPE.orgId,
+      workspaceId: SCOPE.workspaceId,
+      slug: lineage,
+      label: "Tenant queries use withTenantDb",
+      activeVersionId: null,
+      version: 1,
+      checksum: null,
+      title: "Tenant queries use withTenantDb",
+      status: "active",
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      sharingScope: "repository",
+      statement: "Every tenant table query goes through withTenantDb.",
+      commitSha: "0000000000000000000000000000000000000001",
+      path: recordAt,
+      publishedAt: at,
+      activatedByUserId: null,
+      activatedAt: at,
+    } as never);
+    const id = await proposed(h, {
+      record: {
+        lineageId: lineage,
+        kind: "rule",
+        force: "must",
+        sharingScope: "repository",
+        statement:
+          "Every query on a tenant table goes through withTenantDb(ctx, fn), in handlers and in jobs.",
+      },
+    });
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    const branch = `steering/${lineage}`;
+    expect(out.pr).toMatchObject({ branch, path: recordAt });
+    expect(h.github.commits.map((c) => c.path)).toEqual([recordAt]);
+
+    const read = readSteeringRecord(
+      (await h.github.readFile(REPO, recordAt, branch))!,
+    );
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.record).toMatchObject({
+      lineage,
+      label: "Tenant queries use withTenantDb",
+      kind: "code-rule",
+      force: "must",
+      scope: "repository",
+      repos: ["github.com/a-intel/platform"],
+      applies_to: ["packages/handlers/**/*.ts", "packages/database/src/**"],
+      load: "match",
+      provenance: { source: "proposal", uri: `oxagen:proposal/${id}` },
+    });
+    // The statement changed, so the old description no longer describes it.
+    expect(read.record.description).toBeUndefined();
+    expect(read.record.id).toBeUndefined();
+    expect(read.record.hash).toBeUndefined();
+    expect(read.body.trim()).toBe(
+      "Every query on a tenant table goes through withTenantDb(ctx, fn), in handlers and in jobs.",
+    );
+  });
+
+  it("in a steering repo, writes a memory where the curator puts one, on a memory/ branch", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "memory",
+        force: "info",
+        sharingScope: "workspace",
+        statement: "CHANGELOG.md is regenerated on release, so one read per run is enough.",
+      },
+    });
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      branch: `memory/${LINEAGE}`,
+      path: `steering/memory/workspace/general/${LINEAGE}.md`,
+    });
+    const read = readSteeringRecord(
+      (await h.github.readFile(REPO, out.pr!.path, `memory/${LINEAGE}`))!,
+    );
+    expect(read.ok && read.record.kind).toBe("memory");
+  });
+
+  it("in a steering repo, refuses a new repository-scoped proposal before anything reaches the host", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h, {
+      record: { ...proposalInput().record, sharingScope: "repository" },
+    });
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "repository_scope_needs_repo",
+    });
+    expect(h.github.branches).toHaveLength(0);
+    expect(h.github.commits).toHaveLength(0);
+    expect(h.github.pulls).toHaveLength(0);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "proposed",
+      branch: null,
+      path: null,
+    });
+  });
+
+  it("in a steering repo, keeps the .oxagen/rules/ path a row recorded before #4731, and its Schema check names the branch it belongs on", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h);
+    // The row recorded the legacy path before steering records were written.
+    h.store.proposals[0]!.path = PATH;
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_failed");
+    expect(out.pr).toMatchObject({ branch: BRANCH, path: PATH });
+    const schema = out.checks.find((c) => c.name === "schema")!;
+    expect(schema.status).toBe("failed");
+    expect(schema.summary).toContain(`${PATH} is outside every folder`);
+    // The file stays a TOML record file.
+    expect(parseChecked((await h.github.readFile(REPO, PATH, BRANCH))!)).toMatchObject({
+      ok: true,
+    });
   });
 
   /**
-   * A steering-repo PR whose row passed. The proposal writer still writes
-   * .oxagen/rules/, which a steering repo refuses (the test above), so the
-   * branch is rewritten into a steering record and the row marked passed.
+   * A steering PR opened the way a person opens one, whose checks passed:
+   * a new rule written as a steering record at steering/business-rules/.
    */
   async function steeringPrPassed(h: Harness) {
     const id = await proposed(h);
-    await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
-    const recordAt = `steering/platform/${LINEAGE}.md`;
-    h.github.remove(BRANCH, PATH);
-    const head = h.github.commit(BRANCH, recordAt, steeringRecord(LINEAGE));
-    const row = h.store.proposals[0]!;
-    Object.assign(row, {
-      status: "checks_passed",
-      headSha: head,
-      path: recordAt,
-      checks: row.checks.map((c) => ({ ...c, status: "passed" })),
-    });
-    return { id, head, recordAt };
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    const row = h.store.proposals.find((p) => p.publicId === id)!;
+    return { id, head: row.headSha!, recordAt: row.path! };
   }
 
   /**

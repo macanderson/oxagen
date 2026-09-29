@@ -1,9 +1,14 @@
 // open_context_pr — the pull request that publishes a proposal (ADR-061; MC
-// spec §10.3 step 1-2): a branch `context/<lineage>` from the production
-// branch of the workspace's repository, the single record file under
-// `.oxagen/rules/`, the PR with its body, then the six §10.3 checks one at a
-// time, each mirrored as a GitHub check run or a GitLab commit status. On a
-// GitLab main project the PR is a merge request (#3762). Calling it again on a proposal
+// spec §10.3 step 1-2): a branch from the production branch of the
+// workspace's repository, the single record file, the PR with its body, then
+// the six §10.3 checks one at a time, each mirrored as a GitHub check run or a
+// GitLab commit status. The branch and file follow the repository's layout
+// (#4731). A legacy repository gets `.oxagen/rules/<lineage>.toml` on
+// `steering/<lineage>`. A steering repository gets a steering record at
+// `steering/<kind folder>/<lineage>.md` on `steering/<lineage>`, or a memory
+// at `steering/memory/workspace/general/<lineage>.md` on `memory/<lineage>`.
+// A revision is written where the record lives now. On a GitLab main project
+// the PR is a merge request (#3762). Calling it again on a proposal
 // whose PR is open re-runs the checks on the same PR: one concern, one pull
 // request. The handler gates on the caller's org or workspace role, which
 // only a signed-in user holds; an API key carries no user, so the MCP and CLI
@@ -96,7 +101,7 @@ export const contextPrOpen = registerCapability({
   name: "open_context_pr",
   domain: "context",
   description:
-    "Open the Context PR for a proposal: branch context/<lineage> from the production branch, the single record file under .oxagen/rules/, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs or GitLab commit statuses. On GitLab the PR is a merge request. Re-runs the checks when the PR is already open.",
+    "Open the Context PR for a proposal: a branch from the production branch, the single record file, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs or GitLab commit statuses. In a legacy repository the file is .oxagen/rules/<lineage>.toml on steering/<lineage>. In a steering repository it is a steering record at steering/<kind folder>/<lineage>.md on steering/<lineage>, or for a memory steering/memory/workspace/general/<lineage>.md on memory/<lineage>. A revision is written where the record lives now. A repository-scoped proposal in a steering repository is refused repository_scope_needs_repo unless the record it revises lists its repos. On GitLab the PR is a merge request. Re-runs the checks when the PR is already open.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
