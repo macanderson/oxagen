@@ -138,12 +138,12 @@ The current assistant flyout and the retained API chat transport are separate su
 Mac set this rule on 2026-09-21 and restated it on 2026-09-29, after the steering page shipped "Everything written down" and a "Who receives it" button. It applies to every UI string, doc, and mockup in this repository.
 
 - **A heading names the thing.** Write a plain noun or noun phrase: "All items", "Origin", "Governance mode". Do not write a question phrase ("Who receives it", "Where it came from", "What merge will do"), an "Everything ..." slogan, or wordplay.
-- **A button says what it does.** Write a verb and its object, in the form its sibling buttons use: "Open the assignments", "Open the compiler".
+- **A button says what it does.** Write a verb and its object, in the form its sibling buttons use: "Open the assignments", "Open the compiler". Name the object, not a pronoun: "Remove provider", not "Remove it" or "Read them".
 - **A caption, tile note, badge, or hint states one fact.** It carries no comma, no mid-dot (·), and no "not" or "never" contrast. "count per kind", not "one shape, every kind".
 - **Subtext under a heading is one sentence or nothing.** Cut slogans such as "One concern, one pull request." and "The harness owns the context window."
 - **The mockup's wording does not override this rule.** ADR-226 makes the v3 mockup the design of record for layout and behavior. Many of its labels break this rule, so rename a mockup label when you port it, and keep the mockup's structure.
 
-Load `clear-prose` before you write any of these strings.
+Load `clear-prose` before you write any of these strings. `apps/app/src/test/arch/label-voice.test.ts` (INV-34) fails CI on the shapes it can read in `apps/app/messages/*.json`. It cannot read meaning, so read every catalogue diff for a slogan too.
 
 ## Type
 
