@@ -559,7 +559,13 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     sourceFields(files.parsed, mcpServerId),
     seams.now(),
   );
-  const everFinished = (run.prior?.finishedAt ?? null) !== null;
+  // A failed attempt discovered nothing, so it must not spend the one
+  // scheduled discovery an on-change server gets before its first push.
+  // runDiscovery records a retriable failure on the row, finishedAt and
+  // all, before it throws, so reading finishedAt alone made the Inngest
+  // retry read its own failure as a completed discovery and skip.
+  const everFinished =
+    run.prior?.status !== "failed" && (run.prior?.finishedAt ?? null) !== null;
   if (!scheduleAllows(run.trigger, files.parsed.sync.schedule, everFinished)) {
     return finished(kept, "skipped");
   }

@@ -1339,6 +1339,28 @@ describe("listMcpTools", () => {
     expect(refusal.retriable).toBe(false);
     expect(onlyCall(sent, "tools/list").cancel).toHaveBeenCalledTimes(1);
   });
+
+  it("marks the run's own deadline passing as a failure a retry can pass", async () => {
+    const { transport, sent } = fakeTransport(
+      mcpServer(
+        on("tools/list", { status: 200, headers: JSON_TYPE, hang: true }),
+      ),
+    );
+
+    // runDiscovery hands the run an AbortSignal.timeout, so pagination that
+    // outlasts the run arrives here while every single request is still
+    // inside its own deadline. That is a timeout, not a cancel.
+    const refusal = await refusalOf(
+      listMcpTools(listRequest(transport, { signal: AbortSignal.timeout(50) })),
+    );
+
+    expect(refusal.code).toBe("source");
+    expect(refusal.message).toBe(
+      `The discovery run's deadline passed before ${HOST} answered.`,
+    );
+    expect(refusal.retriable).toBe(true);
+    expect(onlyCall(sent, "tools/list").cancel).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── A credential in a refusal ────────────────────────────────────────────────

@@ -287,11 +287,33 @@ function routeOf(options: {
   };
 }
 
+/**
+ * True when a signal aborted because a deadline passed, not because someone
+ * cancelled it. `AbortSignal.timeout()` aborts with a `TimeoutError`, while
+ * `AbortController.abort()` raises an `AbortError` or the caller's own reason.
+ * A deadline can pass on a later attempt; a cancel cannot.
+ */
+function abortedOnDeadline(reason: unknown): boolean {
+  return (
+    typeof reason === "object" &&
+    reason !== null &&
+    (reason as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
 function failed(route: Route, error: unknown): DiscoveryRefused {
   if (error instanceof DiscoveryRefused) return error;
   if (route.caller.aborted) {
+    // The run's own signal is its deadline (AbortSignal.timeout over
+    // DISCOVERY_TIMEOUT_MS), so pagination that outlasts the run while every
+    // single request stays inside its own deadline arrives here. That is a
+    // timeout and can pass later, unlike a cancel.
+    const onDeadline = abortedOnDeadline(route.caller.reason);
     return refused(
-      `The discovery run ended before ${route.endpoint.host} answered.`,
+      onDeadline
+        ? `The discovery run's deadline passed before ${route.endpoint.host} answered.`
+        : `The discovery run ended before ${route.endpoint.host} answered.`,
+      onDeadline,
     );
   }
   if (route.signal.aborted) {
