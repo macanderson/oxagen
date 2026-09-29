@@ -120,7 +120,11 @@ describe("ListTable", () => {
     const size = rowsSelect();
     expect(size).toHaveTextContent("10");
     await user.click(size);
-    const options = await screen.findAllByRole("option");
+    // The filters are native selects whose options are always in the page,
+    // so read the choices from the Rows popup alone.
+    const options = within(await screen.findByRole("listbox")).getAllByRole(
+      "option",
+    );
     expect(options.map((o) => o.textContent)).toEqual([
       "5",
       "10",
