@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeParity,
+  isAppSource,
   parseContract,
   resolveInvoked,
 } from "./check_ui_parity.mjs";
@@ -40,6 +41,63 @@ describe("resolveInvoked", () => {
   it("ignores idents/strings that are not registered capabilities", () => {
     const src = `invoke(somethingElse.name, x); invoke("not.a.real.capability", y);`;
     expect(resolveInvoked(src, VALID, IDENT_TO_NAME).size).toBe(0);
+  });
+
+  // The regression: the app reads and writes through kernelRead and
+  // kernelWrite, not invoke(), so the reverse check saw almost nothing it
+  // calls. The Steering page read get_steering_freshness, which declared no
+  // app layer, and nothing reported it.
+  it("resolves a kernelRead call by the contract key of its request", () => {
+    const src = `
+      const read = await kernelRead(ctx, {
+        contract: graphStats,
+        input: {},
+        page: "graph",
+      });
+    `;
+    const got = resolveInvoked(src, VALID, IDENT_TO_NAME);
+    expect(got).toEqual(new Set(["get_graph_stats"]));
+  });
+
+  it("resolves a kernelWrite call by its second argument, typed or not", () => {
+    const src = `
+      await kernelWrite(ctx, apiKeyCreate, input);
+      await kernelWrite<AuditPage>(
+        ctx,
+        auditLogQuery,
+        { cursor },
+      );
+    `;
+    const got = resolveInvoked(src, VALID, IDENT_TO_NAME);
+    expect(got).toEqual(new Set(["create_api_key", "query_audit_log"]));
+  });
+
+  it("ignores a contract key or kernelWrite argument that names no contract (negative)", () => {
+    const src = `
+      type Call = { contract: ReadContract<I, O>; input: I };
+      await kernelWrite(ctx, somethingElse, input);
+      const options = { contract: undefined };
+    `;
+    expect(resolveInvoked(src, VALID, IDENT_TO_NAME).size).toBe(0);
+  });
+});
+
+describe("isAppSource", () => {
+  it("keeps the app's TypeScript and TSX files", () => {
+    expect(isAppSource("apps/app/src/data/live/steering.ts")).toBe(true);
+    expect(isAppSource("apps/app/src/ui/record-card.tsx")).toBe(true);
+  });
+
+  it("drops tests, the probes under src/test/, and other file types", () => {
+    expect(isAppSource("apps/app/src/features/x/x.test.tsx")).toBe(false);
+    expect(isAppSource("apps/app/src/server/kernel.spec.ts")).toBe(false);
+    expect(isAppSource("apps/app/src/test/architecture/probe.ts")).toBe(false);
+    expect(isAppSource("apps/app/src/features/steering/view.css")).toBe(false);
+  });
+
+  it("reads a Windows path the same as a POSIX one", () => {
+    expect(isAppSource("apps\\app\\src\\test\\probe.ts")).toBe(false);
+    expect(isAppSource("apps\\app\\src\\server\\kernel.ts")).toBe(true);
   });
 });
 
