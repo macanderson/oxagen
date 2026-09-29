@@ -12,6 +12,7 @@ import {
   SearchIndexError,
   effectiveAnnotations,
   execute,
+  inputRefusal,
   type CallToolResult,
   type CredentialSource,
   type ManifestServer,
@@ -204,10 +205,15 @@ async function emergencyRefusal(
   environment: { name: string } | null,
 ): Promise<Answer | null> {
   const { server, tool } = entry;
-  // The reference executeCall resolves: the sandbox environment's, when the
-  // server takes a credential at all.
+  // The connection a switch can name: the sandbox environment's credential,
+  // and only in service mode. An operator-oauth environment's reference names
+  // a preregistered OAuth client rather than a connection, and the token the
+  // call runs on is the operator's own, so a connection switch must not reach
+  // it. Every other scope still does.
   const credential =
-    environment === null || server.auth === null ? null : (server.environments[environment.name]?.credential ?? null);
+    environment === null || server.auth === null || server.auth.mode !== "service"
+      ? null
+      : (server.environments[environment.name]?.credential ?? null);
   let deny: EmergencyDeny | null;
   try {
     deny = await ports.emergencyDeny({
@@ -359,6 +365,13 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     );
   }
   if (verdict.decision !== "allow") return refusal(denial(agent, tool.name, verdict), "denied");
+
+  // The executor's schema check, run here so it comes before the claim. An
+  // approved call whose arguments the tool's input schema refuses sends
+  // nothing, so it leaves the approval for the retry instead of spending it.
+  // It sits after the decision, so a policy denial is still reported as one.
+  const badArguments = inputRefusal(tool.definition.inputSchema, args);
+  if (badArguments !== null) return refusal(badArguments, "failed");
 
   if (environment === null) {
     return refusal(

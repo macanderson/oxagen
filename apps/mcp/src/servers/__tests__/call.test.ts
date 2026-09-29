@@ -318,6 +318,22 @@ describe("callServed policy decisions", () => {
     expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
 
+  it("leaves an approval unused when the arguments do not match the tool's input schema", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+    });
+    // create_refund requires charge. Cedar reads the amount and the rule
+    // parks the call, so the schema is the only thing that refuses it.
+    const result = await call("billing__create_refund", { amount: 100 });
+    expect(result?.isError).toBe(true);
+    expect(textOf(result)).toBe("The arguments do not match the tool's input schema. input.charge is required.");
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
   it("leaves an approval unused when the credential is not connected", async () => {
     const { call, recorded } = await setup({
       approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
@@ -682,6 +698,32 @@ describe("callServed kill switches", () => {
     const { call, recorded } = await setup({}, version);
     await call("billing__list_charges");
     expect(recorded.emergencyDenies.map((checked) => checked.credential)).toEqual([null]);
+  });
+
+  it("names no credential for an operator-oauth server, so a connection switch does not reach it", async () => {
+    const version = published({
+      servers: [server({ ...sourceNamed("billing"), authMode: "operator-oauth" })],
+    });
+    const { call, recorded } = await setup({}, version);
+    await call("billing__list_charges");
+    // The environment still names oxagen:credential/billing-sandbox, but in
+    // operator-oauth mode that reference is a preregistered OAuth client and
+    // the call runs on the operator's own token, so it is not a connection.
+    expect(recorded.emergencyDenies.map((checked) => checked.credential)).toEqual([null]);
+  });
+
+  it("still stops an operator-oauth call at every other scope", async () => {
+    const version = published({
+      servers: [server({ ...sourceNamed("billing"), authMode: "operator-oauth" })],
+    });
+    const { call, recorded } = await setup(
+      { emergencyDeny: () => Promise.resolve({ id: "emd_1", targetKind: "operator", targetId: "usr_1", reason: INCIDENT }) },
+      version,
+    );
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toContain("Kill switch emd_1 on operator usr_1 stops billing__list_charges");
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__list_charges denied"]);
   });
 
   it("checks the tool a search-mode call names", async () => {

@@ -139,6 +139,8 @@ export interface ServerSpec {
   credential?: string;
   mode?: "direct" | "search";
   auth?: boolean;
+  /** The auth mode when auth is set. Defaults to service. */
+  authMode?: "service" | "operator-oauth";
 }
 
 function pinnedFor(source: ServerSpec["source"]): Record<string, unknown> {
@@ -191,7 +193,12 @@ export function server(spec: ServerSpec): ManifestServer {
     description: `The ${spec.name} server.`,
     source: { type: spec.source },
     pinned: pinnedFor(spec.source),
-    auth: spec.auth === true ? { mode: "service", scheme: "bearer", apply: { type: "http_bearer" } } : null,
+    auth:
+      spec.auth === true
+        ? spec.authMode === "operator-oauth"
+          ? { mode: "operator-oauth", scheme: "oauth", apply: { type: "http_bearer" } }
+          : { mode: "service", scheme: "bearer", apply: { type: "http_bearer" } }
+        : null,
     environments,
     exposure: { mode, definition_budget: 8000 },
     tokens: { definitions: 10 * spec.tools.length, request: 10 * spec.tools.length },
