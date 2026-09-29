@@ -573,11 +573,18 @@ describe("toSlackConnection", () => {
   it("copies no field it does not name, so a token beside the connection does not reach the page (negative)", () => {
     // The contract strips unknown keys when it parses; the mapper is the second
     // fence, so hand it the unparsed answer a future contract could produce.
+    // Built without a type annotation, so the extra keys reach the mapper the
+    // way an unparsed answer would, with no cast to hide them.
     const leaky = {
       ...connected,
       botToken: "xoxb-the-customer-bot-token",
-      channel: { ...connected.channel, webhook: "xoxb-in-the-channel-too" },
-    } as OrgSlackConnectionGetOutput;
+      channel: {
+        id: "C07ABCDEF12",
+        name: "steering-health",
+        isPrivate: true,
+        webhook: "xoxb-in-the-channel-too",
+      },
+    };
     const view = SlackConnection.parse(toSlackConnection(leaky));
     expect(Object.keys(view)).toEqual([
       "configured",

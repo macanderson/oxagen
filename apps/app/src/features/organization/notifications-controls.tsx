@@ -77,8 +77,11 @@ export function NotificationsControls({
     try {
       // A connection that starts leaves the page for Slack and answers
       // nothing, so the button keeps its busy label until the page goes.
-      const result: ActionResult<never> | undefined =
-        await startSlackConnection(org);
+      // The action's type says it always answers, but a redirect answers
+      // nothing at run time, so the result is read as possibly undefined.
+      const started: Promise<ActionResult<never> | undefined> =
+        startSlackConnection(org);
+      const result = await started;
       if (result && !result.ok) {
         setFailure(result);
         setBusy("idle");

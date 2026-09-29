@@ -37,11 +37,11 @@ function callback(query: Record<string, string>) {
 
 /** The page the browser is sent to, as path, tab, and outcome. */
 function landing(res: Response) {
-  const location = new URL(res.headers.get("location") ?? "");
+  const target = new URL(res.headers.get("location") ?? "");
   return {
-    path: location.pathname,
-    tab: location.searchParams.get("tab"),
-    slack: location.searchParams.get("slack"),
+    path: target.pathname,
+    tab: target.searchParams.get("tab"),
+    slack: target.searchParams.get("slack"),
   };
 }
 
