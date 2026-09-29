@@ -49,6 +49,20 @@ describe("meterEntry", () => {
     });
   });
 
+  it("records the run's session as the run when the request names a session", () => {
+    expect(meterEntry(event()).runId).toBe("tse_1");
+  });
+
+  it("records no run when the request names no session", () => {
+    const entry = meterEntry(event({ run: run({ sessionId: null, runPublicId: null }) }));
+    expect(entry.runId).toBeNull();
+    expect(entry.sessionId).toBeNull();
+  });
+
+  it("records no run when the session id is absent, even if a run id is known", () => {
+    expect(meterEntry(event({ run: run({ sessionId: null }) })).runId).toBeNull();
+  });
+
   it("attributes a workspace only when its id is a UUID", () => {
     expect(meterEntry(event()).workspaceId).toBeNull();
     expect(meterEntry(event({ run: run({ workspaceId: WORKSPACE }) })).workspaceId).toBe(WORKSPACE);

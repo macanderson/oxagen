@@ -666,9 +666,13 @@ describe("Spend › Findings", () => {
       "fnd_01k5rtop",
       "fnd_01k5rtgh",
     ]);
-    expect(screen.getByRole("navigation", { name: "Pages" })).toHaveTextContent(
-      "1 to 2 of 2",
-    );
+    // The range sits in the pager beside Rows, outside the Previous and Next
+    // landmark.
+    const pager = screen
+      .getByRole("navigation", { name: "Pages" })
+      .closest("[data-rows-pager]");
+    expect(pager).toHaveTextContent("1 to 2 of 2");
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 

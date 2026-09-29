@@ -242,7 +242,7 @@ describe("launch problems", () => {
             "the npm package's positional argument packageArguments[0] has no valueHint, so source.arguments cannot set it",
         },
         {
-          field: "source.arguments.root",
+          field: "source.registry_type",
           message: "the npm package has 2 arguments keyed root, so source.arguments cannot tell them apart",
         },
       ],
@@ -281,7 +281,7 @@ describe("launch problems", () => {
       ok: false,
       problems: [
         {
-          field: "source.arguments.--port",
+          field: "source.registry_type",
           message: "the npm package has 2 arguments keyed --port, so source.arguments cannot tell them apart",
         },
       ],

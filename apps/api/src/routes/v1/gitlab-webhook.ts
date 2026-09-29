@@ -40,7 +40,10 @@ import {
   healthRequests,
   type HealthSignal,
 } from "@oxagen/handlers/steering-repo/health";
-import { routeGitlabDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
+import {
+  routeGitlabDiscoveryPush,
+  type GitlabProject,
+} from "@oxagen/handlers/mcp-studio/discovery/webhook";
 import { eventClient } from "../../event-client";
 import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
@@ -122,16 +125,18 @@ const UNVERIFIED_OUTCOMES: ReadonlySet<string> = new Set([
 
 /**
  * Ask for the discovery of every on-change MCP server whose definition a
- * verified push changed (lane M10, #4682). It logs a failure and never
- * throws: the server's next discovery reads the definition anyway.
+ * verified push changed (lane M10, #4682). The push speaks only for the
+ * project of the connection that authenticated it. It logs a failure and
+ * never throws: the server's next discovery reads the definition anyway.
  */
 async function requestDefinitionDiscovery(
   outcome: string,
   body: unknown,
+  project: GitlabProject | null,
 ): Promise<void> {
-  if (UNVERIFIED_OUTCOMES.has(outcome)) return;
+  if (project === null || UNVERIFIED_OUTCOMES.has(outcome)) return;
   try {
-    await routeGitlabDiscoveryPush(body);
+    await routeGitlabDiscoveryPush(body, project);
   } catch (err) {
     logger.error(
       { err },
@@ -142,12 +147,26 @@ async function requestDefinitionDiscovery(
 
 gitlabWebhookRoute.post("/:connectionId", async (c) => {
   const body = await jsonBody(c.req);
-  const deps = { ...gitlabWebhookDeps(), requestHealthCheck };
+  const base = gitlabWebhookDeps();
+  // The connection's project, kept for the discovery request below.
+  const seen: { project: GitlabProject | null } = { project: null };
+  const deps = {
+    ...base,
+    requestHealthCheck,
+    async findConnection(publicId: string) {
+      const connection = await base.findConnection(publicId);
+      seen.project =
+        connection === null
+          ? null
+          : { id: connection.projectId, path: connection.projectPath };
+      return connection;
+    },
+  };
   const result = await handleGitLabWebhook(deps, {
     connectionPublicId: c.req.param("connectionId"),
     tokenHeader: c.req.header("x-gitlab-token") ?? null,
     body,
   });
-  await requestDefinitionDiscovery(result.outcome, body);
+  await requestDefinitionDiscovery(result.outcome, body, seen.project);
   return c.json({ outcome: result.outcome }, result.status);
 });

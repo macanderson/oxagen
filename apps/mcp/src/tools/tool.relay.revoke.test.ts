@@ -7,6 +7,8 @@
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext`.
 import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -101,8 +103,11 @@ describe("revoke_relay MCP tool", () => {
   });
 
   it("has no create_relay tool beside it, so no relay token reaches a transcript", () => {
-    expect(existsSync(new URL("./tool.relay.create.ts", import.meta.url))).toBe(
-      false,
-    );
+    // The sibling path is built from import.meta.url at runtime. rspack
+    // resolves `new URL("./name.ts", import.meta.url)` as a dependency, so
+    // spelling the absent file as a literal specifier fails the xmcp bundle
+    // rather than this assertion.
+    const here = dirname(fileURLToPath(import.meta.url));
+    expect(existsSync(join(here, "tool.relay.create.ts"))).toBe(false);
   });
 });

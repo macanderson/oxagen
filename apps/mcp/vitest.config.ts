@@ -98,6 +98,7 @@ export default defineConfig({
         // served tools (lane M15)
         "src/servers/call.ts",
         "src/servers/embeddings.ts",
+        "src/servers/kill-switch.ts",
         "src/servers/list.ts",
         "src/servers/names.ts",
         "src/servers/search.ts",

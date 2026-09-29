@@ -25,7 +25,7 @@ import {
   type SendCredential,
   type Transport,
 } from "@oxagen/mcp-studio";
-import type { Scrubber } from "./scrub";
+import { MIN_SECRET_LENGTH, type Scrubber } from "./scrub";
 import { DiscoveryRefused } from "./types";
 
 /**
@@ -53,9 +53,16 @@ const ACCEPT = "application/json, text/event-stream";
 // CR and LF would end a header early, and NUL ends it in some servers.
 const UNSAFE = /[\r\n\0]/;
 
-function refused(message: string): DiscoveryRefused {
-  return new DiscoveryRefused("source", message);
+function refused(message: string, retriable = false): DiscoveryRefused {
+  return new DiscoveryRefused("source", message, { retriable });
 }
+
+/** Transport failures a later attempt can get past. */
+const PASSING_TRANSPORT_ERRORS: ReadonlySet<string> = new Set([
+  "timeout",
+  "disconnected",
+  "not_sent",
+]);
 
 // ── The endpoint ─────────────────────────────────────────────────────────────
 
@@ -147,6 +154,22 @@ function checked(value: string, what: string): string {
 }
 
 /**
+ * A secret the scrubber can keep out of what discovery writes. The scrubber
+ * skips a value shorter than MIN_SECRET_LENGTH, so an upstream that echoes
+ * one back could put it in an error row, a snapshot, or a steering PR.
+ */
+function secret(value: string, what: string): string {
+  const safe = checked(value, what);
+  if (safe.length < MIN_SECRET_LENGTH) {
+    throw new DiscoveryRefused(
+      "credential",
+      `The ${what} is shorter than ${MIN_SECRET_LENGTH} characters, so discovery cannot keep it out of what it writes.`,
+    );
+  }
+  return safe;
+}
+
+/**
  * Place the credential as the executor does: a bearer token or a basic pair
  * in Authorization, and an API key where the scheme names. Each value goes
  * into the scrubber before any request carries it.
@@ -165,7 +188,7 @@ export function placeCredential(
         "Discovery through a relay is not available yet.",
       );
     case "bearer": {
-      const token = checked(credential.token, "access token");
+      const token = secret(credential.token, "access token");
       scrubber.add(token);
       return { headers: [["Authorization", `Bearer ${token}`]], query: [] };
     }
@@ -177,7 +200,7 @@ export function placeCredential(
           "A basic credential's user name cannot hold a colon (RFC 7617).",
         );
       }
-      const password = checked(credential.password, "password");
+      const password = secret(credential.password, "password");
       scrubber.add(password);
       const pair = Buffer.from(`${username}:${password}`, "utf8").toString(
         "base64",
@@ -197,7 +220,7 @@ export function placeCredential(
           "An API key needs an api_key auth scheme that names where it goes.",
         );
       }
-      const value = checked(credential.value, "API key");
+      const value = secret(credential.value, "API key");
       scrubber.add(value);
       switch (apply.in) {
         case "header":
@@ -264,25 +287,52 @@ function routeOf(options: {
   };
 }
 
+/**
+ * True when a signal aborted because a deadline passed, not because someone
+ * cancelled it. `AbortSignal.timeout()` aborts with a `TimeoutError`, while
+ * `AbortController.abort()` raises an `AbortError` or the caller's own reason.
+ * A deadline can pass on a later attempt; a cancel cannot.
+ */
+function abortedOnDeadline(reason: unknown): boolean {
+  return (
+    typeof reason === "object" &&
+    reason !== null &&
+    (reason as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
 function failed(route: Route, error: unknown): DiscoveryRefused {
   if (error instanceof DiscoveryRefused) return error;
   if (route.caller.aborted) {
+    // The run's own signal is its deadline (AbortSignal.timeout over
+    // DISCOVERY_TIMEOUT_MS), so pagination that outlasts the run while every
+    // single request stays inside its own deadline arrives here. That is a
+    // timeout and can pass later, unlike a cancel.
+    const onDeadline = abortedOnDeadline(route.caller.reason);
     return refused(
-      `The discovery run ended before ${route.endpoint.host} answered.`,
+      onDeadline
+        ? `The discovery run's deadline passed before ${route.endpoint.host} answered.`
+        : `The discovery run ended before ${route.endpoint.host} answered.`,
+      onDeadline,
     );
   }
   if (route.signal.aborted) {
     return refused(
       `${route.endpoint.host} did not answer within ${route.deadlineMs / 1000} seconds.`,
+      true,
     );
   }
   if (error instanceof TransportError) {
     return refused(
       `The request to ${route.endpoint.host} failed: ${error.message}`,
+      PASSING_TRANSPORT_ERRORS.has(error.code),
     );
   }
   const message = error instanceof Error ? error.message : String(error);
-  return refused(`The request to ${route.endpoint.host} failed: ${message}`);
+  return refused(
+    `The request to ${route.endpoint.host} failed: ${message}`,
+    true,
+  );
 }
 
 async function send(
@@ -392,6 +442,14 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
   }
 }
 
+/**
+ * A status that says the server could not answer now: a timeout, too many
+ * requests, or a server error. Any other status fails the same way again.
+ */
+function passingStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 function statusError(
   route: Route,
   what: string,
@@ -399,6 +457,7 @@ function statusError(
 ): DiscoveryRefused {
   return refused(
     `${route.endpoint.host} answered ${what} with HTTP ${status}.`,
+    passingStatus(status),
   );
 }
 
@@ -702,7 +761,9 @@ function scrubbed(scrubber: Scrubber, error: unknown): unknown {
   const message = scrubber.scrub(error.message);
   return message === error.message
     ? error
-    : new DiscoveryRefused(error.code, message);
+    : new DiscoveryRefused(error.code, message, {
+        retriable: error.retriable,
+      });
 }
 
 /** Open a session, page through tools/list, and end the session. */

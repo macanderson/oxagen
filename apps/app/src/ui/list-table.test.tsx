@@ -3,16 +3,22 @@
 // narrows the rows to those whose rendered text holds the query; a small
 // enumeration column offers a filter by the design's rule; a header
 // sorts its column ascending, then descending, then back to the caller's
-// order, as a number when the column is numeric; Rows sets the page size and
-// the pager walks the pages. A hidden column names itself through aria-label
-// and carries no text. Every test ends in an axe check.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// order, as a number when the column is numeric; the pager under the table
+// holds Rows, which sets the page size, the range, and Previous and Next,
+// which walk the pages. A hidden column names itself through aria-label and
+// carries no text. Every test ends in an axe check.
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
-import { pageList } from "./page-list";
 
 const COLUMNS = [
   { label: "Invoice" },
@@ -49,7 +55,35 @@ const visible = () =>
     .filter((tr) => tr.style.display !== "none")
     .map((tr) => tr.querySelector("td")?.textContent);
 
+/** The pager's Previous and Next, named as a landmark. */
 const pager = () => screen.getByRole("navigation", { name: "Invoices pages" });
+
+/** The pager under the table: Rows, the range, then Previous and Next. */
+const rowsPager = () => {
+  const el = document.querySelector<HTMLElement>("[data-rows-pager]");
+  if (el === null) throw new Error("the list has no pager");
+  return el;
+};
+
+/** The bar over the table: the search box and the filters. */
+const controls = () => {
+  const el = document.querySelector<HTMLElement>("[data-list-controls]");
+  if (el === null) throw new Error("the list has no control bar");
+  return el;
+};
+
+/** The range the pager prints beside Rows ("1–10 of 12"). */
+const range = () =>
+  rowsPager().querySelector("[data-range]")?.textContent ?? null;
+
+const rowsSelect = () =>
+  within(rowsPager()).getByRole("combobox", { name: "Rows" });
+
+const previousButton = () =>
+  within(pager()).getByRole("button", { name: "Previous page" });
+
+const nextButton = () =>
+  within(pager()).getByRole("button", { name: "Next page" });
 
 afterEach(async () => {
   try {
@@ -60,30 +94,31 @@ afterEach(async () => {
 });
 
 describe("ListTable", () => {
-  it("draws the search box, Rows at 10, the table and a 1–N of N pager", () => {
+  it("draws the search box, the table, and a pager with Rows at 10 and a 1–N of N range", () => {
     renderList(rowsOf(3));
     expect(
       screen.getByRole("searchbox", { name: "Search this list" }),
     ).toHaveAttribute("placeholder", "Search this list");
-    const rows = screen.getByRole("combobox", { name: "Rows" });
-    expect(rows).toHaveValue("10");
-    expect(
-      within(rows)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["5", "10", "25", "50", "All"]);
+    expect(rowsSelect()).toHaveTextContent("10");
     expect(visible()).toEqual(["OXA-001", "OXA-002", "OXA-003"]);
-    expect(pager()).toHaveTextContent("1–3 of 3");
-    expect(within(pager()).getByRole("button", { name: "1" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(range()).toBe("1–3 of 3");
+    expect(previousButton()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
+  });
+
+  it("puts Rows in the pager under the table, not in the bar over it", () => {
+    renderList(rowsOf(3));
+    const pagerEl = rowsPager();
     expect(
-      within(pager()).getByRole("button", { name: "Previous page" }),
-    ).toBeDisabled();
+      within(pagerEl).getByRole("combobox", { name: "Rows" }),
+    ).toBeInTheDocument();
     expect(
-      within(pager()).getByRole("button", { name: "Next page" }),
-    ).toBeDisabled();
+      within(controls()).queryByRole("combobox", { name: "Rows" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("table").compareDocumentPosition(pagerEl) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("carries each row's data attributes", () => {
@@ -103,11 +138,13 @@ describe("ListTable", () => {
     const search = screen.getByRole("searchbox", { name: "Search this list" });
     await userEvent.type(search, "oxa-01");
     expect(visible()).toEqual(["OXA-010", "OXA-011", "OXA-012"]);
-    expect(pager()).toHaveTextContent("1–3 of 3");
+    expect(range()).toBe("1–3 of 3");
     await userEvent.clear(search);
     await userEvent.type(search, "nothing here");
     expect(screen.getByText("No rows match.")).toBeInTheDocument();
-    expect(pager()).toHaveTextContent("0 of 0");
+    expect(range()).toBe("0 of 0");
+    expect(previousButton()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
   });
 
   it("sorts a numeric column as numbers: ascending, descending, then the given order", async () => {
@@ -131,57 +168,57 @@ describe("ListTable", () => {
     expect(visible()[0]).toBe("OXA-001");
   });
 
-  it("pages by the Rows size and walks the pages", async () => {
+  it("walks the pages with Next and Previous, each disabled at its end", async () => {
     renderList(rowsOf(12));
     expect(visible()).toHaveLength(10);
-    await userEvent.click(
-      within(pager()).getByRole("button", { name: "Next page" }),
-    );
+    expect(range()).toBe("1–10 of 12");
+    expect(previousButton()).toBeDisabled();
+    expect(nextButton()).toBeEnabled();
+    await userEvent.click(nextButton());
     expect(visible()).toEqual(["OXA-011", "OXA-012"]);
-    expect(pager()).toHaveTextContent("11–12 of 12");
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Rows" }),
+    expect(range()).toBe("11–12 of 12");
+    expect(nextButton()).toBeDisabled();
+    expect(previousButton()).toBeEnabled();
+    await userEvent.click(previousButton());
+    expect(visible()).toHaveLength(10);
+    expect(visible()[0]).toBe("OXA-001");
+    expect(range()).toBe("1–10 of 12");
+  });
+
+  it("pages by the size chosen in Rows, from the first page", async () => {
+    renderList(rowsOf(12));
+    await userEvent.click(nextButton());
+    expect(range()).toBe("11–12 of 12");
+    await userEvent.click(rowsSelect());
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
       "5",
-    );
-    expect(visible()).toHaveLength(5);
-    expect(pager()).toHaveTextContent("1–5 of 12");
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Rows" }),
+      "10",
+      "25",
+      "50",
       "All",
-    );
-    expect(visible()).toHaveLength(12);
-    expect(pager()).toHaveTextContent("1–12 of 12");
+    ]);
+    await userEvent.click(screen.getByRole("option", { name: "5" }));
+    await waitFor(() => {
+      expect(visible()).toHaveLength(5);
+    });
+    expect(rowsSelect()).toHaveTextContent("5");
+    expect(range()).toBe("1–5 of 12");
+    await userEvent.click(rowsSelect());
+    await userEvent.click(await screen.findByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(visible()).toHaveLength(12);
+    });
+    expect(rowsSelect()).toHaveTextContent("All");
+    expect(range()).toBe("1–12 of 12");
+    expect(nextButton()).toBeDisabled();
   });
 });
 
 describe("ListTable past the first screen", () => {
-  /** The pager's page buttons and gaps, in order. */
-  const pageItems = () =>
-    [...pager().querySelectorAll("span.ml-auto > *")]
-      .slice(1, -1)
-      .map((el) => el.textContent);
-
-  it("shows the first, the last and the pages beside the current one past seven pages, with a gap for the rest", async () => {
-    renderList(rowsOf(100));
-    expect(pageItems()).toEqual(["1", "2", "…", "10"]);
-    await userEvent.click(within(pager()).getByRole("button", { name: "2" }));
-    await userEvent.click(within(pager()).getByRole("button", { name: "3" }));
-    await userEvent.click(within(pager()).getByRole("button", { name: "4" }));
-    await userEvent.click(within(pager()).getByRole("button", { name: "5" }));
-    expect(pageItems()).toEqual(["1", "…", "4", "5", "6", "…", "10"]);
-    expect(pager()).toHaveTextContent("41–50 of 100");
-    await userEvent.click(within(pager()).getByRole("button", { name: "10" }));
-    expect(pageItems()).toEqual(["1", "…", "9", "10"]);
-    expect(
-      within(pager()).getByRole("button", { name: "Next page" }),
-    ).toBeDisabled();
-  });
-
   it("keeps a row off the page in the document, hidden, so what it holds survives a page turn", async () => {
     renderList(rowsOf(12));
-    await userEvent.click(
-      within(pager()).getByRole("button", { name: "Next page" }),
-    );
+    await userEvent.click(nextButton());
     const first = document.querySelector<HTMLElement>('[data-n="1"]');
     expect(first).not.toBeNull();
     expect(first?.style.display).toBe("none");
@@ -297,20 +334,20 @@ describe("ListTable filters", () => {
       </IntlProvider>,
     );
     expect(
-      screen
+      within(controls())
         .getAllByRole("combobox")
         .map((select) => select.getAttribute("aria-label")),
-    ).toEqual(["Status", null]);
+    ).toEqual(["Status"]);
   });
 
   it("offers a status-like column first, reads the values the cells show, and filters on one", async () => {
     renderStatuses(statusRows());
-    const filters = screen
+    const filters = within(controls())
       .getAllByRole("combobox")
       .map((select) => select.getAttribute("aria-label"));
     // Status before Currency though Currency has fewer values; Invoice is one
     // value per row and Amount is a number, so neither offers a filter.
-    expect(filters).toEqual(["Filter by Status", "Filter by Currency", null]);
+    expect(filters).toEqual(["Filter by Status", "Filter by Currency"]);
     const status = screen.getByRole("combobox", { name: "Filter by Status" });
     expect(
       within(status)
@@ -319,7 +356,7 @@ describe("ListTable filters", () => {
     ).toEqual(["All · Status", "open", "paid", "void"]);
     await userEvent.selectOptions(status, "paid");
     expect(visible()).toEqual(["OXA-0", "OXA-2", "OXA-4"]);
-    expect(pager()).toHaveTextContent("1–3 of 3");
+    expect(range()).toBe("1–3 of 3");
     await userEvent.selectOptions(
       screen.getByRole("combobox", { name: "Filter by Currency" }),
       "EUR",
@@ -418,7 +455,7 @@ describe("facetsOf", () => {
 });
 
 describe("ListTable: a caller's filters and empty line", () => {
-  it("draws the caller's filters between the search box and Rows", () => {
+  it("draws the caller's filters after the search box, and Rows in the pager under the table", () => {
     render(
       <IntlProvider>
         <ListTable
@@ -434,13 +471,13 @@ describe("ListTable: a caller's filters and empty line", () => {
       </IntlProvider>,
     );
     const search = screen.getByRole("searchbox", { name: "Search this list" });
-    const status = screen.getByRole("combobox", { name: "Status" });
-    const rows = screen.getByRole("combobox", { name: "Rows" });
+    const status = within(controls()).getByRole("combobox", { name: "Status" });
     expect(
       search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      status.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING,
+      screen.getByRole("table").compareDocumentPosition(rowsSelect()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -481,25 +518,4 @@ describe("leadingNumber", () => {
       expect(leadingNumber(text)).toBeNull();
     },
   );
-});
-
-describe("pageList", () => {
-  it("draws every page up to seven, then the first, the neighbours of the current page and the last", () => {
-    expect(pageList(1, 1)).toEqual([1]);
-    expect(pageList(7, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(pageList(1, 8)).toEqual([1, 2, "gap-after", 8]);
-    expect(pageList(10, 20)).toEqual([
-      1,
-      "gap-before",
-      9,
-      10,
-      11,
-      "gap-after",
-      20,
-    ]);
-    expect(pageList(20, 20)).toEqual([1, "gap-before", 19, 20]);
-    // As in the design, an ellipsis can stand in for one page.
-    expect(pageList(4, 8)).toEqual([1, "gap-before", 3, 4, 5, "gap-after", 8]);
-    expect(pageList(3, 8)).toEqual([1, 2, 3, 4, "gap-after", 8]);
-  });
 });

@@ -83,7 +83,9 @@ function slots(pkg: RegistryPackage): { runtime: Slot[]; packaged: Slot[] } {
  * or unknown. A fixed argument counts toward a shared key. An entry with a
  * fixed --port and a settable --port passes both flags, and the package picks
  * one by its own rule. Arguments that are all fixed may share a name, since
- * source.arguments sets none of them.
+ * source.arguments sets none of them. A missing or shared key is a fault in
+ * the package, and no source.arguments edit fixes it, so the problem sits on
+ * source.registry_type.
  */
 function keyProblems(all: readonly Slot[], given: Readonly<Record<string, string>>, type: RegistryType): LaunchProblem[] {
   const problems: LaunchProblem[] = [];
@@ -102,7 +104,7 @@ function keyProblems(all: readonly Slot[], given: Readonly<Record<string, string
   for (const [name, count] of counts) {
     if (count > 1 && settable.has(name)) {
       problems.push({
-        field: `source.arguments.${name}`,
+        field: "source.registry_type",
         message: `the ${type} package has ${count} arguments keyed ${name}, so source.arguments cannot tell them apart`,
       });
     }
