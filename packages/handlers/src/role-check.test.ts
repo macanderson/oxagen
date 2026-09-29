@@ -161,6 +161,10 @@ const ROLE_CHECKED_CONTRACTS = [
   "list_capability_registry",
   "browse_plugin_catalog",
   "get_catalog_plugin",
+  // M12 (#4685): a relay token lets a process in your network carry the
+  // workspace's calls, so only an org Owner or Admin mints or revokes one.
+  "create_relay",
+  "revoke_relay",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

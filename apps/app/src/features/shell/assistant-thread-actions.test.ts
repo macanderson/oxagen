@@ -50,6 +50,7 @@ const THREAD = {
       parked: [],
       toolCalls: [],
       stopped: false,
+      attachments: [],
     },
   ],
   truncated: false,

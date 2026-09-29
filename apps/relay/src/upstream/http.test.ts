@@ -1,12 +1,14 @@
 // http.test.ts: the HTTP sender against a node:http server on 127.0.0.1.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { Agent as HttpsAgent } from "node:https";
 import type { AddressInfo } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { DATA_CHUNK_BYTES } from "@oxagen/relay-broker/protocol";
-import { afterEach, describe, expect, it } from "vitest";
-import type { HeaderEntry } from "../credentials";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ClientCertificate, HeaderEntry } from "../credentials";
+import { testCertificate } from "../test/certificate";
 import { RecordingSink, type SinkEvent } from "../test/fixtures";
-import { createHttpUpstream, type HttpUpstream } from "./http";
+import { agentFor, createHttpAgents, createHttpUpstream, destroyAgents, type HttpUpstream } from "./http";
 import type { RelayHttpTarget } from "./types";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -31,6 +33,7 @@ interface CallOptions {
   headers?: HeaderEntry[];
   body?: string;
   deadlineMs?: number;
+  clientCert?: ClientCertificate;
   sink?: RecordingSink;
   controller?: AbortController;
 }
@@ -113,11 +116,20 @@ function send(upstream: HttpUpstream, port: number, options: CallOptions = {}): 
     headers: options.headers ?? [],
     body: Buffer.from(options.body ?? ""),
     deadlineMs: options.deadlineMs ?? 2_000,
+    clientCert: options.clientCert,
     signal: controller.signal,
     sink,
   });
   return { sink, controller };
 }
+
+/** A mutual_tls credential's pair, as credentials.ts reads it. */
+function clientCert(name = "BILLING_API"): ClientCertificate {
+  return { name, ...testCertificate(name.toLowerCase()) };
+}
+
+/** A pair that does not load, holding a string no message may quote. */
+const BAD_PAIR: ClientCertificate = { name: "BILLING_API", cert: "not a certificate s3cret", key: "not a key s3cret" };
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
   const parts: Buffer[] = [];
@@ -454,6 +466,44 @@ describe("createHttpUpstream", () => {
     expect(await sink.done).toMatchObject({ kind: "fail", code: "upstream", sent: false });
   });
 
+  it("fails with upstream and sent false when an https target with a client certificate answers without TLS", async () => {
+    const server = await listen((_req, res) => res.end("plain"));
+
+    const { sink } = send(newUpstream(), server.port, { scheme: "https", clientCert: clientCert() });
+
+    expect(await sink.done).toMatchObject({ kind: "fail", code: "upstream", sent: false });
+  });
+
+  it("refuses a client certificate on an http target and opens no connection", async () => {
+    const server = await listen((_req, res) => res.end("plain"));
+
+    const { sink } = send(newUpstream(), server.port, { clientCert: clientCert() });
+
+    expect(await sink.done).toEqual({
+      kind: "fail",
+      code: "upstream",
+      message: "Credential BILLING_API presents a client certificate, which needs an https target.",
+      sent: false,
+    });
+    expect(server.connections()).toBe(0);
+  });
+
+  it("fails with upstream and sent false when the client certificate does not load, naming only the credential", async () => {
+    const server = await listen((_req, res) => res.end("plain"));
+
+    const { sink } = send(newUpstream(), server.port, { scheme: "https", clientCert: BAD_PAIR });
+
+    const done = await sink.done;
+    expect(done).toEqual({
+      kind: "fail",
+      code: "upstream",
+      message: "The relay could not load the client certificate for credential BILLING_API.",
+      sent: false,
+    });
+    expect(JSON.stringify(done)).not.toContain("s3cret");
+    expect(server.connections()).toBe(0);
+  });
+
   it("reuses a kept-alive connection for the next call", async () => {
     const server = await listen((_req, res) => res.end("ok"));
     const upstream = newUpstream();
@@ -487,5 +537,63 @@ describe("createHttpUpstream", () => {
 
     expect(() => upstream.close()).not.toThrow();
     expect(() => upstream.close()).not.toThrow();
+  });
+});
+
+describe("agentFor", () => {
+  it("gives a plain call the http agent and an https call with no certificate the shared https agent", () => {
+    const agents = createHttpAgents();
+
+    expect(agentFor(agents, false)).toBe(agents.http);
+    expect(agentFor(agents, true)).toBe(agents.https);
+    expect(agents.mutual.size).toBe(0);
+    destroyAgents(agents);
+  });
+
+  it("makes one agent per credential, reuses it, and loads that credential's pair into it", () => {
+    const agents = createHttpAgents();
+    const billing = clientCert("BILLING_API");
+    const ledger = clientCert("LEDGER_API");
+
+    const first = agentFor(agents, true, billing);
+
+    expect(agentFor(agents, true, billing)).toBe(first);
+    expect(first).not.toBe(agents.https);
+    expect((first as HttpsAgent).options).toMatchObject({ cert: billing.cert, key: billing.key, keepAlive: true });
+    const second = agentFor(agents, true, ledger);
+    expect(second).not.toBe(first);
+    expect((second as HttpsAgent).options).toMatchObject({ cert: ledger.cert, key: ledger.key });
+    expect([...agents.mutual.keys()]).toEqual(["BILLING_API", "LEDGER_API"]);
+    destroyAgents(agents);
+  });
+
+  it("throws before it makes an agent when the pair does not load", () => {
+    const agents = createHttpAgents();
+
+    expect(() => agentFor(agents, true, BAD_PAIR)).toThrow();
+    expect(agents.mutual.size).toBe(0);
+    destroyAgents(agents);
+  });
+
+  it("gives a call with a certificate but no TLS the http agent, and makes no agent for it", () => {
+    const agents = createHttpAgents();
+
+    expect(agentFor(agents, false, clientCert())).toBe(agents.http);
+    expect(agents.mutual.size).toBe(0);
+    destroyAgents(agents);
+  });
+});
+
+describe("destroyAgents", () => {
+  it("destroys every agent and forgets the per-credential ones", () => {
+    const agents = createHttpAgents();
+    const mutual = agentFor(agents, true, clientCert());
+    const destroyed = [vi.spyOn(agents.http, "destroy"), vi.spyOn(agents.https, "destroy"), vi.spyOn(mutual, "destroy")];
+
+    destroyAgents(agents);
+
+    for (const destroy of destroyed) expect(destroy).toHaveBeenCalledTimes(1);
+    expect(agents.mutual.size).toBe(0);
+    vi.restoreAllMocks();
   });
 });

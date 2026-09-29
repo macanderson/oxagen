@@ -39,7 +39,7 @@ function page(outcome: OAuthOutcome, title: string, body: string): Response {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer"><title>${escapeHtml(title)}</title>
-<style>body{font:15px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#fff;color:#111}@media (prefers-color-scheme:dark){body{background:#111;color:#eee}}main{max-width:28rem;padding:24px;text-align:center}</style>
+<style>body{font:15px/1.5 Geist,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#FFFFFF;color:#09090B}@media (prefers-color-scheme:dark){body{background:#09090B;color:#E4E4E7}}main{max-width:28rem;padding:24px;text-align:center}</style>
 </head><body><main><h1 style="font-size:18px">${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p></main>
 <script>(function(){var m=${scriptJson(outcome)};try{new BroadcastChannel(${scriptJson(MCP_OAUTH_CHANNEL)}).postMessage(m)}catch(e){}try{if(window.opener)window.opener.postMessage(m,window.location.origin)}catch(e){}setTimeout(function(){window.close()},400)})();</script>
 </body></html>`;

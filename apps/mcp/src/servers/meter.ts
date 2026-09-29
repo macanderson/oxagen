@@ -18,6 +18,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * The ledger entry for one governed action. It mirrors governedActionEntry,
  * ledgerKey, and attributableWorkspaceId, which this file cannot import at
  * run time without the billing runtime.
+ *
+ * The run is the tacho session the request names (its tse_ id), the id the
+ * approval for the same call records. A request that names no session
+ * records no run. Tacho ingest records the root session's id for a hook
+ * reported call, so a served call from a child session carries the child's id.
  */
 export function meterEntry(event: MeterEvent): GovernedActionEntry {
   const { run } = event;
@@ -35,7 +40,7 @@ export function meterEntry(event: MeterEvent): GovernedActionEntry {
     principalId: null,
     principalKind: null,
     operatorUserId: null,
-    runId: null,
+    runId: run.sessionId === null ? null : run.runPublicId,
     sessionId: run.sessionId,
     toolCallId: null,
     requestId: run.requestId,

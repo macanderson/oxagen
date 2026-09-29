@@ -386,8 +386,6 @@ export async function chooseAgents(
 
 /**
  * Recent runs by id, labelled with the name `summarize_run` gave them.
- *
- * @deregistered Retained with the replay UI under ADR-130.
  */
 export async function chooseRuns(
   org: string,

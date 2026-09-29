@@ -47,6 +47,7 @@ const message = (over: Record<string, unknown>) => ({
   parkedCards: [],
   toolCalls: [],
   stopped: false,
+  attachments: [],
   ...over,
 });
 
@@ -131,6 +132,7 @@ describe("conversations.latest", () => {
             parked: [],
             toolCalls: [],
             stopped: false,
+            attachments: [],
           },
           {
             id: "msg_a2",
@@ -140,6 +142,7 @@ describe("conversations.latest", () => {
             parked: [CARD],
             toolCalls: VIEW_CALLS,
             stopped: false,
+            attachments: [],
           },
         ],
         truncated: false,
@@ -168,6 +171,47 @@ describe("conversations.latest", () => {
 
     if (!read.ok) throw new Error(`the read failed: ${read.reason}`);
     expect(read.value?.messages.map((m) => m.stopped)).toEqual([false, true]);
+  });
+
+  it("carries the files sent with a question, without their digest (#4690)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        conversation: conversation([
+          message({
+            attachments: [
+              {
+                publicId: "gen_01k9chart",
+                name: "chart.png",
+                mediaType: "image/png",
+                sizeBytes: 2048,
+                sha256: "a".repeat(64),
+              },
+            ],
+          }),
+          message({
+            publicId: "msg_a2",
+            role: "assistant",
+            content: "The chart shows two runs.",
+            runId: "arun_0002",
+          }),
+        ]),
+      }),
+    );
+
+    const read = await conversations.latest(ctx);
+
+    if (!read.ok) throw new Error(`the read failed: ${read.reason}`);
+    expect(read.value?.messages.map((m) => m.attachments)).toEqual([
+      [
+        {
+          publicId: "gen_01k9chart",
+          name: "chart.png",
+          mediaType: "image/png",
+          sizeBytes: 2048,
+        },
+      ],
+      [],
+    ]);
   });
 
   it("answers null when the viewer has no conversation yet", async () => {

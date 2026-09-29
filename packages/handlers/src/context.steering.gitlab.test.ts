@@ -52,6 +52,9 @@ import {
 } from "./context.steering.test-support";
 
 const TOKEN = "glpat-stored-token-never-shown";
+/** The refusal for a project token, which the workspace connected itself. */
+const PROJECT_REJECTED =
+  "GitLab refused the project access token stored for acme/platform/rules. It was revoked, expired, or lost access to the project. Connect the project again with a new token.";
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
 const BRANCH = `steering/${LINEAGE}`;
@@ -437,6 +440,37 @@ describe("the GitLab seam", () => {
       expect(resolveToken).not.toHaveBeenCalled();
       expect(api.tokens).toEqual([]);
     });
+
+    const GROUP_REJECTED =
+      "GitLab refused the group access token stored for the group that holds the steering project acme/platform/rules. It was revoked, expired, or lost access to the project. An organization owner or admin must connect the group again with a new group access token.";
+
+    it("names the group token and the group repair when GitLab refuses it on resolve", async () => {
+      const api = new FakeGitLabApi();
+      api.revoked = true;
+      const { seam } = steeringSeam(api, GROUP_TOKEN);
+      const err = await seam.resolveRepository(SCOPE).catch((e: unknown) => e);
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "gitlab_credential_rejected",
+        message: GROUP_REJECTED,
+      });
+      expect((err as Error).message).not.toContain(GROUP_TOKEN);
+    });
+
+    it("names the group token when GitLab refuses it mid-flow, on the client and on plain REST", async () => {
+      const api = new FakeGitLabApi();
+      const { seam } = steeringSeam(api, GROUP_TOKEN);
+      const repo = await seam.resolveRepository(SCOPE);
+      api.revoked = true;
+      await expect(seam.readFile(repo, "x", "main")).rejects.toMatchObject({
+        reason: "gitlab_credential_rejected",
+        message: GROUP_REJECTED,
+      });
+      await expect(seam.listTree(repo, "c0")).rejects.toMatchObject({
+        reason: "gitlab_credential_rejected",
+        message: GROUP_REJECTED,
+      });
+    });
   });
 
   it("fails closed on a revoked token, naming the project and not the token", async () => {
@@ -447,8 +481,8 @@ describe("the GitLab seam", () => {
     expect(err).toMatchObject({
       code: "conflict",
       reason: "gitlab_credential_rejected",
+      message: PROJECT_REJECTED,
     });
-    expect((err as Error).message).toContain("acme/platform/rules");
     expect((err as Error).message).not.toContain(TOKEN);
   });
 
@@ -458,6 +492,11 @@ describe("the GitLab seam", () => {
     api.revoked = true;
     await expect(seam.readFile(repo, "x", "main")).rejects.toMatchObject({
       reason: "gitlab_credential_rejected",
+      message: PROJECT_REJECTED,
+    });
+    await expect(seam.listTree(repo, "c0")).rejects.toMatchObject({
+      reason: "gitlab_credential_rejected",
+      message: PROJECT_REJECTED,
     });
   });
 

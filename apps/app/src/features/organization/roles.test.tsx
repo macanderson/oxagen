@@ -108,7 +108,9 @@ describe("the Roles panel", () => {
     for (const filter of ["Kind", "Scope", "Origin"]) {
       expect(within(panel).getByLabelText(filter)).toBeInTheDocument();
     }
-    expect(within(panel).getByLabelText("Rows")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("combobox", { name: "Rows" }),
+    ).toBeInTheDocument();
   });
 
   it("names the columns in the design's order", async () => {

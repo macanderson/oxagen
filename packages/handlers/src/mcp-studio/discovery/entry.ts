@@ -92,6 +92,12 @@ export const SWEEP_LIMIT = 200;
 /** A daily server is due once its last discovery is this old. */
 export const DAILY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * A discovery queued or running this long has stalled. A run times out
+ * after 10 minutes and retries twice, so a live run never gets this old.
+ */
+export const STALLED_MS = 60 * 60 * 1000;
+
 const sendEvents: DiscoverySender = async (events) => {
   if (events.length === 0) return;
   await eventClient.send(
@@ -348,7 +354,9 @@ export async function runDiscoveryEvent(
  * - schedule, for every published server with no discovery yet;
  * - schedule, for every daily server whose last discovery is a day old;
  * - lock_merged, for every server with an open sync steering PR, so a merge
- *   releases the withheld tools and a closed PR is let go.
+ *   releases the withheld tools and a closed PR is let go;
+ * - the row's own trigger, for every discovery queued or running for an
+ *   hour, so a lost event or a dead worker does not strand the request.
  *
  * Each event carries an id for the hour, so a sweep that runs twice in one
  * hour sends each event once.
@@ -358,10 +366,11 @@ export async function planDiscoverySweep(
   deps: Pick<DiscoveryEntryDeps, "sweep"> = {},
 ): Promise<DiscoveryRequestEvent[]> {
   const sweep = deps.sweep ?? postgresDiscoverySweepStore;
-  const [fresh, due, open] = await Promise.all([
+  const [fresh, due, open, stalled] = await Promise.all([
     sweep.undiscovered(SWEEP_LIMIT),
     sweep.dueDaily(new Date(now.getTime() - DAILY_MS), SWEEP_LIMIT),
     sweep.openPullRequests(SWEEP_LIMIT),
+    sweep.stalled(new Date(now.getTime() - STALLED_MS), SWEEP_LIMIT),
   ]);
   const hour = now.toISOString().slice(0, 13);
   const events = new Map<string, DiscoveryRequestEvent>();
@@ -377,5 +386,6 @@ export async function planDiscoverySweep(
   add(fresh, "schedule");
   add(due, "schedule");
   add(open, "lock_merged");
+  for (const target of stalled) add([target], target.trigger);
   return [...events.values()];
 }

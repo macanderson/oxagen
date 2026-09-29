@@ -409,6 +409,14 @@ describe("the tool checks", () => {
     ]);
   });
 
+  it("keeps unknown_credential when the run leaves out the references check", async () => {
+    const lint = vi.fn<ServerLint>((folder) => (folder.name === "billing" ? FOUND : []));
+    const { findings } = await servers(fixtureRepo(), { base: null, checks: ["compile"] }, lint);
+    const rules = findings.map((finding) => finding.rule);
+    expect(rules).toContain("lint-unknown-credential");
+    expect(rules).not.toContain("lint-tool-not-offered");
+  });
+
   it("passes each folder with the lock's tools as offered and the vault's names as references", async () => {
     const lint = vi.fn<ServerLint>(() => []);
     await servers(fixtureRepo(), { base: null }, lint);
@@ -470,6 +478,33 @@ describe("runChecksWithServers", () => {
     const input = inputFor(STUDIO_SOURCE, { checks: ["schema"] });
     expect(await runChecksWithServers(input, { lint })).toEqual(runChecks({ ...input, servers: SERVER_READERS }));
     expect(lint).not.toHaveBeenCalled();
+  });
+
+  describe("a credential the vault does not hold", () => {
+    const head = replaced(
+      SERVER,
+      'credential = "oxagen:credential/billing-oauth-client"',
+      'credential = "oxagen:credential/billing-oauth"',
+    );
+    const credentialRules = new Set(["credential-exists", "lint-unknown-credential"]);
+
+    it("fails a compile-only run through the tool checks", async () => {
+      const compile = compileOf(await runChecksWithServers(inputFor(head, { checks: ["compile"] })));
+      expect(compile.findings.filter((finding) => finding.rule === "lint-unknown-credential")).toEqual([
+        expect.objectContaining({
+          severity: "error",
+          path: SERVER,
+          line: lineStarting(textOf(head, SERVER), "credential = "),
+          field: "auth.credential",
+        }),
+      ]);
+    });
+
+    it("is reported once, by the references check, when every check runs", async () => {
+      const report = await runChecksWithServers(inputFor(head));
+      const reported = report.findings.filter((finding) => credentialRules.has(finding.rule));
+      expect(reported.map((finding) => finding.rule)).toEqual(["credential-exists"]);
+    });
   });
 
   it("reports a folder whose check throws as one internal error on its server.toml", async () => {

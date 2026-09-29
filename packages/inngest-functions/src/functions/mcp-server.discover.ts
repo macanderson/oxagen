@@ -8,7 +8,9 @@
 // an imported tool's upstream moved.
 //
 // One discovery runs at a time per server, keyed by `event.data.key`, so two
-// requests for one server never open two PRs.
+// requests for one server never open two PRs. A discovery that fails for a
+// reason that can pass, such as an outage at the source, records the failure
+// and then throws, so the function retries it twice.
 import { NonRetriableError } from "@oxagen/functions";
 
 import { createFunction } from "../create-function";

@@ -1,5 +1,5 @@
-// Every list table on a page becomes a stack of cards on a phone (Mockups
-// origin/main mc.html `cardTables`, ARCHITECTURE.md §1.2): a table with one
+// Every list table on a page becomes a stack of cards on a phone (the rev1
+// mockup's `cardTables`, now history, ARCHITECTURE.md §1.2): a table with one
 // header row and no grouped header gets `data-cards`, and each of its body
 // cells the text of its column header as `data-label`, which src/ui/phone.css
 // prints beside the value so nothing scrolls sideways. A table with grouped
