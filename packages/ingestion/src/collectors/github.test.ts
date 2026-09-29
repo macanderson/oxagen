@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { github } from "../connectors/github/index";
 import { githubCollector, githubCollectorConfig, githubItemInScope } from "./github";
-import type { Connection, InboundRequest, ProviderItem, WriteBack, WriteBackTarget } from "./types";
+import type { Connection, InboundRequest, ItemRef, ProviderItem } from "./types";
 
 // Every GitHub call goes through the global fetch, which these tests replace.
 // A route answers one method and path. A request no route answers fails the test.
@@ -13,7 +13,7 @@ const TOKEN = "gho_user_token";
 const NODE_ID = "I_kwDOAAAA01";
 
 const conn: Connection = { id: "conn-1", auth: { scheme: "bearer_token", token: TOKEN } };
-const target: WriteBackTarget = { ref: { providerId: `issue:node:${NODE_ID}`, kind: "issue" }, conn };
+const issueRef: ItemRef = { providerId: `issue:node:${NODE_ID}`, kind: "issue" };
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -156,10 +156,6 @@ function withoutHeader(req: InboundRequest, name: string): InboundRequest {
   return { ...req, headers };
 }
 
-const locateIssue = graphql("LocateIssue", () => ({
-  data: { node: { __typename: "Issue", number: 42, repository: { nameWithOwner: "acme/web" } } },
-}));
-
 // ---------------------------------------------------------------------------
 // The collector
 // ---------------------------------------------------------------------------
@@ -170,7 +166,10 @@ describe("githubCollector", () => {
     expect(githubCollector.connectorId).toBe("github");
     expect(githubCollector.connectionConfigSchema).toBe(github.connectionConfigSchema);
     expect(githubCollector.deliveryMethod).toBe("webhook");
-    expect(githubCollector.writeBack).toBeDefined();
+  });
+
+  it("writes nothing back to GitHub", () => {
+    expect(githubCollector.writeBack).toBeUndefined();
   });
 
   it("carries none of the connector's poll or webhook members", () => {
@@ -447,8 +446,8 @@ describe("fetchById", () => {
       resolveIssue({ timelineItems: { nodes: [{ __typename: "IssueComment", author: { login: "commenter" } }] } }),
       on("GET", "/repos/acme/web/issues/42", jsonResponse(restIssue())),
     );
-    const item = await githubCollector.fetchById(target.ref, conn);
-    expect(item).toEqual({ ref: target.ref, updatedAt: "2026-09-20T12:00:00Z", record: { issue: restIssue(), lastActor: "commenter" } });
+    const item = await githubCollector.fetchById(issueRef, conn);
+    expect(item).toEqual({ ref: issueRef, updatedAt: "2026-09-20T12:00:00Z", record: { issue: restIssue(), lastActor: "commenter" } });
     expect(requests()).toEqual(["POST /graphql", "GET /repos/acme/web/issues/42"]);
     expect(requestBody(0)).toMatchObject({ variables: { id: NODE_ID } });
     const headers = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
@@ -457,7 +456,7 @@ describe("fetchById", () => {
 
   it("asks GraphQL only for timeline items that carry an actor", async () => {
     serve(resolveIssue({}), on("GET", "/repos/acme/web/issues/42", jsonResponse(restIssue())));
-    await githubCollector.fetchById(target.ref, conn);
+    await githubCollector.fetchById(issueRef, conn);
     const { query } = requestBody(0) as { query: string };
     expect(query).toContain("itemTypes: [ISSUE_COMMENT, ASSIGNED_EVENT,");
     expect(query).toContain("MARKED_AS_DUPLICATE_EVENT");
@@ -472,24 +471,29 @@ describe("fetchById", () => {
     [[null], null],
   ])("reads the last actor from timeline %j as %s", async (nodes, actor) => {
     serve(resolveIssue({ timelineItems: { nodes } }), on("GET", "/repos/acme/web/issues/42", jsonResponse(restIssue())));
-    const item = await githubCollector.fetchById(target.ref, conn);
+    const item = await githubCollector.fetchById(issueRef, conn);
     expect(item.record).toMatchObject({ lastActor: actor });
   });
 
   it("throws when the node is gone", async () => {
     serve(graphql("ResolveIssue", () => ({ data: { node: null }, errors: [{ type: "NOT_FOUND", message: "x" }] })));
-    await expect(githubCollector.fetchById(target.ref, conn)).rejects.toThrow(/no issue I_kwDOAAAA01/);
+    await expect(githubCollector.fetchById(issueRef, conn)).rejects.toThrow(/no issue I_kwDOAAAA01/);
   });
 
   it("throws when the node is not an issue", async () => {
     serve(graphql("ResolveIssue", () => ({ data: { node: { __typename: "PullRequest" } } })));
-    await expect(githubCollector.fetchById(target.ref, conn)).rejects.toThrow(/PullRequest, not an issue/);
+    await expect(githubCollector.fetchById(issueRef, conn)).rejects.toThrow(/PullRequest, not an issue/);
   });
 
   it("throws on a GraphQL error it does not expect, naming only its type", async () => {
     serve(graphql("ResolveIssue", () => ({ data: null, errors: [{ type: "FORBIDDEN", message: `token ${TOKEN}` }] })));
-    const error = await failure(githubCollector.fetchById(target.ref, conn));
+    const error = await failure(githubCollector.fetchById(issueRef, conn));
     expect(error.message).toBe("GitHub GraphQL returned errors: FORBIDDEN.");
+  });
+
+  it("throws when GraphQL returns a repository name that is not owner/name", async () => {
+    serve(resolveIssue({ repository: { nameWithOwner: "acme" } }));
+    await expect(githubCollector.fetchById(issueRef, conn)).rejects.toThrow(/not owner\/name/);
   });
 
   it("throws when the issue moved between the two reads", async () => {
@@ -497,19 +501,19 @@ describe("fetchById", () => {
       resolveIssue({}),
       on("GET", "/repos/acme/web/issues/42", jsonResponse(restIssue({ repository_url: `${API}/repos/acme/api`, number: 7 }))),
     );
-    await expect(githubCollector.fetchById(target.ref, conn)).rejects.toThrow(/moved/);
+    await expect(githubCollector.fetchById(issueRef, conn)).rejects.toThrow(/moved/);
   });
 
   it("names the method, path, and status of a failed read, and never the token", async () => {
     serve(resolveIssue({}), on("GET", "/repos/acme/web/issues/42", jsonResponse({ message: "Server Error" }, 502)));
-    const error = await failure(githubCollector.fetchById(target.ref, conn));
+    const error = await failure(githubCollector.fetchById(issueRef, conn));
     expect(error.message).toBe("GitHub GET /repos/acme/web/issues/42 returned HTTP 502.");
     expect(error.message).not.toContain(TOKEN);
   });
 
   it("throws on a GraphQL HTTP failure", async () => {
     serve(on("POST", "/graphql", jsonResponse({}, 401)));
-    await expect(githubCollector.fetchById(target.ref, conn)).rejects.toThrow("GitHub POST /graphql returned HTTP 401.");
+    await expect(githubCollector.fetchById(issueRef, conn)).rejects.toThrow("GitHub POST /graphql returned HTTP 401.");
   });
 
   it("refuses a provider id that is not an issue node id, before any request", async () => {
@@ -520,13 +524,13 @@ describe("fetchById", () => {
 
   it("refuses a connection with no token, naming the connection", async () => {
     const publicConn: Connection = { id: "conn-9", auth: { scheme: "public" } };
-    await expect(githubCollector.fetchById(target.ref, publicConn)).rejects.toThrow(/conn-9/);
+    await expect(githubCollector.fetchById(issueRef, publicConn)).rejects.toThrow(/conn-9/);
   });
 
   it("reads an api_key credential as the token", async () => {
     const keyConn: Connection = { id: "conn-3", auth: { scheme: "api_key", apiKey: "ghp_key" } };
     serve(resolveIssue({}), on("GET", "/repos/acme/web/issues/42", jsonResponse(restIssue())));
-    await githubCollector.fetchById(target.ref, keyConn);
+    await githubCollector.fetchById(issueRef, keyConn);
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer ghp_key");
   });
@@ -723,176 +727,5 @@ describe("listChangedSince", () => {
   it("throws on a cursor that is not a time", async () => {
     await expect(githubCollector.listChangedSince("yesterday", conn)).rejects.toThrow(/not an RFC 3339 time/);
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// writeBack
-// ---------------------------------------------------------------------------
-
-describe("writeBack", () => {
-  const writeBack: WriteBack = githubCollector.writeBack ?? {
-    note: () => Promise.reject(new Error("The GitHub collector has no write-back.")),
-    status: () => Promise.reject(new Error("The GitHub collector has no write-back.")),
-    close: () => Promise.reject(new Error("The GitHub collector has no write-back.")),
-    labels: () => Promise.reject(new Error("The GitHub collector has no write-back.")),
-  };
-
-  it("posts a note as an issue comment", async () => {
-    serve(locateIssue, on("POST", "/repos/acme/web/issues/42/comments", jsonResponse({ id: 1 }, 201)));
-    await writeBack.note(target, "Oxagen held the done record.");
-    expect(requests()).toEqual(["POST /graphql", "POST /repos/acme/web/issues/42/comments"]);
-    expect(requestBody(1)).toEqual({ body: "Oxagen held the done record." });
-    const headers = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
-    expect(headers["Content-Type"]).toBe("application/json");
-  });
-
-  it("closes the issue as completed", async () => {
-    serve(locateIssue, on("PATCH", "/repos/acme/web/issues/42", jsonResponse({}, 200)));
-    await writeBack.close(target);
-    expect(requests()).toEqual(["POST /graphql", "PATCH /repos/acme/web/issues/42"]);
-    expect(requestBody(1)).toEqual({ state: "closed", state_reason: "completed" });
-  });
-
-  it.each([
-    ["Open", "open"],
-    ["closed", "closed"],
-  ])("sets status %s as the issue state", async (status, state) => {
-    serve(locateIssue, on("PATCH", "/repos/acme/web/issues/42", jsonResponse({}, 200)));
-    await writeBack.status(target, status);
-    expect(requests()).toEqual(["POST /graphql", "PATCH /repos/acme/web/issues/42"]);
-    expect(requestBody(1)).toEqual({ state });
-  });
-
-  it("sets any other status as a label the repository already has", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/In%20Progress", jsonResponse({ name: "In Progress" })),
-      on("POST", "/repos/acme/web/issues/42/labels", jsonResponse([], 200)),
-    );
-    await writeBack.status(target, "In Progress");
-    expect(requests()).toEqual([
-      "POST /graphql",
-      "GET /repos/acme/web/labels/In%20Progress",
-      "POST /repos/acme/web/issues/42/labels",
-    ]);
-    expect(requestBody(2)).toEqual({ labels: ["In Progress"] });
-  });
-
-  it("creates no label for a status the repository lacks", async () => {
-    serve(locateIssue, on("GET", "/repos/acme/web/labels/Blocked", jsonResponse({ message: "Not Found" }, 404)));
-    await expect(writeBack.status(target, "Blocked")).rejects.toThrow(/has no label "Blocked"/);
-    expect(requests()).toEqual(["POST /graphql", "GET /repos/acme/web/labels/Blocked"]);
-  });
-
-  it("replaces the Priority and Type labels and keeps every other label", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/P1", jsonResponse({ name: "P1" })),
-      on("GET", "/repos/acme/web/labels/bug", jsonResponse({ name: "bug" })),
-      on("GET", "/repos/acme/web/issues/42/labels", jsonResponse([
-        { name: "P2" },
-        { name: "bug" },
-        { name: "area/auth" },
-        { name: "enhancement" },
-      ])),
-      on("DELETE", "/repos/acme/web/issues/42/labels/P2", jsonResponse([], 200)),
-      on("DELETE", "/repos/acme/web/issues/42/labels/enhancement", jsonResponse({ message: "Label does not exist" }, 404)),
-      on("POST", "/repos/acme/web/issues/42/labels", jsonResponse([], 200)),
-    );
-
-    await writeBack.labels(target, { priority: "P1", type: "Bug" });
-
-    expect(requests()).toEqual([
-      "POST /graphql",
-      "GET /repos/acme/web/labels/P1",
-      "GET /repos/acme/web/labels/bug",
-      "GET /repos/acme/web/issues/42/labels",
-      "DELETE /repos/acme/web/issues/42/labels/P2",
-      "DELETE /repos/acme/web/issues/42/labels/enhancement",
-      "POST /repos/acme/web/issues/42/labels",
-    ]);
-    expect(requestBody(6)).toEqual({ labels: ["P1"] });
-  });
-
-  it("maps New Feature to enhancement and leaves the Priority labels alone when priority is empty", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/enhancement", jsonResponse({ name: "enhancement" })),
-      on("GET", "/repos/acme/web/issues/42/labels", jsonResponse([{ name: "P0" }, { name: "bug" }])),
-      on("DELETE", "/repos/acme/web/issues/42/labels/bug", jsonResponse([], 200)),
-      on("POST", "/repos/acme/web/issues/42/labels", jsonResponse([], 200)),
-    );
-
-    await writeBack.labels(target, { priority: "", type: "New Feature" });
-
-    expect(requests()).toEqual([
-      "POST /graphql",
-      "GET /repos/acme/web/labels/enhancement",
-      "GET /repos/acme/web/issues/42/labels",
-      "DELETE /repos/acme/web/issues/42/labels/bug",
-      "POST /repos/acme/web/issues/42/labels",
-    ]);
-    expect(requestBody(4)).toEqual({ labels: ["enhancement"] });
-  });
-
-  it("posts nothing when the issue already carries both labels", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/P3", jsonResponse({ name: "P3" })),
-      on("GET", "/repos/acme/web/labels/Epic", jsonResponse({ name: "Epic" })),
-      on("GET", "/repos/acme/web/issues/42/labels", jsonResponse([{ name: "p3" }, { name: "epic" }])),
-    );
-    await writeBack.labels(target, { priority: "P3", type: "Epic" });
-    expect(requests()).toEqual([
-      "POST /graphql",
-      "GET /repos/acme/web/labels/P3",
-      "GET /repos/acme/web/labels/Epic",
-      "GET /repos/acme/web/issues/42/labels",
-    ]);
-  });
-
-  it("makes no request when both labels are empty", async () => {
-    await writeBack.labels(target, { priority: "", type: " " });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("removes nothing when a new label is missing", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/P0", jsonResponse({ name: "P0" })),
-      on("GET", "/repos/acme/web/labels/chore", jsonResponse({ message: "Not Found" }, 404)),
-    );
-    await expect(writeBack.labels(target, { priority: "P0", type: "Chore" })).rejects.toThrow(/has no label "chore"/);
-    expect(requests().some((r) => r.startsWith("DELETE"))).toBe(false);
-  });
-
-  it("throws when removing a label fails for a reason other than 404", async () => {
-    serve(
-      locateIssue,
-      on("GET", "/repos/acme/web/labels/P1", jsonResponse({ name: "P1" })),
-      on("GET", "/repos/acme/web/issues/42/labels", jsonResponse([{ name: "P2" }])),
-      on("DELETE", "/repos/acme/web/issues/42/labels/P2", jsonResponse({}, 403)),
-    );
-    await expect(writeBack.labels(target, { priority: "P1", type: "" })).rejects.toThrow(
-      "GitHub DELETE /repos/acme/web/issues/42/labels/P2 returned HTTP 403.",
-    );
-  });
-
-  it("throws when the label check fails for a reason other than 404", async () => {
-    serve(locateIssue, on("GET", "/repos/acme/web/labels/P1", jsonResponse({}, 500)));
-    await expect(writeBack.labels(target, { priority: "P1", type: "" })).rejects.toThrow(
-      "GitHub GET /repos/acme/web/labels/P1 returned HTTP 500.",
-    );
-  });
-
-  it("throws when a write fails, naming the method and path", async () => {
-    serve(locateIssue, on("POST", "/repos/acme/web/issues/42/comments", jsonResponse({}, 403)));
-    await expect(writeBack.note(target, "x")).rejects.toThrow("GitHub POST /repos/acme/web/issues/42/comments returned HTTP 403.");
-  });
-
-  it("throws when GraphQL returns a repository name that is not owner/name", async () => {
-    serve(graphql("LocateIssue", () => ({ data: { node: { __typename: "Issue", number: 42, repository: { nameWithOwner: "acme" } } } })));
-    await expect(writeBack.close(target)).rejects.toThrow(/not owner\/name/);
   });
 });

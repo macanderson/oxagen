@@ -11,9 +11,9 @@
 //
 // Identity. The provider id is `issue:node:<node_id>`, the node form in
 // ADR-121. A node id survives a repository rename. The REST read needs the
-// owner, the name, and the number, so fetchById and each write-back first
-// resolve the node id with one GraphQL query. A transferred issue gets a new
-// node id, so it arrives as a new work item.
+// owner, the name, and the number, so fetchById first resolves the node id
+// with one GraphQL query. A transferred issue gets a new node id, so it
+// arrives as a new work item.
 //
 // Scope. The contract passes no config to doorbell, fetchById, or
 // listChangedSince. listChangedSince reads every repository the connection
@@ -24,6 +24,9 @@
 // Outside text. People outside the workspace write issue titles, bodies, and
 // comments. toWorkItem marks subject and description tainted, and nothing in
 // this module hands that text to a model.
+//
+// Write-back. The collector defines no writeBack. Phase 1 of agent work keeps
+// source write-back off, so this module only reads from GitHub.
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { github } from "../connectors/github/index";
@@ -39,8 +42,6 @@ import type {
   Secret,
   VerifyResult,
   WorkItemInput,
-  WriteBack,
-  WriteBackTarget,
 } from "./types";
 
 const API_BASE = "https://api.github.com";
@@ -133,7 +134,6 @@ const repoSchema = z
   .object({ full_name: z.string(), has_issues: z.boolean().optional() })
   .passthrough();
 
-const labelListSchema = z.array(z.object({ name: z.string() }).passthrough());
 
 const doorbellSchema = z
   .object({
@@ -171,22 +171,6 @@ const TYPE_BY_ISSUE_TYPE: ReadonlyMap<string, string> = new Map([
   ["bug", "Bug"],
   ["feature", "New Feature"],
 ]);
-
-/** Oxagen label (lowercase) to the GitHub label write-back sets. */
-const GITHUB_LABEL_BY_OXAGEN: ReadonlyMap<string, string> = new Map([
-  ...PRIORITY_LABELS.map((p): [string, string] => [p.toLowerCase(), p]),
-  ["bug", "bug"],
-  ["new feature", "enhancement"],
-  ["improvement", "improvement"],
-  ["documentation", "documentation"],
-  ["test", "test"],
-  ["chore", "chore"],
-]);
-
-const PRIORITY_GITHUB_LABELS: ReadonlySet<string> = new Set(
-  PRIORITY_LABELS.map((p) => p.toLowerCase()),
-);
-const TYPE_GITHUB_LABELS: ReadonlySet<string> = new Set(TYPE_BY_GITHUB_LABEL.keys());
 
 /**
  * Timeline events whose actor made the change. tasks-spec §6.1 sets Updated
@@ -246,16 +230,6 @@ const RESOLVE_QUERY = `query ResolveIssue($id: ID!) {
   }
 }
 ${LAST_ACTOR_FRAGMENT}`;
-
-const LOCATE_QUERY = `query LocateIssue($id: ID!) {
-  node(id: $id) {
-    __typename
-    ... on Issue {
-      number
-      repository { nameWithOwner }
-    }
-  }
-}`;
 
 const LAST_ACTORS_QUERY = `query LastActors($ids: [ID!]!) {
   nodes(ids: $ids) {
@@ -433,7 +407,7 @@ function nextCursor(
 // HTTP
 // ---------------------------------------------------------------------------
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+type HttpMethod = "GET" | "POST";
 
 function tokenOf(conn: Connection): string {
   const { auth } = conn;
@@ -470,11 +444,6 @@ async function ghRead(token: string, path: string): Promise<unknown> {
   if (!resp.ok) throw requestFailed("GET", path, resp.status);
   const data: unknown = await resp.json();
   return data;
-}
-
-async function ghWrite(token: string, method: HttpMethod, path: string, body?: unknown): Promise<void> {
-  const resp = await ghFetch(token, method, path, body);
-  if (!resp.ok) throw requestFailed(method, path, resp.status);
 }
 
 const graphqlResponseSchema = z
@@ -559,12 +528,6 @@ async function issueNode(token: string, nodeId: string, query: string): Promise<
     throw new Error(`GitHub node ${nodeId} is a ${node.__typename}, not an issue.`);
   }
   return node;
-}
-
-async function locate(target: WriteBackTarget): Promise<{ token: string; loc: IssueLocation }> {
-  const token = tokenOf(target.conn);
-  const node = issueLocationSchema.parse(await issueNode(token, nodeIdOf(target.ref), LOCATE_QUERY));
-  return { token, loc: locationOf(node.repository.nameWithOwner, node.number) };
 }
 
 // ---------------------------------------------------------------------------
@@ -783,86 +746,6 @@ function toWorkItem(item: ProviderItem, _config: GitHubCollectorConfig): WorkIte
 }
 
 // ---------------------------------------------------------------------------
-// Write-back
-// ---------------------------------------------------------------------------
-
-/** Throws when the repository lacks the label. Oxagen creates no label on its own (tasks-spec §5.6). */
-async function requireLabel(token: string, loc: IssueLocation, name: string): Promise<void> {
-  const path = `${repoPath(loc)}/labels/${encodeURIComponent(name)}`;
-  const resp = await ghFetch(token, "GET", path);
-  if (resp.status === 404) {
-    throw new Error(
-      `${loc.owner}/${loc.repo} has no label "${name}". Oxagen creates no label on its own. Create it on the Fields tab, then retry.`,
-    );
-  }
-  if (!resp.ok) throw requestFailed("GET", path, resp.status);
-}
-
-async function addLabels(token: string, loc: IssueLocation, names: string[]): Promise<void> {
-  await ghWrite(token, "POST", `${issuePath(loc)}/labels`, { labels: names });
-}
-
-async function removeLabel(token: string, loc: IssueLocation, name: string): Promise<void> {
-  const path = `${issuePath(loc)}/labels/${encodeURIComponent(name)}`;
-  const resp = await ghFetch(token, "DELETE", path);
-  // 404: the label is already off the issue.
-  if (!resp.ok && resp.status !== 404) throw requestFailed("DELETE", path, resp.status);
-}
-
-/** The GitHub label for an Oxagen label, or the name as given when no mapping exists. */
-function githubLabelFor(oxagenLabel: string): string {
-  return GITHUB_LABEL_BY_OXAGEN.get(oxagenLabel.toLowerCase()) ?? oxagenLabel;
-}
-
-const writeBack: WriteBack = {
-  async note(target, text) {
-    const { token, loc } = await locate(target);
-    await ghWrite(token, "POST", `${issuePath(loc)}/comments`, { body: text });
-  },
-
-  async status(target, status) {
-    const { token, loc } = await locate(target);
-    const lower = status.trim().toLowerCase();
-    if (lower === "open" || lower === "closed") {
-      await ghWrite(token, "PATCH", issuePath(loc), { state: lower });
-      return;
-    }
-    // GitHub has two states. Any other status is a label (tasks-spec §5.6).
-    await requireLabel(token, loc, status);
-    await addLabels(token, loc, [status]);
-  },
-
-  async close(target) {
-    const { token, loc } = await locate(target);
-    await ghWrite(token, "PATCH", issuePath(loc), { state: "closed", state_reason: "completed" });
-  },
-
-  async labels(target, { priority, type }) {
-    const wantPriority = priority.trim() === "" ? null : githubLabelFor(priority.trim());
-    const wantType = type.trim() === "" ? null : githubLabelFor(type.trim());
-    const wanted = [wantPriority, wantType].filter((l): l is string => l !== null);
-    if (wanted.length === 0) return;
-    const { token, loc } = await locate(target);
-    // Check every new label first, so a missing one leaves the issue as it was.
-    for (const name of wanted) await requireLabel(token, loc, name);
-    const current = labelListSchema
-      .parse(await ghRead(token, `${issuePath(loc)}/labels?per_page=${PAGE_SIZE}`))
-      .map((l) => l.name);
-    for (const name of current) {
-      const lower = name.toLowerCase();
-      const replacedPriority =
-        wantPriority !== null && PRIORITY_GITHUB_LABELS.has(lower) && lower !== wantPriority.toLowerCase();
-      const replacedType =
-        wantType !== null && TYPE_GITHUB_LABELS.has(lower) && lower !== wantType.toLowerCase();
-      if (replacedPriority || replacedType) await removeLabel(token, loc, name);
-    }
-    const present = new Set(current.map((l) => l.toLowerCase()));
-    const missing = wanted.filter((l) => !present.has(l.toLowerCase()));
-    if (missing.length > 0) await addLabels(token, loc, missing);
-  },
-};
-
-// ---------------------------------------------------------------------------
 // The collector
 // ---------------------------------------------------------------------------
 
@@ -889,5 +772,4 @@ export const githubCollector: CollectorDefinition<GitHubCollectorConfig> = {
   fetchById,
   listChangedSince,
   toWorkItem,
-  writeBack,
 };
