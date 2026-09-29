@@ -13,6 +13,8 @@
  * - entity.received event shape (sourceRecordType + unwrapped record)
  * - push / pull_request → steering sync request (ADR-184); its failure never
  *   changes the response
+ * - push → MCP server discovery (M10, #4682); its failure never changes the
+ *   response
  * - pull_request → the pull request's state is stored (ADR-192) once per
  *   delivery with an installation; its failure never changes the response
  * - a delivery from the Oxagen Steering app is verified with its own secret,
@@ -38,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   githubSyncTargets: vi.fn(),
   requestSteeringSync: vi.fn(),
   recordGithubPullRequestState: vi.fn(),
+  routeGithubDiscoveryPush: vi.fn(),
   findHealthScopes: vi.fn(),
   // Mirrors the real healthRequests, so the test reads the events it sends.
   healthRequests: vi.fn(
@@ -134,6 +137,13 @@ vi.mock("@oxagen/handlers/github.pull-request.webhook", () => ({
   recordGithubPullRequestState: mocks.recordGithubPullRequestState,
 }));
 
+// The MCP server discovery push route (lane M10, #4682) reads Postgres and
+// has its own suite. Here it is a seam, so these tests assert which deliveries
+// reach it and that its failure never reaches GitHub.
+vi.mock("@oxagen/handlers/mcp-studio/discovery/webhook", () => ({
+  routeGithubDiscoveryPush: mocks.routeGithubDiscoveryPush,
+}));
+
 // The steering repo health scope lookup reads Postgres and has its own suite.
 // Here it is a seam. The event mapping (health.events) is the real one.
 vi.mock("@oxagen/handlers/steering-repo/health", () => ({
@@ -219,6 +229,7 @@ beforeEach(() => {
     outcome: "recorded",
     rows: 1,
   });
+  mocks.routeGithubDiscoveryPush.mockResolvedValue(0);
 });
 
 afterEach(() => {
@@ -647,6 +658,59 @@ describe("github app webhook – routing & dispatch", () => {
     expect(((await res.json()) as { dispatched: number }).dispatched).toBe(2);
     const sent = mocks.inngestSend.mock.calls[0]?.[0] as unknown[];
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe("github app webhook – MCP server discovery on a push (M10)", () => {
+  const PUSH = {
+    ref: "refs/heads/main",
+    installation: { id: 555 },
+    repository: { id: 90210, full_name: "acme/widgets" },
+    commits: [{ added: [], modified: ["specs/stripe.yaml"], removed: [] }],
+  };
+
+  it("hands a verified push's body to the discovery route", async () => {
+    mocks.routeGithubDiscoveryPush.mockResolvedValue(1);
+    const res = await app.fetch(signedPost("push", PUSH));
+    expect(res.status).toBe(200);
+    expect(mocks.routeGithubDiscoveryPush).toHaveBeenCalledTimes(1);
+    expect(mocks.routeGithubDiscoveryPush).toHaveBeenCalledWith(PUSH);
+  });
+
+  it("hands over a push that carries no installation", async () => {
+    // A definition in a repository linked without the App still changes.
+    const { installation: _installation, ...body } = PUSH;
+    const res = await app.fetch(signedPost("push", body));
+    expect(res.status).toBe(200);
+    expect(mocks.routeGithubDiscoveryPush).toHaveBeenCalledWith(body);
+  });
+
+  it.each(["pull_request", "ping", "issues"])(
+    "does not hand over a %s delivery",
+    async (event) => {
+      const res = await app.fetch(signedPost(event, PUSH));
+      expect(res.status).toBe(200);
+      expect(mocks.routeGithubDiscoveryPush).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not hand over a push whose signature fails", async () => {
+    const res = await app.fetch(signedPost("push", PUSH, { badSig: true }));
+    expect(res.status).toBe(401);
+    expect(mocks.routeGithubDiscoveryPush).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when the discovery route fails", async () => {
+    // The server's next scheduled discovery reads the definition anyway, so
+    // a failure here costs a log line and nothing else.
+    mocks.routeGithubDiscoveryPush.mockRejectedValue(new Error("pg down"));
+    const res = await app.fetch(signedPost("push", PUSH));
+    expect(res.status).toBe(200);
+    expect(mocks.requestSteeringSync).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      expect.stringContaining("MCP server discovery"),
+    );
   });
 });
 

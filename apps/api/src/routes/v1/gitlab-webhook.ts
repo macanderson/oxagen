@@ -40,7 +40,9 @@ import {
   healthRequests,
   type HealthSignal,
 } from "@oxagen/handlers/steering-repo/health";
+import { routeGitlabDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
 import { eventClient } from "../../event-client";
+import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 export const gitlabWebhookRoute = new Hono<AppEnv>();
@@ -111,6 +113,33 @@ gitlabWebhookRoute.post("/steering/:scopeKind/:scopeId", async (c) => {
   return c.json({ outcome: result.outcome }, result.status);
 });
 
+/** Outcomes that say the delivery is not a verified push to this project. */
+const UNVERIFIED_OUTCOMES: ReadonlySet<string> = new Set([
+  "unauthenticated",
+  "ignored_unparseable",
+  "ignored_other_project",
+]);
+
+/**
+ * Ask for the discovery of every on-change MCP server whose definition a
+ * verified push changed (lane M10, #4682). It logs a failure and never
+ * throws: the server's next discovery reads the definition anyway.
+ */
+async function requestDefinitionDiscovery(
+  outcome: string,
+  body: unknown,
+): Promise<void> {
+  if (UNVERIFIED_OUTCOMES.has(outcome)) return;
+  try {
+    await routeGitlabDiscoveryPush(body);
+  } catch (err) {
+    logger.error(
+      { err },
+      "GitLab webhook: could not request an MCP server discovery; the server's next scheduled discovery will read the definition",
+    );
+  }
+}
+
 gitlabWebhookRoute.post("/:connectionId", async (c) => {
   const body = await jsonBody(c.req);
   const deps = { ...gitlabWebhookDeps(), requestHealthCheck };
@@ -119,5 +148,6 @@ gitlabWebhookRoute.post("/:connectionId", async (c) => {
     tokenHeader: c.req.header("x-gitlab-token") ?? null,
     body,
   });
+  await requestDefinitionDiscovery(result.outcome, body);
   return c.json({ outcome: result.outcome }, result.status);
 });
