@@ -34,6 +34,7 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
+    "@oxagen/relay-broker": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",

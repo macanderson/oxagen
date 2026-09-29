@@ -1,0 +1,55 @@
+{
+  "name": "create_relay",
+  "domain": "tool",
+  "description": "Register a relay for servers and APIs in a private network, and mint its relay token. The token is shown once in this response and cannot be read again. Oxagen stores only its SHA-256.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "createdAt": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "publicId",
+      "name",
+      "createdAt",
+      "token"
+    ],
+    "additionalProperties": false
+  }
+}

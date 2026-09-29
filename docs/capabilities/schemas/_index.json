@@ -437,6 +437,16 @@
       "consumes": []
     },
     {
+      "name": "create_relay",
+      "domain": "tool",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "create_role",
       "domain": "iam",
       "surfaces": [
@@ -3672,6 +3682,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revoke_relay",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

@@ -1,0 +1,56 @@
+{
+  "name": "revoke_relay",
+  "domain": "tool",
+  "description": "Revoke a relay by name in this workspace. The broker refuses the relay's token at its next connect, and a connected relay is closed within 30 seconds.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "publicId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "revokedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "publicId",
+      "name",
+      "revokedAt"
+    ],
+    "additionalProperties": false
+  }
+}
