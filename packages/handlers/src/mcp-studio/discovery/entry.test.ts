@@ -54,6 +54,7 @@ import {
   requestDiscoveries,
   requestDiscovery,
   runDiscoveryEvent,
+  STALLED_MS,
   startServerDiscovery,
   SWEEP_LIMIT,
   type DiscoveryActor,
@@ -416,6 +417,7 @@ describe("planDiscoverySweep", () => {
         { scope: SCOPE, server: "Bad Name" },
       ]),
       openPullRequests: vi.fn(async () => [{ scope: SCOPE, server: "stripe" }]),
+      stalled: vi.fn(async () => []),
       onChangeByRepo: vi.fn(async () => []),
     };
 
@@ -437,6 +439,35 @@ describe("planDiscoverySweep", () => {
         "stripe",
         "lock_merged",
         `mcp-discovery:lock_merged:${ORG}:${WS}:stripe:2026-09-28T15`,
+      ],
+    ]);
+  });
+
+  it("asks again for a stalled discovery, with the trigger it had", async () => {
+    const sweep = {
+      undiscovered: vi.fn(async () => []),
+      dueDaily: vi.fn(async () => []),
+      openPullRequests: vi.fn(async () => []),
+      stalled: vi.fn(async () => [
+        { scope: SCOPE, server: "stripe", trigger: "push" as const },
+        { scope: SCOPE, server: "github", trigger: "manual" as const },
+        { scope: SCOPE, server: "Bad Name", trigger: "push" as const },
+      ]),
+      onChangeByRepo: vi.fn(async () => []),
+    };
+
+    const planned = await planDiscoverySweep(NOW, { sweep });
+
+    expect(sweep.stalled).toHaveBeenCalledWith(
+      new Date(NOW.getTime() - STALLED_MS),
+      SWEEP_LIMIT,
+    );
+    expect(planned.map((e) => [e.data.server, e.data.trigger, e.id])).toEqual([
+      ["stripe", "push", `mcp-discovery:push:${ORG}:${WS}:stripe:2026-09-28T15`],
+      [
+        "github",
+        "manual",
+        `mcp-discovery:manual:${ORG}:${WS}:github:2026-09-28T15`,
       ],
     ]);
   });

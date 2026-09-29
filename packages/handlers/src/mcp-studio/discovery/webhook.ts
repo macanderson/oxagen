@@ -5,7 +5,9 @@
 // repository, and whose sync.schedule is on-change, is discovered again when
 // a push to the definition's ref changes the definition's file. The GitHub
 // App webhook and the GitLab project webhook hand the delivery's body here
-// after they have authenticated it.
+// after they have authenticated it. A GitLab push is bound to the project of
+// the connection that authenticated it: the payload's project id must match,
+// and the repository comes from the connection, never from the payload.
 //
 // A push names a repository, not a workspace, so the lookup reads every
 // workspace's on-change servers in that repository. Each discovery then runs
@@ -41,6 +43,14 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function text(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** A GitLab id arrives as a JSON number. A decimal string is accepted too. */
+function gitlabId(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value))
+    return String(value);
+  if (typeof value === "string" && /^\d+$/.test(value)) return value;
+  return null;
 }
 
 /** The name a ref points at: main for refs/heads/main, v1 for refs/tags/v1. */
@@ -87,34 +97,48 @@ export function githubDefinitionPush(body: unknown): DefinitionPush | null {
 }
 
 /**
- * A GitLab push or tag push delivery, or null when it deletes the ref or is
- * not a push this can read. GitLab lists at most 20 commits and reports the
- * full count apart.
+ * The GitLab project a webhook connection names. The connection is what the
+ * delivery's secret token authenticated, so its project is the only one a
+ * push may speak for.
  */
-export function gitlabDefinitionPush(body: unknown): DefinitionPush | null {
+export interface GitlabProject {
+  /** The numeric project id, as the connection stores it. */
+  id: string;
+  /** group/name, as the connection stores it. */
+  path: string;
+  /** The GitLab host. Connections serve gitlab.com today. */
+  host?: string;
+}
+
+/**
+ * A GitLab push or tag push delivery for project, or null when it deletes
+ * the ref, is not a push this can read, or does not name project's id.
+ * GitLab lists at most 20 commits and reports the full count apart.
+ *
+ * The repository comes from project, not from the payload's path or URL. A
+ * holder of one connection's token can then only speak for that connection's
+ * project.
+ */
+export function gitlabDefinitionPush(
+  body: unknown,
+  project: GitlabProject,
+): DefinitionPush | null {
   const b = record(body);
   if (!b) return null;
   const kind = b["object_kind"];
   if (kind !== "push" && kind !== "tag_push") return null;
+  const payloadId =
+    gitlabId(record(b["project"])?.["id"]) ?? gitlabId(b["project_id"]);
+  if (payloadId === null || payloadId !== project.id) return null;
   const after = text(b["after"]);
   if (after === null || ZERO_SHA.test(after)) return null;
   const ref = text(b["ref"]);
   const name = ref === null ? null : refName(ref);
-  const project = record(b["project"]);
-  const path = text(project?.["path_with_namespace"]);
-  const webUrl = text(project?.["web_url"]);
-  if (ref === null || name === null || path === null || webUrl === null)
-    return null;
-  let host: string;
-  try {
-    host = new URL(webUrl).host;
-  } catch {
-    return null;
-  }
+  if (ref === null || name === null || project.path === "") return null;
   const { files, count } = changedFiles(b["commits"]);
   const total = b["total_commits_count"];
   return {
-    repo: `${host}/${path}`.toLowerCase(),
+    repo: `${project.host ?? "gitlab.com"}/${project.path}`.toLowerCase(),
     name,
     ref,
     files,
@@ -165,11 +189,13 @@ export function routeGithubDiscoveryPush(
 
 /**
  * Ask for a discovery of every on-change server whose definition a GitLab
- * push changed. Returns how many it asked for.
+ * push to project changed. project is the authenticated connection's.
+ * Returns how many it asked for.
  */
 export function routeGitlabDiscoveryPush(
   body: unknown,
+  project: GitlabProject,
   deps: DiscoveryPushDeps = {},
 ): Promise<number> {
-  return route(gitlabDefinitionPush(body), deps);
+  return route(gitlabDefinitionPush(body, project), deps);
 }
