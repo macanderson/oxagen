@@ -5,7 +5,7 @@
  *
  * WHY. `@oxagen/database` now exports three transaction seams: `withTenantDb`
  * (one workspace), `withOrgDb` (the organisation, ADR-086) and `withSystemDb`
- * (the audited bypass). A unit test that mocks the module writes
+ * (the deliberate RLS bypass). A unit test that mocks the module writes
  *
  *     vi.mock("@oxagen/database", async (importOriginal) => {
  *       const real = await importOriginal();

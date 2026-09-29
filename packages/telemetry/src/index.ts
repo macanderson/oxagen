@@ -30,7 +30,7 @@ export * from "./tacho-events-ddl";
 export * from "./tacho-events-retention";
 export * from "./cost-frames";
 export * from "./claude-telemetry";
-export { chInsert, chSelect } from "./tenant";
+export { chInsert, chSelect, scopeSelectSource } from "./tenant";
 export * from "./tool-invocation-counts";
 // ADR-042 dedicated-plane ClickHouse client lifecycle (rotation + shutdown).
 export {

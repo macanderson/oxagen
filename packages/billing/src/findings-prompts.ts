@@ -66,7 +66,7 @@ interface PromptRow {
  * command (`command_name` set) is left out: its text is a template the
  * harness already keeps, not an instruction pasted into the run.
  */
-const PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root_session_uuid, seq,
+export const PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root_session_uuid, seq,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   prompt_digest, prompt_length, content_digest, bytes_ref
   FROM tacho_events FINAL

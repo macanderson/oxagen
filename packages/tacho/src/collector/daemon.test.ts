@@ -17,6 +17,7 @@ import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
+import { digestText } from "../claude-code/context";
 import { runTachoHook } from "../claude-code/hook-client";
 import { sessionUuid } from "../ids";
 import type { TachoEvent } from "../envelope";
@@ -634,6 +635,58 @@ describe("tachod", () => {
     );
     // The state file now holds the id, so the journal is gone.
     expect(existsSync(crashed.hookIdJournal)).toBe(false);
+  });
+
+  it("seals on a spooled session start the text the client delivered, not the daemon's bundle", async () => {
+    // `tacho-hook` answered these starts from its cached bundle while the
+    // daemon was down, and the daemon's bundle holds other text by now. The
+    // second file comes from a client that recorded no delivered text.
+    const paths = scratchPaths();
+    const delivered = "The steering text the cached bundle held.";
+    const start = fixtures().find(
+      (f) => f.stdin["hook_event_name"] === "SessionStart",
+    ) as Fixture;
+    mkdirSync(paths.spool, { recursive: true });
+    const spool = (name: string, extra: Record<string, unknown>) =>
+      writeFileSync(
+        join(paths.spool, `${name}.json`),
+        JSON.stringify({
+          schema: "tacho.spool.v1",
+          received_at: new Date().toISOString(),
+          hook_id: name,
+          payload: start.stdin,
+          env: start.env,
+          ...extra,
+        }),
+      );
+    spool("hook_start_delivered", {
+      delivered_context: {
+        digest: digestText(delivered),
+        chars: delivered.length,
+      },
+    });
+    spool("hook_start_legacy", {
+      payload: { ...start.stdin, session_id: "sess-legacy-spool" },
+    });
+
+    const plane = fakeControlPlane("etag-3");
+    const { handle } = await boot(plane, paths, { listen: false });
+    await handle.tick();
+    const started = (sessionId: string) =>
+      plane.ingested.find(
+        (e) =>
+          e.kind === "agent_start" &&
+          e.attrs?.["hook.replayed"] === "1" &&
+          e.session_uuid === sessionUuid(TEST_ENROLLMENT, sessionId),
+      );
+    expect(started(String(start.stdin["session_id"]))?.attrs).toMatchObject({
+      "oxagen.context_digest": digestText(delivered),
+      "oxagen.delivered_chars": String(delivered.length),
+    });
+    const legacy = started("sess-legacy-spool");
+    expect(legacy).toBeDefined();
+    expect(legacy?.attrs?.["oxagen.context_digest"]).toBeUndefined();
+    expect(legacy?.attrs?.["oxagen.delivered_chars"]).toBeUndefined();
   });
 
   it("forgets a hook id a window after its hook, and holds it across a sleep", async () => {

@@ -18,11 +18,11 @@
  * NOTE ON SUPERUSER AND RLS/PRIVILEGES: PostgreSQL superusers bypass RLS
  * unconditionally even under FORCE ROW LEVEL SECURITY, and privilege checks
  * against a superuser always return true. Like integration/rls.test.ts, this
- * suite creates a non-superuser role and uses SET LOCAL ROLE inside the
- * isolation transactions. The privilege assertions (T3) query
- * has_table_privilege() for the real `oxagen_app` role when it exists, and fall
- * back to the test role otherwise, so the append-only posture is read back from
- * the catalog rather than assumed from the migration text.
+ * suite runs the isolation transactions as the real `oxagen_app` role via SET
+ * LOCAL ROLE, so they see the grants the migrations install. The privilege
+ * assertions (T3) query has_table_privilege() for the same role, so the
+ * append-only posture is read back from the catalog rather than assumed from
+ * the migration text. Missing role provisioning fails.
  *
  * CI: rls-integration job (TENANT_RLS_ENFORCEMENT_ENABLED=true, clean DB).
  * Local: DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
@@ -51,7 +51,11 @@ const RETENTION_ID = "00000000-0000-0000-0016-000000000001";
 const BINDING_ID = "00000000-0000-0000-0017-000000000001";
 const CONNECTION_ID = "00000000-0000-0000-0018-000000000001";
 
-const APP_ROLE = "raf_test_app_role";
+/**
+ * The real application role. Non-superuser and no BYPASSRLS, so the policies
+ * apply. The migrations create it, and beforeAll fails when it is missing.
+ */
+const APP_ROLE = "oxagen_app";
 
 /** A syntactically valid algorithm-qualified digest (64 lowercase hex). */
 const D = (seed: string): string => `sha256:${seed.repeat(64).slice(0, 64)}`;
@@ -86,33 +90,10 @@ const MUTABLE_POINTER_TABLES: ReadonlyArray<[string, string]> = [
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
-  await sql.unsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
-        CREATE ROLE "${APP_ROLE}" NOLOGIN NOSUPERUSER;
-      END IF;
-    END$$
-  `);
-
-  for (const schema of ["agent", "ingestion", "evidence", "iam"]) {
-    await sql.unsafe(`GRANT USAGE ON SCHEMA ${schema} TO "${APP_ROLE}"`);
-  }
-  // Mirror the migration's posture onto the test role so the isolation
-  // assertions run under realistic privileges.
-  for (const [schema, table] of APPEND_ONLY_TABLES) {
-    await sql.unsafe(
-      `GRANT SELECT, INSERT ON ${schema}.${table} TO "${APP_ROLE}"`,
-    );
-  }
-  for (const [schema, table] of MUTABLE_POINTER_TABLES) {
-    await sql.unsafe(
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON ${schema}.${table} TO "${APP_ROLE}"`,
-    );
-  }
-  await sql.unsafe(
-    `GRANT SELECT, INSERT, UPDATE ON agent.agent_runs TO "${APP_ROLE}"`,
-  );
+  // The isolation cases run as the migrated role with the grants the
+  // migrations gave it. A role this suite granted for itself would prove only
+  // its own grants.
+  await privilegeRole();
 
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
@@ -227,22 +208,6 @@ afterAll(async () => {
     await tx`DELETE FROM org.organizations WHERE id IN (${ORG_A}, ${ORG_B})`;
   });
 
-  for (const [schema, table] of [
-    ...APPEND_ONLY_TABLES,
-    ...MUTABLE_POINTER_TABLES,
-    ["agent", "agent_runs"] as [string, string],
-  ]) {
-    await sql
-      .unsafe(`REVOKE ALL ON ${schema}.${table} FROM "${APP_ROLE}"`)
-      .catch(() => undefined);
-  }
-  for (const schema of ["agent", "ingestion", "evidence", "iam"]) {
-    await sql
-      .unsafe(`REVOKE USAGE ON SCHEMA ${schema} FROM "${APP_ROLE}"`)
-      .catch(() => undefined);
-  }
-  await sql.unsafe(`DROP ROLE IF EXISTS "${APP_ROLE}"`).catch(() => undefined);
-
   await sql.end({ timeout: 5 });
 });
 
@@ -279,15 +244,20 @@ async function asSystem<T>(
 }
 
 /**
- * The role whose privileges we assert. Prefer the real `oxagen_app` when the
- * cluster has it (CI and local docker both do); fall back to the test role so
- * the suite still proves the shape on a bare cluster.
+ * The role the isolation cases run as and whose privileges T3 asserts: the
+ * real `oxagen_app`, which the migrations create. Missing role provisioning
+ * fails.
  */
 async function privilegeRole(): Promise<string> {
   const rows = await sql<{ exists: boolean }[]>`
-    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') AS exists
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${APP_ROLE}) AS exists
   `;
-  return rows[0]?.exists ? "oxagen_app" : APP_ROLE;
+  if (!rows[0]?.exists) {
+    throw new Error(
+      "Run/attempt foundation proof requires the migrated oxagen_app role",
+    );
+  }
+  return APP_ROLE;
 }
 
 // ---------------------------------------------------------------------------

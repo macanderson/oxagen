@@ -180,5 +180,7 @@ describe("the sweep", () => {
       expect(record?.recorder.sessionUuid).toBe(uuids[i]);
     }
     expect(again.registry.get(LIVE)?.sealed).toBe(false);
-  });
+    // Sixty hooks, fourteen ticks and two boots, all writing files, pass the
+    // default five seconds on a loaded CI runner under coverage.
+  }, 30_000);
 });

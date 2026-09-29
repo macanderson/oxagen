@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   generateObject: vi.fn(),
-  insertTokenUsage: vi.fn(),
+  stagedUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerFromModelId: vi.fn(),
   defaultModel: vi.fn(),
@@ -24,7 +24,7 @@ mocks.generateObject.mockResolvedValue({
   usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
   finishReason: "stop",
 });
-mocks.insertTokenUsage.mockResolvedValue(undefined);
+mocks.stagedUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("cafebabe");
 mocks.providerFromModelId.mockReturnValue("anthropic");
 mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-5" });
@@ -44,7 +44,6 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   return {
     ...real,
     hashPrompt: mocks.hashPrompt,
-    insertTokenUsage: mocks.insertTokenUsage,
     providerFromModelId: mocks.providerFromModelId,
   };
 });
@@ -57,7 +56,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
     finalizeUsage: vi.fn(
       async ({ row, charge }: { row: unknown; charge?: unknown }) => {
-        await mocks.insertTokenUsage([row]);
+        await mocks.stagedUsage([row]);
         if (charge) await mocks.chargeUsageCredits(charge);
       },
     ),
@@ -90,7 +89,7 @@ const TELEMETRY = {
 
 beforeEach(() => {
   mocks.generateObject.mockClear();
-  mocks.insertTokenUsage.mockClear();
+  mocks.stagedUsage.mockClear();
   mocks.hashPrompt.mockClear();
   mocks.providerFromModelId.mockClear();
   mocks.providerCostUsdMicros.mockClear();
@@ -101,7 +100,7 @@ beforeEach(() => {
     usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
     finishReason: "stop",
   });
-  mocks.insertTokenUsage.mockResolvedValue(undefined);
+  mocks.stagedUsage.mockResolvedValue(undefined);
   mocks.hashPrompt.mockResolvedValue("cafebabe");
   mocks.providerFromModelId.mockReturnValue("anthropic");
   mocks.providerCostUsdMicros.mockReturnValue(156);
@@ -208,8 +207,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
       telemetry: TELEMETRY,
     });
 
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
+    const rows = (mocks.stagedUsage.mock.calls[0] as [unknown[]])[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
     expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
@@ -233,7 +232,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
 
     expect(mocks.hashPrompt).toHaveBeenCalledWith("Capital?");
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
+    const rows = (mocks.stagedUsage.mock.calls[0] as [unknown[]])[0];
     const row = rows[0] as Record<string, unknown>;
     expect(row.prompt_hash).toBe("cafebabe");
   });
@@ -316,7 +315,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     });
 
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+      mocks.stagedUsage.mock.calls[0] as [Array<Record<string, unknown>>]
     )[0];
     expect(rows[0]?.cache_write_tokens).toBe(8);
     expect(rows[0]?.cached_tokens).toBe(12);
@@ -392,7 +391,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
   });
 
   it("rejects when the settlement seam rejects after the usage is staged; the outbox retries it", async () => {
-    mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
+    mocks.stagedUsage.mockRejectedValueOnce(new Error("CH down"));
 
     await expect(
       generateObjectFor({
@@ -572,9 +571,9 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect(object.answer).toBe("Paris");
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
     // Reported in full (ADR-052) even though billed at zero.
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+      mocks.stagedUsage.mock.calls[0] as [Array<Record<string, unknown>>]
     )[0];
     expect(rows[0]).toMatchObject({
       input_tokens: 12,

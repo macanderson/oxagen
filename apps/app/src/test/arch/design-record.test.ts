@@ -125,6 +125,26 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(td).toMatch(/max-width:\s*var\(--cell-max,/);
   });
 
+  it("a cell of row actions shows every button, and a marked message wraps (#4674)", () => {
+    // The ellipsis hid buttons with nothing to reveal them, and cut a form
+    // error mid-sentence. `data-actions` lifts the cap and the clip from its
+    // cell; `data-wrap` takes a message out of the no-wrap rule.
+    const css = read("src/app/globals.css");
+    const actions = css.match(
+      /table tbody :is\(td, th\):not\(\[colspan\]\):has\(\[data-actions\]\) \{[^}]*\}/,
+    )?.[0];
+    expect(actions).toBeDefined();
+    expect(actions).toMatch(/max-width:\s*none/);
+    expect(actions).toMatch(/overflow:\s*visible/);
+    expect(css).toMatch(
+      /:not\(textarea, pre, pre \*, \[data-wrap\], \[data-wrap\] \*\) \{\s*flex-wrap:\s*nowrap;\s*white-space:\s*nowrap;/,
+    );
+    const wrap = css.match(
+      /table tbody :is\(td, th\):not\(\[colspan\]\) \[data-wrap\] \{[^}]*\}/,
+    )?.[0];
+    expect(wrap).toMatch(/white-space:\s*normal/);
+  });
+
   it("the dark theme's page body is the ink, and the panel grey stays on panels", () => {
     const css = read("src/app/globals.css");
     // The `.dark` block and the no-JS `prefers-color-scheme` copy of it.
