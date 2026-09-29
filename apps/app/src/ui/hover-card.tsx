@@ -1,15 +1,15 @@
 "use client";
 // shadcn's base-maia hover card (ADR-221), written from
 // https://ui.shadcn.com/r/styles/base-maia/hover-card.json. Two changes from
-// the registry: the popup fills with the app's raised colour at 70% over a
-// blur, as every popup does, and the content can take an `anchor`, so one
-// card can show beside any element without a trigger of its own
-// (features/shell/cell-overflow.tsx).
+// the registry: the popup fills with the app's raised colour over a blur, as
+// every popup does (`menuSurface` in control-styles.ts), and the content can
+// take an `anchor`, so one card can show beside any element without a
+// trigger of its own (features/shell/cell-overflow.tsx).
 import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
 import { cn } from "@/ui/cn";
 
 const popoverSurface =
-  "relative isolate rounded-2xl bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;
