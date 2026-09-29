@@ -3,6 +3,8 @@
 // on the translucent menu surface where a native <select> opens the operating
 // system's opaque menu. A pick waits for the form's Search button: Base UI
 // keeps the value in a hidden input named "state", which the GET form sends.
+// The ledger keys this select on the URL's state, so a navigation that
+// changes it, such as Clear, draws the select again from the new value.
 //
 // Without script the list cannot open, so the state cannot change. Search
 // still sends the search text and the state the page was drawn with.

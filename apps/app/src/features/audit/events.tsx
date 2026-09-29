@@ -209,6 +209,7 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
           />
         </label>
         <FilterSelect
+          key={query.outcome ?? ""}
           name="outcome"
           aria-label={t("result")}
           defaultValue={query.outcome ?? ""}
@@ -293,6 +294,7 @@ function HeaderFilters({
       className="flex flex-wrap items-center gap-2"
     >
       <FilterSelect
+        key={query.actor ?? ""}
         name="actor"
         aria-label={t("actor")}
         aria-describedby={ACTOR_KIND_NOTE}
@@ -311,6 +313,7 @@ function HeaderFilters({
         className={select}
       />
       <FilterSelect
+        key={query.range}
         name="range"
         aria-label={t("range")}
         defaultValue={query.range}

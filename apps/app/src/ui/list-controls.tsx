@@ -122,6 +122,8 @@ export function useList<T>(
 
 const searchBox =
   "min-h-9 min-w-40 flex-1 rounded-md border border-input-border bg-input-bg px-2.5 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-input-ring sm:text-[13px]";
+// iOS zooms the page when a focused control's text is under 16px.
+const listSelect = "max-md:text-base";
 
 /** `.lt-bar`: search, then the filters or the sort. */
 export function ListBar<T>({
@@ -162,6 +164,7 @@ export function ListBar<T>({
         return (
           <ListSelect
             key={filter.key}
+            className={listSelect}
             aria-label={all}
             items={[{ value: "", label: all }, ...filter.options]}
             value={list.filters[filter.key] ?? ""}
@@ -175,6 +178,7 @@ export function ListBar<T>({
         <span className="flex items-center gap-2">
           <span id={`${id}-sort`}>{sortLabel}</span>
           <ListSelect
+            className={listSelect}
             aria-labelledby={`${id}-sort`}
             items={sorts.map((sort) => ({
               value: sort.value,
