@@ -1,39 +1,48 @@
-// context.governance_mode.set.ts — change the governance mode a workspace
+// context.governance_mode.set.ts: change the governance mode a workspace
 // steers under, from Organization › Workspaces › Edit workspace (ADR-061).
 //
-// The mode is a file, not a column: `.oxagen/rules/governance.toml` on the
-// production branch of the workspace's main repository. ADR-061 decision 1
-// rejects a `workspace_settings.governance_mode` cache precisely so that
-// `open_context_pr` and `merge_context_pr` read the repository itself every
-// time, which means a write here is a commit and nothing else would do.
+// The mode is a file, not a column. ADR-061 decision 1 rejects a
+// `workspace_settings.governance_mode` cache, so `open_context_pr` and
+// `merge_context_pr` read the repository itself every time, and a write here
+// is a change to that file. Which file depends on the layout:
+//
+//   steering  `steering/governance.toml`, the top-level `mode` key. Its
+//             presence on the production branch marks a steering repository.
+//             steering-repo/governance-mode.ts handles it (ADR-229).
+//   legacy    `.oxagen/rules/governance.toml`, handled here.
 //
 // THE MODE IN FORCE DECIDES THE ROUTE. Loosening governance is the change a
 // strict mode most needs to see coming, so the route is read off the file on
 // the production branch rather than off what the caller asked for:
 //
-//   solo            → commit to the production branch. A review step here
-//                     would guard nothing: solo already lets one person
-//                     publish steering alone.
-//   team/regulated  → commit to `oxagen/governance` and open a pull request
-//                     against the production branch, for a person to merge on
-//                     GitHub. An ORDINARY pull request — Oxagen runs no checks
-//                     on it and `merge_context_pr` does not merge it.
-//   unreadable      → the strict route. A governance.toml that does not parse
-//                     already refuses every Context PR open and merge; a mode
-//                     nobody can establish must not be treated as `solo`.
+//   solo            The change lands at once. A review step here would guard
+//                   nothing: solo already lets one person publish alone.
+//   team/regulated  The change waits on a pull request for review.
 //
-// `applyImmediately` takes the strict route back to the direct one. It is not
-// privilege escalation: the contract admits only org Owner/Admin and
+// In a legacy repository, landing at once is a commit to the production
+// branch, and the pull request is an ordinary one a person merges on GitHub.
+// A legacy file that does not parse takes the review route, because a mode
+// nobody can establish must not be treated as `solo`.
+//
+// In a steering repository nothing commits to the production branch. Both
+// routes open a steering PR from `steering/governance`, and landing at once
+// merges it through the steering merge queue. A steering file that does not
+// parse refuses the call, because the merge queue refuses every steering PR
+// until it parses.
+//
+// `applyImmediately` takes the review route back to landing at once. It is
+// not privilege escalation: the contract admits only org Owner/Admin and
 // workspace Owner/Admin, so every caller who can reach this capability can
-// already commit the same file on GitHub by hand. The override is a
-// convenience over doing it by hand — and, unlike doing it by hand, it leaves
-// `steering.governance_overridden` behind. That record is the whole point.
+// already commit the same file on GitHub by hand. The override leaves
+// `steering.governance_overridden` behind, which a commit by hand does not.
+// That record is the point.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
   contextGovernanceModeSet,
   GOVERNANCE_BRANCH,
   GOVERNANCE_FILE,
+  STEERING_GOVERNANCE_FILE,
 } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import {
   draftGovernanceToml,
@@ -50,6 +59,12 @@ import {
 } from "./context.steering.github";
 import { parseGovernanceMode } from "./context.steering.policy";
 import { logger } from "./logger";
+import {
+  productionSteeringGovernanceSeams,
+  readSteeringGovernance,
+  setSteeringGovernanceMode,
+  type SteeringGovernanceSeams,
+} from "./steering-repo/governance-mode";
 
 /**
  * The pull request's title and body never name a mode.
@@ -120,8 +135,46 @@ async function resolveTargetWorkspace(
   return { id: target.id, name: target.name };
 }
 
+/**
+ * Record a mode that landed. Both events when the caller overrode review, not
+ * one or the other: "every governance change" and "every skipped review" are
+ * each a single event-type filter this way, and neither answer is quietly
+ * missing rows.
+ */
+function emitChanged(
+  deps: SteeringDeps,
+  ctx: { orgId: string; requestId?: string | null },
+  actingUserId: string,
+  workspaceId: string,
+  detail: {
+    fullName: string;
+    productionBranch: string;
+    previousMode: GovernanceMode | null;
+    mode: GovernanceMode;
+    commitSha: string;
+    overrodeReview: boolean;
+  },
+): void {
+  const base = {
+    actorUserId: actingUserId,
+    orgId: ctx.orgId,
+    workspaceId,
+    capability: contextGovernanceModeSet.name,
+    outcome: "success" as const,
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+    detail,
+  };
+  deps.emit({ ...base, eventType: "steering.governance_changed" });
+  if (detail.overrodeReview) {
+    deps.emit({ ...base, eventType: "steering.governance_overridden" });
+  }
+}
+
 export function makeSetGovernanceModeHandler(
   deps: SteeringDeps,
+  seams: SteeringGovernanceSeams = productionSteeringGovernanceSeams,
 ): CapabilityHandler<typeof contextGovernanceModeSet> {
   return async (input, ctx) => {
     const actingUserId = await resolveActingUserId(ctx);
@@ -144,6 +197,115 @@ export function makeSetGovernanceModeHandler(
       async () => {
         const repo: SteeringRepository =
           await deps.github.resolveRepository(scope);
+
+        // The layout is read, not declared: `steering/governance.toml` on the
+        // production branch marks a steering repository, as it does for the
+        // merge queue. Everything after this read happens at one commit.
+        const productionHead = await deps.github.branchHead(
+          repo,
+          repo.defaultBranch,
+        );
+        if (productionHead === null) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "production_branch_missing",
+            message: `${repo.fullName} has no ${repo.defaultBranch} branch. Create it, then set the mode again.`,
+          });
+        }
+        const steeringText = await deps.github.readFile(
+          repo,
+          STEERING_GOVERNANCE_FILE,
+          productionHead,
+        );
+        if (steeringText !== null) {
+          const currentMode = readSteeringGovernance(steeringText).mode;
+          const answer = {
+            requestedMode: input.mode,
+            previousMode: currentMode,
+            fullName: repo.fullName,
+            productionBranch: repo.defaultBranch,
+            path: STEERING_GOVERNANCE_FILE,
+          };
+          if (currentMode === input.mode) {
+            return {
+              ...answer,
+              outcome: "unchanged" as const,
+              effectiveMode: input.mode,
+              commitSha: null,
+              pullRequest: null,
+              overrodeReview: false,
+            };
+          }
+          const wantsReview = currentMode !== "solo";
+          const overrodeReview = wantsReview && input.applyImmediately;
+          const result = await setSteeringGovernanceMode({
+            host: deps.github,
+            repo,
+            scope,
+            productionHead,
+            currentText: steeringText,
+            currentMode,
+            mode: input.mode,
+            land: !wantsReview || overrodeReview,
+            withoutReview: overrodeReview,
+            actingUserId,
+            now: deps.now,
+            seams,
+          });
+          if (result.outcome === "proposed") {
+            logger.info(
+              {
+                orgId: ctx.orgId,
+                workspaceId: target.id,
+                repository: repo.fullName,
+                previousMode: currentMode,
+                requestedMode: input.mode,
+                pr: result.pullRequest.htmlUrl,
+                reused: result.pullRequest.reused,
+              },
+              "context.governance_mode.set: proposed governance mode",
+            );
+            return {
+              ...answer,
+              outcome: "proposed" as const,
+              effectiveMode: currentMode,
+              commitSha: null,
+              pullRequest: result.pullRequest,
+              overrodeReview: false,
+            };
+          }
+          emitChanged(deps, ctx, actingUserId, target.id, {
+            fullName: repo.fullName,
+            productionBranch: repo.defaultBranch,
+            previousMode: currentMode,
+            mode: input.mode,
+            commitSha: result.commitSha,
+            overrodeReview,
+          });
+          logger.info(
+            {
+              orgId: ctx.orgId,
+              workspaceId: target.id,
+              repository: repo.fullName,
+              previousMode: currentMode,
+              mode: input.mode,
+              commit: result.commitSha,
+              pr: result.pullRequest.htmlUrl,
+              version: result.version,
+              deploymentUrl: result.deploymentUrl,
+              overrodeReview,
+            },
+            "context.governance_mode.set: merged governance mode",
+          );
+          return {
+            ...answer,
+            outcome: "applied" as const,
+            effectiveMode: input.mode,
+            commitSha: result.commitSha,
+            pullRequest: result.pullRequest,
+            overrodeReview,
+          };
+        }
 
         const existing = await deps.github.readFile(
           repo,
@@ -177,6 +339,7 @@ export function makeSetGovernanceModeHandler(
             effectiveMode: input.mode,
             fullName: repo.fullName,
             productionBranch: repo.defaultBranch,
+            path: GOVERNANCE_FILE,
             commitSha: null,
             pullRequest: null,
             overrodeReview: false,
@@ -200,32 +363,14 @@ export function makeSetGovernanceModeHandler(
             throw githubRefused(err);
           }
 
-          const detail = {
+          emitChanged(deps, ctx, actingUserId, target.id, {
             fullName: repo.fullName,
             productionBranch: repo.defaultBranch,
             previousMode,
             mode: input.mode,
             commitSha,
             overrodeReview,
-          };
-          const base = {
-            actorUserId: actingUserId,
-            orgId: ctx.orgId,
-            workspaceId: target.id,
-            capability: contextGovernanceModeSet.name,
-            outcome: "success" as const,
-            ip: null,
-            userAgent: null,
-            requestId: ctx.requestId ?? null,
-            detail,
-          };
-          // Both events, not one or the other. "Every governance change" and
-          // "every skipped review" are each a single event-type filter this
-          // way, and neither answer is quietly missing rows.
-          deps.emit({ ...base, eventType: "steering.governance_changed" });
-          if (overrodeReview) {
-            deps.emit({ ...base, eventType: "steering.governance_overridden" });
-          }
+          });
 
           logger.info(
             {
@@ -247,6 +392,7 @@ export function makeSetGovernanceModeHandler(
             effectiveMode: input.mode,
             fullName: repo.fullName,
             productionBranch: repo.defaultBranch,
+            path: GOVERNANCE_FILE,
             commitSha,
             pullRequest: null,
             overrodeReview,
@@ -315,6 +461,7 @@ export function makeSetGovernanceModeHandler(
           effectiveMode: currentMode,
           fullName: repo.fullName,
           productionBranch: repo.defaultBranch,
+          path: GOVERNANCE_FILE,
           commitSha: null,
           pullRequest,
           overrodeReview: false,
@@ -326,4 +473,5 @@ export function makeSetGovernanceModeHandler(
 
 export const setGovernanceModeHandler = makeSetGovernanceModeHandler(
   steeringDeps(),
+  productionSteeringGovernanceSeams,
 );
