@@ -2,13 +2,7 @@
 // signature and throws until its lane builds it, and the names every lane shares
 // match agent-work-spec.html. A lane that builds a stub deletes its case here.
 import { describe, expect, it } from "vitest";
-import {
-  AUTONOMY_ACTION_TYPE,
-  AUTONOMY_PRINCIPAL_TYPE,
-  AUTONOMY_RESOURCE_TYPE,
-  type AutonomyFacts,
-  autonomyAllows,
-} from "./autonomy/autonomy-allows";
+import { AUTONOMY_ACTION_TYPE, AUTONOMY_PRINCIPAL_TYPE, AUTONOMY_RESOURCE_TYPE } from "./autonomy/autonomy-allows";
 import { NotBuiltError } from "./not-built";
 import {
   CLAIM_STALE_MINUTES,
@@ -108,20 +102,6 @@ describe("stubs", () => {
       now: NOW,
     };
     expect(() => evaluateWorkOrder(facts)).toThrow(NotBuiltError);
-  });
-
-  it("autonomyAllows throws", () => {
-    const facts: AutonomyFacts = {
-      operator: "priya",
-      level: 2,
-      verdict: "proven",
-      risk: "low",
-      lintPassed: true,
-      closeSwitch: false,
-      spentTodayUsd: 3.2,
-      maxDailyUsd: 40,
-    };
-    expect(() => autonomyAllows({ label: "Documentation" }, "work.merge", facts)).toThrow(NotBuiltError);
   });
 
   it("exportTrainingSet throws", () => {
