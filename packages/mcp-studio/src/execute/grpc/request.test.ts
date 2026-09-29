@@ -156,3 +156,33 @@ describe("buildCredentials", () => {
     );
   });
 });
+
+describe("buildCredentials for mutual TLS", () => {
+  const mtls: ManifestAuth = { mode: "service", scheme: "mtls", apply: { type: "mutual_tls" } };
+  const certificate = { name: "ledger-cert", scheme: "mutual_tls" as const };
+
+  it("hands the relay its client certificate and sends no metadata", () => {
+    expect(buildCredentials(mtls, { type: "relay", credential: certificate }, "relay:acme")).toEqual({
+      metadata: [],
+      relay_credential: certificate,
+    });
+  });
+
+  it("refuses a bearer token for a mutual TLS server", () => {
+    const error = credentialError(() => buildCredentials(mtls, { type: "bearer", token: "tok_1" }, "relay:acme"));
+    expect(error.title).toBe("Invalid credential");
+    expect(error.message).toBe(
+      "A mutual TLS server needs a client certificate that a relay holds, and this call's credential is not one.",
+    );
+  });
+
+  it("refuses a client certificate for a server that is not mutual TLS", () => {
+    const error = credentialError(() =>
+      buildCredentials(API_KEY_AUTH, { type: "relay", credential: certificate }, "relay:acme"),
+    );
+    expect(error.title).toBe("Invalid credential");
+    expect(error.message).toBe(
+      "A relay's client certificate fits only a mutual TLS server, and this server's scheme is api_key.",
+    );
+  });
+});

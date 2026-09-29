@@ -34,6 +34,10 @@ export type RelayCredential = z.output<typeof relayCredentialSchema>;
  * - api_key: the key's value. The executor puts it where auth.apply.in and
  *   auth.apply.name say.
  * - relay: the relay adds the credential itself, so the executor sends none.
+ *   With scheme mutual_tls, the relay presents the client certificate it
+ *   holds in its TLS handshake with the server. The executor places that
+ *   credential only for a mutual_tls server, and a mutual_tls server takes
+ *   no other.
  * - missing: operator-oauth with no token for this operator. The executor
  *   returns isError with message and a link to connect_url, and sends
  *   nothing.

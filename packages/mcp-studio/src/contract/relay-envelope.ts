@@ -21,7 +21,7 @@ import type { Sha256Digest } from "@oxagen/run-evidence";
 import { z } from "zod";
 import { sha256Schema } from "@oxagen/oxagen/steering-repo/common";
 import { CREDENTIAL_NAME_PATTERN } from "@oxagen/oxagen/steering-repo/names";
-import { withChecks } from "./checks";
+import { withChecks, type CustomCheck } from "./checks";
 import {
   envelopeDeadlineSchema,
   envelopeSignatureSchema,
@@ -95,7 +95,12 @@ export function relayHeadersHash(entries: readonly (readonly [name: string, valu
   return canonicalDigest(entries.map(([name, value]) => [name.toLowerCase(), value]));
 }
 
-/** A credential the relay holds itself (Enterprise) and adds after it checks the envelope. */
+/**
+ * A credential the relay holds itself (Enterprise) and adds after it checks the
+ * envelope. With `mutual_tls`, the relay adds no header. It presents the client
+ * certificate it holds under `name` in the upstream TLS handshake, so the
+ * certificate and its key stay inside the customer's network.
+ */
 export const relayCredentialSchema = withChecks(
   z
     .object({
@@ -103,7 +108,7 @@ export const relayCredentialSchema = withChecks(
         .string()
         .regex(CREDENTIAL_NAME_PATTERN, "not a credential name")
         .describe("The credential's name in the relay's own store."),
-      scheme: z.enum(["bearer", "basic", "header"]),
+      scheme: z.enum(["bearer", "basic", "header", "mutual_tls"]),
       header: headerNameSchema.optional(),
     })
     .strict()
@@ -113,6 +118,27 @@ export const relayCredentialSchema = withChecks(
     { kind: "forbid", when: { field: "scheme", isNot: "header" }, fields: ["header"] },
   ],
 );
+
+/**
+ * A client certificate is presented in a TLS handshake, so a `mutual_tls`
+ * credential needs an https target. Over http the relay would have no
+ * handshake to present it in.
+ */
+const mutualTlsCheck: CustomCheck = {
+  issues(value) {
+    const credential = value.credential as { scheme?: unknown } | undefined;
+    const target = value.target as { scheme?: unknown } | undefined;
+    if (credential?.scheme !== "mutual_tls" || target?.scheme === "https") return [];
+    return [{ path: ["target", "scheme"], message: "a mutual_tls credential needs an https target" }];
+  },
+  json: {
+    if: {
+      properties: { credential: { properties: { scheme: { const: "mutual_tls" } }, required: ["scheme"] } },
+      required: ["credential"],
+    },
+    then: { properties: { target: { properties: { scheme: { const: "https" } } } } },
+  },
+};
 
 export const relayEnvelopeSchema = withChecks(
   z
@@ -142,6 +168,6 @@ export const relayEnvelopeSchema = withChecks(
     })
     .strict()
     .describe("One request the cloud gateway decided and signed for a relay."),
-  [expiryCheck],
+  [expiryCheck, mutualTlsCheck],
 );
 export type RelayEnvelope = z.output<typeof relayEnvelopeSchema>;
