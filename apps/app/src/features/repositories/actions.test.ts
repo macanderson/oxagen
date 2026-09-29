@@ -1092,6 +1092,7 @@ describe("mergeRepositoryChange and closeRepositoryChange", () => {
       mergedCommit: "fedcba9876543210",
       promotionEvent: { id: "pev_1", seq: 1, chainDigest: "d1" },
       bundleVersion: { before: 7, after: 8 },
+      publishedVersion: null,
     });
     expect(
       await mergeRepositoryChange("acme", "core-platform", "prp_1"),
