@@ -220,6 +220,7 @@ import { publishedSteeringGetRoute } from "./routes/v1/context.steering.publishe
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
+import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -1198,6 +1199,8 @@ orgScoped.route("/context/steering/index", steeringIndexGetRoute);
 // The workspace's steering repo and its settings repair (lane S2, #4560).
 orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
+// The move from .oxagen/ to a steering repo, once per workspace (lane S10, #4620).
+orgScoped.route("/context/steering/repo/import", steeringRepoImportRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

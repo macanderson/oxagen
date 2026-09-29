@@ -1075,6 +1075,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "import_workspace_steering",
+    async () =>
+      (await import("./steering_repo.import"))
+        .importWorkspaceSteeringHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_steering_freshness",
     async () =>
       (await import("./context.steering.freshness"))

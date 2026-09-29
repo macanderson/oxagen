@@ -2061,6 +2061,17 @@
       "consumes": []
     },
     {
+      "name": "import_workspace_steering",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "ingest_run_frames",
       "domain": "run",
       "surfaces": [

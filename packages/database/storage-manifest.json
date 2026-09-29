@@ -1877,6 +1877,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "import_workspace_steering",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "run",
       "name": "ingest_run_frames",
       "reads": [],

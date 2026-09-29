@@ -371,6 +371,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_main_repository
 - get_repository_tree
 - get_steering_repo
+- import_workspace_steering
 - link_repository
 - list_github_installations
 - list_installation_repositories
