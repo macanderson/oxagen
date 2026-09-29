@@ -12,7 +12,7 @@
 
 You stage edits to one server folder in Studio before you open a steering PR. This capability saves those edits as a draft, so they survive a reload and a second tab. A save replaces the stored edits. It replaces server.toml and the source only when the input carries them. `open_studio_review` reads the draft and opens the steering PR from it.
 
-The draft holds no credential. server.toml names a credential by reference, and a saved test keeps the request as Studio built it before the gateway added the credential. The decision record is ADR-224.
+The draft holds no credential. server.toml names a credential by reference, and a saved test keeps the request as Studio built it before the gateway added the credential. The decision record is [ADR-224](../adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md).
 
 ## Input
 
