@@ -30,6 +30,7 @@ import {
   PROPOSAL_ID,
   publishedRecord,
   proposal,
+  steeringFreshness,
   steeringHub,
   type SteeringReads,
   steeringSource,
@@ -915,6 +916,33 @@ describe("Records", () => {
         name: "Open ctx.release.no-reread-changelog",
       }),
     ).toBeVisible();
+  });
+
+  it("reads the freshness and marks a record the last merge published", async () => {
+    const calls = await renderSteering("/records", {
+      freshness: readOk(
+        steeringFreshness({
+          version: 12,
+          headCommit: "4d5e6f7a8b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e",
+        }),
+      ),
+    });
+    expect(calls.freshness).toEqual([[ctx]]);
+    const card = within(section("Published records")).getByRole("article");
+    expect(
+      within(card).getByTitle("The last merge published this record"),
+    ).toHaveTextContent("new · bundle v12");
+  });
+
+  it("marks no record when the freshness read fails, and still lists them (negative)", async () => {
+    await renderSteering("/records", { freshness: DOWN });
+    const card = within(section("Published records")).getByRole("article");
+    expect(card).toHaveTextContent(
+      "Do not re-read CHANGELOG.md after the first read in a run.",
+    );
+    expect(
+      within(card).queryByTitle("The last merge published this record"),
+    ).toBeNull();
   });
 
   it("offers Clone on each card, which opens the clone editor on that record's slug", async () => {

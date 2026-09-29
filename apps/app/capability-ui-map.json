@@ -1828,6 +1828,14 @@
       "verifiedBy": "steering-2961-residue",
       "also": [
         {
+          "route": "/[org]/[ws]/steering/records",
+          "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+          "entry": "Steering › Library › Records marks each record the last merge published with the bundle version (features/steering/tabs/records.tsx, features/steering/records-shelf.tsx)",
+          "proof": "apps/app/src/features/steering/steering.test.tsx",
+          "verifiedAt": "2026-09-29",
+          "verifiedBy": "steering-2961-residue"
+        },
+        {
           "route": "/[org]/[ws]/steering/records/[lineage]",
           "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
           "entry": "The record page reads the freshness to name the steering repository a revision's pull request goes to (features/record/record.tsx)",
