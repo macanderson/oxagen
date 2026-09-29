@@ -36,8 +36,8 @@ strict.
    `loading.tsx` fallback, and a shared page state (`PageSkeleton`,
    `RouteError`, `PageNotFound`, `PageDenied`) render their body inside the
    shell's main. None renders a `<main>`, `role="main"`, or `id="main"`.
-3. **Five modules own a main, and each stands outside the shell.** They are
-   `ShellFrame`, the onboarding gate (`src/features/onboarding/ui/gate-shell.tsx`),
+3. **Five modules own a main: the shell and four modules outside it.** They
+   are `ShellFrame`, the onboarding gate (`src/features/onboarding/ui/gate-shell.tsx`),
    the auth shell (`src/ui/auth-shell.tsx`), the root `not-found.tsx`, and
    `global-error.tsx`. The onboarding gate's step, the sign-in pages, and the
    two root error pages render outside `ShellFrame`, so each keeps its own
