@@ -221,6 +221,8 @@ describe("callServed policy decisions", () => {
     expectCarried(recorded, "http");
     expect(recorded.claims).toEqual([{ request: recorded.approvals[0], approvers: 1 }]);
     expect(recorded.requested).toEqual([]);
+    // Read once, before the claim, and handed to the executor as read.
+    expect(recorded.credentials).toHaveLength(1);
     expect(outcomes(recorded)).toEqual(["call billing__create_refund allowed"]);
   });
 
@@ -263,8 +265,10 @@ describe("callServed policy decisions", () => {
       servers: [
         server({
           ...sourceNamed("billing"),
+          // Two environments and no sandbox: with one, that one is the sandbox.
           environments: {
             production: { sandbox: false, network: "cloud", credential: "oxagen:credential/billing-live" },
+            staging: { sandbox: false, network: "cloud", credential: "oxagen:credential/billing-staging" },
           },
         }),
       ],
@@ -277,6 +281,57 @@ describe("callServed policy decisions", () => {
     expect(textOf(result)).toContain("billing has no sandbox environment");
     expect(recorded.claims).toEqual([]);
     nothingSent(recorded);
+  });
+
+  it("leaves an approval unused when the route cannot take the call", async () => {
+    const offline = "The machine that runs billing is offline. Start tacho on it, then call the tool again.";
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      transport: () => {
+        throw new ServedRouteError("local_unavailable", offline);
+      },
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(offline);
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("leaves an approval unused when the credential lookup fails", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      credential: () => Promise.reject(new Error("vault is down")),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not read the credential for billing, so it did not send billing__create_refund. Call it again in a minute, and ask a workspace admin to reconnect Billing if it fails again.",
+    );
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.credentials).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("leaves an approval unused when the credential is not connected", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      credential: () =>
+        Promise.resolve({
+          type: "missing",
+          message: "Connect your Billing account in Oxagen, then retry.",
+          connect_url: "https://app.oxagen.sh/connect/billing",
+        }),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe("Connect your Billing account in Oxagen, then retry.\nhttps://app.oxagen.sh/connect/billing");
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
 
   it("denies a call a person refused", async () => {
@@ -570,6 +625,23 @@ describe("callServed kill switches", () => {
       expect(outcomes(recorded)).toEqual(["call billing__create_refund denied"]);
     });
   }
+
+  it("stops a call a person already approved, and leaves the approval unused", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      emergencyDeny: () => Promise.resolve({ id: "emd_1", targetKind: "tool_server", targetId: "mcs_1", reason: INCIDENT }),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Kill switch emd_1 on tool server mcs_1 stops billing__create_refund, so Oxagen did not send it. Reason: Refunds are paused during the incident. Ask an admin to turn the switch off if the call must run.",
+    );
+    expect(recorded.approvals).toEqual([]);
+    expect(recorded.claims).toEqual([]);
+    expect(recorded.requested).toEqual([]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund denied"]);
+  });
 
   it("ends the reason with one period whether or not the person wrote one", async () => {
     const { call } = await setup({

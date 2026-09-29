@@ -13,7 +13,9 @@ import {
   effectiveAnnotations,
   execute,
   type CallToolResult,
+  type CredentialSource,
   type ManifestServer,
+  type ResolvedCredential,
   type Transport,
 } from "@oxagen/mcp-studio";
 import { decideToolCall, type ToolCallVerdict } from "@oxagen/policy";
@@ -301,8 +303,9 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     });
 
   let verdict = decide();
-  // The approvals the call is sent on. Claimed just before the call is sent,
-  // so a call that fails a later check leaves them for the retry.
+  // The approvals the call is sent on. Claimed after every other check and
+  // after the credential is read, so a call that fails any of them leaves the
+  // approvals for the retry.
   let approved: { request: ApprovalRequest; id: string; approvers: number } | null = null;
   if (verdict.decision === "require_approval" && verdict.errors.length === 0) {
     const request: ApprovalRequest = {
@@ -366,6 +369,41 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   const transport = transportFor(ports, { network: environment.network, server, run: view.run });
   if (transport instanceof ServedRouteError) return refusal(transport.message, "failed");
 
+  // The credential is read here, before the claim, so a failed lookup leaves
+  // the approval unused. The executor then gets the credential already read.
+  // The request is the one the executor would build.
+  let credentials: CredentialSource = ports.credentials;
+  if (server.auth !== null) {
+    let credential: ResolvedCredential;
+    try {
+      credential = await ports.credentials.resolve(
+        {
+          server: server.name,
+          environment: environment.name,
+          reference: server.environments[environment.name]?.credential,
+          auth: server.auth,
+          // The run's operator, not the agent file's: an agent names a member
+          // or a team by slug, and only a person holds an operator token.
+          operator: view.run.operator,
+        },
+        ports.signal ?? new AbortController().signal,
+      );
+    } catch (error) {
+      // Only the error's name: a credential lookup's message can quote the secret it read.
+      ports.log.warn("The credential lookup failed, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      return refusal(
+        `Oxagen could not read the credential for ${server.name}, so it did not send ${tool.name}. Call it again in a minute, and ask a workspace admin to reconnect ${server.label} if it fails again.`,
+        "failed",
+      );
+    }
+    if (credential.type === "missing") return refusal(`${credential.message}\n${credential.connect_url}`, "failed");
+    const read = credential;
+    credentials = { resolve: () => Promise.resolve(read) };
+  }
+
   if (approved !== null) {
     let claimed: boolean;
     try {
@@ -385,29 +423,15 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     }
   }
 
-  try {
-    const result = await execute(
-      tool,
-      args,
-      // The run's operator, not the agent file's: an agent names a member or
-      // a team by slug, and only a person holds an operator token.
-      { server, name: environment.name, operator: view.run.operator },
-      ports.credentials,
-      transport,
-      { senders: ports.senders, signal: ports.signal, now: ports.now },
-    );
-    return { result, outcome: result.isError === true ? "failed" : "allowed" };
-  } catch (error) {
-    // Only the error's name: a credential lookup's message can quote the secret it read.
-    ports.log.warn("The credential lookup failed, so the call was not sent.", {
-      tool: tool.name,
-      error: errorName(error),
-    });
-    return refusal(
-      `Oxagen could not read the credential for ${server.name}, so it did not send ${tool.name}. Call it again in a minute, and ask a workspace admin to reconnect ${server.label} if it fails again.`,
-      "failed",
-    );
-  }
+  const result = await execute(
+    tool,
+    args,
+    { server, name: environment.name, operator: view.run.operator },
+    credentials,
+    transport,
+    { senders: ports.senders, signal: ports.signal, now: ports.now },
+  );
+  return { result, outcome: result.isError === true ? "failed" : "allowed" };
 }
 
 function describeTool(entry: ServedTool): CallToolResult {
