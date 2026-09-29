@@ -124,6 +124,17 @@ const mocks = vi.hoisted(() => {
     })),
     warn: vi.fn(),
     error: vi.fn(),
+    host: { host: "steering" },
+    withToolProjection: vi.fn(),
+    readSteeringHealth: vi.fn(),
+    syncPublishCalls: [] as { scope: unknown; tenant: unknown }[],
+    steeringSyncPublish: vi.fn(
+      (_options: Record<string, unknown>) =>
+        async (scope: unknown) => {
+          mocks.syncPublishCalls.push({ scope, tenant: getScope() });
+          return { status: "published" as const, version: 1 };
+        },
+    ),
   };
 });
 
@@ -173,6 +184,18 @@ vi.mock("./logger", () => ({
 vi.mock("./repository.binding-write", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./repository.binding-write")>()),
   writeRepositoryHead: mocks.writeRepositoryHead,
+}));
+vi.mock("./steering-repo/publisher", () => ({
+  steeringSyncPublish: mocks.steeringSyncPublish,
+}));
+vi.mock("./context.steering.host", () => ({
+  createSteeringHost: () => mocks.host,
+}));
+vi.mock("./mcp-studio/publish-deps", () => ({
+  withToolProjection: mocks.withToolProjection,
+}));
+vi.mock("./steering-repo/health.read", () => ({
+  readSteeringHealth: mocks.readSteeringHealth,
 }));
 
 import {
@@ -1261,6 +1284,33 @@ describe("steeringRepoProvisionDeps", () => {
       expect(() => deps(ENV).steeringHook(WORKSPACE, 4242)).toThrow(
         /BETTER_AUTH_SECRET/,
       );
+    });
+  });
+
+  describe("publishFirst", () => {
+    it("publishes through the sync's port with the sync's production deps, in the workspace's tenant scope (#4732)", async () => {
+      mocks.steeringSyncPublish.mockClear();
+      mocks.syncPublishCalls.length = 0;
+      const publishFirst = deps().publishFirst;
+      if (publishFirst === undefined)
+        throw new Error("the production deps carry no publishFirst");
+
+      await expect(
+        publishFirst({ orgId: ORG, workspaceId: WS }),
+      ).resolves.toEqual({ status: "published", version: 1 });
+
+      expect(mocks.steeringSyncPublish).toHaveBeenCalledTimes(1);
+      expect(mocks.steeringSyncPublish.mock.calls[0]![0]).toEqual({
+        host: mocks.host,
+        extend: mocks.withToolProjection,
+        readHealth: mocks.readSteeringHealth,
+      });
+      expect(mocks.syncPublishCalls).toEqual([
+        {
+          scope: { orgId: ORG, workspaceId: WS },
+          tenant: expect.objectContaining({ orgId: ORG, workspaceId: WS }),
+        },
+      ]);
     });
   });
 });

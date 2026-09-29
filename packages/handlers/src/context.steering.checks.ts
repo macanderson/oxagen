@@ -5,14 +5,17 @@
 // reads the PR's head and base trees through a SteeringTreeHost and passes
 // them to that package's runChecksWithServers(). It adds no rule of its own.
 //
-// A PR that Oxagen opens for one record file under rules/ (ADR-061) still runs
-// the six §10.3 checks below, the same rules as `stella context validate`:
-// schema, lineage uniqueness, record_hash recomputation, a secret and PII
-// scan, conflict against active records, and constraint_effect. They read the
-// proposal row and one TOML file, which the steering layout does not have, so
-// they stay here until that flow moves to the steering layout. Each is a pure
-// function of the committed file and what the registry holds, so each has a
-// failing fixture in context.steering.checks.test.ts.
+// A Context PR, which Oxagen opens for one proposal (ADR-061), runs the six
+// §10.3 checks below, the same rules as `stella context validate`: schema,
+// lineage uniqueness, record_hash recomputation, a secret and PII scan,
+// conflict against active records, and constraint_effect. In a legacy repo
+// the PR's file is one TOML record file under .oxagen/rules/. In a steering
+// repo it is one steering record under steering/ (#4731), and runChecks
+// swaps in the four file checks in context.steering.record-checks.ts. The
+// secret and PII scan and the conflict check read only the proposal and the
+// registry, so both layouts share them. Each check is a pure function of the
+// committed file and what the registry holds, so each has a failing fixture
+// in context.steering.checks.test.ts or context.steering.record.test.ts.
 import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
@@ -50,8 +53,13 @@ import {
   stampRecordObject,
   type RecordFileRecord,
 } from "./context.steering.file";
+import { isSteeringRecordPath } from "./context.steering.record";
+import {
+  EDITED_ON_PR,
+  STEERING_RECORD_CHECKS,
+} from "./context.steering.record-checks";
 
-interface CheckOutcome {
+export interface CheckOutcome {
   ok: boolean;
   summary: string;
 }
@@ -322,16 +330,6 @@ function checkLineageUniqueness(ctx: CheckContext): CheckOutcome {
   };
 }
 
-/**
- * Why a stamped file stops agreeing with itself or with its proposal. Oxagen
- * writes the file whole, so a mismatch almost always means someone changed
- * it on the pull request, and the fix is in Oxagen, not in the file. A review
- * bot's accepted suggestion is the common case: it edits `statement` and
- * leaves `record_hash` stamped over the old words.
- */
-const EDITED_ON_PR =
-  "The file changed after Oxagen wrote it, usually through an edit or an accepted review suggestion on this pull request. Change the record in Oxagen, not on the pull request.";
-
 function checkRecordHash(ctx: CheckContext): CheckOutcome {
   const parsed = parseChecked(ctx.fileText);
   if (!parsed.ok) return { ok: false, summary: parsed.reason };
@@ -506,6 +504,18 @@ export const CHECK_TITLES: Record<CheckName, string> = {
 };
 
 /**
+ * The checks a file at `path` runs: the steering record checks for a path
+ * the steering layout reads as a record, and the TOML file's for any other.
+ */
+export function checksForPath(
+  path: string,
+): Record<CheckName, (ctx: CheckContext) => CheckOutcome> {
+  return isSteeringRecordPath(path)
+    ? { ...CHECKS, ...STEERING_RECORD_CHECKS }
+    : CHECKS;
+}
+
+/**
  * Run the six checks in order, one at a time: `start` is awaited before a
  * check runs and `finish` after, so the caller can persist the running state
  * and then the outcome, and mirror each to GitHub before the next one starts.
@@ -519,10 +529,11 @@ export async function runChecks(
     finish: (name: CheckName, outcome: CheckOutcome) => Promise<void>;
   },
 ): Promise<boolean> {
+  const checks = checksForPath(ctx.path);
   let allPassed = true;
   for (const name of CHECK_NAMES) {
     await hooks.start(name);
-    const outcome = CHECKS[name](ctx);
+    const outcome = checks[name](ctx);
     if (!outcome.ok) allPassed = false;
     await hooks.finish(name, outcome);
   }

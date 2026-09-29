@@ -45,7 +45,8 @@ describe("index.ts barrel exports", () => {
     // Insert helpers
     expect(typeof mod.insertExecutionLogs).toBe("function");
     expect(typeof mod.insertEvents).toBe("function");
-    expect(typeof mod.insertTokenUsage).toBe("function");
+    expect(typeof mod.stampTokenUsage).toBe("function");
+    expect(typeof mod.insertDurableTokenUsage).toBe("function");
     expect(typeof mod.insertToolInvocation).toBe("function");
     expect(typeof mod.insertAuditEvent).toBe("function");
     // Utility
@@ -60,5 +61,8 @@ describe("index.ts barrel exports", () => {
     // The skill-load reader and writer were deleted with #3098 (no caller since ADR-043).
     expect("recordSkillLoad" in mod).toBe(false);
     expect("readSkillMetrics" in mod).toBe(false);
+    // insertTokenUsage had no caller once token usage moved to the
+    // billing.usage_outbox delivery (ADR-134), and #2972 deleted it.
+    expect("insertTokenUsage" in mod).toBe(false);
   });
 });

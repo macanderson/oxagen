@@ -75,7 +75,7 @@ liability, risk (as a scare word), exposed, unchecked, rogue, dangerous, protect
 Mission Control (GitHub's product name for its control plane, retired here 2026-09-19; write Oxagen or the operator console), observability, governance (as a category name; fine as a verb and as one of the five jobs), evals, guardrails, trust layer, safety layer, AI ops, LLMOps, AgentOps, orchestration (as a category name)
 
 ### Overclaims
-proven (for anything the dod did), verified (for anything a model did), guaranteed, always, never (about outcomes), 100%, zero, eliminates
+proven (for anything the dod did), verified (for anything a model did), guaranteed, always (about outcomes), never (about outcomes), 100%, zero, eliminates
 
 ### Unscoped and unmeasured claims
 enforced on every call, enforced on every run (with no scope beside them), nothing to leak, nothing for the agent to leak, SOC 2 compliant, SOC 2 certified (unless the actual report says so), costs less, saves money, fewer tokens (without the measured workload and conditions), every agent has it, every agent you run (as a promise of shared knowledge), never re-explain, neither can your provider
@@ -105,6 +105,7 @@ In today's world, As AI agents become, With the rise of, It's no secret that, We
 | there is nothing for the agent to leak | Oxagen uses the connection credential on the agent's behalf |
 | the next run costs less | see what each recorded run costs |
 | stop wasting money on AI | see which agent spent what, and on whose behalf |
+| wasted spend | unproductive spend: spend on steps that bought no progress, with the requests behind it |
 | can you explain your AI bill | see which agent spent what, and on whose behalf |
 | every agent you run has it | give agents the business context their work requires |
 | SOC 2 compliant | the exact report status, type, and scope, or the readiness status |

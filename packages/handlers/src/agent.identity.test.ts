@@ -3,7 +3,9 @@
 //
 // The role gate is proven with a tx double, the way auth.cli.authorize.test.ts
 // proves its own: the org is tier-free in every case, so a refusal can only
-// come from the handler. The writes themselves are proven against a real
+// come from the handler. register_agent's default role assignment is proven
+// with a second double that walks the handler to its version write. The
+// writes themselves are proven against a real
 // Postgres (the credential row, the principal status, the host revocation and
 // the queued command are properties of the SQL); that block runs where
 // DATABASE_URL is set (CI's `test` job) and skips otherwise:
@@ -12,6 +14,7 @@
 //     pnpm --filter @oxagen/handlers exec vitest run src/agent.identity.test.ts
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -20,7 +23,7 @@ import {
   vi,
 } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
-import { schema } from "@oxagen/database";
+import { schema, withTransactionOrgScope } from "@oxagen/database";
 
 const mocks = vi.hoisted(() => ({
   emitSecurityEvent: vi.fn(),
@@ -30,6 +33,15 @@ const mocks = vi.hoisted(() => ({
     keyCreator: null as string | null,
     principalId: null as string | null,
     roleName: null as string | null,
+  },
+  register: {
+    enabled: false,
+    /** The scope kind of the org's default agent role. */
+    roleScope: "org" as "org" | "workspace",
+    /** Every insert a register double took, with the tx it ran on. */
+    inserts: [] as Array<{ tx: unknown; table: unknown; values: unknown }>,
+    /** The tx withTransactionOrgScope handed its callback. */
+    orgTx: null as unknown,
   },
 }));
 
@@ -49,23 +61,24 @@ vi.mock("./logger", () => ({
 // error from the first insert; the positive below names which.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  const gateRows = (table: unknown): unknown[] =>
+    table === real.schema.apiKeys
+      ? mocks.gate.keyCreator
+        ? [{ createdById: mocks.gate.keyCreator }]
+        : []
+      : table === real.schema.principals
+        ? mocks.gate.principalId
+          ? [{ id: mocks.gate.principalId }]
+          : []
+        : table === real.schema.principalRoleAssignments
+          ? mocks.gate.roleName
+            ? [{ roleName: mocks.gate.roleName }]
+            : []
+          : [];
   const gateTx = () => ({
     select: () => ({
       from: (table: unknown) => {
-        const rows =
-          table === real.schema.apiKeys
-            ? mocks.gate.keyCreator
-              ? [{ createdById: mocks.gate.keyCreator }]
-              : []
-            : table === real.schema.principals
-              ? mocks.gate.principalId
-                ? [{ id: mocks.gate.principalId }]
-                : []
-              : table === real.schema.principalRoleAssignments
-                ? mocks.gate.roleName
-                  ? [{ roleName: mocks.gate.roleName }]
-                  : []
-                : [];
+        const rows = gateRows(table);
         const chain = {
           innerJoin: () => chain,
           leftJoin: () => chain,
@@ -82,13 +95,99 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       throw new Error("a write reached the store");
     },
   });
+  // When `mocks.register.enabled`, withTenantDb answers the role gate as the
+  // gate double does and walks register_agent up to its version write: one
+  // runtime, the All tools belt, no agent on the harness or the slug, and
+  // the default agent role at `mocks.register.roleScope`. Every insert is
+  // recorded with the tx it ran on. The version write locks the agent row
+  // and finds none, so the handler stops one step after the role assignment.
+  const registerRows = (table: unknown): unknown[] =>
+    table === real.schema.runtimes
+      ? [
+          {
+            id: "rtm-uuid",
+            publicId: "rtm_0123456789abcdefghjkmn",
+            name: "Mac's laptop",
+            slug: "macs-laptop",
+            containmentRequired: false,
+          },
+        ]
+      : table === real.schema.toolbelts
+        ? [
+            {
+              id: "belt-uuid",
+              publicId: "tlb_all",
+              name: "All tools",
+              slug: "all-tools",
+              kind: "all_tools",
+              description: null,
+              clonedFromId: null,
+              updatedAt: new Date(0),
+              deletedAt: null,
+            },
+          ]
+        : table === real.schema.roles
+          ? [{ id: "role-uuid", scopeKind: mocks.register.roleScope }]
+          : gateRows(table);
+  const registerTx = (): unknown => {
+    const tx: Record<string, unknown> = {
+      select: () => ({
+        from: (table: unknown) => {
+          const rows = registerRows(table);
+          const chain = {
+            innerJoin: () => chain,
+            leftJoin: () => chain,
+            where: () => chain,
+            limit: async () => rows,
+            // lockToolbeltForCarrier and writeAgentVersion end in a row lock.
+            for: async () => rows,
+          };
+          return chain;
+        },
+      }),
+      insert: (table: unknown) => ({
+        values: (values: unknown) => {
+          mocks.register.inserts.push({ tx, table, values });
+          return {
+            returning: async () =>
+              table === real.schema.agents
+                ? [
+                    {
+                      id: "agent-uuid",
+                      publicId: "agt_row",
+                      slug: "release-bot",
+                    },
+                  ]
+                : table === real.schema.principals
+                  ? [{ id: "prn-uuid", publicId: "prn_agent" }]
+                  : [],
+            onConflictDoNothing: async () => undefined,
+          };
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => undefined }) }),
+    };
+    return tx;
+  };
   // The org-wide seam is mocked as the SAME function as the tenant
   // seam (ADR-086): a handler's role gate reads through withOrgDb, and
   // a suite that counts seam calls must see one identity, not two.
   const dbMock = {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      mocks.gate.enabled ? fn(gateTx()) : real.withTenantDb(fn as never),
+      mocks.register.enabled
+        ? fn(registerTx())
+        : mocks.gate.enabled
+          ? fn(gateTx())
+          : real.withTenantDb(fn as never),
+    withTransactionOrgScope: vi.fn(
+      async (tx: unknown, fn: (orgTx: unknown) => Promise<unknown>) => {
+        if (!mocks.register.enabled)
+          return real.withTransactionOrgScope(tx as never, fn as never);
+        mocks.register.orgTx = registerTx();
+        return fn(mocks.register.orgTx);
+      },
+    ),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
@@ -236,6 +335,75 @@ describe("agent identity writes: the role gate on a tier-free org", () => {
   it.each(WRITES)("%s lets an org Admin past the gate", async (name, call) => {
     mocks.gate.roleName = "Admin";
     await expect(call()).rejects.toSatisfy(pastGate(name));
+  });
+});
+
+describe("register_agent: the default agent role assignment", () => {
+  beforeEach(() => {
+    mocks.gate.enabled = true;
+    mocks.gate.keyCreator = null;
+    mocks.gate.principalId = "prn_row";
+    mocks.gate.roleName = "Owner";
+    mocks.register.enabled = true;
+    mocks.register.inserts = [];
+    mocks.register.orgTx = null;
+  });
+
+  afterEach(() => {
+    mocks.register.enabled = false;
+  });
+
+  // The step after the role assignment. The double holds no agent row, so the
+  // version write's row lock throws.
+  const atVersionWrite = (err: unknown): boolean =>
+    err instanceof Error &&
+    /agent row vanished under its version write/.test(err.message);
+
+  const insertInto = (table: unknown) =>
+    mocks.register.inserts.find((insert) => insert.table === table);
+
+  it("writes an org-scoped role inside withTransactionOrgScope on the handler's transaction, in the caller's org with no workspace", async () => {
+    mocks.register.roleScope = "org";
+    const ctx = makeCTX();
+    await expect(agentRegisterHandler(REGISTER_INPUT, ctx)).rejects.toSatisfy(
+      atVersionWrite,
+    );
+
+    const agent = insertInto(schema.agents);
+    const assignment = insertInto(schema.principalRoleAssignments);
+    // withTransactionOrgScope takes no org id. It widens the tx it is handed
+    // to the whole org, so that tx must be the one withTenantDb opened for
+    // the caller's org: the tx that took the agent row.
+    expect(withTransactionOrgScope).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(withTransactionOrgScope).mock.calls[0]![0]).toBe(
+      agent!.tx,
+    );
+    expect(assignment!.tx).toBe(mocks.register.orgTx);
+    expect(assignment!.tx).not.toBe(agent!.tx);
+    expect(assignment!.values).toMatchObject({
+      principalId: "prn-uuid",
+      roleId: "role-uuid",
+      orgId: ctx.orgId,
+      workspaceId: null,
+      assignedBy: ctx.userId,
+    });
+  });
+
+  it("writes a workspace-scoped role on the handler's transaction without withTransactionOrgScope", async () => {
+    mocks.register.roleScope = "workspace";
+    const ctx = makeCTX();
+    await expect(agentRegisterHandler(REGISTER_INPUT, ctx)).rejects.toSatisfy(
+      atVersionWrite,
+    );
+
+    const agent = insertInto(schema.agents);
+    const assignment = insertInto(schema.principalRoleAssignments);
+    expect(withTransactionOrgScope).not.toHaveBeenCalled();
+    expect(assignment!.tx).toBe(agent!.tx);
+    expect(assignment!.values).toMatchObject({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    });
   });
 });
 

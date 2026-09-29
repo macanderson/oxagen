@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@oxagen/done-record": "workspace:*",
+    "@oxagen/glob": "workspace:*",
+    "@oxagen/policy": "workspace:*",
     "@oxagen/run-evidence": "workspace:*"
   },
   "devDependencies": {

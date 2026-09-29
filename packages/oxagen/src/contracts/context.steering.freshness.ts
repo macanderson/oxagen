@@ -103,7 +103,7 @@ export const contextSteeringFreshness = registerCapability({
     "The workspace's steering version, the commit its newest record was published at, its production branch, and whether the workspace requires agents to auto-sync .oxagen/ or refuses prompts on stale steering.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // A freshness read on the path of every prompt. Metering it would bill a
   // customer for the privilege of being told their records are out of date.

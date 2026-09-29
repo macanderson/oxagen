@@ -84,9 +84,21 @@ The mandate governs the agent. The review covers the person working with it. It 
 
 One page per operator, read from the record and not estimated. It shows spend by operator, agent, and workspace, priced from the same rows the Spend page prices. For bounded tasks it shows outcome per dollar. Beside the money it shows how the person asks, taken from the recorded turns: turns to completion, restarts on the same task, steering overridden by hand instead of written as a rule, routed requests the operator approved every time. Each habit carries its definition, so a reader can check the number against the rows behind it, and each habit carries one recommendation, worded as a rule the operator can adopt.
 
-**The honesty rule.** The review reports what the record shows and does not grade the person. "Twelve restarts on the same task this week" is a fact. "Bad prompter" is not one, and no line in this product says it. A habit is a measurement with its definition beside it, never a score, a rating, or a ranking of people. Do not imply a saving from a habit without the measured workload and conditions.
+**The honesty rule.** The review reports what the record shows and does not grade the person. "Twelve restarts on the same task this week" is a fact. "Bad prompter" is not one, and no line in this product says it. A habit is a measurement with its definition beside it, not a score or a rating. Do not imply a saving from a habit without the measured workload and conditions.
 
-The lines are held until the operator review ships. Their gate is `operator-review`.
+**Decision, 2026-09-27:** Spend ranks operators by unproductive spend, for managers. Mac's words: "managers need to know who is wasting the most money." The ranking uses that one measured figure, and each figure opens to the requests behind it. Outside that ranking, no line scores or ranks a person. The figures shown beside each name, a pseudonym setting, and the operator and work order metrics are proposals. The lines are `mc-operator-ranking`, `mc-operator-productivity`, `mc-work-order-metrics`, `mc-unassigned-spend`, and `mc-unproductive-spend`, all held. The source is `finding-wasted-spend.html` in `oxagenai/oxagen-brand`.
+
+**Unproductive spend** is spend on steps that bought no progress: a repeated status poll, a cache that expired while a parent run waited, a model class larger than the job. It replaces "wasted spend". It is a recorded figure, so a line about it names the requests behind it and makes no savings claim without the measured workload.
+
+The lines are held until their gates ship:
+
+| Line | Gates |
+|---|---|
+| `mc-unproductive-spend` | `unproductive-spend` |
+| `mc-operator-ranking` | `operator-review`, `unproductive-spend` |
+| `mc-operator-productivity` | `operator-review`, `dod` |
+| `mc-work-order-metrics` | `work-orders`, `dod` |
+| `mc-unassigned-spend` | `work-orders` |
 
 ## The lead lines
 

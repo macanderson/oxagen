@@ -25,6 +25,7 @@ import {
 } from "@/data/contracts/run";
 import {
   callDetail,
+  lineOf,
   parseBody,
   type ToolDetail,
   type ToolDiff,
@@ -249,6 +250,11 @@ export type FeedCall = {
   group: ToolGroup;
   /** What the call acted on, on one line and cut at `LINE_CAP`; null when the record says nothing more than the name. */
   arg: string | null;
+  /**
+   * The line the row's hover card shows (#4692): `arg` with each path in
+   * full, or `arg` itself when it shortened none.
+   */
+  whole: string | null;
   /** First frame of the call to its last; null for a call recorded in one frame or with no result yet. */
   durationMs: number | null;
   output: string | null;
@@ -414,10 +420,12 @@ function base(
 
 /** The headline and its qualifier on one line, or null when neither was recorded. */
 function argOf(detail: ToolDetail | null): string | null {
-  const parts = [detail?.headline ?? null, detail?.detail ?? null].filter(
-    (part): part is string => part !== null,
-  );
-  return parts.length === 0 ? null : parts.join(" · ");
+  return lineOf(detail?.headline ?? null, detail?.detail ?? null);
+}
+
+/** The hover card's line: the reading's whole line when it shortened a path, or the row's own. */
+function wholeOf(detail: ToolDetail | null, arg: string | null): string | null {
+  return detail?.whole == null ? arg : closedLine(detail.whole);
 }
 
 /**
@@ -503,10 +511,15 @@ function toolRow(entry: TranscriptEntry): FeedRow {
         ? halfRef(entry.request)
         : openingOf(entry);
   const lastGate = gates[gates.length - 1];
+  const arg = callArg(
+    detail === null ? target : argOf(detail),
+    detail?.raw ?? null,
+  );
   const call: FeedCall = {
     name: detail?.name ?? entry.tool ?? entry.subject ?? entry.type,
     group: detail?.group ?? entry.family ?? "tool",
-    arg: callArg(detail === null ? target : argOf(detail), detail?.raw ?? null),
+    arg,
+    whole: wholeOf(detail, arg),
     durationMs: entry.durationMs,
     output: detail?.output ?? null,
     diffs: detail?.diffs ?? [],
@@ -548,10 +561,12 @@ function blockToolRow(
     block.input,
     block.result?.summary ?? null,
   );
+  const arg = callArg(argOf(detail), detail?.raw ?? null);
   const call: FeedCall = {
     name: detail?.name ?? block.tool ?? block.name,
     group: detail?.group ?? block.family ?? "tool",
-    arg: callArg(argOf(detail), detail?.raw ?? null),
+    arg,
+    whole: wholeOf(detail, arg),
     durationMs: null,
     output: detail?.output ?? null,
     diffs: detail?.diffs ?? [],

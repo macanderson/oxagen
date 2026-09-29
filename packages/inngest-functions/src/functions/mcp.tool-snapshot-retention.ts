@@ -9,8 +9,8 @@
 //
 // Runs on the 2nd of each month at 04:00 UTC (after the audit-partition
 // rollover at 03:00 on the 1st). Cross-tenant DDL/DML over every org's
-// snapshots, so it runs through withSystemDb — the explicit, audited RLS-bypass
-// seam for trusted cron jobs (OXA-1515).
+// snapshots, so it runs through withSystemDb, the explicit RLS-bypass seam for
+// trusted cron jobs (OXA-1515).
 //
 // Instrumentation: logs purgedSnapshots + affectedServers counts with
 // durationMs so the Inngest dashboard can track retention health.

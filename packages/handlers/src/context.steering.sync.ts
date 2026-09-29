@@ -763,8 +763,8 @@ async function reject(
 /**
  * Delete a settled Context PR's branch, as `dismiss_proposal` and
  * `merge_context_pr` do. The next proposal on the lineage branches from the
- * production branch; a stale `context/<lineage>` left behind would carry the
- * old PR's commits into it. Best effort: a branch already gone is fine, and a
+ * production branch; a stale branch left behind on the lineage would carry
+ * the old PR's commits into it. Best effort: a branch already gone is fine, and a
  * refusal is logged rather than failing the sync.
  */
 async function dropBranch(
