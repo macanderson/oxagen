@@ -1,0 +1,116 @@
+{{- include "oxagen-relay.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oxagen-relay.fullname" . }}
+  labels:
+    {{- include "oxagen-relay.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "oxagen-relay.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if not .Values.token.existingSecret }}
+        # A new token restarts the pods, since the relay reads it once at start.
+        checksum/token: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "oxagen-relay.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "oxagen-relay.serviceAccountName" . }}
+      # The relay calls no Kubernetes API.
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: relay
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The relay dials out and listens on no port, so the pod has no
+          # ports, no Service, and no probes. A relay that cannot start
+          # exits 2 and lists every setting to fix in its log.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: RELAY_BROKER_URL
+              value: {{ .Values.relay.brokerUrl | quote }}
+            - name: RELAY_NAME
+              value: {{ .Values.relay.name | quote }}
+            - name: RELAY_WORKSPACE
+              value: {{ .Values.relay.workspace | quote }}
+            - name: RELAY_TRUSTED_KEYS
+              # toJson keeps the PEM's line breaks through YAML.
+              value: {{ .Values.relay.trustedKeys | toJson }}
+            - name: RELAY_ALLOWED_HOSTS
+              value: {{ join "," .Values.relay.allowedHosts | quote }}
+            - name: RELAY_CLOCK_SKEW_MS
+              value: {{ .Values.relay.clockSkewMs | int64 | toString | quote }}
+            - name: RELAY_MAX_RESPONSE_BYTES
+              value: {{ .Values.relay.maxResponseBytes | int64 | toString | quote }}
+            - name: RELAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oxagen-relay.tokenSecretName" . }}
+                  key: {{ include "oxagen-relay.tokenSecretKey" . }}
+            {{- if .Values.extraCaCerts.configMap }}
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/oxagen-relay/ca/{{ .Values.extraCaCerts.key }}
+            {{- end }}
+          {{- if .Values.credentials.existingSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.credentials.existingSecret }}
+          {{- end }}
+          {{- if .Values.extraCaCerts.configMap }}
+          volumeMounts:
+            - name: extra-ca
+              mountPath: /etc/oxagen-relay/ca
+              readOnly: true
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if .Values.extraCaCerts.configMap }}
+      volumes:
+        - name: extra-ca
+          configMap:
+            name: {{ .Values.extraCaCerts.configMap }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

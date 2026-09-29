@@ -1029,6 +1029,43 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.8)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
 
+  apps/relay:
+    dependencies:
+      '@grpc/grpc-js':
+        specifier: 1.14.4
+        version: 1.14.4
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../../packages/mcp-studio
+      '@oxagen/relay-broker':
+        specifier: workspace:*
+        version: link:../../packages/relay-broker
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.8
+        version: 25.9.8
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.8)(jsdom@30.1.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
+
   apps/web:
     devDependencies:
       '@mdx-js/mdx':
@@ -1989,6 +2026,46 @@ importers:
       '@types/node':
         specifier: 25.9.8
         version: 25.9.8
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.8)(jsdom@30.1.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
+
+  packages/relay-broker:
+    dependencies:
+      '@oxagen/billing':
+        specifier: workspace:*
+        version: link:../billing
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../mcp-studio
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@oxagen/tacho':
+        specifier: workspace:*
+        version: link:../tacho
+      '@types/node':
+        specifier: 25.9.8
+        version: 25.9.8
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
@@ -7680,6 +7757,9 @@ packages:
 
   '@types/webxr@0.5.24':
     resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@typescript-eslint/eslint-plugin@8.70.1':
     resolution: {integrity: sha512-nDNrUQ/4ruSNYbu749TRY7cfrzPtoLHEXSNBI8aaNY32LlZCajixqRf3FqcKC4p5Cam4VOHYx/t+i5+nKXvrqA==}
@@ -18702,6 +18782,10 @@ snapshots:
   '@types/unist@3.0.3': {}
 
   '@types/webxr@0.5.24': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.9.8
 
   '@typescript-eslint/eslint-plugin@8.70.1(@typescript-eslint/parser@8.70.1(@typescript/typescript6@6.0.2)(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1))(@typescript/typescript6@6.0.2)(eslint@10.11.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)':
     dependencies:
