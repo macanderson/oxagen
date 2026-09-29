@@ -142,8 +142,8 @@ deploy lands.
 ## Amendment 2026-09-28: the API moves to api.oxagen.app
 
 Mac decided on 2026-09-28 that the API is served at `api.oxagen.app` (#4709).
-The record above moved only the web app. No decision moves `mcp.oxagen.sh` or
-`docs.oxagen.sh`.
+The record above moved only the web app. The next amendment moves MCP and the
+docs.
 
 - **Both names answer.** `api.oxagen.app` serves the API beside
   `api.oxagen.sh`, and neither redirects to the other. A webhook POST and an
@@ -163,3 +163,32 @@ The record above moved only the web app. No decision moves `mcp.oxagen.sh` or
 | A2 | Mac | Run `infra/tools/install-node-scripts.sh` after A1, even if step 2 already ran. Then `curl -s https://api.oxagen.app/health` answers from the API. |
 | A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. Do the same for the Oxagen Steering app with `/oauth/github/steering`. |
 | A4 | Agent | Open the API cutover PR: `API_PROD_URL`, `DEFAULT_API_ORIGIN`, the docs, the CLI, and the desktop app name `https://api.oxagen.app`, and the deploy probes check it. |
+
+## Amendment 2026-09-28: MCP and the docs move to oxagen.app
+
+Mac decided on 2026-09-28 that MCP and the docs move to `.app` too (#4717).
+`mcp.oxagen.app` serves the MCP server and `docs.oxagen.app` serves the docs,
+on the terms of the API amendment above.
+
+- **Both names answer.** Neither name redirects to the other. An MCP client
+  sends its key in an `Authorization` header, which a redirect drops, so
+  `mcp.oxagen.sh` stays for the clients configured with it until a later record
+  retires it.
+- **Each name has its own certificate.** `dns-oxagen-app.tf` issues one for
+  each name and adds both to the ALB's HTTPS listener. Either name can leave
+  the ALB without replacing a certificate the other is served with.
+- **Caddy routes both names.** `@mcp` and `@docs` in `Caddyfile.alb` match the
+  `.sh` and the `.app` name. Until the file is installed with them, Caddy
+  answers both `.app` names with a 404.
+- **No code change is needed to answer.** The MCP server pins no Host header
+  and publishes no OAuth metadata that names its origin. The docs site has no
+  canonical-host redirect.
+- **The docs keep their canonical name until B3.** The sitemap, `llms.txt`, and
+  the `oxagen.dev` redirect (`variables.tf`) name `docs.oxagen.sh`. B3 moves
+  them after `docs.oxagen.app` answers.
+
+| Step | Who | What |
+|---|---|---|
+| B1 | CI | The PR that adds this amendment merges. `infra.yml` issues both certificates, adds them to the ALB, and points both names at the ALB. |
+| B2 | Mac | Run `infra/tools/install-node-scripts.sh` after B1. One run after B1 also covers A2. Then `curl -sI https://docs.oxagen.app/` returns 200, and a `POST` to `https://mcp.oxagen.app/mcp` returns the status the same request gets from `mcp.oxagen.sh`. `/healthz` proves nothing, because Caddy answers it for every name. |
+| B3 | Agent | Open the MCP and docs cutover PR: `MCP_PROD_URL`, the docs sitemap and `llms.txt`, the `oxagen.dev` redirect target, the install instructions, the docs pages, and the deploy probes in `pipeline.yml` name the `.app` origins. |
