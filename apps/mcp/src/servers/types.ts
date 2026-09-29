@@ -46,6 +46,12 @@ export interface ServedRun {
   runtime: string;
   /** The harness the session reports, when it reports one. */
   harness: string | null;
+  /**
+   * The auth.users id of the person who enrolled the gateway key's host, when
+   * the host records one. They operate every session the host opens, so an
+   * operator-oauth server signs in with their token.
+   */
+  operator?: string;
   /** The role the gateway key's host enroller holds in the workspace now, when they hold one. */
   operatorRole?: string;
   /** The tacho.hosts public id of the machine the run is on. A local server runs there. */
