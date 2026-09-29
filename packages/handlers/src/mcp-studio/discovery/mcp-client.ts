@@ -53,9 +53,16 @@ const ACCEPT = "application/json, text/event-stream";
 // CR and LF would end a header early, and NUL ends it in some servers.
 const UNSAFE = /[\r\n\0]/;
 
-function refused(message: string): DiscoveryRefused {
-  return new DiscoveryRefused("source", message);
+function refused(message: string, retriable = false): DiscoveryRefused {
+  return new DiscoveryRefused("source", message, { retriable });
 }
+
+/** Transport failures a later attempt can get past. */
+const PASSING_TRANSPORT_ERRORS: ReadonlySet<string> = new Set([
+  "timeout",
+  "disconnected",
+  "not_sent",
+]);
 
 // ── The endpoint ─────────────────────────────────────────────────────────────
 
@@ -290,15 +297,20 @@ function failed(route: Route, error: unknown): DiscoveryRefused {
   if (route.signal.aborted) {
     return refused(
       `${route.endpoint.host} did not answer within ${route.deadlineMs / 1000} seconds.`,
+      true,
     );
   }
   if (error instanceof TransportError) {
     return refused(
       `The request to ${route.endpoint.host} failed: ${error.message}`,
+      PASSING_TRANSPORT_ERRORS.has(error.code),
     );
   }
   const message = error instanceof Error ? error.message : String(error);
-  return refused(`The request to ${route.endpoint.host} failed: ${message}`);
+  return refused(
+    `The request to ${route.endpoint.host} failed: ${message}`,
+    true,
+  );
 }
 
 async function send(
@@ -408,6 +420,14 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
   }
 }
 
+/**
+ * A status that says the server could not answer now: a timeout, too many
+ * requests, or a server error. Any other status fails the same way again.
+ */
+function passingStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
 function statusError(
   route: Route,
   what: string,
@@ -415,6 +435,7 @@ function statusError(
 ): DiscoveryRefused {
   return refused(
     `${route.endpoint.host} answered ${what} with HTTP ${status}.`,
+    passingStatus(status),
   );
 }
 
@@ -718,7 +739,9 @@ function scrubbed(scrubber: Scrubber, error: unknown): unknown {
   const message = scrubber.scrub(error.message);
   return message === error.message
     ? error
-    : new DiscoveryRefused(error.code, message);
+    : new DiscoveryRefused(error.code, message, {
+        retriable: error.retriable,
+      });
 }
 
 /** Open a session, page through tools/list, and end the session. */

@@ -69,6 +69,7 @@ import {
 } from "./store";
 import {
   DiscoveryRefused,
+  RetriableDiscoveryFailure,
   type DiscoveryOutcome,
   type DiscoveryResult,
   type DiscoveryScope,
@@ -529,9 +530,11 @@ async function openPullRequest(
     return { number: pr.number, url: pr.url, branch: pr.branch };
   } catch (error) {
     if (error instanceof DiscoveryRefused) throw error;
+    // The code host may be down, so a retry can open it.
     throw new DiscoveryRefused(
       "opener",
       `The sync steering PR for ${run.server} did not open: ${messageOf(error)}`,
+      { retriable: true },
     );
   }
 }
@@ -677,9 +680,19 @@ function failure(run: Run, error: unknown): DiscoveryFinish {
 }
 
 /**
+ * An error that can pass: one discovery did not expect, or a refusal marked
+ * retriable, such as an outage at the source or at the code host.
+ */
+function retriable(error: unknown): boolean {
+  return !(error instanceof DiscoveryRefused) || error.retriable;
+}
+
+/**
  * Discover one server's tools, record them, and open or update its sync
- * steering PR when an imported tool changed. It never throws for a problem
- * with the server or its source: the row and the result say what happened.
+ * steering PR when an imported tool changed. A refusal that retrying cannot
+ * fix resolves: the row and the result say what happened. Any other failure
+ * is recorded on the row, then thrown as a RetriableDiscoveryFailure, so the
+ * durable function retries it.
  */
 export async function runDiscovery(
   input: RunDiscoveryInput,
@@ -716,10 +729,12 @@ export async function runDiscovery(
   };
 
   let finish: DiscoveryFinish;
+  let retry = false;
   try {
     finish = await sync(run);
   } catch (error) {
     finish = failure(run, error);
+    retry = retriable(error);
     const fields = {
       orgId: scope.orgId,
       workspaceId: scope.workspaceId,
@@ -734,6 +749,11 @@ export async function runDiscovery(
     }
   }
   await store.finish(scope, server, finish, seams.now());
+  if (retry) {
+    throw new RetriableDiscoveryFailure(
+      `MCP discovery of ${server} failed: ${finish.error ?? "no reason given"}`,
+    );
+  }
   return {
     server,
     status: finish.status,

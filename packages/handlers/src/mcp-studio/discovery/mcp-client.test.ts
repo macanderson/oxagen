@@ -1020,7 +1020,31 @@ describe("listMcpTools", () => {
     const refusal = await refusalOf(listMcpTools(listRequest(transport)));
 
     expect(refusal.message).toBe(`${HOST} answered ${method} with HTTP 503.`);
+    expect(refusal.retriable).toBe(true);
     expect(onlyCall(sent, method).cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<[number, boolean]>([
+    [400, false],
+    [401, false],
+    [403, false],
+    [404, false],
+    [408, true],
+    [425, true],
+    [429, true],
+    [500, true],
+    [502, true],
+  ])("marks HTTP %i as retriable: %s", async (status, retriable) => {
+    const { transport } = fakeTransport(
+      mcpServer(on("initialize", { status, body: ["No."] })),
+    );
+
+    const refusal = await refusalOf(listMcpTools(listRequest(transport)));
+
+    expect(refusal.message).toBe(
+      `${HOST} answered initialize with HTTP ${status}.`,
+    );
+    expect(refusal.retriable).toBe(retriable);
   });
 
   it("refuses a session id that is not visible ASCII and cancels the reply", async () => {
@@ -1207,7 +1231,7 @@ describe("listMcpTools", () => {
     expect(callsOf(sent, "DELETE")).toHaveLength(1);
   });
 
-  it.each<[string, unknown, string]>([
+  it.each<[string, unknown, string, boolean]>([
     [
       "a transport error",
       new TransportError(
@@ -1216,23 +1240,40 @@ describe("listMcpTools", () => {
         false,
       ),
       `The request to ${HOST} failed: ${HOST} resolves to a private address.`,
+      false,
+    ],
+    [
+      "a transport error a retry can pass",
+      new TransportError("not_sent", "The connection was refused.", false),
+      `The request to ${HOST} failed: The connection was refused.`,
+      true,
     ],
     [
       "an error",
       new Error("socket hang up"),
       `The request to ${HOST} failed: socket hang up`,
+      true,
     ],
-    ["a string", "ECONNRESET", `The request to ${HOST} failed: ECONNRESET`],
-  ])("refuses a send that rejects with %s", async (_label, error, message) => {
-    const { transport } = fakeTransport(
-      mcpServer(on("initialize", { sendFails: error })),
-    );
+    [
+      "a string",
+      "ECONNRESET",
+      `The request to ${HOST} failed: ECONNRESET`,
+      true,
+    ],
+  ])(
+    "refuses a send that rejects with %s",
+    async (_label, error, message, retriable) => {
+      const { transport } = fakeTransport(
+        mcpServer(on("initialize", { sendFails: error })),
+      );
 
-    const refusal = await refusalOf(listMcpTools(listRequest(transport)));
+      const refusal = await refusalOf(listMcpTools(listRequest(transport)));
 
-    expect(refusal.code).toBe("source");
-    expect(refusal.message).toBe(message);
-  });
+      expect(refusal.code).toBe("source");
+      expect(refusal.message).toBe(message);
+      expect(refusal.retriable).toBe(retriable);
+    },
+  );
 
   it("refuses a body read that rejects and cancels the reply", async () => {
     const broken: Script = {
@@ -1264,6 +1305,7 @@ describe("listMcpTools", () => {
 
     expect(refusal.code).toBe("source");
     expect(refusal.message).toBe(`${HOST} did not answer within 0.05 seconds.`);
+    expect(refusal.retriable).toBe(true);
     expect(onlyCall(sent, "tools/list").cancel).toHaveBeenCalledTimes(1);
     expect(
       sent
@@ -1294,6 +1336,7 @@ describe("listMcpTools", () => {
     expect(refusal.message).toBe(
       `The discovery run ended before ${HOST} answered.`,
     );
+    expect(refusal.retriable).toBe(false);
     expect(onlyCall(sent, "tools/list").cancel).toHaveBeenCalledTimes(1);
   });
 });

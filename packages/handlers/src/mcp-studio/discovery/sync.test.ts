@@ -13,6 +13,7 @@ import {
   parseServerToml,
   parseToolsToml,
   toManifestServer,
+  TransportError,
   upstreamFromMcpTool,
   type CredentialSource,
   type HeaderEntry,
@@ -32,6 +33,7 @@ import {
   toolsLockPath,
   toolsTomlPath,
 } from "@oxagen/oxagen/steering-repo";
+import { REDACTED } from "./scrub";
 import {
   noGrpcDiscovery,
   noToolsPullRequestOpener,
@@ -46,7 +48,11 @@ import {
 } from "./seams";
 import type { DiscoveryFinish, DiscoveryRow, DiscoveryStore } from "./store";
 import { runDiscovery } from "./sync";
-import type { DiscoveryScope, DiscoveryTrigger } from "./types";
+import {
+  RetriableDiscoveryFailure,
+  type DiscoveryScope,
+  type DiscoveryTrigger,
+} from "./types";
 
 const logs = vi.hoisted(() => ({
   warn: vi.fn(),
@@ -389,6 +395,8 @@ interface Upstream {
   tools: readonly RawTool[];
   version?: string;
   fail?: Error;
+  /** Every request gets this HTTP status and no body. */
+  status?: number;
 }
 
 /** One request the fake Transport received. */
@@ -451,6 +459,9 @@ function fakeTransport(upstream: Upstream) {
       )?.[1],
     });
     if (upstream.fail !== undefined) return Promise.reject(upstream.fail);
+    if (upstream.status !== undefined) {
+      return Promise.resolve(answer(upstream.status));
+    }
     if (rpc?.method === "initialize") {
       return Promise.resolve(
         answer(200, {
@@ -598,6 +609,17 @@ function snapshotNames(fns: StoreFns): string[] {
   );
 }
 
+/** What the run threw. Fails the case when the run resolves. */
+async function thrownBy(pending: Promise<unknown>): Promise<Error> {
+  try {
+    await pending;
+  } catch (error) {
+    if (error instanceof Error) return error;
+    throw new Error(`The run threw something that is not an Error: ${String(error)}`);
+  }
+  throw new Error("The run resolved, and it should have thrown.");
+}
+
 /** The forms of SECRET that appear anywhere in the values. */
 function leaks(...values: unknown[]): string[] {
   const text = JSON.stringify(values);
@@ -672,5 +694,152 @@ describe("runDiscovery with no opener installed", () => {
     );
     expect(logs.error).not.toHaveBeenCalled();
     expect(leaks(recorded(h.db.fns, h.pr.open))).toEqual([]);
+  });
+});
+
+// ── Failures a retry can pass ────────────────────────────────────────────────
+
+describe("runDiscovery when a retry can pass", () => {
+  it.each<[string, Partial<Upstream>, string]>([
+    [
+      "a connection that failed before the request left",
+      {
+        fail: new TransportError(
+          "not_sent",
+          `connect ECONNREFUSED, sent Bearer ${SECRET}`,
+          false,
+        ),
+      },
+      `The request to mcp.stripe.com failed: connect ECONNREFUSED, sent Bearer ${REDACTED}`,
+    ],
+    [
+      "an HTTP 503",
+      { status: 503 },
+      "mcp.stripe.com answered initialize with HTTP 503.",
+    ],
+    [
+      "an HTTP 429",
+      { status: 429 },
+      "mcp.stripe.com answered initialize with HTTP 429.",
+    ],
+    [
+      "an error the transport did not expect",
+      { fail: new Error("socket hang up") },
+      "The request to mcp.stripe.com failed: socket hang up",
+    ],
+  ])(
+    "records %s on the row, then throws so the function retries",
+    async (_label, reply, error) => {
+      const h = harness();
+      Object.assign(h.upstream, reply);
+
+      const thrown = await thrownBy(h.run("schedule"));
+
+      expect(thrown).toBeInstanceOf(RetriableDiscoveryFailure);
+      expect(thrown.message).toBe(`MCP discovery of stripe failed: ${error}`);
+      expect(h.db.fns.finish).toHaveBeenCalledTimes(1);
+      expect(lastFinish(h.db.fns)).toMatchObject({
+        status: "failed",
+        outcome: null,
+        error,
+        pr: null,
+      });
+      expect(h.db.state.row?.status).toBe("failed");
+      expect(logs.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ server: "stripe", code: "source", error }),
+        "MCP discovery refused",
+      );
+      expect(h.pr.open).not.toHaveBeenCalled();
+      expect(leaks(thrown.message, recorded(h.db.fns, h.pr.open))).toEqual([]);
+    },
+  );
+
+  it("records a sync steering PR that did not open, then throws so the function retries", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
+      openerFails: new Error(`GitHub answered HTTP 502 to Bearer ${SECRET}`),
+    });
+    const error = `The sync steering PR for stripe did not open: GitHub answered HTTP 502 to Bearer ${REDACTED}`;
+
+    const thrown = await thrownBy(h.run("list_changed"));
+
+    expect(thrown).toBeInstanceOf(RetriableDiscoveryFailure);
+    expect(thrown.message).toBe(`MCP discovery of stripe failed: ${error}`);
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    expect(lastFinish(h.db.fns)).toMatchObject({
+      status: "failed",
+      outcome: null,
+      error,
+      pr: null,
+      withheld: ["stripe__create_refund"],
+      withheldUpstream: ["create_refund"],
+    });
+    expect(snapshotNames(h.db.fns)).toEqual([
+      "create_refund",
+      "list_charges",
+      "create_customer",
+    ]);
+    expect(logs.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "opener", error }),
+      "MCP discovery refused",
+    );
+    expect(leaks(thrown.message, recorded(h.db.fns, h.pr.open))).toEqual([]);
+  });
+});
+
+// ── Failures a retry cannot pass ─────────────────────────────────────────────
+
+describe("runDiscovery when a retry fails the same way", () => {
+  it.each<[string, Partial<Upstream>, string]>([
+    [
+      "an HTTP 401",
+      { status: 401 },
+      "mcp.stripe.com answered initialize with HTTP 401.",
+    ],
+    [
+      "an HTTP 404",
+      { status: 404 },
+      "mcp.stripe.com answered initialize with HTTP 404.",
+    ],
+    [
+      "a private address",
+      {
+        fail: new TransportError(
+          "refused_address",
+          "mcp.stripe.com resolves to a private address.",
+          false,
+        ),
+      },
+      "The request to mcp.stripe.com failed: mcp.stripe.com resolves to a private address.",
+    ],
+  ])("resolves %s as a failed discovery", async (_label, reply, error) => {
+    const h = harness();
+    Object.assign(h.upstream, reply);
+
+    const result = await h.run("schedule");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "failed",
+      outcome: null,
+      toolCount: null,
+      withheld: [],
+      pr: null,
+      error,
+    });
+    expect(h.db.state.row?.status).toBe("failed");
+    expect(logs.error).not.toHaveBeenCalled();
+  });
+
+  it("resolves a credential it cannot place", async () => {
+    const h = harness({ credential: { type: "bearer", token: "abc" } });
+
+    const result = await h.run("manual");
+
+    expect(result).toMatchObject({ status: "failed", outcome: null });
+    expect(result.error).toBe(
+      "The access token is shorter than 4 characters, so discovery cannot keep it out of what it writes.",
+    );
+    expect(h.wire.http).not.toHaveBeenCalled();
   });
 });
