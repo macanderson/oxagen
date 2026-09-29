@@ -70,7 +70,10 @@ export const [steeringRepoBackfill] = createFunction(
     for (let page = 0; page < BACKFILL_MAX_PAGES; page++) {
       const cursor = after;
       const name = `list-headless-workspaces-${page}`;
-      const rows = await step.run(name, () => readPage(cursor));
+      const read = () => readPage(cursor);
+      // Typed, because the cursor comes from the previous page's rows. An
+      // inferred type would depend on itself, and TypeScript reads it as any.
+      const rows: HeadlessWorkspace[] = await step.run(name, read);
       const ready = rows.filter(hasActor);
       skipped += rows.length - ready.length;
       if (ready.length > 0) {
@@ -88,8 +91,7 @@ export const [steeringRepoBackfill] = createFunction(
         );
         requested += ready.length;
       }
-      // Typed, so the cursor's type does not loop back through `rows`.
-      const last: HeadlessWorkspace | undefined = rows.at(-1);
+      const last = rows.at(-1);
       if (last === undefined || rows.length < BACKFILL_PAGE_SIZE) break;
       after = last.workspaceId;
     }
