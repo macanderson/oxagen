@@ -566,6 +566,10 @@ describe("Linked work", () => {
     if (captured === undefined) throw new Error("a captured diff");
     expect(within(captured).getByText("patch retained")).toBeTruthy();
     expect(within(captured).getByRole("link", { name: "fr 31" })).toBeTruthy();
+    // The short digest carries the whole one for its hover card (#4692).
+    const digest = captured.querySelector("code");
+    expect(digest?.getAttribute("data-truncate")).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(digest).not.toHaveAttribute("title");
   });
 
   it("counts the inferred rows against the total, and none is inferred", async () => {

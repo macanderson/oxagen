@@ -324,7 +324,7 @@ export function SpendByArea({
                 >
                   <span
                     className={`${mono} min-w-0 truncate`}
-                    title={tool.name ?? t("unnamedTool")}
+                    data-truncate=""
                   >
                     {tool.name ?? t("unnamedTool")}
                   </span>

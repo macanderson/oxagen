@@ -372,9 +372,11 @@ describe("the rows", () => {
   it("leads each call with the tool's short name and its arguments on the first line", () => {
     renderSection();
     const list = toolRow("github__list_pull_requests");
-    expect(within(list).getByTestId("tx-tool-arg")).toHaveTextContent(
-      "a-intel/platform · state closed · base main",
-    );
+    const arg = within(list).getByTestId("tx-tool-arg");
+    expect(arg).toHaveTextContent("a-intel/platform · state closed · base main");
+    // A cut argument shows whole in the hover card, to focus too (#4692).
+    expect(arg).toHaveAttribute("data-truncate");
+    expect(arg).not.toHaveAttribute("title");
     expect(list).toHaveTextContent("1.1 s");
     expect(list).toHaveTextContent("7 lines");
     expect(
@@ -950,10 +952,12 @@ describe("event rows", () => {
     // The skin draws the call's glyph; only a failure's ✗ is in the text.
     expect(notice).not.toHaveTextContent("✗");
     expect(within(notice).getByText("notification")).toBeTruthy();
-    expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
-      "title",
+    const eventLine = within(notice).getByTestId("tx-event-line");
+    expect(eventLine).toHaveAttribute(
+      "data-truncate",
       "Build finished all 42 tests passed",
     );
+    expect(eventLine).not.toHaveAttribute("title");
     expect(notice.querySelector("pre")).toBeNull();
     const fold = within(notice).getByRole("button", { name: "Show in full" });
     expect(fold).toHaveAttribute("aria-expanded", "false");

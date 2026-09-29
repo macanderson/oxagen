@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import {
   type CSSProperties,
   type ReactNode,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -32,6 +33,13 @@ export type OperatorIdentity = {
   /** The role in the scope the page reads: the workspace's, or the org's. */
   role?: string | null;
 };
+
+/**
+ * How long the card stays after the pointer leaves the name or the card, so
+ * the pointer can cross the 6px gap between them (#4674).
+ * @internal Exported for its component test.
+ */
+export const CLOSE_DELAY_MS = 300;
 
 /** Two letters from a name: first letters of its first two words. */
 function initialsOf(name: string): string {
@@ -63,6 +71,15 @@ export function OperatorName({
   const rootRef = useRef<HTMLSpanElement>(null);
   const cardRef = useRef<HTMLSpanElement>(null);
   const [place, setPlace] = useState<CSSProperties>({});
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(
+    () => () => {
+      clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   useLayoutEffect(() => {
     if (!open) return;
     // 6px under the name, or over it when the viewport has no room below,
@@ -109,11 +126,17 @@ export function OperatorName({
       // The card shows the whole name, so a table cell's tooltip stays shut.
       data-hover-card={hasCard ? "" : undefined}
       className={`relative inline-flex max-w-full items-center ${className ?? ""}`}
+      // React routes the portalled card's pointer events through this span,
+      // so moving onto the card cancels the close that leaving the name armed.
       onMouseEnter={() => {
+        clearTimeout(closeTimer.current);
         setOpen(true);
       }}
       onMouseLeave={() => {
-        setOpen(false);
+        clearTimeout(closeTimer.current);
+        closeTimer.current = setTimeout(() => {
+          setOpen(false);
+        }, CLOSE_DELAY_MS);
       }}
       onFocus={() => {
         setOpen(true);

@@ -235,6 +235,25 @@ describe("Sso: a verified and a pending provider", () => {
       );
     });
   });
+
+  // The table clips a body cell unless it holds `[data-actions]`, so Edit and
+  // Delete must both sit inside that one marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderSection({ ok: true, value: BOTH });
+    const row = within(
+      asElement(
+        screen
+          .getByRole("table", { name: "Identity providers" })
+          .querySelector('[data-provider="acme-okta"]'),
+      ),
+    );
+    const group = row
+      .getByRole("button", { name: "Edit" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(row.getByRole("button", { name: "Delete" }));
+    expect(group?.closest("td")).not.toBeNull();
+  });
 });
 
 describe("Sso: a plan without SSO", () => {
