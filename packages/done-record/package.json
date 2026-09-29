@@ -15,13 +15,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@oxagen/run-evidence": "workspace:*"
+    "@oxagen/glob": "workspace:*",
+    "@oxagen/run-evidence": "workspace:*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   },
   "devDependencies": {
     "@types/node": "25.9.8",
     "@vitest/coverage-v8": "2.1.9",
-    "ajv": "8.20.0",
-    "ajv-formats": "3.0.1",
     "eslint": "9.39.5",
     "typescript": "6.0.3",
     "vitest": "2.1.9",
