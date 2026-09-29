@@ -37,9 +37,10 @@ export const STEERING_IMPORT_OUTCOMES = [
  * (conflict `steering_import_running`), a repository on a host other than
  * GitHub (conflict `steering_import_provider_unsupported`), a repository
  * Oxagen can no longer reach (conflict `steering_import_source_unreachable`),
- * and a repository the workspace reads with no binding (conflict
- * `steering_import_legacy_connection`). When provisioning fails, the old
- * repository steers the workspace again.
+ * a repository the workspace reads with no binding (conflict
+ * `steering_import_legacy_connection`), and a branch it writes that already
+ * holds changes it did not make (conflict `steering_import_branch_taken`).
+ * When provisioning fails, the old repository steers the workspace again.
  *
  * Org Owners and Admins, and workspace Owners. The handler checks the role
  * itself (INV-29). The import is a one-time move a person starts, so the

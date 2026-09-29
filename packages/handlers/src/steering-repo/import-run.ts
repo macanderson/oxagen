@@ -17,7 +17,8 @@
 //                  from the steering repo's default branch as the run first
 //                  read it.
 //   cleanup        open one PR on the old repository that removes the
-//                  `.oxagen/` files the steering repo now holds.
+//                  `.oxagen/` files the steering repo now holds. A file the
+//                  old repository changed after the run read it stays.
 //
 // The run merges nothing. A person merges the import steering PRs in order,
 // then the cleanup PR last. Everything that touches the database or a host is
@@ -32,12 +33,14 @@ import {
 import type { RecordEffect } from "@oxagen/oxagen/steering-repo/record";
 import {
   githubRefused,
+  type SteeringChangedFile,
   type SteeringHost,
   type SteeringRepository,
 } from "../context.steering.github";
 import { githubRepoRef } from "../repository.workspace-toml";
 import {
   convertOxagenTree,
+  droppedFieldLines,
   IMPORT_WORKSPACE_BRANCH,
   importPullRequestBody,
   type ImportAgent,
@@ -136,6 +139,11 @@ export interface SteeringImportState {
   pull_requests: ImportPullRequest[];
   /** The old repository's commit the cleanup PR starts from. */
   cleanup_base: string | null;
+  /**
+   * Converted files the cleanup PR keeps, because the old repository changed
+   * them between `source.commit` and `cleanup_base`.
+   */
+  cleanup_kept: string[];
   cleanup: { number: number; url: string } | null;
   /** Files, records, and agents the import leaves for a person. */
   left_for_a_person: number;
@@ -157,6 +165,7 @@ export function initialImportState(now: Date): SteeringImportState {
     steering_base: null,
     pull_requests: [],
     cleanup_base: null,
+    cleanup_kept: [],
     cleanup: null,
     left_for_a_person: 0,
     rules_needing_kind: [],
@@ -215,6 +224,8 @@ export type ImportHost = Pick<
   | "branchHead"
   | "ensureBranch"
   | "commitFiles"
+  | "changedFiles"
+  | "holdsCommit"
   | "findOpenPullRequest"
   | "openPullRequest"
 >;
@@ -323,6 +334,95 @@ async function readOxagenTree(
   return files;
 }
 
+/** Files, records, and agents the conversion leaves for a person. */
+function leftForAPerson(conversion: OxagenTreeConversion): number {
+  return (
+    conversion.unconverted.length +
+    conversion.agentsByHand.length +
+    conversion.rulesNeedingKind.length +
+    conversion.constraintsNeedingEffect.length
+  );
+}
+
+/**
+ * The paths among `paths` whose content at `base` differs from what the run
+ * read at `commit`. The cleanup keeps each one, so it never deletes an edit
+ * the import did not carry.
+ */
+async function changedSince(
+  source: OpenedRepository,
+  base: string,
+  commit: string,
+  paths: readonly string[],
+  read: ReadonlyMap<string, string>,
+): Promise<string[]> {
+  if (base === commit) return [];
+  const now = await mapLimit(paths, 8, (path) =>
+    source.host.readFile(source.repo, path, base),
+  );
+  return paths.filter((path, index) => now[index] !== read.get(path));
+}
+
+/**
+ * Whether the branch at `head` holds only the commit this run writes on
+ * `base`. The head descends from `base`, changes no path outside `files`, and
+ * holds each file as the run writes it. The host lists at most 300 changed
+ * files, so a longer list proves nothing.
+ */
+async function holdsRunCommit(
+  host: ImportHost,
+  repo: SteeringRepository,
+  base: string,
+  head: string,
+  files: readonly { path: string; content: string | null }[],
+): Promise<boolean> {
+  if (!(await host.holdsCommit(repo, head, base))) return false;
+  let changed: SteeringChangedFile[];
+  try {
+    changed = await host.changedFiles(repo, base, head);
+  } catch (err) {
+    if (isHandlerError(err) && err.reason === "too_many_files") return false;
+    throw err;
+  }
+  const expected = new Set(files.map((file) => file.path));
+  if (changed.some((file) => !expected.has(file.path))) return false;
+  const held = await mapLimit(files, 8, (file) =>
+    host.readFile(repo, file.path, head),
+  );
+  return files.every((file, index) => (held[index] ?? null) === file.content);
+}
+
+/**
+ * Put the run's one commit on `branch`, which starts at `base`. A branch an
+ * earlier call of this run committed is proved and kept. The run refuses any
+ * other branch, and a branch that changes 300 or more files, because the host
+ * cannot list those changes. It opens no PR from a refused branch.
+ */
+async function commitOnce(
+  opened: OpenedRepository,
+  base: string,
+  branch: string,
+  message: string,
+  files: readonly { path: string; content: string | null }[],
+): Promise<void> {
+  const { host, repo } = opened;
+  await host.ensureBranch(repo, branch, repo.defaultBranch, {
+    exclusive: false,
+    at: base,
+  });
+  const head = await host.branchHead(repo, branch);
+  if (head === base) {
+    await host.commitFiles(repo, { branch, parent: base, message, files: [...files] });
+    return;
+  }
+  if (head !== null && (await holdsRunCommit(host, repo, base, head, files)))
+    return;
+  throw conflict(
+    "steering_import_branch_taken",
+    `The branch ${branch} on ${repo.fullName} already exists, and Oxagen cannot confirm it holds only this import's commit. Delete the branch, then run the import again.`,
+  );
+}
+
 /** The title of one import steering PR. */
 export function importPullRequestTitle(
   conversion: OxagenTreeConversion,
@@ -345,7 +445,15 @@ export function cleanupPullRequestBody(args: {
   steeringRepository: string;
   pullRequests: readonly ImportPullRequest[];
   paths: readonly string[];
+  /** The commit the import read `.oxagen/` at. */
+  commit: string;
+  /** Converted files this PR keeps, because they changed after `commit`. */
+  kept: readonly string[];
+  /** The fields the conversion dropped, by the file that held them. */
+  dropped: Readonly<Record<string, readonly string[]>>;
 }): string {
+  const removed = new Set(args.paths);
+  const dropped = droppedFieldLines(args.dropped, (path) => removed.has(path));
   return [
     `The workspace's steering moved to the steering repo ${args.steeringRepository}. This PR removes the ${args.paths.length === 1 ? "file" : `${args.paths.length} files`} under \`${LEGACY_OXAGEN_DIR}/\` that the steering repo now holds.`,
     "",
@@ -358,6 +466,26 @@ export function cleanupPullRequestBody(args: {
     "## Files removed",
     "",
     ...args.paths.map((path) => `- \`${path}\``),
+    ...(args.kept.length > 0
+      ? [
+          "",
+          "## Files changed since the import",
+          "",
+          `The import read these files at \`${args.commit}\`, and they changed after that. The steering repo holds the version the import read, so this PR keeps them. Move each change into the steering repo with a steering PR, then delete the file.`,
+          "",
+          ...args.kept.map((path) => `- \`${path}\``),
+        ]
+      : []),
+    ...(dropped.length > 0
+      ? [
+          "",
+          "## Dropped fields",
+          "",
+          "The steering repo has no place for these fields, and this PR deletes the files that hold them. Move any field you still need by hand before you merge.",
+          "",
+          ...dropped,
+        ]
+      : []),
   ].join("\n") + "\n";
 }
 
@@ -430,17 +558,23 @@ async function advance(
   // same files.
   let conversion: OxagenTreeConversion | null = null;
   let source: OpenedRepository | null = null;
+  // `.oxagen/` at the pinned commit, read once. The cleanup compares each
+  // file it would remove against this read.
+  let snapshot: Map<string, string> | null = null;
   const openSource = async (from: ImportSourceRepository) => {
     source ??= await deps.openSource(scope, from);
     return source;
+  };
+  const readSnapshot = async (from: ImportSource) => {
+    snapshot ??= await readOxagenTree(await openSource(from), from.commit);
+    return snapshot;
   };
   const convert = async (
     from: ImportSource,
     steering: { workspaceToml: string | null; governanceToml: string | null } | null,
   ): Promise<OxagenTreeConversion> => {
-    const opened = await openSource(from);
     const [files, agents, names] = await Promise.all([
-      readOxagenTree(opened, from.commit),
+      readSnapshot(from),
       deps.agents(scope),
       deps.names(scope),
     ]);
@@ -528,11 +662,17 @@ async function advance(
 
   // 2. The old head stops steering. The bind refuses while it steers.
   if (!reached(state, "demote")) {
-    if (state.source !== null && !(await deps.demote(scope, state.source.head_id)))
+    if (state.source !== null && !(await deps.demote(scope, state.source.head_id))) {
+      // Forget the source, so the next run reads the steering head again
+      // instead of retrying a head that is gone.
+      const gone = state.source.full_name;
+      state.source = null;
+      state.step = null;
       throw conflict(
         "steering_import_source_gone",
-        `The binding of ${state.source.full_name} is gone. Run the import again to read the workspace afresh.`,
+        `The binding of ${gone} is gone. Run the import again to read the workspace afresh.`,
       );
+    }
     state.step = "demote";
     await save();
   }
@@ -587,11 +727,7 @@ async function advance(
         );
         await save();
       }
-      state.left_for_a_person =
-        conversion.unconverted.length +
-        conversion.agentsByHand.length +
-        conversion.rulesNeedingKind.length +
-        conversion.constraintsNeedingEffect.length;
+      state.left_for_a_person = leftForAPerson(conversion);
     }
     state.step = "import";
     await save();
@@ -617,12 +753,27 @@ async function advance(
       const present = new Set(
         await opened.host.listFiles(opened.repo, base, LEGACY_OXAGEN_DIR),
       );
-      const paths = conversion.cleanupPaths.filter((path) => present.has(path));
+      const candidates = conversion.cleanupPaths.filter((path) => present.has(path));
+      // A file that changed after the run read it holds an edit the import
+      // did not carry, so the cleanup keeps it for a person.
+      const kept = await changedSince(
+        opened,
+        base,
+        from.commit,
+        candidates,
+        await readSnapshot(from),
+      );
+      const paths = candidates.filter((path) => !kept.includes(path));
+      state.cleanup_kept = kept;
+      state.left_for_a_person = leftForAPerson(conversion) + kept.length;
       if (paths.length > 0) {
         state.cleanup = await openCleanupPullRequest(opened, base, {
           steeringRepository: state.steering_repository ?? "",
           pullRequests: state.pull_requests,
           paths,
+          commit: from.commit,
+          kept,
+          dropped: conversion.dropped,
         });
       }
     }
@@ -653,7 +804,7 @@ async function steeringFiles(
 /**
  * Open, or find, one import steering PR. The branch starts at `base`, and the
  * files are committed only while the branch is still there, so a resumed run
- * never commits them twice.
+ * never commits them twice. A branch that holds anything else is refused.
  */
 async function openImportPullRequest(
   steering: OpenedRepository,
@@ -664,23 +815,13 @@ async function openImportPullRequest(
 ): Promise<ImportPullRequest> {
   const { host, repo } = steering;
   try {
+    const title = importPullRequestTitle(conversion, branch);
+    await commitOnce(steering, base, branch.branch, title, branch.files);
     const open = await host.findOpenPullRequest(repo, {
       head: branch.branch,
       base: repo.defaultBranch,
     });
     if (open) return { branch: branch.branch, number: open.number, url: open.htmlUrl };
-    const title = importPullRequestTitle(conversion, branch);
-    await host.ensureBranch(repo, branch.branch, repo.defaultBranch, {
-      exclusive: false,
-      at: base,
-    });
-    if ((await host.branchHead(repo, branch.branch)) === base)
-      await host.commitFiles(repo, {
-        branch: branch.branch,
-        parent: base,
-        message: title,
-        files: branch.files,
-      });
     const opened = await host.openPullRequest(repo, {
       title,
       head: branch.branch,
@@ -694,7 +835,11 @@ async function openImportPullRequest(
   }
 }
 
-/** Open, or find, the cleanup PR on the old repository. */
+/**
+ * Open, or find, the cleanup PR on the old repository. The branch holds one
+ * commit that removes `paths`, and a branch that holds anything else is
+ * refused.
+ */
 async function openCleanupPullRequest(
   source: OpenedRepository,
   base: string,
@@ -702,27 +847,26 @@ async function openCleanupPullRequest(
     steeringRepository: string;
     pullRequests: readonly ImportPullRequest[];
     paths: readonly string[];
+    commit: string;
+    kept: readonly string[];
+    dropped: Readonly<Record<string, readonly string[]>>;
   },
 ): Promise<{ number: number; url: string }> {
   const { host, repo } = source;
   try {
+    const title = "Remove the .oxagen/ files the steering repo now holds";
+    await commitOnce(
+      source,
+      base,
+      IMPORT_CLEANUP_BRANCH,
+      title,
+      args.paths.map((path) => ({ path, content: null })),
+    );
     const open = await host.findOpenPullRequest(repo, {
       head: IMPORT_CLEANUP_BRANCH,
       base: repo.defaultBranch,
     });
     if (open) return { number: open.number, url: open.htmlUrl };
-    const title = "Remove the .oxagen/ files the steering repo now holds";
-    await host.ensureBranch(repo, IMPORT_CLEANUP_BRANCH, repo.defaultBranch, {
-      exclusive: false,
-      at: base,
-    });
-    if ((await host.branchHead(repo, IMPORT_CLEANUP_BRANCH)) === base)
-      await host.commitFiles(repo, {
-        branch: IMPORT_CLEANUP_BRANCH,
-        parent: base,
-        message: title,
-        files: args.paths.map((path) => ({ path, content: null })),
-      });
     const opened = await host.openPullRequest(repo, {
       title,
       head: IMPORT_CLEANUP_BRANCH,

@@ -36,6 +36,8 @@ const NAMES = { organization: "a-intel", workspace: "core-platform" };
 
 const OLD_HEAD = "head-old";
 const NEW_HEAD = "head-steering";
+/** A converted file whose governance section the conversion drops a field from. */
+const GOVERNANCE_PATH = ".oxagen/rules/governance.toml";
 
 const SOURCE: ImportSourceRepository = {
   head_id: OLD_HEAD,
@@ -218,6 +220,16 @@ describe("runSteeringImport: a workspace steered by .oxagen/", () => {
     expect(removed.every((file) => file.content === null)).toBe(true);
     expect(removed.map((file) => file.path).sort()).toEqual([...expected.cleanupPaths].sort());
     for (const pr of world.steering.pulls) expect(cleanup?.body).toContain(`\`${pr.head}\``);
+    expect(cleanup?.body).not.toContain("## Files changed since the import");
+
+    // Both the first steering PR and the cleanup PR name the dropped fields.
+    expect(Object.keys(expected.dropped)).toContain(GOVERNANCE_PATH);
+    for (const body of [world.steering.pulls[0]?.body, cleanup?.body]) {
+      expect(body).toContain("## Dropped fields");
+      expect(body).toContain(`- \`${GOVERNANCE_PATH}\`: \`separation_of_duties\``);
+      expect(body).toContain("`workspace.name`");
+    }
+    expect(world.steering.pulls[1]?.body).not.toContain("## Dropped fields");
 
     expect(result.leftForAPerson).toBe(
       expected.unconverted.length +
@@ -232,6 +244,7 @@ describe("runSteeringImport: a workspace steered by .oxagen/", () => {
       source: { ...SOURCE, commit: "base0", relinked: "github.com/a-intel/platform" },
       steering_base: "base0",
       cleanup_base: "base0",
+      cleanup_kept: [],
     });
   });
 
@@ -444,6 +457,148 @@ describe("runSteeringImport: a stopped run", () => {
     expect(await refusal(world.run())).toBe("steering_import_running");
     expect(world.state).toEqual(before);
     expect(world.demoteCalls).toBe(0);
+  });
+
+  it("forgets a source whose binding is gone, so the next run reads the workspace again", async () => {
+    const world = new World();
+    world.state = {
+      ...initialImportState(new Date(world.clock.getTime() - 60_000)),
+      status: "failed",
+      step: "record_source",
+      source: {
+        ...SOURCE,
+        head_id: "head-gone",
+        commit: "base0",
+        relinked: "github.com/a-intel/platform",
+      },
+    };
+
+    expect(await refusal(world.run())).toBe("steering_import_source_gone");
+    expect(world.state).toMatchObject({
+      status: "failed",
+      step: null,
+      source: null,
+      error: { code: "steering_import_source_gone" },
+    });
+    expect(world.heads.get(OLD_HEAD)).toBe("steering");
+    expect(world.provisionCalls).toBe(0);
+
+    const result = await world.run();
+
+    expect(result.outcome).toBe("imported");
+    expect(world.heads.get(OLD_HEAD)).toBe("linked");
+    expect(world.state?.source?.head_id).toBe(OLD_HEAD);
+  });
+
+  it("keeps the cleanup commit a refused run made, and opens its PR once", async () => {
+    const world = new World();
+    const open = world.source.openPullRequest.bind(world.source);
+    let refused = false;
+    world.source.openPullRequest = async (repo, args) => {
+      if (!refused) {
+        refused = true;
+        throw new Error("socket hang up");
+      }
+      return open(repo, args);
+    };
+
+    expect(await refusal(world.run())).toBe("github_refused");
+    expect(world.state).toMatchObject({ status: "failed", step: "import", cleanup: null });
+    expect(world.source.stamps).toHaveLength(1);
+    expect(world.source.pulls).toHaveLength(0);
+
+    const result = await world.run();
+
+    expect(result.outcome).toBe("imported");
+    expect(world.source.stamps).toHaveLength(1);
+    expect(world.source.pulls.map((pr) => pr.head)).toEqual([IMPORT_CLEANUP_BRANCH]);
+    expect(result.cleanup?.number).toBe(world.source.pulls[0]?.number);
+  });
+});
+
+describe("runSteeringImport: branches the import did not make", () => {
+  it("refuses a cleanup branch that holds other changes, and opens no PR from it", async () => {
+    const world = new World();
+    world.source.heads.set(IMPORT_CLEANUP_BRANCH, "base0");
+    world.source.commit(IMPORT_CLEANUP_BRANCH, "README.md", "not the import");
+
+    expect(await refusal(world.run())).toBe("steering_import_branch_taken");
+    expect(world.source.pulls).toHaveLength(0);
+    expect(world.source.stamps).toHaveLength(0);
+    expect(world.state).toMatchObject({
+      status: "failed",
+      step: "import",
+      cleanup: null,
+      error: { code: "steering_import_branch_taken" },
+    });
+
+    // With the branch deleted, the next run opens the cleanup PR.
+    world.source.heads.delete(IMPORT_CLEANUP_BRANCH);
+    const result = await world.run();
+
+    expect(result.outcome).toBe("imported");
+    expect(world.source.stamps).toHaveLength(1);
+    expect(world.source.pulls.map((pr) => pr.head)).toEqual([IMPORT_CLEANUP_BRANCH]);
+  });
+
+  it("refuses an import branch that holds other changes, and opens no PR from it", async () => {
+    const world = new World();
+    world.steering.heads.set(IMPORT_BRANCH, "base0");
+    world.steering.commit(IMPORT_BRANCH, "steering/other.md", "not the import");
+
+    expect(await refusal(world.run())).toBe("steering_import_branch_taken");
+    expect(world.steering.pulls).toHaveLength(0);
+    expect(world.steering.stamps).toHaveLength(0);
+    expect(world.source.pulls).toHaveLength(0);
+    expect(world.state).toMatchObject({ status: "failed", step: "provision", pull_requests: [] });
+  });
+});
+
+describe("runSteeringImport: the old repository changes during the run", () => {
+  it("keeps a converted file edited after the import read it", async () => {
+    const world = new World();
+    const expected = expectedConversion();
+    expect(expected.cleanupPaths).toContain(GOVERNANCE_PATH);
+    const open = world.steering.openPullRequest.bind(world.steering);
+    let edited = false;
+    world.steering.openPullRequest = async (repo, args) => {
+      const opened = await open(repo, args);
+      if (!edited) {
+        edited = true;
+        world.source.commit("main", GOVERNANCE_PATH, "edited after the import read it");
+      }
+      return opened;
+    };
+
+    const result = await world.run();
+
+    expect(result.outcome).toBe("imported");
+    const moved = world.source.heads.get("main");
+    expect(moved).not.toBe("base0");
+    expect(world.source.stamps).toHaveLength(1);
+    expect(world.source.stamps[0]?.parent).toBe(moved);
+    const removed = (world.source.stamps[0]?.files ?? []).map((file) => file.path);
+    expect(removed).not.toContain(GOVERNANCE_PATH);
+    expect(removed.sort()).toEqual(
+      expected.cleanupPaths.filter((path) => path !== GOVERNANCE_PATH).sort(),
+    );
+
+    const body = world.source.pulls[0]?.body ?? "";
+    expect(body).toContain("## Files changed since the import");
+    expect(body).toContain(`- \`${GOVERNANCE_PATH}\``);
+    expect(body).toContain("`base0`");
+    // The kept file's dropped field stays with the file, so the cleanup does not list it.
+    expect(body).not.toContain("`separation_of_duties`");
+    expect(body).toContain("`workspace.name`");
+
+    expect(result.leftForAPerson).toBe(
+      expected.unconverted.length +
+        expected.agentsByHand.length +
+        expected.rulesNeedingKind.length +
+        expected.constraintsNeedingEffect.length +
+        1,
+    );
+    expect(world.state).toMatchObject({ cleanup_base: moved, cleanup_kept: [GOVERNANCE_PATH] });
   });
 });
 

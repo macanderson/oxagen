@@ -36,7 +36,7 @@ Send `{}` on the first call. The choices count only until the run changes someth
 | `steeringRepository` | string or null | `owner/name` of the steering repo |
 | `pullRequests` | array of `{ branch, number, url }` | the import steering PRs on the steering repo, in merge order |
 | `cleanup` | `{ number, url }` or null | the PR that removes the imported files from the old repository |
-| `leftForAPerson` | integer | files, records, and agents the import left for a person |
+| `leftForAPerson` | integer | files, records, and agents the import left for a person, counting each converted file the cleanup PR keeps |
 | `rulesNeedingKind` | array of strings | old lineages of the v0.1 rules that need a kind |
 | `constraintsNeedingEffect` | array of strings | old lineages of the v0.1 constraints that need an effect |
 
@@ -55,7 +55,7 @@ Send `{}` on the first call. The choices count only until the run changes someth
 2. Makes the old repository's head linked.
 3. Creates and binds the steering repo. When this step fails, the old repository steers the workspace again.
 4. Opens the import steering PRs on the steering repo. The records go in batches on `steering/import-oxagen`, `steering/import-oxagen-2`, and so on, each at most 299 files. `workspace.toml` goes on `workspace/import-oxagen`, and each agent goes on its own `agents/<name>` branch.
-5. Opens one cleanup PR on the old repository, on `oxagen/import-cleanup`. It removes the files the steering repo now holds. Files the import left for a person stay.
+5. Opens one cleanup PR on the old repository, on `oxagen/import-cleanup`. It removes the files the steering repo now holds. Files the import left for a person stay. A converted file that changed on the old repository after step 1 read it stays too, and the cleanup PR lists it.
 
 Merge the PRs in the order `pullRequests` lists them, then merge the cleanup PR last.
 
@@ -67,8 +67,10 @@ The run records each step in the workspace's `steering_import` setting. A call a
 - A record with no record id.
 - A v0.1 rule with no kind, and a v0.1 constraint with no effect.
 - An agent Oxagen holds no operator, runtime, or harness for. The agent registry records no operator yet, so today every agent is left for a person.
+- A converted file that changed on the old repository after the import read it. The steering repo holds the version the import read. Move the change with a steering PR, then delete the file.
+- A field the steering repo has no place for. The import drops it from the file it converts.
 
-Each import steering PR lists what it left.
+The first import steering PR lists what the import left and each dropped field. The cleanup PR lists the files it keeps and the dropped fields of the files it deletes.
 
 ## Refusals
 
@@ -80,7 +82,8 @@ Each import steering PR lists what it left.
 | `conflict` | `steering_import_provider_unsupported` | the workspace binds a repository on a host other than GitHub, such as GitLab |
 | `conflict` | `steering_import_source_unreachable` | Oxagen can no longer reach the old repository, or its production branch is gone |
 | `conflict` | `steering_import_legacy_connection` | the workspace reads a repository through a sources connection with no binding. Bind the repository with `bind_main_repository`, then run the import |
-| `conflict` | `steering_import_source_gone` | the old repository's binding was removed while the run was going |
+| `conflict` | `steering_import_source_gone` | the old repository's binding was removed while the run was going. Call again, and the next run reads the workspace afresh |
+| `conflict` | `steering_import_branch_taken` | a branch the import writes, such as `oxagen/import-cleanup`, already exists, and Oxagen cannot confirm it holds only this import's commit. Delete the branch, then call again |
 | `conflict` | `workspace_mismatch`, `governance_unreadable`, `workspace_toml_unreadable`, `too_many_files`, `branch_scope` | the converter cannot read the tree. Nothing changed |
 | `conflict` | `steering_repo_provisioning` | another request is creating the steering repo |
 | `conflict` | `steering_repo_provision_failed`, `steering_repo_already_bound`, `steering_app_unconfigured`, `repository_name_taken`, `no_connection`, `choose_connection` | the steering repo could not be created. The old repository steers the workspace again |

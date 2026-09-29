@@ -1074,10 +1074,30 @@ export function renderIdTable(records: readonly ImportedRecord[]): string {
 }
 
 /**
+ * One line for each file the conversion dropped fields from, sorted by path:
+ * the file, then each field. `only` limits the lines to the files it keeps.
+ * A reason in parentheses, such as "(the file is not TOML)", reads as text.
+ */
+export function droppedFieldLines(
+  dropped: Readonly<Record<string, readonly string[]>>,
+  only: (path: string) => boolean = () => true,
+): string[] {
+  return Object.keys(dropped)
+    .filter((path) => only(path) && (dropped[path]?.length ?? 0) > 0)
+    .sort()
+    .map((path) => {
+      const fields = (dropped[path] ?? []).map((key) =>
+        key.startsWith("(") && key.endsWith(")") ? key.slice(1, -1) : `\`${key}\``,
+      );
+      return `- \`${path}\`: ${fields.join(", ")}`;
+    });
+}
+
+/**
  * The body of one import steering PR. An import batch lists the records and
  * skills it converts, with each record's id before and after. The first
  * batch also names the governance mode. The first PR the import opens lists
- * the files and agents it leaves for a person.
+ * the files and agents it leaves for a person, and the fields it drops.
  */
 export function importPullRequestBody(
   conversion: OxagenTreeConversion,
@@ -1155,6 +1175,17 @@ export function importPullRequestBody(
         "Oxagen writes an agent only when it holds the agent's operator, runtime, and harness.",
         "",
         ...conversion.agentsByHand.map((agent) => `- \`${agent.name}\`: ${agent.reason}`),
+      );
+    }
+    const dropped = droppedFieldLines(conversion.dropped);
+    if (dropped.length > 0) {
+      lines.push(
+        "",
+        "## Dropped fields",
+        "",
+        `The steering repo has no place for these fields, so the import leaves them out. The cleanup PR deletes the files that hold them from ${relinked}. Move any field you still need by hand before you merge it.`,
+        "",
+        ...dropped,
       );
     }
   }

@@ -36,7 +36,9 @@ unless the ledger says which id it replaces.
    setting records each finished step, so a rerun resumes at the step that
    stopped and opens no second copy of a pull request. When provisioning
    fails before its bind step, the import gives the old head back its
-   `steering` role and answers a typed error.
+   `steering` role and answers a typed error. When the old head's binding is
+   gone at the demote step, the import forgets the source it recorded, so the
+   next run reads the workspace's steering head again.
 3. **`convertOxagenTree` converts the tree and touches nothing.** Each v0.1
    record becomes `steering/imported/<lineage>.md`, and its lineage is
    `<organization>.<workspace>.<slug>`. Each skill becomes
@@ -69,7 +71,17 @@ unless the ledger says which id it replaces.
 8. **The cleanup removes what moved.** The cleanup pull request on the old
    repository deletes each converted file. It keeps every file the import
    left for a person, and it keeps `.oxagen/workspace.json` and the settings
-   files, which belong to one checkout.
+   files, which belong to one checkout. It also keeps a converted file that
+   changed on the old repository after the import read it, and lists it for
+   a person, so the cleanup never deletes an edit the steering repo does not
+   hold. The first import steering PR and the cleanup PR list each field the
+   conversion dropped, by the file that held it.
+9. **The import writes only on a branch it can prove.** The branches it
+   writes have fixed names. Before it opens or adopts a pull request, the
+   import checks the branch. The branch must start at the base the run
+   recorded and change nothing but the run's own files, as the run writes
+   them. Otherwise it refuses with `steering_import_branch_taken` and opens
+   nothing, and the owner deletes the branch and runs the import again.
 
 ## Consequences
 
@@ -102,3 +114,7 @@ unless the ledger says which id it replaces.
 - A rerun finds a pull request it opened but did not save by looking for the
   open pull request on its branch. If a person closes that pull request
   before the rerun, the rerun opens a new one.
+- A branch that changes 300 or more files cannot be proved, because the host
+  lists at most 299 changed files in one compare. The import refuses such a
+  branch with `steering_import_branch_taken`. Its own branches change at most
+  299 files each, so only a branch someone else wrote meets that limit.

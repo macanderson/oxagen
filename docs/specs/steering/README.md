@@ -257,9 +257,16 @@ with one call per workspace, `import_workspace_steering`, in four steps:
    records, the skills, and `governance.toml`. `workspace/import-oxagen`
    carries `workspace.toml`. Each agent with a stored operator, runtime, and
    harness gets its own `agents/` PR.
-4. Once those merge, Oxagen opens one pull request on the old repository. It
-   removes the committed steering files under `.oxagen/`. The machine-local
-   files that the repository-binding spec lists in §4 stay.
+4. In the same run, Oxagen opens one pull request on the old repository. A
+   person merges it last, after the import steering PRs. It removes the
+   committed steering files under `.oxagen/` that the steering repo now
+   holds. A file that changed after the import read it stays, and the pull
+   request lists it. The machine-local files that the repository-binding spec
+   lists in §4 stay.
+
+Oxagen writes only on a branch it can prove holds nothing but its own commit.
+A branch with the same name and other changes stops the run with
+`steering_import_branch_taken`.
 
 A rerun starts at the first step not yet done.
 
