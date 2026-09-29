@@ -7,9 +7,12 @@
 // never one agent or one operator (#3864).
 import { useLocale, useTranslations } from "next-intl";
 import {
+  type Cost,
+  differenceOfMicros,
   maxMoney,
   type Money as MoneyValue,
   ratioOfMicros,
+  sumMoney,
 } from "@/data/contracts/money";
 import {
   OTHER_SPEND_KEY,
@@ -95,6 +98,9 @@ function BudgetMeter({
     );
   }
   const reached = budget.ratio >= 1;
+  // A budget that is not enforced stops no run, so reaching it is a fact to
+  // note and not an alarm.
+  const alarm = reached && budget.enabled;
   const used = formatRatio(budget.ratio, locale);
   return (
     <div className="flex flex-col gap-1.5 pt-2" data-budget-state={budget.state}>
@@ -113,13 +119,18 @@ function BudgetMeter({
         className="block h-1.5 w-full overflow-hidden rounded-full bg-muted"
       >
         <span
-          className={`block h-full ${reached ? "bg-destructive" : "bg-link"}`}
+          className={`block h-full ${alarm ? "bg-destructive" : "bg-link"}`}
           style={{ width: ratioWidth(Math.min(1, budget.ratio)) }}
         />
       </span>
-      {reached ? (
-        <span>
-          <Badge tone="denied">{t("reached")}</Badge>
+      {reached || !budget.enabled ? (
+        <span className="flex flex-wrap gap-1.5">
+          {reached ? (
+            <Badge tone={alarm ? "denied" : "quiet"}>{t("reached")}</Badge>
+          ) : null}
+          {budget.enabled ? null : (
+            <Badge tone="quiet">{t("notEnforced")}</Badge>
+          )}
         </span>
       ) : null}
     </div>
@@ -136,7 +147,10 @@ function Total({
   at: SpendAt;
 }) {
   const t = useTranslations("spend.month");
+  const tSummary = useTranslations("spend.summary");
   const format = useFormatter();
+  // Open runs whose running cost is in the total (#3980); final once they seal.
+  const estimatedRuns = report.estimatedRuns ?? 0;
   const days = report.days ?? [];
   const costs = days.flatMap((day) => (day.cost === null ? [] : [day.cost]));
   const peak = maxMoney(costs);
@@ -165,6 +179,14 @@ function Total({
             count: report.total.runs,
           })}
         </p>
+        {report.total.cost === null || estimatedRuns === 0 ? null : (
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="spend-month-estimate"
+          >
+            {tSummary("estimated", { count: estimatedRuns })}
+          </p>
+        )}
         <UnmeteredNote
           unmetered={report.unmeteredRuns}
           className="text-xs text-muted-foreground"
@@ -180,6 +202,48 @@ function Total({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * The row key of the spend the agent, operator, and model groupings leave out:
+ * runs that recorded no agent, operator, or model, and runs the daily rollup
+ * has not counted yet. No group key starts with a tilde.
+ */
+const UNGROUPED_KEY = "~ungrouped";
+
+/**
+ * What the total holds beyond the priced groups, or null when the groups
+ * account for all of it.
+ */
+function ungroupedCost(report: SpendReport): Cost | null {
+  const total = report.total.cost;
+  if (total === null) return null;
+  const priced = report.rows.flatMap((row) =>
+    row.cost === null ? [] : [row.cost],
+  );
+  // Groups in more than one currency have no sum to set against the total.
+  const grouped =
+    priced.length === 0
+      ? { micros: "0", currency: total.currency }
+      : sumMoney(priced);
+  if (grouped === null) return null;
+  const rest = differenceOfMicros(total, grouped);
+  if (rest === null || rest.sign <= 0) return null;
+  return { ...rest.gap, basis: total.basis };
+}
+
+function UngroupedLabel({
+  by,
+}: {
+  by: Exclude<SpendMonthBy, "mcp_server">;
+}) {
+  const t = useTranslations("spend.month.ungrouped");
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="font-semibold">{t("label")}</span>
+      <span className="text-xs text-muted-foreground">{t(`note.${by}`)}</span>
+    </span>
   );
 }
 
@@ -225,24 +289,22 @@ function GroupLabel({ row, by }: { row: Row; by: SpendMonthBy }) {
 }
 
 function Share({
-  row,
+  cost,
   total,
   largest,
 }: {
-  row: Row;
+  cost: MoneyValue | null;
   total: MoneyValue | null;
+  /** The largest group's cost, or null for a row that draws no bar. */
   largest: MoneyValue | null;
 }) {
   const locale = useLocale();
   const share =
-    row.cost === null || total === null ? null : ratioOfMicros(row.cost, total);
+    cost === null || total === null ? null : ratioOfMicros(cost, total);
   if (share === null) return <NotRecordedValue />;
-  // The bar is the row against the largest group, as the design draws it; the
-  // rest of the spend on the MCP server grouping draws none.
+  // The bar is the row against the largest group, as the design draws it.
   const bar =
-    row.key === OTHER_SPEND_KEY || row.cost === null || largest === null
-      ? 0
-      : (ratioOfMicros(row.cost, largest) ?? 0);
+    cost === null || largest === null ? 0 : (ratioOfMicros(cost, largest) ?? 0);
   return (
     <span className="flex items-center gap-2">
       <span
@@ -355,17 +417,38 @@ export function MonthSection({
       row.key === OTHER_SPEND_KEY || row.cost === null ? [] : [row.cost],
     ),
   );
+  // The rest of the spend on the MCP server grouping, and the ungrouped
+  // remainder, draw no bar and count no runs: neither is one group.
   const rows: MonthTableRow[] = report.rows.map((row) => ({
     key: row.key,
     label: <GroupLabel row={row} by={by} />,
     runs: row.key === OTHER_SPEND_KEY ? null : formatCount(row.runs, locale),
-    share: <Share row={row} total={total} largest={largest} />,
+    share: (
+      <Share
+        cost={row.cost}
+        total={total}
+        largest={row.key === OTHER_SPEND_KEY ? null : largest}
+      />
+    ),
     cost: <CostFigure cost={row.cost} />,
     runList:
       row.key === OTHER_SPEND_KEY || (row.topRuns ?? []).length === 0 ? null : (
         <RunList row={row} at={at} />
       ),
   }));
+  // The priced rows then sum to the Total row beneath them. The MCP server
+  // grouping needs no such row: Everything else holds the rest of each run.
+  const ungrouped = by === "mcp_server" ? null : ungroupedCost(report);
+  if (ungrouped !== null && by !== "mcp_server") {
+    rows.push({
+      key: UNGROUPED_KEY,
+      label: <UngroupedLabel by={by} />,
+      runs: null,
+      share: <Share cost={ungrouped} total={total} largest={null} />,
+      cost: <CostFigure cost={ungrouped} />,
+      runList: null,
+    });
+  }
   const reported =
     report.reported === null ||
     report.reported === undefined ||
@@ -387,7 +470,7 @@ export function MonthSection({
               })
         }
       >
-        {rows.length === 0 ? (
+        {report.rows.length === 0 ? (
           <Empty>{t("empty")}</Empty>
         ) : (
           <MonthTable

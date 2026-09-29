@@ -207,21 +207,24 @@ export function DrillSection({
   const own =
     findings === null ? null : findingsOn(findings, drill.kind, drill.key);
   const saving = own === null ? null : savingOf(own);
-  // The crumb goes back to the table the key sits in: By tool for a tool, and
-  // the Month tab grouped by the drill's kind for an operator or an agent.
+  // The crumb goes back to where the key's drill is reached: By tool for a
+  // tool, the operator ranking on Findings for an operator (the v3 mockup's
+  // operator review), and the Month tab grouped by agent for an agent.
   const back =
     drill.kind === "tool"
       ? {
           to: routes.spend(at.org, at.ws, { tab: "tool" }),
           label: t("tabs.tool"),
         }
-      : {
-          to: routes.spend(at.org, at.ws, {
-            tab: "month",
-            by: drill.kind === "operator" ? "operator" : undefined,
-          }),
-          label: t(`month.by.titles.${drill.kind}`),
-        };
+      : drill.kind === "operator"
+        ? {
+            to: routes.spend(at.org, at.ws, { tab: "findings" }),
+            label: t("tabs.findings"),
+          }
+        : {
+            to: routes.spend(at.org, at.ws, { tab: "month" }),
+            label: t("month.by.titles.agent"),
+          };
   return (
     <>
       <nav aria-label={t("drill.crumbLabel")} className="text-[13px]">

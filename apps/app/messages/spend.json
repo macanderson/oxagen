@@ -712,12 +712,21 @@
         "note": "Model output, prompts, steering, files, and commands"
       },
       "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
-      "reported": "The harness reported {amount} of this total. The gateway metered the rest.",
+      "reported": "The harness reported {amount} of this total. The gateway metered or estimated the rest.",
+      "ungrouped": {
+        "label": "Not grouped",
+        "note": {
+          "agent": "Runs with no agent recorded, or not yet in the daily rollup",
+          "operator": "Runs with no operator recorded, or not yet in the daily rollup",
+          "model": "Runs with no model recorded, or not yet in the daily rollup"
+        }
+      },
       "budget": {
         "label": "Monthly budget",
         "used": "{ratio} of {limit}",
         "position": "{ratio} of the monthly budget used",
         "reached": "Reached",
+        "notEnforced": "Not enforced",
         "none": "No budget set"
       },
       "by": {
