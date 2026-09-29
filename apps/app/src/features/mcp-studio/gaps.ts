@@ -11,6 +11,11 @@ const STUDIO_GAPS = {
    * issue carries the record.
    */
   record: 4678,
+  /**
+   * Discovery progress and the tools discovery found: lane M10 part 2
+   * (start_studio_discovery, get_studio_discovery, list_studio_tools).
+   */
+  discovery: 4682,
   /** Try it and Draft run through capabilities that PR2 of this lane adds. */
   capability: 4678,
   /** Saving the draft and opening a steering PR from it: lane M11 (PR #4688). */
