@@ -42,12 +42,12 @@ export function ContextPrs({
   if (!read.ok) {
     body = <SteeringReadFailure read={read} section={title} />;
   } else {
-    const rows = read.value.proposals.flatMap((proposal) =>
+    const prRows = read.value.proposals.flatMap((proposal) =>
       proposal.pr === null ? [] : [{ proposal, pr: proposal.pr }],
     );
     body = (
       <>
-        {rows.length === 0 ? (
+        {prRows.length === 0 ? (
           <p data-state="empty" className="text-sm text-muted-foreground">
             {t("empty")}
           </p>
@@ -61,7 +61,7 @@ export function ContextPrs({
               { label: t("columns.state") },
             ]}
           >
-            {rows.map(({ proposal, pr: row }) => (
+            {prRows.map(({ proposal, pr: row }) => (
               <tr key={proposal.id} data-proposal={proposal.id}>
                 <td className={cell}>
                   <SafeLink

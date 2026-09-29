@@ -5,11 +5,12 @@
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
-// (#2962); the three Agents routes hand theirs, with the agent, the tab and the
-// cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); the Skills route moves a
-// member to the Skills tab of Steering with its cursor; Steering hands its viewer,
-// the data source and the query to the Steering feature (#2961); Tools hands
+// (#2962); the three Agents routes hand theirs, with the agent, the tab, the
+// cursor and the rows the URL names, to the Agents feature (#2956, #4693);
+// Spend hands its viewer, the data source and the query to its body (#2962);
+// the Skills route moves a member to the Skills tab of Steering with its
+// cursor; Steering hands its viewer, the data source and the query to the
+// Steering feature (#2961); Tools hands
 // theirs, with the tab and the chips the URL names, to the Tools feature
 // (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
@@ -787,10 +788,10 @@ describe("the Agents pages", () => {
     expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 
-  it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
+  it("the agent page hands the agent, the tab, the cursor and the rows the URL names to Agent", async () => {
     await expectBodyTitled(
       await AGENT(),
-      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
+      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3", rows: "25" }),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -800,11 +801,13 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "incidents",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(await AGENT(), routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
+      rows: null,
     });
     await expectPageTitle(
       await AGENTS(),
@@ -814,11 +817,14 @@ describe("the Agents pages", () => {
     expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
   });
 
-  it("the agent tab page hands the tab its path names, and the cursor, to Agent", async () => {
+  it("the agent tab page hands the tab its path names, the cursor and the rows to Agent", async () => {
     const page = await AGENT_TAB();
     await expectBodyTitled(
       page,
-      routeProps({ ...SEGMENTS, tab: "activity" }, { cursor: "c3" }),
+      routeProps(
+        { ...SEGMENTS, tab: "activity" },
+        { cursor: "c3", rows: "25" },
+      ),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -828,6 +834,7 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "activity",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(
       page,
@@ -837,6 +844,7 @@ describe("the Agents pages", () => {
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: "identity",
       cursor: null,
+      rows: null,
     });
   });
 });

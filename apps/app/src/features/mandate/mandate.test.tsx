@@ -652,4 +652,44 @@ describe("Mandate › the ledger's search, facet and pager", () => {
         .querySelector('input[type="hidden"][name="rows"]'),
     ).toBeNull();
   });
+
+  it("links Older and Newer at a picked size, dropping the offset on the first page", async () => {
+    const many = Array.from({ length: 30 }, () => mandateMovement());
+    await renderMandate(mandateDetailRead({ ledger: many }), {
+      rows: "10",
+      offset: "10",
+    });
+    expect(movements()).toHaveLength(10);
+    const pages = screen.getByRole("navigation", { name: "Ledger pages" });
+    expect(within(pages).getByRole("link", { name: "Newer" })).toHaveAttribute(
+      "href",
+      `${BASE}?rows=10`,
+    );
+    expect(within(pages).getByRole("link", { name: "Older" })).toHaveAttribute(
+      "href",
+      `${BASE}?rows=10&offset=20`,
+    );
+  });
+
+  // The second Clear sits in the empty state a search leaves, apart from the
+  // one in the filter bar, so it needs its own proof that the size survives.
+  it("keeps the size on the Clear link a search with no match shows, and draws no pager (negative)", async () => {
+    await renderMandate(mandateDetailRead({ ledger: three() }), {
+      q: "nothing-matches-this",
+      rows: "50",
+    });
+    const empty = document.querySelector<HTMLElement>(
+      '[data-state="filtered-empty"]',
+    );
+    expect(empty).not.toBeNull();
+    expect(
+      within(empty as HTMLElement).getByRole("link", {
+        name: "Clear the search",
+      }),
+    ).toHaveAttribute("href", `${BASE}?rows=50`);
+    expect(
+      screen.queryByRole("navigation", { name: "Ledger pages" }),
+    ).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Rows" })).toBeNull();
+  });
 });

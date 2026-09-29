@@ -1348,6 +1348,22 @@ describe("Proposals", () => {
     ).toBeDisabled();
   });
 
+  // The pager hides only under an empty first page. A later page that comes
+  // back empty, from a stale link or a list that shrank, keeps the way back.
+  it("keeps the way back on a later page that came back empty (negative)", async () => {
+    await renderSteering("/proposals?rows=10&offset=40", {
+      proposals: readOk({ proposals: [], total: 30 }),
+    });
+    const pager = pagesRow();
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals?rows=10&offset=30`);
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+    expect(pager.querySelector("[data-range]")).toBeNull();
+  });
+
   it("keeps the size on both segments and on the link to a Context PR", async () => {
     const calls = await renderSteering("/proposals?rows=25");
     // The hub's gold check asks with the body's size, so the read table
