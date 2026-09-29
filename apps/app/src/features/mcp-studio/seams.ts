@@ -6,19 +6,15 @@
 //   - readStudioRecord: the server's steering folder and its discovery. Lane
 //     M10 (#4682, PR #4711) discovers the tools, and a later part of this
 //     lane joins them to the folder. Null until then.
-//   - readFindings: the tool checks on the server's folder. Lane M5 (#4672)
-//     owns lint; null, meaning no checks ran, until then.
-//   - tryCall and draftDescription: Try it and Draft, which capabilities of
-//     their own will back. Try it is metered as a governed action and Draft
-//     bills as in-app agent spend, both through the kernel.
 //   - SaveStudioDraft, GetStudioDraft and OpenStudioReview: Review, lane M11
 //     (#4686), whose capabilities save_studio_draft, get_studio_draft and
 //     open_studio_review shipped in #4688. review-calls.ts binds these types
 //     to them through this lane's server actions (actions.ts).
 //
-// A credential never crosses any of these. Try it names an environment and
-// the gateway adds the credential after the request is recorded, and a saved
-// test loses any credential header before it is staged (draft.ts, scrubTest).
+// Try it, Draft and the Changes tab's findings call capabilities that have
+// not merged yet. Their stubs live in pending-capabilities.ts.
+//
+// A credential never crosses any of these seams.
 import type {
   ToolEgress,
   ToolRiskGrade,
@@ -26,11 +22,7 @@ import type {
 } from "@/data/contracts/tools";
 import type { WsCtx } from "@/server/viewer";
 import type { DraftOp } from "./draft";
-import type { StudioGap } from "./gaps";
 import type { StudioRecord } from "./model";
-
-/** An answer from a seam whose work has not landed. */
-type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
 
 /** A tool check's finding (lint's `Finding`, lane M5). */
 export type StudioFinding = {
@@ -51,59 +43,8 @@ export type RecordReader = (
   serverId: string,
 ) => Promise<StudioRecord | null>;
 
-export type FindingsReader = (
-  ctx: WsCtx,
-  serverId: string,
-) => Promise<readonly StudioFinding[] | null>;
-
 /** The Studio record. Null until PR2 of this lane binds M10's discovery. */
 export const readStudioRecord: RecordReader = () => Promise.resolve(null);
-
-/** The tool checks on the folder as it stands. Null until lint lands (lane M5). */
-export const readFindings: FindingsReader = () => Promise.resolve(null);
-
-/** One Try it call: an imported tool, an environment and the arguments. */
-type TryInput = {
-  serverId: string;
-  tool: string;
-  environment: string;
-  /** The arguments, parsed from the JSON the person typed. */
-  args: Readonly<Record<string, unknown>>;
-};
-
-export type TryResult =
-  | {
-      ok: true;
-      /** What went upstream, as built before the gateway added the credential. */
-      request: string;
-      /** The upstream's answer, unshaped. */
-      raw: string;
-      /** What the model would receive after tools.toml's shaping. */
-      shaped: string;
-    }
-  | NotBuilt
-  /** Policy denied the call or parked it for approval; the call still counts. */
-  | { ok: false; reason: "denied"; message: string }
-  | { ok: false; reason: "failed"; message: string };
-
-export type TryCall = (input: TryInput) => Promise<TryResult>;
-
-export const tryCall: TryCall = () =>
-  Promise.resolve({ ok: false, reason: "not_built", gap: "capability" });
-
-type DraftResult =
-  | { ok: true; description: string }
-  | NotBuilt
-  | { ok: false; reason: "failed"; message: string };
-
-export type DraftDescription = (input: {
-  serverId: string;
-  tool: string;
-}) => Promise<DraftResult>;
-
-/** Draft a description with the in-app agent, billed as in-app agent spend. */
-export const draftDescription: DraftDescription = () =>
-  Promise.resolve({ ok: false, reason: "not_built", gap: "capability" });
 
 /**
  * A Review call Oxagen refused. The code is the handler's reason for a

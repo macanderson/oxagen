@@ -16,14 +16,14 @@ const STUDIO_GAPS = {
    * (start_studio_discovery, get_studio_discovery, list_studio_tools).
    */
   discovery: 4682,
-  /** Try it and Draft run through capabilities that PR2 of this lane adds. */
-  capability: 4678,
+  /** Try it and Draft: try_studio_tool and draft_studio_description. */
+  capability: 4742,
   /** Saving the draft and opening a steering PR from it: lane M11 (PR #4688). */
   steeringPr: 4686,
-  /** Findings on the draft: lane M5's lint. */
-  findings: 4672,
-  /** Writing a credential: lane M8. */
-  credentials: 4668,
+  /** Findings on the draft: list_studio_findings, which runs lane M5's lint. */
+  findings: 4742,
+  /** Writing a named credential: set_mcp_credential. */
+  credentials: 4742,
 } as const;
 
 export type StudioGap = keyof typeof STUDIO_GAPS;

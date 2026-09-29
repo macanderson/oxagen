@@ -812,18 +812,18 @@ describe("ToolsTab tool panel", () => {
         "Charges a customer once, in cents.",
       );
     });
-    expect(calls).toEqual([{ serverId: STRIPE, tool: "create_payment" }]);
+    expect(calls).toEqual([{ server: "stripe", tool: "create_payment" }]);
     await closePanel(user, panel, "create_payment");
   });
 
-  it("falls back to the not-built draft seam when the page passes none", async () => {
+  it("falls back to the pending Draft stub when the page passes none", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const panel = await openPanel(user, "create_payment");
-    await user.click(within(panel).getByTestId("studio-panel-draft"));
-    expect(
-      await within(panel).findByTestId("studio-panel-draft-not-built"),
-    ).toHaveTextContent(COPY.draftNotBuilt);
+    expect(within(panel).getByTestId("studio-panel-draft")).toBeDisabled();
+    const note = within(panel).getByTestId("studio-panel-draft-pending");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent(COPY.draftNotBuilt);
     await closePanel(user, panel, "create_payment");
   });
 

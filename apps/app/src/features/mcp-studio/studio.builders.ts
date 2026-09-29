@@ -47,16 +47,19 @@ import {
   type StudioServerView,
   type StudioTool,
 } from "./model";
+import type {
+  DraftStudioDescription,
+  ListStudioFindings,
+  TryResult,
+  TryStudioTool,
+} from "./pending-capabilities";
 import type { StudioAt } from "./route";
 import type {
-  DraftDescription,
   GetStudioDraft,
   OpenStudioReview,
   SaveStudioDraft,
   StudioFinding,
   StudioReview,
-  TryCall,
-  TryResult,
 } from "./seams";
 
 export const STRIPE = "mcs_01k5s1";
@@ -787,7 +790,8 @@ export function seedDraft(key: string, draft: StoredDraft): void {
 type SaveAnswer = Awaited<ReturnType<SaveStudioDraft>>;
 type GetAnswer = Awaited<ReturnType<GetStudioDraft>>;
 type OpenAnswer = Awaited<ReturnType<OpenStudioReview>>;
-type DraftAnswer = Awaited<ReturnType<DraftDescription>>;
+type DraftAnswer = Awaited<ReturnType<DraftStudioDescription["call"]>>;
+type FindingsAnswer = Awaited<ReturnType<ListStudioFindings["call"]>>;
 type SavedDraft = Extract<SaveAnswer, { ok: true }>["draft"];
 
 /** A draft as M11 stores it, after one save by default. */
@@ -959,18 +963,54 @@ export function fakeOpen(...answers: OpenAnswer[]) {
   return { open, calls };
 }
 
+/**
+ * try_studio_tool as it will be once #4742 merges: available, giving its
+ * answers in turn.
+ */
 export function fakeTry(...answers: TryResult[]) {
-  const { fn, calls } = answering<Parameters<TryCall>[0], TryResult>(answers);
-  const call: TryCall = fn;
+  const { fn, calls } = answering<
+    Parameters<TryStudioTool["call"]>[0],
+    TryResult
+  >(answers);
+  const call: TryStudioTool = {
+    name: "try_studio_tool",
+    available: true,
+    gap: "capability",
+    call: fn,
+  };
   return { call, calls };
 }
 
+/** draft_studio_description once #4742 merges. */
 export function fakeDraft(...answers: DraftAnswer[]) {
-  const { fn, calls } = answering<Parameters<DraftDescription>[0], DraftAnswer>(
-    answers,
-  );
-  const draft: DraftDescription = fn;
+  const { fn, calls } = answering<
+    Parameters<DraftStudioDescription["call"]>[0],
+    DraftAnswer
+  >(answers);
+  const draft: DraftStudioDescription = {
+    name: "draft_studio_description",
+    available: true,
+    gap: "capability",
+    call: fn,
+  };
   return { draft, calls };
+}
+
+/** list_studio_findings' answer for one folder: the draft's findings. */
+export function findingsAnswer(
+  findings: StudioFinding[] = studioFindings(),
+  server = "stripe",
+): FindingsAnswer {
+  return {
+    ok: true,
+    list: {
+      server,
+      basis: "draft",
+      revision: 1,
+      tokens: { definitions: 1150, budget: 8000 },
+      findings,
+    },
+  };
 }
 
 // ---- DataSource -----------------------------------------------------------

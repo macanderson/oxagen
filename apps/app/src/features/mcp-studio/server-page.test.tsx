@@ -26,8 +26,9 @@ import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { StudioRecord } from "./model";
+import type { ListStudioFindings } from "./pending-capabilities";
 import type { StudioTab } from "./route";
-import type { FindingsReader, RecordReader } from "./seams";
+import type { RecordReader } from "./seams";
 
 // The switch dialog's pickers read their lists through these server actions.
 const { choices } = vi.hoisted(() => {
@@ -109,6 +110,7 @@ const {
   WAREHOUSE,
   WAREHOUSE_PAGE_2,
   draftKey,
+  findingsAnswer,
   idDraftKey,
   offSwitch,
   recordOf,
@@ -121,6 +123,7 @@ const {
 } = await import("./studio.builders");
 
 type Reads = NonNullable<Parameters<typeof studioSource>[0]>;
+type FindingsCall = ListStudioFindings["call"];
 
 const AT = { org: "acme", ws: "core-platform" };
 
@@ -155,8 +158,9 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 /**
  * The page on the Studio fakes: each read answers its fixture unless `reads`
  * says otherwise, the record seam answers each server's record fixture unless
- * `record` says otherwise, and the findings seam answers the three fixture
- * findings.
+ * `record` says otherwise, and list_studio_findings answers the three
+ * fixture findings. `findingsAvailable: false` stands in the stub the page
+ * uses until #4742 merges.
  */
 async function renderStudio({
   serverId = STRIPE,
@@ -164,28 +168,35 @@ async function renderStudio({
   orgRole = "owner",
   reads = {},
   record = recordOf,
-  findings = () => Promise.resolve(studioFindings()),
+  findings = () => Promise.resolve(findingsAnswer()),
+  findingsAvailable = true,
 }: {
   serverId?: string;
   tab?: StudioTab;
   orgRole?: OrgRole;
   reads?: Reads;
   record?: (serverId: string) => StudioRecord | null;
-  findings?: FindingsReader;
+  findings?: FindingsCall;
+  findingsAvailable?: boolean;
 } = {}) {
   const ctx = viewer(orgRole);
   const { source, calls } = studioSource(reads);
   const readRecord = vi.fn<RecordReader>((_ctx, id) =>
     Promise.resolve(record(id)),
   );
-  const readFindings = vi.fn<FindingsReader>(findings);
+  const readFindings = vi.fn<FindingsCall>(findings);
   withIntl(
     await StudioServer({
       ctx,
       source,
       route: { serverId, tab },
       readRecord,
-      findings: readFindings,
+      findings: {
+        name: "list_studio_findings",
+        available: findingsAvailable,
+        gap: "findings",
+        call: readFindings,
+      },
     }),
   );
   return { ctx, calls, readRecord, readFindings };
@@ -233,14 +244,51 @@ describe("StudioServer reads", () => {
   });
 
   it("reads the findings for this server on the Changes tab and lists them", async () => {
-    const { ctx, readFindings } = await renderStudio({ tab: "changes" });
+    const { readFindings } = await renderStudio({ tab: "changes" });
     expect(readFindings).toHaveBeenCalledTimes(1);
-    expect(readFindings).toHaveBeenCalledWith(ctx, STRIPE);
+    expect(readFindings).toHaveBeenCalledWith({ server: "stripe" });
     const findings = screen.getByTestId("studio-changes-findings");
     expect(within(findings).getAllByTestId("studio-finding")).toHaveLength(
       studioFindings().length,
     );
   });
+
+  it("asks nothing and says findings are not available while list_studio_findings has not merged", async () => {
+    const { readFindings } = await renderStudio({
+      tab: "changes",
+      findingsAvailable: false,
+    });
+    expect(readFindings).not.toHaveBeenCalled();
+    const missing = screen.getByTestId("studio-findings-missing");
+    expect(missing).toHaveAttribute("data-gap", "#4742");
+    expect(missing).toHaveTextContent("Findings are not available yet.");
+    expect(screen.queryByTestId("studio-finding")).toBeNull();
+  });
+
+  it.each([
+    {
+      answer: "a refusal",
+      result: { ok: false, reason: "failed", code: "denied" },
+    },
+    {
+      answer: "not built",
+      result: { ok: false, reason: "not_built", gap: "findings" },
+    },
+  ] as const)(
+    "says findings are not available when the call answers $answer",
+    async ({ result }) => {
+      const { readFindings } = await renderStudio({
+        tab: "changes",
+        findings: () => Promise.resolve(result),
+      });
+      expect(readFindings).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("studio-findings-missing")).toHaveAttribute(
+        "data-gap",
+        "#4742",
+      );
+      expect(screen.queryByTestId("studio-finding")).toBeNull();
+    },
+  );
 });
 
 describe("StudioServer failed reads", () => {
@@ -705,15 +753,15 @@ describe("StudioServer without a Studio record", () => {
     expect(countOf("changes")).toBe("1");
   });
 
-  it("on Changes, says the checks have not run and the draft has no folder to open a PR from", async () => {
-    await renderStudio({
+  it("on Changes, asks for no findings and says the draft has no folder to open a PR from", async () => {
+    const { readFindings } = await renderStudio({
       serverId: GITHUB,
       tab: "changes",
-      findings: () => Promise.resolve(null),
     });
+    expect(readFindings).not.toHaveBeenCalled();
     const missing = screen.getByTestId("studio-findings-missing");
     expect(missing).toHaveAttribute("data-state", "not-recorded");
-    expect(missing).toHaveAttribute("data-gap", "#4672");
+    expect(missing).toHaveAttribute("data-gap", "#4742");
     expect(screen.queryByTestId("studio-finding")).toBeNull();
     expect(screen.getByTestId("studio-pr-no-server")).toHaveAttribute(
       "data-gap",

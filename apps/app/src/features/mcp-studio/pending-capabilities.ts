@@ -28,7 +28,7 @@ import type { StudioGap } from "./gaps";
 import type { StudioFinding } from "./seams";
 
 /** The capabilities this module stubs, by the names their owners register. */
-export type PendingCapability =
+type PendingCapability =
   | "start_studio_discovery"
   | "get_studio_discovery"
   | "list_studio_tools"
@@ -38,7 +38,7 @@ export type PendingCapability =
   | "set_mcp_credential";
 
 /** The answer every stub gives: its capability has not merged. */
-export type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
+type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
 
 /**
  * A refusal with the handler's code (`denied`, `unavailable`, or the reason
@@ -47,12 +47,18 @@ export type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
  */
 type Refused = { ok: false; reason: "failed"; code: string };
 
-/** One capability as Studio calls it. */
-export type PendingCall<Name extends PendingCapability, Input, Result> = {
+/**
+ * One capability as Studio calls it. A control carries the name as
+ * `data-capability` and the gap as `data-gap`, so a reader of the DOM can
+ * follow a disabled control to the work that enables it.
+ */
+type PendingCall<Name extends PendingCapability, Input, Result> = {
   /** The capability's registered name. Part 3 finds its call sites by it. */
   readonly name: Name;
   /** False until the capability merges. Its control renders disabled. */
   readonly available: boolean;
+  /** The work that builds the capability. */
+  readonly gap: StudioGap;
   readonly call: (input: Input) => Promise<Result | NotBuilt>;
 };
 
@@ -60,11 +66,8 @@ function stub<Name extends PendingCapability, Input, Result>(
   name: Name,
   gap: StudioGap,
 ): PendingCall<Name, Input, Result> {
-  return {
-    name,
-    available: false,
-    call: () => Promise.resolve({ ok: false, reason: "not_built", gap }),
-  };
+  const answer: NotBuilt = { ok: false, reason: "not_built", gap };
+  return { name, available: false, gap, call: () => Promise.resolve(answer) };
 }
 
 // ---- Discovery (lane M10 part 2) ------------------------------------------
@@ -195,7 +198,7 @@ export const tryStudioTool = stub<"try_studio_tool", TryInput, TryResult>(
 
 export type TryStudioTool = typeof tryStudioTool;
 
-export type DraftResult =
+type DraftResult =
   | { ok: true; description: string }
   | NotBuilt
   | { ok: false; reason: "failed"; message: string };
@@ -216,7 +219,7 @@ export type DraftStudioDescription = typeof draftStudioDescription;
 // ---- Findings and credentials (#4742, PR #4743) ---------------------------
 
 /** list_studio_findings' output. */
-export type StudioFindingsList = {
+type StudioFindingsList = {
   server: string;
   /** "draft" when the saved draft was checked, "published" for the production folder. */
   basis: "draft" | "published";
@@ -233,6 +236,8 @@ export const listStudioFindings = stub<
   ServerInput,
   { ok: true; list: StudioFindingsList } | Refused
 >("list_studio_findings", "findings");
+
+export type ListStudioFindings = typeof listStudioFindings;
 
 /**
  * One named credential. The kind decides the fields, and each kind refuses

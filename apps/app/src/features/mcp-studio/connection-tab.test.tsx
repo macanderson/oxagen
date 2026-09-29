@@ -6,8 +6,8 @@
 // mode, the provider's status light and sign-in, the sync schedule, and the
 // tab a server shows before discovery records it. A server the local gateway
 // runs shows its machine groups in place of environments and auth. An editor
-// sees Replace credential, drawn as not built until lane M8 (#4668) lands,
-// and Reconnect for an OAuth provider. A reader sees neither. A credential
+// sees Replace credential, drawn as not available until set_mcp_credential
+// (#4742) merges, and Reconnect for an OAuth provider. A reader sees neither. A credential
 // shows only as its vault reference: every fixture is checked for any other
 // credential text and for a secret-shaped value in any text or attribute. Each
 // address the tab shows hides a URL's user info and any query or fragment
@@ -125,7 +125,7 @@ const at = { org: "acme", ws: "core-platform" };
 
 /** The issues a not-built value names in `data-gap` (gaps.ts). */
 const RECORD_GAP = "#4678";
-const CREDENTIALS_GAP = "#4668";
+const CREDENTIALS_GAP = "#4742";
 
 const connection = translator("mcpStudio.connection");
 const term = translator("mcpStudio.connection.facts");
@@ -820,7 +820,7 @@ describe("Connection tab › authentication", () => {
     }
   });
 
-  it("offers an editor Replace credential, disabled until lane M8 lands and described by the vault note", () => {
+  it("offers an editor Replace credential, disabled until set_mcp_credential merges and described by the vault note", () => {
     renderTab(studioView(STRIPE));
     const replace = screen.getByRole("button", { name: auth("replace") });
     expect(replace).toBeDisabled();

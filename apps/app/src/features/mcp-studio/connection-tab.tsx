@@ -5,10 +5,10 @@
 // A credential shows only as its vault reference (`oxagen:credential/<name>`).
 // Replacing one is written on this tab and kept in the vault, never in the
 // steering folder, so a credential never reaches a steering PR. That write is
-// lane M8's (#4668), and the button draws as not built until it lands. Until
-// discovery records the server's folder, the tab shows what the registry row
-// holds: the endpoint, the transport, the auth kind and the status light the
-// Providers tab draws.
+// set_mcp_credential (#4742), and the button draws as not available until it
+// merges. Until discovery records the server's folder, the tab shows what the
+// registry row holds: the endpoint, the transport, the auth kind and the
+// status light the Providers tab draws.
 //
 // A URL can carry a credential too, as user info or as a query value, so the
 // tab hides both wherever it shows an address (#4678, item 12).

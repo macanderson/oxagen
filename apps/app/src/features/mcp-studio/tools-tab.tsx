@@ -32,8 +32,8 @@ import {
 } from "./draft";
 import type { StudioRecord, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
+import type { DraftStudioDescription } from "./pending-capabilities";
 import type { StudioAt } from "./route";
-import type { DraftDescription } from "./seams";
 import { ToolPanel } from "./tool-panel";
 import { useStudioDraft } from "./use-draft";
 
@@ -182,8 +182,8 @@ export function ToolsTab({
   off: Readonly<Record<string, ReactNode>>;
   /** Who turned each tool off or back on, and when, by tool name. */
   offFacts: Readonly<Record<string, ReactNode>>;
-  /** Draft's capability for the tool panel; the not-built stub by default. */
-  draft?: DraftDescription;
+  /** Draft's capability for the tool panel; the stub by default (#4742). */
+  draft?: DraftStudioDescription;
 }) {
   const t = useTranslations("mcpStudio.tools");
   const registry = useTranslations("tools.registry");
@@ -440,7 +440,7 @@ export function ToolsTab({
       {opened === undefined ? null : (
         <ToolPanel
           key={opened.name}
-          serverId={serverId}
+          serverName={serverName}
           tool={opened}
           ops={ops}
           canEdit={canEdit}

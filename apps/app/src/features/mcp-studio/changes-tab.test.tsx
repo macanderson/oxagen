@@ -340,14 +340,12 @@ describe("ChangesTab tool surface", () => {
 });
 
 describe("ChangesTab findings", () => {
-  it("says the tool checks have not run when there are no findings yet", () => {
+  it("says findings are not available when none could be read", () => {
     renderTab(BILLING, { findings: null });
     const missing = screen.getByTestId("studio-findings-missing");
     expect(missing).toHaveAttribute("role", "note");
-    expect(missing).toHaveAttribute("data-gap", "#4672");
-    expect(missing).toHaveTextContent(
-      "The tool checks have not run on this draft yet.",
-    );
+    expect(missing).toHaveAttribute("data-gap", "#4742");
+    expect(missing).toHaveTextContent("Findings are not available yet.");
   });
 
   it("says the tool checks found nothing when the list is empty", () => {

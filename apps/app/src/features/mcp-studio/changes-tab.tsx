@@ -11,9 +11,10 @@
 // saved the draft since this tab did reloads theirs and stages this tab's
 // edits on top (mergeDrafts), and the person reviews the result before trying
 // again. A stored draft this page cannot read leaves the tab's edits as they
-// are. The findings come from lane M5's checks (#4672) and read as not
-// recorded until they run. The PR carries tools.toml, the lock and the saved
-// tests, never a credential.
+// are. The findings come from list_studio_findings, which runs lane M5's
+// checks. #4742 builds it, and until it merges the section says findings are
+// not available yet. The PR carries tools.toml, the lock and the saved tests,
+// never a credential.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -436,7 +437,7 @@ export function ChangesTab({
   /** Where the server's tools come from; null until the record says. */
   sourceType: StudioSourceType | null;
   tools: readonly Pick<StudioTool, "name" | "imported" | "tokens">[];
-  /** The tool checks' findings on the folder; null until the checks run. */
+  /** The tool checks' findings on the folder; null when none could be read. */
   findings: readonly StudioFinding[] | null;
   /** An org Owner or Admin, who can open the steering PR and discard edits. */
   canEdit: boolean;

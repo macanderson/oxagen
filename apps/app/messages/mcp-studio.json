@@ -292,7 +292,7 @@
       },
       "findings": {
         "title": "Findings",
-        "missing": "The tool checks have not run on this draft yet.",
+        "missing": "Findings are not available yet.",
         "none": "The tool checks found nothing.",
         "server": "Server",
         "columns": {
