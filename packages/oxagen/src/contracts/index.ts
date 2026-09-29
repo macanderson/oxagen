@@ -291,6 +291,9 @@ import { toolClassificationSchema } from "./tool.classification";
 import { toolVersionList } from "./tool.version.list";
 import { toolClassificationSet } from "./tool.classification.set";
 import { toolImport } from "./tool.import";
+import { toolStudioDiscoveryGet } from "./tool.studio.discovery.get";
+import { toolStudioDiscoveryStart } from "./tool.studio.discovery.start";
+import { toolStudioToolsList } from "./tool.studio.tools.list";
 import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
@@ -963,6 +966,9 @@ export {
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDiscoveryGet,
+  toolStudioDiscoveryStart,
+  toolStudioToolsList,
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
@@ -1395,6 +1401,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDiscoveryGet,
+  toolStudioDiscoveryStart,
+  toolStudioToolsList,
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,

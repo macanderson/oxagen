@@ -131,7 +131,7 @@ function requestEvent(
 }
 
 /** Refuse a name that cannot be a folder under tools/servers/. */
-function serverName(server: string): string {
+export function serverName(server: string): string {
   if (!serverNameSchema.safeParse(server).success)
     throw new HandlerError({
       code: "not_found",
@@ -210,7 +210,10 @@ export async function startServerDiscovery(
   return store.read(scope, server);
 }
 
-async function assertReader(actor: DiscoveryActor): Promise<DiscoveryScope> {
+/** Refuse a caller who may not read discovery state, and return the scope. */
+export async function assertReader(
+  actor: DiscoveryActor,
+): Promise<DiscoveryScope> {
   const scope = { orgId: actor.orgId, workspaceId: actor.workspaceId };
   await runInTenantScope(scope, async () => {
     const userId = await resolveActingUserId({
