@@ -8,7 +8,7 @@
   spec `2026-09-11-oxagen-mission-control-spec.md` (§3 "Onboarding is gated,
   and it is three steps", §6.2, §7.2, §14.1, App. E `register_agent`,
   `enroll_host`, App. F), the Mockups repo `pages/onboarding-*.md` and
-  `pages/register-*.md` (the per-page design of record), `mc.html`
+  `pages/register-*.md` (the per-page design of record until ADR-226), `mc.html`
   `OB_STEPS`, `obUnlock`, `REG_TOKEN`, ADR-057 (agents: the identity half in
   Postgres, `register_agent` and the long-lived agent credential),
   `docs/specs/tacho/spec.md` §5 (enrollment; §5.6 is this decision's token),

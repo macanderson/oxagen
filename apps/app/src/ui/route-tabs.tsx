@@ -10,7 +10,7 @@
 //
 // `.tab { padding:8px 13px; font-size:13px; color:var(--muted);
 // border-bottom:2px solid transparent }` and `.tab[aria-selected] {
-// color:var(--fg); border-bottom-color:var(--gold) }` (engine.css, ADR-132):
+// color:var(--fg); border-bottom-color:var(--gold) }` (engine.css, ADR-226):
 // the current tab is underlined in the gold, and a count after a label is
 // mono and dim.
 //

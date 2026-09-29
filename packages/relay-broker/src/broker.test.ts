@@ -28,6 +28,7 @@ import {
 import {
   CLOSE_HELLO_MISMATCH,
   CLOSE_NO_HELLO,
+  CLOSE_TOKEN_REVOKED,
   decodeBrokerFrame,
   encodeFrame,
   fromBase64,
@@ -39,7 +40,14 @@ import {
   type RelayFrame,
 } from "./protocol/frames";
 import { relaySignerFromPem, type RelaySigner } from "./signer";
-import { generateRelayToken, hashRelayToken, memoryRelayTokenVerifier, type RelayIdentity } from "./tokens";
+import {
+  generateRelayToken,
+  hashRelayToken,
+  memoryRelayTokenVerifier,
+  type RelayIdentity,
+  type RelayTokenRecord,
+  type RelayTokenVerifier,
+} from "./tokens";
 
 const WORKSPACE = "wrk_0123456789abcdefghjkmn";
 
@@ -271,6 +279,21 @@ describe("the upgrade", () => {
   it("accepts a stored token", async () => {
     const h = await startBroker();
     await expect(upgradeOutcome(h.url, { authorization: `Bearer ${h.token}` })).resolves.toBe("open");
+  });
+
+  it("accepts the connect path with a query string", async () => {
+    const h = await startBroker();
+    await expect(upgradeOutcome(`${h.url}?attempt=2`, { authorization: `Bearer ${h.token}` })).resolves.toBe("open");
+  });
+
+  it("answers 404 for any other path, before it checks the token", async () => {
+    const verify = vi.fn<RelayTokenVerifier["verify"]>(() => Promise.resolve(identity));
+    const h = await startBroker({ verifier: { verify } });
+    const root = h.url.slice(0, -RELAY_CONNECT_PATH.length);
+    for (const path of ["/", "/mcp", "/relay/v1", `${RELAY_CONNECT_PATH}/extra`]) {
+      await expect(upgradeOutcome(`${root}${path}`, { authorization: `Bearer ${h.token}` })).resolves.toBe(404);
+    }
+    expect(verify).not.toHaveBeenCalled();
   });
 });
 
@@ -666,6 +689,79 @@ describe("several connections for one relay", () => {
     await second.closed;
     await vi.waitFor(() => expect(h.broker.status(scope, "office")).toBe("down"));
     expect(h.statuses.map((event) => event.status)).toStrictEqual(["up", "down"]);
+  });
+});
+
+describe("a revoked token", () => {
+  /** A broker over a record list the test can change while a relay is connected. */
+  async function startRevocable(options: Partial<RelayBrokerOptions> = {}) {
+    const token = generateRelayToken();
+    const records: RelayTokenRecord[] = [{ ...identity, tokenHash: hashRelayToken(token) }];
+    const h = await startBroker({ verifier: memoryRelayTokenVerifier(records), revocationCheckMs: 50, ...options });
+    return { h, token, records };
+  }
+
+  it("closes a live connection with 4001, fails its open calls, and refuses the next connect", async () => {
+    const { h, token, records } = await startRevocable();
+    const relay = await FakeRelay.connect(h.url, token);
+    const pending = h.broker.transport(scope).http(httpRequest());
+    await relay.next("request");
+    const failed = expect(pending).rejects.toMatchObject({ code: "disconnected", sent: true });
+
+    records.splice(0);
+
+    await expect(relay.closed).resolves.toMatchObject({ code: CLOSE_TOKEN_REVOKED });
+    await failed;
+    expect(h.broker.status(scope, "office")).toBe("down");
+    expect(h.statuses.map((event) => [event.status, event.reason])).toStrictEqual([
+      ["up", "connected"],
+      ["down", "the relay token was revoked"],
+    ]);
+    await expect(h.broker.transport(scope).http(httpRequest())).rejects.toMatchObject({
+      code: "disconnected",
+      sent: false,
+    });
+    await expect(upgradeOutcome(h.url, { authorization: `Bearer ${token}` })).resolves.toBe(401);
+  });
+
+  it("closes with 4001 when the token's record now names another relay", async () => {
+    const { h, token, records } = await startRevocable();
+    const relay = await FakeRelay.connect(h.url, token);
+    const [record] = records;
+    if (!record) throw new Error("The test record is missing.");
+    records[0] = { ...record, relay: "warehouse" };
+    await expect(relay.closed).resolves.toMatchObject({ code: CLOSE_TOKEN_REVOKED });
+    expect(h.broker.status(scope, "office")).toBe("down");
+  });
+
+  it("keeps the connection while the check itself fails, and checks again", async () => {
+    const token = generateRelayToken();
+    const stored = memoryRelayTokenVerifier([{ ...identity, tokenHash: hashRelayToken(token) }]);
+    let checks = 0;
+    const verify = vi.fn<RelayTokenVerifier["verify"]>((presented) => {
+      checks += 1;
+      // The connect check passes. Every recheck after it fails.
+      return checks === 1 ? stored.verify(presented) : Promise.reject(new Error("database down"));
+    });
+    const h = await startBroker({ verifier: { verify }, revocationCheckMs: 50 });
+    const relay = await FakeRelay.connect(h.url, token);
+
+    await vi.waitFor(() => expect(checks).toBeGreaterThanOrEqual(4));
+    expect(h.broker.status(scope, "office")).toBe("up");
+    expect(h.statuses.map((event) => event.status)).toStrictEqual(["up"]);
+    relay.send({ type: "hb" });
+    await expect(relay.next("hb_ack")).resolves.toStrictEqual({ type: "hb_ack" });
+  });
+
+  it("checks with the same token the relay connected with", async () => {
+    const token = generateRelayToken();
+    const stored = memoryRelayTokenVerifier([{ ...identity, tokenHash: hashRelayToken(token) }]);
+    const verify = vi.fn<RelayTokenVerifier["verify"]>((presented) => stored.verify(presented));
+    const h = await startBroker({ verifier: { verify }, revocationCheckMs: 50 });
+    await FakeRelay.connect(h.url, token);
+    await vi.waitFor(() => expect(verify.mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(new Set(verify.mock.calls.map(([presented]) => presented))).toStrictEqual(new Set([token]));
+    expect(h.broker.status(scope, "office")).toBe("up");
   });
 });
 

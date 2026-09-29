@@ -13,6 +13,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -211,16 +212,24 @@ describe("Runtimes, loaded", () => {
       "data-gap",
       "#3816",
     );
-    // The design's list controls: search, Rows and the pager.
+    // The design's list controls: search over the table, and under it the
+    // pager with Rows, the range, and Previous and Next.
     expect(
       within(hosts).getByRole("searchbox", { name: "Search this list" }),
     ).toBeInTheDocument();
-    expect(within(hosts).getByRole("combobox", { name: "Rows" })).toHaveValue(
-      "10",
-    );
+    const hostsPager = hosts.querySelector<HTMLElement>("[data-rows-pager]");
+    if (hostsPager === null) throw new Error("the hosts list has no pager");
     expect(
-      within(hosts).getByRole("navigation", { name: "Enrolled hosts pages" }),
-    ).toHaveTextContent("1–4 of 4");
+      within(hostsPager).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("10");
+    expect(
+      within(hostsPager).getByRole("navigation", {
+        name: "Enrolled hosts pages",
+      }),
+    ).toBeInTheDocument();
+    expect(hostsPager.querySelector("[data-range]")?.textContent).toBe(
+      "1–4 of 4",
+    );
     // Four rows, and Health reads two values: the design's rule offers it.
     // Kind reads not recorded on every row and offers nothing.
     const health = within(hosts).getByRole("combobox", {
@@ -402,16 +411,19 @@ describe("Runtimes, loaded", () => {
     const pager = screen.getByRole("navigation", {
       name: "Enrolled hosts pages",
     });
-    expect(pager).toHaveTextContent("1–10 of 12");
+    const rowsPager = pager.closest("[data-rows-pager]");
+    const range = () => rowsPager?.querySelector("[data-range]")?.textContent;
+    expect(range()).toBe("1–10 of 12");
     expect(shown()).toHaveLength(10);
-    fireEvent.click(within(pager).getByRole("button", { name: "2" }));
-    expect(pager).toHaveTextContent("11–12 of 12");
+    fireEvent.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(range()).toBe("11–12 of 12");
     expect(shown()).toEqual(["host-10", "host-11"]);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
-      target: { value: "0" },
+    await userEvent.click(screen.getByRole("combobox", { name: "Rows" }));
+    await userEvent.click(await screen.findByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(12);
     });
-    expect(shown()).toHaveLength(12);
 
     fireEvent.change(
       screen.getByRole("searchbox", { name: "Search this list" }),
@@ -731,7 +743,10 @@ describe("One runtime", () => {
       within(agents).getByRole("navigation", {
         name: "Agents on this host pages",
       }),
-    ).toHaveTextContent("1–1 of 1");
+    ).toBeInTheDocument();
+    expect(
+      agents.querySelector("[data-rows-pager] [data-range]")?.textContent,
+    ).toBe("1–1 of 1");
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-manager",

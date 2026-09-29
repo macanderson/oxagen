@@ -41,10 +41,10 @@ or `system` are left out, as the assistant's own transcript leaves them out.
 `conversation` carries the `list_conversations` summary fields (`publicId`,
 `title`, `status`, `archivedAt`, `createdAt`, `updatedAt`) and:
 
-| Field       | Type                                                                             | Notes                                                        |
-| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, toolCalls }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `toolCalls` are the tool calls behind a reply, in the shape `ask_assistant` returns them. |
-| `truncated` | `boolean`                                                                        | True when `limit` left earlier messages out.                 |
+| Field       | Type                                                                                          | Notes                                                        |
+| ----------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, toolCalls, stopped, attachments }>` | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `toolCalls` are the tool calls behind a reply, in the shape `ask_assistant` returns them. `stopped` is true when the person stopped the turn, so `content` is the part of the reply written before the stop. `attachments` are the files the person sent with a question. |
+| `truncated` | `boolean`                                                                                     | True when `limit` left earlier messages out.                 |
 
 ### Tool calls
 
@@ -63,10 +63,22 @@ the runs of the replies inside `limit` are read.
 `toolCalls` is empty on a `user` or `system` message and on a reply with no
 run. If the ledger cannot be read, the conversation is still returned: every
 reply lists no calls, and the handler logs the failure as a warning.
-| Field       | Type                                                                  | Notes                                                        |
-| ----------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `messages`  | `Array<{ publicId, role, content, createdAt, runId, parkedCards, stopped }>`   | Oldest first. `runId` is the `arun_` run an assistant turn was recorded as, or null. `parkedCards` are the governed writes that turn parked for a person, each `{ approvalId, capability, expiresAt }`. `stopped` is true when the person stopped the turn, so `content` is the part of the reply written before the stop. |
-| `truncated` | `boolean`                                                             | True when `limit` left earlier messages out.                 |
+### Attachments
+
+Each message's `attachments` lists the files the person sent with it, in the
+order they were uploaded (#4690). Each entry is
+`{ publicId, name, mediaType, sizeBytes, sha256 }`, the shape
+`upload_assistant_attachment` returned when the file was attached. Open a
+file through `GET /v1/:org/:workspace/assistant/attachments/:publicId`.
+
+One query reads the files of every message returned, however many there are.
+Only files you uploaded to this conversation are read. A file that was
+deleted, or never finished storing, is left out, and so is a file that no
+message sent. `delete_conversation` soft-deletes a conversation's files with
+it.
+
+`attachments` is empty on a message sent without files and on every
+`assistant` or `system` message.
 
 ## Surfaces
 
@@ -75,16 +87,18 @@ reply lists no calls, and the handler logs the failure as a warning.
   optional `?limit=`
 - **MCP:** `get_conversation` tool (read-only, idempotent)
 - **App:** the assistant flyout reads your latest conversation when it opens
-  (`apps/app/src/features/shell/assistant-thread-actions.ts`)
+  (`apps/app/src/features/shell/assistant-thread-actions.ts`), and draws each
+  sent file as the chip it showed when the question was sent
 
 Not on the agent surface: a turn already carries its own conversation as the
 model's transcript, and no assistant task needs to read another one.
 
 ## Side effects
 
-None. Read-only against PostgreSQL: the conversation store, and the run
-ledger for the replies' tool calls. The billing gate is skipped
-(`noBillingGate`), because reading your own history uses no model.
+None. Read-only against PostgreSQL: the conversation store, the run ledger
+for the replies' tool calls, and `generated_assets` for the files sent. The
+billing gate is skipped (`noBillingGate`), because reading your own history
+uses no model.
 
 ## Errors
 

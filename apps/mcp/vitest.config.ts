@@ -98,10 +98,17 @@ export default defineConfig({
         // served tools (lane M15)
         "src/servers/call.ts",
         "src/servers/embeddings.ts",
+        "src/servers/kill-switch.ts",
         "src/servers/list.ts",
         "src/servers/names.ts",
         "src/servers/search.ts",
         "src/servers/snapshot.ts",
+        // the relay broker's mount (lane M12, ADR-225). index.ts and
+        // install.ts are absent: they only wire the Postgres verifier and
+        // the process environment into these three.
+        "src/relay/broker.ts",
+        "src/relay/mount.ts",
+        "src/relay/transport.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {

@@ -3,6 +3,7 @@ import { createServer as createNetServer, type AddressInfo } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   Client,
+  credentials,
   Metadata,
   Server,
   ServerCredentials,
@@ -13,9 +14,17 @@ import {
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { HeaderEntry } from "../credentials";
+import type { ClientCertificate, HeaderEntry } from "../credentials";
+import { testCertificate } from "../test/certificate";
 import { RecordingSink, type SinkEvent } from "../test/fixtures";
-import { createGrpcUpstream, grpcDialAddress, grpcMetadata, metadataEntries, type GrpcUpstream } from "./grpc";
+import {
+  createGrpcUpstream,
+  grpcChannelCredentials,
+  grpcDialAddress,
+  grpcMetadata,
+  metadataEntries,
+  type GrpcUpstream,
+} from "./grpc";
 import type { RelayGrpcTarget } from "./types";
 
 type Call = ServerWritableStream<Buffer, Buffer>;
@@ -39,6 +48,7 @@ interface CallOptions {
   headers?: HeaderEntry[];
   body?: Uint8Array;
   deadlineMs?: number;
+  clientCert?: ClientCertificate;
   sink?: RecordingSink;
   controller?: AbortController;
 }
@@ -133,11 +143,20 @@ function send(upstream: GrpcUpstream, port: number, options: CallOptions = {}): 
     headers: options.headers ?? [],
     body: options.body ?? Buffer.from("request"),
     deadlineMs: options.deadlineMs ?? 2_000,
+    clientCert: options.clientCert,
     signal: controller.signal,
     sink,
   });
   return { sink, controller };
 }
+
+/** A mutual_tls credential's pair, as credentials.ts reads it. */
+function clientCert(name = "LEDGER_API"): ClientCertificate {
+  return { name, ...testCertificate(name.toLowerCase()) };
+}
+
+/** A pair that does not load, holding a string no message may quote. */
+const BAD_PAIR: ClientCertificate = { name: "LEDGER_API", cert: "not a certificate s3cret", key: "not a key s3cret" };
 
 function only<T>(items: readonly T[]): T {
   expect(items).toHaveLength(1);
@@ -392,6 +411,66 @@ describe("createGrpcUpstream", () => {
     expect(server.calls).toHaveLength(0);
   });
 
+  it("ends with UNAVAILABLE when an https target with a client certificate answers without TLS", async () => {
+    const server = await startServer(() => undefined);
+
+    const { sink } = send(newUpstream(), server.port, { scheme: "https", clientCert: clientCert(), deadlineMs: 1_500 });
+
+    expect(await sink.done).toMatchObject({ kind: "trailers", code: grpcStatus.UNAVAILABLE });
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it("refuses a client certificate on an http target and starts no call", async () => {
+    const server = await startServer(() => undefined);
+    const request = vi.spyOn(Client.prototype, "makeServerStreamRequest");
+
+    const { sink } = send(newUpstream(), server.port, { clientCert: clientCert() });
+
+    expect(await sink.done).toEqual({
+      kind: "fail",
+      code: "upstream",
+      message: "Credential LEDGER_API presents a client certificate, which needs an https target.",
+      sent: false,
+    });
+    expect(request).not.toHaveBeenCalled();
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it("fails with upstream and sent false when the client certificate does not load, naming only the credential", async () => {
+    const server = await startServer(() => undefined);
+    const request = vi.spyOn(Client.prototype, "makeServerStreamRequest");
+
+    const { sink } = send(newUpstream(), server.port, { scheme: "https", clientCert: BAD_PAIR });
+
+    const done = await sink.done;
+    expect(done).toEqual({
+      kind: "fail",
+      code: "upstream",
+      message: "The relay could not load the client certificate for credential LEDGER_API.",
+      sent: false,
+    });
+    expect(JSON.stringify(done)).not.toContain("s3cret");
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("fails with upstream and sent false, naming the host, when TLS cannot be set up without a certificate", async () => {
+    const server = await startServer(() => undefined);
+    vi.spyOn(credentials, "createSsl").mockImplementation(() => {
+      throw new Error("no roots s3cret");
+    });
+
+    const { sink } = send(newUpstream(), server.port, { scheme: "https" });
+
+    const done = await sink.done;
+    expect(done).toEqual({
+      kind: "fail",
+      code: "upstream",
+      message: "The relay could not set up TLS for 127.0.0.1.",
+      sent: false,
+    });
+    expect(JSON.stringify(done)).not.toContain("s3cret");
+  });
+
   it("ends with UNAVAILABLE trailers, not a fail, when nothing listens on the port", async () => {
     const port = await closedPort();
 
@@ -465,6 +544,43 @@ describe("grpcDialAddress", () => {
 
   it("dials port 80 for an http target with no port", () => {
     expect(grpcDialAddress(target)).toBe("dns:ledger.internal:80");
+  });
+});
+
+describe("grpcChannelCredentials", () => {
+  const target: RelayGrpcTarget = {
+    kind: "grpc",
+    scheme: "https",
+    host: "ledger.internal",
+    service: SERVICE,
+    method: "PostEntry",
+  };
+
+  it("gives an http target insecure credentials, even with a certificate", () => {
+    const createSsl = vi.spyOn(credentials, "createSsl");
+
+    expect(grpcChannelCredentials({ ...target, scheme: "http" })._isSecure()).toBe(false);
+    expect(grpcChannelCredentials({ ...target, scheme: "http" }, clientCert())._isSecure()).toBe(false);
+    expect(createSsl).not.toHaveBeenCalled();
+  });
+
+  it("gives an https target TLS with the default roots and no client certificate", () => {
+    const createSsl = vi.spyOn(credentials, "createSsl");
+
+    expect(grpcChannelCredentials(target)._isSecure()).toBe(true);
+    expect(createSsl).toHaveBeenCalledWith(null);
+  });
+
+  it("gives an https target with a certificate TLS that presents the credential's pair", () => {
+    const createSsl = vi.spyOn(credentials, "createSsl");
+    const pair = clientCert();
+
+    expect(grpcChannelCredentials(target, pair)._isSecure()).toBe(true);
+    expect(createSsl).toHaveBeenCalledWith(null, Buffer.from(pair.key, "utf8"), Buffer.from(pair.cert, "utf8"));
+  });
+
+  it("throws when the pair does not load", () => {
+    expect(() => grpcChannelCredentials(target, BAD_PAIR)).toThrow();
   });
 });
 

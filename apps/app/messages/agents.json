@@ -111,7 +111,6 @@
         "pager": "Pages",
         "previous": "Previous page",
         "next": "Next page",
-        "page": "Page {page}",
         "sortBy": "Sort by {column}",
         "noMatch": "No rows match.",
         "cursor": "Agents beyond this page",

@@ -1,6 +1,6 @@
 export const meta = {
   name: 'mission-control-wizards-and-repositories',
-  description: 'Build the skill/agent/context-record creation wizards and the Repositories page (Settings leaves the workspace menu) per the oxagen-roadmap spec; two PRs',
+  description: 'Retired 2026-09-28 (ADR-226). Built the creation wizards and the Repositories page from the rev1 mockup, which roadmap #234 removed',
   phases: [
     { title: 'Shell + skill wizard' },
     { title: 'Agent + record wizards' },
@@ -9,6 +9,11 @@ export const meta = {
     { title: 'Review' },
   ],
 }
+
+// Retired 2026-09-28. This workflow reads the rev1 mockup (missioncontrol.html, engine.js, engine.css, pages/repositories.md), which roadmap #234 removed.
+// docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md names the design of record: the v3 mockup at the commit it pins, and the brand kit.
+// The prompts below are kept as history. Port a lane to the v3 mockup before you run it again.
+throw new Error('Retired: the rev1 mockup this workflow reads is gone. Read docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md and build from the v3 mockup at its pin.')
 
 const RULES = `
 HARD RULES (Mac's standing rules for this repo — restate them to any subagent you spawn):

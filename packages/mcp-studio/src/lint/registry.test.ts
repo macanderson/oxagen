@@ -281,6 +281,20 @@ describe("lint's registry checks", () => {
     expect(fixOf(entry(pypi({ packageArguments: [{ type: "positional" }] })))).toBe(version);
     expect(fixOf(entry(pypi({ runtimeHint: "uvx" })))).toBe('Set source.registry_type to "pypi" in server.toml.');
 
+    // Two settable --root arguments are the pypi package's fault, and no
+    // source.arguments edit fixes them, so the fix does not point at pypi.
+    const sharedKey = entry(
+      npm({ transport: { type: "sse", url: "http://localhost:8080/sse" } }),
+      pypi({
+        packageArguments: [
+          { type: "named", name: "--root" },
+          { type: "named", name: "--root" },
+        ],
+      }),
+    );
+    const cannotRun = lint(folder(onNpm(), sharedKey), CONTEXT).find((finding) => finding.rule === "package_cannot_run");
+    expect(cannotRun?.fix).toBe(version);
+
     const sseOnly = registryEntrySchema.parse({
       server: {
         name: catalog.server,
@@ -448,7 +462,7 @@ const LAUNCHES: Launch[] = [
         packageArguments: [{ type: "positional" }, { type: "positional", valueHint: "root" }],
       }),
     ),
-    fields: ["source.registry_type", "source.arguments.root"],
+    fields: ["source.registry_type", "source.registry_type"],
   },
   {
     name: "a key the entry fixes, and a key it does not take",
@@ -473,7 +487,7 @@ const LAUNCHES: Launch[] = [
         ],
       }),
     ),
-    fields: ["source.arguments.--port"],
+    fields: ["source.registry_type"],
   },
   {
     name: "secrets whose values come from the entry",

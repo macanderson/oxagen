@@ -189,7 +189,6 @@ describe("useAssistantAttachments", () => {
         mediaType: "text/plain",
         size: 5,
         publicId: "gen_abc",
-        href: "/api/v1/acme/core/assistant/attachments/gen_abc",
       },
     ]);
     expect(result.current.files).toEqual([]);

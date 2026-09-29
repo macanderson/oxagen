@@ -4633,6 +4633,7 @@
         "postgres:mcp.mcp_servers",
         "postgres:mcp.operator_tokens",
         "postgres:mcp.registries",
+        "postgres:mcp.relays",
         "postgres:mcp.search_embeddings",
         "postgres:mcp.server_discoveries",
         "postgres:mcp.studio_drafts",
@@ -19581,6 +19582,84 @@
       "domain": "mcp",
       "id": "postgres:mcp.registries",
       "name": "registries",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:workspace.workspaces",
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "token_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "revoked_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "revoked_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.relays",
+      "name": "relays",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

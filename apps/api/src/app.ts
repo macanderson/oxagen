@@ -207,6 +207,8 @@ import { toolImportRoute } from "./routes/v1/tool.import";
 import { toolStudioDraftSaveRoute } from "./routes/v1/tool.studio.draft.save";
 import { toolStudioDraftGetRoute } from "./routes/v1/tool.studio.draft.get";
 import { toolStudioReviewOpenRoute } from "./routes/v1/tool.studio.review.open";
+import { toolRelayCreateRoute } from "./routes/v1/tool.relay.create";
+import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
 import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
 import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
@@ -1186,6 +1188,9 @@ orgScoped.route("/tools/import", toolImportRoute);
 orgScoped.route("/tools/studio/draft", toolStudioDraftSaveRoute);
 orgScoped.route("/tools/studio/draft/get", toolStudioDraftGetRoute);
 orgScoped.route("/tools/studio/review", toolStudioReviewOpenRoute);
+// Relays (lane M12, #4685): register and revoke a relay for a private network.
+orgScoped.route("/tools/relays", toolRelayCreateRoute);
+orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
 orgScoped.route("/credential-grants", credentialGrantListRoute);
 orgScoped.route("/kill-switches", killSwitchSetRoute);
 orgScoped.route("/kill-switches/list", killSwitchListRoute);

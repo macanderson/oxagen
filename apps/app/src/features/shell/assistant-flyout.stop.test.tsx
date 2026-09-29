@@ -519,6 +519,7 @@ describe("A stopped reply after a reload", () => {
         parked: [],
         toolCalls: [],
         stopped: false,
+        attachments: [],
       },
       {
         id: "msg_a2",
@@ -528,6 +529,7 @@ describe("A stopped reply after a reload", () => {
         parked: [],
         toolCalls: [],
         stopped: true,
+        attachments: [],
       },
     ],
     truncated: false,

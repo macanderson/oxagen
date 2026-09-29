@@ -36,7 +36,9 @@
 // `list_kill_switches` reported the switch on.
 //
 // This gate reaches every principal kind that materializes tools through
-// `materializeTools` — the in-app agent's turn and the tool gateway. It is NOT
+// `materializeTools` — the in-app agent's turn and the tool gateway. The
+// steering tools mcp.oxagen.sh serves check each call through it too
+// (apps/mcp/src/servers/kill-switch.ts, #4666). It is NOT
 // the whole product's coverage: a customer agent calling a capability through
 // the API or mcp.oxagen.sh with an API key never passes through here, and the
 // kernel consults emergency denies only on the agent-run path

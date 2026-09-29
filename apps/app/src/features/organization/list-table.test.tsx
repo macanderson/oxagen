@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 // The Organization list (list-table.tsx) over the shared list table: the
-// "All · Status" filters sit in the control row between the search box and
-// Rows, a filter narrows the rows before the shared table pages them, Rows
-// offers 5, 10, 25, 50 and All, the pager is numbered, the row actions column
-// has no header text, and a list with no rows prints the section's own line.
-// A filter the record cannot back is drawn disabled with its reason. Checked
-// with axe.
-import { cleanup, render, screen, within } from "@testing-library/react";
+// "All · Status" filters sit in the control row after the search box, a
+// filter narrows the rows before the shared table pages them, the pager under
+// the table holds Rows (5, 10, 25, 50 and All), the range, and Previous and
+// Next, the row actions column has no header text, and a list with no rows
+// prints the section's own line. A filter the record cannot back is drawn
+// disabled with its reason. Checked with axe.
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -77,50 +83,77 @@ function shownRows() {
     );
 }
 
+/** The pager's Previous and Next, named as a landmark. */
 const pager = () => screen.getByRole("navigation", { name: "People pages" });
 
+/** The pager under the table: Rows, the range, then Previous and Next. */
+const rowsPager = () => {
+  const el = document.querySelector<HTMLElement>("[data-rows-pager]");
+  if (el === null) throw new Error("the list has no pager");
+  return el;
+};
+
+/** The range the pager prints beside Rows ("1–10 of 12"). */
+const range = () =>
+  rowsPager().querySelector("[data-range]")?.textContent ?? null;
+
+const rowsSelect = () =>
+  within(rowsPager()).getByRole("combobox", { name: "Rows" });
+
 describe("ListTable", () => {
-  it("shows the first ten rows under a numbered pager", async () => {
+  it("shows the first ten rows, with Previous disabled and Next ready", async () => {
     const view = renderList();
     expect(shownRows()).toHaveLength(10);
-    expect(pager()).toHaveTextContent("1–10 of 12");
-    expect(within(pager()).getByRole("button", { name: "1" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(range()).toBe("1–10 of 12");
     expect(
-      within(pager()).getByRole("button", { name: "2" }),
-    ).toBeInTheDocument();
+      within(pager()).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager()).getByRole("button", { name: "Next page" }),
+    ).toBeEnabled();
     await expectNoAxe(view.container);
   });
 
   it("offers the design's Rows choices, All included", async () => {
     const user = userEvent.setup();
     renderList();
-    const size = screen.getByLabelText("Rows");
-    expect(
-      within(size)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["5", "10", "25", "50", "All"]);
-    await user.selectOptions(size, "0");
-    expect(shownRows()).toHaveLength(12);
-    expect(pager()).toHaveTextContent("1–12 of 12");
+    const size = rowsSelect();
+    expect(size).toHaveTextContent("10");
+    await user.click(size);
+    // The filters are native selects whose options are always in the page,
+    // so read the choices from the Rows popup alone.
+    const options = within(await screen.findByRole("listbox")).getAllByRole(
+      "option",
+    );
+    expect(options.map((o) => o.textContent)).toEqual([
+      "5",
+      "10",
+      "25",
+      "50",
+      "All",
+    ]);
+    await user.click(screen.getByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(shownRows()).toHaveLength(12);
+    });
+    expect(size).toHaveTextContent("All");
+    expect(range()).toBe("1–12 of 12");
   });
 
-  it("draws the filters between the search box and Rows, labelled All · Status", () => {
+  it("draws the filters after the search box, labelled All · Status, and Rows in the pager under the table", () => {
     renderList();
     const status = screen.getByLabelText("Status");
     expect(within(status).getAllByRole("option")[0]).toHaveTextContent(
       "All · Status",
     );
     const search = screen.getByRole("searchbox");
-    const size = screen.getByLabelText("Rows");
+    const table = screen.getByRole("table", { name: "People" });
     expect(
       search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      status.compareDocumentPosition(size) & Node.DOCUMENT_POSITION_FOLLOWING,
+      table.compareDocumentPosition(rowsSelect()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -129,7 +162,7 @@ describe("ListTable", () => {
     renderList();
     await user.selectOptions(screen.getByLabelText("Status"), "invited");
     expect(shownRows()).toHaveLength(6);
-    expect(pager()).toHaveTextContent("1–6 of 6");
+    expect(range()).toBe("1–6 of 6");
     for (const row of shownRows()) {
       expect(Number(row.getAttribute("data-row")?.slice(4)) % 2).toBe(1);
     }
@@ -164,7 +197,7 @@ describe("ListTable", () => {
   it("prints the section's own line when there are no rows (negative)", async () => {
     const view = renderList([], "This organization has no members.");
     expect(screen.getByText("This organization has no members.")).toBeVisible();
-    expect(pager()).toHaveTextContent("0 of 0");
+    expect(range()).toBe("0 of 0");
     await expectNoAxe(view.container);
   });
 });

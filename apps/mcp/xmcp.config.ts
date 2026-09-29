@@ -73,6 +73,11 @@ const config: XmcpConfig = {
       // import its Node build by a literal name, and that build reads its
       // .wasm file from its own directory, so the package stays on disk.
       "@cedar-policy/cedar-wasm",
+      // The relay broker's WebSocket server (lane M12, ADR-225). ws requires
+      // its optional native helpers, `bufferutil` and `utf-8-validate`, inside
+      // try/catch, so the bundler must not try to resolve them. ws loads
+      // without them.
+      "ws",
     ];
 
     // Function-based external: matches exact package names and sub-path imports

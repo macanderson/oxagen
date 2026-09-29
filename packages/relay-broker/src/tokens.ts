@@ -3,10 +3,15 @@
 // A relay authenticates with a relay token when it connects. Oxagen stores
 // only the token's SHA-256, so a leaked database row cannot connect a relay.
 // The record behind a token names the organization, the workspace, and the
-// relay, and the broker routes calls by exactly those three. The table that
-// holds the records, and the verifier that reads it, come in a later change.
-// Until then a host app passes any RelayTokenVerifier, such as the in-memory
-// one below.
+// relay, and the broker routes calls by exactly those three. The records live
+// in the mcp.relays table, and postgresRelayTokenVerifier in
+// packages/handlers/src/mcp-studio/relays/verifier.ts reads them. The
+// in-memory verifier below serves tests and a host app that loads its relays
+// at start.
+//
+// The broker checks each live connection's token again every 30 seconds
+// (DEFAULT_REVOCATION_CHECK_MS), so a revoked token stops working within 30
+// seconds, even on a relay that is already connected.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 /** The organization, workspace, and relay a token belongs to. */

@@ -223,6 +223,7 @@ beforeEach(() => {
   mocks.checkSteeringChange.mockReset();
   mocks.checkSteeringChange.mockResolvedValue(PASSED);
   vi.mocked(logger.error).mockClear();
+  vi.mocked(logger.warn).mockClear();
 });
 
 describe("toolsPullRequestRefusal", () => {
@@ -423,17 +424,92 @@ describe("createToolsPullRequestOpener, a new PR", () => {
   });
 
   it("deletes the branch when the PR does not open, so a retry succeeds", async () => {
-    const { host, branches } = fakeHost();
+    const { host, branches, calls } = fakeHost();
     const down = new Error("pull requests are down");
     vi.mocked(host.openPullRequest).mockRejectedValueOnce(down);
 
     await expect(opener(host).open(SCOPE, args())).rejects.toBe(down);
+    // The lookup comes first: the branch goes only once no PR is found on it.
+    expect(host.findOpenPullRequest).toHaveBeenCalledWith(GITHUB_REPO, {
+      head: "tools/billing",
+      base: "main",
+    });
+    const order = calls.map((call) => call.method);
+    expect(order.indexOf("findOpenPullRequest")).toBeLessThan(
+      order.indexOf("deleteBranch"),
+    );
     expect(host.deleteBranch).toHaveBeenCalledWith(GITHUB_REPO, "tools/billing");
     expect(branches.has("tools/billing")).toBe(false);
     expect(host.reportCheckRun).not.toHaveBeenCalled();
 
     const result = await opener(host).open(SCOPE, args());
     expect(result.number).toBe(17);
+  });
+
+  it.each([
+    { provider: "GitHub", repo: GITHUB_REPO },
+    { provider: "GitLab", repo: GITLAB_REPO },
+  ])(
+    "adopts the PR on $provider when the create call fails but the PR opened",
+    async ({ repo }) => {
+      const opened = {
+        number: 23,
+        htmlUrl: "https://example.test/acme/steering/pull/23",
+        body: "Imports three tools.",
+      };
+      const { host, branches } = fakeHost({ repo, openPr: opened });
+      vi.mocked(host.openPullRequest).mockRejectedValueOnce(
+        new Error("the response timed out"),
+      );
+
+      const result = await opener(host).open(SCOPE, args());
+
+      expect(result).toEqual({
+        number: 23,
+        url: "https://example.test/acme/steering/pull/23",
+        branch: "tools/billing",
+        headSha: NEW_SHA,
+      });
+      expect(host.findOpenPullRequest).toHaveBeenCalledWith(repo, {
+        head: "tools/billing",
+        base: repo.defaultBranch,
+      });
+      // Deleting the branch would close the PR that opened.
+      expect(host.deleteBranch).not.toHaveBeenCalled();
+      expect(branches.get("tools/billing")).toBe(NEW_SHA);
+      expect(host.reportCheckRun).toHaveBeenCalledWith(
+        repo,
+        expect.objectContaining({ headSha: NEW_SHA }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ branch: "tools/billing", number: 23 }),
+        "tools.pr.open: the PR opened although its create call failed, so the opener adopted it",
+      );
+    },
+  );
+
+  it("keeps the branch when the PR lookup fails after the create call fails", async () => {
+    const { host, branches } = fakeHost();
+    const down = new Error("pull requests are down");
+    vi.mocked(host.openPullRequest).mockRejectedValueOnce(down);
+    vi.mocked(host.findOpenPullRequest).mockRejectedValueOnce(
+      new Error("the PR list is down"),
+    );
+
+    await expect(opener(host).open(SCOPE, args())).rejects.toBe(down);
+    expect(host.deleteBranch).not.toHaveBeenCalled();
+    expect(branches.get("tools/billing")).toBe(NEW_SHA);
+    expect(host.reportCheckRun).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "tools/billing" }),
+      "tools.pr.open: the branch was kept because the PR lookup failed after the PR did not open",
+    );
+
+    // A PR may be open on the kept branch, so a retry is refused, not doubled.
+    expect(await reasonOf(opener(host).open(SCOPE, args()))).toBe(
+      "tools_branch_exists",
+    );
   });
 
   it("passes on the first failure when the branch cannot be deleted", async () => {

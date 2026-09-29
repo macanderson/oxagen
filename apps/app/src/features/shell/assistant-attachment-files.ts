@@ -62,14 +62,15 @@ export type AttachmentFile = {
 };
 
 /**
- * A file the message carries, as the transcript shows it after the send.
- * `href` is the read route for the workspace the file was stored in, so the
- * chip under the question opens the file the person sent.
+ * A file the message carries, as the transcript shows it after the send. It
+ * holds the file's `gen_` id and no link: the flyout builds the link when it
+ * draws the chip, from the workspace slugs on screen then, so a workspace
+ * renamed since the send still opens the file (#4690).
  */
 export type SentAttachment = Pick<
   AttachmentFile,
   "key" | "name" | "mediaType" | "size"
-> & { publicId: string; href: SafePath };
+> & { publicId: string };
 
 /** The `accept` list of the file picker: every type, and the extensions a device may not type. */
 export const ASSISTANT_ATTACHMENT_ACCEPT = [

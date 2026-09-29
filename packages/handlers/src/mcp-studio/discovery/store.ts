@@ -185,6 +185,11 @@ export interface OnChangeTarget extends DiscoveryTarget {
   ref: string;
 }
 
+/** A discovery that stopped before it finished, and the trigger it had. */
+export interface StalledTarget extends DiscoveryTarget {
+  trigger: DiscoveryTrigger;
+}
+
 /** The cross-workspace reads of the hourly sweep and the push webhook. */
 export interface DiscoverySweepStore {
   /** Published steering servers with no discovery row yet. */
@@ -193,6 +198,12 @@ export interface DiscoverySweepStore {
   dueDaily(before: Date, limit: number): Promise<DiscoveryTarget[]>;
   /** Servers with an open sync steering PR. */
   openPullRequests(limit: number): Promise<DiscoveryTarget[]>;
+  /**
+   * Rows queued before before and never started, and rows that started
+   * before before and never finished. A lost event or a dead worker leaves
+   * such a row, and no other read picks it up.
+   */
+  stalled(before: Date, limit: number): Promise<StalledTarget[]>;
   /** On-change servers whose definition lives in repo. */
   onChangeByRepo(repo: string): Promise<OnChangeTarget[]>;
 }
@@ -620,6 +631,41 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
         .limit(limit),
     );
     return rows.map(target);
+  },
+
+  async stalled(before, limit) {
+    // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
+    // of the shared plane. It selects the org, workspace, server, and
+    // trigger of each discovery that stalled, and reads no other column.
+    // The oldest request goes first, so a sweep past the limit is fair.
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({
+          orgId: t.orgId,
+          workspaceId: t.workspaceId,
+          server: t.server,
+          trigger: t.trigger,
+        })
+        .from(t)
+        .where(
+          or(
+            and(eq(t.status, "queued"), lt(t.requestedAt, before)),
+            and(
+              eq(t.status, "running"),
+              or(
+                lt(t.startedAt, before),
+                and(isNull(t.startedAt), lt(t.requestedAt, before)),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(t.requestedAt), asc(t.id))
+        .limit(limit),
+    );
+    return rows.map((row) => ({
+      ...target(row),
+      trigger: row.trigger as DiscoveryTrigger,
+    }));
   },
 
   async onChangeByRepo(repo) {
