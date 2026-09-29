@@ -1,0 +1,139 @@
+# The steering repo live test (lane S11, #4723).
+#
+# One job proves the steering repo path against production Oxagen and a
+# GitHub test organization:
+#   1. Create a workspace and wait for its steering repo to read healthy.
+#   2. Merge a steering PR through Oxagen and read a published version one higher.
+#   3. Delete the "Oxagen merges" ruleset, see drifted health and a failed
+#      "Oxagen steering" check within 60 seconds, repair, and see healthy.
+#
+# It calls production and creates real repositories, so it never runs on
+# pull_request or push. The suite lives in apps/app/live/ with its own
+# Playwright config, and no unit, integration, or e2e lane picks it up.
+#
+# Issue #4724 names the rig and where each secret and variable comes from.
+# The values live in the `steering-live` environment, which allows only main.
+# STEERING_LIVE_ENABLED is a repository variable because a job-level `if:`
+# cannot read an environment's variables.
+name: Steering live test
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+# One run at a time. A dispatch that lands during the scheduled run waits for
+# it instead of sharing the test organization with it.
+concurrency:
+  group: steering-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  STEERING_LIVE_API_URL: https://api.oxagen.sh
+  STEERING_LIVE_APP_URL: https://app.oxagen.sh
+
+jobs:
+  live:
+    name: Steering repo live test
+    if: github.event_name == 'workflow_dispatch' || vars.STEERING_LIVE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: steering-live
+    timeout-minutes: 60
+    steps:
+      # First, before any install: a run with a missing value fails in seconds
+      # and names each one. The step reads only whether each value is set.
+      - name: Check secrets and variables
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL != '' }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD != '' }}
+          STEERING_LIVE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY != '' }}
+          STEERING_LIVE_GITHUB_APP_ID: ${{ vars.STEERING_LIVE_GITHUB_APP_ID != '' }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG != '' }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG != '' }}
+        run: |
+          missing=0
+          for name in \
+            STEERING_LIVE_OXAGEN_EMAIL \
+            STEERING_LIVE_OXAGEN_PASSWORD \
+            STEERING_LIVE_GITHUB_APP_PRIVATE_KEY \
+            STEERING_LIVE_GITHUB_APP_ID \
+            STEERING_LIVE_GITHUB_ORG \
+            STEERING_LIVE_OXAGEN_ORG; do
+            if [ "${!name}" != "true" ]; then
+              echo "::error::$name is not set in the steering-live environment. Issue #4724 names where it comes from."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - uses: actions/checkout@v5
+
+      - name: Install
+        id: install
+        uses: ./.github/actions/pnpm-install
+
+      # A one-hour installation token from the rig app. It approves the
+      # steering PR, deletes the ruleset, reads check runs, and deletes the
+      # test repository.
+      - name: Mint the rig token
+        id: rig-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.STEERING_LIVE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+
+      - name: Sweep what earlier runs left
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.rig-token.outputs.token }}
+        run: pnpm exec tsx live/steering-cleanup.ts sweep
+
+      - name: Run the live suite
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.rig-token.outputs.token }}
+        run: pnpm exec playwright test -c playwright.live.config.ts
+
+      # The suite's teardown already cleaned up. This pass covers a teardown
+      # that never ran, and finds nothing when it did. It mints a fresh token,
+      # because a slow run can outlast the first one.
+      - name: Mint a cleanup token
+        id: cleanup-token
+        if: always() && steps.install.outcome == 'success' && steps.rig-token.outcome == 'success'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.STEERING_LIVE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+
+      - name: Delete this run's workspace and repository
+        if: always() && steps.cleanup-token.outcome == 'success'
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.cleanup-token.outputs.token }}
+        run: pnpm exec tsx live/steering-cleanup.ts run
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steering-live-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/app/playwright-report/steering-live
+          if-no-files-found: ignore
+          retention-days: 14
