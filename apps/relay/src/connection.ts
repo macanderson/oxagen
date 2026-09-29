@@ -197,6 +197,7 @@ export function startRelay(options: StartRelayOptions): RelayHandle {
         headers: verdict.headers,
         body: verdict.body,
         deadlineMs: verdict.deadlineMs,
+        ...(verdict.clientCert === undefined ? {} : { clientCert: verdict.clientCert }),
         signal: controller.signal,
         sink,
       };

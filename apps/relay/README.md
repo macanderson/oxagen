@@ -151,8 +151,11 @@ For a credential named `billing-api`, the relay reads:
 | `bearer` | `RELAY_CREDENTIAL_BILLING_API_TOKEN` |
 | `basic` | `RELAY_CREDENTIAL_BILLING_API_USERNAME` and `RELAY_CREDENTIAL_BILLING_API_PASSWORD` |
 | `header` | `RELAY_CREDENTIAL_BILLING_API_VALUE`, sent in the header the envelope names |
+| `mutual_tls` | `RELAY_CREDENTIAL_BILLING_API_CERT` and `RELAY_CREDENTIAL_BILLING_API_KEY` |
 
-The credential replaces any header of the same name. A token or header value for an HTTP call may hold tab, printable ASCII, and the characters from U+0080 to U+00FF. For a gRPC call it may hold printable ASCII only. A basic user name may not hold a colon. The relay refuses a value that breaks these rules with `credential_missing`, and its message names the variable without quoting the value.
+A bearer, basic, or header credential replaces any header of the same name. A token or header value for an HTTP call may hold tab, printable ASCII, and the characters from U+0080 to U+00FF. For a gRPC call it may hold printable ASCII only. A basic user name may not hold a colon. The relay refuses a value that breaks these rules with `credential_missing`, and its message names the variable without quoting the value.
+
+A `mutual_tls` credential adds no header. The relay presents the client certificate in the TLS handshake with the upstream, so Oxagen names one only for an `https` target. `_CERT` holds the certificate and `_KEY` its unencrypted private key, both as PEM text. A PEM written on one line, with each line break as `\n`, works too. The relay refuses a certificate that does not parse, a key that does not parse, or a key that does not match the certificate with `credential_missing`, and its message names the variable without quoting the value.
 
 With Helm, put the variables in a Secret and set `credentials.existingSecret` to its name.
 

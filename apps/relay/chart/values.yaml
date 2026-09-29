@@ -46,7 +46,9 @@ token:
 credentials:
   # A Secret you manage whose keys are RELAY_CREDENTIAL_* variables. The relay
   # adds a credential from it when a call names one (Enterprise plan). Keep
-  # other keys out of this Secret, since the pod reads all of them.
+  # other keys out of this Secret, since the pod reads all of them. A
+  # mutual_tls credential's _CERT and _KEY values hold PEM text, on several
+  # lines or on one line with each line break written as \n.
   existingSecret: ""
 
 extraCaCerts:

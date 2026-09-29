@@ -26,6 +26,7 @@ import {
   type StartRelayOptions,
 } from "./connection";
 import type { RelayLog, RelayLogFields } from "./log";
+import { testCertificate } from "./test/certificate";
 import {
   GRPC_TARGET,
   HTTP_TARGET,
@@ -472,6 +473,28 @@ describe("startRelay", () => {
     expect(await peer.next()).toEqual({ type: "end", id: "call-1" });
     expect(await logs.waitFor("call_done")).toMatchObject({ id: "call-1" });
     expect(arrival.call.signal.aborted).toBe(true);
+  });
+
+  it("hands a mutual_tls credential's certificate to the upstream call and adds no header", async () => {
+    const pair = testCertificate();
+    const { broker, key, upstream } = await setup({
+      config: {
+        credentials: new Map([
+          ["RELAY_CREDENTIAL_BILLING_API_CERT", pair.cert],
+          ["RELAY_CREDENTIAL_BILLING_API_KEY", pair.key],
+        ]),
+      },
+    });
+    const peer = await welcomed(broker);
+    peer.send(
+      freshRequest(key, "call-1", {
+        headers: [["accept", "application/json"]],
+        credential: { name: "billing-api", scheme: "mutual_tls" },
+      }),
+    );
+    const arrival = await upstream.arrivals.shift();
+    expect(arrival.call.headers).toEqual([["accept", "application/json"]]);
+    expect(arrival.call.clientCert).toEqual({ name: "billing-api", cert: pair.cert, key: pair.key });
   });
 
   it("carries an accepted gRPC call and its trailers", async () => {

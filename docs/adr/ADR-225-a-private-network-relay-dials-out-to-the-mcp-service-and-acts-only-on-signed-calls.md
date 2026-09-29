@@ -99,8 +99,10 @@ HTTP server. And how fast a revoked relay stops.
     MCP. Neither has a screen in the app yet.
 11. **A relay may add a credential on the Enterprise plan.** An envelope may
     name a credential that the relay adds from its own environment, as a
-    bearer token, basic auth, or a named header. The secret never leaves the
-    customer's network. The broker refuses to name a credential for an
+    bearer token, basic auth, a named header, or a client certificate. A
+    client certificate adds no header. The relay presents it in the TLS
+    handshake with the upstream, and the envelope schema allows it only on an
+    `https` target. The secret never leaves the customer's network. The broker refuses to name a credential for an
     organization below the Enterprise plan.
 
 ## Consequences
