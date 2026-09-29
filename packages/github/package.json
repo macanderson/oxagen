@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./workspace-token": "./src/workspace-token.ts",
     "./provision": "./src/provision/index.ts",
-    "./provision/testing": "./src/provision/testing/fake-github.ts"
+    "./provision/testing": "./src/provision/testing/fake-github.ts",
+    "./done-check": "./src/done-check.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
   "dependencies": {
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/done-record": "workspace:*",
     "drizzle-orm": "0.45.3"
   },
   "devDependencies": {
