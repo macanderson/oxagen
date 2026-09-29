@@ -82,11 +82,11 @@ function Row({
       <td className="px-3 py-2">
         <SafeLink
           to={routes.mandate(at.org, at.ws, mandate.id)}
-          className={`${mono} ${linkText} break-all`}
+          className={`${mono} ${linkText}`}
         >
           {mandate.id}
         </SafeLink>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground md:truncate">
           {mandate.impacts.join(", ")}
         </div>
       </td>
@@ -106,7 +106,7 @@ function Row({
             {mandate.requestedBy === null ? null : (
               <div
                 data-requested-by={mandate.requestedBy}
-                className="text-xs text-muted-foreground"
+                className="text-xs text-muted-foreground md:truncate"
               >
                 {t("requestedBy", { user: mandate.requestedBy })}
               </div>
@@ -114,16 +114,16 @@ function Row({
           </>
         ) : (
           <>
-            <span className={`${mono} break-all`}>{mandate.grantedBy}</span>
+            <span className={mono}>{mandate.grantedBy}</span>
             {mandate.roleAtGrant === null ? null : (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground md:truncate">
                 {mandate.roleAtGrant}
               </div>
             )}
           </>
         )}
       </td>
-      <td className="max-w-xs px-3 py-2">{mandate.purpose}</td>
+      <td className="px-3 py-2">{mandate.purpose}</td>
       <td className="px-3 py-2">
         <MandateScope tools={mandate.tools} />
       </td>

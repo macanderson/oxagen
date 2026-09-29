@@ -39,12 +39,16 @@ export function canonicalJson(value: unknown): string {
 }
 
 /**
- * Compute the sha256 content hash of a manifest BODY — i.e. the manifest with
- * its own `contentHash` field excluded (a hash cannot cover itself). The body
- * is canonicalized first, so the hash is a pure function of the manifest's
- * meaningful content and is stable across runs.
+ * Compute the sha256 content hash of a manifest. The manifest is canonicalized
+ * first, so the hash is a pure function of its meaningful content and is
+ * stable across runs; for a current manifest it equals the sha256 of the
+ * committed file's bytes.
+ *
+ * The manifest no longer commits this hash (ADR-216): it is computed wherever
+ * it is read. A `contentHash` field is still excluded, so a file written
+ * before that change hashes to the same value as its body.
  */
-export function contentHashOf(body: Record<string, unknown>): string {
-  const { contentHash: _omit, ...rest } = body;
+export function contentHashOf(body: object): string {
+  const { contentHash: _omit, ...rest } = body as Record<string, unknown>;
   return createHash("sha256").update(canonicalJson(rest)).digest("hex");
 }

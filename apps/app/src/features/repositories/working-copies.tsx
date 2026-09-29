@@ -260,12 +260,12 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
   return (
     <tr data-testid={`working-copy-${row.id}`} data-copy={row.id}>
       <td className={cell}>
-        <span className="block text-[12px] text-muted-foreground">
+        <span className="block text-[12px] text-muted-foreground md:truncate">
           {row.hostname}
         </span>
         <code
           data-testid={`working-copy-path-${row.id}`}
-          className={`${mono} block select-all break-all text-foreground`}
+          className={`${mono} block select-all text-foreground md:truncate`}
         >
           {row.directory}
         </code>
@@ -274,17 +274,17 @@ function CopyRow({ row, readAt }: { row: WorkingCopy; readAt: Date | null }) {
         {row.repository === null ? (
           <span className="text-dim">{t("noRemote")}</span>
         ) : (
-          <span className={`${mono} break-all`}>{row.repository}</span>
+          <span className={mono}>{row.repository}</span>
         )}
       </td>
       <td className={cell}>
         {row.branch === null ? (
           <span className="text-dim">{t("detached")}</span>
         ) : (
-          <span className={`${mono} break-all`}>{row.branch}</span>
+          <span className={mono}>{row.branch}</span>
         )}
         {row.headCommit === null ? null : (
-          <span className={`${mono} block text-[11px] text-dim`}>
+          <span className={`${mono} block text-[11px] text-dim md:truncate`}>
             {t("head", { commit: short(row.headCommit) })}
           </span>
         )}

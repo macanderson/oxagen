@@ -87,7 +87,7 @@ export function InvitationControls({
   const ended = !allowed || pending || outcome === "revoked";
   return (
     <div className="flex flex-col gap-2" data-testid="invitation-controls">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 max-md:flex-wrap">
         <button
           type="button"
           className={buttonSecondary}
@@ -155,7 +155,9 @@ export function InvitationControls({
       {failure?.verb === "resend" ? (
         <FormAlert>{describeFailure(failure.failure)}</FormAlert>
       ) : null}
-      <p role="status">{pending ? t("working") : outcome ? t(outcome) : ""}</p>
+      <p role="status" className="md:truncate">
+        {pending ? t("working") : outcome ? t(outcome) : ""}
+      </p>
     </div>
   );
 }

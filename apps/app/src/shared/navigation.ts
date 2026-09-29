@@ -1,12 +1,14 @@
 import type { LinearAuthorizationUrl } from "./linear-authorization-url";
 // The only module that performs a redirect (ARCHITECTURE.md §3.8, INV-13).
 // Every target is a branded value: a SafePath from sanitizeNext or a route
-// builder, a LoopbackUri from parseLoopbackUri, or an ExternalCheckoutUrl from
-// parseCheckoutUrl. The lint rule in eslint.config.mjs refuses redirect,
-// permanentRedirect, NextResponse.redirect and Response.redirect everywhere
-// else under src/.
+// builder, a LoopbackUri from parseLoopbackUri, an ExternalCheckoutUrl from
+// parseCheckoutUrl, a LinearAuthorizationUrl from parseLinearAuthorizationUrl,
+// or a CanonicalHostUrl from canonicalHostRedirect. The lint rule in
+// eslint.config.mjs refuses redirect, permanentRedirect, NextResponse.redirect
+// and Response.redirect everywhere else under src/.
 import { permanentRedirect, redirect } from "next/navigation";
 import { NextResponse } from "next/server";
+import type { CanonicalHostRedirect } from "./canonical-host";
 import type { ExternalCheckoutUrl } from "./checkout-url";
 import type { LoopbackUri } from "./loopback-uri";
 import type { SafePath } from "./safe-path";
@@ -45,6 +47,23 @@ export function responseRedirect(
   status: 307 | 308 = 307,
 ): NextResponse {
   return NextResponse.redirect(new URL(path, request.url), status);
+}
+
+/**
+ * A page visit on a production host that is not the canonical one, sent to the
+ * same page there (ADR-215). A permanent move is cached for an hour, the cap
+ * the static sites' edge redirects use, so a wrong target clears on its own. A
+ * temporary one is not cached at all.
+ */
+export function redirectToCanonicalHost(
+  target: CanonicalHostRedirect,
+): NextResponse {
+  const res = NextResponse.redirect(target.url, target.permanent ? 308 : 307);
+  res.headers.set(
+    "cache-control",
+    target.permanent ? "public, max-age=3600" : "no-store",
+  );
+  return res;
 }
 
 export function redirectToLinearAuthorization(

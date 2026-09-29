@@ -4293,7 +4293,6 @@
       "writes": []
     }
   ],
-  "contentHash": "a5243990bf4555aaed5cd9ee2e7ea69a918988474a70307ea39f2154470aeec6",
   "domains": [
     {
       "name": "agent",
@@ -4573,6 +4572,7 @@
         "postgres:mcp.credential_grants",
         "postgres:mcp.credentials",
         "postgres:mcp.mcp_servers",
+        "postgres:mcp.operator_tokens",
         "postgres:mcp.registries",
         "postgres:mcp.server_discoveries",
         "postgres:mcp.tool_snapshots"
@@ -4777,8 +4777,7 @@
         "workspace"
       ],
       "kind": "postgres",
-      "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 172
+      "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state."
     },
     {
       "domains": [
@@ -4789,8 +4788,7 @@
         "telemetry"
       ],
       "kind": "clickhouse",
-      "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry.",
-      "tableCount": 12
+      "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry."
     },
     {
       "domains": [
@@ -4805,16 +4803,14 @@
         "workspace"
       ],
       "kind": "neo4j",
-      "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 29
+      "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval."
     },
     {
       "domains": [
         "content"
       ],
       "kind": "blob",
-      "purpose": "Binary assets — avatars, generated media, uploads; the Postgres row (URL + metadata) is source of truth.",
-      "tableCount": 4
+      "purpose": "Binary assets — avatars, generated media, uploads; the Postgres row (URL + metadata) is source of truth."
     }
   ],
   "tables": [
@@ -19293,6 +19289,137 @@
           "type": "uuid"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "server",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "environment",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "credential_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:mcp.credentials",
+          "type": "uuid"
+        },
+        {
+          "name": "client_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "client_secret_enc",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "token_endpoint",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "revocation_endpoint",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "access_token_enc",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "refresh_token_enc",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bytea"
+        },
+        {
+          "name": "token_kms_key_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "scopes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "expires_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "last_refreshed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.operator_tokens",
+      "name": "operator_tokens",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -26131,5 +26258,5 @@
       "tenantScoped": true
     }
   ],
-  "version": 1
+  "version": 2
 }

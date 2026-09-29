@@ -293,7 +293,7 @@ function RankingRow({
                 >
                   <SafeLink
                     to={routes.run(at.org, at.ws, run.runId, { tab: "cost" })}
-                    className={`${linkText} font-mono text-[11.5px]`}
+                    className={`${linkText} min-w-0 font-mono text-[11.5px] md:truncate`}
                   >
                     {run.runId}
                   </SafeLink>

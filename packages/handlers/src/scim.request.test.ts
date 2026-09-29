@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   tokenRow: null as null | { orgId: string },
   serveScim: vi.fn(),
   entitled: vi.fn(),
+  revoke: vi.fn(),
+  onRemoved: (_userId: string): void => {},
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -34,7 +36,20 @@ vi.mock("./lib/sso", () => ({
   ssoEntitled: mocks.entitled,
   ssoAuthBaseUrl: () => "https://app.oxagen.sh",
 }));
-vi.mock("./lib/scim/pg-store", () => ({ createPgScimStore: () => ({}) }));
+vi.mock("./lib/scim/pg-store", () => ({
+  createPgScimStore: (
+    _tx: unknown,
+    _orgId: string,
+    _requestId: string | null,
+    onRemoved: (userId: string) => void,
+  ) => {
+    mocks.onRemoved = onRemoved;
+    return {};
+  },
+}));
+vi.mock("./mcp-studio/credentials/revoke", () => ({
+  revokeDepartedMember: mocks.revoke,
+}));
 vi.mock("./lib/scim/service", () => ({ serveScim: mocks.serveScim }));
 
 import { ScimError } from "./lib/scim/protocol";
@@ -54,6 +69,7 @@ beforeEach(() => {
   mocks.emit.mockReset();
   mocks.serveScim.mockReset();
   mocks.entitled.mockReset().mockResolvedValue(true);
+  mocks.revoke.mockReset().mockResolvedValue({ revoked: 0, failed: [] });
   mocks.tokenRow = { orgId: "org_1" };
 });
 
@@ -169,5 +185,58 @@ describe("execute_scim_request", () => {
     await expect(scimRequestHandler(INPUT, SCIM_CTX)).rejects.toThrow(
       "db down",
     );
+  });
+});
+
+describe("MCP server tokens of a removed person", () => {
+  const USER_A = "00000000-0000-4000-8000-0000000000aa";
+  const USER_B = "00000000-0000-4000-8000-0000000000bb";
+
+  it("revokes each removed person's tokens once the request committed", async () => {
+    mocks.serveScim.mockImplementation(async () => {
+      mocks.onRemoved(USER_A);
+      mocks.onRemoved(USER_B);
+      mocks.onRemoved(USER_A);
+      expect(mocks.revoke).not.toHaveBeenCalled();
+      return { status: 204, body: null };
+    });
+    await expect(scimRequestHandler(INPUT, SCIM_CTX)).resolves.toEqual({
+      status: 204,
+      body: null,
+    });
+    expect(mocks.revoke.mock.calls).toEqual([
+      [{ orgId: "org_1", userId: USER_A }],
+      [{ orgId: "org_1", userId: USER_B }],
+    ]);
+  });
+
+  it("revokes nothing when the request removed no one", async () => {
+    mocks.serveScim.mockResolvedValue({ status: 200, body: {} });
+    await scimRequestHandler(INPUT, SCIM_CTX);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+  });
+
+  it("revokes nothing when the request failed after a removal", async () => {
+    mocks.serveScim.mockImplementation(async () => {
+      mocks.onRemoved(USER_A);
+      throw new ScimError(404, "User x not found");
+    });
+    const out = await scimRequestHandler(INPUT, SCIM_CTX);
+    expect(out.status).toBe(404);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+  });
+
+  it("still answers the SCIM request when a revocation fails", async () => {
+    mocks.serveScim.mockImplementation(async () => {
+      mocks.onRemoved(USER_A);
+      mocks.onRemoved(USER_B);
+      return { status: 204, body: null };
+    });
+    mocks.revoke.mockRejectedValueOnce(new Error("connection reset"));
+    await expect(scimRequestHandler(INPUT, SCIM_CTX)).resolves.toEqual({
+      status: 204,
+      body: null,
+    });
+    expect(mocks.revoke).toHaveBeenCalledTimes(2);
   });
 });

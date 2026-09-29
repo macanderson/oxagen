@@ -1,0 +1,45 @@
+`chSelect` previously accepted any query mentioning `org_id`, and separate migration processes could replay the same pending ClickHouse migration.
+
+This change scopes the SELECT's table source by the active organization and workspace before evaluating caller predicates or aggregates. It refuses unsupported multi-source syntax. This helper accepts fixed repository queries, not arbitrary untrusted SQL.
+
+`migrate()` now takes a Postgres advisory transaction lock before contacting ClickHouse. Every migration process targeting one ClickHouse deployment must use the same `DATABASE_URL` coordination database. Missing or unavailable coordination fails before DDL. ADR-116 records the decision and operational requirement.
+
+The production store migration workflow connects to the same Aurora coordination database through an SSM remote-host tunnel. The URL retains its credentials, database, and TLS hostname. The `infra` workflow must apply the narrowly scoped forwarding-document grant from `infra/stacks-new/ci-deploy` before a production ClickHouse migration dispatch.
+
+Refs #2972, #2192, and #2687.
+
+Verification:
+- `tenant.test.ts`: 17 tests passed locally, including OR, omitted predicates, aggregates, FINAL, parameter spoofing, and rejected joins/subqueries/comments/set operations.
+- Added CI tests using real ClickHouse rows from another organization and workspace, plus two OS migration processes sharing Postgres and ClickHouse.
+- Added lock acquisition, failure, and cleanup tests. Full validation remains in CI.
+- Coordinator tunnel helper: 5 tests passed; workflow YAML and shell syntax checked.
+- Test-engineer coverage audit approved. Configured commit hooks passed.
+
+This PR does not close #2972. Durable telemetry buffering, broader breaker coverage, RLS bypass hardening, NULL-workspace write policies, and security-event partitioning remain unfinished. No production database changed.
+
+## Summary by Sourcery
+
+Harden ClickHouse tenant reads and serialize migrations through shared PostgreSQL coordination.
+
+New Features:
+- Scope ClickHouse tenant reads at the table-source level so predicates and aggregates cannot access data outside the active organization and workspace.
+- Coordinate ClickHouse migrations across processes with a shared PostgreSQL advisory transaction lock.
+
+Bug Fixes:
+- Prevent unsupported ClickHouse query shapes and caller-supplied parameters from bypassing tenant isolation.
+- Prevent concurrent migration processes from replaying the same pending migration.
+
+Enhancements:
+- Document the ClickHouse read and migration coordination requirements in ADR-116 and the project README.
+
+CI:
+- Add integration coverage for cross-tenant ClickHouse reads and concurrent migration processes sharing PostgreSQL and ClickHouse.
+
+Deployment:
+- Connect production ClickHouse migration jobs to the shared Aurora coordination database through an SSM remote-host tunnel and grant the required forwarding permission.
+
+Documentation:
+- Document the shared DATABASE_URL requirement and migration coordination design.
+
+Tests:
+- Add unit tests covering tenant query isolation, rejected query syntax, advisory-lock acquisition and cleanup, and coordinator tunnel URL handling.

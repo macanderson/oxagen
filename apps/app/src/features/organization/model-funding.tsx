@@ -366,7 +366,7 @@ function ModelRoutes() {
           <tr key={tier} data-route={tier}>
             <td className={cell}>
               <span className={mono}>{tier}</span>
-              <div className="max-w-[34ch] text-[11px] text-dim">
+              <div className="text-[11px] text-dim md:truncate">
                 {t(`tiers.${tier}`)}
               </div>
             </td>

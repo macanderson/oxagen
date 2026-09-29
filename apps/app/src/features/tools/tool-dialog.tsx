@@ -623,7 +623,7 @@ export function ToolDialog({
           setTab("overview");
           setOpen(true);
         }}
-        className="min-w-0 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="block min-w-0 max-w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {children}
       </button>
