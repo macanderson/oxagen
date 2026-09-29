@@ -1,22 +1,15 @@
 // @vitest-environment jsdom
 // The Spend tables when little is recorded: each level's empty sentence, a
 // row with no cost and no tokens printing "not recorded" rather than a zero,
-// savings that could not be read, a model with no provider, and a budget with
-// no ceiling, no window, or a position past eighty percent.
+// savings that could not be read, and a budget with no ceiling, no window, or
+// a position past eighty percent.
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import type { SpendBudgets, SpendReport } from "@/data/contracts/spend";
 import { IntlProvider } from "@/test/intl";
-import {
-  AgentTable,
-  BudgetsTable,
-  ModelTable,
-  OperatorTable,
-  TaskTable,
-  ToolSection,
-} from "./tables";
+import { BudgetsTable, TaskTable, ToolSection } from "./tables";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -73,34 +66,20 @@ describe("the level tables", () => {
   it("says each level recorded nothing in its own words", () => {
     render(
       <IntlProvider>
-        <OperatorTable report={report([])} findings={[]} at={AT} />
-        <AgentTable report={report([])} findings={[]} at={AT} />
         <ToolSection report={report([])} findings={null} at={AT} />
         <TaskTable report={report([])} />
       </IntlProvider>,
     );
     for (const sentence of [
-      "No run in this period names an operator.",
-      "No run in this period names an agent.",
       "No tool call in this period has been rolled up.",
       "No run in this period names a task.",
     ])
       expect(screen.getByText(sentence)).toBeTruthy();
   });
 
-  it("prints not recorded for a row with no cost, no tokens and savings that could not be read", () => {
+  it("prints not recorded for a row with no cost and savings that could not be read", () => {
     render(
       <IntlProvider>
-        <OperatorTable
-          report={report([bare("prn_ghost")])}
-          findings={null}
-          at={AT}
-        />
-        <AgentTable
-          report={report([bare("a-intel.core.ghost")])}
-          findings={null}
-          at={AT}
-        />
         <ToolSection
           report={report([bare("ghost_tool")])}
           findings={null}
@@ -108,29 +87,12 @@ describe("the level tables", () => {
         />
       </IntlProvider>,
     );
-    for (const key of ["prn_ghost", "a-intel.core.ghost", "ghost_tool"]) {
-      const row = document.querySelector(`tr[data-key="${key}"]`);
-      expect(row).not.toBeNull();
-      expect(
-        row?.querySelectorAll('[data-recorded="false"]').length,
-      ).toBeGreaterThanOrEqual(2);
-      expect(row?.textContent).not.toContain("$0");
-    }
-  });
-
-  it("names no provider it was not given, and prints the model total as not recorded", () => {
-    render(
-      <IntlProvider>
-        <ModelTable month={report([bare("mystery-model")])} at={AT} />
-      </IntlProvider>,
-    );
-    const row = document.querySelector('tr[data-key="mystery-model"]');
-    expect(row?.textContent).not.toContain("anthropic");
+    const row = document.querySelector('tr[data-key="ghost_tool"]');
+    expect(row).not.toBeNull();
     expect(
-      document
-        .querySelector("tr[data-total]")
-        ?.querySelector('[data-recorded="false"]'),
-    ).not.toBeNull();
+      row?.querySelectorAll('[data-recorded="false"]').length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(row?.textContent).not.toContain("$0");
   });
 });
 

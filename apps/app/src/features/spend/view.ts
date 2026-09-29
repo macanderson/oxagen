@@ -1,7 +1,7 @@
 // Which Spend view a request asks for (#2962, #2963): a tab, and with it
-// either one key's drill on the operator, agent and tool tabs, one finding's
-// evidence on the Findings tab, or the grouping on the Month tab. The tab and
-// the drill are path segments (`/spend/<tab>/<drill>`, the mockup's route).
+// either one operator's, agent's, or tool's drill, one finding's evidence on
+// the Findings tab, or the grouping on the Month tab. The tab and the drill
+// are path segments (`/spend/<tab>/<drill>`, the mockup's route).
 // The evidence is a dialog over the Findings tab and the grouping is a choice
 // within the Month tab, so both are query values. A segment the page does not
 // know is a 404 rather than a page that guesses.
@@ -11,19 +11,18 @@ import { isFindingId } from "./forms";
 
 /**
  * Month first, the v3 design's landing tab (ADR-226), then the earlier
- * design's tabs, Findings to Budgets. The three after them are this build's
- * own and are not in either design: By task and By cost center (ADR-142), and
- * Pricing, the book every figure above was priced against with the models it
- * cannot price, which is why some of those figures read "not recorded".
+ * design's tabs that Month does not replace, Findings to Budgets. Month groups
+ * by operator, agent, and model, so those three tabs and Coaching are gone
+ * (#2962); a drill still reaches one operator, agent, or tool. The three after
+ * Budgets are this build's own and are not in either design: By task and By
+ * cost center (ADR-142), and Pricing, the book every figure above was priced
+ * against with the models it cannot price, which is why some of those figures
+ * read "not recorded".
  */
 export const SPEND_TABS = [
   "month",
   "findings",
   "tokens",
-  "coaching",
-  "operator",
-  "agent",
-  "model",
   "tool",
   "waste",
   "budgets",

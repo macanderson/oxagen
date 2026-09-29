@@ -56,15 +56,11 @@ describe("parseSpendView", () => {
     });
   });
 
-  it("lists Month first, then the earlier design's nine tabs in its order", () => {
-    expect(SPEND_TABS.slice(0, 10)).toEqual([
+  it("lists Month first, then the earlier design's five tabs it keeps in its order", () => {
+    expect(SPEND_TABS.slice(0, 6)).toEqual([
       "month",
       "findings",
       "tokens",
-      "coaching",
-      "operator",
-      "agent",
-      "model",
       "tool",
       "waste",
       "budgets",
@@ -148,6 +144,10 @@ describe("parseSpendView", () => {
     ["a drill on a tab that has none", ["waste", "x"]],
     ["a drill on the Month tab", ["month", "acme.core.triage"]],
     ["a drill on the model tab", ["model", "claude-opus-5"]],
+    ["the Coaching tab, which Month replaced", ["coaching"]],
+    ["the By operator tab, which Month replaced", ["operator"]],
+    ["the By agent tab, which Month replaced", ["agent"]],
+    ["the By model tab, which Month replaced", ["model"]],
     ["an operator key that is not a principal id", ["operator", "marcus"]],
     ["an empty key", ["agent", ""]],
     ["a key longer than the contract takes", ["tool", "t".repeat(257)]],

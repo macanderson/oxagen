@@ -11,7 +11,7 @@ import { panel, panelHeader, panelTitle } from "@/ui/control-styles";
 /**
  * The backend issues on macanderson/oxagen that record each missing slice:
  * #2962 the cost rollup (prompt parts, harness, observed share, per-class
- * cost, provider key, coaching, waste causes, per-key export), #2963 the
+ * cost, waste causes, per-key export), #2963 the
  * findings job (who a finding is about, its trend, findings per key), #3864
  * spend ceilings for an agent or an operator, #3846 asking for access, #3847
  * opening an incident, #3841 a failed read's trace and deciding policy.

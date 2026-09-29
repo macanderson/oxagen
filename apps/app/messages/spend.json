@@ -14,10 +14,6 @@
       "month": "Month",
       "findings": "Findings",
       "tokens": "Tokens",
-      "coaching": "Coaching",
-      "operator": "By operator",
-      "agent": "By agent",
-      "model": "By model",
       "tool": "By tool",
       "waste": "Wasted spend",
       "budgets": "Budgets",
@@ -171,23 +167,9 @@
       }
     },
     "columns": {
-      "operator": "Operator",
-      "role": "Role",
-      "agents": "Agents",
       "runs": "Runs",
       "spend": "Spend",
-      "tokens": "Tokens",
-      "cacheHit": "Cache hit",
       "savings": "Potential savings",
-      "budgetPosition": "Budget position",
-      "agent": "Agent",
-      "perRun": "Per run",
-      "trend": "Trend",
-      "model": "Model",
-      "providerKey": "Provider key",
-      "modelCalls": "Model calls",
-      "cacheHitRate": "Cache hit rate",
-      "basis": "Basis",
       "tool": "Tool",
       "server": "Server",
       "calls": "Calls",
@@ -201,28 +183,6 @@
       "shareOfSpend": "Share of spend"
     },
     "groups": {
-      "operator": {
-        "unnamed": "Unnamed operator",
-        "title": "By operator",
-        "empty": "No run in this period names an operator.",
-        "note": "Every run has exactly one operator. A run that arrived without one is attributed to the agent’s owning operator and flagged, never dropped and never spread.",
-        "budgetMissing": "No spend ceiling names an operator yet, so Budget position is not recorded, and the rollup does not count an operator’s agents."
-      },
-      "agent": {
-        "title": "By agent",
-        "empty": "No run in this period names an agent.",
-        "note": "Every figure is a rollup of the agent’s runs, rebuilt from frames. An agent on the harness tier is self-reported, and a class its harness does not report is marked absent, never zero.",
-        "trendMissing": "The rollup does not compare an agent’s month with the one before, so Trend is not recorded."
-      },
-      "model": {
-        "title": "Models and keys",
-        "note": "Every model the workspace called this month, and the provider key it was billed to.",
-        "routes": "Model routes",
-        "footer": "Consumption reads here. The routes themselves are configured under Organization, in Model funding.",
-        "keyMissing": "The rollup names each model’s provider, not the key it was billed to.",
-        "total": "Total",
-        "totalNote": "the month’s spend"
-      },
       "tool": {
         "title": "By tool",
         "empty": "No tool call in this period has been rolled up.",
@@ -690,29 +650,6 @@
         "error": "The read answered {status} {code}. Nothing was changed."
       }
     },
-    "coaching": {
-      "title": "Coaching",
-      "notBacked": "Coaching lists one change for each agent and each operator, with the tokens and money at stake and the one action that moves it. No coaching record exists yet, and the signals it reads are not on the rollup.",
-      "agents": "Agent coaching",
-      "operators": "Operator coaching",
-      "agentSignals": {
-        "narrowBelt": "Narrow the belt",
-        "stablePrefix": "Keep the prefix stable",
-        "pageResults": "Page the tool results",
-        "contextBudget": "Lower the context budget",
-        "lightModel": "Route classification-shaped work to a light model",
-        "retryStorms": "Stop the retry storms",
-        "oneTurnCache": "Stop writing cache for one-turn runs"
-      },
-      "operatorSignals": {
-        "grants": "Grants are wider than the work",
-        "reRead": "Prompts that make the agent re-read",
-        "onePrompt": "Get to one prompt per session",
-        "publishSteering": "Publish steering between runs",
-        "resizeBudget": "Resize the budget before it stops a run",
-        "selfReported": "Move the last self-reported agents behind the gateway"
-      }
-    },
     "ranking": {
       "title": "Operator ranking",
       "note": "Operators by unproductive spend for this period, highest first. Each figure links to its definition.",
@@ -750,12 +687,6 @@
         "denied": "Only an org Owner or Admin can change this setting.",
         "failed": "The setting did not save. Try again."
       }
-    },
-    "agentChart": {
-      "title": "Cumulative spend",
-      "label": "Cumulative spend for the leading agents",
-      "footer": "The leading {shown} of {total}. The table holds every agent.",
-      "otherCurrency": "{count, plural, one {One agent is} other {# agents are}} billed in another currency and shown in the table only."
     },
     "toolChart": {
       "metric": {

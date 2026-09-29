@@ -24,7 +24,6 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { PageHeader } from "@/ui/page-header";
 import { BudgetDialog } from "./budget-dialog";
-import { CoachingSection } from "./coaching";
 import { CostCenterTable } from "./cost-centers";
 import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
@@ -39,14 +38,7 @@ import {
 import { PricingSection } from "./pricing";
 import { SpendEmpty, SpendReadFailure, SpendSectionFailure } from "./states";
 import { SummaryTiles } from "./summary";
-import {
-  AgentTable,
-  BudgetsTable,
-  ModelTable,
-  OperatorTable,
-  TaskTable,
-  ToolSection,
-} from "./tables";
+import { BudgetsTable, TaskTable, ToolSection } from "./tables";
 import { SpendTabs } from "./tabs";
 import { TokensSection } from "./tokens";
 import { monthToDate, type SpendAt, type SpendView } from "./view";
@@ -219,7 +211,8 @@ async function body({
 }: {
   ctx: WsCtx;
   source: DataSource;
-  view: SpendView;
+  /** A tab's view: a drill renders before the body is asked for. */
+  view: Extract<SpendView, { drill: null }>;
   at: SpendAt;
   period: { from: string; to: string };
   /** The month's rollup: by the Month tab's grouping there, by model elsewhere. */
@@ -273,37 +266,20 @@ async function body({
       const agents = await source.spend.byGroup(ctx, "agent", period);
       return <TokensSection month={month} agents={agents} at={at} />;
     }
-    case "coaching":
-      return <CoachingSection at={at} />;
-    case "operator": {
-      const report = await source.spend.byGroup(ctx, "operator", period);
-      if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
-      return (
-        <OperatorTable
-          report={report.value}
-          findings={listed(findings)}
-          at={at}
-        />
-      );
-    }
-    case "agent":
     case "tool":
     case "task": {
       const report = await source.spend.byGroup(ctx, view.tab, period);
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
-      const list = listed(findings);
-      switch (view.tab) {
-        case "agent":
-          return <AgentTable report={report.value} findings={list} at={at} />;
-        case "tool":
-          return <ToolSection report={report.value} findings={list} at={at} />;
-        case "task":
-          return <TaskTable report={report.value} />;
-      }
-      break;
+      return view.tab === "tool" ? (
+        <ToolSection
+          report={report.value}
+          findings={listed(findings)}
+          at={at}
+        />
+      ) : (
+        <TaskTable report={report.value} />
+      );
     }
-    case "model":
-      return <ModelTable month={month} at={at} />;
     case "cost_center": {
       const report = await source.spend.byGroup(ctx, "cost_center", period);
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;

@@ -1,5 +1,5 @@
 // One operator's, agent's or tool's spend over its trailing window (#2962;
-// spec "Drill"): the crumb back to its tab, the header with Open the agent (an
+// spec "Drill"): the crumb back to its table, the header with Open the agent (an
 // agent only) and Export this view, the potential savings its own findings
 // hold, the kind's stat tiles, spend by day as a chart with its peak and
 // average, the cross-cuts, and its findings. get_spend_drill answers the
@@ -207,14 +207,26 @@ export function DrillSection({
   const own =
     findings === null ? null : findingsOn(findings, drill.kind, drill.key);
   const saving = own === null ? null : savingOf(own);
+  // The crumb goes back to the table the key sits in: By tool for a tool, and
+  // the Month tab grouped by the drill's kind for an operator or an agent.
+  const back =
+    drill.kind === "tool"
+      ? {
+          to: routes.spend(at.org, at.ws, { tab: "tool" }),
+          label: t("tabs.tool"),
+        }
+      : {
+          to: routes.spend(at.org, at.ws, {
+            tab: "month",
+            by: drill.kind === "operator" ? "operator" : undefined,
+          }),
+          label: t(`month.by.titles.${drill.kind}`),
+        };
   return (
     <>
       <nav aria-label={t("drill.crumbLabel")} className="text-[13px]">
-        <SafeLink
-          to={routes.spend(at.org, at.ws, { tab: drill.kind })}
-          className={linkText}
-        >
-          {t("drill.crumb", { tab: t(`tabs.${drill.kind}`) })}
+        <SafeLink to={back.to} className={linkText}>
+          {t("drill.crumb", { tab: back.label })}
         </SafeLink>
         <span aria-hidden="true" className="px-1.5 text-muted-foreground">
           /

@@ -8,7 +8,7 @@
 // operator rows and the row for runs with no operator sum to the total row.
 // With the workspace's pseudonyms on, a stable pseudonym replaces each name,
 // and the share, the run count and the runs are hidden: each could match a
-// pseudonym to a named row on the By operator table.
+// pseudonym to a named row on the Month tab grouped by operator.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {

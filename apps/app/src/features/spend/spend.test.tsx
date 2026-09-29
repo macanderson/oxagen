@@ -507,15 +507,6 @@ describe("Spend › runs with no usage (#3304)", () => {
     );
   });
 
-  it("says it again on the By model total row, which prints the same total", async () => {
-    loaded();
-    unmetered({ total: 1, byHarness: [{ harness: "cursor", runs: 1 }] });
-    await renderSpend(["model"]);
-    expect(screen.getByTestId("spend-model-unmetered")).toHaveTextContent(
-      "1 run reported no usage and is not in this total: cursor 1",
-    );
-  });
-
   it("says nothing when every run in the month reported usage (negative)", async () => {
     loaded();
     unmetered({ total: 0, byHarness: [] });
@@ -569,37 +560,37 @@ describe("Spend › header, tiles and tabs", () => {
     expect(wasted.querySelector('[data-tone="critical"]')).not.toBeNull();
   });
 
-  it("lists Month, then the earlier design's nine tabs, in order, with live counts, as path links", async () => {
+  it("lists Month, then the earlier design's five tabs it keeps, in order, with live counts, as path links", async () => {
     loaded();
     await renderSpend(["waste"]);
     const nav = screen.getByRole("navigation", { name: "Spend views" });
     const links = within(nav).getAllByRole("link");
-    expect(links.slice(0, 10).map((a) => a.textContent)).toEqual([
+    expect(links.slice(0, 6).map((a) => a.textContent)).toEqual([
       "Month",
       "Findings3",
       "Tokens",
-      "Coaching",
-      "By operator",
-      "By agent",
-      "By model",
       "By tool",
       "Wasted spend2",
       "Budgets2",
     ]);
+    // Month groups by operator, agent, and model, so those tabs and Coaching are gone.
+    for (const gone of ["Coaching", "By operator", "By agent", "By model"]) {
+      expect(within(nav).queryByRole("link", { name: gone })).toBeNull();
+    }
     expect(links[0]).toHaveAttribute("href", "/acme/core-platform/spend");
     expect(links[1]).toHaveAttribute(
       "href",
       "/acme/core-platform/spend/findings",
     );
-    expect(links[8]).toHaveAttribute("href", "/acme/core-platform/spend/waste");
-    expect(links[8]).toHaveAttribute("aria-current", "page");
+    expect(links[4]).toHaveAttribute("href", "/acme/core-platform/spend/waste");
+    expect(links[4]).toHaveAttribute("aria-current", "page");
   });
 
   it("leaves a count off when its read did not answer, rather than printing a zero", async () => {
     loaded();
     findings.mockResolvedValue(readError("findings_down", 503));
     waste.mockResolvedValue(readError("waste_down", 503));
-    await renderSpend(["model"]);
+    await renderSpend(["tokens"]);
     const nav = screen.getByRole("navigation", { name: "Spend views" });
     expect(
       within(nav).getByRole("link", { name: "Findings" }),
@@ -1135,38 +1126,6 @@ describe("Spend › Tokens", () => {
   });
 });
 
-describe("Spend › Coaching", () => {
-  it("names the coaching it will show and that no record backs it, inventing no item", async () => {
-    loaded();
-    await renderSpend(["coaching"]);
-    const panel = screen
-      .getByRole("heading", { name: "Coaching" })
-      .closest("section");
-    if (panel === null) throw new Error("no coaching panel");
-    expect(within(panel).getByTestId("spend-not-backed")).toHaveAttribute(
-      "data-issue",
-      "2962",
-    );
-    expect(panel).toHaveTextContent("Get to one prompt per session");
-    expect(panel).toHaveTextContent("Stop the retry storms");
-    expect(panel.querySelectorAll("[data-signal]")).toHaveLength(13);
-    expect(panel.querySelector("[data-testid=money]")).toBeNull();
-  });
-
-  it("links each operator signal to the operator ranking on the Findings tab", async () => {
-    loaded();
-    await renderSpend(["coaching"]);
-    const links = document.querySelectorAll("a[data-signal]");
-    expect(links).toHaveLength(6);
-    for (const link of links) {
-      expect(link).toHaveAttribute("href", "/acme/core-platform/spend/findings");
-    }
-    expect(
-      screen.getByRole("link", { name: "Get to one prompt per session" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
-  });
-});
-
 describe("Spend › Findings › Operator ranking", () => {
   const owner = unsafeMint(WsCtx, {
     userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -1274,124 +1233,16 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeVisible();
   });
 
-  it("asks no ranking on the By operator tab, which holds the table alone (negative)", async () => {
+  it("asks no ranking on the Month tab grouped by operator, which holds the table alone (negative)", async () => {
     loaded({
       operator: report([row("prn_marcusbell", { operator: MARCUS })]),
     });
-    await renderSpend(["operator"], undefined, owner);
+    await renderSpend([], undefined, owner, "operator");
     expect(operatorRanking).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("table", { name: "Operator ranking" }),
     ).toBeNull();
     expect(screen.getByRole("table", { name: "By operator" })).toBeVisible();
-  });
-});
-
-describe("Spend › By operator", () => {
-  it("prints the design's columns, the person by name, tokens and cache from the row, savings from the operator's findings, and opens the drill", async () => {
-    loaded({
-      operator: report([
-        row("prn_marcusbell", {
-          cost: cost("9000000", "mixed"),
-          operator: MARCUS,
-        }),
-        row("prn_ada", { cost: null }),
-      ]),
-    });
-    await renderSpend(["operator"]);
-    expect(byGroup).toHaveBeenCalledWith(ctx, "operator", PERIOD);
-    const table = screen.getByRole("table", { name: "By operator" });
-    expect(headers(table)).toEqual([
-      "Operator",
-      "Role",
-      "Agents",
-      "Runs",
-      "Spend",
-      "Tokens",
-      "Cache hit",
-      "Potential savings",
-      "Budget position",
-    ]);
-    const marcus = rowOf("prn_marcusbell");
-    expect(
-      within(marcus).getByRole("link", { name: "Marcus Bell" }),
-    ).toHaveAttribute(
-      "href",
-      "/acme/core-platform/spend/operator/prn_marcusbell",
-    );
-    expect(marcus).toHaveTextContent("workspace.owner");
-    expect(marcus).toHaveTextContent("275");
-    expect(marcus).toHaveTextContent("40%");
-    expect(marcus).toHaveTextContent("$200.00");
-    expect(marcus).toHaveTextContent("1 finding");
-    expect(marcus.querySelector("[data-basis]")).toHaveAttribute(
-      "data-basis",
-      "mixed",
-    );
-    const ada = rowOf("prn_ada");
-    expect(ada).toHaveTextContent("none");
-    expect(ada).not.toHaveTextContent("$0.00");
-    expect(
-      screen.getByText(/Every run has exactly one operator/),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("Spend › By agent", () => {
-  it("prints Agent, Runs, Spend, Tokens, Per run, Cache hit, Potential savings and Trend, and opens the drill", async () => {
-    loaded({ agent: report([row("a-intel.core.stella-ci")]) });
-    await renderSpend(["agent"]);
-    const table = screen.getByRole("table", { name: "By agent" });
-    expect(headers(table)).toEqual([
-      "Agent",
-      "Runs",
-      "Spend",
-      "Tokens",
-      "Per run",
-      "Cache hit",
-      "Potential savings",
-      "Trend",
-    ]);
-    const agent = rowOf("a-intel.core.stella-ci");
-    expect(within(agent).getByRole("link")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/spend/agent/a-intel.core.stella-ci",
-    );
-    // 275 tokens over 12 runs is 23 a run.
-    expect(agent).toHaveTextContent("23");
-    expect(agent).toHaveTextContent("$486.20");
-    expect(agent).toHaveTextContent("not recorded");
-  });
-});
-
-describe("Spend › By model", () => {
-  it("reads Models and keys with its routes link and a Total row equal to the Spend tile", async () => {
-    loaded();
-    await renderSpend(["model"]);
-    const table = screen.getByRole("table", { name: "Models and keys" });
-    expect(headers(table)).toEqual([
-      "Model",
-      "Provider key",
-      "Model calls",
-      "Spend",
-      "Cache hit rate",
-      "Basis",
-    ]);
-    expect(
-      screen.getByText(
-        "Every model the workspace called this month, and the provider key it was billed to.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Model routes" })).toHaveAttribute(
-      "href",
-      "/acme/model-funding",
-    );
-    expect(rowOf("claude-opus-5")).toHaveTextContent("anthropic");
-    expect(rowOf("claude-opus-5")).toHaveTextContent("75%");
-    const total = document.querySelector("tr[data-total]");
-    expect(total).toHaveTextContent("Total");
-    expect(total).toHaveTextContent("$12.35");
-    expect(tile("Spend")).toHaveTextContent("$12.35");
   });
 });
 
@@ -1572,9 +1423,10 @@ describe("Spend › drill", () => {
     expect(byGroup).not.toHaveBeenCalled();
     expect(screen.queryByTestId("spend-summary")).toBeNull();
     const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    // The crumb goes back to the Month tab, which groups by agent on the bare path.
     expect(within(crumb).getByRole("link")).toHaveAttribute(
       "href",
-      "/acme/core-platform/spend/agent",
+      "/acme/core-platform/spend",
     );
     expect(crumb).toHaveTextContent("By agent");
     expect(
@@ -1606,6 +1458,12 @@ describe("Spend › drill", () => {
     );
     findings.mockResolvedValue(readOk(listing()));
     await renderSpend(["tool", "github__get_issue"]);
+    const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumb).getByRole("link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/tool",
+    );
+    expect(crumb).toHaveTextContent("By tool");
     expect(screen.queryByRole("link", { name: "Open the agent" })).toBeNull();
     await userEvent.click(
       screen.getByRole("button", { name: "Export this view" }),
@@ -1630,6 +1488,12 @@ describe("Spend › drill", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "Marcus Bell" }),
     ).toBeInTheDocument();
+    const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumb).getByRole("link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend?by=operator",
+    );
+    expect(crumb).toHaveTextContent("By operator");
     expect(tile("Budget position")).toHaveTextContent("not recorded");
   });
 
@@ -1686,7 +1550,7 @@ describe("Spend › states", () => {
     findings.mockResolvedValue(readOk(listing()));
     waste.mockResolvedValue(readOk(wasteRead));
     budgets.mockResolvedValue(readOk([]));
-    await renderSpend(["operator"]);
+    await renderSpend(["tool"]);
     const empty = screen.getByTestId("spend-empty");
     expect(within(empty).getByRole("heading")).toHaveTextContent(
       "Nothing spent yet",
@@ -1781,7 +1645,7 @@ describe("Spend › states", () => {
         groupBy === "model" ? monthByModel() : readError("rollup_down", 503),
       ),
     );
-    await renderSpend(["agent"]);
+    await renderSpend(["tool"]);
     expect(screen.getByTestId("spend-summary")).toBeInTheDocument();
     expect(screen.getByTestId("spend-error")).toHaveTextContent(
       "503 rollup_down",
@@ -1865,16 +1729,14 @@ describe("Spend › a tab's own read failing", () => {
     );
   });
 
-  it("prints the operator table with savings not recorded when the findings read failed", async () => {
-    loaded({
-      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
-    });
+  it("prints the tool table with savings not recorded when the findings read failed", async () => {
+    loaded({ tool: report([row("github__get_issue")]) });
     findings.mockResolvedValue(readError("findings_down", 503));
-    await renderSpend(["operator"]);
-    const marcus = rowOf("prn_marcusbell");
-    if (!(marcus instanceof HTMLTableRowElement)) throw new Error("not a row");
-    // Potential savings is the eighth column: unread findings are not "none".
-    const savings = marcus.cells[7];
+    await renderSpend(["tool"]);
+    const github = rowOf("github__get_issue");
+    if (!(github instanceof HTMLTableRowElement)) throw new Error("not a row");
+    // Potential savings is the ninth column: unread findings are not "none".
+    const savings = github.cells[8];
     expect(savings).toHaveTextContent("not recorded");
     expect(savings).not.toHaveTextContent("none");
   });
