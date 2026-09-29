@@ -433,13 +433,18 @@ export interface ToolsPullRequestOpener {
   ): Promise<ToolsPullRequest>;
 }
 
-/** Refuses until lane M11's opener is installed. */
+/**
+ * Refuses until lane M11's opener is installed. The refusal carries its own
+ * code, no_opener, so a reader can tell a missing opener from one that
+ * failed. The run that meets it still records the diff and keeps the changed
+ * tools withheld.
+ */
 export const noToolsPullRequestOpener: ToolsPullRequestOpener = {
   open() {
     return Promise.reject(
       new DiscoveryRefused(
-        "opener",
-        "The tools steering PR is not available yet.",
+        "no_opener",
+        "No tools steering PR opener is installed, so discovery cannot open the sync steering PR.",
       ),
     );
   },

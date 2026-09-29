@@ -55,6 +55,7 @@ export type DiscoveryRefusalCode =
   | "source"
   | "unsupported"
   | "needs_digest"
+  | "no_opener"
   | "opener";
 
 /** A refusal whose message a person can act on. It never holds a credential. */

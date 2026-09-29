@@ -475,7 +475,7 @@ export function withheldUpstream(
   const held = new Set(withheld);
   const out = new Set<string>();
   for (const entry of surface.entries) {
-    if (!held.has(entry.tool)) continue;
+    if (entry.change === "offered" || !held.has(entry.tool)) continue;
     for (const lock of [served, proposed]) {
       const name = lock.tools[entry.key]?.upstream.name;
       if (name !== undefined) out.add(name);
