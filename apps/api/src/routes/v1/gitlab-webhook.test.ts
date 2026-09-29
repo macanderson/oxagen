@@ -3,7 +3,8 @@
 // `X-Gitlab-Token` header and the parsed body, and answers the handler's
 // status and outcome. Both routes also bind the steering repo health request
 // (S2, #4560): the connection route through the scope lookup, and the steering
-// route straight to the one scope its hook belongs to.
+// route straight to the one scope its hook belongs to. The connection route
+// also hands a verified delivery to MCP server discovery (M10, #4682).
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthSignal } from "@oxagen/handlers/steering-repo/health";
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   steeringDeps: { marker: "steering-deps" },
   findHealthScopes: vi.fn(),
   send: vi.fn(),
+  routeGitlabDiscoveryPush: vi.fn(),
+  logError: vi.fn(),
 }));
 
 vi.mock("@oxagen/handlers/gitlab.webhook", () => ({
@@ -42,6 +45,16 @@ vi.mock("@oxagen/handlers/steering-repo/health", () => ({
         trigger,
       },
     })),
+}));
+
+// The MCP server discovery push route (lane M10, #4682) reads Postgres and
+// has its own suite. Here it is a seam.
+vi.mock("@oxagen/handlers/mcp-studio/discovery/webhook", () => ({
+  routeGitlabDiscoveryPush: mocks.routeGitlabDiscoveryPush,
+}));
+
+vi.mock("../../middleware/logger", () => ({
+  logger: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("../../event-client", () => ({
@@ -97,6 +110,56 @@ describe("POST /webhooks/gitlab/:connectionId", () => {
     const res = await post("not json", { "X-Gitlab-Token": "whsec" });
     expect(res.status).toBe(202);
     expect(mocks.handle.mock.calls[0]?.[1]).toMatchObject({ body: null });
+  });
+});
+
+describe("POST /webhooks/gitlab/:connectionId: MCP server discovery (M10)", () => {
+  const PUSH = {
+    object_kind: "push",
+    after: "5f1c0e7a9b3d2c4e6f8a0b1c2d3e4f5a6b7c8d9e",
+    ref: "refs/heads/main",
+    project: {
+      path_with_namespace: "platform/billing",
+      web_url: "https://gitlab.example.com/platform/billing",
+    },
+    commits: [{ added: [], modified: ["api/billing.yaml"], removed: [] }],
+  };
+  const postPush = () =>
+    post(JSON.stringify(PUSH), { "X-Gitlab-Token": "whsec" });
+
+  beforeEach(() => {
+    mocks.handle.mockReset();
+    mocks.routeGitlabDiscoveryPush.mockReset();
+    mocks.routeGitlabDiscoveryPush.mockResolvedValue(1);
+  });
+
+  it("hands a verified delivery's body to the discovery route", async () => {
+    mocks.handle.mockResolvedValue({ status: 202, outcome: "ignored_event" });
+    const res = await postPush();
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ outcome: "ignored_event" });
+    expect(mocks.routeGitlabDiscoveryPush).toHaveBeenCalledWith(PUSH);
+  });
+
+  it.each(["unauthenticated", "ignored_unparseable", "ignored_other_project"])(
+    "does not hand over a delivery the handler answered %s",
+    async (outcome) => {
+      mocks.handle.mockResolvedValue({ status: 202, outcome });
+      await postPush();
+      expect(mocks.routeGitlabDiscoveryPush).not.toHaveBeenCalled();
+    },
+  );
+
+  it("answers as usual and logs when the discovery route fails", async () => {
+    mocks.handle.mockResolvedValue({ status: 202, outcome: "ignored_event" });
+    mocks.routeGitlabDiscoveryPush.mockRejectedValueOnce(new Error("pg down"));
+    const res = await postPush();
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ outcome: "ignored_event" });
+    expect(mocks.logError).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      expect.stringContaining("MCP server discovery"),
+    );
   });
 });
 
