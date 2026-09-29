@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package a_intel.ledger.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/a-intel/ledger/gen/ledgerv1";
+
+service Ledger {
+  rpc GetEntry(GetEntryRequest) returns (Entry) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc PostEntry(PostEntryRequest) returns (Entry);
+  rpc ReverseEntry(ReverseEntryRequest) returns (Entry) {
+    option idempotency_level = IDEMPOTENT;
+  }
+  rpc ListEntries(ListEntriesRequest) returns (stream Entry) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc UploadEntries(stream PostEntryRequest) returns (UploadSummary);
+  rpc SyncEntries(stream PostEntryRequest) returns (stream Entry);
+}
+
+message Money {
+  int64 amount = 1;
+  string currency = 2;
+}
+
+message Entry {
+  string id = 1;
+  string account_id = 2;
+  EntryKind kind = 3;
+  Money money = 4;
+  google.protobuf.Timestamp posted_at = 5;
+  map<string, string> labels = 6;
+  repeated string related_ids = 7;
+  google.protobuf.Any detail = 8;
+  oneof source {
+    string invoice_id = 9;
+    string transfer_id = 10;
+    string manual_note = 11;
+  }
+  bool reversed = 12;
+}
+
+message GetEntryRequest {
+  string id = 1;
+}
+
+message PostEntryRequest {
+  string account_id = 1;
+  EntryKind kind = 2;
+  Money money = 3;
+  map<string, string> labels = 4;
+  google.protobuf.Any detail = 5;
+  oneof source {
+    string invoice_id = 6;
+    string transfer_id = 7;
+    string manual_note = 8;
+  }
+}
+
+message ReverseEntryRequest {
+  string id = 1;
+  string reason = 2;
+}
+
+message ListEntriesRequest {
+  string account_id = 1;
+  google.protobuf.Timestamp since = 2;
+}
+
+message UploadSummary {
+  int32 posted = 1;
+  repeated string entry_ids = 2;
+}
+
+enum EntryKind {
+  ENTRY_KIND_UNSPECIFIED = 0;
+  ENTRY_KIND_DEBIT = 1;
+  ENTRY_KIND_CREDIT = 2;
+}
