@@ -1013,6 +1013,40 @@ describe("runDiscovery on each trigger", () => {
     expect(h.pr.open).not.toHaveBeenCalled();
   });
 
+  it("reads the source on a scheduled retry after the first attempt failed", async () => {
+    // An on-change server gets one scheduled discovery, before its first
+    // push. runDiscovery records a retriable failure on the row, finishedAt
+    // and all, before it throws, so the retry must not read that failure as
+    // the discovery it is retrying.
+    const h = harness({
+      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
+      prior: row({
+        schedule: "on-change",
+        status: "failed",
+        outcome: null,
+        error: "mcp.stripe.com answered initialize with HTTP 503.",
+        toolCount: null,
+      }),
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({ status: "succeeded", outcome: "unchanged" });
+    expect(h.wire.http).toHaveBeenCalled();
+  });
+
+  it("skips a scheduled discovery of an on-change server that already succeeded", async () => {
+    const h = harness({
+      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
+      prior: row({ schedule: "on-change" }),
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({ status: "succeeded", outcome: "skipped" });
+    expect(h.wire.http).not.toHaveBeenCalled();
+  });
+
   it("skips lock_merged while the sync steering PR is still open", async () => {
     const h = harness({
       prior: row({
