@@ -4,17 +4,17 @@
 // for a real empty answer only when the record says so.
 //
 //   - readStudioRecord: the server's steering folder and its discovery. Lane
-//     M10 (#4682, PR #4711) discovers the tools, and the second PR of this
+//     M10 (#4682, PR #4711) discovers the tools, and a later part of this
 //     lane joins them to the folder. Null until then.
 //   - readFindings: the tool checks on the server's folder. Lane M5 (#4672)
 //     owns lint; null, meaning no checks ran, until then.
-//   - tryCall and draftDescription: Try it and Draft, which the second PR of
-//     this lane backs with capabilities. Try it is metered as a governed
-//     action and Draft bills as in-app agent spend, both through the kernel.
-//   - saveStudioDraft, getStudioDraft and openStudioReview: Review, lane M11
+//   - tryCall and draftDescription: Try it and Draft, which capabilities of
+//     their own will back. Try it is metered as a governed action and Draft
+//     bills as in-app agent spend, both through the kernel.
+//   - SaveStudioDraft, GetStudioDraft and OpenStudioReview: Review, lane M11
 //     (#4686), whose capabilities save_studio_draft, get_studio_draft and
-//     open_studio_review these mirror. #4688 shipped them, and the second
-//     PR of this lane wires these seams to them.
+//     open_studio_review shipped in #4688. review-calls.ts binds these types
+//     to them through this lane's server actions (actions.ts).
 //
 // A credential never crosses any of these. Try it names an environment and
 // the gateway adds the credential after the request is recorded, and a saved
@@ -105,42 +105,20 @@ export type DraftDescription = (input: {
 export const draftDescription: DraftDescription = () =>
   Promise.resolve({ ok: false, reason: "not_built", gap: "capability" });
 
-/** A seam that ran and failed, with the reason to show. */
-type Failed = { ok: false; reason: "failed"; message: string };
+/**
+ * A Review call Oxagen refused. The code is the handler's reason for a
+ * refusal that names one (`tools_unclassified`, `draft_not_found`), or the
+ * kind of refusal otherwise (`denied`, `unavailable`). The tab maps a code it
+ * knows to its own copy, because no message text reaches the app.
+ */
+export type ReviewFailed = { ok: false; reason: "failed"; code: string };
 
 /**
- * Refused because the stored draft moved on: a save over a newer revision,
- * or a Review of a draft that is stale, imports an unclassified tool or does
- * not compile. The message says which.
+ * Refused because the stored draft moved on (`draft_revision_stale`): a save
+ * over a newer revision, or a Review of a revision that is no longer the
+ * stored one. The tab reloads the stored draft and stages its edits on top.
  */
-type Conflict = { ok: false; reason: "conflict"; message: string };
-
-/** A definition file M11 vendors into the folder. */
-type DefinitionFile = { path: string; text: string };
-
-/** The definition a Review vendors (`studioSourceSchema`). */
-type StudioDraftSource =
-  | {
-      type: "mcp";
-      /** The lock's source object, parsed; never a JSON string. */
-      lockSource: Readonly<Record<string, unknown>>;
-      tools: readonly Readonly<Record<string, unknown>>[];
-    }
-  | {
-      type: "openapi";
-      files: readonly DefinitionFile[];
-      entry: string;
-      overlay?: string;
-      commit?: string;
-    }
-  | { type: "graphql"; sdl: string; commit?: string }
-  | {
-      type: "graphql";
-      /** The introspection result, parsed; never a JSON string. */
-      introspection: Readonly<Record<string, unknown>>;
-    }
-  | { type: "grpc"; files: readonly DefinitionFile[]; commit?: string }
-  | { type: "grpc"; reflection: readonly string[] };
+type Conflict = { ok: false; reason: "conflict"; code: "draft_revision_stale" };
 
 /**
  * One save of a server's draft (`save_studio_draft`). The ops replace the
@@ -149,9 +127,9 @@ type StudioDraftSource =
  * `conflict` rather than overwriting it. The page always sends it, because
  * a save with no revision overwrites whatever is stored.
  *
- * The browser sends neither `serverToml` nor `source`. The definition can
- * run to 25 MiB, so PR2's server action attaches the recorded one whenever
- * sourceRequired (draft.ts) holds, and the page never carries it.
+ * The browser sends neither server.toml nor the definition. The definition
+ * can run to 25 MiB, so the server attaches the recorded one once the app
+ * can read the discovery record (pending-capabilities.ts).
  */
 type SaveStudioDraftInput = {
   /** The server's folder name under tools/servers/. */
@@ -159,16 +137,19 @@ type SaveStudioDraftInput = {
   /** `mcs_…`, absent for a server that has no registry row yet. */
   serverId?: string;
   ops: readonly DraftOp[];
-  serverToml?: string;
-  source?: StudioDraftSource;
-  revision?: number;
+  revision: number;
 };
 
 /** The draft as stored (`studioDraftSchema`). */
-type SavedStudioDraft = {
+export type SavedStudioDraft = {
   server: string;
   serverId: string | null;
-  ops: readonly DraftOp[];
+  /**
+   * The stored edits. Another page, or another version of this one, wrote
+   * them, so the tab checks them against its own draft shape before it
+   * stages anything on top (draft.ts, readDraftOps).
+   */
+  ops: readonly unknown[];
   serverToml: string | null;
   /** The vendored definition's type and size; null when none is attached. */
   source: {
@@ -184,15 +165,11 @@ type SavedStudioDraft = {
 
 export type SaveStudioDraft = (
   input: SaveStudioDraftInput,
-) => Promise<
-  { ok: true; draft: SavedStudioDraft } | Conflict | NotBuilt | Failed
->;
+) => Promise<{ ok: true; draft: SavedStudioDraft } | Conflict | ReviewFailed>;
 
 export type GetStudioDraft = (input: {
   server: string;
-}) => Promise<
-  { ok: true; draft: SavedStudioDraft | null } | NotBuilt | Failed
->;
+}) => Promise<{ ok: true; draft: SavedStudioDraft | null } | ReviewFailed>;
 
 /** A tool's classification before and after a Review. */
 type ReviewClassification = {
@@ -221,20 +198,5 @@ export type StudioReview = {
 
 export type OpenStudioReview = (input: {
   server: string;
-  revision?: number;
-}) => Promise<{ ok: true; review: StudioReview } | Conflict | NotBuilt | Failed>;
-
-/** Save the server's draft (lane M11). */
-export const saveStudioDraft: SaveStudioDraft = () =>
-  Promise.resolve({ ok: false, reason: "not_built", gap: "steeringPr" });
-
-/** Read the server's stored draft, or null when none is stored (lane M11). */
-export const getStudioDraft: GetStudioDraft = () =>
-  Promise.resolve({ ok: false, reason: "not_built", gap: "steeringPr" });
-
-/**
- * Review: open one steering PR from the stored draft, or add a commit to the
- * one an earlier Review opened (lane M11).
- */
-export const openStudioReview: OpenStudioReview = () =>
-  Promise.resolve({ ok: false, reason: "not_built", gap: "steeringPr" });
+  revision: number;
+}) => Promise<{ ok: true; review: StudioReview } | Conflict | ReviewFailed>;

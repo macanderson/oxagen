@@ -74,6 +74,12 @@ const actions = vi.hoisted(() => ({
   setToolState: vi.fn(),
 }));
 vi.mock("../tools/actions", () => actions);
+// The Changes tab's Review calls go through Studio's own server actions.
+vi.mock("./actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 // The Tools barrel also exports the OAuth callback route handler, which
 // imports the completion action and two server-only Next modules.
 vi.mock("../tools/provider-auth-actions", () => ({

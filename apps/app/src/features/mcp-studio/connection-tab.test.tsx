@@ -9,8 +9,10 @@
 // sees Replace credential, drawn as not built until lane M8 (#4668) lands,
 // and Reconnect for an OAuth provider. A reader sees neither. A credential
 // shows only as its vault reference: every fixture is checked for any other
-// credential text and for a secret-shaped value in any text or attribute.
-// axe checks the state each test ends in (INV-26).
+// credential text and for a secret-shaped value in any text or attribute. Each
+// address the tab shows hides a URL's user info and any query or fragment
+// value whose name reads like a secret (item 12). axe checks the state each
+// test ends in (INV-26).
 import {
   cleanup,
   fireEvent,
@@ -107,10 +109,13 @@ const {
   localRecord,
   packageRecord,
   stripeRecord,
+  studioBoard,
   studioServer,
   studioView,
+  versionsOf,
   warehouseTool,
 } = await import("./studio.builders");
+const { buildStudioView } = await import("./model");
 
 type TabProps = Parameters<typeof ConnectionTab>[0];
 type SectionName = "source" | "environments" | "auth" | "machines" | "sync";
@@ -1059,5 +1064,152 @@ describe("Connection tab › credentials", () => {
       ),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("oxagen:credential/");
+  });
+});
+
+describe("Connection tab › addresses", () => {
+  // Each secret is built at run time so the repository's push protection does
+  // not read the fixture as a live key.
+  const KEY = ["sk", "live", "51HxAddressKeyInQuery"].join("_");
+  const TOKEN = ["ghp", "abcdefghijklmnopqrstuv"].join("_");
+  const PASSWORD = ["hunter2", "address", "pass"].join("-");
+
+  /** One server's page, joined as the page joins it, with its row at `endpointUrl`. */
+  function viewAt(
+    serverId: string,
+    endpointUrl: string,
+    record: StudioRecord | null,
+  ): StudioServerView {
+    return buildStudioView({
+      server: { ...studioServer(serverId), endpointUrl },
+      versions: versionsOf(serverId).items,
+      board: studioBoard(),
+      record,
+    });
+  }
+
+  /** No secret in any text or attribute, and the secrets above nowhere. */
+  function expectNoSecret() {
+    const text = document.body.textContent;
+    for (const secret of [KEY, TOKEN, PASSWORD]) {
+      expect(text).not.toContain(secret);
+    }
+    expect(textsOf(document.body).filter((node) => SECRET.test(node))).toEqual(
+      [],
+    );
+    expect(
+      attributesOf(document.body).filter((value) => SECRET.test(value)),
+    ).toEqual([]);
+  }
+
+  it("hides a remote URL's user info and a key in its query, and keeps the other parameters", () => {
+    const url = `https://billing:${PASSWORD}@mcp.stripe.example/v1?api_key=${KEY}&region=eu`;
+    renderTab(
+      viewAt(
+        STRIPE,
+        url,
+        withSource(stripeRecord(), {
+          type: "remote",
+          url,
+          transport: "http",
+          network: null,
+        }),
+      ),
+    );
+    const shown = "https://***@mcp.stripe.example/v1?api_key=***&region=eu";
+    expect(fact("source", term("url")).textContent).toBe(shown);
+    expect(cellOf("default", "url").textContent).toBe(shown);
+    expectNoSecret();
+  });
+
+  it("hides a token in an environment URL's fragment and a signature in its query", () => {
+    const sandbox: StudioEnvironment = {
+      name: "sandbox",
+      sandbox: true,
+      url: `https://billing.example.com/sandbox#access_token=${TOKEN}&expires_in=3600`,
+      network: null,
+      credential: null,
+    };
+    const production: StudioEnvironment = {
+      name: "production",
+      sandbox: false,
+      url: `https://billing.example.com/mcp?sig=${KEY};page=2`,
+      network: null,
+      credential: null,
+    };
+    renderTab(
+      studioView(BILLING, {
+        ...billingRecord(),
+        environments: [sandbox, production],
+      }),
+    );
+    expect(cellOf("sandbox", "url").textContent).toBe(
+      "https://billing.example.com/sandbox#access_token=***&expires_in=3600",
+    );
+    expect(cellOf("production", "url").textContent).toBe(
+      "https://billing.example.com/mcp?sig=***;page=2",
+    );
+    expectNoSecret();
+  });
+
+  it("hides the user info and token of the registry row's endpoint before discovery records the server", () => {
+    renderTab(
+      viewAt(
+        GITHUB,
+        `https://bot:${TOKEN}@mcp.github.example/sse?token=${TOKEN}`,
+        null,
+      ),
+    );
+    const shown = "https://***@mcp.github.example/sse?token=***";
+    expect(fact("source", term("endpoint")).textContent).toBe(shown);
+    expect(cellOf("default", "url").textContent).toBe(shown);
+    expectNoSecret();
+  });
+
+  it("hides a token in a URL a local command passes as an argument", () => {
+    renderTab(
+      studioView(
+        GITHUB,
+        withSource(localRecord(), {
+          type: "local",
+          command: "npx",
+          args: [
+            "-y",
+            "mcp-remote",
+            `https://mcp.acme.example/sse?auth_token=${TOKEN}`,
+          ],
+          env: [],
+          machines: ["build-agents"],
+        }),
+      ),
+    );
+    expect(fact("source", term("command")).textContent).toBe(
+      "npx -y mcp-remote https://mcp.acme.example/sse?auth_token=***",
+    );
+    expectNoSecret();
+  });
+
+  it("hides the user info of a definition's repository and a key in its URL", () => {
+    renderTab(
+      studioView(
+        BILLING,
+        withSource(billingRecord(), {
+          type: "openapi",
+          from: "repository",
+          repo: `https://deploy:${PASSWORD}@github.com/acme/billing-api`,
+          path: "openapi/billing.yaml",
+          ref: "main",
+          url: `https://billing.internal.example/openapi.json?key=${KEY}`,
+          network: null,
+        }),
+      ),
+    );
+    expect(fact("source", term("repo")).textContent).toBe(
+      "https://***@github.com/acme/billing-api",
+    );
+    expect(fact("source", term("url")).textContent).toBe(
+      "https://billing.internal.example/openapi.json?key=***",
+    );
+    expectNoSecret();
   });
 });

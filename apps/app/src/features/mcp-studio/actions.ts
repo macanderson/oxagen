@@ -1,0 +1,88 @@
+"use server";
+// The Studio draft writes and read the Changes tab makes (#4678, item 6),
+// each through the kernel seam for the workspace viewer the URL names. They
+// are lane M11's capabilities (#4686, shipped in #4688): save_studio_draft
+// stores the tab's edits, get_studio_draft reads the stored draft after a
+// save conflict, and open_studio_review opens one steering PR from it.
+//
+// Each handler checks the role itself (an org Owner or Admin, or a workspace
+// Owner), and each is `noBillingGate`, so there is no second gate here. A
+// refusal comes back with the handler's reason as its code, and the tab
+// names it where the person acted.
+//
+// The save sends neither `serverToml` nor `source`. The definition comes from
+// the server's discovery record, which the app cannot read until lane M10's
+// discovery capabilities land (pending-capabilities.ts). Until then a draft
+// that imports a tool reads as "definition not recorded" (sourceRequired).
+import {
+  type ToolStudioDraftGetOutput,
+  toolStudioDraftGet,
+} from "@oxagen/oxagen/contracts/tool.studio.draft.get";
+import {
+  type StudioDraftOp,
+  type ToolStudioDraftSaveOutput,
+  toolStudioDraftSave,
+} from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+import {
+  type ToolStudioReviewOpenOutput,
+  toolStudioReviewOpen,
+} from "@oxagen/oxagen/contracts/tool.studio.review.open";
+import type { ActionResult } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
+import { requireViewer } from "@/server/viewer";
+
+/**
+ * Save the tab's edits as the server's draft. `revision` is the stored
+ * revision the edits build on, 0 for a draft never saved, so a save over a
+ * newer draft is refused with `draft_revision_stale` instead of overwriting it.
+ */
+export async function saveStudioDraftAction(
+  org: string,
+  ws: string,
+  draft: {
+    server: string;
+    serverId?: string;
+    ops: readonly StudioDraftOp[];
+    revision: number;
+  },
+): Promise<ActionResult<ToolStudioDraftSaveOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioDraftSave, {
+    server: draft.server,
+    ...(draft.serverId === undefined ? {} : { serverId: draft.serverId }),
+    ops: [...draft.ops],
+    revision: draft.revision,
+  });
+}
+
+/** The server's stored draft, or null when none is stored. */
+export async function getStudioDraftAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioDraftGetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioDraftGet,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
+}
+
+/**
+ * Review: open one steering PR from the stored draft at `revision`, or add a
+ * commit to the one an earlier Review opened. A newer stored draft is
+ * refused with `draft_revision_stale`.
+ */
+export async function openStudioReviewAction(
+  org: string,
+  ws: string,
+  review: { server: string; revision: number },
+): Promise<ActionResult<ToolStudioReviewOpenOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioReviewOpen, {
+    server: review.server,
+    revision: review.revision,
+  });
+}

@@ -9,6 +9,9 @@
 // discovery records the server's folder, the tab shows what the registry row
 // holds: the endpoint, the transport, the auth kind and the status light the
 // Providers tab draws.
+//
+// A URL can carry a credential too, as user info or as a query value, so the
+// tab hides both wherever it shows an address (#4678, item 12).
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId } from "react";
 import type { McpServer } from "@/data/contracts/tools";
@@ -87,6 +90,38 @@ function Code({ children }: { children: ReactNode }) {
 const CREDENTIAL_REF = /^oxagen:credential\/[a-z0-9][a-z0-9-]{0,62}$/;
 
 /**
+ * A query or fragment parameter whose name reads like a secret. Loose on
+ * purpose: hiding a harmless value costs less than showing a key.
+ */
+const SECRET_PARAM =
+  /token|secret|passw|pwd|key|auth|sig|credential|session|code/i;
+
+/**
+ * Text that holds URLs, as the tab shows it: each URL's user info and each
+ * query or fragment value whose name reads like a secret replaced with `***`.
+ * The user info rule is redactUrlCredentials in
+ * packages/config/src/public-url.ts, copied because the app does not depend on
+ * @oxagen/config.
+ */
+function redactUrls(text: string): string {
+  return text
+    .replace(
+      /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/?#\s]*@/g,
+      (_match, scheme: string) => `${scheme}***@`,
+    )
+    .replace(
+      /([?&;#])([^=&;#\s]+)=([^&;#\s]*)/g,
+      (match, separator: string, name: string) =>
+        SECRET_PARAM.test(name) ? `${separator}${name}=***` : match,
+    );
+}
+
+/** A URL, or a command line that may carry one, with its secrets hidden. */
+function Address({ value }: { value: string }) {
+  return <Code>{redactUrls(value)}</Code>;
+}
+
+/**
  * A credential as the record names it. Only a vault reference is shown. Any
  * other text could be a secret someone pasted into server.toml, so the tab
  * withholds it and says why.
@@ -142,7 +177,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.url")}>
-            <Code>{source.url}</Code>
+            <Address value={source.url} />
           </Fact>
           <Fact term={t("facts.transport")}>
             <Code>{source.transport}</Code>
@@ -154,7 +189,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.registry")}>
-            <Code>{source.registry}</Code>
+            <Address value={source.registry} />
           </Fact>
           <Fact term={t("facts.server")}>
             <Code>{source.server}</Code>
@@ -187,7 +222,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.command")}>
-            <Code>{[source.command, ...source.args].join(" ")}</Code>
+            <Address value={[source.command, ...source.args].join(" ")} />
           </Fact>
           <Fact term={t("facts.machines")}>
             <Names names={source.machines} none={t("noMachines")} />
@@ -205,7 +240,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
           <Fact term={t("facts.from")}>{t(`from.${source.from}`)}</Fact>
           {source.repo === null ? null : (
             <Fact term={t("facts.repo")}>
-              <Code>{source.repo}</Code>
+              <Address value={source.repo} />
             </Fact>
           )}
           {source.path === null ? null : (
@@ -220,7 +255,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
           )}
           {source.url === null ? null : (
             <Fact term={t("facts.url")}>
-              <Code>{source.url}</Code>
+              <Address value={source.url} />
             </Fact>
           )}
           <Fact term={t("facts.network")}>{network(source.network)}</Fact>
@@ -261,7 +296,7 @@ function Source({
         {record === null ? (
           <>
             <Fact term={t("facts.endpoint")}>
-              <Code>{server.endpointUrl}</Code>
+              <Address value={server.endpointUrl} />
             </Fact>
             <Fact term={t("facts.transport")}>
               <Code>{server.transportType}</Code>
@@ -337,7 +372,7 @@ function Environments({
               </span>
             </td>
             <td className={`${cell} ${mono} [overflow-wrap:anywhere]`}>
-              {env.url ?? "—"}
+              {env.url === null ? "—" : redactUrls(env.url)}
             </td>
             <td className={`${cell} ${mono}`}>
               {env.network ?? connection("cloud")}

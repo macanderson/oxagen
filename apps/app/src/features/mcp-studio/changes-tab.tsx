@@ -4,17 +4,18 @@
 // checks' findings, and the button that opens the steering PR.
 //
 // The draft lives in this browser tab (use-draft.ts) until the person
-// discards it. Opening the steering PR is lane M11's Review, in two calls:
-// save_studio_draft stores the draft, then open_studio_review opens one
-// steering PR from it, or adds a commit to the one an earlier Review opened.
-// Both answer "not built" until #4688 merges. A save refused because someone
+// discards it. Opening the steering PR is lane M11's Review, in two calls
+// (review-calls.ts): save_studio_draft stores the draft, then
+// open_studio_review opens one steering PR from it, or adds a commit to the
+// one an earlier Review opened. A save or a Review refused because someone
 // saved the draft since this tab did reloads theirs and stages this tab's
 // edits on top (mergeDrafts), and the person reviews the result before trying
-// again. The findings come from lane M5's checks (#4672) and read as not
+// again. A stored draft this page cannot read leaves the tab's edits as they
+// are. The findings come from lane M5's checks (#4672) and read as not
 // recorded until they run. The PR carries tools.toml, the lock and the saved
 // tests, never a credential.
 import { useLocale, useTranslations } from "next-intl";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import {
   buttonPrimary,
@@ -41,21 +42,19 @@ import {
   draftLines,
   draftTokens,
   mergeDrafts,
+  readDraftOps,
   sourceRequired,
 } from "./draft";
-import type { StudioGap } from "./gaps";
 import type { StudioRecord, StudioSourceType, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
 import type { StudioAt } from "./route";
-import {
-  type GetStudioDraft,
-  getStudioDraft,
-  type OpenStudioReview,
-  openStudioReview,
-  type SaveStudioDraft,
-  type StudioFinding,
-  type StudioReview,
-  saveStudioDraft,
+import { reviewCalls } from "./review-calls";
+import type {
+  GetStudioDraft,
+  OpenStudioReview,
+  SaveStudioDraft,
+  StudioFinding,
+  StudioReview,
 } from "./seams";
 import { useStudioDraft } from "./use-draft";
 
@@ -263,13 +262,56 @@ function Findings({
   );
 }
 
+/**
+ * The refusals the tab explains in its own words. Any other code shows as
+ * itself, so a refusal this list has not caught up with still names its
+ * reason.
+ */
+const REVIEW_CODES = [
+  "denied",
+  "invalid",
+  "unavailable",
+  "pending_approval",
+  "exhausted",
+  "too_large",
+  "draft_not_found",
+  "draft_unchanged",
+  "draft_unreadable",
+  "server_not_found",
+  "server_toml_missing",
+  "server_toml_invalid",
+  "server_name_mismatch",
+  "workspace_repository_missing",
+  "production_branch_missing",
+  "folder_invalid",
+  "source_required",
+  "source_invalid",
+  "source_commit_missing",
+  "definition_path_invalid",
+  "importer_not_built",
+  "tools_unclassified",
+  "tool_not_found",
+  "tool_not_offered",
+  "tool_key_collision",
+  "test_invalid",
+  "test_holds_credential",
+] as const;
+
+type ReviewCode = (typeof REVIEW_CODES)[number];
+
+function isReviewCode(code: string): code is ReviewCode {
+  return (REVIEW_CODES as readonly string[]).includes(code);
+}
+
 /** How the last Review went, shown under the button. */
 type Outcome =
   | { kind: "opened"; review: StudioReview; updated: boolean }
   | { kind: "conflict"; dropped: number }
+  /** The stored draft does not fit this page's draft shape, so the tab kept its own edits. */
+  | { kind: "kept" }
   | { kind: "sourceMissing" }
-  | { kind: "notBuilt"; gap: StudioGap }
-  | { kind: "failed"; message: string };
+  /** A refusal's code, or null when the call threw before Oxagen answered. */
+  | { kind: "failed"; code: string | null };
 
 /** What the steering PR carries, from Review's answer. */
 function ReviewSummary({ review }: { review: StudioReview }) {
@@ -282,6 +324,13 @@ function ReviewSummary({ review }: { review: StudioReview }) {
       aria-label={t("title")}
       data-testid="studio-review-summary"
     >
+      <dt className={kvTerm}>{t("branch")}</dt>
+      <dd
+        className={`${kvValue} ${mono} [overflow-wrap:anywhere]`}
+        data-testid="studio-review-branch"
+      >
+        {review.branch}
+      </dd>
       <dt className={kvTerm}>{t("imported")}</dt>
       <dd className={kvValue}>{count(review.imported.length)}</dd>
       <dt className={kvTerm}>{t("removed")}</dt>
@@ -342,24 +391,26 @@ function Opened({ outcome }: { outcome: Outcome }) {
             : ` ${t("conflictDropped", { count: outcome.dropped })}`}
         </FormAlert>
       );
+    case "kept":
+      return <FormAlert testId="studio-pr-kept">{t("kept")}</FormAlert>;
     case "sourceMissing":
       return (
         <StudioNotRecorded gap="record" testId="studio-pr-source-missing">
           {t("sourceMissing")}
         </StudioNotRecorded>
       );
-    case "notBuilt":
-      return (
-        <StudioNotRecorded gap={outcome.gap} testId="studio-pr-not-built">
-          {t("notBuilt")}
-        </StudioNotRecorded>
-      );
-    case "failed":
+    case "failed": {
+      const { code } = outcome;
       return (
         <FormAlert testId="studio-pr-failed">
-          {t("failed", { message: outcome.message })}
+          {code === null
+            ? t("thrown")
+            : isReviewCode(code)
+              ? t(`codes.${code}`)
+              : t("failed", { code })}
         </FormAlert>
       );
+    }
   }
 }
 
@@ -372,9 +423,9 @@ export function ChangesTab({
   tools,
   findings,
   canEdit,
-  save = saveStudioDraft,
-  get = getStudioDraft,
-  open = openStudioReview,
+  save: saveOverride,
+  get: getOverride,
+  open: openOverride,
 }: {
   /** The workspace the draft belongs to. */
   at: StudioAt;
@@ -389,12 +440,21 @@ export function ChangesTab({
   findings: readonly StudioFinding[] | null;
   /** An org Owner or Admin, who can open the steering PR and discard edits. */
   canEdit: boolean;
+  /** Test seams; the tab calls lane M11's capabilities otherwise. */
   save?: SaveStudioDraft;
   get?: GetStudioDraft;
   open?: OpenStudioReview;
 }) {
   const t = useTranslations("mcpStudio.changes");
+  const locale = useLocale();
   const draft = useStudioDraft({ at, serverName, serverId });
+  const calls = useMemo(
+    () => reviewCalls({ org: at.org, ws: at.ws }),
+    [at.org, at.ws],
+  );
+  const save = saveOverride ?? calls.save;
+  const get = getOverride ?? calls.get;
+  const open = openOverride ?? calls.open;
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const view = { tools };
@@ -402,23 +462,36 @@ export function ChangesTab({
   const files = draftFiles(view, draft.ops);
   const { before, after } = draftTokens(view, draft.ops);
   const empty = draft.ops.length === 0;
+  // Lint flags an over-budget server only when its tools load directly
+  // (over_definition_budget), so the warning follows the same rule.
+  const overBudget =
+    record !== null &&
+    record.exposure.mode === "direct" &&
+    after !== null &&
+    after > record.exposure.definitionBudget
+      ? { tokens: after, budget: record.exposure.definitionBudget }
+      : null;
   // Review runs the checks again, so its findings replace the folder's.
   const shown = outcome?.kind === "opened" ? outcome.review.findings : findings;
 
   /** Reload the stored draft and stage this tab's edits on top of it. */
   const reload = async (server: string): Promise<Outcome> => {
     const stored = await get({ server });
-    if (!stored.ok) {
-      return stored.reason === "not_built"
-        ? { kind: "notBuilt", gap: stored.gap }
-        : { kind: "failed", message: stored.message };
-    }
+    if (!stored.ok) return { kind: "failed", code: stored.code };
     if (stored.draft === null) {
       // The stored draft is gone, so this tab's is saved as a new one.
       draft.replace({ revision: 0, ops: draft.ops });
       return { kind: "conflict", dropped: 0 };
     }
-    const merged = mergeDrafts(stored.draft.ops, draft.ops);
+    const theirs = readDraftOps(stored.draft.ops);
+    if (theirs === null) {
+      // Staging on top of a draft this page cannot read would drop every
+      // edit, so the tab keeps its own and takes the stored revision: the
+      // next Open saves these edits over the unreadable draft.
+      draft.replace({ revision: stored.draft.revision, ops: draft.ops });
+      return { kind: "kept" };
+    }
+    const merged = mergeDrafts(theirs, draft.ops);
     draft.replace({ revision: stored.draft.revision, ops: merged.ops });
     return { kind: "conflict", dropped: merged.dropped };
   };
@@ -431,12 +504,16 @@ export function ChangesTab({
       revision: draft.revision,
     });
     if (!saved.ok) {
-      if (saved.reason === "conflict") return reload(server);
-      return saved.reason === "not_built"
-        ? { kind: "notBuilt", gap: saved.gap }
-        : { kind: "failed", message: saved.message };
+      return saved.reason === "conflict"
+        ? reload(server)
+        : { kind: "failed", code: saved.code };
     }
-    draft.replace({ revision: saved.draft.revision, ops: saved.draft.ops });
+    // The save echoes the edits it stored. Should they not read back, the
+    // tab keeps the ones it sent, which are the same edits.
+    draft.replace({
+      revision: saved.draft.revision,
+      ops: readDraftOps(saved.draft.ops) ?? draft.ops,
+    });
     if (
       sourceRequired(saved.draft.ops, sourceType) &&
       saved.draft.source === null
@@ -451,23 +528,23 @@ export function ChangesTab({
         updated: saved.draft.pr !== null,
       };
     }
-    // A Review refused after a clean save names its reason (an unclassified
-    // import, a folder that does not compile), so it reads as a failure to
-    // fix rather than a draft to reload.
-    return opened.reason === "not_built"
-      ? { kind: "notBuilt", gap: opened.gap }
-      : { kind: "failed", message: opened.message };
+    // Someone saved between this tab's save and its Review, so the tab
+    // reloads as it does for a save conflict. Any other refusal names its
+    // reason (an unclassified import, a folder that does not compile): a
+    // failure to fix, not a draft to reload.
+    return opened.reason === "conflict"
+      ? reload(server)
+      : { kind: "failed", code: opened.code };
   };
 
   const openPr = async (server: string) => {
     setBusy(true);
     try {
       setOutcome(await review(server));
-    } catch (error) {
-      setOutcome({
-        kind: "failed",
-        message: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
+      // The request itself failed (the network, or the server before it
+      // answered), so there is no code to name.
+      setOutcome({ kind: "failed", code: null });
     } finally {
       setBusy(false);
     }
@@ -537,6 +614,20 @@ export function ChangesTab({
       <Findings findings={shown} />
       <Section title={t("pr.title")} testId="studio-changes-pr">
         <p className="text-[13px] text-muted-foreground">{t("pr.body")}</p>
+        {overBudget !== null && !empty ? (
+          <p
+            data-testid="studio-pr-over-budget"
+            className="flex flex-wrap items-center gap-2 text-[13px] text-foreground"
+          >
+            <Badge tone="denied">{t("pr.overBudgetBadge")}</Badge>
+            <span>
+              {t("pr.overBudget", {
+                tokens: formatCount(overBudget.tokens, locale),
+                budget: formatCount(overBudget.budget, locale),
+              })}
+            </span>
+          </p>
+        ) : null}
         {canEdit ? (
           <div className="flex flex-wrap items-center gap-2">
             <button
