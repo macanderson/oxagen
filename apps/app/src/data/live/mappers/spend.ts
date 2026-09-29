@@ -50,6 +50,13 @@ export function toSpendReport(
   return {
     period: out.period,
     total: toFigure(out.total),
+    days: out.days.map((day) => ({
+      day: day.day,
+      cost: day.cost,
+      calls: day.calls,
+      runs: day.runs,
+    })),
+    reported: out.reported,
     estimatedRuns: out.estimatedRuns,
     unmeteredRuns: out.unmeteredRuns,
     rows: out.rows.map((row) => ({
@@ -58,6 +65,15 @@ export function toSpendReport(
       provider: row.provider,
       tokens: row.tokens,
       operator: row.operator,
+      topRuns: row.topRuns.map((run) => ({
+        runId: run.runId,
+        name: run.name,
+        startedAt: run.startedAt,
+        agentKey: run.agentKey,
+        operatorKey: run.operatorKey,
+        cost: run.cost,
+        calls: run.calls,
+      })),
     })),
   };
 }
