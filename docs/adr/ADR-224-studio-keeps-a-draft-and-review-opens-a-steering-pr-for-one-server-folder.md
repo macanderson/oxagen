@@ -81,8 +81,11 @@ steering PR, a draft row, a log line, or a PR body.
    (`at`), or at the production head when the caller names none. It refuses
    a branch that already exists, so two writers never share one. It commits
    every file in one commit and labels the PR with `OXAGEN_PR_LABELS`. When
-   the PR does not open, it deletes the branch it created, so a retry can
-   create it again. It reports the `Oxagen steering` check on the new head.
+   the create call fails, it looks for an open PR on the branch first,
+   because the host can open the PR and still fail the call. It adopts a PR
+   it finds. It deletes the branch only when no PR exists, so a retry can
+   create it again. When the lookup fails too, it keeps the branch. It
+   reports the `Oxagen steering` check on the new head.
    When that report fails, it logs the failure and still answers the open
    PR. It works on GitHub and GitLab through the steering host.
 

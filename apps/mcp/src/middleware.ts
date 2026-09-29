@@ -21,6 +21,10 @@ import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { extractBearerToken } from "./context";
 import { servedToolsMiddleware } from "./servers/serve";
+// The relay's upgrade mount (lane M12, ADR-225). xmcp gives no handle to its
+// HTTP server, so the mount subscribes at module load and adds its upgrade
+// listener when the server answers its first request.
+import "./relay/install";
 
 // Refuse to boot if a production runtime disabled RLS enforcement, or if
 // TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS

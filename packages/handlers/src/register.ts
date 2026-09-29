@@ -1534,6 +1534,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/import/review.open"))
         .openStudioReviewHandler as CapabilityHandlerFn,
   );
+  // M12 (#4685): relays for servers and APIs in a private network.
+  registerHandler(
+    "create_relay",
+    async () =>
+      (await import("./mcp-studio/relays/create"))
+        .toolRelayCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "revoke_relay",
+    async () =>
+      (await import("./mcp-studio/relays/revoke"))
+        .toolRelayRevokeHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "fetch_commands",
     async () =>

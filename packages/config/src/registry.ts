@@ -1114,10 +1114,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "bundles with (get_tacho_bundle) and attests run exports with (export_run, ADR-058). " +
       "The matching public key travels to each host at enrollment so tacho-hook verifies a " +
       "cached bundle offline and fails closed on one it cannot verify, and into every export " +
-      "bundle so its verifier runs offline. Unset means enrollment, bundle and export refuse.",
+      "bundle so its verifier runs offline. The MCP service signs relay envelopes and local " +
+      "server calls with it. Unset means enrollment, bundle, export, relay calls, and local " +
+      "calls refuse.",
     secret: true,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "",

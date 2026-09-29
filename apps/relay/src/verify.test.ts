@@ -5,6 +5,7 @@ import { toBase64, type RelayRefusalCode } from "@oxagen/relay-broker/protocol";
 import { describe, expect, it } from "vitest";
 import type { HeaderEntry } from "./credentials";
 import { NonceCache } from "./nonces";
+import { testCertificate } from "./test/certificate";
 import {
   GRPC_TARGET,
   HTTP_TARGET,
@@ -607,6 +608,41 @@ describe("verifyRequest", () => {
       const result = expectAccepted(check(frame, { config: withValue }));
       expect(result.headers).toEqual([[name, SECRET]]);
     });
+
+    describe("mutual_tls", () => {
+      const pair = testCertificate();
+      const withPair = testConfig(key, {
+        credentials: new Map([
+          ["RELAY_CREDENTIAL_BILLING_API_CERT", pair.cert],
+          ["RELAY_CREDENTIAL_BILLING_API_KEY", pair.key],
+        ]),
+      });
+      const MUTUAL = { name: "billing-api", scheme: "mutual_tls" } as const;
+
+      it.each<[string, EnvelopeTarget]>([
+        ["an HTTP", HTTP_TARGET],
+        ["a gRPC", grpcTarget({ scheme: "https" })],
+      ])("accepts it on %s call over TLS, adds no header, and hands back the certificate", (_label, target) => {
+        const frame = requestFrame(key, { target, headers: [["x-request-id", "req-1"]], credential: MUTUAL });
+        const result = expectAccepted(check(frame, { config: withPair }));
+        expect(result.headers).toEqual([["x-request-id", "req-1"]]);
+        expect(result.clientCert).toEqual({ name: "billing-api", cert: pair.cert, key: pair.key });
+      });
+
+      it.each<[string, EnvelopeTarget]>([
+        ["an http HTTP target", httpTarget({ scheme: "http" })],
+        ["an http gRPC target", GRPC_TARGET],
+      ])("refuses it on %s as invalid, because the schema allows it only over TLS", (_label, target) => {
+        const frame = requestFrame(key, { target, credential: MUTUAL });
+        expectRefused(check(frame, { config: withPair }), "invalid");
+      });
+
+      it("refuses it when the relay's environment holds no certificate, and names the variable to set", () => {
+        const frame = requestFrame(key, { credential: MUTUAL });
+        const result = expectRefused(check(frame), "credential_missing");
+        expect(result.message).toContain("RELAY_CREDENTIAL_BILLING_API_CERT");
+      });
+    });
   });
 
   describe("accepted requests", () => {
@@ -628,6 +664,7 @@ describe("verifyRequest", () => {
       expect(new TextDecoder().decode(result.body)).toBe(body);
       expect(result.body.byteLength).toBe(12);
       expect(result.deadlineMs).toBe(DEFAULT_DEADLINE_MS);
+      expect(result).not.toHaveProperty("clientCert");
     });
 
     it("waits 30 seconds by default, as the envelope schema documents for an omitted deadline_ms", () => {
