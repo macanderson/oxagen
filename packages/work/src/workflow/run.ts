@@ -412,7 +412,7 @@ class Machine {
       this.hold(
         record,
         "returns_exhausted",
-        `Stage ${record.role} used its ${stage.maxReturns} returns to ${stage.returnTo}.`,
+        `Stage ${record.role} reached max_returns = ${stage.maxReturns} and cannot send the work back to ${stage.returnTo} again.`,
       );
       return;
     }
@@ -420,6 +420,10 @@ class Machine {
     this.close(record, run, "returned", note);
     const target = this.record(stage.returnTo) as StageRecord;
     target.pendingReturns.push(note);
+    // The returning stage lies downstream of return_to. Its run just closed, so
+    // it goes to run again before the loop, which would otherwise read it as
+    // running and mark its next run stale.
+    record.state = "to_run_again";
     const affected = downstreamOf(this.state.workflow.stages, stage.returnTo);
     affected.add(stage.returnTo);
     for (const other of this.state.stages) {
@@ -428,7 +432,6 @@ class Machine {
       else if (other.state === "running" || other.state === "launching") other.rerun = true;
       // A waiting or held stage keeps its state. It launches once its needs hand off again.
     }
-    record.state = "to_run_again";
     this.schedule();
   }
 

@@ -185,6 +185,12 @@ function join(path: string, key: string): string {
   return path === "" ? key : `${path}.${key}`;
 }
 
+/** How a list's problems name its items: `one` for an item, `many` for the list. */
+interface ListNoun {
+  one: string;
+  many: string;
+}
+
 /**
  * A list of strings, each passing `check`, with no repeats unless `unique` is
  * false. Returns null and records a problem when the value is not one.
@@ -194,23 +200,23 @@ function readList<T extends string>(
   value: unknown,
   path: string,
   check: (item: unknown) => item is T,
-  expected: string,
-  minItems = 0,
+  noun: ListNoun,
+  nonEmpty = false,
   unique = true,
 ): T[] | null {
   if (!Array.isArray(value)) {
-    problems.bad(path, `a list of ${expected}`);
+    problems.bad(path, `a list of ${noun.many}`);
     return null;
   }
   const items: unknown[] = value;
-  if (items.length < minItems) {
-    problems.bad(path, `a list of at least ${minItems} ${expected}`);
+  if (nonEmpty && items.length === 0) {
+    problems.bad(path, `a list of one or more ${noun.many}`);
     return null;
   }
   const out: T[] = [];
   for (const [i, item] of items.entries()) {
     if (!check(item)) {
-      problems.bad(`${path}[${i}]`, expected);
+      problems.bad(`${path}[${i}]`, noun.one);
       return null;
     }
     if (unique && out.includes(item)) {
@@ -221,6 +227,13 @@ function readList<T extends string>(
   }
   return out;
 }
+
+const OWNS_NOUN: ListNoun = {
+  one: `one of ${CRITERION_TAGS.join(", ")}`,
+  many: `criterion tags (${CRITERION_TAGS.join(", ")})`,
+};
+
+const COLLECTOR_NOUN: ListNoun = { one: "a collector name such as support-zendesk", many: "collector names" };
 
 interface RawStage {
   role: string;
@@ -269,15 +282,13 @@ function readStage(problems: Problems, value: unknown, index: number, schema: Wo
 
   let owns: CriterionTag[] = [];
   if (value.owns !== undefined) {
-    owns =
-      readList(problems, value.owns, `${path}.owns`, isCriterionTag, `criterion tags (${CRITERION_TAGS.join(", ")})`) ??
-      [];
+    owns = readList(problems, value.owns, `${path}.owns`, isCriterionTag, OWNS_NOUN) ?? [];
   }
 
   let needs: string[] | null = null;
   if (value.needs !== undefined) {
     if (isV1) problems.notInVersion(`${path}.needs`, schema, "oxagen-workflow/v0.2");
-    else needs = readList(problems, value.needs, `${path}.needs`, isText, "roles", 1);
+    else needs = readList(problems, value.needs, `${path}.needs`, isText, { one: "a role", many: "roles" }, true);
   }
 
   let onFail: OnFail = "stop";
@@ -330,10 +341,10 @@ function readMatch(problems: Problems, value: unknown): ResolvedWorkflow["match"
   }
   problems.unknownKeys(value, new Set(["labels", "collectors"]), "match");
   if (value.labels !== undefined) {
-    match.labels = readList(problems, value.labels, "match.labels", isText, "labels") ?? [];
+    match.labels = readList(problems, value.labels, "match.labels", isText, { one: "a label", many: "labels" }) ?? [];
   }
   if (value.collectors !== undefined) {
-    match.collectors = readList(problems, value.collectors, "match.collectors", isWorkflowSlug, "collector names") ?? [];
+    match.collectors = readList(problems, value.collectors, "match.collectors", isWorkflowSlug, COLLECTOR_NOUN) ?? [];
   }
   return match;
 }
@@ -350,7 +361,8 @@ function readDone(problems: Problems, value: unknown): string[] {
     return [];
   }
   // The schema lets a criterion repeat, so the parser does too.
-  return readList(problems, value.criteria, "done.criteria", isText, "criteria", 1, false) ?? [];
+  const noun = { one: "a criterion", many: "criteria" };
+  return readList(problems, value.criteria, "done.criteria", isText, noun, true, false) ?? [];
 }
 
 /** Read the [accept] table. A file without one accepts by operator. */
