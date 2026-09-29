@@ -290,19 +290,23 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - accept_member_invite
 - add_org_member
+- authorize_slack_connection
 - change_member_role
 - create_org
 - create_scim_token
 - create_sso_provider
 - decline_member_invite
 - delete_model_credential
+- delete_slack_connection
 - delete_sso_provider
 - execute_scim_request
 - get_data_plane
 - get_model_credential
 - get_org_settings
+- get_slack_connection
 - list_members
 - list_orgs
+- list_slack_channels
 - list_sso_providers
 - remove_org_member
 - resend_member_invite
@@ -311,8 +315,10 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - rotate_scim_token
 - set_data_plane
 - set_model_credential
+- set_slack_channel
 - set_sso_group_roles
 - set_sso_policy
+- start_slack_connection
 - update_org_settings
 - update_sso_provider
 - verify_model_credential

@@ -361,27 +361,33 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [accept_member_invite](org.member_invite.accept.md) | [org.member_invite.accept.ts](../../packages/oxagen/src/contracts/org.member_invite.accept.ts) | api, mcp, agent |
 | [add_org_member](org.member.add.md) | [org.member.add.ts](../../packages/oxagen/src/contracts/org.member.add.ts) | api, mcp, agent |
+| [authorize_slack_connection](authorize_slack_connection.md) | [org.slack_connection.authorize.ts](../../packages/oxagen/src/contracts/org.slack_connection.authorize.ts) | none |
 | [change_member_role](org.member_role.change.md) | [org.member_role.change.ts](../../packages/oxagen/src/contracts/org.member_role.change.ts) | api, mcp, agent |
 | [create_org](org.create.md) | [org.create.ts](../../packages/oxagen/src/contracts/org.create.ts) | api, mcp, agent |
 | [create_scim_token](create_scim_token.md) | [org.scim_token.create.ts](../../packages/oxagen/src/contracts/org.scim_token.create.ts) | api |
 | [create_sso_provider](create_sso_provider.md) | [org.sso.create.ts](../../packages/oxagen/src/contracts/org.sso.create.ts) | api, mcp |
 | [decline_member_invite](org.member_invite.decline.md) | [org.member_invite.decline.ts](../../packages/oxagen/src/contracts/org.member_invite.decline.ts) | api, mcp, agent |
 | [delete_model_credential](delete_model_credential.md) | [org.model_credential.delete.ts](../../packages/oxagen/src/contracts/org.model_credential.delete.ts) | api, mcp |
+| [delete_slack_connection](delete_slack_connection.md) | [org.slack_connection.delete.ts](../../packages/oxagen/src/contracts/org.slack_connection.delete.ts) | none |
 | [delete_sso_provider](delete_sso_provider.md) | [org.sso.delete.ts](../../packages/oxagen/src/contracts/org.sso.delete.ts) | api, mcp |
 | [execute_scim_request](execute_scim_request.md) | [scim.request.ts](../../packages/oxagen/src/contracts/scim.request.ts) | none |
 | [get_data_plane](get_data_plane.md) | [org.data_plane.get.ts](../../packages/oxagen/src/contracts/org.data_plane.get.ts) | api, mcp |
 | [get_model_credential](get_model_credential.md) | [org.model_credential.get.ts](../../packages/oxagen/src/contracts/org.model_credential.get.ts) | api, mcp |
 | [get_org_settings](org.settings.read.md) | [org.settings.read.ts](../../packages/oxagen/src/contracts/org.settings.read.ts) | api, mcp, agent |
+| [get_slack_connection](get_slack_connection.md) | [org.slack_connection.get.ts](../../packages/oxagen/src/contracts/org.slack_connection.get.ts) | none |
 | [list_members](workspace.member.list.md) | [workspace.member.list.ts](../../packages/oxagen/src/contracts/workspace.member.list.ts) | api, mcp |
 | [list_orgs](org.list.md) | [org.list.ts](../../packages/oxagen/src/contracts/org.list.ts) | api, mcp, agent |
+| [list_slack_channels](list_slack_channels.md) | [org.slack_channels.list.ts](../../packages/oxagen/src/contracts/org.slack_channels.list.ts) | none |
 | [list_sso_providers](list_sso_providers.md) | [org.sso.list.ts](../../packages/oxagen/src/contracts/org.sso.list.ts) | api, mcp |
 | [remove_org_member](org.member.remove.md) | [org.member.remove.ts](../../packages/oxagen/src/contracts/org.member.remove.ts) | api, mcp, agent |
 | [revoke_scim_token](revoke_scim_token.md) | [org.scim_token.revoke.ts](../../packages/oxagen/src/contracts/org.scim_token.revoke.ts) | api, mcp |
 | [rotate_scim_token](rotate_scim_token.md) | [org.scim_token.rotate.ts](../../packages/oxagen/src/contracts/org.scim_token.rotate.ts) | api |
 | [set_data_plane](set_data_plane.md) | [org.data_plane.set.ts](../../packages/oxagen/src/contracts/org.data_plane.set.ts) | api, mcp |
 | [set_model_credential](set_model_credential.md) | [org.model_credential.set.ts](../../packages/oxagen/src/contracts/org.model_credential.set.ts) | api, mcp |
+| [set_slack_channel](set_slack_channel.md) | [org.slack_channel.set.ts](../../packages/oxagen/src/contracts/org.slack_channel.set.ts) | none |
 | [set_sso_group_roles](set_sso_group_roles.md) | [org.sso.group_roles.set.ts](../../packages/oxagen/src/contracts/org.sso.group_roles.set.ts) | api, mcp |
 | [set_sso_policy](set_sso_policy.md) | [org.sso.policy.set.ts](../../packages/oxagen/src/contracts/org.sso.policy.set.ts) | api, mcp |
+| [start_slack_connection](start_slack_connection.md) | [org.slack_connection.start.ts](../../packages/oxagen/src/contracts/org.slack_connection.start.ts) | none |
 | [update_org_settings](org.settings.write.md) | [org.settings.write.ts](../../packages/oxagen/src/contracts/org.settings.write.ts) | api, mcp, agent |
 | [update_sso_provider](update_sso_provider.md) | [org.sso.update.ts](../../packages/oxagen/src/contracts/org.sso.update.ts) | api, mcp |
 | [verify_model_credential](verify_model_credential.md) | [org.model_credential.verify.ts](../../packages/oxagen/src/contracts/org.model_credential.verify.ts) | api, mcp |
