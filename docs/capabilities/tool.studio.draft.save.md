@@ -12,7 +12,7 @@
 
 You stage edits to one server folder in Studio before you open a steering PR. This capability saves those edits as a draft, so they survive a reload and a second tab. A save replaces the stored edits. It replaces server.toml and the source only when the input carries them. `open_studio_review` reads the draft and opens the steering PR from it.
 
-The draft holds no credential. server.toml names a credential by reference, and a saved test keeps the request as Studio built it before the gateway added the credential. The decision record is ADR-224.
+The draft holds no credential. server.toml names a credential by reference, and a saved test keeps the request as Studio built it before the gateway added the credential. The decision record is [ADR-224](../adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md).
 
 ## Input
 
@@ -20,10 +20,12 @@ The draft holds no credential. server.toml names a credential by reference, and 
 |---|---|---|---|
 | `server` | string | yes | the folder name under `tools/servers/`: a lowercase letter, then lowercase letters, digits, or underscores, 24 characters at most. `builtin` is reserved |
 | `serverId` | string | no | `mcs_…` of the registered server, 1 to 64 characters. Omit it for a server you have not registered |
-| `ops` | object[] | yes | every staged edit, 2,000 at most. The list replaces the stored one. See Edits |
-| `serverToml` | string | no | server.toml as Studio wrote it, 256 KiB at most. Omit it to keep the stored one |
+| `ops` | object[] | yes | every staged edit, 2,000 at most and 8 MiB at most as UTF-8 JSON. The list replaces the stored one. See Edits |
+| `serverToml` | string | no | server.toml as Studio wrote it, 256 KiB at most in UTF-8 bytes. Omit it to keep the stored one |
 | `source` | object | no | what the draft imports from, 25 MiB at most as UTF-8 JSON. See Sources. Omit it to keep the stored one |
 | `revision` | integer | no | the revision this save builds on. `0` starts a new draft. Omit it to save over any revision |
+
+The API reads a request body of 36 MiB at most. It answers a larger body with 413 before it parses it.
 
 ## Edits
 
@@ -86,4 +88,5 @@ The handler writes one live `mcp.studio_drafts` row per server folder. It runs e
 | `conflict` (409) | `test_holds_credential`: a saved test carries a credential header |
 | `conflict` (409) | `test_invalid`: a saved test does not make one recorded exchange |
 | `conflict` (409) | `server_toml_invalid` or `server_name_mismatch`: server.toml does not parse, or it names another server |
-| `invalid_input` (400) | the input fails the contract, including a source over 25 MiB |
+| `invalid_input` (400) | the input fails the contract, including a source over 25 MiB, edits over 8 MiB, or a server.toml over 256 KiB |
+| 413 | the request body is over 36 MiB |
