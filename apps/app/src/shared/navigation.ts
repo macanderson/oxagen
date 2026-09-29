@@ -46,7 +46,25 @@ export function responseRedirect(
   path: SafePath,
   status: 307 | 308 = 307,
 ): NextResponse {
-  return NextResponse.redirect(new URL(path, request.url), status);
+  return NextResponse.redirect(new URL(path, publicOrigin(request)), status);
+}
+
+const HOST_HEADER = /^[a-z0-9.-]+(:\d{1,5})?$/i;
+
+/**
+ * The origin the visitor asked for. In a route handler, Next's standalone
+ * server builds `request.url` from the address it listens on, so a redirect
+ * resolved against it sent production visitors to https://localhost:3000.
+ * Caddy passes the visitor's Host header through and routes only the app's
+ * own names here. The scheme still comes from `request.url`, which Next takes
+ * from X-Forwarded-Proto.
+ */
+function publicOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const host = request.headers.get("host");
+  return host !== null && HOST_HEADER.test(host)
+    ? `${url.protocol}//${host}`
+    : url.origin;
 }
 
 /**
