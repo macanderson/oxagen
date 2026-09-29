@@ -494,6 +494,30 @@ export async function readWithheldTools(
   return row?.withheld ?? [];
 }
 
+/**
+ * Every tool name withheld in one workspace, for the gateway's withheld port.
+ * A full name carries its server (billing__create_refund), so one set covers
+ * every server. It reads only the withheld column, because the gateway calls
+ * it on every request.
+ */
+export async function readWorkspaceWithheldTools(
+  scope: DiscoveryScope,
+): Promise<Set<string>> {
+  const rows = await inScope(scope, (tx) =>
+    tx
+      .select({ withheld: t.withheld })
+      .from(t)
+      .where(
+        and(
+          eq(t.orgId, scope.orgId),
+          eq(t.workspaceId, scope.workspaceId),
+          sql`cardinality(${t.withheld}) > 0`,
+        ),
+      ),
+  );
+  return new Set(rows.flatMap((row) => row.withheld));
+}
+
 function storedTool(row: {
   id: string;
   toolName: string;

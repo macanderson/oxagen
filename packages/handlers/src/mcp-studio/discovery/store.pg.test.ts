@@ -24,6 +24,7 @@ import {
   postgresDiscoverySweepStore,
   postgresDiscoveryToolsStore,
   readWithheldTools,
+  readWorkspaceWithheldTools,
   type SnapshotDescriptor,
 } from "./store";
 import type { DiscoveryScope } from "./types";
@@ -677,6 +678,44 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       expect(await readWithheldTools(b, "github")).toEqual([
         "github.create_issue",
       ]);
+    });
+
+    it("readWorkspaceWithheldTools returns every server's withheld names in the scope's workspace only", async () => {
+      const a = newScope();
+      const b = newScope();
+      const sameWorkspaceOtherOrg: DiscoveryScope = {
+        orgId: otherOrgId,
+        workspaceId: a.workspaceId,
+      };
+      const withhold = async (
+        scope: DiscoveryScope,
+        server: string,
+        withheld: string[],
+      ) => {
+        await store.request(scope, server, "manual", USER, T0);
+        await store.finish(scope, server, finished({ pr: PR, withheld }), T1);
+      };
+      await withhold(a, "billing", [
+        "billing__create_refund",
+        "billing__list_disputes",
+      ]);
+      await withhold(a, "github", ["github__create_issue"]);
+      await withhold(a, "slack", []);
+      await store.request(a, "linear", "manual", USER, T0);
+      await withhold(b, "billing", ["billing__void_invoice"]);
+      await withhold(sameWorkspaceOtherOrg, "billing", [
+        "billing__close_account",
+      ]);
+
+      expect([...(await readWorkspaceWithheldTools(a))].sort()).toEqual([
+        "billing__create_refund",
+        "billing__list_disputes",
+        "github__create_issue",
+      ]);
+      expect([...(await readWorkspaceWithheldTools(b))]).toEqual([
+        "billing__void_invoice",
+      ]);
+      expect(await readWorkspaceWithheldTools(newScope())).toEqual(new Set());
     });
   });
 
