@@ -8,8 +8,9 @@
 // the endpoint's url, or any part of the endpoint's response body.
 //
 // These requests do not go through @oxagen/ai (ADR-217), so the caller meters
-// them: the embedder opens the caller's meter before each request and closes
-// it with the token count, or as failed, once the request ends.
+// them: the embedder opens the caller's meter before each request. It closes
+// it with the token count once the endpoint answers 2xx, or as failed when
+// the endpoint refuses the request or never answers.
 import { concat, decodeText, encodeText, parseJson } from "../execute/body";
 import { createCloudTransport } from "../execute/cloud/transport";
 import { parseEndpoint } from "../execute/endpoint";
@@ -87,10 +88,22 @@ export interface EmbedUsage {
  * exactly one of these once the request ends. Neither may throw.
  */
 export interface EmbedMeter {
-  /** The request returned its vectors, and this is what it used. */
+  /**
+   * The endpoint answered 2xx, so it did the work, and this is what it
+   * reported using. It runs even when the vectors are then refused, and
+   * `tokens` is null when the answer carried no readable count.
+   */
   used(usage: EmbedUsage): void;
-  /** The request failed, so it reports no usage. */
+  /** The endpoint refused the request or never answered, so it reports no usage. */
   failed(): void;
+}
+
+/** What post() learned about the answer, filled in as it arrives. */
+interface Answer {
+  /** True once the endpoint answered 2xx. */
+  answered: boolean;
+  /** The answer's usage.total_tokens, once its body parsed. */
+  tokens: number | null;
 }
 
 /** How long one embeddings request may take. */
@@ -137,7 +150,8 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
     texts: readonly string[],
     purpose: EmbedPurpose,
     signal: AbortSignal | undefined,
-  ): Promise<{ vectors: Float32Array[]; tokens: number | null }> {
+    answer: Answer,
+  ): Promise<Float32Array[]> {
     const headers: HeaderEntry[] = [
       ["content-type", "application/json"],
       ["accept", "application/json"],
@@ -166,10 +180,12 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
         response.cancel();
         throw statusFailure(response.status);
       }
+      answer.answered = true;
       const bytes = await readCapped(response, clock, limit);
       const parsed = parseJson(decodeText(bytes));
       if (!parsed.ok) throw malformed("The embeddings endpoint's response is not JSON.", response.status);
-      return { vectors: vectorsOf(parsed.value, texts.length, response.status), tokens: tokensOf(parsed.value) };
+      answer.tokens = tokensOf(parsed.value);
+      return vectorsOf(parsed.value, texts.length, response.status);
     } finally {
       clock.dispose();
     }
@@ -183,12 +199,18 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
       const sender = (transport ??= createCloudTransport());
       const meter = await options.meter?.();
       const startedAt = Date.now();
-      const answer = await post(sender, target, texts, purpose, signal).catch((error: unknown) => {
-        meter?.failed();
-        throw error;
-      });
-      meter?.used({ texts, purpose, tokens: answer.tokens, durationMs: Date.now() - startedAt });
-      return answer.vectors;
+      const answer: Answer = { answered: false, tokens: null };
+      try {
+        return await post(sender, target, texts, purpose, signal, answer);
+      } finally {
+        // A 2xx answer was spent even when its vectors are refused, so its
+        // usage is reported. Only a refused or unanswered request is voided.
+        if (answer.answered) {
+          meter?.used({ texts, purpose, tokens: answer.tokens, durationMs: Date.now() - startedAt });
+        } else {
+          meter?.failed();
+        }
+      }
     },
   };
 }

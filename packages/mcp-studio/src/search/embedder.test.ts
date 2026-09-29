@@ -306,10 +306,9 @@ describe("httpEmbedder", () => {
     for (const usage of usages) expect(usage.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("closes the meter as failed, with no usage, for a request that fails", async () => {
+  it("closes the meter as failed, with no usage, for a request the endpoint refused or never answered", async () => {
     const failing = [
       fakeHttp(() => reply(401)),
-      fakeHttp(() => reply(200, { ...(data([[1]]) as object), usage: { total_tokens: 4 } })),
       fakeHttp(() => Promise.reject(new TransportError("timeout", "slow", true))),
       fakeHttp(() => Promise.reject(new Error("socket hang up"))),
     ];
@@ -319,6 +318,23 @@ describe("httpEmbedder", () => {
       await failure(httpEmbedder(voyage({ transport: http.transport, meter })).embed(["a", "b"], "document"));
       expect(events).toEqual(["open", "failed"]);
       expect(usages).toEqual([]);
+    }
+  });
+
+  it("reports the usage of a 2xx answer whose vectors it refuses", async () => {
+    // The endpoint did the work, so its spend stays on record (#4760).
+    const refused: Array<[unknown, number | null]> = [
+      [{ ...(data([[1]]) as object), usage: { total_tokens: 4 } }, 4],
+      ["not json", null],
+    ];
+    for (const [body, tokens] of refused) {
+      const events: string[] = [];
+      const { meter, usages } = recordingMeter(events);
+      const http = fakeHttp(() => reply(200, body));
+      const error = await failure(httpEmbedder(voyage({ transport: http.transport, meter })).embed(["a", "b"], "document"));
+      expect(error.code).toBe("malformed");
+      expect(events).toEqual(["open", "used"]);
+      expect(usages).toEqual([{ texts: ["a", "b"], purpose: "document", tokens, durationMs: expect.any(Number) }]);
     }
   });
 

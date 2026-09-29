@@ -86,7 +86,8 @@ Two rules stand in the way:
   does for its own embeddings. An answered request finalizes the row with
   the input tokens from the response's `usage.total_tokens`, the duration,
   the surface `mcp`, the prompt hash, and the provider cost from the rate
-  card. A failed request voids it. The row charges no credits.
+  card, even when the vectors are then refused. A request the endpoint
+  refuses or never answers voids it. The row charges no credits.
   `searchUsageMeter` in `packages/handlers/src/mcp-studio/search-usage.ts`
   writes it. A failed admission is logged with an alert and never fails a
   search or a publish. (Amended by #2972: the row was first written after
