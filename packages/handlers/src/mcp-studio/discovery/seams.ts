@@ -21,7 +21,11 @@ import type {
   ServerSource,
   Transport,
 } from "@oxagen/mcp-studio";
-import { createCloudTransport, registryEntrySchema } from "@oxagen/mcp-studio";
+import {
+  createCloudTransport,
+  mcpToolSchema,
+  registryEntrySchema,
+} from "@oxagen/mcp-studio";
 import { refusalText } from "@oxagen/tacho/local-servers";
 import type { SteeringHost } from "../../context.steering.github";
 import type { LocalGatewayBroker } from "../local-calls/broker";
@@ -210,10 +214,24 @@ export function gatewayLocalReporter(
       if (!result.ok) {
         throw new DiscoveryRefused("source", refusalText(result.refusal));
       }
+      // The gateway's wire keeps any object as an input schema. A lock needs
+      // the MCP tool shape, whose input schema is an object schema.
+      const tools: McpTool[] = [];
+      for (const tool of result.report.tools) {
+        const parsed = mcpToolSchema.safeParse(tool);
+        if (!parsed.success) {
+          const field = parsed.error.issues[0]?.path.join(".") || "shape";
+          throw new DiscoveryRefused(
+            "source",
+            `${result.report.machine} reported a tool named ${JSON.stringify(tool.name)} for ${server} whose ${field} does not fit an MCP tool, so ${server} was not discovered.`,
+          );
+        }
+        tools.push(parsed.data);
+      }
       return {
         machine: result.report.machine,
         server_version: result.report.server_version,
-        tools: result.report.tools,
+        tools,
       };
     },
   };

@@ -28,7 +28,11 @@ import {
 import type { Scrubber } from "./scrub";
 import { DiscoveryRefused } from "./types";
 
-/** Each request's deadline when the caller sets none. */
+/**
+ * The deadline for one call when the caller sets none. One deadline covers the
+ * whole call: an MCP session from initialize to its last tools/list page, one
+ * introspection query, or one GET.
+ */
 export const REQUEST_DEADLINE_MS = 30_000;
 /** The most bytes one MCP reply may hold. */
 export const MCP_REPLY_BYTES_MAX = 8 * 1024 * 1024;
@@ -228,6 +232,8 @@ interface Route {
   /** The credential's headers. */
   auth: HeaderEntry[];
   signal: AbortSignal;
+  /** The caller's own signal, so a cancel is not reported as a timeout. */
+  caller: AbortSignal;
   deadlineMs: number;
 }
 
@@ -237,7 +243,7 @@ function routeOf(options: {
   placed: PlacedCredential;
   transport: Transport;
   signal: AbortSignal;
-  deadlineMs: number | undefined;
+  deadlineMs?: number | undefined;
 }): Route {
   if (options.network !== "cloud") {
     throw new DiscoveryRefused(
@@ -253,12 +259,18 @@ function routeOf(options: {
     path: withQuery(endpoint.path, options.placed.query),
     auth: options.placed.headers,
     signal: AbortSignal.any([options.signal, AbortSignal.timeout(deadlineMs)]),
+    caller: options.signal,
     deadlineMs,
   };
 }
 
 function failed(route: Route, error: unknown): DiscoveryRefused {
   if (error instanceof DiscoveryRefused) return error;
+  if (route.caller.aborted) {
+    return refused(
+      `The discovery run ended before ${route.endpoint.host} answered.`,
+    );
+  }
   if (route.signal.aborted) {
     return refused(
       `${route.endpoint.host} did not answer within ${route.deadlineMs / 1000} seconds.`,
@@ -581,6 +593,28 @@ async function initialize(route: Route): Promise<Session> {
     response.cancel();
     throw refused("The MCP server's Mcp-Session-Id is not visible ASCII.");
   }
+  try {
+    return await sessionFrom(route, response, sessionId);
+  } catch (error) {
+    // The server opened a session before its reply failed, so end it.
+    if (sessionId !== undefined) {
+      closeSession(route, {
+        headers: [
+          ["Mcp-Session-Id", sessionId],
+          ["MCP-Protocol-Version", MCP_PROTOCOL_VERSION],
+        ],
+        serverVersion: undefined,
+      });
+    }
+    throw error;
+  }
+}
+
+async function sessionFrom(
+  route: Route,
+  response: HttpTransportResponse,
+  sessionId: string | undefined,
+): Promise<Session> {
   const message = await reply(route, response, INITIALIZE_ID, "initialize");
   if (Object.hasOwn(message, "error")) {
     throw rpcError("initialize", message.error);
@@ -658,10 +692,31 @@ export interface McpListResult {
   serverVersion: string | undefined;
 }
 
+/**
+ * A refusal with each credential the call placed replaced. A server or a
+ * transport can echo a credential into its error text, so a refusal is
+ * scrubbed before it leaves the client.
+ */
+function scrubbed(scrubber: Scrubber, error: unknown): unknown {
+  if (!(error instanceof DiscoveryRefused)) return error;
+  const message = scrubber.scrub(error.message);
+  return message === error.message
+    ? error
+    : new DiscoveryRefused(error.code, message);
+}
+
 /** Open a session, page through tools/list, and end the session. */
 export async function listMcpTools(
   request: McpListRequest,
 ): Promise<McpListResult> {
+  try {
+    return await listTools(request);
+  } catch (error) {
+    throw scrubbed(request.scrubber, error);
+  }
+}
+
+async function listTools(request: McpListRequest): Promise<McpListResult> {
   const placed = placeCredential(
     request.auth,
     request.credential,
@@ -775,6 +830,14 @@ export interface IntrospectRequest {
 export async function introspectGraphql(
   request: IntrospectRequest,
 ): Promise<unknown> {
+  try {
+    return await introspect(request);
+  } catch (error) {
+    throw scrubbed(request.scrubber, error);
+  }
+}
+
+async function introspect(request: IntrospectRequest): Promise<unknown> {
   const placed = placeCredential(
     request.auth,
     request.credential,

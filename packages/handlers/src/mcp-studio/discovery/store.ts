@@ -544,10 +544,10 @@ const target = (row: {
 export const postgresDiscoverySweepStore: DiscoverySweepStore = {
   async undiscovered(limit) {
     const s = schema.mcpServers;
-    // tenancy: the hourly sweep is a deliberate cross-tenant read of the
-    // shared plane. It selects the org, workspace, and folder name of each
-    // live steering server with no discovery row, and reads no other column.
-    // Each discovery then runs in its own workspace scope.
+    // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
+    // of the shared plane. It selects the org, workspace, and folder name of
+    // each live steering server with no discovery row, and reads no other
+    // column. Each discovery then runs in its own workspace scope.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -580,9 +580,9 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
   },
 
   async dueDaily(before, limit) {
-    // tenancy: the hourly sweep is a deliberate cross-tenant read of the
-    // shared plane. It selects the org, workspace, and server of each daily
-    // discovery that is due, and reads no other column.
+    // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
+    // of the shared plane. It selects the org, workspace, and server of each
+    // daily discovery that is due, and reads no other column.
     const rows = await withSystemDb((tx) =>
       tx
         .select({ orgId: t.orgId, workspaceId: t.workspaceId, server: t.server })
@@ -601,9 +601,9 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
   },
 
   async openPullRequests(limit) {
-    // tenancy: the hourly sweep is a deliberate cross-tenant read of the
-    // shared plane. It selects the org, workspace, and server of each row
-    // with an open sync steering PR, and reads no other column.
+    // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
+    // of the shared plane. It selects the org, workspace, and server of each
+    // row with an open sync steering PR, and reads no other column.
     const rows = await withSystemDb((tx) =>
       tx
         .select({ orgId: t.orgId, workspaceId: t.workspaceId, server: t.server })
@@ -621,10 +621,11 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
   },
 
   async onChangeByRepo(repo) {
-    // tenancy: a push webhook names a repository, not a workspace, so this
-    // is a deliberate cross-tenant read of the shared plane. It selects the
-    // org, workspace, server, path, and ref of each on-change server whose
-    // definition lives in that repository, and reads no other column.
+    // tenancy: a signed push webhook names a repository, not a workspace, so
+    // this is a deliberate cross-tenant read of the shared plane, filtered by
+    // that repository. It selects the org, workspace, server, path, and ref
+    // of each on-change server whose definition lives in that repository,
+    // and reads no other column.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
