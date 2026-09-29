@@ -8650,10 +8650,6 @@ type Messages = {
       month: string;
       findings: string;
       tokens: string;
-      coaching: string;
-      operator: string;
-      agent: string;
-      model: string;
       tool: string;
       waste: string;
       budgets: string;
@@ -8807,23 +8803,9 @@ type Messages = {
       };
     };
     columns: {
-      operator: string;
-      role: string;
-      agents: string;
       runs: string;
       spend: string;
-      tokens: string;
-      cacheHit: string;
       savings: string;
-      budgetPosition: string;
-      agent: string;
-      perRun: string;
-      trend: string;
-      model: string;
-      providerKey: string;
-      modelCalls: string;
-      cacheHitRate: string;
-      basis: string;
       tool: string;
       server: string;
       calls: string;
@@ -8837,28 +8819,6 @@ type Messages = {
       shareOfSpend: string;
     };
     groups: {
-      operator: {
-        unnamed: string;
-        title: string;
-        empty: string;
-        note: string;
-        budgetMissing: string;
-      };
-      agent: {
-        title: string;
-        empty: string;
-        note: string;
-        trendMissing: string;
-      };
-      model: {
-        title: string;
-        note: string;
-        routes: string;
-        footer: string;
-        keyMissing: string;
-        total: string;
-        totalNote: string;
-      };
       tool: {
         title: string;
         empty: string;
@@ -9326,29 +9286,6 @@ type Messages = {
         error: string;
       };
     };
-    coaching: {
-      title: string;
-      notBacked: string;
-      agents: string;
-      operators: string;
-      agentSignals: {
-        narrowBelt: string;
-        stablePrefix: string;
-        pageResults: string;
-        contextBudget: string;
-        lightModel: string;
-        retryStorms: string;
-        oneTurnCache: string;
-      };
-      operatorSignals: {
-        grants: string;
-        reRead: string;
-        onePrompt: string;
-        publishSteering: string;
-        resizeBudget: string;
-        selfReported: string;
-      };
-    };
     ranking: {
       title: string;
       note: string;
@@ -9386,12 +9323,6 @@ type Messages = {
         denied: string;
         failed: string;
       };
-    };
-    agentChart: {
-      title: string;
-      label: string;
-      footer: string;
-      otherCurrency: string;
     };
     toolChart: {
       metric: {
