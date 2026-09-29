@@ -69,9 +69,15 @@ brings. It needs no new ADR.
 The kit wins on tokens, type, and marks. The mockup wins on layout and
 behavior.
 
-- **Type.** The app keeps the kit's faces (Space Grotesk, Geist, Monaspace
-  Neon) until the kit adopts Aeonik. A slice ports the mockup's type roles
-  (which text is display, body, or mono) and draws them with the kit's fonts.
+- **Type.** The app keeps the kit's faces until the kit adopts Aeonik. Geist
+  sets every heading and every line of text, and Monaspace Neon sets code.
+  Space Grotesk sets only the Oxagen and stella wordmarks. A slice ports the
+  mockup's type roles (which text is body or mono) and draws a display role in
+  Geist. The amendment of 2026-09-29 below has the reason.
+- **Copy.** The mockup sets layout and behavior, not wording. A heading,
+  button, caption, or hint ported from the mockup follows `CLAUDE.md` under
+  Labels and headings, and a label that breaks that rule is renamed in the
+  port.
 - **Colour.** A mockup hex that the kit has no token for is not copied. The
   slice uses the nearest kit token, or asks the kit for a new one.
 - **Radius and control sizes.** ADR-221's `base-maia` scale stays. The mockup
@@ -165,3 +171,23 @@ the same line.
   `font-family` written in the app, so the kit has to ship it first.
 - ADR-130, ADR-132, and ADR-170 are superseded. Their rules that still hold are
   restated above.
+
+## Amendment of 2026-09-29: one face and plain labels
+
+Mac set two rules on 2026-09-29 after the Steering page shipped two headings
+in Space Grotesk and two labels ported from the mockup, "Everything written
+down" and "Who receives it".
+
+- **One face.** Space Grotesk is banned everywhere except the Oxagen wordmark,
+  the stella wordmark in the assistant launcher, and line 1 of the oxagen.sh
+  hero. Geist sets every other heading and every line of text in every app.
+  The kit still maps h1 to h3 to Space Grotesk in `house-tailwind.css`, which
+  the sync keeps byte-identical. `packages/ui/src/styles/globals.css` therefore
+  sets `--font-display` to Geist in an `@theme` block after the kit's import,
+  and keeps Space Grotesk under `--font-wordmark` for the marks alone. INV-32
+  fails when a file under `apps/app/src` names `--ox-font-display`,
+  `--font-wordmark`, or Space Grotesk outside a comment. The kit should adopt
+  the same rule. Until it does, this override is the app's record.
+- **Plain labels.** The mockup's wording is not the design of record. The rule
+  in `CLAUDE.md` under Labels and headings governs every heading, button,
+  caption, and hint, including one a slice ports from the mockup.

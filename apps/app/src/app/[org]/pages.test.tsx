@@ -376,7 +376,7 @@ describe("the Audit page", () => {
       searchParams: { outcome: "deny", offset: "50" },
     });
     expect(page).toHaveTextContent(
-      "What happened, who allowed it, under what authority, and what it cost.",
+      "The governed actions in this organization with their actors, authority, and cost.",
     );
     expect(screen.getByTestId("audit-retention-line")).toBeInTheDocument();
     expect(screen.getByTestId("audit-header-action")).toHaveTextContent("acme");
@@ -473,7 +473,7 @@ describe("the Steering page", () => {
     // The eyebrow is the workspace name and the subtext the design's sentence.
     expect(page.textContent).toContain("Core platform");
     expect(page.textContent).toContain(
-      "Everything that can steer an agent in this workspace competes in one assembler.",
+      "One assembler ranks every item that steers an agent in this workspace.",
     );
     expect(screen.getByTestId("steering-actions")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();

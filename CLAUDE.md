@@ -133,6 +133,26 @@ The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, To
 
 The current assistant flyout and the retained API chat transport are separate surfaces. Do not copy the deprecated app's `use-tool-stream.ts` path into new app guidance. Use existing data ports and server actions, and keep platform actions behind capability contracts.
 
+## Labels and headings
+
+Mac set this rule on 2026-09-21 and restated it on 2026-09-29, after the steering page shipped "Everything written down" and a "Who receives it" button. It applies to every UI string, doc, and mockup in this repository.
+
+- **A heading names the thing.** Write a plain noun or noun phrase: "All items", "Origin", "Governance mode". Do not write a question phrase ("Who receives it", "Where it came from", "What merge will do"), an "Everything ..." slogan, or wordplay.
+- **A button says what it does.** Write a verb and its object, in the form its sibling buttons use: "Open the assignments", "Open the compiler".
+- **A caption, tile note, badge, or hint states one fact.** It carries no comma, no mid-dot (·), and no "not" or "never" contrast. "count per kind", not "one shape, every kind".
+- **Subtext under a heading is one sentence or nothing.** Cut slogans such as "One concern, one pull request." and "The harness owns the context window."
+- **The mockup's wording does not override this rule.** ADR-226 makes the v3 mockup the design of record for layout and behavior. Many of its labels break this rule, so rename a mockup label when you port it, and keep the mockup's structure.
+
+Load `clear-prose` before you write any of these strings.
+
+## Type
+
+Mac set this on 2026-09-29. The app uses Geist for every heading and every line of text. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh, the first line of a hero. It sets nothing else.
+
+- `packages/ui/src/styles/globals.css` points `--font-display` at Geist (`--ox-font`), so `h1` to `h3` and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class.
+- Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
+- The brand kit (`oxagenai/oxagen-brand`) still names Space Grotesk as its display face. The files it syncs into `packages/ui/src/styles/` stay byte-identical to the kit, so the override lives in `globals.css`, after the kit's import.
+
 ## Runtime checks that matter
 
 - Register handlers before calling `invoke()`. A missing handler throws `CapabilityError` with code `no_handler`. Handler registration does not install IAM, billing, or entitlement gates. Bootstrap those at the surface entry point.

@@ -486,35 +486,35 @@ describe("the Library, All shelf", () => {
   it("prints the stat strip with each tile's basis, and not recorded for what no read measures", async () => {
     await renderSteering("/library", { records: three });
     expect(screen.getByTestId("tile-items")).toHaveTextContent(
-      "Items3everything that can steer an agent here",
+      "Items3in force in this workspace",
     );
     expect(screen.getByTestId("tile-by-kind")).toHaveTextContent(
-      "By kindrecord 3one shape, every kind",
+      "By kindrecord 3count per kind",
     );
     expect(screen.getByTestId("tile-compiled-size")).toHaveTextContent(
-      "Compiled sizenot recordedif every item were rendered at once, which no run does",
+      "Compiled sizenot recordedall items rendered together",
     );
     expect(screen.getByTestId("tile-grants")).toHaveTextContent(
-      "Carry a grantnot recordedthese compile to a gate as well as to text",
+      "Enforcement grantsnot recordeditems that also compile to a gate",
     );
   });
 
   it("prints the lead note verbatim", async () => {
     await renderSteering();
     expect(screen.getByTestId("library-lead")).toHaveTextContent(
-      "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
+      "The assembler reads these items in this order and picks the ones each run receives.",
     );
   });
 
-  it("lists everything written down in the assembler's order under the design's columns", async () => {
+  it("lists all items in the assembler's order under the design's columns", async () => {
     await renderSteering("/library", { records: three });
-    const panel = section("Everything written down");
+    const panel = section("All items");
     expect(within(panel).getByTestId("library-count")).toHaveTextContent("3");
     expect(
-      within(panel).getByRole("link", { name: "Who receives it" }),
+      within(panel).getByRole("link", { name: "Open the assignments" }),
     ).toHaveAttribute("href", `${BASE}/assignments`);
     const table = within(panel).getByRole("table", {
-      name: "Everything written down",
+      name: "All items",
     });
     expect(
       within(table)
@@ -561,9 +561,9 @@ describe("the Library, All shelf", () => {
   it("says steering and gating are two planes, and names the issue the other shelves wait on on the values it leaves out", async () => {
     await renderSteering();
     expect(
-      screen.getByText(/Steering is what the model reads/),
+      screen.getByText(/show the text the model reads/),
     ).toHaveTextContent(
-      "advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked.",
+      "The Library, Assignments, and the Compiler show the text the model reads. Gates shows the calls Oxagen refuses.",
     );
     // The design's footer holds no gap paragraph; the tooltips carry the issue.
     expect(screen.queryByTestId("library-gap")).toBeNull();
@@ -605,7 +605,7 @@ describe("the Library, All shelf", () => {
         total: 12,
       });
     const lineages = () =>
-      within(screen.getByRole("table", { name: "Everything written down" }))
+      within(screen.getByRole("table", { name: "All items" }))
         .getAllByRole("row")
         .slice(1)
         .map((row) => row.getAttribute("data-lineage"));
@@ -763,7 +763,7 @@ describe("states", () => {
       await renderSteering(path, { records: none });
       const empty = section("Nothing steers this workspace yet");
       expect(empty).toHaveTextContent(
-        "Published records live in .oxagen/rules/ on acme/platform. A record becomes published by being merged, never by being saved here.",
+        "Published records live in .oxagen/rules/ on acme/platform. A record is published when its pull request merges.",
       );
       expect(
         within(empty).getByRole("button", { name: "Write a context record" }),
