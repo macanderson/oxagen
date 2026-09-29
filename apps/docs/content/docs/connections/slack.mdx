@@ -1,0 +1,102 @@
+---
+title: Connect Slack
+description: Post each change in a steering repo's health to one Slack channel your organization picks, beside the in-app notice and the email Oxagen already sends.
+---
+
+## Overview
+
+When a steering repo loses access, has its settings changed, or takes a commit Oxagen did not merge, Oxagen tells the organization's owners and admins in the app and by email. Connect Slack to post the same notice to one channel your team already reads.
+
+One Slack workspace connects to one Oxagen organization. Every notice for the organization goes to the one channel you pick. The in-app notice and the email keep going out, so Slack adds a copy and replaces nothing.
+
+<Callout type="info">
+  Until Oxagen turns on public distribution for its Slack app, Slack installs the app only in Oxagen's own Slack workspace. Slack's install screen refuses any other workspace until then.
+</Callout>
+
+## Before you start
+
+- You are an Owner or Admin of the Oxagen organization. Only those two roles can connect Slack, pick the channel, or disconnect.
+- You can install apps in the Slack workspace. If your Slack workspace requires approval for new apps, a Slack admin approves the request first.
+
+## Connect a Slack workspace
+
+1. Open **Organization → Notifications** at `/{org}/notifications`.
+2. Under **Slack**, select **Connect Slack**.
+3. Slack shows the permissions the Oxagen app asks for. Pick your Slack workspace and select **Allow**.
+4. Slack sends you back to **Notifications**, which shows the connected Slack workspace.
+
+The connect link lasts ten minutes and works once, for the person who started it. If it expires, select **Connect Slack** again. If you select **Cancel** in Slack, Oxagen connects nothing.
+
+## Permissions
+
+The Oxagen app asks Slack for four bot scopes.
+
+| Slack scope | What Oxagen uses it for |
+| --- | --- |
+| `chat:write` | Post the notice |
+| `chat:write.public` | Post to a public channel without joining it |
+| `channels:read` | List public channels for the channel picker |
+| `groups:read` | List the private channels the Oxagen bot was invited to |
+
+Oxagen refuses an install that does not grant `chat:write`, because it could post nothing.
+
+## Pick a channel
+
+1. Under **Slack**, choose a channel from the list.
+2. Select **Save**.
+
+Every public channel appears in the list. A private channel appears only after someone in it invites the bot. Run `/invite @Oxagen` in the channel, then reload **Notifications**. Archived channels do not appear. In a Slack workspace with thousands of channels, the list can stop short, and the page says so.
+
+Oxagen posts nothing until you pick a channel.
+
+## What Oxagen posts
+
+Oxagen posts one message each time a steering repo's health changes. The message carries the change as a bold title, the health summary under it, and an **Open in Oxagen** link to the steering repo.
+
+| Change | Message title |
+| --- | --- |
+| Oxagen can no longer reach the repository | Oxagen lost access to the steering repo `<owner/repo>` |
+| Someone changed the repository's settings | Settings changed on the steering repo `<owner/repo>` |
+| The main branch holds a commit Oxagen did not merge | main on the steering repo `<owner/repo>` holds a commit Oxagen did not merge |
+| The repository recovered | The steering repo `<owner/repo>` is healthy again |
+
+## When a post fails
+
+Some Slack refusals repeat until a person acts. For those, Oxagen stops trying that notice and shows the reason under the channel on **Notifications**. The in-app notice and the email still go out.
+
+| Code | What to do |
+| --- | --- |
+| `not_in_channel` | Invite the bot to the private channel with `/invite @Oxagen`. |
+| `channel_not_found` | The channel was deleted, or the bot cannot see it. Pick another channel. |
+| `is_archived` | Unarchive the channel in Slack, or pick another channel. |
+| `token_revoked`, `invalid_auth`, `account_inactive` | Someone removed the app from Slack or revoked its token. Select **Disconnect**, then **Connect Slack**. |
+| `missing_scope` | Select **Disconnect**, then **Connect Slack**, so Slack grants every scope the app asks for. |
+| `token_unreadable` | Oxagen could not decrypt the stored token. Select **Disconnect**, then **Connect Slack**. |
+
+Saving a channel clears the recorded failure. So does connecting the same Slack workspace again, which keeps the channel.
+
+Other failures can pass on a retry, such as a timeout, a rate limit, or a Slack server error. For those, Oxagen sends the notice again on the next health check. Now and then the channel receives the same notice twice.
+
+## Disconnect
+
+Under **Slack**, select **Disconnect** and confirm. Oxagen deletes the stored token, asks Slack to revoke it, and stops posting. The in-app notice and the email keep going out.
+
+If Slack does not answer the revoke, the app can stay installed in your Slack workspace. Remove it from the Slack workspace's app management page.
+
+To send notices to a different Slack workspace, disconnect, then connect again and pick the other workspace.
+
+## Security
+
+- Oxagen encrypts the bot token at rest and stores it on your organization. No agent and no page receives it.
+- The connect link carries a single-use value tied to you and your organization. Oxagen refuses it from anyone else, or after ten minutes.
+- Connecting writes a `plugin.credential_set` audit event. Disconnecting writes `plugin.credential_revoked`.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| **Notifications** says Slack is unavailable | This deployment has no Slack app credentials. Contact your Oxagen admin. |
+| Slack says the app cannot be installed in your workspace | The app is not yet distributed publicly. See the note at the top of this page. |
+| The connect link expired or belongs to someone else | Select **Connect Slack** again, and finish in the same browser within ten minutes. |
+| A private channel is missing from the list | Run `/invite @Oxagen` in the channel, then reload **Notifications**. |
+| No message arrived after a health change | Check that a channel is picked and read the failure under it on **Notifications**. |
