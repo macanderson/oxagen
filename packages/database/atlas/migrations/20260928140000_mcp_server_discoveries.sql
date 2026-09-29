@@ -5,7 +5,9 @@
 -- source which tools it offers, writes them to mcp.tool_snapshots, and opens
 -- one sync steering PR when an imported tool's upstream differs from the
 -- served lock. `withheld` names the tools whose input schema changed. The
--- gateway withholds them until that steering PR merges. The source columns
+-- gateway withholds them until that steering PR merges. `withheld_upstream`
+-- names the same tools by their upstream names, and `offered` lists the
+-- upstream names the source offered on the last read. The source columns
 -- let the push webhook find the servers a push to a definition repository
 -- touches. The table is tenant-isolated like every org-scoped table.
 
@@ -38,6 +40,8 @@ CREATE TABLE IF NOT EXISTS mcp.server_discoveries (
   pr_url text,
   pr_branch text,
   withheld text[] NOT NULL DEFAULT '{}',
+  withheld_upstream text[] NOT NULL DEFAULT '{}',
+  offered text[] NOT NULL DEFAULT '{}',
   CONSTRAINT "server_discoveries_status_check" CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
   CONSTRAINT "server_discoveries_trigger_check" CHECK (trigger IN ('schedule', 'list_changed', 'push', 'registry_version', 'manual', 'lock_merged')),
   CONSTRAINT "server_discoveries_outcome_check" CHECK (outcome IS NULL OR outcome IN ('unchanged', 'pr_opened', 'pr_updated', 'needs_digest', 'skipped')),

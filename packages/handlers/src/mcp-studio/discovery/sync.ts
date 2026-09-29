@@ -104,6 +104,10 @@ interface Kept {
   latestVersion: string | null;
   toolCount: number | null;
   machine: string | null;
+  /** Set once the source is read: the upstream names it offered. */
+  offered?: string[];
+  /** Set once the surface is compared: withheld, by upstream name. */
+  withheldUpstream?: string[];
 }
 
 interface Run {
@@ -265,6 +269,7 @@ async function resolvePullRequest(
   if (!state.merged) return { open: null, checkout };
   run.kept.digest = null;
   run.kept.withheld = [];
+  run.kept.withheldUpstream = [];
   return { open: null, checkout: await run.seams.steering.open(run.scope) };
 }
 
@@ -456,6 +461,29 @@ export function withheldTools(
   return [...out].sort();
 }
 
+/**
+ * The upstream names behind the withheld full names, as mcp.tool_snapshots
+ * names them. A key maps to its upstream name through the served lock, the
+ * proposed lock, or both when the upstream renamed the tool.
+ */
+export function withheldUpstream(
+  surface: ToolSurfaceDiff,
+  withheld: readonly string[],
+  served: McpToolsLock,
+  proposed: McpToolsLock,
+): string[] {
+  const held = new Set(withheld);
+  const out = new Set<string>();
+  for (const entry of surface.entries) {
+    if (!held.has(entry.tool)) continue;
+    for (const lock of [served, proposed]) {
+      const name = lock.tools[entry.key]?.upstream.name;
+      if (name !== undefined) out.add(name);
+    }
+  }
+  return [...out].sort();
+}
+
 // ── One run ──────────────────────────────────────────────────────────────────
 
 function finished(kept: Kept, outcome: DiscoveryOutcome): DiscoveryFinish {
@@ -469,6 +497,10 @@ function finished(kept: Kept, outcome: DiscoveryOutcome): DiscoveryFinish {
     latestVersion: kept.latestVersion,
     pr: kept.pr,
     withheld: kept.withheld,
+    ...(kept.offered === undefined ? {} : { offered: kept.offered }),
+    ...(kept.withheldUpstream === undefined
+      ? {}
+      : { withheldUpstream: kept.withheldUpstream }),
   };
 }
 
@@ -551,6 +583,7 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
   });
   const offered = scrubValue(run.scrubber, discovered.offered);
   kept.toolCount = offered.length;
+  kept.offered = offered.map((tool) => tool.name);
   kept.machine = discovered.machine;
   kept.latestVersion = discovered.latestVersion ?? kept.latestVersion;
   if (mcpServerId !== null) {
@@ -573,6 +606,12 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     offered,
   });
   kept.withheld = withheldTools(surface, served, proposed.server);
+  kept.withheldUpstream = withheldUpstream(
+    surface,
+    kept.withheld,
+    files.lock,
+    proposed.lock,
+  );
 
   const changed =
     version !== undefined ||

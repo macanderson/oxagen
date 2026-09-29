@@ -19674,6 +19674,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
+        },
+        {
+          "name": "withheld_upstream",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "offered",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
         }
       ],
       "domain": "mcp",

@@ -10,9 +10,13 @@
 // steering PR for the server, and the row keeps that PR until it merges.
 //
 // `withheld` names the tools whose input schema changed upstream. The gateway
-// withholds them until the sync steering PR merges. The row also keeps the
-// source fields the push webhook needs to find the servers a push to a
-// definition repository touches. A stored error never carries a credential.
+// withholds them until the sync steering PR merges. `withheld_upstream` names
+// the same tools by their upstream names, and `offered` lists every upstream
+// name the source offered on the last read, so Studio can show the current
+// tools from mcp.tool_snapshots without the ones the source dropped. The row
+// also keeps the source fields the push webhook needs to find the servers a
+// push to a definition repository touches. A stored error never carries a
+// credential.
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -97,6 +101,13 @@ export const mcpServerDiscoveries = mcpSchema.table(
     prBranch: text("pr_branch"),
     /** Full tool names the gateway withholds until the sync steering PR merges. */
     withheld: text("withheld").array().notNull().default(sql`'{}'`),
+    /** The upstream names behind the withheld tools, as snapshots name them. */
+    withheldUpstream: text("withheld_upstream")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    /** The upstream tool names the source offered on the last read. */
+    offered: text("offered").array().notNull().default(sql`'{}'`),
   },
   (t) => ({
     serverUniq: uniqueIndex("server_discoveries_server_uniq").on(

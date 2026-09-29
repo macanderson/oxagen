@@ -2,20 +2,29 @@
 //
 // mcp.server_discoveries holds one row per workspace and server folder: the
 // last discovery's state, the source fields the push webhook matches on, the
-// open sync steering PR, and the tools the gateway withholds until it merges.
+// open sync steering PR, the tools the gateway withholds until it merges, and
+// the upstream names the last source read offered. The tools store joins
+// those names to their newest mcp.tool_snapshots rows for Studio.
 //
 // The scoped store opens the workspace's tenant transaction and filters by
 // the scope as well, so one missing policy still leaks no row. The sweep
 // store reads across workspaces with withSystemDb, and each of its queries
 // says why in a tenancy comment.
 import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
-import {
-  captureToolSnapshots,
-  descriptorHash,
-  readLatestSnapshots,
-} from "@oxagen/agent/runtime/mcp-snapshots";
+import { readLatestSnapshots } from "@oxagen/agent/runtime/mcp-snapshots";
+import { canonicalDigest } from "@oxagen/mcp-studio";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+} from "drizzle-orm";
 import type {
   DiscoveryOutcome,
   DiscoveryScope,
@@ -74,6 +83,16 @@ export interface DiscoveryFinish {
   latestVersion: string | null;
   pr: { number: number; url: string; branch: string } | null;
   withheld: string[];
+  /**
+   * The upstream names the source offered. Absent when the run never read
+   * the source, so the row keeps the last read's names.
+   */
+  offered?: string[];
+  /**
+   * The upstream names behind withheld, as mcp.tool_snapshots names them.
+   * Absent when the run did not compare the surface, so the row keeps them.
+   */
+  withheldUpstream?: string[];
 }
 
 /** One tool the source offered, as mcp.tool_snapshots stores it. */
@@ -81,6 +100,33 @@ export interface SnapshotDescriptor {
   name: string;
   description: string | null;
   inputSchema: Record<string, unknown>;
+  /** The MCP hints, when the source gives them. */
+  annotations?: Record<string, unknown>;
+}
+
+/** One tool from a server's newest snapshots. */
+export interface StoredTool {
+  /** The upstream name, as the source offered it. */
+  name: string;
+  description: string | null;
+  inputSchema: Record<string, unknown>;
+  annotations: Record<string, unknown> | null;
+  /** The mcp.tool_snapshots row. */
+  snapshotId: string;
+  capturedAt: Date;
+}
+
+/** The tools the last source read offered, and the ones withheld. */
+export interface DiscoveryTools {
+  /** Upstream names the gateway withholds until the sync steering PR merges. */
+  withheldUpstream: string[];
+  /** One entry per offered tool with a snapshot, by name. */
+  tools: StoredTool[];
+}
+
+/** Reads a server's current tools for Studio. */
+export interface DiscoveryToolsStore {
+  read(scope: DiscoveryScope, server: string): Promise<DiscoveryTools>;
 }
 
 export interface DiscoveryStore {
@@ -227,6 +273,36 @@ async function readIn(
   return row ? toRow(row) : null;
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** A descriptor as a mcp.tool_snapshots row's schema_json holds it. */
+function snapshotJson(d: SnapshotDescriptor): Record<string, unknown> {
+  return {
+    name: d.name,
+    description: d.description,
+    inputSchema: d.inputSchema,
+    ...(d.annotations === undefined ? {} : { annotations: d.annotations }),
+  };
+}
+
+/**
+ * The content a snapshot pins. Annotations count, so a changed hint writes
+ * a new row. A row with no annotations reads the same as one with null.
+ */
+function snapshotDigest(name: string, json: unknown): string {
+  const j = record(json);
+  return canonicalDigest({
+    name,
+    description: j?.["description"] ?? null,
+    inputSchema: j?.["inputSchema"] ?? {},
+    annotations: j?.["annotations"] ?? null,
+  });
+}
+
 export const postgresDiscoveryStore: DiscoveryStore = {
   async request(scope, server, trigger, requestedBy, now) {
     await inScope(scope, (tx) =>
@@ -297,6 +373,11 @@ export const postgresDiscoveryStore: DiscoveryStore = {
           prUrl: finish.pr?.url ?? null,
           prBranch: finish.pr?.branch ?? null,
           withheld: finish.withheld,
+          // A run that stopped before the source read keeps the last names.
+          ...(finish.offered === undefined ? {} : { offered: finish.offered }),
+          ...(finish.withheldUpstream === undefined
+            ? {}
+            : { withheldUpstream: finish.withheldUpstream }),
           finishedAt: now,
           updatedAt: now,
         })
@@ -351,25 +432,28 @@ export const postgresDiscoveryStore: DiscoveryStore = {
       );
       const pinned = new Map<string, string>();
       for (const snap of latest) {
-        const json = snap.schemaJson as Partial<SnapshotDescriptor> | null;
         pinned.set(
           snap.toolName,
-          descriptorHash({
-            name: snap.toolName,
-            description: json?.description ?? null,
-            inputSchema: json?.inputSchema ?? {},
-          }),
+          snapshotDigest(snap.toolName, snap.schemaJson),
         );
       }
       const fresh = descriptors.filter(
-        (d) => pinned.get(d.name) !== descriptorHash(d),
+        (d) => pinned.get(d.name) !== snapshotDigest(d.name, snapshotJson(d)),
       );
-      return captureToolSnapshots({
-        orgId: scope.orgId,
-        workspaceId: scope.workspaceId,
-        mcpServerId,
-        descriptors: fresh,
-      });
+      if (fresh.length === 0) return 0;
+      await withTenantDb((tx) =>
+        tx.insert(schema.mcpToolSnapshots).values(
+          fresh.map((d) => ({
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            mcpServerId,
+            toolName: d.name,
+            schemaJson: snapshotJson(d),
+            createdById: null,
+          })),
+        ),
+      );
+      return fresh.length;
     });
   },
 };
@@ -383,6 +467,70 @@ export async function readWithheldTools(
   const row = await store.read(scope, server);
   return row?.withheld ?? [];
 }
+
+function storedTool(row: {
+  id: string;
+  toolName: string;
+  schemaJson: unknown;
+  capturedAt: Date;
+}): StoredTool {
+  const json = record(row.schemaJson);
+  const description = json?.["description"];
+  return {
+    name: row.toolName,
+    description: typeof description === "string" ? description : null,
+    inputSchema: record(json?.["inputSchema"]) ?? {},
+    annotations: record(json?.["annotations"]),
+    snapshotId: row.id,
+    capturedAt: row.capturedAt,
+  };
+}
+
+/**
+ * The newest snapshot of each tool the last source read offered. Older rows
+ * stay in mcp.tool_snapshots for replay, so a tool the source dropped is left
+ * out by the offered list, not by its rows.
+ */
+export const postgresDiscoveryToolsStore: DiscoveryToolsStore = {
+  read(scope, server) {
+    const s = schema.mcpToolSnapshots;
+    return inScope(scope, async (tx) => {
+      const [row] = await tx
+        .select({
+          mcpServerId: t.mcpServerId,
+          offered: t.offered,
+          withheldUpstream: t.withheldUpstream,
+        })
+        .from(t)
+        .where(scoped(scope, server))
+        .limit(1);
+      if (!row || row.mcpServerId === null || row.offered.length === 0) {
+        return { withheldUpstream: row?.withheldUpstream ?? [], tools: [] };
+      }
+      const rows = await tx
+        .selectDistinctOn([s.toolName], {
+          id: s.id,
+          toolName: s.toolName,
+          schemaJson: s.schemaJson,
+          capturedAt: s.capturedAt,
+        })
+        .from(s)
+        .where(
+          and(
+            eq(s.orgId, scope.orgId),
+            eq(s.workspaceId, scope.workspaceId),
+            eq(s.mcpServerId, row.mcpServerId),
+            inArray(s.toolName, row.offered),
+          ),
+        )
+        .orderBy(s.toolName, desc(s.capturedAt));
+      const tools = rows
+        .map(storedTool)
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      return { withheldUpstream: row.withheldUpstream, tools };
+    });
+  },
+};
 
 const target = (row: {
   orgId: string;

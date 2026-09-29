@@ -1,8 +1,9 @@
 // entry.ts: where discovery starts, where a person reads its progress, and
 // where the durable functions run it (lane M10, #4682; mcp-studio-spec, Sync).
 //
-// - Studio (lane M9) calls startServerDiscovery, readServerDiscovery, and
-//   listServerDiscoveries. Each checks the caller's role first.
+// - Studio (lane M9) calls startServerDiscovery, readServerDiscovery,
+//   listServerDiscoveries, and readServerTools. Each checks the caller's role
+//   first.
 // - The gateway (lane M15) calls requestDiscovery on a server's
 //   notifications/tools/list_changed, and the catalog sync calls it when a
 //   registry publishes a newer version. It checks no role: the caller is the
@@ -23,11 +24,14 @@ import { eventClient } from "../../event-client";
 import {
   postgresDiscoveryStore,
   postgresDiscoverySweepStore,
+  postgresDiscoveryToolsStore,
   readWithheldTools,
   type DiscoveryRow,
   type DiscoveryStore,
   type DiscoverySweepStore,
   type DiscoveryTarget,
+  type DiscoveryToolsStore,
+  type StoredTool,
 } from "./store";
 import { runDiscovery, type RunDiscoveryDeps } from "./sync";
 import {
@@ -65,6 +69,7 @@ export interface DiscoveryActor extends DiscoveryScope {
 export interface DiscoveryEntryDeps {
   store?: DiscoveryStore;
   sweep?: DiscoverySweepStore;
+  tools?: DiscoveryToolsStore;
   send?: DiscoverySender;
   now?: () => Date;
 }
@@ -235,6 +240,61 @@ export async function listServerDiscoveries(
 ): Promise<DiscoveryRow[]> {
   const scope = await assertReader(actor);
   return (deps.store ?? postgresDiscoveryStore).list(scope);
+}
+
+/** One tool a server offers now, as Studio's Tools tab shows it. */
+export interface ServerTool {
+  /** The upstream name, as the source offers it. */
+  name: string;
+  description: string | null;
+  inputSchema: Record<string, unknown>;
+  /** The MCP hints, or null when the source gives none. */
+  annotations: Record<string, unknown> | null;
+  /** The mcp.tool_snapshots row this tool reads from. */
+  snapshotId: string;
+  capturedAt: Date;
+  /** True while the gateway hides the tool until the sync steering PR merges. */
+  withheld: boolean;
+}
+
+/** A server's current tools, from its newest snapshots. */
+export interface ServerTools {
+  server: string;
+  /** The newest snapshot row among the tools, or null with no tools. */
+  snapshotId: string | null;
+  /** When that row was written, or null with no tools. */
+  capturedAt: Date | null;
+  /** By name. Empty before the first discovery reads the source. */
+  tools: ServerTool[];
+}
+
+/**
+ * The tools a server's last discovery read, each from its newest snapshot,
+ * with the ones the gateway withholds marked. A server with no snapshot yet
+ * returns no tools, not an error.
+ */
+export async function readServerTools(
+  actor: DiscoveryActor,
+  server: string,
+  deps: DiscoveryEntryDeps = {},
+): Promise<ServerTools> {
+  const scope = await assertReader(actor);
+  const name = serverName(server);
+  const read = await (deps.tools ?? postgresDiscoveryToolsStore).read(
+    scope,
+    name,
+  );
+  const held = new Set(read.withheldUpstream);
+  let newest: StoredTool | null = null;
+  for (const tool of read.tools) {
+    if (newest === null || tool.capturedAt > newest.capturedAt) newest = tool;
+  }
+  return {
+    server: name,
+    snapshotId: newest?.snapshotId ?? null,
+    capturedAt: newest?.capturedAt ?? null,
+    tools: read.tools.map((tool) => ({ ...tool, withheld: held.has(tool.name) })),
+  };
 }
 
 const TRIGGERS: ReadonlySet<string> = new Set(schema.MCP_DISCOVERY_TRIGGERS);

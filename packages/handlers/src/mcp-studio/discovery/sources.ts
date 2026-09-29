@@ -139,6 +139,9 @@ export function snapshotsOf(
     name: tool.name,
     description: tool.description ?? null,
     inputSchema: tool.inputSchema,
+    ...(tool.annotations === undefined
+      ? {}
+      : { annotations: tool.annotations }),
   }));
 }
 
