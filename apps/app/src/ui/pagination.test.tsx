@@ -34,7 +34,7 @@ function renderPager(
 
 describe("RowsPager", () => {
   it("disables a step with no page that way and turns the other", async () => {
-    const next = vi.fn();
+    const next = vi.fn<() => void>();
     const { container } = renderPager({ previous: null, next });
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -46,7 +46,7 @@ describe("RowsPager", () => {
 
   it("reports the size chosen from Rows per page", async () => {
     const onPerPage = vi.fn();
-    renderPager({ previous: vi.fn(), next: null }, onPerPage);
+    renderPager({ previous: vi.fn<() => void>(), next: null }, onPerPage);
     const rows = screen.getByRole("combobox", { name: "Rows per page" });
     expect(rows).toHaveTextContent("25");
     await userEvent.click(rows);
