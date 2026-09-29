@@ -173,6 +173,25 @@ export function scheduleAllows(
   }
 }
 
+/**
+ * Whether a discovery of this server ever finished, which is what decides
+ * whether an on-change server has already spent the one scheduled discovery it
+ * gets before its first push.
+ *
+ * A failed attempt discovered nothing, so it does not count. runDiscovery
+ * records a retriable failure on the row, finishedAt and all, before it throws
+ * RetriableDiscoveryFailure, so counting that row would make the Inngest retry
+ * read its own failure as the discovery it is retrying: scheduleAllows would
+ * answer false, the retry would record skipped without contacting the source,
+ * and the row would be neither stalled nor picked up by the daily sweep.
+ */
+export function everFinished(
+  prior: Pick<DiscoveryRow, "status" | "finishedAt"> | null,
+): boolean {
+  if (prior === null || prior.status === "failed") return false;
+  return prior.finishedAt !== null;
+}
+
 // ── Steering files ───────────────────────────────────────────────────────────
 
 function parsedFile<T>(path: string, result: ReadResult<T>): T {
@@ -559,14 +578,13 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     sourceFields(files.parsed, mcpServerId),
     seams.now(),
   );
-  // A failed attempt discovered nothing, so it must not spend the one
-  // scheduled discovery an on-change server gets before its first push.
-  // runDiscovery records a retriable failure on the row, finishedAt and
-  // all, before it throws, so reading finishedAt alone made the Inngest
-  // retry read its own failure as a completed discovery and skip.
-  const everFinished =
-    run.prior?.status !== "failed" && (run.prior?.finishedAt ?? null) !== null;
-  if (!scheduleAllows(run.trigger, files.parsed.sync.schedule, everFinished)) {
+  if (
+    !scheduleAllows(
+      run.trigger,
+      files.parsed.sync.schedule,
+      everFinished(run.prior ?? null),
+    )
+  ) {
     return finished(kept, "skipped");
   }
 

@@ -49,7 +49,12 @@ import {
   type ToolsPullRequestOpener,
 } from "./seams";
 import type { DiscoveryFinish, DiscoveryRow, DiscoveryStore } from "./store";
-import { moveSourceVersion, runDiscovery, scheduleAllows } from "./sync";
+import {
+  everFinished,
+  moveSourceVersion,
+  runDiscovery,
+  scheduleAllows,
+} from "./sync";
 import {
   DiscoveryRefused,
   RetriableDiscoveryFailure,
@@ -895,6 +900,41 @@ describe("runDiscovery when a retry fails the same way", () => {
 
 // ── The schedule ─────────────────────────────────────────────────────────────
 
+describe("everFinished", () => {
+  // The one scheduled discovery an on-change server gets before its first push
+  // must survive a transient failure. runDiscovery writes the failed row,
+  // finishedAt and all, before it throws RetriableDiscoveryFailure, so counting
+  // that row made the Inngest retry skip the source instead of reading it.
+  it.each<[string, DiscoveryRow | null, boolean]>([
+    ["no prior row", null, false],
+    ["a prior that succeeded", row(), true],
+    ["a prior that failed", row({ status: "failed", finishedAt: NOW }), false],
+    [
+      "a prior still running",
+      row({ status: "running", finishedAt: null }),
+      false,
+    ],
+    [
+      "a prior still queued",
+      row({ status: "queued", finishedAt: null }),
+      false,
+    ],
+  ])("reads %s as %s", (_label, prior, finished) => {
+    expect(everFinished(prior)).toBe(finished);
+  });
+
+  it("keeps a failed attempt from skipping a scheduled on-change run", () => {
+    const failed = row({ status: "failed", finishedAt: NOW });
+
+    expect(scheduleAllows("schedule", "on-change", everFinished(failed))).toBe(
+      true,
+    );
+    expect(scheduleAllows("schedule", "on-change", everFinished(row()))).toBe(
+      false,
+    );
+  });
+});
+
 describe("scheduleAllows", () => {
   it.each<[DiscoveryTrigger, SyncSchedule, boolean, boolean]>([
     ["manual", "manual", true, true],
@@ -913,8 +953,8 @@ describe("scheduleAllows", () => {
     ["schedule", "manual", false, false],
   ])(
     "%s on a %s server that finished before (%s) runs: %s",
-    (trigger, schedule, everFinished, runs) => {
-      expect(scheduleAllows(trigger, schedule, everFinished)).toBe(runs);
+    (trigger, schedule, finished, runs) => {
+      expect(scheduleAllows(trigger, schedule, finished)).toBe(runs);
     },
   );
 });
@@ -1011,40 +1051,6 @@ describe("runDiscovery on each trigger", () => {
     expect(result).toMatchObject({ status: "succeeded", outcome: "skipped" });
     expect(h.wire.http).not.toHaveBeenCalled();
     expect(h.pr.open).not.toHaveBeenCalled();
-  });
-
-  it("reads the source on a scheduled retry after the first attempt failed", async () => {
-    // An on-change server gets one scheduled discovery, before its first
-    // push. runDiscovery records a retriable failure on the row, finishedAt
-    // and all, before it throws, so the retry must not read that failure as
-    // the discovery it is retrying.
-    const h = harness({
-      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
-      prior: row({
-        schedule: "on-change",
-        status: "failed",
-        outcome: null,
-        error: "mcp.stripe.com answered initialize with HTTP 503.",
-        toolCount: null,
-      }),
-    });
-
-    const result = await h.run("schedule");
-
-    expect(result).toMatchObject({ status: "succeeded", outcome: "unchanged" });
-    expect(h.wire.http).toHaveBeenCalled();
-  });
-
-  it("skips a scheduled discovery of an on-change server that already succeeded", async () => {
-    const h = harness({
-      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
-      prior: row({ schedule: "on-change" }),
-    });
-
-    const result = await h.run("schedule");
-
-    expect(result).toMatchObject({ status: "succeeded", outcome: "skipped" });
-    expect(h.wire.http).not.toHaveBeenCalled();
   });
 
   it("skips lock_merged while the sync steering PR is still open", async () => {
