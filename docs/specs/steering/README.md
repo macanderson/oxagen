@@ -7,7 +7,7 @@ more, `<org>/oxagen`, for the records every workspace in it shares. Code
 repositories hold no committed steering. A workspace links a code repository
 with a steering PR (ADR-212, `docs/specs/repository-binding/README.md`).
 
-The code is in five places:
+The code is in seven places:
 
 - `packages/oxagen/src/steering-repo/` holds the layout, the names, and the
   record and ledger formats.
@@ -16,6 +16,10 @@ The code is in five places:
   the publisher.
 - `packages/steering-check` holds the checks.
 - `packages/steering-bundle` builds what a published version sends a model.
+- `packages/handlers/src/tools.pr.open.ts` opens every steering PR under
+  `tools/`.
+- `packages/handlers/src/mcp-studio/import/` holds Studio's draft and Review,
+  which build one server folder.
 
 ## Repository layout
 
@@ -227,6 +231,30 @@ A publish takes these steps:
 
 The version store is `postgresVersionStore`, keyed by
 `<host>/<owner>/<name>`, where the host is `github.com` or `gitlab.com`.
+
+## Tools changes
+
+A change to `tools/servers/<name>/` arrives as a steering PR from one of three
+writers: Studio's Review (`open_studio_review`), MCP server discovery, and
+the server folder writer that adds a server or its tools. All three call one
+opener, `packages/handlers/src/tools.pr.open.ts` (ADR-224).
+
+- It refuses a branch outside `tools/`, a path outside the branch's folder,
+  more than 299 files, and a repository without `steering/governance.toml`.
+- It creates a new branch at the commit the writer built its files against,
+  or at the production head when the writer names none. It refuses a branch
+  that already exists.
+- It commits every file in one commit, labels the PR with
+  `OXAGEN_PR_LABELS`, and reports the `Oxagen steering` check on the new
+  head.
+- It works on GitHub and GitLab through the steering host.
+
+Studio keeps a person's edits as a draft in Postgres (`mcp.studio_drafts`)
+until Review. Review uses the branch `tools/<server>`. When a steering PR is
+already open on it, Review adds one commit to that PR, holding only the files
+that differ from the branch. A saved test carries no credential header, and
+`server.toml` names a credential by reference only, so no credential reaches
+the draft, the branch, or the PR body.
 
 ## Readers
 
