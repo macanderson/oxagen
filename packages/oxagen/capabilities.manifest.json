@@ -6432,6 +6432,22 @@
       }
     },
     {
+      "name": "retry_steering_repo_provision",
+      "file": "steering_repo.provision.retry.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "repair_steering_repo",
       "file": "steering_repo.repair.ts",
       "domain": "repository",
