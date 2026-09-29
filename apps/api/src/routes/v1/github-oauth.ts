@@ -1411,6 +1411,18 @@ const GITHUB_CONNECTOR_ID = "github";
 const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
 
 /**
+ * A steering connection stores its installation id as a number, so the
+ * steering leg also refuses an id the pattern admits but a number cannot hold
+ * exactly (past `Number.MAX_SAFE_INTEGER`). The registry write and the stored
+ * connection apply this one rule.
+ */
+function isSteeringInstallationId(raw: string): boolean {
+  return (
+    INSTALLATION_ID_PATTERN.test(raw) && Number.isSafeInteger(Number(raw))
+  );
+}
+
+/**
  * What the callback settled about which installation this workspace acts
  * through. Five states, because the operator's next click differs in each and
  * a redirect that flattened them would put the wrong door in front of them.
@@ -1948,7 +1960,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         400,
       );
     }
-    if (installationId && INSTALLATION_ID_PATTERN.test(installationId)) {
+    if (installationId && isSteeringInstallationId(installationId)) {
       await upsertGithubInstallation({
         installationId,
         reactivate: true,
@@ -2569,7 +2581,7 @@ async function steeringInstallationConnection(
   rawId: string,
 ): Promise<SteeringConnection | null> {
   const id = Number(rawId);
-  if (!INSTALLATION_ID_PATTERN.test(rawId) || !Number.isSafeInteger(id)) {
+  if (!isSteeringInstallationId(rawId)) {
     logger.warn(
       { orgId, installationId: rawId },
       "The steering connect named a malformed installation_id. The connect did not store it.",
