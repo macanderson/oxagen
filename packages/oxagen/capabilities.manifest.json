@@ -1225,6 +1225,24 @@
       }
     },
     {
+      "name": "upload_assistant_attachment",
+      "file": "assistant.attachment.upload.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_assistant_engine",
       "file": "assistant.engine.get.ts",
       "domain": "assistant",
@@ -6301,6 +6319,23 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "import_workspace_steering",
+      "file": "steering_repo.import.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

@@ -5,7 +5,7 @@
 // what the record carries (the name, the sessions that reported it, their
 // harnesses and when it was last seen) and nothing the record does not. The
 // empty and failed states are the shared StateWrap, the design's .state-wrap.
-import { GraduationCap } from "lucide-react";
+import { GraduationCapIcon } from "@phosphor-icons/react/ssr";
 import { useTranslations } from "next-intl";
 import type { SkillInventory } from "@/data/contracts/skills";
 import type { Read } from "@/data/read";
@@ -113,7 +113,7 @@ export function SkillsInventory({
             data-skill={skill.name}
             className="flex gap-3 px-4 py-3"
           >
-            <GraduationCap
+            <GraduationCapIcon
               aria-hidden="true"
               className="mt-0.5 size-4 flex-none text-muted-foreground"
             />

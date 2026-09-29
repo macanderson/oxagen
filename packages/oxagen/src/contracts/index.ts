@@ -160,6 +160,7 @@ import { runRecentList } from "./run.recent.list";
 // The shell (#2968): the in-app agent on stella-serve, the command menu, the
 // sidebar counts and the account preferences.
 import { assistantAsk } from "./assistant.ask";
+import { assistantAttachmentUpload } from "./assistant.attachment.upload";
 import { assistantEngineGet } from "./assistant.engine.get";
 import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
@@ -309,6 +310,7 @@ import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
+import { steeringRepoImport } from "./steering_repo.import";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -819,6 +821,7 @@ export {
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,
@@ -967,6 +970,7 @@ export {
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoImport,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1243,6 +1247,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,
@@ -1390,6 +1395,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoImport,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

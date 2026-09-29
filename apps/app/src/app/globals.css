@@ -61,6 +61,17 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
+  /* The corner scale of the chosen shadcn preset (base-maia, radius 0.45rem):
+     each step is a multiple of --radius, as the shadcn CLI writes it, so the
+     kit's additive steps give way here. `rounded-4xl` is the pill a maia
+     button and input wear; `rounded-2xl` is a card, a popover and a menu. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 @layer base {
@@ -110,6 +121,8 @@
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
+    /* The preset's radius. The kit's knob is 0.5rem; the scale above reads it. */
+    --ui-radius: 0.45rem;
     --muted-surface: var(--_stone-100);
     --data-surface: var(--ox-paper-hl);
     /* A panel header is a light grey band over the white panel (ADR-170). */

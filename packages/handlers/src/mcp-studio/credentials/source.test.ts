@@ -199,6 +199,7 @@ describe("service mode: a credential the relay holds", () => {
       { type: "api_key", in: "header", name: "X-Api-Key" } as SecurityScheme,
       { name: "billing-key", scheme: "header", header: "X-Api-Key" },
     ],
+    [{ type: "mutual_tls" } as SecurityScheme, { name: "billing-key", scheme: "mutual_tls" }],
   ])("names the relay credential for %o", async (apply, credential) => {
     const resolved = await source(noFetch(), relay).resolve(service(apply), signal);
     expect(resolved).toEqual({ type: "relay", credential });
@@ -211,15 +212,16 @@ describe("service mode: a credential the relay holds", () => {
     expect(error.code).toBe("unsupported");
   });
 
-  it("refuses mutual TLS on a relay", async () => {
-    const error = await failure(source(noFetch(), relay).resolve(service({ type: "mutual_tls" }), signal));
-    expect(error.code).toBe("unsupported");
-  });
-
   it("uses the vault's row when the workspace holds one", async () => {
     await store.addCredential({ name: "billing-key", secret: "sk_vault" });
     const resolved = await source(noFetch(), relay).resolve(service({ type: "http_bearer" }), signal);
     expect(resolved).toEqual({ type: "bearer", token: "sk_vault" });
+  });
+
+  it("refuses a vault row for a mutual TLS server, since the certificate stays with the relay", async () => {
+    await store.addCredential({ name: "billing-key", secret: "unused" });
+    const error = await failure(source(noFetch(), relay).resolve(service({ type: "mutual_tls" }), signal));
+    expect(error.code).toBe("unsupported");
   });
 });
 

@@ -25,8 +25,8 @@ import { routes } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
-  inputBase,
   linkText,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -337,7 +337,7 @@ export function ApprovalDecision({
               onChange={(event) => {
                 setNote(event.target.value);
               }}
-              className={inputBase}
+              className={textareaBase}
             />
             <p className="text-xs text-muted-foreground">{t("noteHint")}</p>
           </div>

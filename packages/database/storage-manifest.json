@@ -1877,6 +1877,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "import_workspace_steering",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "run",
       "name": "ingest_run_frames",
       "reads": [],
@@ -4174,6 +4184,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "assistant",
+      "name": "upload_assistant_attachment",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],

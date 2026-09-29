@@ -9,6 +9,7 @@
 // the reason as the option's description whether or not the popover is open.
 // Choosing a taken option does nothing.
 import { type ReactNode, useId, useState } from "react";
+import { popoverSurface } from "./control-styles";
 
 type ChoiceOption<V extends string> = {
   value: V;
@@ -86,7 +87,7 @@ function Option<V extends string>({
           data-open={open ? "" : undefined}
           className={
             open
-              ? "absolute left-0 top-full z-20 mt-1.5 w-max max-w-72 rounded-md border border-border bg-app-raised-bg px-2.5 py-1.5 text-xs text-app-raised-fg shadow-md"
+              ? `${popoverSurface} absolute left-0 top-full z-20 mt-1.5 w-max max-w-72 px-3 py-2 text-xs`
               : "sr-only"
           }
         >

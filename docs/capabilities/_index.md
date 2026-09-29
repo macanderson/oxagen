@@ -123,6 +123,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_assistant_reply](assistant.reply.get.md) | [assistant.reply.get.ts](../../packages/oxagen/src/contracts/assistant.reply.get.ts) | api |
 | [record_reply_feedback](assistant.reply_feedback.record.md) | [assistant.reply_feedback.record.ts](../../packages/oxagen/src/contracts/assistant.reply_feedback.record.ts) | api, mcp |
 | [cancel_assistant_turn](assistant.turn.cancel.md) | [assistant.turn.cancel.ts](../../packages/oxagen/src/contracts/assistant.turn.cancel.ts) | api |
+| [upload_assistant_attachment](assistant.attachment.upload.md) | [assistant.attachment.upload.ts](../../packages/oxagen/src/contracts/assistant.attachment.upload.ts) | api, mcp |
 
 ## Audit
 
@@ -449,6 +450,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
 | [get_repository_tree](repository.tree.get.md) | [repository.tree.get.ts](../../packages/oxagen/src/contracts/repository.tree.get.ts) | api, mcp, cli |
 | [get_steering_repo](steering_repo.get.md) | [steering_repo.get.ts](../../packages/oxagen/src/contracts/steering_repo.get.ts) | api, mcp |
+| [import_workspace_steering](steering_repo.import.md) | [steering_repo.import.ts](../../packages/oxagen/src/contracts/steering_repo.import.ts) | api, mcp |
 | [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, cli |
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |

@@ -281,7 +281,9 @@ export function createCredentialSource(deps: CredentialSourceDeps): CredentialSo
   /**
    * On a relay network, a credential the vault does not hold is one the
    * customer keeps in the relay (Enterprise). The relay adds it after it
-   * checks the envelope, so the executor sends none.
+   * checks the envelope, so the executor sends none. For mutual TLS, the relay
+   * presents the client certificate it holds under that name, so the
+   * certificate never leaves the customer's network.
    */
   const relayHeld = (
     request: CredentialRequest,
@@ -306,10 +308,7 @@ export function createCredentialSource(deps: CredentialSourceDeps): CredentialSo
           `A relay adds a credential only in a header, and the ${request.server} server's API key goes in the ${apply.in ?? "request"}.`,
         );
       case "mutual_tls":
-        throw new CredentialError(
-          "unsupported",
-          `The ${request.server} server uses mutual TLS, and a relay credential has no client certificate scheme yet.`,
-        );
+        return { type: "relay", credential: { name, scheme: "mutual_tls" } };
     }
   };
 

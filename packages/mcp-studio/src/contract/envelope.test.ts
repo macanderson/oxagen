@@ -175,6 +175,33 @@ describe("relay-envelope/v1", () => {
     expect(relayEnvelopeSchema.safeParse(ok).success).toBe(true);
   });
 
+  it("carries a mutual TLS credential with no header, to an https target only", () => {
+    const certificate = { name: "billing-cert", scheme: "mutual_tls" };
+    expect(relayEnvelopeSchema.safeParse({ ...relayEnvelope, credential: certificate }).success).toBe(true);
+    const withHeader = { ...relayEnvelope, credential: { ...certificate, header: "X-Client-Cert" } };
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(withHeader))).toStrictEqual([
+      { path: "credential.header", message: "header is not allowed when scheme is not header" },
+    ]);
+    const plain = { ...relayEnvelope, credential: certificate, target: { ...relayEnvelope.target, scheme: "http" } };
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(plain))).toStrictEqual([
+      { path: "target.scheme", message: "a mutual_tls credential needs an https target" },
+    ]);
+    const grpc = {
+      ...relayEnvelope,
+      credential: certificate,
+      target: {
+        kind: "grpc",
+        scheme: "https",
+        host: "ledger.internal.a-intel.com",
+        port: 8443,
+        service: "a_intel.ledger.v1.Ledger",
+        method: "PostEntry",
+      },
+    };
+    expect(relayEnvelopeSchema.safeParse(grpc).success).toBe(true);
+    expect(relayEnvelopeSchema.safeParse({ ...grpc, target: { ...grpc.target, scheme: "http" } }).success).toBe(false);
+  });
+
   it("refuses an unsigned envelope and a path with a fragment", () => {
     const { signature: _signature, ...unsigned } = relayEnvelope;
     expect(pathsAndMessages(relayEnvelopeSchema.safeParse(unsigned))).toStrictEqual([

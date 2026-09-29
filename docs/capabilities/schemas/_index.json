@@ -2061,6 +2061,17 @@
       "consumes": []
     },
     {
+      "name": "import_workspace_steering",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "ingest_run_frames",
       "domain": "run",
       "surfaces": [
@@ -4587,6 +4598,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "upload_assistant_attachment",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

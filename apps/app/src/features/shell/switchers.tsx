@@ -18,7 +18,7 @@
 // An organization or workspace with none keeps the mock's letter tile: the
 // first letter on gold for an organization, two mono letters for a workspace.
 // A refused or failed read has no avatar to draw, so the tile falls back too.
-import { ChevronsUpDown } from "lucide-react";
+import { CaretUpDownIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import type { ShellData } from "./shell-data";
@@ -253,7 +253,7 @@ function Switcher({
       >
         <span className="sr-only">{title}</span>
         {children}
-        <ChevronsUpDown
+        <CaretUpDownIcon
           aria-hidden="true"
           className="size-3.5 flex-none text-muted-foreground"
         />

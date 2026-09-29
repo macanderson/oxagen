@@ -20,7 +20,7 @@
 // away from. An agent already reserved (the operator came back with Back or the
 // rail) is shown read-only, and Continue only moves on, because the key is
 // immutable.
-import { Check } from "lucide-react";
+import { CheckIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import type { RuntimeRef, ToolbeltRef } from "@/data/contracts/agents";
@@ -85,7 +85,7 @@ function SectionHead({ title, done }: { title: string; done?: string }) {
           data-testid="register-toolbelt-done"
           className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
         >
-          <Check aria-hidden className="size-3" />
+          <CheckIcon aria-hidden className="size-3" />
           {done}
         </span>
       )}

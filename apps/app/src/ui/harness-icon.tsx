@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Terminal } from "lucide-react";
+import { TerminalIcon } from "@phosphor-icons/react/ssr";
 
 const MARKS: Readonly<Record<string, string>> = {
   "claude-code": "claude-code",
@@ -27,7 +27,7 @@ export function HarnessIcon({
   const style = { width: size, height: size };
   if (!mark) {
     return (
-      <Terminal
+      <TerminalIcon
         aria-hidden="true"
         size={size}
         className={`shrink-0 text-muted-foreground ${className}`}

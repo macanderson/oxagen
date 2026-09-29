@@ -73,6 +73,9 @@ export async function assistantAskHandler(
       conversationId: input.conversationId,
       content: input.content,
       pageContext: input.pageContext,
+      ...(input.attachments?.length
+        ? { attachments: input.attachments }
+        : {}),
       ...(input.goal ? { goal: input.goal } : {}),
       ...stream?.overrides,
     });

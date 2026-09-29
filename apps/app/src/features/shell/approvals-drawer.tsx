@@ -23,7 +23,7 @@
 // The open interjections come first (#3839): a question an agent paused its
 // run to ask, from `list_interjections`, one row each, linking to the run.
 // They count in the header and the list's heading beside the parked calls.
-import { ChevronLeft, ShieldCheck, X } from "lucide-react";
+import { CaretLeftIcon, ShieldCheckIcon, XIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -96,7 +96,7 @@ function Glyph() {
       aria-hidden="true"
       className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-card text-muted-foreground"
     >
-      <ShieldCheck className="size-3.5" />
+      <ShieldCheckIcon className="size-3.5" />
     </span>
   );
 }
@@ -393,7 +393,7 @@ export function ApprovalsDrawer({
             onClick={close}
             className="ml-auto grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           >
-            <X aria-hidden="true" className="size-3.5" />
+            <XIcon aria-hidden="true" className="size-3.5" />
           </button>
         </div>
         <div
@@ -411,7 +411,7 @@ export function ApprovalsDrawer({
                   if (bodyRef.current) bodyRef.current.scrollTop = 0;
                 }}
               >
-                <ChevronLeft aria-hidden="true" className="size-3.5" />
+                <CaretLeftIcon aria-hidden="true" className="size-3.5" />
                 {t("all")}
               </button>
               {selected.kind === "resolved" ? (

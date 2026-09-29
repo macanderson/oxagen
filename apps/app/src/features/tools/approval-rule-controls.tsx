@@ -25,6 +25,7 @@ import {
   buttonSecondary,
   inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -320,7 +321,7 @@ export function RuleEditor({
               name="maxMeasures"
               rows={2}
               defaultValue={ceilingLines(existing)}
-              className={`${inputBase} ${mono}`}
+              className={`${textareaBase} ${mono}`}
             />
           </Field>
           <Field
@@ -333,7 +334,7 @@ export function RuleEditor({
               name="allowTargets"
               rows={2}
               defaultValue={allowLines(existing)}
-              className={`${inputBase} ${mono}`}
+              className={`${textareaBase} ${mono}`}
             />
           </Field>
           <Field

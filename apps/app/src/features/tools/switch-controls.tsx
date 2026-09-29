@@ -23,7 +23,7 @@ import {
 } from "@/data/contracts/tools";
 import { chooseSwitchTargets } from "@/features/shell/client";
 import { routes, type SafePath } from "@/shared/safe-path";
-import { inputBase, mono } from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { type PickerOption, RecordPicker } from "@/ui/record-picker";
@@ -394,7 +394,7 @@ export function FlipControls({
               rows={2}
               required
               maxLength={500}
-              className={inputBase}
+              className={textareaBase}
             />
           </div>
           <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">

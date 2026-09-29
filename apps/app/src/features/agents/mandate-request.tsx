@@ -39,7 +39,7 @@ import {
 } from "@/data/contracts/mandates";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import { chooseToolPatterns } from "@/features/shell/client";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { buttonSecondary, inputBase, textareaBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { RecordMultiPicker } from "@/ui/record-picker";
@@ -289,7 +289,7 @@ export function RequestMandate({
               required
               maxLength={PURPOSE_MAX}
               rows={2}
-              className={inputBase}
+              className={textareaBase}
             />
           </Field>
           <Field name="validFrom" label={t("validFrom")}>

@@ -3,7 +3,7 @@
 // pull requests, the lines changed, the tokens and the status word, and the
 // Tokens shown tile. Kept out of board.tsx to keep that file
 // under 1,500 lines.
-import { GitPullRequest } from "lucide-react";
+import { GitPullRequestIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type RunDiff,
@@ -79,7 +79,7 @@ function PullRequestItem({ pull }: { pull: RunPullRequest }) {
           }}
           className={`${linkText} flex min-w-0 items-center gap-1 whitespace-nowrap font-mono text-[11.5px]`}
         >
-          <GitPullRequest aria-hidden className="size-3 flex-none" />
+          <GitPullRequestIcon aria-hidden className="size-3 flex-none" />
           <span className="min-w-0 md:truncate">{label}</span>
         </PullRequestLink>
       )}

@@ -748,6 +748,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
+  // A file attached to an in-app assistant message (#4690, ADR-222).
+  registerHandler(
+    "upload_assistant_attachment",
+    async () =>
+      (await import("./assistant.attachment.upload"))
+        .assistantAttachmentUploadHandler as CapabilityHandlerFn,
+  );
   // A person's verdict on an assistant reply (#4169). The turn itself is
   // `ask_assistant`, bound in @oxagen/agent; the verdict needs none of the
   // agent runtime, so it binds here.
@@ -1066,6 +1073,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./steering_repo.repair"))
         .repairSteeringRepoHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "import_workspace_steering",
+    async () =>
+      (await import("./steering_repo.import"))
+        .importWorkspaceSteeringHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_steering_freshness",

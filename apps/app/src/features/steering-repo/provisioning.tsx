@@ -4,7 +4,12 @@
 // done, running, failed, blocked, or waiting (./steps). A failed or blocked
 // step shows the job's message and, to an owner or admin, Retry. An error that
 // asks for Oxagen Steering's grant again shows Re-authorize above the steps.
-import { Check, CircleAlert, CircleDashed, LoaderCircle } from "lucide-react";
+import {
+  CheckIcon,
+  CircleDashedIcon,
+  CircleNotchIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -23,20 +28,20 @@ const RETRY_CAPABILITY = "retry_steering_repo_provision";
 function StepIcon({ state }: { state: StepState }) {
   switch (state) {
     case "done":
-      return <Check aria-hidden className="size-3.5 text-success" />;
+      return <CheckIcon aria-hidden className="size-3.5 text-success" />;
     case "running":
       return (
-        <LoaderCircle
+        <CircleNotchIcon
           aria-hidden
           className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none"
         />
       );
     case "failed":
     case "blocked":
-      return <CircleAlert aria-hidden className="size-3.5 text-error-ink" />;
+      return <WarningCircleIcon aria-hidden className="size-3.5 text-error-ink" />;
     case "waiting":
       return (
-        <CircleDashed aria-hidden className="size-3.5 text-muted-foreground" />
+        <CircleDashedIcon aria-hidden className="size-3.5 text-muted-foreground" />
       );
   }
 }

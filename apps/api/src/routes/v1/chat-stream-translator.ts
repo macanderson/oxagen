@@ -62,7 +62,13 @@ export type ApiStreamEvent =
       mode: string;
     }
   | { type: "run"; runId: string }
-  | { type: "error"; message: string; code?: string };
+  | {
+      type: "error";
+      message: string;
+      code?: string;
+      /** Which attachment rule refused the turn, with `attachment_refused` (ADR-222). */
+      reason?: string;
+    };
 
 // Inline stream-part helpers (same logic as apps/app/.../stream-parts.ts).
 function partType(p: unknown): string | undefined {
