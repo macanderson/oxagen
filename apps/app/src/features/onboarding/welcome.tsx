@@ -1,5 +1,5 @@
 // The onboarding gate's later steps and the installer's screens (#2967, the
-// rev1 design's `pWelcome`): Wrap an agent and Start a run in the gate shell,
+// rev1 mockup's `pWelcome`, now history): Wrap an agent and Start a run in the gate shell,
 // and the signed package's own screens in the auth shell. Each is an async
 // Server Component the route renders under its own Suspense boundary, so the
 // loading state keeps the shell and the rail.

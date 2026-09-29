@@ -25,7 +25,7 @@
 // one route (`api-keys-view.ts`), so a filtered roster survives a reload and a
 // shared link. The rows go to the shared list table (`@/ui/list-table`), the
 // controls every list in the design carries: "Search this list", headers that
-// sort, Rows 5 to All and a numbered pager.
+// sort, and a pager under the table with Rows 5 to All.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";

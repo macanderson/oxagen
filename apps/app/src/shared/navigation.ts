@@ -1,9 +1,11 @@
 import type { LinearAuthorizationUrl } from "./linear-authorization-url";
+import type { SlackAuthorizationUrl } from "./slack-authorization-url";
 // The only module that performs a redirect (ARCHITECTURE.md §3.8, INV-13).
 // Every target is a branded value: a SafePath from sanitizeNext or a route
 // builder, a LoopbackUri from parseLoopbackUri, an ExternalCheckoutUrl from
 // parseCheckoutUrl, a LinearAuthorizationUrl from parseLinearAuthorizationUrl,
-// or a CanonicalHostUrl from canonicalHostRedirect. The lint rule in
+// a SlackAuthorizationUrl from parseSlackAuthorizationUrl, or a
+// CanonicalHostUrl from canonicalHostRedirect. The lint rule in
 // eslint.config.mjs refuses redirect, permanentRedirect, NextResponse.redirect
 // and Response.redirect everywhere else under src/.
 import { permanentRedirect, redirect } from "next/navigation";
@@ -86,6 +88,13 @@ export function redirectToCanonicalHost(
 
 export function redirectToLinearAuthorization(
   url: LinearAuthorizationUrl,
+): never {
+  redirect(url);
+}
+
+/** Sends the browser to the Slack page that connects a Slack workspace (#4608). */
+export function redirectToSlackAuthorization(
+  url: SlackAuthorizationUrl,
 ): never {
   redirect(url);
 }

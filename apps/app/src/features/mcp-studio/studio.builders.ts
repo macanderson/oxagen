@@ -1112,6 +1112,7 @@ export function studioSource(reads: StudioReads = {}) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

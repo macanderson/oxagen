@@ -1118,6 +1118,7 @@ export function runSource(reads: RunReads) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

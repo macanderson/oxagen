@@ -47,7 +47,9 @@ model that does not. And who can read a file once it is stored.
    Inngest cron `assistant.attachment-sweep` deletes its bytes, then its row.
    Each batch locks its rows with `FOR UPDATE SKIP LOCKED`, so a turn that
    links a file mid-sweep waits and then links nothing. A blob the store
-   refuses to delete keeps its row for the next run.
+   refuses to delete keeps its row for the next run. Deleting a conversation
+   soft-deletes the rows of its sent files in the same transaction, so the
+   read route refuses them from then on (#4690).
 5. **Only the uploader reads a file, and only in its workspace.** The turn
    looks files up by public id, organisation, workspace, uploader, source and
    status together. The read route `GET

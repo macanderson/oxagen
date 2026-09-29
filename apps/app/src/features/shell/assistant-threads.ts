@@ -35,8 +35,14 @@
 // place of the thread there, and the next question continues it. A stand-in
 // that holds an opened session counts as used, so the first read does not
 // replace it when it lands.
+//
+// A restored question shows the files sent with it as the same chips a live
+// question shows (#4690). An entry holds each file's `gen_` id, not a link:
+// the flyout builds the link from the slugs on screen when it draws the chip,
+// so a thread kept across a rename still opens its files.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
+import type { SentAttachment } from "./assistant-attachment-files";
 import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
@@ -52,7 +58,13 @@ export type ThreadState<E> = {
 
 /** A turn read back from the record, in the shape a live turn produces. */
 export type RestoredEntry =
-  | { kind: "asked"; id: string; text: string }
+  | {
+      kind: "asked";
+      id: string;
+      text: string;
+      /** The files sent with it, when there were any (#4690). */
+      files?: readonly SentAttachment[];
+    }
   | {
       kind: "answered";
       id: string;
@@ -68,17 +80,34 @@ export type RestoredEntry =
 type ThreadStatus = "idle" | "loading" | "failed";
 
 /**
- * The recorded thread as entries. A question is `asked`; a reply is
- * `answered` with the run it was recorded as and the tool calls that run
- * made, so a restored reply lists what it listed when it was new (#4161). A
- * reply with no run was not an assistant turn (another chat surface wrote
- * it), and the flyout has nothing to link it to, so it is left out.
+ * The recorded thread as entries. A question is `asked`, with the files sent
+ * with it in the shape a live question carries them (#4690). A reply is
+ * `answered` with
+ * the run it was recorded as and the tool calls that run made, so a restored
+ * reply lists what it listed when it was new (#4161). A reply with no run was
+ * not an assistant turn (another chat surface wrote it), and the flyout has
+ * nothing to link it to, so it is left out.
  */
 function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
   for (const message of thread.messages) {
     if (message.role === "user") {
-      entries.push({ kind: "asked", id: message.id, text: message.text });
+      // A question sent without files carries no `files`, as a live one does.
+      const files = message.attachments.map(
+        (file): SentAttachment => ({
+          key: file.publicId,
+          name: file.name,
+          mediaType: file.mediaType,
+          size: file.sizeBytes,
+          publicId: file.publicId,
+        }),
+      );
+      entries.push({
+        kind: "asked",
+        id: message.id,
+        text: message.text,
+        ...(files.length === 0 ? {} : { files }),
+      });
     } else if (message.runId !== null) {
       entries.push({
         kind: "answered",
@@ -314,21 +343,24 @@ export function useAssistantThreads<E>({
    * typed stays. Refused while a turn is in flight: its reply belongs to the
    * conversation it was asked in.
    */
-  const openThread = useCallback((key: string, thread: AssistantThread) => {
-    setStore((prior) => {
-      const target = prior.keys.get(key) ?? key;
-      const current = prior.threads.get(target) ?? emptyThread<E>();
-      if (current.pending) return prior;
-      const threads = new Map(prior.threads).set(target, {
-        ...emptyThread<E>(),
-        entries: restoredEntries(thread).map(restoreRef.current),
-        conversationId: thread.id,
-        draft: current.draft,
-        draftTooLong: current.draftTooLong ?? false,
+  const openThread = useCallback(
+    (key: string, thread: AssistantThread) => {
+      setStore((prior) => {
+        const target = prior.keys.get(key) ?? key;
+        const current = prior.threads.get(target) ?? emptyThread<E>();
+        if (current.pending) return prior;
+        const threads = new Map(prior.threads).set(target, {
+          ...emptyThread<E>(),
+          entries: restoredEntries(thread).map(restoreRef.current),
+          conversationId: thread.id,
+          draft: current.draft,
+          draftTooLong: current.draftTooLong ?? false,
+        });
+        return { ...prior, threads };
       });
-      return { ...prior, threads };
-    });
-  }, []);
+    },
+    [],
+  );
 
   return { scope, status, threadOf, updateThread, startNewThread, openThread };
 }

@@ -50,3 +50,12 @@ export type {
   NotificationRecipient,
   NotifyOrgManagersInput,
 } from "./notifications/notify-org-managers";
+
+// Slack notices (the Oxagen Slack app). Connecting Slack lives on the
+// "@oxagen/notifications/slack" subpath.
+export { notifyOrgSlack } from "./slack/notify-org-slack";
+export type {
+  NotifyOrgSlackInput,
+  NotifyOrgSlackResult,
+  SlackSkipReason,
+} from "./slack/notify-org-slack";

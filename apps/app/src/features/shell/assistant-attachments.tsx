@@ -39,7 +39,6 @@ import { formatByteSize } from "@/ui/money-format";
 import { FileTabLink } from "@/ui/navigation";
 import {
   ASSISTANT_ATTACHMENT_ACCEPT,
-  assistantAttachmentHref,
   type AttachmentFile,
   type AttachmentProblem,
   planAttachments,
@@ -147,14 +146,13 @@ export function useAssistantAttachments(
               mediaType: f.mediaType,
               size: f.size,
               publicId: f.publicId,
-              href: assistantAttachmentHref(org, ws, f.publicId),
             },
           ]
         : [],
     );
     setFiles([]);
     return sent;
-  }, [files, org, ws]);
+  }, [files]);
 
   return {
     files,

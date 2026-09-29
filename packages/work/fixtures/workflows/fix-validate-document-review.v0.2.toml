@@ -1,0 +1,38 @@
+# The v0.2 workflow in work-graph-spec.md §8.1, copied verbatim. v0.3 reads it unchanged.
+# .oxagen/workflows/fix-validate-document-review.toml
+schema = "oxagen-workflow/v0.2"
+name = "Fix, validate, document, review"
+
+[[stage]]
+role = "Fix"
+agent = "aintel.core.bug-fixer"
+owns = ["code"]
+on_fail = "stop"
+
+[[stage]]
+role = "Validate"
+agent = "aintel.core.validator"
+owns = ["test"]
+needs = ["Fix"]
+on_fail = "return"
+return_to = "Fix"
+max_returns = 2
+
+[[stage]]
+role = "Document"
+agent = "aintel.core.documenter"
+owns = ["docs"]
+needs = ["Fix"]
+on_fail = "stop"
+
+[[stage]]
+role = "Review"
+agent = "aintel.core.architect"
+owns = ["review"]
+needs = ["Validate", "Document"]
+on_fail = "return"
+return_to = "Fix"
+max_returns = 1
+
+[accept]
+by = "operator"   # the last stage is always a person

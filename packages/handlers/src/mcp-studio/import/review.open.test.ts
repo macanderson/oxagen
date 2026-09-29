@@ -24,6 +24,7 @@ import type {
   ToolsPullRequestScope,
 } from "../../tools.pr.open";
 import { TEST_CTX } from "../../test-utils/fixtures";
+import { createSaveStudioDraftHandler } from "./draft.save";
 import { createOpenStudioReviewHandler, reviewBranch, type StudioReviewHost } from "./review.open";
 import { importSource } from "./source";
 import type { StoredStudioDraft, StudioDraftStore } from "./store";
@@ -553,6 +554,36 @@ describe("open_studio_review refuses", () => {
     expect(err.message).toBe(
       "Every imported tool needs a risk, a side effect, and an egress before Review opens a steering PR. Classify create_refund.",
     );
+    expect(r.opener.open).not.toHaveBeenCalled();
+    expect(r.store.recordPr).not.toHaveBeenCalled();
+  });
+
+  it("a saved test that carries a credential, whose value reaches no row, file, or PR body", async () => {
+    const secret = "sk_live_51Hx9QeZ";
+    const withCredential: StudioDraftOp = {
+      ...LIST_CHARGES_TEST,
+      request: JSON.stringify({
+        method: "GET",
+        path: "/customers/cus_81/charges",
+        headers: { Authorization: `Bearer ${secret}` },
+      }),
+    };
+    const first = billingFirstImport(COMMIT);
+    const ops = [...first.ops.filter((op) => op.kind !== "test"), withCredential];
+    const r = rig({ ...first, ops }, { credentials: [BILLING_CREDENTIAL] });
+
+    // The save refuses the test, so no row holds it.
+    const save = createSaveStudioDraftHandler({ store: r.store, authorize: r.authorize });
+    const saveErr = await refusal(save({ server: "billing", ops, revision: 1 }, TEST_CTX));
+    expect(saveErr.reason).toBe("test_holds_credential");
+    expect(saveErr.message).not.toContain(secret);
+    expect(r.store.save).not.toHaveBeenCalled();
+
+    // A row that holds one anyway, such as a row stored before the save
+    // checked tests, opens no PR, so no branch file or PR body carries it.
+    const err = await refusal(r.run({ server: "billing", revision: 1 }));
+    expect(err.reason).toBe("test_holds_credential");
+    expect(err.message).not.toContain(secret);
     expect(r.opener.open).not.toHaveBeenCalled();
     expect(r.store.recordPr).not.toHaveBeenCalled();
   });

@@ -63,7 +63,7 @@ describe("StatusBadge", () => {
   });
 
   it("draws the shared state pill, and gives a failure its own hue", async () => {
-    // ADR-132: the badge is the mockup's `.b` recipe, so the hue sits on the
+    // ADR-226: the badge is the mockup's `.b` recipe, so the hue sits on the
     // ink, the border and the dot together. Greyscale is carried by the word,
     // which is why the word had to stop being `sealed` for all five.
     const failed = draw("sealed", "failed");

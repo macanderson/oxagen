@@ -18,6 +18,7 @@ import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
+import { orgSlackConnectionGet } from "@oxagen/oxagen/contracts/org.slack_connection.get";
 import { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -31,6 +32,7 @@ import {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SlackConnection,
   SsoSettings,
   WorkspaceFacts,
   WorkspaceList,
@@ -45,6 +47,7 @@ import {
   toMemberList,
   toModelCredential,
   toRoleCatalog,
+  toSlackConnection,
   toSsoSettings,
   toWorkspaceFacts,
   toWorkspaceList,
@@ -254,5 +257,23 @@ export const org: DataSource["org"] = {
     });
     if (!read.ok) return read;
     return view(ctx.orgId, SsoSettings, toSsoSettings(read.value), "org.sso");
+  },
+
+  // The organisation's Slack connection for steering repo health notices
+  // (#4608): org-scoped, Owner-or-Admin in its contract, no token in the
+  // answer. A deployment with no Slack app answers `configured: false`.
+  async slackConnection(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: orgSlackConnectionGet,
+      input: {},
+      page: "organization",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      SlackConnection,
+      toSlackConnection(read.value),
+      "org.slackConnection",
+    );
   },
 };
