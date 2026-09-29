@@ -46,12 +46,20 @@ interface Keyed {
 }
 
 async function keyed(): Promise<Keyed> {
-  const result = await importGrpc({ files: [{ path: "acme/keys.proto", text: KEYED_PROTO }] });
+  const result = await importGrpc({ files: [{ path: "proto/acme/keys.proto", text: KEYED_PROTO }] });
   const [tool] = result.tools;
   if (tool === undefined || tool.request.kind !== "grpc") throw new Error("The import made no gRPC tool.");
   if (result.descriptor_set === undefined) throw new Error("The import returned no descriptor_set.");
   const method = resolveMethod(Buffer.from(result.descriptor_set).toString("base64"), tool.request);
   return { tool, method };
+}
+
+/** The properties of a tool's schema, or a thrown error when it has none. */
+function propertiesOf(schema: unknown): Record<string, unknown> {
+  if (typeof schema !== "object" || schema === null || !("properties" in schema)) {
+    throw new Error("The schema has no properties.");
+  }
+  return schema.properties as Record<string, unknown>;
 }
 
 /** Whether the tool's inputSchema passes the arguments. */
@@ -134,9 +142,9 @@ describe("a request's inputSchema", () => {
 describe("a response's outputSchema", () => {
   it("leaves map keys to toJson and takes an empty Any", async () => {
     const { tool } = await keyed();
-    const output = tool.outputSchema as { properties: Record<string, Record<string, unknown>> };
-    expect(output.properties.int32Key).toStrictEqual({ type: "object", additionalProperties: { type: "string" } });
-    expect(output.properties.detail).toStrictEqual({
+    const output = propertiesOf(tool.outputSchema);
+    expect(output.int32Key).toStrictEqual({ type: "object", additionalProperties: { type: "string" } });
+    expect(output.detail).toStrictEqual({
       type: "object",
       properties: { "@type": { type: "string" } },
       additionalProperties: true,
