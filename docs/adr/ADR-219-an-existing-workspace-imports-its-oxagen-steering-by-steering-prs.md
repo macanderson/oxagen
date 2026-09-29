@@ -84,18 +84,21 @@ unless the ledger says which id it replaces.
    recorded and change nothing but the run's own files, as the run writes
    them. Otherwise it refuses with `steering_import_branch_taken` and opens
    nothing, and the owner deletes the branch and runs the import again.
-10. **Legacy sources connections retire.** Mac decided this on 2026-09-29
-    (#4684). A workspace that reads its repository through a sources
-    connection with no binding has nothing to demote, and nothing can bind
-    that connection since #4616 removed `bind_main_repository`. The import
-    refuses such a workspace with `steering_import_legacy_connection`, and
-    the refusal tells the owner to call again with `startFresh` set to true.
-    That call creates an empty steering repo and answers `provisioned`. It
-    imports nothing, and the `.oxagen/` files stay in the legacy repository.
-    The steering repo steers the workspace from then on, because the
-    steering seam reads the legacy connection only while the workspace has
-    no binding head. The owner moves any record they still want with a
-    steering PR.
+10. **Legacy sources connections retire.** Mac decided on 2026-09-29
+    (#4684) that a workspace on a legacy sources connection starts its
+    steering fresh and imports nothing. Such a workspace reads its
+    repository through a sources connection with no binding, so it has
+    nothing to demote, and nothing can bind that connection since #4616
+    removed `bind_main_repository`. The implementing agent chose the
+    mechanism in PR #4747, and Mac has not ruled on it. The import refuses
+    such a workspace with `steering_import_legacy_connection`, and the
+    refusal tells the owner to call again with the `startFresh` input set to
+    true. That call creates an empty steering repo and answers
+    `provisioned`. The `.oxagen/` files stay in the legacy repository. The
+    steering repo steers the workspace from then on, because the steering
+    seam and the sync sweep read a legacy connection only while the
+    workspace has no steering head. The owner moves any record they still
+    want with a steering PR.
 
 ## Consequences
 

@@ -398,6 +398,18 @@ describe("runSteeringImport: workspaces with nothing to read", () => {
     expect(world.source.pulls).toHaveLength(0);
   });
 
+  it("starts a legacy workspace fresh on the call the refusal asks for", async () => {
+    const world = new World();
+    world.heads.clear();
+    world.head = { kind: "legacy", fullName: "a-intel/platform" };
+
+    expect(await refusal(world.run({}))).toBe("steering_import_legacy_connection");
+    const result = await world.run({ startFresh: true });
+
+    expect(result).toMatchObject({ outcome: "provisioned", pullRequests: [], cleanup: null });
+    expect(world.provisionCalls).toBe(1);
+  });
+
   it("answers nothing_to_import for a workspace that has a steering repo", async () => {
     const world = new World();
     world.heads.set(OLD_HEAD, "linked");
