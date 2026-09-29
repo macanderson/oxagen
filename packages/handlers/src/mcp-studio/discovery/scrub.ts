@@ -46,3 +46,25 @@ export function scrubbedMessage(scrubber: Scrubber, error: unknown, max = 2000):
   const clean = scrubber.scrub(text);
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
+
+/**
+ * A JSON value with every string scrubbed, keys included. Discovery scrubs
+ * what a source offers before it compiles, so the lock, the snapshot rows,
+ * and the steering PR are all built from the same scrubbed text.
+ */
+export function scrubValue<T>(scrubber: Scrubber, value: T): T {
+  const walk = (item: unknown): unknown => {
+    if (typeof item === "string") return scrubber.scrub(item);
+    if (Array.isArray(item)) return item.map(walk);
+    if (item !== null && typeof item === "object") {
+      return Object.fromEntries(
+        Object.entries(item as Record<string, unknown>).map(([key, inner]) => [
+          scrubber.scrub(key),
+          walk(inner),
+        ]),
+      );
+    }
+    return item;
+  };
+  return walk(value) as T;
+}

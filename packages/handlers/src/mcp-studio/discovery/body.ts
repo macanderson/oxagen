@@ -27,6 +27,13 @@ const DESCRIPTION_MAX = 240;
 /** The gap between the name column and the text after it. */
 const COLUMN_GAP = 3;
 
+/** A tools.toml entry that no longer compiles against what the source offers. */
+export interface DroppedTool {
+  key: string;
+  /** compile's messages for the entry. */
+  reasons: readonly string[];
+}
+
 /** What one sync steering PR says. */
 export interface SyncPullRequestText {
   /** The folder name under tools/servers/. */
@@ -39,8 +46,8 @@ export interface SyncPullRequestText {
   diff: ToolSurfaceDiff;
   /** Full tool names the gateway withholds until the PR merges. */
   withheld: readonly string[];
-  /** tools.toml keys the proposed lock leaves out, because they no longer compile. */
-  dropped: readonly string[];
+  /** tools.toml keys the proposed lock leaves out, each with why it no longer compiles. */
+  dropped: readonly DroppedTool[];
   /** A registry server's source.version move, when the catalog moved on. */
   version: { from: string; to: string } | undefined;
   trigger: DiscoveryTrigger;
@@ -261,9 +268,11 @@ export function syncBody(input: SyncPullRequestText): string {
   if (input.dropped.length > 0) {
     sections.push(
       [
-        "tools.toml still imports these tools, and the source no longer offers them in a form that compiles. The new lock leaves them out. Remove each from tools.toml before merge, or the compile check fails:",
+        "tools.toml still imports these tools, and they no longer compile against what the source offers. The new lock leaves them out. Change or remove each one in tools.toml on this branch before merge, or the compile check fails:",
         "",
-        bullets(input.dropped),
+        input.dropped
+          .map(({ key, reasons }) => `- \`${key}\`: ${reasons.join(" ")}`)
+          .join("\n"),
       ].join("\n"),
     );
   }
