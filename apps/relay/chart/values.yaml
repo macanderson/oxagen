@@ -1,0 +1,89 @@
+# Values for the oxagen-relay chart. apps/relay/README.md explains each one.
+# The chart fails to render until every value marked required is set.
+
+# Each replica holds its own connection to the broker, and the broker sends
+# calls to the relay's connections in turn. Two replicas keep the relay up
+# through a node drain or a restart.
+replicaCount: 1
+
+image:
+  # Required. Oxagen publishes no image yet. Build apps/relay/Dockerfile and
+  # push it to a registry your cluster can pull from.
+  repository: ""
+  # Required. The tag you pushed, such as the version in apps/relay/package.json.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+relay:
+  # Required. The broker address Oxagen gave you, such as wss://relay.oxagen.sh.
+  brokerUrl: ""
+  # Required. The relay's name in Oxagen: up to 63 lowercase letters, digits, and hyphens.
+  name: ""
+  # Required. The workspace id Oxagen shows for the relay: wrk_ and 22 characters.
+  workspace: ""
+  # Required. The PEM public key Oxagen signs relay requests with. More than
+  # one key may follow each other, which lets Oxagen rotate its key.
+  trustedKeys: ""
+  # Required. The hosts the relay may reach. A bare host allows the scheme's
+  # default port only (443 for https, 80 for http). host:port allows that port.
+  allowedHosts: []
+  # How far the relay's clock may drift from Oxagen's, in milliseconds (0 to 60000).
+  clockSkewMs: 5000
+  # The largest response the relay carries back, in bytes (1024 to 268435456).
+  maxResponseBytes: 8388608
+
+token:
+  # The relay token Oxagen showed you when you created the relay. The chart
+  # stores it in a Secret. Set this or existingSecret, not both.
+  value: ""
+  # A Secret you manage that holds the token.
+  existingSecret: ""
+  # The key in existingSecret that holds the token.
+  existingSecretKey: RELAY_TOKEN
+
+credentials:
+  # A Secret you manage whose keys are RELAY_CREDENTIAL_* variables. The relay
+  # adds a credential from it when a call names one (Enterprise plan). Keep
+  # other keys out of this Secret, since the pod reads all of them.
+  existingSecret: ""
+
+extraCaCerts:
+  # A ConfigMap holding a PEM bundle of the CAs that sign your upstreams'
+  # certificates, for https targets behind a private CA. Node trusts these
+  # in addition to its own roots.
+  configMap: ""
+  key: ca.crt
+
+serviceAccount:
+  create: true
+  # Defaults to the release's full name.
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+# The relay streams each response to the broker instead of holding it whole.
+# A gRPC message arrives whole, so raise the memory limit if you raise
+# maxResponseBytes and carry many gRPC calls at once.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+networkPolicy:
+  # Adds a NetworkPolicy that refuses every inbound connection and allows
+  # only the egress rules below. The relay needs DNS, the broker on 443, and
+  # each allowed host. A NetworkPolicy names addresses, not host names, so
+  # write each rule for your network.
+  enabled: false
+  egress: []
