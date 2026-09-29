@@ -42,6 +42,7 @@ export default defineConfig({
     "cost",
     "tools",
     "skills",
+    "work",
   ],
   verbose: true,
   strict: true,
