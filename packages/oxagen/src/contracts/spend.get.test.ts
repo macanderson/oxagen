@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { spendGet, spendRowSchema } from "./spend.get";
+import {
+  OTHER_SPEND_KEY,
+  SPEND_TOP_RUNS_MAX,
+  spendGet,
+  spendRowSchema,
+  spendTopRunSchema,
+} from "./spend.get";
 import { SPEND_RANGE_DAYS_MAX } from "./spend.shared";
 
 const figure = {
@@ -29,7 +35,7 @@ describe("get_spend contract", () => {
     });
   });
 
-  it("takes an inclusive day range and one of the five levels, and nothing else", () => {
+  it("takes an inclusive day range and one of the seven groupings, and nothing else", () => {
     expect(
       spendGet.input.parse({
         period: { from: "2026-09-01", to: "2026-09-30" },
@@ -101,6 +107,7 @@ describe("get_spend contract", () => {
         reasoning: 0,
         server_tool_request: 0,
       },
+      topRuns: [],
     };
     expect(spendRowSchema.parse(row)).toEqual(row);
     expect(spendRowSchema.parse({ ...row, cost: null }).cost).toBe(null);
@@ -127,6 +134,53 @@ describe("get_spend contract", () => {
         ...row,
         proven: { micros: "1", currency: "USD", basis: "mixed" },
       }).success,
+    ).toBe(false);
+  });
+
+  it("groups by MCP server, which the daily rollup does not store", () => {
+    expect(
+      spendGet.input.parse({
+        period: { from: "2026-09-01", to: "2026-09-30" },
+        groupBy: "mcp_server",
+      }).groupBy,
+    ).toBe("mcp_server");
+    // The key of the rest can never be a server name a harness spells.
+    expect(OTHER_SPEND_KEY).not.toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("lists at most eight runs a row, each a run id with its part of the cost", () => {
+    const top = {
+      runId: "tse_0000000000000000000001",
+      name: null,
+      startedAt: "2026-09-10T12:00:00.000Z",
+      agentKey: "acme.core.cc",
+      operatorKey: null,
+      cost: { micros: "700", currency: "USD", basis: "estimated" },
+      calls: 2,
+    };
+    expect(spendTopRunSchema.parse(top)).toEqual(top);
+    expect(
+      spendTopRunSchema.safeParse({ ...top, runId: "run_1" }).success,
+    ).toBe(false);
+    expect(SPEND_TOP_RUNS_MAX).toBe(8);
+    const row = {
+      ...figure,
+      key: "github",
+      provider: null,
+      operator: null,
+      tokens: {
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+        server_tool_request: 0,
+      },
+    };
+    expect(
+      spendRowSchema.safeParse({ ...row, topRuns: Array(9).fill(top) })
+        .success,
     ).toBe(false);
   });
 });

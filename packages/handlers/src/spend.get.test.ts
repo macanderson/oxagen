@@ -1,7 +1,14 @@
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import { describe, expect, it, vi } from "vitest";
-import { compareRows, createSpendGetHandler, groupRows } from "./spend.get";
+import {
+  compareRows,
+  createSpendGetHandler,
+  groupRows,
+  mcpServerOf,
+  mcpServerShares,
+  reportedSpend,
+} from "./spend.get";
 import {
   daily,
   ctx,
@@ -19,6 +26,7 @@ function harness(
     daily?: ReturnType<typeof daily>[];
     runs?: ReturnType<typeof run>[];
     unmetered?: UnmeteredRuns;
+    names?: Record<string, string>;
   } = {},
 ) {
   const readDailyTotals = vi.fn(async () => over.daily ?? []);
@@ -27,12 +35,28 @@ function harness(
     async (): Promise<UnmeteredRuns> =>
       over.unmetered ?? { total: 0, byHarness: [] },
   );
+  const readRunNames = vi.fn(
+    async (_scope: unknown, runIds: readonly string[]) =>
+      new Map(
+        runIds.map((id): [string, string | null] => [
+          id,
+          over.names?.[id] ?? null,
+        ]),
+      ),
+  );
   const handler = createSpendGetHandler({
     readDailyTotals,
     readRunTotals,
     readUnmeteredRuns,
+    readRunNames,
   });
-  return { handler, readDailyTotals, readRunTotals, readUnmeteredRuns };
+  return {
+    handler,
+    readDailyTotals,
+    readRunTotals,
+    readUnmeteredRuns,
+    readRunNames,
+  };
 }
 
 describe("get_spend, runs with no usage (#3304)", () => {
@@ -251,5 +275,212 @@ describe("get_spend open runs (#3980)", () => {
     const h = harness({ runs: [pricedRun(10n)] });
     const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
     expect(out.estimatedRuns).toBe(0);
+  });
+});
+
+/** A priced run that called MCP tools, each tool's result estimate given. */
+function mcpRun(
+  micros: bigint,
+  tools: { name: string; calls: number; costMicros: bigint | null }[],
+  over: Parameters<typeof pricedRun>[1] = {},
+) {
+  const base = pricedRun(micros, over);
+  return {
+    ...base,
+    breakdown: {
+      ...base.breakdown,
+      tools: tools.map((t) => ({
+        ...t,
+        resultTokens: t.costMicros === null ? null : 100,
+      })),
+    },
+  };
+}
+
+describe("get_spend by MCP server", () => {
+  it("parses the server out of a tool name, after the harness prefix", () => {
+    expect(mcpServerOf("mcp__github__create_issue")).toBe("github");
+    expect(mcpServerOf("claude_code__mcp__linear__list_issues")).toBe(
+      "linear",
+    );
+    expect(mcpServerOf("mcp__my_server__search")).toBe("my_server");
+    expect(mcpServerOf("Read")).toBeNull();
+    expect(mcpServerOf("mcp__github")).toBeNull();
+  });
+
+  it("gives each server its tools' estimate and the rest of the run to Everything else", () => {
+    const shares = mcpServerShares(
+      mcpRun(1_000n, [
+        { name: "mcp__github__create_issue", calls: 2, costMicros: 150n },
+        { name: "mcp__github__get_file", calls: 1, costMicros: 50n },
+        { name: "mcp__linear__list_issues", calls: 1, costMicros: 100n },
+        { name: "Read", calls: 3, costMicros: 20n },
+      ]),
+    );
+    expect(shares.map((s) => [s.key, s.micros, s.basis, s.calls])).toEqual([
+      ["github", 200n, "estimated", 3],
+      ["linear", 100n, "estimated", 1],
+      ["~other", 700n, "estimated", 0],
+    ]);
+  });
+
+  it("leaves a run with no priced server tool whole under Everything else, at its own basis", () => {
+    const shares = mcpServerShares(
+      mcpRun(1_000n, [
+        { name: "mcp__github__create_issue", calls: 1, costMicros: null },
+      ]),
+    );
+    expect(shares.map((s) => [s.key, s.micros, s.basis])).toEqual([
+      ["github", null, null],
+      ["~other", 1_000n, "client_attested"],
+    ]);
+  });
+
+  it("never lets the rest drop below zero", () => {
+    const shares = mcpServerShares(
+      mcpRun(100n, [
+        { name: "mcp__github__get_file", calls: 1, costMicros: 150n },
+      ]),
+    );
+    expect(shares.at(-1)?.micros).toBe(0n);
+  });
+
+  it("answers server rows costliest first, then Everything else, summing to the total, with no daily read", async () => {
+    const h = harness({
+      runs: [
+        mcpRun(1_000n, [
+          { name: "mcp__github__create_issue", calls: 2, costMicros: 200n },
+        ]),
+        mcpRun(500n, [
+          { name: "mcp__linear__list_issues", calls: 1, costMicros: 300n },
+          { name: "mcp__github__get_file", calls: 1, costMicros: 50n },
+        ]),
+        pricedRun(250n),
+      ],
+    });
+    const out = await h.handler(
+      { period: PERIOD, groupBy: "mcp_server" },
+      ctx(),
+    );
+    expect(h.readDailyTotals).not.toHaveBeenCalled();
+    expect(out.rows.map((r) => [r.key, r.cost?.micros, r.runs])).toEqual([
+      ["linear", "300", 1],
+      ["github", "250", 2],
+      ["~other", "1200", 3],
+    ]);
+    const sum = out.rows.reduce(
+      (t, r) => t + BigInt(r.cost?.micros ?? "0"),
+      0n,
+    );
+    expect(sum.toString()).toBe(out.total.cost?.micros);
+    expect(out.rows.at(-1)?.topRuns).toEqual([]);
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+});
+
+describe("get_spend day series and top runs", () => {
+  it("answers every day of the period, oldest first, with no run a null cost", async () => {
+    const h = harness({
+      runs: [
+        pricedRun(400n, { startedAt: new Date("2026-09-02T09:00:00Z") }),
+        pricedRun(100n, { startedAt: new Date("2026-09-02T18:00:00Z") }),
+      ],
+    });
+    const out = await h.handler(
+      { period: { from: "2026-09-01", to: "2026-09-03" }, groupBy: "agent" },
+      ctx(),
+    );
+    expect(out.days).toEqual([
+      { day: "2026-09-01", cost: null, calls: 0, runs: 0 },
+      {
+        day: "2026-09-02",
+        cost: { micros: "500", currency: "USD", basis: "client_attested" },
+        calls: 8,
+        runs: 2,
+      },
+      { day: "2026-09-03", cost: null, calls: 0, runs: 0 },
+    ]);
+  });
+
+  it("lists a row's costliest runs, at most eight, each with its name", async () => {
+    const runs = Array.from({ length: 10 }, (_, i) =>
+      pricedRun(BigInt((i + 1) * 100)),
+    );
+    const costliest = runs[9];
+    if (costliest === undefined) throw new Error("no run");
+    const h = harness({
+      daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
+      runs,
+      names: { [costliest.runId]: "Fix the billing test" },
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
+    const top = out.rows[0]?.topRuns ?? [];
+    expect(top).toHaveLength(8);
+    expect(top.map((r) => r.cost?.micros)).toEqual([
+      "1000",
+      "900",
+      "800",
+      "700",
+      "600",
+      "500",
+      "400",
+      "300",
+    ]);
+    expect(top[0]).toMatchObject({
+      runId: costliest.runId,
+      name: "Fix the billing test",
+      agentKey: "acme.core.cc",
+      operatorKey: OPERATOR,
+      startedAt: "2026-09-10T12:00:00.000Z",
+    });
+    expect(h.readRunNames).toHaveBeenCalledTimes(1);
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("gives a model row's runs that model's part of each run", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "model",
+          groupKey: "claude-sonnet-5",
+          costMicros: 700n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [pricedRun(700n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.rows[0]?.topRuns[0]).toMatchObject({
+      cost: { micros: "700", basis: "client_attested" },
+      calls: 2,
+    });
+  });
+
+  it("lists a tool row's runs by calls, with no money", async () => {
+    const h = harness({
+      daily: [daily({ groupKind: "tool", groupKey: "Read" })],
+      runs: [pricedRun(700n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "tool" }, ctx());
+    expect(out.rows[0]?.topRuns[0]).toMatchObject({ cost: null, calls: 2 });
+  });
+});
+
+describe("get_spend reported spend", () => {
+  it("sums the models the harness reported and leaves gateway and mixed models out", () => {
+    const reported = pricedRun(300n);
+    const metered = pricedRun(900n, { costBasis: "gateway_observed" });
+    const mixed = pricedRun(50n, { costBasis: "mixed" });
+    expect(reportedSpend([reported, metered, mixed])).toEqual({
+      micros: "300",
+      currency: "USD",
+    });
+  });
+
+  it("answers null when no harness-reported model carries a cost", () => {
+    expect(
+      reportedSpend([pricedRun(10n, { costBasis: "gateway_observed" })]),
+    ).toBeNull();
+    expect(reportedSpend([run()])).toBeNull();
   });
 });

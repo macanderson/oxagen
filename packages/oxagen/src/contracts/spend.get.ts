@@ -2,7 +2,14 @@
  * `get_spend`: the Spend page's rollup at one level (Mission Control spec
  * §12.7, §12.9, App. E; ADR-060). Reads `cost.daily_totals` for the active
  * workspace over an inclusive day range, grouped by operator, agent, model,
- * tool or task, and answers the rows with the period's total: the month strip.
+ * tool, task or cost center, and answers the rows with the period's total,
+ * its spend by day, and each row's costliest runs: the Month tab.
+ *
+ * `mcp_server` is the one grouping the daily rollup does not store. The
+ * handler folds it from the period's run rows: each server row is what its
+ * tools' results cost as input (the ADR-199 estimate), and the
+ * {@link OTHER_SPEND_KEY} row is the rest of every run's cost, so the rows
+ * sum to the total.
  *
  * Every money figure is integer micros with a currency and a basis (INV-09);
  * a group no frame priced answers `cost: null`. Proven and accepted spend are
@@ -12,23 +19,83 @@
 import { z } from "zod";
 import { operatorFactsSchema } from "./operator.shared";
 import { registerCapability } from "../registry";
+import { RUN_LABEL_MAX, runPublicIdSchema } from "./run.list";
 import {
+  costSchema,
   dayRangeSchema,
+  moneySchema,
+  spendDaySchema,
   spendFigureSchema,
-  spendGroupKindSchema,
   tokenCountsSchema,
   unmeteredRunsSchema,
 } from "./spend.shared";
 
+/**
+ * The groupings `get_spend` answers: every level in `spendGroupKindSchema`,
+ * which the daily rollup stores, plus `mcp_server`, which it does not.
+ */
+export const spendGroupBySchema = z.enum([
+  "operator",
+  "agent",
+  "model",
+  "tool",
+  "task",
+  "cost_center",
+  "mcp_server",
+]);
+
+/**
+ * The `mcp_server` row key of the spend no MCP server's tool results carried:
+ * model output, the harness's prompt, and every other input. A harness
+ * spells a server in a tool name (`mcp__<server>__<tool>`) with letters,
+ * digits, `_` and `-`, so no server key collides with it.
+ */
+export const OTHER_SPEND_KEY = "~other";
+
+/** The most runs a row lists. */
+export const SPEND_TOP_RUNS_MAX = 8;
+
+/** One of a row's costliest runs, with the row's share of its cost. */
+export const spendTopRunSchema = z
+  .object({
+    runId: runPublicIdSchema,
+    /** The session name the Fleet board shows; null when the run has none. */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
+    startedAt: z.string().datetime(),
+    agentKey: z.string().nullable(),
+    /** The operator's principal public id; null for a run with no operator. */
+    operatorKey: z.string().nullable(),
+    /**
+     * The row's part of the run's cost: the whole run on an operator, agent,
+     * task or cost-center row, the model's calls on a model row, and the
+     * server's tool results on an `mcp_server` row. Null when nothing priced
+     * it, and always null on a tool row, since no frame prices a tool call.
+     */
+    cost: costSchema.nullable(),
+    /** The row's calls in the run: its steps, model calls, or tool calls. */
+    calls: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const spendRowSchema = spendFigureSchema
   .extend({
-    /** The group's key: a principal id, an agent key, a model id, a tool name or a task reference. */
+    /**
+     * The group's key: a principal id, an agent key, a model id, a tool name,
+     * a task reference, a cost-center label, an MCP server name, or
+     * {@link OTHER_SPEND_KEY}.
+     */
     key: z.string(),
     /** The model's provider on `model` rows; null elsewhere. */
     provider: z.string().nullable(),
     tokens: tokenCountsSchema,
     /** Who the key names on `operator` rows; null elsewhere, and for a principal nobody can name. */
     operator: operatorFactsSchema.nullable(),
+    /**
+     * The row's costliest runs in the period, at most
+     * {@link SPEND_TOP_RUNS_MAX}; most calls first where nothing priced them.
+     * Empty on the {@link OTHER_SPEND_KEY} row. `runs` says how many there are.
+     */
+    topRuns: z.array(spendTopRunSchema).max(SPEND_TOP_RUNS_MAX),
   })
   .strict();
 
@@ -36,7 +103,7 @@ export const spendGet = registerCapability({
   name: "get_spend",
   domain: "spend",
   description:
-    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart.",
+    "Read this workspace's spend over a day range, rolled up by operator, agent, model, tool, task, cost center or MCP server, with every figure in micros and the basis that says who observed it, the period total with proven and accepted spend kept apart, the spend by day, and each row's costliest runs.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -53,15 +120,24 @@ export const spendGet = registerCapability({
   input: z
     .object({
       period: dayRangeSchema,
-      groupBy: spendGroupKindSchema,
+      groupBy: spendGroupBySchema,
     })
     .strict(),
   output: z
     .object({
       period: z.object({ from: z.string(), to: z.string() }).strict(),
-      groupBy: spendGroupKindSchema,
+      groupBy: spendGroupBySchema,
       /** The period over every group: the strip at the top of the page. */
       total: spendFigureSchema,
+      /** One entry per day of the period, oldest first, days with no run included. */
+      days: z.array(spendDaySchema),
+      /**
+       * The part of the total the harness reported rather than the gateway
+       * metered: every model whose frames were all `client_attested`. A
+       * model whose frames mix both counts as metered. Null when no
+       * harness-reported model carries a cost.
+       */
+      reported: moneySchema.nullable(),
       /**
        * Priced runs in the period that were still open when their rollup was
        * last built (#3980). Their cost is in every figure here as a running
@@ -78,4 +154,6 @@ export const spendGet = registerCapability({
 
 export type SpendGetInput = z.output<typeof spendGet.input>;
 export type SpendGetOutput = z.output<typeof spendGet.output>;
+export type SpendGroupBy = z.output<typeof spendGroupBySchema>;
 export type SpendRow = z.output<typeof spendRowSchema>;
+export type SpendTopRun = z.output<typeof spendTopRunSchema>;

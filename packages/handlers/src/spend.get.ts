@@ -5,24 +5,43 @@
 // from the run rows, since a level's groups only hold the runs that name a
 // key at that level (a run with no operator is not attributed to any
 // operator, spec §12.7) and a run appears under every model it used.
+//
+// The run rows also give the spend by day, each row's costliest runs, and
+// the `mcp_server` grouping, which the daily rollup does not store.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
+  OTHER_SPEND_KEY,
+  SPEND_TOP_RUNS_MAX,
   spendGet,
   type SpendGetOutput,
+  type SpendGroupBy,
   type SpendRow,
+  type SpendTopRun,
 } from "@oxagen/oxagen/contracts/spend.get";
-import type {
-  TokenCounts,
-  UnmeteredRuns,
+import {
+  type TokenCounts,
+  UNASSIGNED_COST_CENTER_KEY,
+  type UnmeteredRuns,
 } from "@oxagen/oxagen/contracts/spend.shared";
-import type { DailyTotalsRecord, RunTotalsRecord } from "@oxagen/billing";
+import {
+  type CostBasis,
+  type DailyTotalsRecord,
+  foldBasis,
+  type RunTotalsRecord,
+  utcDay,
+} from "@oxagen/billing";
+import { bareToolName } from "@oxagen/run-ledger";
 import {
   noOperatorFacts,
   readOperatorFacts,
   type ReadOperatorFacts,
 } from "./lib/operator-facts";
+import { readRunNames } from "./lib/run-names";
 import {
   addTokens,
+  cost,
+  daysBetween,
+  money,
   readDailyTotals,
   readRunTotals,
   readUnmeteredRuns,
@@ -45,6 +64,11 @@ export type SpendGetDeps = {
     scope: SpendScope,
     q: { from: string; to: string },
   ) => Promise<UnmeteredRuns>;
+  /** The session name of each run a row lists (#4571). */
+  readRunNames: (
+    scope: SpendScope,
+    runIds: readonly string[],
+  ) => Promise<Map<string, string | null>>;
 };
 
 /** Sum a level's day rows into one row per key. */
@@ -70,6 +94,7 @@ export function groupRows(rows: readonly DailyTotalsRecord[]): SpendRow[] {
       provider: g.provider,
       tokens: g.tokens,
       operator: null,
+      topRuns: [],
       ...sumFigures(g.days),
     }))
     .sort(compareRows);
@@ -84,31 +109,291 @@ export function compareRows(a: SpendRow, b: SpendRow): number {
   return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 }
 
+/** One row's part of one run: the cost, calls and tokens the run adds to it. */
+export interface RunShare {
+  key: string;
+  micros: bigint | null;
+  basis: CostBasis | null;
+  calls: number;
+  tokens: TokenCounts;
+}
+
+/**
+ * The MCP server a tool name calls (`mcp__<server>__<tool>`), after the
+ * harness prefix a gateway adds; null for a tool no MCP server serves.
+ */
+export function mcpServerOf(tool: string): string | null {
+  return /^mcp__(.+?)__./.exec(bareToolName(tool))?.[1] ?? null;
+}
+
+/**
+ * What one run adds to each MCP server row, and to the row for the rest.
+ * A server's part is its tools' result tokens at the run's uncached input
+ * rate (ADR-199): input the run's own cost already counts. The rest is the
+ * run's cost less every server's part, so the rows sum to the run. Only a
+ * run that called a priced server tool has an estimated remainder; any
+ * other run's remainder is its whole cost at its own basis. The remainder
+ * never drops below zero.
+ */
+export function mcpServerShares(run: RunTotalsRecord): RunShare[] {
+  const servers = new Map<string, RunShare>();
+  let serverMicros = 0n;
+  let serverCalls = 0;
+  let serverTokens = 0;
+  for (const tool of run.breakdown.tools) {
+    const key = mcpServerOf(tool.name);
+    if (key === null) continue;
+    const share = servers.get(key) ?? {
+      key,
+      micros: null,
+      basis: null,
+      calls: 0,
+      tokens: { ...ZERO_TOKENS },
+    };
+    share.calls += tool.calls;
+    share.tokens.input_uncached += tool.resultTokens ?? 0;
+    if (tool.costMicros !== null) {
+      share.micros = (share.micros ?? 0n) + tool.costMicros;
+      share.basis = "estimated";
+      serverMicros += tool.costMicros;
+    }
+    servers.set(key, share);
+    serverCalls += tool.calls;
+    serverTokens += tool.resultTokens ?? 0;
+  }
+  const estimated = serverMicros > 0n;
+  const rest: RunShare = {
+    key: OTHER_SPEND_KEY,
+    micros:
+      run.costMicros === null
+        ? null
+        : run.costMicros > serverMicros
+          ? run.costMicros - serverMicros
+          : 0n,
+    basis:
+      run.costBasis === null
+        ? null
+        : estimated
+          ? foldBasis(run.costBasis, "estimated")
+          : run.costBasis,
+    calls: Math.max(0, run.steps - serverCalls),
+    tokens: {
+      ...run.tokens,
+      input_uncached: Math.max(0, run.tokens.input_uncached - serverTokens),
+    },
+  };
+  return [...servers.values(), rest];
+}
+
+/** What one run adds to each row of a grouping. */
+export function runShares(
+  run: RunTotalsRecord,
+  groupBy: SpendGroupBy,
+): RunShare[] {
+  const whole = (key: string | null): RunShare[] =>
+    key === null
+      ? []
+      : [
+          {
+            key,
+            micros: run.costMicros,
+            basis: run.costBasis,
+            calls: run.steps,
+            tokens: run.tokens,
+          },
+        ];
+  switch (groupBy) {
+    case "operator":
+      return whole(run.operatorKey);
+    case "agent":
+      return whole(run.agentKey);
+    case "task":
+      return whole(run.taskRef);
+    case "cost_center":
+      return whole(run.costCenter ?? UNASSIGNED_COST_CENTER_KEY);
+    case "model":
+      return run.breakdown.models.map((m) => ({
+        key: m.model,
+        micros: m.costMicros,
+        basis: m.basis,
+        calls: m.calls,
+        tokens: m.tokens,
+      }));
+    case "tool":
+      // No frame prices a tool call (spec §12.3), so a tool's part of a run
+      // carries calls and no money, as the tool level's rows do.
+      return run.breakdown.tools.map((t) => ({
+        key: t.name,
+        micros: null,
+        basis: null,
+        calls: t.calls,
+        tokens: { ...ZERO_TOKENS },
+      }));
+    case "mcp_server":
+      return mcpServerShares(run);
+  }
+}
+
+type Attributed = { run: RunTotalsRecord; share: RunShare };
+
+/** Costliest first, then most calls, then newest; nothing priced sorts last. */
+function compareShares(a: Attributed, b: Attributed): number {
+  const am = a.share.micros;
+  const bm = b.share.micros;
+  if (am !== null && bm !== null && am !== bm) return am > bm ? -1 : 1;
+  if ((am === null) !== (bm === null)) return am === null ? 1 : -1;
+  if (a.share.calls !== b.share.calls) return b.share.calls - a.share.calls;
+  const at = a.run.startedAt.getTime();
+  const bt = b.run.startedAt.getTime();
+  if (at !== bt) return bt - at;
+  return a.run.runId < b.run.runId ? -1 : 1;
+}
+
+/** Every row's runs, keyed by the row's key. */
+function attribute(
+  runs: readonly RunTotalsRecord[],
+  groupBy: SpendGroupBy,
+): Map<string, Attributed[]> {
+  const byKey = new Map<string, Attributed[]>();
+  for (const run of runs)
+    for (const share of runShares(run, groupBy)) {
+      const list = byKey.get(share.key) ?? [];
+      list.push({ run, share });
+      byKey.set(share.key, list);
+    }
+  return byKey;
+}
+
+/** A share as a figure: the run's figure with the share's cost and calls. */
+function shareFigure({ run, share }: Attributed) {
+  return {
+    ...runFigure({ ...run, costMicros: share.micros, costBasis: share.basis }),
+    calls: share.calls,
+  };
+}
+
+/** The `mcp_server` rows: each server, costliest first, then the rest. */
+export function mcpServerRows(byKey: Map<string, Attributed[]>): SpendRow[] {
+  const rowOf = (key: string, list: readonly Attributed[]): SpendRow => ({
+    key,
+    provider: null,
+    operator: null,
+    topRuns: [],
+    tokens: list.reduce<TokenCounts>(
+      (sum, a) => addTokens(sum, a.share.tokens),
+      { ...ZERO_TOKENS },
+    ),
+    ...sumFigures(list.map(shareFigure)),
+  });
+  const servers = [...byKey.entries()]
+    .filter(([key]) => key !== OTHER_SPEND_KEY)
+    .map(([key, list]) => rowOf(key, list))
+    .sort(compareRows);
+  const rest = byKey.get(OTHER_SPEND_KEY);
+  return rest === undefined
+    ? servers
+    : [...servers, rowOf(OTHER_SPEND_KEY, rest)];
+}
+
+/** The period's spend by day, every day included. */
+function spendByDay(
+  runs: readonly RunTotalsRecord[],
+  from: string,
+  to: string,
+): SpendGetOutput["days"] {
+  const byDay = new Map<string, RunTotalsRecord[]>();
+  for (const run of runs) {
+    const day = utcDay(run.startedAt);
+    byDay.set(day, [...(byDay.get(day) ?? []), run]);
+  }
+  return daysBetween(from, to).map((day) => {
+    const f = sumFigures((byDay.get(day) ?? []).map(runFigure));
+    return { day, cost: f.cost, calls: f.calls, runs: f.runs };
+  });
+}
+
+/**
+ * The part of the period's spend the harness reported: every model whose
+ * frames were all `client_attested`. A run rolled up before its breakdown
+ * existed counts whole when its own basis is `client_attested`.
+ */
+export function reportedSpend(
+  runs: readonly RunTotalsRecord[],
+): SpendGetOutput["reported"] {
+  let micros: bigint | null = null;
+  let currency = "USD";
+  for (const run of runs) {
+    currency = run.currency;
+    const parts =
+      run.breakdown.models.length === 0
+        ? [{ costMicros: run.costMicros, basis: run.costBasis }]
+        : run.breakdown.models;
+    for (const part of parts)
+      if (part.costMicros !== null && part.basis === "client_attested")
+        micros = (micros ?? 0n) + part.costMicros;
+  }
+  return micros === null ? null : money(micros, currency);
+}
+
 export function createSpendGetHandler(
   deps: SpendGetDeps,
 ): CapabilityHandler<typeof spendGet> {
   return async (input, ctx): Promise<SpendGetOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const { from, to } = input.period;
-    const [rows, runs, unmeteredRuns] = await Promise.all([
-      deps.readDailyTotals(scope, { from, to, groupKind: input.groupBy }),
+    const groupBy = input.groupBy;
+    // The daily rollup stores every level but `mcp_server`, which the run
+    // rows below answer on their own.
+    const [dailyRows, runs, unmeteredRuns] = await Promise.all([
+      groupBy === "mcp_server"
+        ? Promise.resolve([])
+        : deps.readDailyTotals(scope, { from, to, groupKind: groupBy }),
       deps.readRunTotals(scope, { from, to }),
       deps.readUnmeteredRuns(scope, { from, to }),
     ]);
-    const grouped = groupRows(rows);
+    const byKey = attribute(runs, groupBy);
+    const grouped =
+      groupBy === "mcp_server" ? mcpServerRows(byKey) : groupRows(dailyRows);
+    const top = new Map<string, Attributed[]>(
+      grouped
+        .filter((row) => row.key !== OTHER_SPEND_KEY)
+        .map((row): [string, Attributed[]] => [
+          row.key,
+          [...(byKey.get(row.key) ?? [])]
+            .sort(compareShares)
+            .slice(0, SPEND_TOP_RUNS_MAX),
+        ]),
+    );
     // An operator row's key is a principal id, which is a key and not a
     // label. The person it names rides beside it, so the page prints a name.
-    const facts =
-      input.groupBy === "operator"
-        ? await (deps.readOperatorFacts ?? noOperatorFacts)(
+    const [facts, names] = await Promise.all([
+      groupBy === "operator"
+        ? (deps.readOperatorFacts ?? noOperatorFacts)(
             scope,
             grouped.map((row) => row.key),
           )
-        : new Map<string, never>();
+        : new Map<string, never>(),
+      deps.readRunNames(
+        scope,
+        [...top.values()].flatMap((list) => list.map((a) => a.run.runId)),
+      ),
+    ]);
+    const topRuns = (key: string): SpendTopRun[] =>
+      (top.get(key) ?? []).map(({ run, share }) => ({
+        runId: run.runId,
+        name: names.get(run.runId) ?? null,
+        startedAt: run.startedAt.toISOString(),
+        agentKey: run.agentKey,
+        operatorKey: run.operatorKey,
+        cost: cost(share.micros, run.currency, share.basis),
+        calls: share.calls,
+      }));
     return {
       period: { from, to },
-      groupBy: input.groupBy,
+      groupBy,
       total: sumFigures(runs.map(runFigure)),
+      days: spendByDay(runs, from, to),
+      reported: reportedSpend(runs),
       // An open run's row is its running estimate; the page says how many
       // of the period's runs that is. An open run nothing priced adds no
       // figure, so it is no estimate of one.
@@ -122,6 +407,7 @@ export function createSpendGetHandler(
       rows: grouped.map((row) => ({
         ...row,
         operator: facts.get(row.key) ?? null,
+        topRuns: topRuns(row.key),
       })),
     };
   };
@@ -134,4 +420,5 @@ export const spendGetHandler = createSpendGetHandler({
   readOperatorFacts,
   readUnmeteredRuns: (scope, q) =>
     readUnmeteredRuns(scope, { ...q, filter: { kind: "all" } }),
+  readRunNames,
 });
