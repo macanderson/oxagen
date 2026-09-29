@@ -3,13 +3,24 @@
 // principal with no name reads by its kind, and the id only ever appears
 // inside the hover card, never as the label. The card exists only when there
 // is something to put in it, and only while the pointer or focus is on the
-// name.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+// name, or on the card after a short wait for the pointer to cross to it.
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { type OperatorIdentity, OperatorName } from "./operator";
+import {
+  CLOSE_DELAY_MS,
+  type OperatorIdentity,
+  OperatorName,
+} from "./operator";
 
 afterEach(cleanup);
 
@@ -98,7 +109,112 @@ describe("OperatorName card", () => {
     );
     await expectNoAxe(container);
     await userEvent.unhover(root);
-    expect(screen.queryByTestId("operator-card")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByTestId("operator-card")).toBeNull();
+    });
+  });
+
+  it("stays open while the pointer crosses from the name to the card, and closes once it leaves the card (#4674)", () => {
+    vi.useFakeTimers();
+    try {
+      renderOperator(marcus);
+      const root = screen.getByTestId("operator");
+      fireEvent.mouseEnter(root);
+      fireEvent.mouseLeave(root);
+      // The pointer is in the gap between the name and the card.
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+      fireEvent.mouseEnter(screen.getByTestId("operator-card"));
+      act(() => {
+        vi.advanceTimersByTime(CLOSE_DELAY_MS * 2);
+      });
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+      fireEvent.mouseLeave(screen.getByTestId("operator-card"));
+      act(() => {
+        vi.advanceTimersByTime(CLOSE_DELAY_MS - 1);
+      });
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(screen.queryByTestId("operator-card")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a pending close when the name unmounts", () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderOperator(marcus);
+      const root = screen.getByTestId("operator");
+      fireEvent.mouseEnter(root);
+      const before = vi.getTimerCount();
+      fireEvent.mouseLeave(root);
+      expect(vi.getTimerCount()).toBe(before + 1);
+      unmount();
+      expect(vi.getTimerCount()).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stays open when the name takes focus while a close is pending", () => {
+    vi.useFakeTimers();
+    try {
+      renderOperator(marcus);
+      const root = screen.getByTestId("operator");
+      fireEvent.mouseEnter(root);
+      const before = vi.getTimerCount();
+      fireEvent.mouseLeave(root);
+      act(() => {
+        vi.advanceTimersByTime(CLOSE_DELAY_MS - 1);
+      });
+      // Focus lands on the name before the close runs, and drops the close.
+      act(() => {
+        labelOf(root).focus();
+      });
+      // jsdom collapses the selection on focus and queues `selectionchange`
+      // with setImmediate, which the fake clock counts. A zero tick runs it
+      // and leaves the close, 1ms short of due, pending if focus kept it.
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(vi.getTimerCount()).toBe(before);
+      act(() => {
+        vi.advanceTimersByTime(CLOSE_DELAY_MS * 2);
+      });
+      expect(labelOf(root)).toHaveFocus();
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stays open while focused after the pointer leaves, until blur", () => {
+    vi.useFakeTimers();
+    try {
+      renderOperator(marcus);
+      const root = screen.getByTestId("operator");
+      act(() => {
+        labelOf(root).focus();
+      });
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+      // The pointer passes over the name while focus stays on it.
+      fireEvent.mouseEnter(root);
+      fireEvent.mouseLeave(root);
+      act(() => {
+        vi.advanceTimersByTime(CLOSE_DELAY_MS);
+      });
+      expect(screen.getByTestId("operator-card")).toBeInTheDocument();
+      // Focus leaves for the page, which closes the card at once.
+      act(() => {
+        labelOf(root).blur();
+      });
+      expect(document.activeElement).toBe(document.body);
+      expect(screen.queryByTestId("operator-card")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("opens on keyboard focus and stays open while focus moves within it", async () => {

@@ -8,7 +8,7 @@ import { z } from "zod";
 const mocks = vi.hoisted(() => ({
   recordSpend: vi.fn(),
   generateObject: vi.fn(),
-  insertTokenUsage: vi.fn(),
+  stagedUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerFromModelId: vi.fn(),
   defaultModel: vi.fn(),
@@ -23,7 +23,7 @@ mocks.generateObject.mockResolvedValue({
   usage: { inputTokens: 12, outputTokens: 8, totalTokens: 20 },
   finishReason: "stop",
 });
-mocks.insertTokenUsage.mockResolvedValue(undefined);
+mocks.stagedUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("cafebabe");
 mocks.providerFromModelId.mockReturnValue("anthropic");
 mocks.defaultModel.mockReturnValue({ modelId: "openai/gpt" });
@@ -35,7 +35,6 @@ vi.mock("ai", () => ({ generateObject: mocks.generateObject }));
 vi.mock("@oxagen/telemetry", () => ({
   stampTokenUsage: (rows: unknown[]) => rows,
   hashPrompt: mocks.hashPrompt,
-  insertTokenUsage: mocks.insertTokenUsage,
   providerFromModelId: mocks.providerFromModelId,
 }));
 vi.mock("@oxagen/billing", () => ({
@@ -44,7 +43,7 @@ vi.mock("@oxagen/billing", () => ({
   admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
   finalizeUsage: vi.fn(
     async ({ row, charge }: { row: unknown; charge?: unknown }) => {
-      await mocks.insertTokenUsage([row]);
+      await mocks.stagedUsage([row]);
       if (charge) await mocks.chargeUsageCredits(charge);
     },
   ),
@@ -126,7 +125,7 @@ describe("generateObjectFor cache option", () => {
       totalTokens: 5,
     });
     expect(mocks.generateObject).not.toHaveBeenCalled();
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
     expect(mocks.writeCache).not.toHaveBeenCalled();
   });
@@ -183,7 +182,7 @@ describe("generateObjectFor cache option", () => {
 
     expect(res.object).toEqual({ title: "Fresh" });
     expect(mocks.generateObject).toHaveBeenCalledTimes(1);
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     // Write-through reuses the read's query embedding (no second embed).
     expect(mocks.writeCache).toHaveBeenCalledTimes(1);

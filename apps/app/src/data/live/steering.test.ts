@@ -1,16 +1,20 @@
-// The steering port: three kernel reads on the workspace ctx, each mapped into
-// its view model, with a refusal passed through and an unmappable record
-// reported once.
+// The steering port: kernel reads on the workspace ctx, each mapped into its
+// view model, with a refusal passed through and an unmappable record reported
+// once.
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
+import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   contextPrOutput,
+  LINEAGE,
   proposalOutput,
+  RECORD_PATH,
   recordGetOutput,
   recordOutput,
   recordsOutput,
@@ -232,6 +236,7 @@ describe("steering.deliveries", () => {
     expect(kernelRead).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
+        contract: contextSteeringDeliveries,
         input: { days: 7, limit: 50 },
         page: "steering",
       }),
@@ -270,6 +275,78 @@ describe("steering.deliveries", () => {
       reason: "error",
       code: "record_unmappable",
     });
+  });
+});
+
+describe("steering.freshness", () => {
+  const AT = "2026-09-28T14:02:00Z";
+  const HEAD = "4d5e6f7a8b9c";
+
+  it("reads the workspace's freshness and renames it for the panel", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        steeringVersion: 12,
+        headCommit: HEAD,
+        headCommits: [HEAD],
+        publishedAt: AT,
+        repository: "acme/platform",
+        provider: "github",
+        defaultBranch: "main",
+        policy: { autoSync: true, blockStaleRuns: false },
+        sync: {
+          status: "problems",
+          headSha: HEAD,
+          requestedAt: AT,
+          syncedAt: AT,
+          error: null,
+          findings: [
+            {
+              level: "warning",
+              path: RECORD_PATH,
+              lineageId: LINEAGE,
+              code: "unknown_key",
+              message: "The record names a key the schema does not know.",
+            },
+          ],
+        },
+      }),
+    );
+    const read = await steering.freshness(ctx);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextSteeringFreshness,
+      input: {},
+      page: "steering",
+    });
+    expect(read).toEqual(
+      readOk({
+        version: 12,
+        headCommit: HEAD,
+        publishedAt: AT,
+        repository: "acme/platform",
+        defaultBranch: "main",
+        gates: { autoSync: true, blockStaleRuns: false },
+        sync: {
+          status: "problems",
+          headSha: HEAD,
+          syncedAt: AT,
+          error: null,
+          findings: [
+            {
+              level: "warning",
+              path: RECORD_PATH,
+              lineage: LINEAGE,
+              message: "The record names a key the schema does not know.",
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("passes a denial through without mapping (negative)", async () => {
+    kernelRead.mockResolvedValue(DENIED);
+    expect(await steering.freshness(ctx)).toEqual(DENIED);
+    expect(captureError).not.toHaveBeenCalled();
   });
 });
 

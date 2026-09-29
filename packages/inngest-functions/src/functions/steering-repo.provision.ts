@@ -1,6 +1,7 @@
 import { NonRetriableError } from "@oxagen/functions";
 
 import { createFunction } from "../create-function";
+import { isWorkspaceArchived } from "../lib/steering-repo-backfill";
 import {
   steeringRepoProvisionRunner,
   type SteeringRepoProvisionScope,
@@ -37,10 +38,17 @@ async function runStep(
  * Provision a steering repo (steering-repo-spec, Provisioning; lane S1).
  *
  * `create_workspace` sends `steering-repo/provision.requested` for the new
- * workspace, and `create_organization` sends it for `<org>/oxagen`. Each step
+ * workspace, and `create_organization` sends it for `<org>/oxagen`. The
+ * headless backfill (`steering-repo.backfill.ts`, #4683) sends it for each
+ * workspace that never started provisioning. Each step
  * is its own durable step, so a retry starts at the step that failed. Every
  * step also reads what earlier runs recorded, so sending the event again for
  * the same scope finishes the work instead of repeating it.
+ *
+ * A workspace event first reads whether the workspace is archived, in its own
+ * durable step. A person can archive a workspace after the backfill or
+ * `create_workspace` sent its event. The job then ends with `skipped` and
+ * writes nothing, to the provider or to the database.
  */
 export const [steeringRepoProvision] = createFunction(
   {
@@ -63,6 +71,13 @@ export const [steeringRepoProvision] = createFunction(
       actorUserId: data.actorUserId,
     };
     const steps = await steeringRepoProvisionRunner().steps();
+    const workspaceId = scope.workspaceId;
+    if (workspaceId !== null) {
+      const archived = await step.run("check_workspace", () =>
+        isWorkspaceArchived({ orgId: scope.orgId, workspaceId }),
+      );
+      if (archived) return { status: "skipped", reason: "workspace_archived" };
+    }
     let last: SteeringRepoStepResult | null = null;
     for (const name of steps)
       last = await step.run(name, () => runStep(scope, name));

@@ -3,6 +3,7 @@ import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
 import { mcpServerDiscover } from "./functions/mcp-server.discover";
 import { mcpServerSync } from "./functions/mcp-server.sync";
 import { steeringRepoProvision } from "./functions/steering-repo.provision";
+import { steeringRepoBackfill } from "./functions/steering-repo.backfill";
 import {
   steeringRepoHealthCheck,
   steeringRepoSweep,
@@ -92,6 +93,7 @@ export const functions: any[] = [
   steeringSync,
   steeringSyncSweep,
   steeringRepoProvision,
+  steeringRepoBackfill,
   steeringRepoSweep,
   steeringRepoHealthCheck,
   billingDunningSweep,

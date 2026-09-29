@@ -66,7 +66,7 @@ async function render(org: string, ws: string) {
   const errors: unknown[] = [];
   const stream = await renderToReadableStream(
     <WorkspaceLayout params={Promise.resolve({ org, ws })}>
-      <main data-testid="page">page</main>
+      <div data-testid="page">page</div>
     </WorkspaceLayout>,
     {
       onError(error) {

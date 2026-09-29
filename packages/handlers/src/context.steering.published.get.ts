@@ -64,7 +64,7 @@ export function mainRepoUnbound(): HandlerError {
     code: "conflict",
     reason: "main_repo_unbound",
     message:
-      "This workspace has no main repository, so it has no published steering. Bind one from the Repositories page, or name a repository by its binding id.",
+      "This workspace has no steering repository yet, so it has no published steering. Oxagen creates the steering repository after the organization connects GitHub or GitLab. To pull from another repository, name it by its binding id.",
   });
 }
 

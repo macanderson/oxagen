@@ -294,6 +294,7 @@ const mergeResult = z.object({
   record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
   mergedCommit: z.string(),
   bundleVersion: z.object({ before: z.number().int(), after: z.number().int() }),
+  publishedVersion: z.number().int().nullable(),
 });
 
 const proposalCreated = z.object({

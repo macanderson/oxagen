@@ -9,10 +9,11 @@
   day. The other details were chosen under SCR-002 and await acceptance.
 - **Related:** issue #4685 (lane M12), PR #4698 (part 1, merged as
   e1ce3b977), PR #4714 (merged as dbec3a9d2), PR #4720 (part 2 and this
-  record), issue #4666 (the served-call gates, after which the
-  `relay_not_built` refusal goes), issue #4712 (CI builds neither the relay
-  image nor the chart), ADR-042 (tenant data planes), and ADR-187 (two
-  gateways carry every customer agent's traffic)
+  record, merged as 8b360982b), issue #4666 (the served-call gates, fixed by
+  PR #4728, after which part 2c removed the `relay_not_built` refusal),
+  issue #4712 (CI builds neither the relay image nor the chart), ADR-042
+  (tenant data planes), and ADR-187 (two gateways carry every customer
+  agent's traffic)
 
 ## Context
 
@@ -24,8 +25,10 @@ outright.
 
 The served tools already pick a Transport per network: `local` for a server
 on an operator's machine, the cloud transport for a public host, and
-`relay:<name>` for a private network. Until this record, the last one ended
-every call with `relay_not_built`.
+`relay:<name>` for a private network. Before the relay, the last one ended
+every call with `relay_not_built`. PR #4720 added the broker behind that
+refusal, and part 2c of #4685 removed the refusal, so a served call on a
+`relay:<name>` network now goes to the broker.
 
 Four questions had to be settled. Which side opens the connection. What the
 relay trusts. Where the broker runs, given that xmcp owns the MCP service's
@@ -116,6 +119,10 @@ HTTP server. And how fast a revoked relay stops.
 - The MCP service holds a WebSocket per connected relay. Calls to one relay
   from another MCP process fail as `disconnected` until the broker is
   shared.
+- `mcp.relays` stores no heartbeat. The broker judges a relay live by its
+  open connection and the heartbeats on it, which it holds in memory. No
+  spec page, screen, or capability reads a stored heartbeat, so the table
+  has no column for one.
 - A relay's first dial after an MCP deploy can be answered with a plain
   status, and it succeeds one second later.
 - CI does not yet build the relay image or render the chart (#4712).

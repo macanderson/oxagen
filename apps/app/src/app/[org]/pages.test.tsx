@@ -918,7 +918,8 @@ async function expectOrganizationRoute<P extends object>(
   expect(metadata.title).toBe(name);
   const container = await renderPage(await page.default(props));
   expect(container.querySelectorAll("h1")).toHaveLength(0);
-  expect(container.querySelector("main#main")).not.toBeNull();
+  // The shell frame holds main#main; the route adds no landmark (ADR-227).
+  expect(container.querySelector("main")).toBeNull();
 }
 
 describe("Organization", () => {

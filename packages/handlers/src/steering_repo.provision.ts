@@ -18,7 +18,10 @@
 //                           GitLab refuses logs a warning and does not stop
 //                           the run.
 //   7. publish_version      Version 1, recorded as a deployment to `steering`.
-//   8. bind_repository      Workspace only. A binding head with role steering.
+//   8. bind_repository      Workspace only. A binding head with role steering,
+//                           then the first commit published through the
+//                           version store as version 1, so the first steering
+//                           PR publishes version 2 (#4732).
 //
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
 // the workspace's settings, or of the organization's for `<org>/oxagen`, and
@@ -54,7 +57,9 @@ import {
   steeringHookTarget,
   type SteeringHookTarget,
 } from "./lib/steering-hook";
+import type { SyncPublish } from "./context.steering.sync";
 import { logger } from "./logger";
+import { publishFirstVersion } from "./steering-repo/first-version";
 import {
   workspaceRepositoriesLock,
   writeRepositoryHead,
@@ -236,6 +241,14 @@ export interface ProvisionDeps {
   ): Promise<void>;
   /** The URL and token of the hook on a GitLab steering project. */
   steeringHook(scope: SteeringRepoScope, projectId: number): SteeringHookTarget;
+  /**
+   * Publish the bound steering repo's production head through the version
+   * store, after bind_repository binds it (#4732). The repository sync's
+   * port, so the first commit takes version 1 in the store every merge
+   * numbers from. Unset, as in tests that do not exercise the publish, the
+   * step publishes nothing.
+   */
+  publishFirst?: SyncPublish;
 }
 
 /**
@@ -647,11 +660,20 @@ async function publishVersion(ctx: StepContext): Promise<void> {
 
 async function bindRepository(ctx: StepContext): Promise<void> {
   if (ctx.scope.kind !== "workspace") return;
+  const repository = requireRepository(ctx);
   ctx.state.binding_id = await ctx.deps.bind(ctx.scope, {
     connection: requireConnection(ctx),
-    repository: requireRepository(ctx),
+    repository,
     default_branch: STEERING_DEFAULT_BRANCH,
   });
+  // The publish resolves the repository from the binding written above, so it
+  // runs after the bind. A rerun finds the head published and answers
+  // `current`.
+  await publishFirstVersion(
+    ctx.deps.publishFirst,
+    ctx.scope,
+    repository.full_name,
+  );
 }
 
 const STEP_BODIES: Record<SteeringRepoStep, (ctx: StepContext) => Promise<void>> =
@@ -1307,6 +1329,34 @@ export function steeringRepoProvisionDeps(options: {
         { kind: scope.kind, scopeId: scopeId(scope), projectId },
         options.env ?? process.env,
       ),
+
+    // The repository sync's publish port with the sync's production deps, so
+    // the first version lands in the same store, under the same key, with the
+    // same tool projection as every later one (#4732). Loaded on the call, as
+    // the sync's modules are, and run in the workspace's tenant scope the
+    // sync runs in.
+    async publishFirst(scope) {
+      const [
+        { steeringSyncPublish },
+        { createSteeringHost },
+        { withToolProjection },
+        { readSteeringHealth },
+      ] = await Promise.all([
+        import("./steering-repo/publisher"),
+        import("./context.steering.host"),
+        import("./mcp-studio/publish-deps"),
+        import("./steering-repo/health.read"),
+      ]);
+      const publish = steeringSyncPublish({
+        host: createSteeringHost(),
+        extend: withToolProjection,
+        readHealth: readSteeringHealth,
+      });
+      return runInTenantScope(
+        { orgId: scope.orgId, workspaceId: scope.workspaceId },
+        () => publish(scope),
+      );
+    },
   };
 }
 

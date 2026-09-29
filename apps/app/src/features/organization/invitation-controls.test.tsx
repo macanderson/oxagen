@@ -192,3 +192,17 @@ it("names the recipient in each row's Resend and Revoke, so two rows differ", ()
   }
   expect(screen.queryByRole("button", { name: "Resend" })).toBeNull();
 });
+
+// The invitation table clips a body cell unless the cell holds
+// `[data-actions]`, so Resend and Revoke must share that one marked group. The
+// mark sits on the row of buttons, as at every other site, and not on the
+// wrapper that also holds the revoke dialog.
+it("marks the row actions so the cell shows every button (#4674)", () => {
+  show();
+  const group = screen
+    .getByRole("button", { name: RESEND })
+    .closest("[data-actions]");
+  expect(group).not.toBeNull();
+  expect(group).toContainElement(screen.getByRole("button", { name: REVOKE }));
+  expect(group).not.toBe(screen.getByTestId("invitation-controls"));
+});

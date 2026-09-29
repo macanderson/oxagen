@@ -6,7 +6,7 @@
  * "the same link can't be used twice" holds even under concurrent opens.
  *
  * Every DB touch goes through withSystemDb — cms.* tables are non-tenant and
- * carry bypass-only RLS, so this audited system bypass is the sole access path.
+ * carry bypass-only RLS, so this system bypass is the sole access path.
  */
 
 import {

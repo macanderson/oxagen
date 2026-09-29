@@ -5,6 +5,14 @@
 // queued ones, and any sent one it never acknowledged, with the control
 // envelope (`drainCommands` in ./lib/tacho-host.ts).
 //
+// The envelope is built in a transaction of its own, after the one that lands
+// the acknowledgements. Its etag covers the host's published skills, and those
+// are read between the two, outside any tenant transaction
+// (./lib/tacho-host-skills.ts says why). A failed envelope leaves the
+// acknowledgements landed. The host sends them again with its next poll, as
+// it does after any poll whose answer it never read, and `ackableOutcomes`
+// keeps a repeat from moving a row back.
+//
 // An acknowledgement lands only on a row that has not reached a terminal
 // status: a row Oxagen already cancelled (superseded) or expired while it
 // was still `queued` stays as it is, and the report keeps what Oxagen
@@ -24,6 +32,11 @@ import {
   resolveEnrolledHost,
   touchHost,
 } from "./lib/tacho-host";
+import { hostSkillsReader } from "./lib/tacho-host-skills";
+import {
+  type TachoPublished,
+  VERSION_STORE_PUBLISHED,
+} from "./tacho.published";
 
 type Ack =
   (typeof tachoCommandFetch.input)["_output"]["acknowledgements"][number];
@@ -76,37 +89,60 @@ export function ackPatch(
   }
 }
 
-export const tachoCommandFetchHandler: CapabilityHandler<
-  typeof tachoCommandFetch
-> = async (input, ctx) => {
-  const now = new Date();
-  return withTenantDb(async (tx) => {
-    const host = await resolveEnrolledHost(
-      tachoCommandFetch.name,
-      ctx,
-      tx as never,
-      input.host_enrollment_id,
-    );
-    let acknowledged = 0;
-    for (const ack of input.acknowledgements) {
-      const updated = await tx
-        .update(schema.tachoControlCommands)
-        .set(ackPatch(ack, now))
-        .where(
-          and(
-            eq(schema.tachoControlCommands.publicId, ack.command_id),
-            eq(schema.tachoControlCommands.hostId, host.id),
-            inArray(
-              schema.tachoControlCommands.outcome,
-              ackableOutcomes(ack.status),
-            ),
-          ),
-        )
-        .returning({ id: schema.tachoControlCommands.id });
-      acknowledged += updated.length;
-    }
-    const seen = await touchHost(tx as never, host, input.daemon, now, false);
-    const control = await controlEnvelope(tx as never, ctx, seen, now);
-    return { acknowledged, control };
-  });
+export interface TachoCommandFetchDeps {
+  /** The workspace's and the organization's published steering, for the skills the envelope's etag covers. */
+  published: TachoPublished;
+}
+
+/** The same version store `get_tacho_bundle` reads, so both serve one etag. */
+export const defaultTachoCommandFetchDeps: TachoCommandFetchDeps = {
+  published: VERSION_STORE_PUBLISHED,
 };
+
+export function createTachoCommandFetchHandler(
+  deps: TachoCommandFetchDeps,
+): CapabilityHandler<typeof tachoCommandFetch> {
+  const skillsReader = hostSkillsReader(deps.published);
+  return async (input, ctx) => {
+    const now = new Date();
+    const { acknowledged, seen } = await withTenantDb(async (tx) => {
+      const host = await resolveEnrolledHost(
+        tachoCommandFetch.name,
+        ctx,
+        tx as never,
+        input.host_enrollment_id,
+      );
+      let acknowledged = 0;
+      for (const ack of input.acknowledgements) {
+        const updated = await tx
+          .update(schema.tachoControlCommands)
+          .set(ackPatch(ack, now))
+          .where(
+            and(
+              eq(schema.tachoControlCommands.publicId, ack.command_id),
+              eq(schema.tachoControlCommands.hostId, host.id),
+              inArray(
+                schema.tachoControlCommands.outcome,
+                ackableOutcomes(ack.status),
+              ),
+            ),
+          )
+          .returning({ id: schema.tachoControlCommands.id });
+        acknowledged += updated.length;
+      }
+      const seen = await touchHost(tx as never, host, input.daemon, now, false);
+      return { acknowledged, seen };
+    });
+    // `seen` carries the features this poll advertised, which decide whether
+    // the host parses skills at all.
+    const skills = await skillsReader.read(tachoCommandFetch.name, ctx, seen);
+    const control = await withTenantDb((tx) =>
+      controlEnvelope(tx as never, ctx, seen, now, skills),
+    );
+    return { acknowledged, control };
+  };
+}
+
+export const tachoCommandFetchHandler = createTachoCommandFetchHandler(
+  defaultTachoCommandFetchDeps,
+);

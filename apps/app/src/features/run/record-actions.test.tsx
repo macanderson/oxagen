@@ -136,7 +136,9 @@ describe("export status", () => {
     expect(link).toHaveAttribute("download");
     expect(screen.getByTestId("export-size")).toHaveTextContent(/48\.2\s?kB/);
     const digest = screen.getByTestId("export-digest");
-    expect(digest).toHaveAttribute("title", DIGEST);
+    // The hover card shows the whole digest, to a pointer and to focus (#4692).
+    expect(digest).toHaveAttribute("data-truncate", DIGEST);
+    expect(digest).not.toHaveAttribute("title");
     expect(digest.textContent).not.toBe(DIGEST);
     expect(screen.getByTestId("export-verify-command")).toHaveTextContent(
       `oxagen verify ${RUN}-${EXPORT}.zip`,

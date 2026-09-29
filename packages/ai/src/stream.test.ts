@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   streamText: vi.fn(),
-  insertTokenUsage: vi.fn(),
+  stagedUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerFromModelId: vi.fn(),
   defaultModel: vi.fn(),
@@ -28,7 +28,7 @@ mocks.streamText.mockImplementation(
     },
   }),
 );
-mocks.insertTokenUsage.mockResolvedValue(undefined);
+mocks.stagedUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("aabbccdd");
 mocks.providerFromModelId.mockReturnValue("anthropic");
 mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-5" });
@@ -61,7 +61,6 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   return {
     ...real,
     hashPrompt: mocks.hashPrompt,
-    insertTokenUsage: mocks.insertTokenUsage,
     providerFromModelId: mocks.providerFromModelId,
   };
 });
@@ -74,7 +73,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
     finalizeUsage: vi.fn(
       async ({ row, charge }: { row: unknown; charge?: unknown }) => {
-        await mocks.insertTokenUsage([row]);
+        await mocks.stagedUsage([row]);
         if (charge) await mocks.chargeUsageCredits(charge);
       },
     ),
@@ -129,13 +128,13 @@ const USAGE_EVENT = {
 
 beforeEach(() => {
   mocks.streamText.mockClear();
-  mocks.insertTokenUsage.mockClear();
+  mocks.stagedUsage.mockClear();
   mocks.hashPrompt.mockClear();
   mocks.providerFromModelId.mockClear();
   mocks.providerCostUsdMicros.mockClear();
   mocks.chargeUsageCredits.mockClear();
   // restore defaults
-  mocks.insertTokenUsage.mockResolvedValue(undefined);
+  mocks.stagedUsage.mockResolvedValue(undefined);
   mocks.hashPrompt.mockResolvedValue("aabbccdd");
   mocks.providerFromModelId.mockReturnValue("anthropic");
   mocks.providerCostUsdMicros.mockReturnValue(330);
@@ -330,8 +329,8 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     }) as StreamResult;
     await result._onFinish(USAGE_EVENT);
 
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
+    const rows = (mocks.stagedUsage.mock.calls[0] as [unknown[]])[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
     expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
@@ -424,7 +423,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     });
     // Telemetry row records the real cached count (not hardcoded 0).
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+      mocks.stagedUsage.mock.calls[0] as [Array<Record<string, unknown>>]
     )[0];
     expect(rows[0]?.cached_tokens).toBe(80);
     // The meter receives cachedTokens so the cached portion is priced cheaper.
@@ -459,7 +458,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     // Telemetry row records the fourth token class so the billing rollup can
     // price cache writes at the provider premium instead of as fresh input.
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+      mocks.stagedUsage.mock.calls[0] as [Array<Record<string, unknown>>]
     )[0];
     expect(rows[0]?.cache_write_tokens).toBe(30);
     expect(rows[0]?.cached_tokens).toBe(30);
@@ -521,7 +520,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("withholds onFinish when the settlement seam rejects; the staged usage is retried by the outbox", async () => {
-    mocks.insertTokenUsage.mockRejectedValueOnce(new Error("CH down"));
+    mocks.stagedUsage.mockRejectedValueOnce(new Error("CH down"));
     let calledOnFinish = false;
     const result = streamAgentReply({
       fundedBy: "platform" as const,
@@ -586,7 +585,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
       },
       finishReason: "stop",
     });
-    const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
+    const rows = (mocks.stagedUsage.mock.calls[0] as [unknown[]])[0];
     const row = rows[0] as Record<string, unknown>;
     expect(row.input_tokens).toBe(0);
     expect(row.output_tokens).toBe(0);
@@ -653,9 +652,9 @@ describe("streamAgentReply funding source (ADR-053)", () => {
 
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
     // Reported in full (ADR-052) even though billed at zero.
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Array<Record<string, unknown>>]
+      mocks.stagedUsage.mock.calls[0] as [Array<Record<string, unknown>>]
     )[0];
     expect(rows[0]).toMatchObject({
       input_tokens: 10,
@@ -949,7 +948,7 @@ describe("stream durable lifecycle", () => {
     const options = mocks.streamText.mock.calls[0]![0];
     await options.prepareStep();
     await options.onAbort({ steps: [] });
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
     // The admission would otherwise count as incomplete for ever.
     expect(mocks.voidUsage).toHaveBeenCalledWith({
@@ -977,7 +976,7 @@ describe("stream durable lifecycle", () => {
     expect(mocks.voidUsage).toHaveBeenCalledWith(
       expect.objectContaining({ reason: "provider_error_before_first_step" }),
     );
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(error);
   });
   it("logs what the provider said when it fails before the first step (#4148)", async () => {
