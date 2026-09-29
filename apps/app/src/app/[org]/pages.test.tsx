@@ -918,7 +918,8 @@ async function expectOrganizationRoute<P extends object>(
   expect(metadata.title).toBe(name);
   const container = await renderPage(await page.default(props));
   expect(container.querySelectorAll("h1")).toHaveLength(0);
-  expect(container.querySelector("main#main")).not.toBeNull();
+  // The shell frame holds main#main; the route adds no landmark (ADR-227).
+  expect(container.querySelector("main")).toBeNull();
 }
 
 describe("Organization", () => {
@@ -939,6 +940,30 @@ describe("Organization", () => {
       ctx,
       source,
       tab: "people",
+      slack: null,
+    });
+  });
+
+  it("hands Notifications the Slack outcome the callback named, and none for a value it did not (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "notifications", slack: "connected" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "notifications",
+      slack: "connected",
+    });
+    Organization.mockClear();
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "notifications", slack: "xoxb-token" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "notifications",
+      slack: null,
     });
   });
 

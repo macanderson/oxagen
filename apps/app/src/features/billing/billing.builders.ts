@@ -283,6 +283,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

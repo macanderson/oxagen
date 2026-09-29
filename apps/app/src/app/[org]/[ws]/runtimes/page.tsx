@@ -25,17 +25,12 @@ export default async function RuntimesPage({
   const user = await getAuthUser();
   const viewerName = user === null ? "" : user.name || user.email;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Runtimes
-        ctx={ctx}
-        source={dataSource()}
-        org={org}
-        ws={ws}
-        viewerName={viewerName}
-      />
-    </main>
+    <Runtimes
+      ctx={ctx}
+      source={dataSource()}
+      org={org}
+      ws={ws}
+      viewerName={viewerName}
+    />
   );
 }

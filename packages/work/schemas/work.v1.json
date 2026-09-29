@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/work/v1.json",
+  "title": "Work",
+  "description": "work/work.toml: who triages, which priorities record ranks the work, which model routes draft, and the autonomy level of each scope.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "triage"
+  ],
+  "properties": {
+    "schema": {
+      "const": "work/v1"
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator",
+        "priorities",
+        "models"
+      ],
+      "properties": {
+        "operator": {
+          "$ref": "#/$defs/actor",
+          "description": "The operator the triage agent runs as."
+        },
+        "priorities": {
+          "$ref": "#/$defs/lineage",
+          "description": "The lineage of the priorities steering record."
+        },
+        "models": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Model routes in order. Triage uses the first one that differs from every model route pinned on the workflow's build stages."
+        }
+      }
+    },
+    "autonomy": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/autonomy"
+      },
+      "description": "One entry per scope. A scope not listed is at level 0."
+    }
+  },
+  "$defs": {
+    "actor": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "maxLength": 128,
+      "description": "A person's or an agent's handle in the workspace."
+    },
+    "lineage": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+      "maxLength": 200,
+      "description": "A dotted lineage, such as aintel.core.bug-fixer."
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "level",
+        "operator"
+      ],
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "0 Suggest, 1 Send, 2 Merge proven, 3 Autonomous."
+        },
+        "operator": {
+          "$ref": "#/$defs/actor",
+          "description": "The operator Oxagen acts as in this scope."
+        },
+        "max_daily_usd": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sample_rate": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.1,
+          "description": "The share of merged work items the operator reviews at level 3."
+        }
+      }
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$"
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true,
+              "minItems": 1,
+              "description": "Path globs in the repository."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

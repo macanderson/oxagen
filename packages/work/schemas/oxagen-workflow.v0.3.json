@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/oxagen-workflow/v0.3.json",
+  "title": "Workflow",
+  "description": "work/workflows/<slug>.toml: the stages a work order moves through. v0.3 reads every v0.1 and v0.2 file unchanged. The steering PR check enforces the rules a schema cannot: unique roles, needs without a cycle, return_to upstream, and every stage reachable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "stage"
+  ],
+  "properties": {
+    "schema": {
+      "enum": [
+        "oxagen-workflow/v0.1",
+        "oxagen-workflow/v0.2",
+        "oxagen-workflow/v0.3"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "$ref": "#/$defs/actor",
+      "description": "The operator who owns the workflow. v0.3 only."
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Labels and collectors triage uses to suggest this workflow. v0.3 only.",
+      "properties": {
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "collectors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/slug"
+          }
+        }
+      }
+    },
+    "done": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criteria"
+      ],
+      "description": "Criteria every done record drafted for this workflow starts with. v0.3 only.",
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "stage": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stage"
+      }
+    },
+    "accept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by"
+      ],
+      "properties": {
+        "by": {
+          "enum": [
+            "operator",
+            "proven"
+          ],
+          "description": "operator: a person accepts. proven: Oxagen accepts when the record is proven, at level 2 and above. v0.3 only."
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema": {
+            "const": "oxagen-workflow/v0.3"
+          }
+        },
+        "required": [
+          "schema"
+        ]
+      },
+      "then": {
+        "required": [
+          "owner"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema": {
+            "enum": [
+              "oxagen-workflow/v0.1",
+              "oxagen-workflow/v0.2"
+            ]
+          }
+        },
+        "required": [
+          "schema"
+        ]
+      },
+      "then": {
+        "properties": {
+          "owner": false,
+          "match": false,
+          "done": false,
+          "stage": {
+            "items": {
+              "properties": {
+                "kind": false,
+                "model": false
+              }
+            }
+          },
+          "accept": {
+            "properties": {
+              "by": {
+                "const": "operator"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema": {
+            "const": "oxagen-workflow/v0.1"
+          }
+        },
+        "required": [
+          "schema"
+        ]
+      },
+      "then": {
+        "properties": {
+          "stage": {
+            "items": {
+              "properties": {
+                "needs": false,
+                "return_to": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "stage": {
+            "items": {
+              "properties": {
+                "return_to": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "actor": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "maxLength": 128,
+      "description": "A person's or an agent's handle in the workspace."
+    },
+    "lineage": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+      "maxLength": 200,
+      "description": "A dotted lineage, such as aintel.core.bug-fixer."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "maxLength": 64,
+      "description": "Lowercase words joined by single hyphens."
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "agent"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "build",
+            "test",
+            "verify",
+            "review"
+          ],
+          "description": "A stage without one reads as build. v0.3 only."
+        },
+        "agent": {
+          "$ref": "#/$defs/lineage",
+          "description": "The agent's lineage."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A model route that pins the stage's model. v0.3 only."
+        },
+        "owns": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "code",
+              "test",
+              "docs",
+              "review"
+            ]
+          },
+          "description": "The criterion tags this stage owns."
+        },
+        "needs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The roles that hand off before this stage runs. v0.2 and later."
+        },
+        "on_fail": {
+          "enum": [
+            "stop",
+            "return"
+          ],
+          "default": "stop"
+        },
+        "return_to": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "The stage a failure returns to: a 1-based index in v0.1, a role in v0.2 and later."
+        },
+        "max_returns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        }
+      },
+      "if": {
+        "properties": {
+          "on_fail": {
+            "const": "return"
+          }
+        },
+        "required": [
+          "on_fail"
+        ]
+      },
+      "then": {
+        "required": [
+          "return_to",
+          "max_returns"
+        ]
+      },
+      "else": {
+        "properties": {
+          "return_to": false,
+          "max_returns": false
+        }
+      }
+    }
+  }
+}

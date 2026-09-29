@@ -41,10 +41,23 @@ import {
   healthHostFor,
   healthNotificationTitle,
   type LocatedTarget,
+  notifyAdmins,
   unconnectedHealthHost,
 } from "./health.hosts";
 
-const mocks = vi.hoisted(() => ({ warn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+  calls: [] as string[],
+  notifyOrgManagers: vi.fn(),
+  notifyOrgSlack: vi.fn(),
+}));
+
+// The notice senders have their own tests in @oxagen/notifications. Here they
+// only need to receive the right notice, in the right order.
+vi.mock("@oxagen/notifications", () => ({
+  notifyOrgManagers: mocks.notifyOrgManagers,
+  notifyOrgSlack: mocks.notifyOrgSlack,
+}));
 
 vi.mock("../logger", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../logger")>()),
@@ -971,5 +984,78 @@ describe("healthEmailHtml", () => {
     expect(healthEmailHtml('Rules & "checks"', "Line <one>\nLine two")).toBe(
       "<p><strong>Rules &amp; &quot;checks&quot;</strong></p><p>Line &lt;one&gt;<br>Line two</p>",
     );
+  });
+});
+
+describe("notifyAdmins", () => {
+  const TARGET = located("github", null).target;
+  const ENV = { APP_URL: "https://app.oxagen.sh" };
+
+  function reset(): void {
+    mocks.calls.length = 0;
+    mocks.notifyOrgManagers.mockReset().mockImplementation(async () => {
+      mocks.calls.push("managers");
+    });
+    mocks.notifyOrgSlack.mockReset().mockImplementation(async () => {
+      mocks.calls.push("slack");
+      return { outcome: "posted", channelId: "C1", ts: null };
+    });
+  }
+
+  it("sends the in-app notice and email, then one Slack message with the same text", async () => {
+    reset();
+    await notifyAdmins(TARGET, state("drifted"), REPORT, ENV);
+    const title = healthNotificationTitle(state("drifted"), "acme/steering");
+    expect(mocks.calls).toEqual(["managers", "slack"]);
+    expect(mocks.notifyOrgManagers).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      kind: "security",
+      title,
+      body: REPORT.summary,
+      deepLink: "/acme/main/repositories",
+      emailHtml: healthEmailHtml(title, REPORT.summary),
+    });
+    expect(mocks.notifyOrgSlack).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyOrgSlack).toHaveBeenCalledWith(
+      {
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        kind: "security",
+        title,
+        body: REPORT.summary,
+        deepLink: "/acme/main/repositories",
+      },
+      ENV,
+    );
+  });
+
+  it("leaves out the workspace for the organization's own steering repo", async () => {
+    reset();
+    const target = { ...TARGET, scope: { orgId: "org-1", workspaceId: null } };
+    await notifyAdmins(target, state("disconnected"), REPORT, ENV);
+    expect(mocks.notifyOrgManagers.mock.calls[0]![0]).not.toHaveProperty("workspaceId");
+    expect(mocks.notifyOrgSlack.mock.calls[0]![0]).not.toHaveProperty("workspaceId");
+  });
+
+  it("throws a failed Slack post, so the next health read sends the notice again", async () => {
+    reset();
+    const failure = new Error("Slack chat.postMessage failed: ratelimited");
+    mocks.notifyOrgSlack.mockRejectedValueOnce(failure);
+    await expect(notifyAdmins(TARGET, state("drifted"), REPORT, ENV)).rejects.toBe(failure);
+    expect(mocks.notifyOrgManagers).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not post to Slack when the in-app notice fails", async () => {
+    reset();
+    mocks.notifyOrgManagers.mockRejectedValueOnce(new Error("db down"));
+    await expect(notifyAdmins(TARGET, state("drifted"), REPORT, ENV)).rejects.toThrow("db down");
+    expect(mocks.notifyOrgSlack).not.toHaveBeenCalled();
+  });
+
+  it("reads process.env when no env is passed", async () => {
+    reset();
+    await notifyAdmins(TARGET, state("drifted"), REPORT);
+    expect(mocks.notifyOrgSlack.mock.calls[0]![1]).toBe(process.env);
   });
 });

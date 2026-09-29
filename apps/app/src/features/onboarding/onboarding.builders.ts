@@ -319,6 +319,7 @@ export function onboardingSource(reads: Reads): {
       costCenters: refuse("org.costCenters"),
       modelCredential: refuse("org.modelCredential"),
       dataPlane: refuse("org.dataPlane"),
+      slackConnection: refuse("org.slackConnection"),
       workspaceFacts: refuse("org.workspaceFacts"),
       sso: refuse("org.sso"),
     },

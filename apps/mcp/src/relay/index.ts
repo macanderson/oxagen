@@ -7,13 +7,12 @@
 // would need a shared broker before it could carry relay calls.
 import { schema, withTenantDb } from "@oxagen/database";
 import { postgresRelayTokenVerifier } from "@oxagen/handlers/mcp-studio/relays/verifier";
-import type { Transport } from "@oxagen/mcp-studio";
 import type { RelayScope } from "@oxagen/relay-broker";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { buildRelayBroker, relayStatusLogger } from "./broker";
 import { mountRelayUpgrades } from "./mount";
-import { createRelayTransport, type RelayBrokerState } from "./transport";
+import { createRelayTransport, type RelayBrokerState, type RelayRoute, type RelayTransport } from "./transport";
 
 let state: RelayBrokerState | undefined;
 let mounted = false;
@@ -22,6 +21,14 @@ let mounted = false;
 export function relayBrokerState(): RelayBrokerState {
   state ??= buildRelayBroker(process.env, postgresRelayTokenVerifier, { onStatus: relayStatusLogger(console) });
   return state;
+}
+
+/**
+ * The run names a workspace with no row. The relay Transport logs only an
+ * error's name, so this name tells that case apart from a failed read.
+ */
+class RelayWorkspaceMissingError extends Error {
+  override readonly name = "RelayWorkspaceMissingError";
 }
 
 /** The workspace's public id, which each envelope names and the relay checks. */
@@ -36,13 +43,17 @@ async function readRelayScope(orgId: string, workspaceId: string): Promise<Relay
         .limit(1),
     ),
   );
-  if (row === undefined) throw new Error("The run's workspace does not exist.");
+  if (row === undefined) throw new RelayWorkspaceMissingError("The run's workspace does not exist.");
   return { orgId, workspaceId, workspacePublicId: row.publicId };
 }
 
-/** The Transport for one run's calls on relay:<name> networks. */
-export function relayTransport(run: { orgId: string; workspaceId: string }): Transport {
-  return createRelayTransport(run, { broker: relayBrokerState, scope: readRelayScope });
+/** The Transport for one call on a relay:<name> network. */
+export function relayTransport(route: RelayRoute): RelayTransport {
+  return createRelayTransport(route, {
+    broker: relayBrokerState,
+    scope: readRelayScope,
+    warn: (message, fields) => console.warn(message, fields),
+  });
 }
 
 /**

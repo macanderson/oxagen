@@ -682,22 +682,43 @@ export function healthEmailHtml(title: string, summary: string): string {
   return `<p><strong>${escapeHtml(title)}</strong></p><p>${lines}</p>`;
 }
 
-async function notifyAdmins(
+/**
+ * Tell the organization's Owners and Admins that the steering repo changed
+ * state: an in-app notice and an email to each, then one message in the
+ * Slack channel the organization picked, when it has one. A throw from
+ * either leaves the notified state as it was, so the next health read sends
+ * the notice again.
+ */
+export async function notifyAdmins(
   target: HealthTarget,
   state: HealthState,
   report: HealthReport,
+  env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<void> {
-  const { notifyOrgManagers } = await import("@oxagen/notifications");
+  const { notifyOrgManagers, notifyOrgSlack } = await import("@oxagen/notifications");
   const title = healthNotificationTitle(state, target.repository.full_name);
+  const workspace =
+    target.scope.workspaceId !== null ? { workspaceId: target.scope.workspaceId } : {};
   await notifyOrgManagers({
     orgId: target.scope.orgId,
-    ...(target.scope.workspaceId !== null ? { workspaceId: target.scope.workspaceId } : {}),
+    ...workspace,
     kind: "security",
     title,
     body: report.summary,
     deepLink: target.deepLink,
     emailHtml: healthEmailHtml(title, report.summary),
   });
+  await notifyOrgSlack(
+    {
+      orgId: target.scope.orgId,
+      ...workspace,
+      kind: "security",
+      title,
+      body: report.summary,
+      deepLink: target.deepLink,
+    },
+    env,
+  );
 }
 
 // ── Production dependencies ──────────────────────────────────────────────────
@@ -720,7 +741,7 @@ export function productionHealthDeps(
       const found = located.get(target);
       return found === undefined ? null : healthHostFor(found, env);
     },
-    notify: notifyAdmins,
+    notify: (target, state, report) => notifyAdmins(target, state, report, env),
   };
 }
 

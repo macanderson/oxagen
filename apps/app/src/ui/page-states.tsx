@@ -47,9 +47,8 @@ const OPEN_INCIDENT_GAP = "#3847";
  * `skeleton()`: four tile blocks and a panel of seven rows, each bone the
  * `.sk` shimmer (globals.css `skeleton`). The shape of a page's answer, so
  * nothing moves when the reads land and no zero ever flashes where a figure
- * is coming. The frame carries the padding globals.css gives `main#main`
- * under the shell, because the skeleton stands where that `main` will be
- * rather than inside it.
+ * is coming. It stands inside the shell's `main#main` (ADR-227), which
+ * gives it the page's padding, so nothing jumps when the page takes over.
  */
 export function PageSkeleton({ label }: { label?: string }) {
   const t = useTranslations("ui.pageState");
@@ -58,7 +57,7 @@ export function PageSkeleton({ label }: { label?: string }) {
       role="status"
       aria-busy="true"
       data-testid="page-skeleton"
-      className="flex w-full max-w-[1500px] flex-col gap-4 px-6 pt-[22px] pb-20 max-md:px-4 max-md:pt-4 max-md:pb-[88px]"
+      className="flex w-full flex-col gap-4"
     >
       <span className="sr-only">{label ?? t("loading")}</span>
       <div
@@ -205,7 +204,8 @@ function utcInstant(at: Date): string {
  * line cites it; the code is `internal_error` because the render failed
  * inside Oxagen rather than on a read that answered its own code. The
  * instant is read after mount, because a component may not read a clock
- * during render.
+ * during render. It draws inside the shell's `main#main` (ADR-227) and adds
+ * no landmark of its own.
  */
 export function RouteError({
   error,
@@ -238,23 +238,20 @@ export function RouteError({
     };
   }, []);
   return (
-    // `id="main"` is the skip link's target, as every page's own <main> is.
-    <main id="main" className="mx-auto flex w-full max-w-6xl flex-col">
-      <PageError
-        title={name === null ? t("title") : t("titleNamed", { page: name })}
-        status={500}
-        code="internal_error"
-        trace={{ at: at ?? "", id: error.digest ?? null }}
-        onRetry={() => {
-          // A server render failed, so the retry re-requests the route and
-          // then clears the boundary once the new payload is in.
-          startTransition(() => {
-            navigate.refresh();
-            reset();
-          });
-        }}
-      />
-    </main>
+    <PageError
+      title={name === null ? t("title") : t("titleNamed", { page: name })}
+      status={500}
+      code="internal_error"
+      trace={{ at: at ?? "", id: error.digest ?? null }}
+      onRetry={() => {
+        // A server render failed, so the retry re-requests the route and
+        // then clears the boundary once the new payload is in.
+        startTransition(() => {
+          navigate.refresh();
+          reset();
+        });
+      }}
+    />
   );
 }
 
@@ -364,6 +361,7 @@ export function PageDenied({
  * asked for and the workspace or organization it was looked for in, read from
  * the route params because a not-found boundary receives no props. The one
  * action goes back to Fleet, or to the Organization page above a workspace.
+ * It draws inside the shell's `main#main` (ADR-227) and adds no landmark.
  */
 export function PageNotFound({
   scope,
@@ -384,28 +382,25 @@ export function PageNotFound({
     code: (chunks: ReactNode) => <code className={stateCode}>{chunks}</code>,
   };
   return (
-    // `id="main"` is the skip link's target, as every page's own <main> is.
-    <main id="main" className="mx-auto flex w-full max-w-6xl flex-col">
-      <StateWrap
-        testId="page-not-found"
-        tone="neutral"
-        title={t("title")}
-        actions={
-          inWorkspace ? (
-            <SafeLink to={routes.fleet(org, ws)} className={buttonPrimary}>
-              {t("backFleet")}
-            </SafeLink>
-          ) : (
-            <SafeLink to={routes.people(org)} className={buttonPrimary}>
-              {t("backOrganization")}
-            </SafeLink>
-          )
-        }
-      >
-        {inWorkspace
-          ? t.rich("bodyWorkspace", rich)
-          : t.rich("bodyOrganization", rich)}
-      </StateWrap>
-    </main>
+    <StateWrap
+      testId="page-not-found"
+      tone="neutral"
+      title={t("title")}
+      actions={
+        inWorkspace ? (
+          <SafeLink to={routes.fleet(org, ws)} className={buttonPrimary}>
+            {t("backFleet")}
+          </SafeLink>
+        ) : (
+          <SafeLink to={routes.people(org)} className={buttonPrimary}>
+            {t("backOrganization")}
+          </SafeLink>
+        )
+      }
+    >
+      {inWorkspace
+        ? t.rich("bodyWorkspace", rich)
+        : t.rich("bodyOrganization", rich)}
+    </StateWrap>
   );
 }

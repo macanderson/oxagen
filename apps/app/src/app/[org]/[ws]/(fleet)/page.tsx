@@ -40,19 +40,14 @@ export default async function FleetPage({
     (await cookies()).get(FLEET_PREFS_COOKIE)?.value,
   );
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Fleet
-        ctx={ctx}
-        source={dataSource()}
-        cursor={firstParam(cursor) ?? null}
-        prefs={prefs}
-        pullRequests={pullRequestFilterOf(firstParam(prs))}
-        list={parseListQuery(query)}
-        banners={<OnboardingGate ctx={ctx} source={dataSource()} />}
-      />
-    </main>
+    <Fleet
+      ctx={ctx}
+      source={dataSource()}
+      cursor={firstParam(cursor) ?? null}
+      prefs={prefs}
+      pullRequests={pullRequestFilterOf(firstParam(prs))}
+      list={parseListQuery(query)}
+      banners={<OnboardingGate ctx={ctx} source={dataSource()} />}
+    />
   );
 }
