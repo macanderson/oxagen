@@ -171,19 +171,48 @@ const HAND_TILE =
 /**
  * A colour the kit does not supply: a hex (one with a letter, or all digits
  * where a colour goes, so `"#4665"` stays an issue number), a colour function,
- * or a Tailwind default-palette class. The kit's colours reach a component as
- * a token (`bg-card`, `text-muted-foreground`, `var(--gold)`), never as a value.
+ * a `color-mix()` or `light-dark()` over anything but tokens, or a Tailwind
+ * default-palette class. The kit's colours reach a component as a token
+ * (`bg-card`, `text-muted-foreground`, `var(--gold)`), never as a value. A mix
+ * of tokens only (`color-mix(in oklab, var(--border) 60%, transparent)`)
+ * invents no colour, so it passes.
  */
 const RAW_COLOUR = new RegExp(
   [
     /(?<![\w&/#])#(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{3,8}(?![\w-])/,
     /(?:[:=]\s*["'`]?|\[)#(?:\d{8}|\d{6}|\d{3})(?![\w-])/,
-    /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(|\bcolor\(\s*(?:srgb|display-p3)/,
+    // Four digits is also an issue number, so it counts only in a colour
+    // property or a `[…]` class: `color: "#0000"`, `bg-[#0000]`.
+    /(?:\[|(?:[cC]olou?r|background|fill|stroke|border|outline|shadow)[\w-]*["']?\s*[:=][^;{},]*?)#\d{4}(?![\w-])/,
+    /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|device-cmyk)\(/,
+    /\bcolor\(\s*(?:from|srgb|xyz|display-p3|a98-rgb|prophoto-rgb|rec20[12]0|--)/,
+    /\b(?:color-mix|light-dark)\((?!(?:\s*(?:in\s+[\w-]+(?:\s+(?:shorter|longer|increasing|decreasing)\s+hue)?|var\(--[\w-]+\)|transparent|[cC]urrent[cC]olor|[\d.]+%|,))*\s*\))/,
     /\b(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/,
     /\b(?:bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(?:white|black)\b/,
   ]
     .map((part) => part.source)
     .join("|"),
+);
+
+/**
+ * How a CSS `font` shorthand value begins: a size, a style, variant, weight,
+ * or stretch keyword, a system font, `var(`, or `calc(`. An object key such as
+ * `font: avatar.font` or `font: "sans"` begins with none of these.
+ */
+const SHORTHAND_START =
+  /(?:\.?\d[\d.]*(?:[a-zA-Z%]|\s*\/|\s+\S)|(?:italic|oblique|normal|bold|bolder|lighter|small-caps|(?:ultra-|extra-|semi-)?(?:condensed|expanded)|xx?-small|small|medium|large|x{1,3}-large|larger|smaller|caption|icon|menu|message-box|small-caption|status-bar)(?![\w-])|(?:var|calc)\()/;
+
+/**
+ * A `font` shorthand, in CSS or a style object, that does not end in one
+ * `var(--…)` token. `font: 15px Arial`, `font: 15px "Comic Sans MS"`, and
+ * `font: var(--size) Arial` each name a family the kit does not supply.
+ */
+const FONT_SHORTHAND = new RegExp(
+  [
+    /\bfont\s*:\s*["'`]?/.source,
+    `(?=${SHORTHAND_START.source})`,
+    /(?![^;{}"'`]*var\(--[\w-]+\)\s*(?:["'`]|[;}]|$))/.source,
+  ].join(""),
 );
 
 /**
@@ -196,7 +225,7 @@ const RAW_FONT = new RegExp(
   [
     /font-family\s*:(?!\s*(?:var\(--|inherit\b))/,
     /fontFamily\s*:(?!\s*["'`]?var\(--)/,
-    /\bfont\s*:\s*[^;{}"]*?(?:serif|monospace|system-ui|-apple-system)/,
+    FONT_SHORTHAND,
     /\bfont-serif\b|\bfont-\[(?!\d|var\(|family-name:var\()/,
     /from\s+["']next\/font|@font-face/,
   ]
@@ -390,10 +419,17 @@ describe("design record: no page draws around the recipes", () => {
       `${RULE} ${raw}:4 raw-colour`,
       `${RULE} ${raw}:5 raw-colour`,
       `${RULE} ${raw}:6 raw-colour`,
+      `${RULE} ${raw}:7 raw-colour`,
+      `${RULE} ${raw}:8 raw-colour`,
+      `${RULE} ${raw}:9 raw-colour`,
+      `${RULE} ${raw}:10 raw-colour`,
     ]);
     expect(hits([raw], RAW_FONT, "raw-font", scan)).toEqual([
-      `${RULE} ${raw}:7 raw-font`,
-      `${RULE} ${raw}:8 raw-font`,
+      `${RULE} ${raw}:11 raw-font`,
+      `${RULE} ${raw}:12 raw-font`,
+      `${RULE} ${raw}:13 raw-font`,
+      `${RULE} ${raw}:14 raw-font`,
+      `${RULE} ${raw}:15 raw-font`,
     ]);
     expect(hits([clean], RAW_COLOUR, "raw-colour", scan)).toEqual([]);
     expect(hits([clean], RAW_FONT, "raw-font", scan)).toEqual([]);

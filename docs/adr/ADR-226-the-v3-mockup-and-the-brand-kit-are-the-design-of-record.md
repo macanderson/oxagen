@@ -136,11 +136,13 @@ knip keeps its empty baseline (INV-16).
 rules above. It also fails when a file under `apps/app/src` writes a colour or
 a font family the kit does not supply:
 
-- a raw hex, `rgb()`, `hsl()`, `oklch()`, or other colour function;
+- a raw hex, `rgb()`, `hsl()`, `oklch()`, `color()`, or other colour function;
+- a `color-mix()` or `light-dark()` that mixes anything but `var(--…)` tokens,
+  `transparent`, and `currentColor`;
 - a Tailwind default-palette class such as `bg-blue-500` or `text-white`;
-- a `font-family`, `fontFamily`, or `font` shorthand not drawn from a
-  `var(--…)` token, a `font-serif` or `font-[…]` family class, `next/font`, or
-  `@font-face`.
+- a `font-family` or `fontFamily` not drawn from a `var(--…)` token, a `font`
+  shorthand that does not end in one `var(--…)` token, a `font-serif` or
+  `font-[…]` family class, `next/font`, or `@font-face`.
 
 The token map files (`apps/app/src/app/globals.css` and
 `apps/app/src/ui/control-styles.ts`) are exempt. A short allowlist in the test
