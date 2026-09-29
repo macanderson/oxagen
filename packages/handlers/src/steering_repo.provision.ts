@@ -5,7 +5,7 @@
 // creating an organization creates `<org>/oxagen`. The durable job
 // `steering-repo/provision` runs the steps below one at a time:
 //
-//   1. pick_connection      The organization's Oxagen Steering installation or
+//   1. pick_connection      The organization's Oxagen GitHub App installation or
 //                           GitLab group. Oxagen asks only when there is more
 //                           than one.
 //   2. create_repository    `oxagen-<slug>`, then `-2`, `-3` and so on.
@@ -192,7 +192,7 @@ export interface ProvisionTarget {
   workspace: { slug: string; name: string } | null;
 }
 
-/** The Oxagen Steering app's clients for one organization. */
+/** The Oxagen GitHub App's clients for one organization. */
 export interface GithubSteeringClients {
   app: gh.SteeringApp;
   /** A client holding a fresh installation token. */
@@ -222,7 +222,7 @@ export interface ProvisionDeps {
     scope: SteeringRepoScope,
     connection: SteeringConnection,
   ): Promise<void>;
-  /** Null when the Oxagen Steering app is not configured. */
+  /** Null when the Oxagen GitHub App is not configured. */
   github(scope: SteeringRepoScope): GithubSteeringClients | null;
   gitlab(scope: SteeringRepoScope): GitlabSteeringClients;
   /** Bind the repository to the workspace with role steering. */
@@ -421,7 +421,7 @@ async function pickConnection(ctx: StepContext): Promise<void> {
   if (only === undefined)
     throw new SteeringProvisionBlockedError(
       "no_connection",
-      "This organization has no GitHub organization with Oxagen Steering installed and no GitLab group token. Connect one, then retry.",
+      "This organization has no GitHub organization with the Oxagen GitHub App installed and no GitLab group token. Connect one, then retry.",
     );
   await ctx.deps.saveConnection(ctx.scope, only);
   ctx.connection = only;
@@ -519,7 +519,7 @@ async function addToInstallation(ctx: StepContext): Promise<void> {
   if (user === null)
     throw new SteeringProvisionBlockedError(
       REAUTHORIZE,
-      "No organization owner has authorized Oxagen Steering. An owner must authorize it.",
+      "No organization owner has authorized the Oxagen GitHub App for steering. An owner must authorize it.",
     );
   const installation = (await gh.listSteeringInstallations(user)).find(
     (i) => i.id === connection.installation_id,
@@ -527,7 +527,7 @@ async function addToInstallation(ctx: StepContext): Promise<void> {
   if (installation === undefined)
     throw new SteeringProvisionBlockedError(
       REAUTHORIZE,
-      `The stored Oxagen Steering authorization cannot reach the installation on ${connection.account_login}. An owner must authorize it again.`,
+      `The stored steering authorization cannot reach the Oxagen GitHub App installation on ${connection.account_login}. An owner must authorize it again.`,
     );
   // An installation on every repository already holds the new one.
   if (installation.repository_selection === "all") return;
@@ -848,7 +848,7 @@ function bagValue(settings: unknown, key: string): unknown {
   return (settings as Record<string, unknown>)[key] ?? null;
 }
 
-/** Mint an installation token for the Oxagen Steering app. */
+/** Mint an installation token for the Oxagen GitHub App. */
 export async function steeringInstallationRest(
   config: { app: gh.SteeringApp; privateKey: string },
   installationId: number,
@@ -1025,6 +1025,77 @@ export async function keepSteeringConnection(
       .returning({ id: schema.organizations.id }),
   );
   return rows.length > 0;
+}
+
+/**
+ * Point the organization's GitHub steering connection, and every steering
+ * source connection bound from it, at `connection` when the stored connection
+ * names a different installation on the same GitHub account.
+ *
+ * A GitHub App has one installation per account, and the caller checked that
+ * the owner's own token reaches `connection`. So a different stored id on the
+ * same account belongs to the retired Oxagen Steering app or to an
+ * installation the owner removed, and no token the deployment mints can use it
+ * (ADR-228). The connection never moves to another account or host, as
+ * `keepSteeringConnection` says. Returns the installation id it replaced, or
+ * null when it changed nothing.
+ */
+export async function moveSteeringInstallation(
+  orgId: string,
+  connection: Extract<SteeringConnection, { provider: "github" }>,
+  actorUserId: string,
+): Promise<number | null> {
+  // tenancy: filtered by orgId, which the caller took from a signed state. The
+  // caller checked that the owner's own token reaches the connection.
+  return withSystemDb(async (tx) => {
+    const [org] = await tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1);
+    const stored = readSteeringConnection(org?.settings);
+    if (
+      stored?.provider !== "github" ||
+      stored.installation_id === connection.installation_id ||
+      stored.account_login.toLowerCase() !==
+        connection.account_login.toLowerCase()
+    )
+      return null;
+    const from = stored.installation_id;
+    // The where clause repeats the id it read, so a connect that races this
+    // one and already moved the setting leaves it alone.
+    const moved = await tx
+      .update(schema.organizations)
+      .set({
+        settings: mergeSettings(schema.organizations.settings, {
+          [STEERING_CONNECTION_SETTING]: connection,
+        }),
+      })
+      .where(
+        and(
+          eq(schema.organizations.id, orgId),
+          sql`(${schema.organizations.settings} -> ${STEERING_CONNECTION_SETTING}::text ->> 'installation_id') = ${String(from)}`,
+        ),
+      )
+      .returning({ id: schema.organizations.id });
+    if (moved.length === 0) return null;
+    await tx
+      .update(schema.sourceConnections)
+      .set({
+        deliveryConfig: sql`jsonb_set(${schema.sourceConnections.deliveryConfig}, '{installationId}', ${JSON.stringify(connection.installation_id)}::jsonb)`,
+        updatedAt: new Date(),
+        updatedById: actorUserId,
+      })
+      .where(
+        and(
+          eq(schema.sourceConnections.orgId, orgId),
+          eq(schema.sourceConnections.connectorId, GITHUB_STEERING_PROVIDER),
+          isNull(schema.sourceConnections.deletedAt),
+          sql`(${schema.sourceConnections.deliveryConfig} ->> 'installationId') = ${String(from)}`,
+        ),
+      );
+    return from;
+  });
 }
 
 /** The email body. The in-app notification carries the link. */
@@ -1306,11 +1377,11 @@ export function steeringRepoProvisionDeps(options: {
       const slug = loadedSlugs.get(scope.orgId) ?? "";
       const title =
         provider === "github"
-          ? "Authorize Oxagen Steering again"
+          ? "Authorize the Oxagen GitHub App again"
           : "Connect your GitLab group again";
       const body =
         provider === "github"
-          ? "Oxagen could not finish setting up a steering repo because the Oxagen Steering authorization is missing or GitHub refused it. An organization owner must authorize Oxagen Steering again."
+          ? "Oxagen could not finish setting up a steering repo because its GitHub authorization is missing or GitHub refused it. An organization owner must authorize the Oxagen GitHub App again."
           : "Oxagen could not finish setting up a steering repo because the GitLab group token is missing or GitLab refused it. An organization owner must connect the group again.";
       const deepLink = `/${slug}`;
       await notifyOrgManagers({

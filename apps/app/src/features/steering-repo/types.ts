@@ -22,7 +22,7 @@ export type SteeringRepoStep = (typeof STEERING_REPO_STEPS)[number];
 
 type SteeringRepoStatus = "provisioning" | "ready" | "failed" | "blocked";
 
-/** The error code of a step that needs an owner to authorize Oxagen Steering again. */
+/** The error code of a step that needs an owner to authorize Oxagen again. */
 export const STEERING_REAUTHORIZE = "steering_reauthorize";
 
 /**
