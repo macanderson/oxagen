@@ -6952,6 +6952,38 @@
       }
     },
     {
+      "name": "create_relay",
+      "file": "tool.relay.create.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "revoke_relay",
+      "file": "tool.relay.revoke.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "set_tool_state",
       "file": "tool.state.set.ts",
       "domain": "tool",

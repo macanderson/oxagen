@@ -535,12 +535,14 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## tool
 
+- create_relay
 - get_studio_draft
 - import_tools
 - list_tool_declarations
 - list_tool_versions
 - open_studio_review
 - publish_tool_declaration
+- revoke_relay
 - save_studio_draft
 - set_tool_classification
 - set_tool_state

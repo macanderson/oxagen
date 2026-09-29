@@ -168,6 +168,10 @@ const ROLE_CHECKED_CONTRACTS = [
   "list_slack_channels",
   "set_slack_channel",
   "delete_slack_connection",
+  // M12 (#4685): a relay token lets a process in your network carry the
+  // workspace's calls, so only an org Owner or Admin mints or revokes one.
+  "create_relay",
+  "revoke_relay",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

@@ -26,6 +26,7 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/policy": "workspace:*",
+    "@oxagen/relay-broker": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
@@ -37,6 +38,7 @@
     "pdf-lib": "1.17.1",
     "postgres": "3.4.9",
     "stripe": "17.7.0",
+    "ws": "8.21.3",
     "xmcp": "0.6.13",
     "zod": "3.25.76"
   },
