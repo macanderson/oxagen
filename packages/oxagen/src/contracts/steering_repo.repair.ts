@@ -11,8 +11,8 @@ import { REPO_HEALTH_STATES } from "../steering-repo/health";
  * that puts main back. It then reads the health again and answers what that
  * read finds. It refuses a repo Oxagen can no longer reach (conflict
  * `steering_repo_disconnected`), a workspace with no steering repo yet
- * (not_found `steering_repo_not_ready`), a deployment with no Oxagen Steering
- * app settings (conflict `steering_app_unconfigured`), and a revert the host
+ * (not_found `steering_repo_not_ready`), a deployment with no Oxagen GitHub App
+ * settings (conflict `steering_app_unconfigured`), and a revert the host
  * will not merge (conflict `steering_revert_refused`).
  *
  * Org Owners and Admins only. The handler checks the role itself (INV-29).

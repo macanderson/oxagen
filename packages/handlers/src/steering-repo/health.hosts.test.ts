@@ -184,7 +184,7 @@ describe("githubHealthHost.observe", () => {
 
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "The repository acme/steering was deleted, or Oxagen Steering can no longer see it.",
+      reason: "The repository acme/steering was deleted, or the Oxagen GitHub App can no longer see it.",
     });
   });
 
@@ -198,7 +198,7 @@ describe("githubHealthHost.observe", () => {
 
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "GitHub refused to show Oxagen Steering the settings of acme/steering.",
+      reason: "GitHub refused to show the Oxagen GitHub App the settings of acme/steering.",
     });
   });
 
@@ -241,7 +241,7 @@ describe("githubHealthHost.observe", () => {
     );
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "Oxagen Steering is no longer installed on acme.",
+      reason: "The Oxagen GitHub App is no longer installed on acme.",
     });
   });
 
@@ -251,7 +251,7 @@ describe("githubHealthHost.observe", () => {
     );
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "The Oxagen Steering installation on acme is suspended.",
+      reason: "The Oxagen GitHub App installation on acme is suspended.",
     });
   });
 
@@ -834,9 +834,9 @@ describe("unconnectedHealthHost", () => {
 // ── Host for a target ────────────────────────────────────────────────────────
 
 const APP_ENV = {
-  OXAGEN_STEERING_APP_ID: "4242",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "private-key",
-  OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+  GITHUB_APP_ID: "4242",
+  GITHUB_APP_PRIVATE_KEY: "private-key",
+  GITHUB_APP_SLUG: "oxagen-steering",
 };
 const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
@@ -883,11 +883,11 @@ describe("healthHostFor", () => {
     });
   });
 
-  it("returns null and logs when the deployment has no Oxagen Steering app", () => {
+  it("returns null and logs when the deployment has no Oxagen GitHub App", () => {
     expect(healthHostFor(located("github", GITHUB_CONNECTION), {})).toBeNull();
     expect(mocks.warn).toHaveBeenCalledWith(
       { orgId: "org-1", workspaceId: "ws-1" },
-      expect.stringContaining("the Oxagen Steering app is not configured"),
+      expect.stringContaining("the Oxagen GitHub App is not configured"),
     );
   });
 

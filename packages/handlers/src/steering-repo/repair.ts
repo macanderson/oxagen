@@ -103,7 +103,7 @@ export interface RepairDeps {
   now(): Date;
   locate(scope: HealthScope): Promise<LocatedTarget | null>;
   loadRow(scope: HealthScope): Promise<HealthRow | null>;
-  /** The host, or null when this deployment has no Oxagen Steering app settings. */
+  /** The host, or null when this deployment has no Oxagen GitHub App settings. */
   host(located: LocatedTarget): Promise<RepairHost | null>;
   /** Read the health again and act on it (`refreshRepoHealth`). */
   refresh(scope: HealthScope, trigger: HealthTrigger): Promise<HealthOutcome | null>;

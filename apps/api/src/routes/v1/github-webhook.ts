@@ -11,32 +11,34 @@
  * secret belonging to the App that SENT the delivery, using the
  * `x-hub-signature-256` header. There is no HTTP auth on this route.
  *
- * Two Apps deliver here. `oxagen-code-agent` signs with
- * `GITHUB_APP_WEBHOOK_SECRET`; a second App, `oxagen-sh`, signs with
- * `GITHUB_WEBHOOK_SECRET` — confirmed by HMAC-verifying a captured delivery
- * (#1200), which is why that parameter existed in Parameter Store while no
- * code read it. Every one of its deliveries was rejected 401.
+ * Two Apps deliver here. The Oxagen GitHub App (`oxagen-connect` in
+ * production, `GITHUB_APP_ID`) signs with `GITHUB_APP_WEBHOOK_SECRET`. A
+ * second App, `oxagen-sh`, signs with `GITHUB_WEBHOOK_SECRET`, confirmed by
+ * HMAC-verifying a captured delivery (#1200), which is why that parameter
+ * existed in Parameter Store while no code read it. Every one of its
+ * deliveries was rejected 401.
  *
  * The sender is identified by `x-github-hook-installation-target-id`, and each
- * App is verified against its OWN secret — not against whichever one happens to
+ * App is verified against its OWN secret, not against whichever one happens to
  * match, which would let either secret authorise a payload claiming to be from
  * the other.
  *
- * A third App, the Oxagen Steering app (`OXAGEN_STEERING_APP_ID`), signs with
- * `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Its deliveries ask for a steering repo
- * health read (S2, #4560) and nothing else: they never reach the installation
- * lifecycle, the steering sync, or ingestion below. With its secret unset, a
- * delivery from it is acked with 200 and logged, and asks for no health read.
- * It is never verified against another App's secret.
+ * Steering repos run on the Oxagen GitHub App too (ADR-228), so a delivery
+ * from it that can change a steering repo's health asks for a health read
+ * (S2, #4560) before anything else reads it.
  *
  * Flow:
  *   1. Verify the signature against GITHUB_APP_WEBHOOK_SECRET.
- *   2. `ping` → ack. `installation` / `installation_repositories` → reconcile
+ *   2. `ping` → ack.
+ *   2a. A delivery that can change a steering repo's health asks for one
+ *      health read per scope that holds the repo. A failure never fails the
+ *      delivery: the 10-minute sweep reads every steering repo anyway.
+ *   2b. `installation` / `installation_repositories` → reconcile
  *      (pause connections on uninstall/suspend), ack.
- *   2b. `push` / `pull_request` → ask every workspace whose main repository
+ *   2c. `push` / `pull_request` → ask every workspace whose main repository
  *      this is, on the branch the delivery touched, for a steering sync
  *      (ADR-184). The sync reads the branch itself.
- *   2c. `pull_request` → store the state the delivery reports on every run
+ *   2d. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
  *      installation (ADR-192).
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
@@ -45,7 +47,7 @@
  *      6-step pipeline then maps/dedups/embeds exactly as the initial sync does.
  */
 
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -146,63 +148,32 @@ async function pauseGithubConnections(installationId: string): Promise<void> {
 }
 
 /**
- * A delivery from the Oxagen Steering app (S2, #4560). The branch fails
- * closed: it verifies the signature with the steering secret alone, and
- * acks the delivery without reading it when that secret is unset. A
- * verified delivery that can change a steering repo's health asks for one
- * health read per scope that holds the repo. A failure to ask is logged and acked, because the
- * 10-minute sweep reads every steering repo anyway, and GitHub retries any
- * non-2xx without end.
+ * Ask for a steering repo health read when a delivery can change one (S2,
+ * #4560). It logs a failure and never throws, because the 10-minute sweep
+ * reads every steering repo anyway, and GitHub retries any non-2xx without
+ * end.
  */
-async function handleSteeringAppDelivery(
-  c: Context<AppEnv>,
-  secret: string | undefined,
-  targetId: string,
-): Promise<Response> {
-  if (!secret) {
-    logger.error(
-      { reason: "steering_app_webhook_secret_missing", targetId },
-      "GitHub webhook from the Oxagen Steering app, but OXAGEN_STEERING_APP_WEBHOOK_SECRET is not set. " +
-        "Acking with 200 to stop retries. Set OXAGEN_STEERING_APP_WEBHOOK_SECRET to process its events.",
-    );
-    return c.json({ received: true, dispatched: 0 }, 200);
-  }
-
-  const payload = new Uint8Array(await c.req.arrayBuffer());
-  if (!verifySignature(payload, c.req.header("x-hub-signature-256"), secret))
-    return c.json({ error: "Webhook signature invalid" }, 401);
-
-  let body: unknown;
-  try {
-    body = JSON.parse(Buffer.from(payload).toString("utf8"));
-  } catch {
-    return c.json({ error: "Invalid JSON payload" }, 400);
-  }
-
-  const eventName = c.req.header("x-github-event") ?? "";
-  if (eventName === "ping") return c.json({ received: true, pong: true }, 200);
-  if (typeof body !== "object" || body === null || Array.isArray(body))
-    return c.json({ received: true, dispatched: 0 }, 200);
-
-  const signal = githubHealthSignal(eventName, body as Record<string, unknown>);
-  if (signal === null) return c.json({ received: true, dispatched: 0 }, 200);
-
+async function requestSteeringHealthRead(
+  eventName: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return;
+  const signal = githubHealthSignal(eventName, body);
+  if (signal === null) return;
   try {
     const scopes = await findHealthScopes(signal);
-    if (scopes.length > 0)
-      await eventClient.send(
-        healthRequests(scopes, signal.trigger).map((r) => ({
-          name: r.name,
-          data: { ...r.data },
-        })),
-      );
-    return c.json({ received: true, dispatched: scopes.length }, 200);
+    if (scopes.length === 0) return;
+    await eventClient.send(
+      healthRequests(scopes, signal.trigger).map((r) => ({
+        name: r.name,
+        data: { ...r.data },
+      })),
+    );
   } catch (err) {
     logger.error(
       { err, event: eventName, reason: signal.trigger.reason },
-      "GitHub webhook from the Oxagen Steering app: could not request a steering repo health check, so the 10-minute sweep will run it",
+      "GitHub App webhook: could not request a steering repo health check, so the 10-minute sweep will run it",
     );
-    return c.json({ received: true, dispatched: 0 }, 200);
   }
 }
 
@@ -211,14 +182,10 @@ githubAppWebhookRoute.post("/", async (c) => {
     GITHUB_APP_WEBHOOK_SECRET: appSecret,
     GITHUB_WEBHOOK_SECRET: secondAppSecret,
     GITHUB_APP_ID: appId,
-    OXAGEN_STEERING_APP_ID: steeringAppId,
-    OXAGEN_STEERING_APP_WEBHOOK_SECRET: steeringSecret,
   } = requireEnv([
     "GITHUB_APP_WEBHOOK_SECRET",
     "GITHUB_WEBHOOK_SECRET",
     "GITHUB_APP_ID",
-    "OXAGEN_STEERING_APP_ID",
-    "OXAGEN_STEERING_APP_WEBHOOK_SECRET",
   ] as const);
 
   // Pick the secret by SENDER. A delivery from the primary App is verified
@@ -233,10 +200,6 @@ githubAppWebhookRoute.post("/", async (c) => {
   // signature verification (401) or, with no second secret configured either,
   // were acked and dropped (200).
   const targetId = c.req.header("x-github-hook-installation-target-id");
-  // The Oxagen Steering app is told apart before the other two, so its
-  // deliveries are verified with its own secret and nothing else.
-  if (targetId && steeringAppId && targetId === steeringAppId)
-    return handleSteeringAppDelivery(c, steeringSecret, targetId);
   const fromPrimaryApp = !targetId || !appId || targetId === appId;
   const secret = fromPrimaryApp ? appSecret : secondAppSecret;
 
@@ -303,6 +266,13 @@ githubAppWebhookRoute.post("/", async (c) => {
   if (eventName === "ping") {
     return c.json({ received: true, pong: true }, 200);
   }
+
+  // ── Steering: the repo health read (S2, #4560) ──────────────────────────
+  // Steering repos run on the Oxagen GitHub App (ADR-228). This runs before
+  // the installation lifecycle below, which answers early, because an
+  // uninstall or a repository removed from an installation changes a
+  // steering repo's health too.
+  if (fromPrimaryApp) await requestSteeringHealthRead(eventName, body);
 
   const installation = body["installation"] as
     | { id?: number | string }
