@@ -1,19 +1,21 @@
-// A route's loading fallback never renders a main landmark. Next renders
-// `loading.tsx` as the route segment's Suspense fallback, and while the page
-// streams in, the fallback and the page are in the document together. If both
-// render `<main id="main">`, the skip link has two targets and page-load's
-// strict `main#main` locator fails whenever it looks during the swap. Billing's
-// fallback did that on 2026-09-24, and passed or failed depending on timing.
-// A `<main>` with no `id` still gives the document two main landmarks, which
-// Spend, Runtimes and Fleet did until #4053. The fallback renders a busy
-// region. The page owns `main`.
+// The organization shell renders the page's one main landmark, and nothing
+// under it renders another (ADR-227). Next renders a segment's `loading.tsx`
+// as its Suspense fallback, and while the page streams in, the fallback and
+// the page are in the document together. When each rendered its own
+// `<main id="main">`, the skip link had two targets and page-load's strict
+// `main#main` locator failed whenever it looked during the swap: Billing on
+// 2026-09-24, then Fleet, Spend and Runtimes until #4053. A `main` inside the
+// page alone is missing while the fallback shows, so the shell frame owns it,
+// above the organization layout's <Suspense>, from the first byte on.
 //
+// The tree check reads JSX, not text, so a comment that names `<main>` passes
+// and an `id="main"` on any element fails: the skip link targets the id.
 // Most `loading.tsx` files re-export a lane's component
-// (`export { FleetLoading as default } from "@/features/fleet"`), so the test
-// follows that re-export through the lane's barrel, including `export *`, to
-// the declaration and checks the component's own source, not only the one-line
-// route file. A re-export it cannot follow fails the test rather than passing
-// on the route file's text alone.
+// (`export { FleetLoading as default } from "@/features/fleet"`), so the
+// fallback check follows that re-export through the lane's barrel, including
+// `export *`, to the declaration and checks the component's own source, not
+// only the one-line route file. A re-export it cannot follow fails the test
+// rather than passing on the route file's text alone.
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -23,11 +25,73 @@ import {
   productionFiles,
   readSource,
   resolveInternal,
+  type SourceText,
   WHOLE_TREE_TIMEOUT_MS,
 } from "./parse";
 
-/** A `<main>` element or an explicit `role="main"`, with or without an `id`. */
-const MAIN_LANDMARK = /<main\b|\brole=["{]\s*["']?main["']/;
+/** The shell frame, which renders the one `main#main` every page sits in. */
+const SHELL_FRAME = "src/features/shell/shell-frame.tsx";
+
+/**
+ * Every module allowed to render a main landmark. Each one draws a whole
+ * document or a frame outside the organization shell, so no two of them are
+ * ever in one document.
+ */
+const LANDMARK_OWNERS = [
+  // The root layout's error page, which replaces the whole document.
+  "src/app/global-error.tsx",
+  // The 404 for an address no route answers, above every organization.
+  "src/app/not-found.tsx",
+  // The onboarding gate (/new-organization and /welcome/**), outside the shell.
+  "src/features/onboarding/ui/gate-shell.tsx",
+  // The organization shell, around every organization and workspace page.
+  SHELL_FRAME,
+  // The sign-in, sign-up and CLI hand-off pages, outside every organization.
+  "src/ui/auth-shell.tsx",
+];
+
+/** Whether a JSX attribute is `role="main"` or `id="main"`. */
+function claimsMain(attribute: ts.JsxAttributeLike): boolean {
+  if (!ts.isJsxAttribute(attribute) || !ts.isIdentifier(attribute.name)) {
+    return false;
+  }
+  if (attribute.name.text !== "role" && attribute.name.text !== "id") {
+    return false;
+  }
+  const value = attribute.initializer;
+  if (value === undefined) return false;
+  if (ts.isStringLiteral(value)) return value.text === "main";
+  return (
+    ts.isJsxExpression(value) &&
+    value.expression !== undefined &&
+    ts.isStringLiteralLike(value.expression) &&
+    value.expression.text === "main"
+  );
+}
+
+/**
+ * The 1-based lines where a module's JSX renders a main landmark: a `<main>`,
+ * a `role="main"`, or an `id="main"`, the skip link's target.
+ */
+function mainLandmarks(source: SourceText): number[] {
+  const sf = parse(source);
+  const lines: number[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName;
+      if (
+        (ts.isIdentifier(tag) && tag.text === "main") ||
+        node.attributes.properties.some(claimsMain)
+      ) {
+        const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+        lines.push(line + 1);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return lines;
+}
 
 /**
  * Reads a `src/`-relative source file, or returns null when it does not
@@ -162,17 +226,35 @@ function memoryTree(files: Record<string, string>): ReadFile {
   return (file) => files[file] ?? null;
 }
 
-describe("loading fallbacks", () => {
+describe("the main landmark", () => {
+  it("is rendered once, by the shell frame", () => {
+    const frame = readSource(SHELL_FRAME);
+    expect(mainLandmarks(frame)).toHaveLength(1);
+    expect(frame.text).toContain('<main id="main"');
+  });
+
   it(
-    "never render a main landmark, which the streamed page owns",
+    "is rendered by no other module under the shell",
+    () => {
+      const owners = productionFiles()
+        .filter((file) => file.endsWith(".tsx"))
+        .filter((file) => mainLandmarks(readSource(file)).length > 0);
+      expect(owners).toEqual([...LANDMARK_OWNERS].sort());
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+
+  it(
+    "is never rendered by a route's loading fallback",
     () => {
       const fallbacks = productionFiles().filter(
         (file) => path.basename(file) === "loading.tsx",
       );
       // An empty list would pass for the wrong reason.
       expect(fallbacks.length).toBeGreaterThan(0);
-      const offenders = fallbacks.filter((file) =>
-        MAIN_LANDMARK.test(fallbackSource(file)),
+      const offenders = fallbacks.filter(
+        (file) =>
+          mainLandmarks({ file, text: fallbackSource(file) }).length > 0,
       );
       expect(offenders).toEqual([]);
     },
@@ -196,9 +278,11 @@ describe("loading fallbacks", () => {
     });
     const source = fallbackSource(route, read);
     expect(source).toContain("export function LaneLoading()");
-    expect(MAIN_LANDMARK.test(source)).toBe(true);
+    expect(mainLandmarks({ file: route, text: source })).toHaveLength(1);
     // The route file alone reads clean, which is what the guard missed.
-    expect(MAIN_LANDMARK.test(read(route) ?? "")).toBe(false);
+    expect(mainLandmarks({ file: route, text: read(route) ?? "" })).toEqual(
+      [],
+    );
   });
 
   it("fails loudly on a re-export it cannot follow", () => {
@@ -210,13 +294,22 @@ describe("loading fallbacks", () => {
     expect(() => fallbackSource(route, read)).toThrow(/could not be found/);
   });
 
-  it("catches a fallback that renders main, with or without an id", () => {
+  it("counts a main element, role main and id main, and nothing else", () => {
+    const lines = (text: string) =>
+      mainLandmarks({ file: "src/features/lane/x.tsx", text });
     expect(
-      MAIN_LANDMARK.test('<main\n      id="main"\n      className="x">'),
-    ).toBe(true);
-    expect(MAIN_LANDMARK.test('<main\n      aria-busy="true"')).toBe(true);
-    expect(MAIN_LANDMARK.test('<section role="main">')).toBe(true);
-    expect(MAIN_LANDMARK.test('<div aria-busy="true">')).toBe(false);
-    expect(MAIN_LANDMARK.test("<mainline />")).toBe(false);
+      lines('const a = <main\n  id="main"\n  className="x">b</main>;'),
+    ).toEqual([1]);
+    expect(lines('const a = <main aria-busy="true" />;')).toEqual([1]);
+    expect(lines('const a = <section role="main" />;')).toEqual([1]);
+    expect(lines('const a = <section role={"main"} />;')).toEqual([1]);
+    expect(lines('const a = <div id="main" />;')).toEqual([1]);
+    expect(lines('const a = <div aria-busy="true" />;')).toEqual([]);
+    expect(lines("const a = <mainline />;")).toEqual([]);
+    expect(lines('const a = <a href="#main">Skip</a>;')).toEqual([]);
+    // A comment or a string that names the element renders nothing.
+    expect(
+      lines('// the shell owns <main id="main">\nconst a = "<main>";'),
+    ).toEqual([]);
   });
 });

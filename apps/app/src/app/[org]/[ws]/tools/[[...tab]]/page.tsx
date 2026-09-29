@@ -48,14 +48,9 @@ export default async function ToolsPage({
   if (studio !== undefined) {
     const ctx = await requireViewer(org, ws);
     return (
-      <main
-        id="main"
-        className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-      >
-        <Suspense fallback={<StudioLoading />}>
-          <StudioServer ctx={ctx} source={dataSource()} route={studio} />
-        </Suspense>
-      </main>
+      <Suspense fallback={<StudioLoading />}>
+        <StudioServer ctx={ctx} source={dataSource()} route={studio} />
+      </Suspense>
     );
   }
   const query = await searchParams;
@@ -67,13 +62,8 @@ export default async function ToolsPage({
   if (tab === null) notFound();
   const ctx = await requireViewer(org, ws);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<ToolsLoading />}>
-        <Tools ctx={ctx} source={dataSource()} tab={tab} searchParams={query} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<ToolsLoading />}>
+      <Tools ctx={ctx} source={dataSource()} tab={tab} searchParams={query} />
+    </Suspense>
   );
 }

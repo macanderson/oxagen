@@ -29,8 +29,9 @@
  *     cannot hold.
  *
  *   REVERSE (advisory — always warn-only):
- *     A registered capability that apps/app actually invokes (a literal
- *     invoke("<name>") call) but that does NOT declare the "app" layer is
+ *     A registered capability that apps/app actually calls (an invoke() call,
+ *     or a kernelRead or kernelWrite call in server code, which is how the
+ *     rebuilt app reaches every contract) but that does NOT declare the "app" layer is
  *     flagged — either it needs the promise + a binding, or the invoke is
  *     internal plumbing that should be documented as such. Advisory because
  *     mid-stream agent capabilities are legitimately invoked without being a
@@ -175,13 +176,24 @@ function readBaseline() {
 }
 
 /**
- * Set of capability names invoked by app code. The app invokes capabilities in
- * two shapes:
- *   invoke("<name>", ...)          — a string literal (rare)
- *   invoke(<ident>.name, ...)      — the imported contract's .name (common),
- *                                    e.g. invoke(apiKeyCreate.name, ...)
- * We resolve the second shape through identToName (built from each contract's
- * `export const <ident> = registerCapability({ name: ... })`).
+ * Set of capability names invoked by app code. The app calls capabilities in
+ * four shapes:
+ *   invoke("<name>", ...)                        a string literal (rare)
+ *   invoke(<ident>.name, ...)                    the imported contract's .name
+ *   kernelRead(ctx, { contract: <ident>, ... })  every server read in apps/app
+ *   kernelWrite(ctx, <ident>, input)             every server write in apps/app
+ * We resolve the identifier shapes through identToName (built from each
+ * contract's `export const <ident> = registerCapability({ name: ... })`).
+ *
+ * The kernel shapes matter most. apps/app reaches contracts through
+ * `src/server/kernel.ts`, not through invoke(), so a scan for invoke() alone
+ * missed every read and write the app makes. The Steering page read
+ * get_steering_freshness with no "app" layer, and nothing reported it.
+ *
+ * A `contract:` key is matched anywhere in the source, because a read's call
+ * object can be built before the kernelRead call that takes it. An identifier
+ * that is not a registered contract, such as the `ReadContract` type in a
+ * signature, resolves to nothing.
  *
  * @param {Set<string>} validNames - registered capability names
  * @param {Map<string,string>} identToName - contract ident → capability name
@@ -190,13 +202,17 @@ export function resolveInvoked(src, validNames, identToName) {
   const found = new Set();
   const LITERAL = /invoke\(\s*["'`]([a-zA-Z][\w.]+)["'`]/g;
   const IDENT = /invoke\(\s*(\w+)\.name\b/g;
+  const READ = /\bcontract:\s*(\w+)\b/g;
+  const WRITE = /\bkernelWrite(?:<[^>()]*>)?\(\s*[^,()]+,\s*(\w+)\b/g;
   let m;
   while ((m = LITERAL.exec(src))) {
     if (validNames.has(m[1])) found.add(m[1]);
   }
-  while ((m = IDENT.exec(src))) {
-    const name = identToName.get(m[1]);
-    if (name && validNames.has(name)) found.add(name);
+  for (const pattern of [IDENT, READ, WRITE]) {
+    while ((m = pattern.exec(src))) {
+      const name = identToName.get(m[1]);
+      if (name && validNames.has(name)) found.add(name);
+    }
   }
   return found;
 }
@@ -310,8 +326,33 @@ export function computeParity({
 }
 
 /**
- * Concatenated source of every .ts/.tsx under apps/app/src that mentions
- * `invoke(`, found via rg when it is available and a directory walk otherwise.
+ * True for a file that ships in the app. A test, and the deliberately broken
+ * probes under `src/test/` that the architecture tests read, are not a surface
+ * a person operates, so a contract they name is not one the app calls.
+ *
+ * Exported so the two scan paths can be tested to agree.
+ *
+ * @param {string} path
+ */
+export function isAppSource(path) {
+  const p = path.replaceAll("\\", "/");
+  if (!/\.(ts|tsx)$/.test(p)) return false;
+  if (/\.(test|spec)\.tsx?$/.test(p)) return false;
+  return !/(^|\/)src\/test\//.test(p);
+}
+
+/**
+ * The rg pattern that picks which app files resolveInvoked reads. It must
+ * match every call shape resolveInvoked resolves, or rg drops the file before
+ * the resolver sees it while the directory walk, which reads every file,
+ * still finds it. Exported so a test holds the two together.
+ */
+export const APP_SOURCE_PATTERN = "invoke\\(|contract:|kernelWrite";
+
+/**
+ * Concatenated source of every shipping .ts/.tsx under apps/app/src that
+ * mentions `invoke(`, `contract:`, or `kernelWrite`, found via rg when it is
+ * available and a directory walk otherwise.
  *
  * rg narrows which FILES to read, never which lines: the formatter wraps long
  * calls, so `invoke(\n  listAgents.name, …)` puts the call and its argument on
@@ -331,13 +372,14 @@ function readAppSource() {
         "*.ts",
         "-g",
         "*.tsx",
-        "invoke\\(",
+        APP_SOURCE_PATTERN,
         APP_SRC,
       ],
       { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     )
       .split("\n")
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter(isAppSource);
   } catch {
     return walkGrep(APP_SRC);
   }
@@ -367,7 +409,7 @@ function walkGrep(dir) {
       if (e.name === "node_modules" || e.name === ".next") continue;
       const p = join(d, e.name);
       if (e.isDirectory()) stack.push(p);
-      else if (/\.(ts|tsx)$/.test(e.name)) {
+      else if (isAppSource(p)) {
         try {
           out += readFileSync(p, "utf8") + "\n";
         } catch {

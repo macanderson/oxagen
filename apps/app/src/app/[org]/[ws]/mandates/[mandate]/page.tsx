@@ -31,13 +31,8 @@ export default async function MandatePage({
   const ctx = await requireViewer(org, ws);
   const query = await searchParams;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<MandateLoading />}>
-        <Mandate ctx={ctx} source={dataSource()} mandate={mandate} searchParams={query} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<MandateLoading />}>
+      <Mandate ctx={ctx} source={dataSource()} mandate={mandate} searchParams={query} />
+    </Suspense>
   );
 }

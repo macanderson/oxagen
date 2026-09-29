@@ -2,18 +2,14 @@
 // shell while the page's reads resolve (pages/billing.md, loading). No figure
 // and no zero renders until a read answers.
 //
-// A busy region, not the page's `main`: while the page streams in, this
-// fallback and the page are in the document together, and only the page may
-// own main#main. Two gave the skip link two targets and failed page-load's
-// strict locator on 2026-09-24 (arch/loading-landmarks.test.ts).
+// A busy region inside the shell's `main#main`, which is the only landmark
+// (ADR-227). A `main` here would give the skip link a second target while the
+// page streams in beside it (arch/loading-landmarks.test.ts).
 import { BillingSkeleton } from "@/features/billing";
 
 export default function BillingLoading() {
   return (
-    <div
-      aria-busy="true"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
+    <div aria-busy="true" className="flex w-full flex-col gap-4">
       <BillingSkeleton />
     </div>
   );
