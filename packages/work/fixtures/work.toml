@@ -1,0 +1,19 @@
+# work/work.toml in agent-work-spec.html (Priorities), copied verbatim.
+schema = "work/v1"
+
+[triage]
+operator = "priya"
+priorities = "aintel.work.priorities"
+models = ["triage-primary", "triage-second"]   # model routes, first that differs wins
+
+[[autonomy]]
+scope = { label = "Documentation" }
+level = 2
+operator = "priya"
+max_daily_usd = 40
+
+[[autonomy]]
+scope = { repo = "aintel/billing-service", paths = ["src/**"] }
+level = 1
+operator = "sam"
+max_daily_usd = 120

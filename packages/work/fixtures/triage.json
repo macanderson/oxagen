@@ -1,0 +1,31 @@
+{
+  "schema": "triage/v1",
+  "item": "wi_01K5ZQ4M8T2DXW",
+  "state": "triaged",
+  "priority": {
+    "label": "P1",
+    "reason": "A paying customer reported it, and it blocks their invoice export.",
+    "cites": [
+      "aintel.work.priorities#2"
+    ]
+  },
+  "labels": [
+    "Bug"
+  ],
+  "estimate_minutes": 45,
+  "claims": [
+    "apps/app/src/features/billing/**"
+  ],
+  "duplicates": [],
+  "related": [
+    "wi_01K5YV0B3N7PRA"
+  ],
+  "workflow": "fix-test-verify-review",
+  "done_record": {
+    "criteria": [
+      "…"
+    ]
+  },
+  "questions": [],
+  "conflicts": []
+}
