@@ -248,7 +248,7 @@ export interface GrpcDiscovery {
   }): Promise<never>;
 }
 
-/** Refuses until lane M3's gRPC import and reflection are built. */
+/** Refuses until the second M10 PR binds lane M3's `importGrpc` here. */
 export const noGrpcDiscovery: GrpcDiscovery = {
   discover() {
     return Promise.reject(
@@ -315,10 +315,21 @@ export function githubDefinitionReader(
   return {
     async read(scope, location, signal) {
       const [host, owner, ...rest] = location.repo.split("/");
-      if (host !== "github.com" || owner === undefined || rest.length !== 1) {
+      if (host !== "github.com") {
         throw new DiscoveryRefused(
           "unsupported",
           "Reading a definition from GitLab is not available yet.",
+        );
+      }
+      if (
+        owner === undefined ||
+        owner === "" ||
+        rest.length !== 1 ||
+        rest[0] === ""
+      ) {
+        throw new DiscoveryRefused(
+          "source",
+          `The definition repo ${location.repo} is not a github.com/owner/name path.`,
         );
       }
       const repo = rest[0] as string;

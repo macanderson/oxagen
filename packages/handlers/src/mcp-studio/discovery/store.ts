@@ -547,7 +547,8 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
     // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
     // of the shared plane. It selects the org, workspace, and folder name of
     // each live steering server with no discovery row, and reads no other
-    // column. Each discovery then runs in its own workspace scope.
+    // column. Each discovery then runs in its own workspace scope. The
+    // oldest server goes first, so a sweep past the limit is fair.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -572,6 +573,7 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
             isNull(t.id),
           ),
         )
+        .orderBy(asc(s.createdAt), asc(s.id))
         .limit(limit),
     );
     return rows.flatMap((row) =>
