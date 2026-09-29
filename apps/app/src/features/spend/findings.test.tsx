@@ -25,6 +25,7 @@ import type {
 import { readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -180,17 +181,23 @@ describe("Findings with an unknown total", () => {
   it("sorts by saving, high first, and by kind", async () => {
     const user = userEvent.setup();
     section(null);
-    await user.selectOptions(
-      screen.getByLabelText("Sort"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
       "Savings low first",
     );
     expect(order()[0]).toBe("fnd_8a");
-    await user.selectOptions(
-      screen.getByLabelText("Sort"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
       "Savings high first",
     );
     expect(order()[0]).toBe("fnd_0a");
-    await user.selectOptions(screen.getByLabelText("Sort"), "Finding A to Z");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Finding A to Z",
+    );
     const kinds = Array.from(document.querySelectorAll("li[data-finding]")).map(
       (li) => li.getAttribute("data-finding"),
     );
@@ -201,8 +208,9 @@ describe("Findings with an unknown total", () => {
   it("says no finding matches when a filter hides every card (negative)", async () => {
     const user = userEvent.setup();
     section(null);
-    await user.selectOptions(
-      screen.getByLabelText("Confidence"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Confidence" }),
       "medium confidence",
     );
     expect(screen.getByText("No finding matches these filters.")).toBeTruthy();

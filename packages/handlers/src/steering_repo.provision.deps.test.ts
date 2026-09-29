@@ -1,7 +1,7 @@
 // steering_repo.provision.deps.test.ts: the production wiring of the steering
 // repo job (lane S1, #4450). steering_repo.provision.test.ts runs the steps on
 // in-memory deps. This file covers what those deps stand in for: the settings
-// readers, the Oxagen Steering app config, the stored-token reader, the
+// readers, the Oxagen GitHub App config, the stored-token reader, the
 // database writes, the steering binding, the Re-authorize notice, and the
 // provision event.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -203,6 +203,7 @@ import {
   GITLAB_STEERING_PROVIDER,
   initialSteeringRepoState,
   keepSteeringConnection,
+  moveSteeringInstallation,
   readSteeringConnection,
   readSteeringRepoState,
   requestSteeringRepoProvision,
@@ -230,9 +231,9 @@ const ACTOR = "0192d4a8-7c1e-7a00-8000-0000000a0701";
 const CONN = "0192d4a8-7c1e-7a00-8000-0000000c0c01";
 
 const ENV = {
-  OXAGEN_STEERING_APP_ID: "123",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "pem",
-  OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+  GITHUB_APP_ID: "123",
+  GITHUB_APP_PRIVATE_KEY: "pem",
+  GITHUB_APP_SLUG: "oxagen-steering",
 };
 
 const WORKSPACE: Extract<SteeringRepoScope, { kind: "workspace" }> = {
@@ -272,9 +273,9 @@ const REQUEST: SteeringRepoProvisionRequest = {
   actorUserId: ACTOR,
 };
 
-const GITHUB_TITLE = "Authorize Oxagen Steering again";
+const GITHUB_TITLE = "Authorize the Oxagen GitHub App again";
 const GITHUB_BODY =
-  "Oxagen could not finish setting up a steering repo because the Oxagen Steering authorization is missing or GitHub refused it. An organization owner must authorize Oxagen Steering again.";
+  "Oxagen could not finish setting up a steering repo because its GitHub authorization is missing or GitHub refused it. An organization owner must authorize the Oxagen GitHub App again.";
 const GITLAB_TITLE = "Connect your GitLab group again";
 const GITLAB_BODY =
   "Oxagen could not finish setting up a steering repo because the GitLab group token is missing or GitLab refused it. An organization owner must connect the group again.";
@@ -426,19 +427,29 @@ describe("steeringAppFromEnv", () => {
   it("returns null for an app id that is not a positive integer", () => {
     for (const id of ["abc", "0", "-4", "1.5", ""])
       expect(
-        steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_ID: id }),
+        steeringAppFromEnv({ ...ENV, GITHUB_APP_ID: id }),
       ).toBeNull();
   });
 
   it("returns null when the private key or the slug is missing", () => {
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_PRIVATE_KEY: undefined }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_PRIVATE_KEY: undefined }),
     ).toBeNull();
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_PRIVATE_KEY: "" }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_PRIVATE_KEY: "" }),
     ).toBeNull();
     expect(
-      steeringAppFromEnv({ ...ENV, OXAGEN_STEERING_APP_SLUG: undefined }),
+      steeringAppFromEnv({ ...ENV, GITHUB_APP_SLUG: undefined }),
+    ).toBeNull();
+  });
+
+  it("ignores the retired OXAGEN_STEERING_APP_* keys (ADR-228) (negative)", () => {
+    expect(
+      steeringAppFromEnv({
+        OXAGEN_STEERING_APP_ID: "5121606",
+        OXAGEN_STEERING_APP_PRIVATE_KEY: "pem",
+        OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+      }),
     ).toBeNull();
   });
 
@@ -450,9 +461,9 @@ describe("steeringAppFromEnv", () => {
   });
 
   it("reads process.env when no env is given", () => {
-    vi.stubEnv("OXAGEN_STEERING_APP_ID", "321");
-    vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "pem-from-process");
-    vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "steering-from-process");
+    vi.stubEnv("GITHUB_APP_ID", "321");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem-from-process");
+    vi.stubEnv("GITHUB_APP_SLUG", "steering-from-process");
     expect(steeringAppFromEnv()).toEqual({
       app: {
         symbol: OXAGEN_STEERING_APP,
@@ -570,6 +581,115 @@ describe("keepSteeringConnection", () => {
     expect(where.params).toEqual([ORG, "steering_connection"]);
     const column = render(sql`${schema.organizations.settings}`).sql;
     expect(where.sql).toContain(`(${column} -> $2::text) IS NULL`);
+  });
+});
+
+describe("moveSteeringInstallation", () => {
+  const MOVED = GITHUB as Extract<SteeringConnection, { provider: "github" }>;
+
+  /** The organization row the move reads first. */
+  function storedGithub(installationId: number, accountLogin: string) {
+    return [
+      {
+        settings: {
+          steering_connection: {
+            provider: "github",
+            installation_id: installationId,
+            account_login: accountLogin,
+          },
+        },
+      },
+    ];
+  }
+
+  it("moves the setting and the steering source connections to the new installation on the same account", async () => {
+    mocks.results.push(storedGithub(44, "ACME"));
+    mocks.updateResults.push([{ id: ORG }]);
+
+    await expect(moveSteeringInstallation(ORG, MOVED, ACTOR)).resolves.toBe(
+      44,
+    );
+
+    // One transaction: read, move the setting, move the source connections.
+    expect(mocks.dbCalls).toEqual(["system"]);
+    expect(mocks.chains.map((c) => c.op)).toEqual([
+      "select",
+      "update",
+      "update",
+    ]);
+    expect(render(argOf(chain(0), "where")).params).toEqual([ORG]);
+
+    const setting = chain(1);
+    expect(argOf(setting, "update")).toBe(schema.organizations);
+    expect(savedPatch(setting)).toEqual({ steering_connection: GITHUB });
+    // The write repeats the id it read, so a racing connect is left alone.
+    const settingWhere = render(argOf(setting, "where"));
+    expect(settingWhere.params).toEqual([ORG, "steering_connection", "44"]);
+    const settingsColumn = render(sql`${schema.organizations.settings}`).sql;
+    expect(settingWhere.sql).toContain(
+      `(${settingsColumn} -> $2::text ->> 'installation_id') = $3`,
+    );
+
+    const sources = chain(2);
+    expect(argOf(sources, "update")).toBe(schema.sourceConnections);
+    const set = argOf(sources, "set") as {
+      deliveryConfig: unknown;
+      updatedAt: unknown;
+      updatedById: unknown;
+    };
+    const configColumn = render(
+      sql`${schema.sourceConnections.deliveryConfig}`,
+    ).sql;
+    const config = render(set.deliveryConfig);
+    expect(config.sql).toBe(
+      `jsonb_set(${configColumn}, '{installationId}', $1::jsonb)`,
+    );
+    expect(config.params).toEqual(["55"]);
+    expect(set.updatedAt).toBeInstanceOf(Date);
+    expect(set.updatedById).toBe(ACTOR);
+    const sourcesWhere = render(argOf(sources, "where"));
+    expect(sourcesWhere.params).toEqual([ORG, GITHUB_STEERING_PROVIDER, "44"]);
+    expect(sourcesWhere.sql).toContain("is null");
+    expect(sourcesWhere.sql).toContain(
+      `(${configColumn} ->> 'installationId') = $3`,
+    );
+  });
+
+  it.each([
+    {
+      name: "a stored installation on another account",
+      stored: () => storedGithub(44, "globex"),
+    },
+    {
+      name: "the same installation id",
+      stored: () => storedGithub(55, "acme"),
+    },
+    {
+      name: "a GitLab connection",
+      stored: () => [{ settings: { steering_connection: GITLAB } }],
+    },
+    { name: "no stored connection", stored: () => [{ settings: {} }] },
+    { name: "no organization row", stored: () => [] },
+  ])("changes nothing for $name (negative)", async ({ stored }) => {
+    mocks.results.push(stored());
+
+    await expect(
+      moveSteeringInstallation(ORG, MOVED, ACTOR),
+    ).resolves.toBeNull();
+
+    expect(mocks.chains.map((c) => c.op)).toEqual(["select"]);
+  });
+
+  it("leaves the source connections alone when a racing connect already moved the setting (negative)", async () => {
+    mocks.results.push(storedGithub(44, "acme"));
+    // The guarded update matches no row.
+
+    await expect(
+      moveSteeringInstallation(ORG, MOVED, ACTOR),
+    ).resolves.toBeNull();
+
+    expect(mocks.chains.map((c) => c.op)).toEqual(["select", "update"]);
+    expect(argOf(chain(1), "update")).toBe(schema.organizations);
   });
 });
 
@@ -704,19 +824,19 @@ describe("steeringRepoProvisionDeps", () => {
   });
 
   describe("github", () => {
-    it("returns null when the Oxagen Steering app is not configured", () => {
+    it("returns null when the Oxagen GitHub App is not configured", () => {
       expect(deps({}).github(WORKSPACE)).toBeNull();
       expect(
-        deps({ ...ENV, OXAGEN_STEERING_APP_SLUG: undefined }).github(
+        deps({ ...ENV, GITHUB_APP_SLUG: undefined }).github(
           ORGANIZATION,
         ),
       ).toBeNull();
     });
 
     it("reads the app from process.env when no env is given", () => {
-      vi.stubEnv("OXAGEN_STEERING_APP_ID", "321");
-      vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "pem-from-process");
-      vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "steering-from-process");
+      vi.stubEnv("GITHUB_APP_ID", "321");
+      vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "pem-from-process");
+      vi.stubEnv("GITHUB_APP_SLUG", "steering-from-process");
       const clients = steeringRepoProvisionDeps({ actorUserId: ACTOR }).github(
         WORKSPACE,
       );
@@ -1214,7 +1334,7 @@ describe("steeringRepoProvisionDeps", () => {
   });
 
   describe("notifyReauthorize", () => {
-    it("asks the workspace's organization managers to authorize Oxagen Steering again", async () => {
+    it("asks the workspace's organization managers to authorize the Oxagen GitHub App again", async () => {
       mocks.results.push(
         [orgRow(null)],
         [{ slug: "platform", name: "Platform", settings: null }],

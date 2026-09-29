@@ -4,14 +4,17 @@
 // step connects the host its steering repos live on before the first
 // workspace creates one.
 //
-// **GitHub has two apps.** Oxagen Steering creates the organization's steering
-// repos and holds admin only on the repositories Oxagen creates. Oxagen reads
-// and checks the organization's code repositories. Each install is a plain
-// link to the API route that signs the state and sends the person to GitHub
-// (`steeringGithubHref`). GitHub returns them to the route's `return_to`,
-// with `?steering=connected` or `?steering=error&code=`, which the result
-// line reads. Oxagen Steering returns to the first workspace, the step that
-// uses it. Oxagen returns here, since nothing after this step needs it.
+// **GitHub has one app.** Oxagen creates the organization's steering repos and
+// reads and checks its code repositories, so one install covers both
+// (ADR-228). The entry offers two links to the API route that signs the state
+// and sends the person to GitHub (`steeringGithubHref`). Install comes first:
+// GitHub's install page installs the app on an organization and authorizes the
+// person in one pass. Authorize comes second: an organization that already has
+// the app gets Configure on the install page, which drops the state, so
+// authorize is the way back. GitHub returns through the app's one callback to
+// the route's `return_to`, with `?steering=connected` or
+// `?steering=error&code=`. Both links return to the first workspace, the step
+// that uses the connection, and its result line reads the query.
 //
 // **GitLab has one form**: a group's path and a group access token.
 //
@@ -43,34 +46,6 @@ import { GateDenied } from "./ui/gate-states";
 import { GitlabConnect } from "./ui/gitlab-connect";
 import { type SteeringResult, SteeringResultLine } from "./ui/steering-result";
 
-/** One GitHub app: its name, what it does, and its install link. */
-function GithubApp({
-  testId,
-  name,
-  body,
-  action,
-}: {
-  testId: string;
-  name: string;
-  body: string;
-  action: ReactNode;
-}) {
-  return (
-    <li
-      data-testid={testId}
-      className="flex min-w-0 flex-col gap-3 py-3.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center"
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h3 className="text-[13.5px] font-semibold text-foreground">{name}</h3>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">
-          {body}
-        </p>
-      </div>
-      {action}
-    </li>
-  );
-}
-
 function ConnectStep({
   org,
   result,
@@ -94,46 +69,45 @@ function ConnectStep({
             {t("github.heading")}
           </h2>
         </div>
-        <ul className={`${panelBody} flex flex-col divide-y divide-border`}>
-          <GithubApp
-            testId="connect-github-steering"
-            name={t("github.steeringName")}
-            body={t("github.steeringBody")}
-            action={
-              <a
-                // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub. SafeLink would prefetch it through next/link, and ui/navigation has no plain-anchor link for a SafePath (#4518)
-                href={steeringGithubHref(
-                  org,
-                  { app: "steering", mode: "install" },
-                  firstWorkspace,
-                )}
-                data-testid="connect-github-steering-install"
-                className={buttonSecondary}
-              >
-                {t("github.steeringInstall")}
-              </a>
-            }
-          />
-          <GithubApp
-            testId="connect-github-oxagen"
-            name={t("github.oxagenName")}
-            body={t("github.oxagenBody")}
-            action={
-              <a
-                // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub. SafeLink would prefetch it through next/link, and ui/navigation has no plain-anchor link for a SafePath (#4518)
-                href={steeringGithubHref(
-                  org,
-                  { app: "oxagen", mode: "install" },
-                  routes.welcomeConnect(org),
-                )}
-                data-testid="connect-github-oxagen-install"
-                className={buttonSecondary}
-              >
-                {t("github.oxagenInstall")}
-              </a>
-            }
-          />
-        </ul>
+        <div
+          data-testid="connect-github-app"
+          className={`${panelBody} flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center`}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h3 className="text-[13.5px] font-semibold text-foreground">
+              {t("github.name")}
+            </h3>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              {t("github.body")}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub. SafeLink would prefetch it through next/link, and ui/navigation has no plain-anchor link for a SafePath (#4518)
+              href={steeringGithubHref(
+                org,
+                { mode: "install" },
+                firstWorkspace,
+              )}
+              data-testid="connect-github-install"
+              className={buttonSecondary}
+            >
+              {t("github.install")}
+            </a>
+            <a
+              // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub. SafeLink would prefetch it through next/link, and ui/navigation has no plain-anchor link for a SafePath (#4518)
+              href={steeringGithubHref(
+                org,
+                { mode: "authorize" },
+                firstWorkspace,
+              )}
+              data-testid="connect-github-authorize"
+              className={buttonSecondary}
+            >
+              {t("github.authorize")}
+            </a>
+          </div>
+        </div>
       </section>
       <section
         aria-labelledby="ob-connect-gitlab"

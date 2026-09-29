@@ -115,7 +115,7 @@ describe("skill repository resolution for a steering repository", () => {
     } as unknown as GitHubClient;
   }
 
-  it("mints the Oxagen Steering token and never asks for the workspace's", async () => {
+  it("mints the Oxagen GitHub App token and never asks for the workspace's", async () => {
     const github = fakeGithub();
     const token = vi.fn().mockResolvedValue("workspace-tok");
     const client = vi.fn(() => github);

@@ -17,6 +17,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { type ListRow, ListTable } from "./list-table";
 
 afterEach(cleanup);
@@ -120,8 +121,7 @@ describe("ListTable", () => {
     const size = rowsSelect();
     expect(size).toHaveTextContent("10");
     await user.click(size);
-    // The filters are native selects whose options are always in the page,
-    // so read the choices from the Rows popup alone.
+    // Read the choices from the Rows popup, the one list open.
     const options = within(await screen.findByRole("listbox")).getAllByRole(
       "option",
     );
@@ -140,12 +140,12 @@ describe("ListTable", () => {
     expect(range()).toBe("1–12 of 12");
   });
 
-  it("draws the filters after the search box, labelled All · Status, and Rows in the pager under the table", () => {
+  it("draws the filters after the search box, labelled All · Status, and Rows in the pager under the table", async () => {
+    const user = userEvent.setup();
     renderList();
     const status = screen.getByLabelText("Status");
-    expect(within(status).getAllByRole("option")[0]).toHaveTextContent(
-      "All · Status",
-    );
+    expect(status).toHaveTextContent("All · Status");
+    expect((await optionNames(user, status))[0]).toBe("All · Status");
     const search = screen.getByRole("searchbox");
     const table = screen.getByRole("table", { name: "People" });
     expect(
@@ -160,7 +160,7 @@ describe("ListTable", () => {
   it("narrows the rows by a filter before the pager counts them", async () => {
     const user = userEvent.setup();
     renderList();
-    await user.selectOptions(screen.getByLabelText("Status"), "invited");
+    await pickOption(user, screen.getByLabelText("Status"), "invited");
     expect(shownRows()).toHaveLength(6);
     expect(range()).toBe("1–6 of 6");
     for (const row of shownRows()) {
