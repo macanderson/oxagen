@@ -404,6 +404,7 @@ describe("runTachoHook", () => {
     ).toEqual({
       digest: digestText("You are governed by Oxagen."),
       chars: "You are governed by Oxagen.".length,
+      bundle_etag: active.bundle.etag,
     });
     expect(
       decideLocally(
@@ -411,10 +412,10 @@ describe("runTachoHook", () => {
         parse("SessionStart"),
         now,
       ).delivered,
-    ).toEqual({ chars: 0 });
+    ).toEqual({ chars: 0, bundle_etag: active.bundle.etag });
     expect(
       decideLocally(paused, parse("SessionStart"), now).delivered,
-    ).toEqual({ chars: 0 });
+    ).toEqual({ chars: 0, bundle_etag: active.bundle.etag });
     expect(
       decideLocally(active, parse("UserPromptSubmit"), now).delivered,
     ).toBeUndefined();
