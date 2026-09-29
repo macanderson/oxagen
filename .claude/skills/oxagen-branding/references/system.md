@@ -62,7 +62,7 @@ Marketing is for landing pages, posts, and anything read once: large and spaced.
 
 ## Layout
 
-Wrap 1120px, 24px side padding. Card radius 12px. Section rhythm: 44px vertical, 1px border on top. Grid gaps 16px. Tables sit inside a rounded, bordered, horizontally scrolling container with a highlight header row.
+Wrap 1120px, 24px side padding. Card radius 12px on the website. The app's card is `rounded-2xl` on the shadcn preset scale: 1.8 times a 0.45rem base, about 13px (oxagen ADR-221). Section rhythm: 44px vertical, 1px border on top. Grid gaps 16px. Tables sit inside a rounded, bordered, horizontally scrolling container with a highlight header row.
 
 The eyebrow above an h2 is muted, except the first one on a page, which is gold and counts as the identity, not as the action.
 

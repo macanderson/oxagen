@@ -139,7 +139,10 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
-import type { SentAttachment } from "./assistant-attachment-files";
+import {
+  assistantAttachmentHref,
+  type SentAttachment,
+} from "./assistant-attachment-files";
 import {
   AssistantAttachmentChips,
   AssistantAttachmentPicker,
@@ -1323,6 +1326,18 @@ export function AssistantFlyout({
                                 ...f,
                                 state: "done" as const,
                                 problem: null,
+                                // Built from the slugs on screen now, so a
+                                // rename since the send still opens the file.
+                                ...(threadOrg === undefined ||
+                                threadWs === undefined
+                                  ? {}
+                                  : {
+                                      href: assistantAttachmentHref(
+                                        threadOrg,
+                                        threadWs,
+                                        f.publicId,
+                                      ),
+                                    }),
                               }))}
                               testId="assistant-sent-attachments"
                             />

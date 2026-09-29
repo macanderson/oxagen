@@ -25,9 +25,11 @@
 // counts every tamper incident the store keeps on the agent's hosts, the set
 // the Tamper incidents tile sums.
 //
-// **The controls work over the rows in hand.** The read asks for the
-// contract's largest page; a workspace with more agents than that pages the
-// rest through the cursor link under the pager.
+// **The controls work over the rows in hand.** The search and the facets sit
+// above the rows. Rows, the range and Previous and Next sit in the pager under
+// them (ui/pagination), beside the link to deregistered agents. The read asks
+// for the contract's largest page; a workspace with more agents than that
+// pages the rest through the cursor link under the pager.
 //
 // **A retired row is a deleted record.** It is listed only when a person
 // chose to show deregistered agents. It is dimmed, and its actions cell holds
@@ -62,7 +64,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
-import { pageList } from "@/ui/page-list";
+import { RowsPager } from "@/ui/pagination";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { RetireAgent } from "./agent-actions";
 import { AgentStatusBadge, NotRecordedValue } from "./parts";
@@ -582,22 +584,6 @@ function searchText(row: AgentRow, harness: string): string {
     .toLowerCase();
 }
 
-/**
- * The page buttons the design's `ltPager` draws, zero-based: every page up to
- * seven; past that the first, the current page and its neighbours, and the
- * last, with null for each gap the ellipsis stands in. A pager of 20 pages at
- * page 10 is 1 … 9 10 11 … 20, so it fits a phone's width. The window is the
- * shared list table's (`pageList`), so the two pagers cannot drift apart.
- */
-function pagerItems(
-  pages: number,
-  current: number,
-): readonly (number | null)[] {
-  return pageList(current + 1, pages).map((item) =>
-    typeof item === "number" ? item - 1 : null,
-  );
-}
-
 export function AgentsTable({
   rows,
   org,
@@ -687,6 +673,9 @@ export function AgentsTable({
     size === 0
       ? visible.length
       : Math.min(visible.length, (current + 1) * size);
+  /** How a size reads in the Rows select: `0` is All. */
+  const sizeLabel = (option: number) =>
+    option === 0 ? t("list.controls.all") : formatCount(option, locale);
 
   const titleId = "agents-registered";
   return (
@@ -762,26 +751,6 @@ export function AgentsTable({
             ))}
           </select>
         ))}
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {t("list.controls.rows")}
-          <select
-            value={size}
-            data-touch-target=""
-            className={`${inputBase} w-auto`}
-            onChange={(event) => {
-              setSize(Number(event.target.value));
-              setPage(0);
-            }}
-          >
-            {PAGE_SIZES.map((option) => (
-              <option key={option} value={option}>
-                {option === 0
-                  ? t("list.controls.all")
-                  : formatCount(option, locale)}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <div className="min-w-0 overflow-x-auto">
@@ -887,72 +856,45 @@ export function AgentsTable({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-        <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className={`${mono} text-[11px] text-muted-foreground`}>
-            {t("list.controls.range", {
-              from: formatCount(from, locale),
-              to: formatCount(to, locale),
-              total: formatCount(visible.length, locale),
-            })}
-          </span>
-          {retired}
-        </span>
-        {pages > 1 ? (
-          <nav aria-label={t("list.controls.pager")} className="flex gap-1">
-            <button
-              type="button"
-              aria-label={t("list.controls.previous")}
-              disabled={current === 0}
-              data-touch-target=""
-              className={buttonSecondary}
-              onClick={() => {
+      <RowsPager
+        // The row wraps on a phone, so the deregistered link beside the range
+        // pushes Previous and Next to a line of their own, not off the edge.
+        className="flex-wrap px-4"
+        label={t("list.controls.pager")}
+        rowsLabel={t("list.controls.rows")}
+        perPage={size}
+        sizes={PAGE_SIZES}
+        onPerPage={(perPage) => {
+          setSize(perPage);
+          setPage(0);
+        }}
+        sizeLabel={sizeLabel}
+        range={t("list.controls.range", {
+          from: formatCount(from, locale),
+          to: formatCount(to, locale),
+          total: formatCount(visible.length, locale),
+        })}
+        // The link aligns itself to the top for the empty state, so it sits
+        // in a row of its own here, which centres it beside the select. The
+        // row is hidden when the link draws nothing, so it adds no gap.
+        beside={<span className="flex empty:hidden">{retired}</span>}
+        previousLabel={t("list.controls.previous")}
+        nextLabel={t("list.controls.next")}
+        previous={
+          current <= 0
+            ? null
+            : () => {
                 setPage(current - 1);
-              }}
-            >
-              ‹
-            </button>
-            {pagerItems(pages, current).map((item, position) =>
-              item === null ? (
-                <span
-                  // A gap sits before the current page or after it.
-                  key={position === 1 ? "gap-start" : "gap-end"}
-                  aria-hidden="true"
-                  className="self-center px-1 text-muted-foreground"
-                >
-                  …
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  type="button"
-                  aria-label={t("list.controls.page", { page: item + 1 })}
-                  aria-current={item === current ? "page" : undefined}
-                  data-touch-target=""
-                  className={`${buttonSecondary} aria-[current=page]:border-gold`}
-                  onClick={() => {
-                    setPage(item);
-                  }}
-                >
-                  {formatCount(item + 1, locale)}
-                </button>
-              ),
-            )}
-            <button
-              type="button"
-              aria-label={t("list.controls.next")}
-              disabled={current === pages - 1}
-              data-touch-target=""
-              className={buttonSecondary}
-              onClick={() => {
+              }
+        }
+        next={
+          current >= pages - 1
+            ? null
+            : () => {
                 setPage(current + 1);
-              }}
-            >
-              ›
-            </button>
-          </nav>
-        ) : null}
-      </div>
+              }
+        }
+      />
       {more === null && first === null ? null : (
         <nav
           aria-label={t("list.controls.cursor")}

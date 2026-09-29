@@ -1,10 +1,11 @@
 "use client";
 // A list table with the controls every list in the design carries (the
 // mockup's `ltTable`, engine.js, and the `.lt`, `.lp` and `th.sortable` rules
-// in engine.css): a "Search this list" box, a filter per small enumeration
-// column ("All · Health"), a Rows select (5, 10, 25, 50, All), a header that
-// sorts its column on a click (ascending, descending, then the order the
-// caller gave), and a "1–N of N ‹ 1 ›" pager under the table.
+// in engine.css): a "Search this list" box and a filter per small enumeration
+// column ("All · Health") over the table, a header that sorts its column on a
+// click (ascending, descending, then the order the caller gave), and under the
+// table the shared pager (ui/pagination): a Rows select (5, 10, 25, 50, All)
+// and the range ("1–10 of 12") on the left, Previous and Next on the right.
 //
 // A column earns a filter by the mockup's rule (`ltFacets`): at least four
 // rows, and two to eight distinct values of 28 characters or fewer that are
@@ -15,10 +16,11 @@
 // The caller gives cells as nodes. Search, the filters and sort read the text
 // each cell renders, measured from the DOM once the rows mount and again when
 // the reader types or sorts, the way the mockup reads `textContent`, so a
-// caller never writes a figure twice to make it searchable. A cell whose text leads with a number (money, counts) sorts
-// as a number; an ISO date and anything else sorts as text. Every row stays
-// in the DOM and a row outside the page is hidden, so the texts stay
-// measurable and a row that holds a form keeps its state across a page turn.
+// caller never writes a figure twice to make it searchable. A cell whose text
+// leads with a number (money, counts) sorts as a number; an ISO date and
+// anything else sorts as text. Every row stays in the DOM and a row outside
+// the page is hidden, so the texts stay measurable and a row that holds a
+// form keeps its state across a page turn.
 //
 // On a phone the shell turns the table into labelled cards
 // (features/shell/card-tables.ts), reading each header's text. A hidden column
@@ -26,7 +28,7 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useId, useRef, useState } from "react";
-import { pageList, pagerButton } from "@/ui/page-list";
+import { RowsPager } from "@/ui/pagination";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type ListColumn = {
@@ -47,7 +49,7 @@ export type ListRow = {
   className?: string;
 };
 
-/** The Rows select's options; 0 is All. */
+/** The sizes the pager's Rows select offers; 0 is All. */
 const LIST_PAGE_SIZES = [5, 10, 25, 50, 0] as const;
 const DEFAULT_PER = 10;
 
@@ -140,7 +142,10 @@ function compare(a: string, b: string, numeric: boolean): number {
   });
 }
 
-/** The mockup's `.lt select`: the Rows select, the column filters, and any filter a caller draws beside them. */
+/**
+ * The mockup's `.lt select`: the column filters, and any filter a caller
+ * draws beside them.
+ */
 export const listSelect =
   "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none max-md:text-base";
 
@@ -173,8 +178,8 @@ export function ListTable({
   columns: readonly ListColumn[];
   rows: readonly ListRow[];
   /**
-   * The list's own select filters (the mockup's "All · Status"), drawn between
-   * the search box and Rows. The caller owns their state and hands in only the
+   * The list's own select filters (the mockup's "All · Status"), drawn after
+   * the search box. The caller owns their state and hands in only the
    * rows they keep, and they replace the filters the design's rule would
    * offer, so a list never shows two filters over one column.
    */
@@ -339,24 +344,6 @@ export function ListTable({
             </select>
           );
         })}
-        <label className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground max-md:ml-0">
-          {t("rows")}
-          <select
-            value={per}
-            onChange={(event) => {
-              setPer(Number(event.currentTarget.value));
-              setPage(1);
-            }}
-            data-touch-target=""
-            className={listSelect}
-          >
-            {LIST_PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? t("all") : String(n)}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table
@@ -422,63 +409,43 @@ export function ListTable({
           </tbody>
         </table>
       </div>
-      <nav
-        aria-label={t("pages", { label })}
-        className="flex flex-wrap items-center gap-2 border-t border-border bg-card px-3 py-2 text-[11.5px] text-muted-foreground"
-      >
-        <span className="font-mono tabular-nums text-dim">
-          {total === 0
+      <RowsPager
+        label={t("pages", { label })}
+        rowsLabel={t("rows")}
+        perPage={per}
+        sizes={LIST_PAGE_SIZES}
+        onPerPage={(n) => {
+          setPer(n);
+          setPage(1);
+        }}
+        sizeLabel={(n) => (n === 0 ? t("all") : String(n))}
+        range={
+          total === 0
             ? t("rangeNone")
             : t("range", {
                 from: String(from),
                 to: String(to),
                 total: String(total),
-              })}
-        </span>
-        <span className="ml-auto flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            aria-label={t("previous")}
-            disabled={current <= 1}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-            className={pagerButton}
-          >
-            ‹
-          </button>
-          {pageList(current, pages).map((p) =>
-            typeof p === "string" ? (
-              <span key={p} className="px-1 text-dim">
-                …
-              </span>
-            ) : (
-              <button
-                key={p}
-                type="button"
-                aria-current={p === current ? "page" : undefined}
-                onClick={() => {
-                  setPage(p);
-                }}
-                className={pagerButton}
-              >
-                {p}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            aria-label={t("next")}
-            disabled={current >= pages}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-            className={pagerButton}
-          >
-            ›
-          </button>
-        </span>
-      </nav>
+              })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
+        previous={
+          current <= 1
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+        className="border-t border-border bg-card"
+      />
     </div>
   );
 }

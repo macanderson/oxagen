@@ -32,6 +32,17 @@ const MESSAGE = {
     },
   ],
   stopped: false,
+  attachments: [],
+};
+
+// A file as upload_assistant_attachment returned it, and as a question that
+// carried it reads back (#4690).
+const ATTACHMENT = {
+  publicId: "gen_01k9x2chart",
+  name: "chart.png",
+  mediaType: "image/png",
+  sizeBytes: 2048,
+  sha256: "a".repeat(64),
 };
 
 const CONVERSATION = {
@@ -135,6 +146,41 @@ describe("get_conversation contract", () => {
       { ...MESSAGE, toolCalls: [{ ...call, outcome: "skipped" }] },
       { ...MESSAGE, toolCalls: [{ ...call, durationMs: -1 }] },
       { ...MESSAGE, toolCalls: [{ ...call, alias: "list_runs_2" }] },
+    ];
+    for (const message of refused) {
+      expect(
+        conversationGet.output.safeParse({
+          conversation: { ...CONVERSATION, messages: [message] },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("carries the files sent with a question in the shape the upload returned (#4690)", () => {
+    const question = {
+      ...MESSAGE,
+      role: "user" as const,
+      runId: null,
+      parkedCards: [],
+      toolCalls: [],
+      attachments: [ATTACHMENT],
+    };
+    expect(
+      conversationGet.output.parse({
+        conversation: { ...CONVERSATION, messages: [question] },
+      }).conversation?.messages[0]?.attachments,
+    ).toEqual([ATTACHMENT]);
+  });
+
+  it("requires each message's files and holds each file to the upload's shape (negative)", () => {
+    const { attachments: _omitted, ...unlisted } = MESSAGE;
+    const refused = [
+      unlisted,
+      { ...MESSAGE, attachments: [{ ...ATTACHMENT, publicId: "cnv_01k9x2" }] },
+      { ...MESSAGE, attachments: [{ ...ATTACHMENT, sha256: "not-a-digest" }] },
+      { ...MESSAGE, attachments: [{ ...ATTACHMENT, sizeBytes: -1 }] },
+      { ...MESSAGE, attachments: [{ ...ATTACHMENT, name: "" }] },
+      { ...MESSAGE, attachments: [{ ...ATTACHMENT, storageKey: "k" }] },
     ];
     for (const message of refused) {
       expect(
