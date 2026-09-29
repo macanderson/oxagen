@@ -75,7 +75,7 @@ Some Slack refusals repeat until a person acts. For those, Oxagen stops trying t
 
 Saving a channel clears the recorded failure. So does connecting the same Slack workspace again, which keeps the channel.
 
-Other failures can pass on a retry, such as a timeout, a rate limit, or a Slack server error. For those, Oxagen sends the notice again on the next health check. Now and then the channel receives the same notice twice.
+Other failures can pass on a retry, such as a timeout, a rate limit, or a Slack server error. For those, Oxagen sends the notice again on the next health check, and it sends all three copies: in the app, by email, and in Slack. So after a Slack outage, owners and admins can receive the same notice twice.
 
 ## Disconnect
 
