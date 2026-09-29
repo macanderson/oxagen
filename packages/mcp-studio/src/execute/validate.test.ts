@@ -1,12 +1,24 @@
 // validate.ts: the inputSchema check that runs before a call is shaped and sent.
 import { describe, expect, it } from "vitest";
-import { MAX_ISSUES, resolveRef, validateInput } from "./validate";
+import { MAX_ISSUES, inputRefusal, resolveRef, validateInput } from "./validate";
 
 function nested(levels: number): Record<string, unknown> {
   let value: Record<string, unknown> = {};
   for (let level = 0; level < levels; level += 1) value = { c: value };
   return value;
 }
+
+describe("inputRefusal", () => {
+  const schema = { type: "object", properties: { charge: { type: "string" } }, required: ["charge"] };
+
+  it("says nothing for arguments that conform", () => {
+    expect(inputRefusal(schema, { charge: "ch_1" })).toBeNull();
+  });
+
+  it("names every issue in one sentence after the same opening", () => {
+    expect(inputRefusal(schema, {})).toBe("The arguments do not match the tool's input schema. input.charge is required.");
+  });
+});
 
 describe("validateInput", () => {
   it("returns no issues for conforming arguments", () => {

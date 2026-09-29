@@ -22,6 +22,7 @@ export { grpcSender, type GrpcStreamResult } from "./grpc";
 export { createHttpSender, type HttpSenderOptions } from "./http";
 export { createMcpSender, MCP_PROTOCOL_VERSION, sendLocal, type McpSenderOptions } from "./mcp";
 export { defaultSenders, graphqlSender, httpSender, mcpSender } from "./senders";
+export { inputRefusal, validateInput } from "./validate";
 
 /**
  * Run one call and return the MCP tools/call result the agent receives. An
