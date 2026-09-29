@@ -1122,6 +1122,29 @@ describe("Connection tab › addresses", () => {
     expectNoSecret();
   });
 
+  it("hides a value whose parameter name is percent-encoded, and keeps a malformed escape readable", () => {
+    // The recipient reads %74oken as token, so it is hidden like one. %zz is
+    // not a valid escape: decodeURIComponent throws, and the name as written
+    // is the only reading there is, so region stays visible.
+    const sandbox: StudioEnvironment = {
+      name: "sandbox",
+      sandbox: true,
+      url: `https://billing.example.com/mcp?%74oken=${TOKEN}&%zzregion=eu`,
+      network: null,
+      credential: null,
+    };
+    renderTab(
+      studioView(BILLING, {
+        ...billingRecord(),
+        environments: [sandbox],
+      }),
+    );
+    expect(cellOf("sandbox", "url").textContent).toBe(
+      "https://billing.example.com/mcp?%74oken=***&%zzregion=eu",
+    );
+    expectNoSecret();
+  });
+
   it("hides a token in an environment URL's fragment and a signature in its query", () => {
     const sandbox: StudioEnvironment = {
       name: "sandbox",

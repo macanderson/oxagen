@@ -485,10 +485,14 @@ export function ChangesTab({
     }
     const theirs = readDraftOps(stored.draft.ops);
     if (theirs === null) {
-      // Staging on top of a draft this page cannot read would drop every
-      // edit, so the tab keeps its own and takes the stored revision: the
-      // next Open saves these edits over the unreadable draft.
-      draft.replace({ revision: stored.draft.revision, ops: draft.ops });
+      // The stored draft holds edits this page cannot read, which a newer
+      // page wrote. The tab keeps its own revision rather than taking the
+      // stored one: a save replaces the whole operation list, so adopting
+      // that revision would pass the next concurrency check and delete those
+      // edits. Keeping it means the next save conflicts again instead, and
+      // the message asks for a reload, which is what brings a page able to
+      // read them. The local edits survive it, because the draft is in
+      // sessionStorage.
       return { kind: "kept" };
     }
     const merged = mergeDrafts(theirs, draft.ops);

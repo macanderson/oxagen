@@ -97,6 +97,22 @@ const SECRET_PARAM =
   /token|secret|passw|pwd|key|auth|sig|credential|session|code/i;
 
 /**
+ * Whether a parameter name reads like a secret, tested as written and as the
+ * recipient reads it. A name may percent-encode any of its characters, so
+ * `%74oken` is `token` to the server that receives it and has to be hidden
+ * like one. A malformed escape such as `%zz` makes decodeURIComponent throw,
+ * and then the name as written is the only reading there is.
+ */
+function secretName(name: string): boolean {
+  if (SECRET_PARAM.test(name)) return true;
+  try {
+    return SECRET_PARAM.test(decodeURIComponent(name));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Text that holds URLs, as the tab shows it: each URL's user info and each
  * query or fragment value whose name reads like a secret replaced with `***`.
  * The user info rule is redactUrlCredentials in
@@ -112,7 +128,7 @@ function redactUrls(text: string): string {
     .replace(
       /([?&;#])([^=&;#\s]+)=([^&;#\s]*)/g,
       (match, separator: string, name: string) =>
-        SECRET_PARAM.test(name) ? `${separator}${name}=***` : match,
+        secretName(name) ? `${separator}${name}=***` : match,
     );
 }
 

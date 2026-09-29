@@ -321,7 +321,7 @@
         "updated": "Updated steering PR #{number}",
         "conflict": "Someone saved this server's draft after you last did. Your edits are now staged on top of theirs. Check the edits, then open the steering PR again.",
         "conflictDropped": "{count, plural, one {# edit did not fit the saved draft and was left out.} other {# edits did not fit the saved draft and were left out.}}",
-        "kept": "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged. Open the steering PR again to save your edits over theirs.",
+        "kept": "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged, and Oxagen kept theirs. Reload the page to get a version that can read their edits, then open the steering PR again.",
         "folderMissing": "Oxagen has not recorded this server's steering folder yet, so a steering PR cannot be opened from here.",
         "sourceMissing": "The steering PR needs the server's definition to go with this draft, and Oxagen has not recorded it yet.",
         "overBudgetBadge": "Over budget",

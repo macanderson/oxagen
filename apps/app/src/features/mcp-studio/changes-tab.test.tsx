@@ -14,6 +14,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
@@ -106,7 +107,7 @@ const CLASSIFY_REFUND: DraftOp = {
 const CONFLICT =
   "Someone saved this server's draft after you last did. Your edits are now staged on top of theirs. Check the edits, then open the steering PR again.";
 const KEPT =
-  "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged. Open the steering PR again to save your edits over theirs.";
+  "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged, and Oxagen kept theirs. Reload the page to get a version that can read their edits, then open the steering PR again.";
 const THROWN =
   "The steering PR did not open because the request failed before Oxagen answered. Try again.";
 const UNAVAILABLE =
@@ -777,18 +778,11 @@ describe("ChangesTab conflict", () => {
     });
   });
 
-  it("keeps this tab's edits when the stored draft does not fit the draft shape, then saves over it", async () => {
+  it("keeps its own revision when the stored draft does not fit the draft shape, so it cannot save over it", async () => {
     seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
-    const save = fakeSave(STALE, {
-      ok: true,
-      draft: savedDraft({
-        server: "stripe",
-        serverId: STRIPE,
-        ops: [IMPORT_REFUND],
-        source: { type: "mcp", bytes: 18_432 },
-        revision: 4,
-      }),
-    });
+    // The fake repeats its last answer, so every save is stale and every get
+    // returns the same unreadable draft.
+    const save = fakeSave(STALE);
     // A newer page stored an edit kind this page does not know.
     const get = fakeGet({
       ok: true,
@@ -806,26 +800,31 @@ describe("ChangesTab conflict", () => {
     expect(kept).toHaveAttribute("role", "alert");
     expect(kept.textContent).toBe(KEPT);
     expect(screen.queryByTestId("studio-pr-conflict")).toBeNull();
-    // The edits stay, at the stored revision, so the next save goes over it.
+    // The edits stay at this tab's own revision. Taking revision 3 would let
+    // the next save replace the whole list and delete the edits this page
+    // cannot read.
     expect(stored(draftKey("stripe"))).toEqual({
-      revision: 3,
+      revision: 1,
       ops: [IMPORT_REFUND],
     });
     expect(open.calls).toHaveLength(0);
+    // A second Open sends the same revision, so it conflicts again and still
+    // opens nothing. A reload is what brings a page able to merge.
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-opened")).toHaveTextContent(
-      "Opened steering PR #4721",
-    );
+    await waitFor(() => {
+      expect(save.calls).toHaveLength(2);
+    });
     expect(save.calls[1]).toStrictEqual({
       server: "stripe",
       serverId: STRIPE,
       ops: [IMPORT_REFUND],
-      revision: 3,
+      revision: 1,
     });
-    expect(open.calls).toStrictEqual([{ server: "stripe", revision: 4 }]);
+    expect(open.calls).toEqual([]);
+    expect(screen.queryByTestId("studio-pr-opened")).toBeNull();
   });
 
-  it("keeps this tab's edits when the stored draft holds more edits than a draft may", async () => {
+  it("keeps its own revision when the stored draft holds more edits than a draft may", async () => {
     seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
     const save = fakeSave(STALE);
     const get = fakeGet({
@@ -846,7 +845,7 @@ describe("ChangesTab conflict", () => {
       KEPT,
     );
     expect(stored(draftKey("stripe"))).toEqual({
-      revision: 3,
+      revision: 1,
       ops: [IMPORT_REFUND],
     });
   });
