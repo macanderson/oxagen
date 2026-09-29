@@ -15,14 +15,13 @@
 //
 // Base UI keeps the value in a hidden input named `name`, and the form sends
 // that input. React writes the new value into it only when it renders again,
-// so the pick renders at once through flushSync and the form is submitted
-// after it, with the new value.
+// so a pick marks the form for sending and an effect submits it after that
+// render, with the new value.
 //
 // Without script the list cannot open, so the filter cannot change. The
 // form's Apply button, shown only then (events.tsx), still sends the values
 // the page was drawn with.
-import { useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -54,6 +53,12 @@ export function FilterSelect({
 }) {
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
+  const picked = useRef(false);
+  useEffect(() => {
+    if (!picked.current) return;
+    picked.current = false;
+    inputRef.current?.form?.requestSubmit();
+  }, [value]);
   return (
     <Select
       items={items}
@@ -64,8 +69,8 @@ export function FilterSelect({
       onValueChange={(next, details) => {
         if (next === null || next === value) return;
         if (details.reason !== "item-press") return;
-        flushSync(() => setValue(next));
-        inputRef.current?.form?.requestSubmit();
+        picked.current = true;
+        setValue(next);
       }}
     >
       <SelectTrigger {...trigger}>

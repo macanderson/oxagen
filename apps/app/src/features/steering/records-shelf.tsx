@@ -404,7 +404,7 @@ export function RecordsList({
   const t = useTranslations("steering.records");
   const list = useTranslations("ui.list");
   const locale = useLocale();
-  const sortLabel = useId();
+  const sortLabelId = useId();
   const [sort, setSort] = useState<Sort>("shown");
   const [per, setPer] = useState<number>(10);
   const [page, setPage] = useState(1);
@@ -459,11 +459,11 @@ export function RecordsList({
         {/* The word names the Select's trigger by id, as the list bar's Sort
             does (ui/list-controls.tsx). */}
         <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <span id={sortLabel}>{t("sort")}</span>
+          <span id={sortLabelId}>{t("sort")}</span>
           <ListSelect
             size="sm"
             className="max-md:min-h-11 max-md:text-base"
-            aria-labelledby={sortLabel}
+            aria-labelledby={sortLabelId}
             items={SORTS.map((s) => ({ value: s, label: t(`sorts.${s}`) }))}
             value={sort}
             onValue={(value) => {
