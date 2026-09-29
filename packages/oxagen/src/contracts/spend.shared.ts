@@ -165,6 +165,16 @@ export const spendFigureSchema = z
   .strict();
 export type SpendFigure = z.output<typeof spendFigureSchema>;
 
+/** One day of a spend series: what the day's runs cost, and how many calls and runs. */
+export const spendDaySchema = z
+  .object({
+    day: daySchema,
+    cost: costSchema.nullable(),
+    calls: z.number().int().nonnegative(),
+    runs: z.number().int().nonnegative(),
+  })
+  .strict();
+
 /**
  * Runs in the window that recorded no usage, so no total counts their cost,
  * broken out by the harness that ran them (#3304).

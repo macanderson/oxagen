@@ -10,7 +10,7 @@ export const schema = {
     "Inclusive UTC day range, { from: YYYY-MM-DD, to: YYYY-MM-DD }",
   ),
   groupBy: spendGet.input.shape.groupBy.describe(
-    "The level to roll up by: operator, agent, model, tool or task",
+    "The level to roll up by: operator, agent, model, tool, task, cost_center or mcp_server",
   ),
 };
 
