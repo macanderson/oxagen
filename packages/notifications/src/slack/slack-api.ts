@@ -50,18 +50,28 @@ export class SlackApiError extends Error {
   readonly method: string;
   /** The HTTP status, or null when no response arrived. */
   readonly status: number | null;
+  /** Whether `code` repeats on every retry until a person acts (PERMANENT_CODES). */
+  readonly permanent: boolean;
 
   constructor(method: string, code: string, status: number | null) {
     super(`Slack ${method} failed: ${code}`);
     this.code = code;
     this.method = method;
     this.status = status;
+    this.permanent = PERMANENT_CODES.has(code);
   }
 }
 
-/** Whether a Slack failure repeats until a person reconnects or re-picks a channel. */
-export function isPermanentSlackError(err: unknown): err is SlackApiError {
-  return err instanceof SlackApiError && PERMANENT_CODES.has(err.code);
+/**
+ * Whether a Slack failure repeats until a person reconnects or re-picks a
+ * channel. The guard narrows to a SlackApiError whose `permanent` is true, so
+ * a SlackApiError that fails the check stays a SlackApiError in the other
+ * branch instead of narrowing to `never`.
+ */
+export function isPermanentSlackError(
+  err: unknown,
+): err is SlackApiError & { readonly permanent: true } {
+  return err instanceof SlackApiError && err.permanent;
 }
 
 type SlackBody = { ok?: unknown; error?: unknown } & Record<string, unknown>;
