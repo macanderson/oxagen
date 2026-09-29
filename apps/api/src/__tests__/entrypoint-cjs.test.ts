@@ -24,8 +24,11 @@
  */
 
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { transform } from "esbuild";
+import { runInThisContext } from "node:vm";
+import { build, transform } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 const ENTRYPOINT = fileURLToPath(new URL("../index.ts", import.meta.url));
@@ -34,6 +37,9 @@ const BACKFILL = fileURLToPath(
 );
 const BUILD_NODE = fileURLToPath(
   new URL("../../build-node.mjs", import.meta.url),
+);
+const MCP_STUDIO = fileURLToPath(
+  new URL("../../../../packages/mcp-studio/src/index.ts", import.meta.url),
 );
 
 describe("apps/api self-hosted entrypoint", () => {
@@ -84,4 +90,38 @@ describe("apps/api self-hosted entrypoint", () => {
     }
     expect(source).toMatch(/const BUNDLES = \[/);
   });
+
+  it("@oxagen/mcp-studio loads from a CJS bundle", async () => {
+    // In CJS output esbuild leaves `import.meta` empty, so `import.meta.url` is
+    // undefined. A package that reads it when its module loads crashes
+    // server.cjs at startup, and only the staging deploy boots that bundle.
+    // mcp-studio did this with a module-level schemas path, and main's api
+    // deploy failed on 0fccf9e36 (#4706). The API reaches mcp-studio through
+    // @oxagen/handlers. This bundles the package the way build-node.mjs does
+    // and loads the result as a CJS module.
+    const result = await build({
+      entryPoints: [MCP_STUDIO],
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      target: "node22",
+      write: false,
+      logLevel: "silent",
+    });
+    const code = result.outputFiles?.[0]?.text ?? "";
+    const loaded = { exports: {} as Record<string, unknown> };
+    const wrapper = runInThisContext(
+      `(function (exports, require, module, __filename, __dirname) {${code}\n})`,
+    ) as (...args: unknown[]) => void;
+    expect(() =>
+      wrapper(
+        loaded.exports,
+        createRequire(MCP_STUDIO),
+        loaded,
+        MCP_STUDIO,
+        dirname(MCP_STUDIO),
+      ),
+    ).not.toThrow();
+    expect(typeof loaded.exports.schemasDir).toBe("function");
+  }, 60_000);
 });

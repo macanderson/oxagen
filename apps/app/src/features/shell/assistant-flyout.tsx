@@ -116,7 +116,13 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, List, SquarePen } from "lucide-react";
+//
+// The transcript scrolls in shadcn's message scroller (`ui/message-scroller`,
+// ADR-221). A question just asked moves to the top with its reply growing
+// under it, a restored thread opens at its last question, and a button returns
+// a reader who scrolled up to the newest message.
+import { WarningCircleIcon } from "@phosphor-icons/react";
+import { List, SquarePen } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -189,6 +195,14 @@ import { useShellState } from "./shell-state";
 import { useEngineHealth } from "./use-engine-health";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/ui/message-scroller";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
@@ -367,13 +381,6 @@ function focusComposerOr(
   if (composer !== null && !composer.disabled) composer.focus();
   else fallback?.focus();
 }
-
-/**
- * How close to the bottom still counts as reading the newest turn. A few
- * pixels of rounding or a trailing margin must not unpin a reader who never
- * scrolled.
- */
-const PIN_SLACK_PX = 32;
 
 function subscribeToWidth(onChange: () => void): () => void {
   const mql = window.matchMedia(COVERS_THE_APP);
@@ -611,7 +618,6 @@ export function AssistantFlyout({
   const declaredRecord = usePageRecord(route);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   // A monotonic key per entry: two turns in the same millisecond would collide
   // on a clock-derived one, and React needs these stable across re-renders.
@@ -628,10 +634,10 @@ export function AssistantFlyout({
       open: assistantOpen,
       restore: restoreEntry,
     });
-  // Whether the reader is at the bottom of the transcript. A streamed reply
-  // grows fragment by fragment, and the growth follows the tail only while the
-  // reader has not scrolled up to read something else.
-  const pinnedRef = useRef(true);
+  // How many conversations have been opened from the list. The transcript's
+  // scroller keys on it, so an opened conversation remounts and lands at its
+  // last question the way a restored thread does.
+  const [openedCount, setOpenedCount] = useState(0);
   // The turn whose stop is on its way or has been taken, so Stop does not
   // send twice, and the turn whose stop failed, so the flyout can say so.
   const [stopping, setStopping] = useState<string | null>(null);
@@ -752,22 +758,6 @@ export function AssistantFlyout({
       closeRef.current?.focus();
     return release;
   }, [modal]);
-
-  // Keep the newest turn in view. A new entry, such as the question just
-  // asked, always scrolls to it. A streamed reply growing in place follows
-  // the tail only while the reader is pinned there. Guarded because scrollTo
-  // is a browser affordance jsdom does not implement, and the shell's own
-  // tests mount this host on every render — a cosmetic scroll must not fail
-  // them.
-  const entryCountRef = useRef(entries.length);
-  useEffect(() => {
-    const log = logRef.current;
-    const added = entries.length !== entryCountRef.current;
-    entryCountRef.current = entries.length;
-    if (log === null || typeof log.scrollTo !== "function") return;
-    if (!added && !pinnedRef.current) return;
-    log.scrollTo({ top: log.scrollHeight });
-  }, [entries]);
 
   // The width the person left the panel at. The cookie is read as a store:
   // the server renders the designed width, and the first client read corrects
@@ -1274,197 +1264,219 @@ export function AssistantFlyout({
             refusal keeps its own `role="alert"`, which is assertive and
             interrupts.
 
-            The region is this container, which renders on every pass, rather
-            than the list inside it, which appears with the first turn: a
-            polite region inserted in the same commit as the text it holds is
-            announced unreliably, so only the contents may be conditional.
+            The region is the scroller's content, which renders on every pass
+            and carries `role="log"`, rather than the entries inside it, which
+            appear with the first turn: a polite region inserted in the same
+            commit as the text it holds is announced unreliably, so only the
+            contents may be conditional.
+
+            The scroller remounts on a workspace switch and on a conversation
+            opened from the list, so each opens at its last question. A new
+            question is the scroll anchor: it moves to the top, and the reply
+            grows under it.
           */}
-          <div
-            ref={logRef}
-            role="log"
-            className="min-h-0 flex-1 overflow-y-auto p-4"
-            onScroll={(e) => {
-              const log = e.currentTarget;
-              const gap = log.scrollHeight - log.scrollTop - log.clientHeight;
-              pinnedRef.current = gap < PIN_SLACK_PX;
-            }}
+          <MessageScrollerProvider
+            key={`${shownSlugs?.org ?? ""}/${shownSlugs?.ws ?? ""}:${String(openedCount)}`}
+            autoScroll
+            defaultScrollPosition="last-anchor"
           >
-            {entries.length === 0 ? (
-              <div
-                className="flex flex-col gap-2 py-6"
-                data-testid="assistant-intro"
-              >
-                <h3 className="text-[13px] leading-5 font-semibold">
-                  {t("intro.title")}
-                </h3>
-                <p className="text-[13px] leading-5 text-muted-foreground">
-                  {t("intro.body")}
-                </p>
-                <AssistantSuggestions />
-              </div>
-            ) : (
-              <ol className="flex flex-col gap-3" data-testid="assistant-log">
-                {entries.map((entry) => (
-                  <li key={entry.id}>
-                    {entry.kind === "asked" ? (
-                      <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
-                        <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
-                          {entry.text}
+            <MessageScroller className="min-h-0 flex-1">
+              <MessageScrollerViewport aria-label={t("transcript")}>
+                <MessageScrollerContent
+                  className="gap-3 p-4"
+                  // Named only once there is a turn, as the list it replaced
+                  // was: the intro is not the log.
+                  data-testid={
+                    entries.length === 0 ? undefined : "assistant-log"
+                  }
+                >
+                  {entries.length === 0 ? (
+                    <MessageScrollerItem messageId="intro">
+                      <div
+                        className="flex flex-col gap-2 py-6"
+                        data-testid="assistant-intro"
+                      >
+                        <h3 className="text-[13px] leading-5 font-semibold">
+                          {t("intro.title")}
+                        </h3>
+                        <p className="text-[13px] leading-5 text-muted-foreground">
+                          {t("intro.body")}
                         </p>
-                        {entry.files === undefined ? null : (
-                          <AssistantAttachmentChips
-                            files={entry.files.map((f) => ({
-                              ...f,
-                              state: "done" as const,
-                              problem: null,
-                            }))}
-                            testId="assistant-sent-attachments"
-                          />
-                        )}
+                        <AssistantSuggestions />
                       </div>
-                    ) : entry.kind === "answering" ? (
-                      <AssistantAnswering
-                        text={entry.text}
-                        tools={entry.tools}
-                      />
-                    ) : entry.kind === "dropped" ? (
-                      <AssistantDropped
-                        text={entry.text}
-                        runId={entry.runId}
-                        load={entry.load}
-                        org={entry.org}
-                        ws={entry.ws}
-                        retryDisabled={pending}
-                        onLoad={() => {
-                          if (shownScope !== null)
-                            void loadReply(shownScope, entry);
-                        }}
-                        onRetry={() => {
-                          void send(entry.question, { fromDraft: false });
-                        }}
-                      />
-                    ) : entry.kind === "answered" ? (
-                      <div data-testid="assistant-answer">
-                        <AssistantMarkdown>{entry.text}</AssistantMarkdown>
-                        {entry.stopped === true ? (
-                          <p
-                            data-testid="assistant-stopped"
-                            className="mt-1 text-[12px] text-muted-foreground"
-                          >
-                            {t("stopped")}
+                    </MessageScrollerItem>
+                  ) : null}
+                  {entries.map((entry) => (
+                    <MessageScrollerItem
+                      key={entry.id}
+                      messageId={entry.id}
+                      scrollAnchor={entry.kind === "asked"}
+                    >
+                      {entry.kind === "asked" ? (
+                        <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
+                          <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
+                            {entry.text}
                           </p>
-                        ) : null}
-                        <p
-                          data-testid="assistant-recorded-as"
-                          className="mt-1 font-mono text-[11px] text-muted-foreground"
-                        >
-                          {t("recordedAs")}{" "}
-                          {org !== null && ws !== null ? (
-                            <SafeLink
-                              to={routes.run(org, ws, entry.runId)}
-                              className={linkText}
-                            >
-                              {entry.runId}
-                            </SafeLink>
-                          ) : (
-                            entry.runId
+                          {entry.files === undefined ? null : (
+                            <AssistantAttachmentChips
+                              files={entry.files.map((f) => ({
+                                ...f,
+                                state: "done" as const,
+                                problem: null,
+                              }))}
+                              testId="assistant-sent-attachments"
+                            />
                           )}
-                        </p>
-                        <AssistantToolCalls calls={entry.toolCalls} />
-                        {/* What the run cost, from its record (#4167). */}
-                        {shownScope === null ? null : (
-                          <AssistantReplyCost
-                            scope={shownScope}
-                            runId={entry.runId}
-                          />
-                        )}
-                        {entry.parked.length === 0 ? null : (
+                        </div>
+                      ) : entry.kind === "answering" ? (
+                        <AssistantAnswering
+                          text={entry.text}
+                          tools={entry.tools}
+                        />
+                      ) : entry.kind === "dropped" ? (
+                        <AssistantDropped
+                          text={entry.text}
+                          runId={entry.runId}
+                          load={entry.load}
+                          org={entry.org}
+                          ws={entry.ws}
+                          retryDisabled={pending}
+                          onLoad={() => {
+                            if (shownScope !== null)
+                              void loadReply(shownScope, entry);
+                          }}
+                          onRetry={() => {
+                            void send(entry.question, { fromDraft: false });
+                          }}
+                        />
+                      ) : entry.kind === "answered" ? (
+                        <div data-testid="assistant-answer">
+                          <AssistantMarkdown>{entry.text}</AssistantMarkdown>
+                          {entry.stopped === true ? (
+                            <p
+                              data-testid="assistant-stopped"
+                              className="mt-1 text-[12px] text-muted-foreground"
+                            >
+                              {t("stopped")}
+                            </p>
+                          ) : null}
                           <p
-                            data-testid="assistant-parked"
-                            className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+                            data-testid="assistant-recorded-as"
+                            className="mt-1 font-mono text-[11px] text-muted-foreground"
                           >
-                            {t("parked", { count: entry.parked.length })}
+                            {t("recordedAs")}{" "}
+                            {org !== null && ws !== null ? (
+                              <SafeLink
+                                to={routes.run(org, ws, entry.runId)}
+                                className={linkText}
+                              >
+                                {entry.runId}
+                              </SafeLink>
+                            ) : (
+                              entry.runId
+                            )}
                           </p>
-                        )}
-                        {/* Each parked write as a card, with Approve and Deny
-                            (#4162). */}
-                        {entry.parked.length === 0 ||
-                        threadOrg === undefined ||
-                        threadWs === undefined ? null : (
-                          <AssistantParkedApprovals
-                            org={threadOrg}
-                            ws={threadWs}
-                            runId={entry.runId}
-                            cards={entry.parked}
-                          />
-                        )}
-                        {/*
-                          Useful or wrong, recorded against the run (#4169).
-                          Only inside a workspace, like the run link: the vote
-                          names the workspace the thread was asked in. A
-                          stopped reply keeps its controls: the turn still
-                          saved an assistant message under this run (#4164),
-                          so the vote resolves to it.
-                        */}
-                        {(() => {
-                          const conversation =
-                            entry.conversationId ?? thread.conversationId;
-                          return org !== null &&
-                            ws !== null &&
-                            conversation !== null ? (
-                            <AssistantReplyFeedback
-                              org={org}
-                              ws={ws}
-                              conversationId={conversation}
+                          <AssistantToolCalls calls={entry.toolCalls} />
+                          {/* What the run cost, from its record (#4167). */}
+                          {shownScope === null ? null : (
+                            <AssistantReplyCost
+                              scope={shownScope}
                               runId={entry.runId}
                             />
-                          ) : null;
-                        })()}
-                      </div>
-                    ) : (
-                      <div>
-                        <p
-                          role="alert"
-                          data-testid={`assistant-${entry.code}`}
-                          className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
-                        >
-                          <CircleAlert
-                            aria-hidden="true"
-                            className="mt-0.5 size-4 flex-none text-error"
-                          />
-                          <span>
-                            <RefusalText code={entry.code} org={org} />
-                          </span>
-                        </p>
-                        {entry.detail === null ? null : (
+                          )}
+                          {entry.parked.length === 0 ? null : (
+                            <p
+                              data-testid="assistant-parked"
+                              className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+                            >
+                              {t("parked", { count: entry.parked.length })}
+                            </p>
+                          )}
+                          {/* Each parked write as a card, with Approve and Deny
+                              (#4162). */}
+                          {entry.parked.length === 0 ||
+                          threadOrg === undefined ||
+                          threadWs === undefined ? null : (
+                            <AssistantParkedApprovals
+                              org={threadOrg}
+                              ws={threadWs}
+                              runId={entry.runId}
+                              cards={entry.parked}
+                            />
+                          )}
+                          {/*
+                            Useful or wrong, recorded against the run (#4169).
+                            Only inside a workspace, like the run link: the vote
+                            names the workspace the thread was asked in. A
+                            stopped reply keeps its controls: the turn still
+                            saved an assistant message under this run (#4164),
+                            so the vote resolves to it.
+                          */}
+                          {(() => {
+                            const conversation =
+                              entry.conversationId ?? thread.conversationId;
+                            return org !== null &&
+                              ws !== null &&
+                              conversation !== null ? (
+                              <AssistantReplyFeedback
+                                org={org}
+                                ws={ws}
+                                conversationId={conversation}
+                                runId={entry.runId}
+                              />
+                            ) : null;
+                          })()}
+                        </div>
+                      ) : (
+                        <div>
                           <p
-                            data-testid="assistant-refusal-code"
-                            className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                            role="alert"
+                            data-testid={`assistant-${entry.code}`}
+                            className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
                           >
-                            {entry.detail}
+                            <WarningCircleIcon
+                              aria-hidden="true"
+                              className="mt-0.5 size-4 flex-none text-error"
+                            />
+                            <span>
+                              <RefusalText code={entry.code} org={org} />
+                            </span>
                           </p>
-                        )}
-                        {RETRYABLE.has(entry.code) && inWorkspace ? (
-                          <button
-                            type="button"
-                            data-testid="assistant-retry"
-                            disabled={pending || engineDown}
-                            onClick={() => {
-                              void send(entry.question, { fromDraft: false });
-                            }}
-                            className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
-                          >
-                            {t("retry")}
-                          </button>
-                        ) : null}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            )}
-            {pending ? <AssistantThinking label={t("thinking")} /> : null}
-          </div>
+                          {entry.detail === null ? null : (
+                            <p
+                              data-testid="assistant-refusal-code"
+                              className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                            >
+                              {entry.detail}
+                            </p>
+                          )}
+                          {RETRYABLE.has(entry.code) && inWorkspace ? (
+                            <button
+                              type="button"
+                              data-testid="assistant-retry"
+                              disabled={pending || engineDown}
+                              onClick={() => {
+                                void send(entry.question, { fromDraft: false });
+                              }}
+                              className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                            >
+                              {t("retry")}
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </MessageScrollerItem>
+                  ))}
+                  {pending ? (
+                    <MessageScrollerItem messageId="thinking">
+                      <AssistantThinking label={t("thinking")} />
+                    </MessageScrollerItem>
+                  ) : null}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton label={t("scrollToEnd")} />
+            </MessageScroller>
+          </MessageScrollerProvider>
 
           <div className="flex-none border-t border-border px-3 py-3">
             {inWorkspace ? (
@@ -1636,7 +1648,7 @@ export function AssistantFlyout({
               onOpened={(opened) => {
                 if (scope === null) return;
                 openThread(scope, opened);
-                pinnedRef.current = true;
+                setOpenedCount((count) => count + 1);
                 showThread();
               }}
               onShowCurrent={showThread}

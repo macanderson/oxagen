@@ -4841,6 +4841,7 @@ type Messages = {
         za: string;
       };
       rows: string;
+      pager: string;
       nothing: string;
       range: string;
       previous: string;
@@ -5110,6 +5111,7 @@ type Messages = {
       search: string;
       all: string;
       rows: string;
+      pager: string;
       range: string;
       previous: string;
       next: string;
@@ -7868,6 +7870,8 @@ type Messages = {
       resize: string;
       close: string;
       thinking: string;
+      transcript: string;
+      scrollToEnd: string;
       recordedAs: string;
       cost: {
         label: string;
@@ -11170,6 +11174,10 @@ type Messages = {
       };
       failed: string;
       photoPlaceholder: string;
+    };
+    toast: {
+      region: string;
+      close: string;
     };
   };
 };

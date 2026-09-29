@@ -29,6 +29,7 @@ function renderPager(props: Partial<Parameters<typeof RunsPager>[0]> = {}) {
       <RunsPager
         list={list()}
         pageSize={10}
+        onPageSize={vi.fn()}
         rows={10}
         cursor={null}
         nextCursor={null}

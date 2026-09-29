@@ -285,6 +285,8 @@
       "resize": "Resize stella",
       "close": "Close stella",
       "thinking": "Working…",
+      "transcript": "Conversation with stella",
+      "scrollToEnd": "Scroll to the newest message",
       "recordedAs": "recorded as",
       "cost": {
         "label": "cost",

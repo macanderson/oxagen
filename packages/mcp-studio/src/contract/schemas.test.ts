@@ -12,28 +12,28 @@ import {
   MCP_STUDIO_SCHEMAS,
   renderSchemaFile,
   schemaFilePath,
-  SCHEMAS_DIR,
+  schemasDir,
   writeSchemaFiles,
 } from "./schemas";
 
 function filesUnder(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    return statSync(path).isDirectory() ? filesUnder(path) : [relative(SCHEMAS_DIR, path)];
+    return statSync(path).isDirectory() ? filesUnder(path) : [relative(schemasDir(), path)];
   });
 }
 
 describe("published schemas", () => {
   it("match the committed files byte for byte", () => {
     for (const entry of MCP_STUDIO_SCHEMAS) {
-      const committed = readFileSync(join(SCHEMAS_DIR, schemaFilePath(entry)), "utf8");
+      const committed = readFileSync(join(schemasDir(), schemaFilePath(entry)), "utf8");
       expect(committed, `${entry.id}: run scripts/generate-schemas.ts`).toBe(renderSchemaFile(entry));
     }
   });
 
   it("leave no stale file in the schemas folder", () => {
     const expected = MCP_STUDIO_SCHEMAS.map(schemaFilePath).sort();
-    expect(filesUnder(SCHEMAS_DIR).sort()).toEqual(expected);
+    expect(filesUnder(schemasDir()).sort()).toEqual(expected);
   });
 
   it("carry the ids the Shared contract names", () => {
