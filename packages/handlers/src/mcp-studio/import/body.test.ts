@@ -70,7 +70,7 @@ describe("reviewBody", () => {
           {
             tool: "create_refund",
             before: { risk: "high", sideEffect: "irreversible", egress: "org_tenant", impacts: ["moves_money"] },
-            after: { risk: "medium", sideEffect: "reversible", egress: "org_tenant", impacts: [] },
+            after: { risk: "medium", sideEffect: "write", egress: "org_tenant", impacts: [] },
           },
         ],
         described: ["create_refund"],
@@ -79,7 +79,7 @@ describe("reviewBody", () => {
       3,
     );
     expect(body).toContain(
-      "- `create_refund` from risk high, side effect irreversible, egress org_tenant, impacts moves_money to risk medium, side effect reversible, egress org_tenant, no impacts",
+      "- `create_refund` from risk high, side effect irreversible, egress org_tenant, impacts moves_money to risk medium, side effect write, egress org_tenant, no impacts",
     );
     expect(body).toContain("## Changed descriptions\n\n- `create_refund`");
     expect(body).toContain("## Saved tests\n\n- `list_charges`");

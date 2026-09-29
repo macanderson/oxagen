@@ -42,10 +42,10 @@ Org Owner or Admin, or workspace Owner. The handler checks the role with `assert
 ## Side effects
 
 1. The handler reads the draft and refuses a stale revision.
-2. It reads the folder's managed files on the production branch, and the names of the workspace's credentials.
+2. It resolves the production branch to one commit, and reads the folder's managed files at that commit. It also reads the names of the workspace's credentials.
 3. It imports the draft's source again, so the PR is built from inputs rather than from Studio's view.
 4. It builds the folder and runs the tool checks.
-5. It opens the steering PR through the tools steering PR path. When a PR is already open on `tools/<server>`, it adds one commit to that PR instead.
+5. It opens the steering PR through the tools steering PR path. A new branch starts at the commit from step 2, so a merge during the import stays in the PR's base. When a PR is already open on `tools/<server>`, it reads the branch at one commit and adds one commit to that PR instead. When the branch moves before the write, Review refuses.
 6. It records the PR on the draft in `mcp.studio_drafts`.
 
 The commit holds only the files that differ from the branch it lands on. The contract declares the server folder (`tool_server_folder`) as its audit target.
@@ -63,6 +63,8 @@ The commit holds only the files that differ from the branch it lands on. The con
 | `not_found` (404) | `draft_not_found`: the server folder has no draft |
 | `conflict` (409) | `draft_revision_stale`: the stored draft is at another revision. Reload it, then Review |
 | `conflict` (409) | `draft_unchanged`: the open PR or the production branch already holds every edit |
+| `conflict` (409) | `tools_branch_moved`: a commit landed on `tools/<server>` while Review built the folder. Review again |
+| `conflict` (409) | `production_branch_missing`: the steering repo has no production branch |
 | `conflict` (409) | `tools_unclassified`: an imported tool has no risk, side effect, or egress |
 | `conflict` (409) | `folder_invalid` or `definition_path_invalid`: the folder does not validate or lock, or the definition names a file outside the folder |
 | `conflict` (409) | `server_toml_missing`, `server_toml_invalid`, or `server_name_mismatch`: server.toml is absent, does not parse, or names another server |

@@ -205,12 +205,28 @@ function billingFirstImport(commit: string | null): StoredStudioDraft {
 
 type OpenPr = { number: number; htmlUrl: string; body: string };
 
+/** The fake head commit of a branch: its name in hex, cut or padded to 40 characters. */
+function headOf(branch: string): string {
+  return Buffer.from(branch).toString("hex").padEnd(40, "0").slice(0, 40);
+}
+
+/**
+ * A repository whose branches are `refs`. Files are found by commit only, so a
+ * read by branch name finds nothing, and every test proves Review reads the
+ * commit it resolved.
+ */
 function fakeHost(refs: Record<string, Tree>, open: OpenPr | null) {
+  const trees = new Map(Object.entries(refs).map(([branch, tree]) => [headOf(branch), tree]));
   return {
     resolveRepository: vi.fn(async () => REPO),
-    readFile: vi.fn(async (_repo: SteeringRepository, path: string, ref: string) => refs[ref]?.[path] ?? null),
+    branchHead: vi.fn(async (_repo: SteeringRepository, branch: string) =>
+      branch in refs ? headOf(branch) : null,
+    ),
+    readFile: vi.fn(
+      async (_repo: SteeringRepository, path: string, ref: string) => trees.get(ref)?.[path] ?? null,
+    ),
     listFiles: vi.fn(async (_repo: SteeringRepository, ref: string, dir: string) =>
-      Object.keys(refs[ref] ?? {})
+      Object.keys(trees.get(ref) ?? {})
         .filter((path) => path.startsWith(`${dir}/`))
         .sort(),
     ),
@@ -466,6 +482,12 @@ describe("open_studio_review on a folder already on main", () => {
 
     const args = committed(r.opener);
     expect(args.title).toBe("Update tools for billing");
+    // Every read and the new branch use the one production commit Review
+    // resolved, so a merge during the import cannot sit under this commit.
+    expect(args.at).toBe(headOf("main"));
+    expect(r.host.branchHead).toHaveBeenCalledWith(REPO, "main");
+    for (const call of r.host.readFile.mock.calls) expect(call[2]).toBe(headOf("main"));
+    for (const call of r.host.listFiles.mock.calls) expect(call[1]).toBe(headOf("main"));
     const changed = paths(args, "billing");
     expect(changed).toContain("tools.toml");
     for (const kept of ["server.toml", "openapi.yaml", "tests/calls.jsonl", "tests/selection.jsonl"]) {
@@ -535,6 +557,16 @@ describe("open_studio_review refuses", () => {
     expect(r.store.recordPr).not.toHaveBeenCalled();
   });
 
+  it("a repository without its production branch", async () => {
+    const r = rig(stripeDraft([]), { refs: {} });
+    const err = await refusal(r.run({ server: "stripe" }));
+    expect(err.code).toBe("conflict");
+    expect(err.reason).toBe("production_branch_missing");
+    expect(err.message).toBe("acme/steering has no main branch.");
+    expect(r.host.listFiles).not.toHaveBeenCalled();
+    expect(r.opener.open).not.toHaveBeenCalled();
+  });
+
   it("a server with no draft", async () => {
     const r = rig(null);
     const err = await refusal(r.run({ server: "stripe" }));
@@ -568,14 +600,18 @@ describe("open_studio_review refuses", () => {
 describe("open_studio_review with a steering PR open on the branch", () => {
   const ops = (): StudioDraftOp[] => [imp("list_charges"), classify("list_charges", READ_THIRD_PARTY)];
   const open: OpenPr = { number: 7, htmlUrl: prUrl(7), body: "" };
+  const refs = (): Record<string, Tree> => ({ main: {}, "tools/stripe": {} });
 
   it("adds a commit to the open PR", async () => {
-    const r = rig(stripeDraft(ops()), { open });
+    const r = rig(stripeDraft(ops()), { refs: refs(), open });
     const out = await r.run({ server: "stripe" });
 
     expect(r.host.findOpenPullRequest).toHaveBeenCalledWith(REPO, { head: reviewBranch("stripe"), base: "main" });
     const args = committed(r.opener);
     expect(args.existing).toStrictEqual({ number: 7 });
+    // The branch's files were read at this commit, and the opener refuses a
+    // branch that moved off it.
+    expect(args.at).toBe(headOf("tools/stripe"));
     expect(paths(args, "stripe")).toStrictEqual(["server.toml", "tools.lock.json", "tools.toml"]);
     expect(out.number).toBe(7);
     expect(r.store.recordPr).toHaveBeenCalledWith(SCOPE, "stripe", {
@@ -598,7 +634,7 @@ describe("open_studio_review with a steering PR open on the branch", () => {
   });
 
   it("opens a new PR when the open one closed before the write", async () => {
-    const r = rig(stripeDraft(ops()), { open });
+    const r = rig(stripeDraft(ops()), { refs: refs(), open });
     r.opener.open.mockRejectedValueOnce(
       new HandlerError({ code: "conflict", reason: "tools_pr_not_open", message: "PR #7 is closed." }),
     );
@@ -607,11 +643,34 @@ describe("open_studio_review with a steering PR open on the branch", () => {
     expect(r.opener.open).toHaveBeenCalledTimes(2);
     expect(r.opener.open.mock.calls[0]?.[1].existing).toStrictEqual({ number: 7 });
     expect(r.opener.open.mock.calls[1]?.[1].existing).toBeUndefined();
+    expect(r.opener.open.mock.calls[1]?.[1].at).toBe(headOf("main"));
     expect(out.number).toBe(41);
   });
 
+  it("opens a new PR when the branch is gone before Review reads it", async () => {
+    const r = rig(stripeDraft(ops()), { refs: { main: {} }, open });
+    const out = await r.run({ server: "stripe" });
+
+    expect(r.opener.open).toHaveBeenCalledTimes(1);
+    const args = committed(r.opener);
+    expect(args.existing).toBeUndefined();
+    expect(args.at).toBe(headOf("main"));
+    expect(out.number).toBe(41);
+  });
+
+  it("passes on a branch that moved after Review read it", async () => {
+    const r = rig(stripeDraft(ops()), { refs: refs(), open });
+    r.opener.open.mockRejectedValueOnce(
+      new HandlerError({ code: "conflict", reason: "tools_branch_moved", message: "tools/stripe moved." }),
+    );
+    const err = await refusal(r.run({ server: "stripe" }));
+    expect(err.reason).toBe("tools_branch_moved");
+    expect(r.opener.open).toHaveBeenCalledTimes(1);
+    expect(r.store.recordPr).not.toHaveBeenCalled();
+  });
+
   it("passes on any other refusal from the opener", async () => {
-    const r = rig(stripeDraft(ops()), { open });
+    const r = rig(stripeDraft(ops()), { refs: refs(), open });
     r.opener.open.mockRejectedValueOnce(
       new HandlerError({ code: "conflict", reason: "tools_check_failed", message: "The check failed." }),
     );
