@@ -8,9 +8,8 @@
 //
 //   - start_studio_discovery, get_studio_discovery and list_studio_tools:
 //     lane M10 part 2 (#4682). Discovery progress after Add server, and the
-//     tools discovery found. The shapes follow M10's DiscoveryRow and
-//     ServerTools (packages/handlers/src/mcp-studio/discovery), with dates as
-//     ISO strings.
+//     tools discovery found. The shapes are the ones M10 set and the
+//     coordinator accepted, with dates as ISO strings.
 //   - try_studio_tool: Try it, metered as a governed action (#4742).
 //   - draft_studio_description: Draft on the tool panel, billed as in-app
 //     agent spend (#4742).
@@ -23,7 +22,12 @@
 // This module imports nothing server-only, so client components import it.
 // A credential crosses only set_mcp_credential's input, which a form reads at
 // submit and never holds in state.
-import type { RegistryServer } from "@/data/contracts/tools";
+import type {
+  RegistryServer,
+  ToolEgress,
+  ToolRiskGrade,
+  ToolSideEffect,
+} from "@/data/contracts/tools";
 import type { StudioGap } from "./gaps";
 import type { StudioFinding } from "./seams";
 
@@ -46,6 +50,13 @@ type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
  * code it knows to its own copy.
  */
 type Refused = { ok: false; reason: "failed"; code: string };
+
+/**
+ * A capability's answer as Studio's action returns it. The capability's
+ * output carries no `ok`, as get_studio_draft returns `{ draft }`. The action
+ * adds `ok: true` to it, or refuses with the handler's code.
+ */
+type Answer<Output> = ({ ok: true } & Output) | Refused;
 
 /**
  * One capability as Studio calls it. A control carries the name as
@@ -72,13 +83,17 @@ function stub<Name extends PendingCapability, Input, Result>(
 
 // ---- Discovery (lane M10 part 2) ------------------------------------------
 
-/** One server's discovery (M10's DiscoveryRow). */
+/** One server's discovery. */
 export type StudioDiscovery = {
+  /** The discovery row's uuid. It stays the same across the server's runs. */
+  id: string;
   /** The folder name under tools/servers/. */
   server: string;
   /** `mcs_…`, or null before the server has a registry row. */
   mcpServerId: string | null;
   status: "queued" | "running" | "succeeded" | "failed";
+  /** True when the discovery has been queued or running for over an hour. */
+  stalled: boolean;
   trigger:
     | "schedule"
     | "list_changed"
@@ -115,18 +130,74 @@ export type StudioDiscovery = {
   withheld: readonly string[];
 };
 
-/** One tool the last discovery read (M10's ServerTool). */
-export type StudioServerTool = {
+/**
+ * One tool's classification. An imported tool's comes from tools.toml and is
+ * confirmed. An available tool's is Studio's suggestion, unconfirmed, and the
+ * page shows it grey.
+ */
+type StudioServerToolClassification = {
+  risk: ToolRiskGrade;
+  sideEffect: ToolSideEffect;
+  egress: ToolEgress;
+  impacts: readonly string[];
+  confirmed: boolean;
+  /**
+   * What the suggestion came from, such as `annotations` or `fail_safe`, or
+   * null once a person set the values. For an OpenAPI, GraphQL or gRPC
+   * server, an available tool's suggestion falls back to `fail_safe`.
+   */
+  basis: string | null;
+};
+
+/**
+ * One row of list_studio_tools. The rows run one per tools.toml key (state
+ * imported), then one per snapshot tool that no imported key uses (state
+ * available).
+ */
+type StudioServerTool = {
+  /** The tools.toml key, or null for an available tool. */
+  key: string | null;
+  state: "imported" | "available";
   /** The upstream name, as the source offers it. */
   name: string;
   description: string | null;
+  /** The description tools.toml sets over the upstream one, if any. */
+  importedDescription: string | null;
   inputSchema: Readonly<Record<string, unknown>>;
   /** The MCP hints, or null when the source gives none. */
   annotations: Readonly<Record<string, unknown>> | null;
-  snapshotId: string;
-  capturedAt: string;
+  /**
+   * What the tool's definition costs the model, or null when unknown. For an
+   * OpenAPI, GraphQL or gRPC server, an available tool's count leaves out its
+   * title and outputSchema.
+   */
+  tokens: number | null;
+  classification: StudioServerToolClassification;
+  snapshotId: string | null;
+  capturedAt: string | null;
   /** True while the gateway hides the tool until the sync steering PR merges. */
   withheld: boolean;
+};
+
+/** list_studio_tools' output: one server's tools and what they cost. */
+export type StudioToolsList = {
+  server: string;
+  mcpServerId: string | null;
+  /** The newest snapshot the rows read, or null before the first discovery. */
+  snapshotId: string | null;
+  capturedAt: string | null;
+  exposure: { mode: "direct" | "search"; budget: number };
+  /** The imported definitions' tokens against the budget; null when unknown. */
+  tokens: { definitions: number | null; budget: number };
+  /** How many tools tools.toml imports. */
+  imported: number;
+  /** How many tools the last snapshot offers. */
+  offered: number;
+  /** True when the definitions would fit better behind search. */
+  searchRecommended: boolean;
+  /** Why tools.toml did not compile, or null when it did. */
+  compileError: string | null;
+  tools: readonly StudioServerTool[];
 };
 
 type ServerInput = {
@@ -134,33 +205,34 @@ type ServerInput = {
   server: string;
 };
 
-/** Ask for a discovery of one server now. */
+/**
+ * Ask for a discovery of one server now. Org Owner and Admin, and workspace
+ * Owner and Member.
+ */
 export const startStudioDiscovery = stub<
   "start_studio_discovery",
   ServerInput,
-  { ok: true; discovery: StudioDiscovery } | Refused
+  Answer<{ discovery: StudioDiscovery }>
 >("start_studio_discovery", "discovery");
 
-/** One server's latest discovery, or null before the first one. */
+/**
+ * One server's latest discovery, or null before the first one. Workspace
+ * Viewers may read it too.
+ */
 export const getStudioDiscovery = stub<
   "get_studio_discovery",
   ServerInput,
-  { ok: true; discovery: StudioDiscovery | null } | Refused
+  Answer<{ discovery: StudioDiscovery | null }>
 >("get_studio_discovery", "discovery");
 
-/** The tools one server's last discovery read. Empty before the first one. */
+/**
+ * One server's tools: its tools.toml keys, then the snapshot tools no key
+ * imports. Workspace Viewers may read it too.
+ */
 export const listStudioTools = stub<
   "list_studio_tools",
   ServerInput,
-  | {
-      ok: true;
-      server: string;
-      /** The newest snapshot row among the tools, or null with no tools. */
-      snapshotId: string | null;
-      capturedAt: string | null;
-      tools: readonly StudioServerTool[];
-    }
-  | Refused
+  Answer<StudioToolsList>
 >("list_studio_tools", "discovery");
 
 // ---- Try it and Draft (#4742) ---------------------------------------------
@@ -234,7 +306,7 @@ type StudioFindingsList = {
 export const listStudioFindings = stub<
   "list_studio_findings",
   ServerInput,
-  { ok: true; list: StudioFindingsList } | Refused
+  Answer<StudioFindingsList>
 >("list_studio_findings", "findings");
 
 export type ListStudioFindings = typeof listStudioFindings;
@@ -262,15 +334,13 @@ export type SetMcpCredentialInput =
 export const setMcpCredential = stub<
   "set_mcp_credential",
   SetMcpCredentialInput,
-  | {
-      ok: true;
-      name: string;
-      /** `oxagen:credential/<name>`, the value server.toml names. */
-      reference: string;
-      /** False when the call replaced a credential of that name. */
-      created: boolean;
-    }
-  | Refused
+  Answer<{
+    name: string;
+    /** `oxagen:credential/<name>`, the value server.toml names. */
+    reference: string;
+    /** False when the call replaced a credential of that name. */
+    created: boolean;
+  }>
 >("set_mcp_credential", "credentials");
 
 export type SetMcpCredential = typeof setMcpCredential;

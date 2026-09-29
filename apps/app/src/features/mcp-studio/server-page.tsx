@@ -263,7 +263,7 @@ async function findingsOf(
 ): Promise<readonly StudioFinding[] | null> {
   if (!list.available || serverName === null) return null;
   const answer = await list.call({ server: serverName });
-  return answer.ok ? answer.list.findings : null;
+  return answer.ok ? answer.findings : null;
 }
 
 export async function StudioServer({

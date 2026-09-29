@@ -1003,13 +1003,11 @@ export function findingsAnswer(
 ): FindingsAnswer {
   return {
     ok: true,
-    list: {
-      server,
-      basis: "draft",
-      revision: 1,
-      tokens: { definitions: 1150, budget: 8000 },
-      findings,
-    },
+    server,
+    basis: "draft",
+    revision: 1,
+    tokens: { definitions: 1150, budget: 8000 },
+    findings,
   };
 }
 
