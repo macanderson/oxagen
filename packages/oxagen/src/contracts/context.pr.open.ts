@@ -75,7 +75,11 @@ export const contextPrSchema = z
         publishes: z
           .object({ lineageId: z.string(), path: z.string() })
           .strict(),
-        /** The workspace's steering version: the promotions ledger length. */
+        /**
+         * The promotions ledger length now and after merge, one entry per
+         * merged record. It is not the steering version, which
+         * merge_context_pr answers as `publishedVersion` (#4732).
+         */
         bundleVersion: z
           .object({ current: z.number().int(), afterMerge: z.number().int() })
           .strict(),

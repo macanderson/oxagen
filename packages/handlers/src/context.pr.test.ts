@@ -975,6 +975,9 @@ describe("merge_context_pr", () => {
       mergedCommit: "0000000000000000000000000000000000000519",
       promotionEvent: { seq: 1 },
       bundleVersion: { before: 0, after: 1 },
+      // A legacy repository has no version store, so the merge publishes no
+      // steering version (#4732).
+      publishedVersion: null,
     });
     expect(() => contextPrMerge.output.parse(out)).not.toThrow();
 
@@ -2334,6 +2337,11 @@ describe("merge_context_pr", () => {
 
     expect(out.status).toBe("merged");
     expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    // The output names the steering version, which differs from the ledger
+    // count: the ledger held no entry before this merge (#4732).
+    expect(out.publishedVersion).toBe(2);
+    expect(out.bundleVersion).toEqual({ before: 0, after: 1 });
+    expect(() => contextPrMerge.output.parse(out)).not.toThrow();
     await expect(s5.publish.mock.results[0]!.value).resolves.toMatchObject({
       status: "published",
       version: 2,
@@ -2559,8 +2567,10 @@ describe("merge_context_pr", () => {
       })({ proposalId: id }, ctx({ userId: REVIEWER }));
       expect(out.status).toBe("merged");
       expect(h.store.ledger).toHaveLength(1);
-      // Version 1 never went live, so no deployment names it.
+      // Version 1 never went live, so no deployment names it, and the
+      // output reports no published version.
       expect(h.github.deployments).toHaveLength(0);
+      expect(out.publishedVersion).toBeNull();
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({ commit: "0000000000000000000000000000000000000519", version: 1 }),
         expect.stringContaining("publish() answered stale"),
