@@ -76,12 +76,14 @@ export const steeringRepoImport = registerCapability({
         .optional(),
       /** The effect of each v0.1 constraint, keyed by its old lineage. */
       constraintEffects: z.record(z.string(), recordEffectSchema).optional(),
+      // describe() sits on the boolean: the schema generator drops a
+      // description set on the optional wrapper.
       startFresh: z
         .boolean()
-        .optional()
         .describe(
           "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository.",
-        ),
+        )
+        .optional(),
     })
     .strict(),
   output: z.object({
