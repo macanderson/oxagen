@@ -52,6 +52,13 @@ import {
 } from "@oxagen/steering-bundle";
 import { logger } from "./logger";
 import { heldVersionStore } from "./steering-repo/version-store";
+import { syncPublished } from "./steering-repo/publisher";
+import {
+  initialSteeringRepoState,
+  runSteeringRepoStep,
+  type ProvisionDeps,
+  type SteeringRepoState,
+} from "./steering_repo.provision";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
@@ -155,6 +162,53 @@ function s5Publisher() {
       ),
   };
   return { tip, store, deps, publish, publisher };
+}
+
+/**
+ * Provisioning's deps for a GitHub workspace whose steps through
+ * publish_version finished at `commit`, so bind_repository is the one step
+ * left. The repository is the fixture steering repo.
+ */
+function provisionedThrough(commit: string): ProvisionDeps {
+  const at = new Date("2026-09-26T11:00:00.000Z");
+  const state: SteeringRepoState = {
+    ...initialSteeringRepoState(at),
+    step: "publish_version",
+    provider: "github",
+    repository: {
+      id: 519,
+      owner: "a-intel",
+      name: "oxagen-core-platform",
+      full_name: "a-intel/oxagen-core-platform",
+      initial_branch: "main",
+    },
+    commit_sha: commit,
+    deployment_id: 1,
+  };
+  return {
+    now: () => at,
+    load: async () => ({
+      target: {
+        org_slug: "a-intel",
+        workspace: { slug: "core-platform", name: "Core platform" },
+      },
+      state: structuredClone(state),
+      connection: {
+        provider: "github",
+        installation_id: 1,
+        account_login: "a-intel",
+      },
+    }),
+    saveState: async () => undefined,
+    saveConnection: async () => undefined,
+    github: () => null,
+    gitlab: () => ({ groups: async () => [], group: async () => null }),
+    bind: async () => "rpb_steering",
+    notifyReauthorize: async () => undefined,
+    steeringHook: () => {
+      throw new Error("a GitHub steering repo registers no hook");
+    },
+  };
 }
 
 /** A publisher with a stubbed publish() and a lock that holds nothing. */
@@ -1990,22 +2044,21 @@ describe("merge_context_pr", () => {
     expect(h.store.ledger).toHaveLength(2);
   });
 
-  it("in a steering repo, fails the one required check when the branch changes a path outside its folder", async () => {
+  it("in a steering repo, writes a new record as a steering record under steering/, and the one required check passes", async () => {
     const h = steeringHarness();
     const id = await proposed(h);
     const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
-    expect(out.status).toBe("checks_failed");
-    expect(out.checks.find((c) => c.name === "schema")).toMatchObject({
-      status: "failed",
-      summary: expect.stringContaining(
-        `${PATH} is outside every folder a steering PR may change`,
-      ),
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      branch: BRANCH,
+      path: `steering/business-rules/${LINEAGE}.md`,
     });
+    expect(out.checks.every((c) => c.status === "passed")).toBe(true);
     expect(h.github.checkRuns).toEqual([
       expect.objectContaining({
         name: "Oxagen steering",
         headSha: "head1",
-        conclusion: "failure",
+        conclusion: "success",
       }),
     ]);
   });
@@ -2119,6 +2172,51 @@ describe("merge_context_pr", () => {
       version: 2,
       commit: "0000000000000000000000000000000000000519",
     });
+    expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
+      version: 2,
+      commit: "0000000000000000000000000000000000000519",
+    });
+    expect(h.github.deployments).toEqual([
+      expect.objectContaining({
+        sha: "0000000000000000000000000000000000000519",
+        description: "Steering version 2 from #519",
+      }),
+    ]);
+  });
+
+  it("in a new steering repo, the first merge after provisioning publishes version 2 with no sync between them", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    // Provisioning's last step binds the repo, then publishes its first
+    // commit through the store the merge numbers from. No sync runs after it.
+    const first = "5eed000000000000000000000000000000000000";
+    s5.tip.head = first;
+    const deps = {
+      ...provisionedThrough(first),
+      publishFirst: async () =>
+        syncPublished(await s5.publisher.publish(REPO, s5.tip.head)),
+    };
+    await expect(
+      runSteeringRepoStep(
+        deps,
+        { kind: "workspace", ...SCOPE },
+        "bind_repository",
+      ),
+    ).resolves.toMatchObject({ status: "ready" });
+    s5.tip.head = "0000000000000000000000000000000000000519";
+
+    const out = await createMergeContextPrHandler(h, {
+      publisher: () => s5.publisher,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+    expect(out.status).toBe("merged");
+    expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    // Each commit has its own number: the first commit is version 1 and the
+    // merge commit is version 2.
+    await expect(
+      s5.store.versionAt(BUNDLE_IDENTITY.repository, first),
+    ).resolves.toMatchObject({ version: 1 });
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 2,
       commit: "0000000000000000000000000000000000000519",
