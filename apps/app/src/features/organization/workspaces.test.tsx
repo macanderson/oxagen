@@ -18,11 +18,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceList } from "@/data/contracts/org";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames } from "@/test/select";
 import { COPIED_MS } from "./copy-id";
 import { workspaceRow } from "./organization.builders";
 
@@ -285,13 +287,13 @@ describe("Workspaces", () => {
   });
 
   it("filters by the production branch the rows carry", async () => {
+    const user = userEvent.setup();
     await renderTab();
     const branch = screen.getByLabelText("Production branch");
-    expect(
-      within(branch)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Production branch", "main"]);
+    expect(await optionNames(user, branch)).toEqual([
+      "All · Production branch",
+      "main",
+    ]);
   });
 
   it("opens a workspace the viewer belongs to, and offers Edit and Archive on a live one", async () => {

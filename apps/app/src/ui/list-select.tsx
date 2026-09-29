@@ -9,6 +9,11 @@
 // it still reads the "All" label from `items`. Picking the choice already
 // shown hands on nothing, as a native select did. `name` puts the value in a
 // hidden input, so a form that holds the select carries it.
+//
+// The trigger is as wide as the label it shows, so a short choice makes it
+// narrow. The list grows to its longest option, up to the room on screen,
+// instead of taking the trigger's width and cutting a long option such as
+// "compilation not recorded" at the trigger's edge.
 import {
   Select,
   SelectContent,
@@ -38,6 +43,9 @@ export function ListSelect({
   className?: string;
   "aria-label"?: string;
   "aria-labelledby"?: string;
+  "aria-describedby"?: string;
+  /** A hover hint on the trigger, such as why a disabled filter cannot narrow the list. */
+  title?: string;
   "data-testid"?: string;
 }) {
   return (
@@ -53,7 +61,7 @@ export function ListSelect({
       <SelectTrigger size={size} {...trigger}>
         <SelectValue />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="w-max max-w-(--available-width) min-w-(--anchor-width)">
         {items.map((item) => (
           <SelectItem key={item.value} value={item.value}>
             {item.label}

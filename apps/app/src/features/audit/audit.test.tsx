@@ -30,6 +30,7 @@ import { PAGE_FAILURES, type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 
 const { getAuthUser, buildBundle, push, refresh } = vi.hoisted(() => ({
   getAuthUser: vi.fn(),
@@ -262,6 +263,14 @@ function selectOf(element: HTMLElement): HTMLSelectElement {
   return element;
 }
 
+/** The value a filter's form sends for this query parameter. */
+function sent(filter: HTMLElement, name: string): string {
+  const field = filter.closest("form")?.elements.namedItem(name);
+  if (!(field instanceof HTMLInputElement))
+    throw new Error(`no ${name} field in the filter's form`);
+  return field.value;
+}
+
 /** The section a heading titles. */
 function sectionOf(heading: string): HTMLElement {
   const found = screen
@@ -431,7 +440,9 @@ describe("Events", () => {
     expect(events.mock.calls[0]?.[1]).toMatchObject({
       since: "2026-09-14T12:00:00.000Z",
     });
-    expect(screen.getByRole("combobox", { name: "Range" })).toHaveValue("48h");
+    const range = screen.getByRole("combobox", { name: "Range" });
+    expect(range).toHaveTextContent("Last 48 hours");
+    expect(sent(range, "range")).toBe("48h");
   });
 
   it("prints the design's columns, with the actor named, severity not recorded and the request as the reference", async () => {
@@ -495,9 +506,14 @@ describe("Events", () => {
 
     // The design's actor kinds, disabled until the record carries one; the
     // person a link named stays visible so the filter can be cleared.
+    const user = userEvent.setup();
     const actor = screen.getByRole("combobox", { name: "Actor" });
-    expect(actor).toHaveValue(ADA);
-    const options = within(actor).getAllByRole("option");
+    expect(actor).toHaveTextContent("Ada Lovelace");
+    expect(sent(actor, "actor")).toBe(ADA);
+    await user.click(actor);
+    const options = within(await screen.findByRole("listbox")).getAllByRole(
+      "option",
+    );
     expect(options.map((option) => option.textContent)).toEqual([
       "All actors",
       "Humans",
@@ -505,28 +521,27 @@ describe("Events", () => {
       "Services",
       "Ada Lovelace",
     ]);
-    expect(options.map((option) => option.matches(":disabled"))).toEqual([
-      false,
-      true,
-      true,
-      true,
-      false,
-    ]);
+    expect(
+      options.map((option) => option.hasAttribute("data-disabled")),
+    ).toEqual([false, true, true, true, false]);
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("listbox")).toBeNull();
+    });
     expect(actor).toHaveAccessibleDescription(
       "An audit event records no actor kind yet, so Humans, Agents and Services cannot be picked.",
     );
     expect(
-      within(screen.getByRole("combobox", { name: "Range" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
+      await optionNames(user, screen.getByRole("combobox", { name: "Range" })),
     ).toEqual(["Last 48 hours", "Last 7 days", "Last 30 days"]);
     const result = screen.getByRole("combobox", { name: "Result" });
-    expect(result).toHaveValue("deny");
-    expect(
-      within(result)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["All results", "allowed", "denied"]);
+    expect(result).toHaveTextContent("denied");
+    expect(sent(result, "outcome")).toBe("deny");
+    expect(await optionNames(user, result)).toEqual([
+      "All results",
+      "allowed",
+      "denied",
+    ]);
     // Rows sits in the pager under the table (#4693). The filters form
     // carries its size as a hidden field, so picking a result keeps it.
     expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
@@ -551,17 +566,15 @@ describe("Events", () => {
     );
     const severity = screen.getByRole("combobox", { name: "Severity" });
     expect(severity).toBeDisabled();
-    expect([...selectOf(severity).options].map((o) => o.textContent)).toEqual([
-      "All severities",
-      "critical",
-      "info",
-      "warning",
-    ]);
+    // A disabled select cannot open, so its trigger shows All alone.
+    expect(severity).toHaveTextContent("All severities");
     // Every filter is a 44 px tap target with 16 px text on a phone (rev1
-    // audit.md, Mobile); the house input alone is about 38 px tall.
+    // audit.md, Mobile); the house input alone is about 38 px tall. A
+    // select's form value rides in an input hidden from everyone, which has
+    // no size to check.
     const filters = screen.getByTestId("audit-filters");
     for (const each of filters.querySelectorAll(
-      "select, input:not([type=hidden])",
+      "[data-slot=select-trigger], input:not([type=hidden]):not([aria-hidden=true])",
     )) {
       expect(each.className).toContain("max-md:min-h-11");
       expect(each.className).toContain("max-md:text-base");
@@ -637,11 +650,10 @@ describe("Events", () => {
     expect(size).toHaveTextContent("10");
     await userEvent.click(size);
     await screen.findByRole("option", { name: "25" });
-    // The page's native selects carry options too; these are the pager's.
+    // Only the pager's list is open, so these are its options.
     expect(
-      screen
+      within(screen.getByRole("listbox"))
         .getAllByRole("option")
-        .filter((option) => option.closest("select") === null)
         .map((option) => option.textContent),
     ).toEqual(["5", "10", "25", "50"]);
     await userEvent.click(screen.getByRole("option", { name: "25" }));
@@ -695,35 +707,38 @@ describe("Events", () => {
     expect(document.body).not.toHaveTextContent("Older events");
   });
 
-  it("applies a picked filter at once, but a keyboard step only on Enter or leaving the select", async () => {
+  it("applies a filter picked from its list at once, with the picked value, but not a letter typed on the closed trigger", async () => {
     answer({ window: recordOf([denied]) });
     await renderAudit();
+    const user = userEvent.setup();
+    const range = screen.getByRole("combobox", { name: "Range" });
+    // The value the form holds at the moment it submits.
+    const submitted: string[] = [];
     const submit = vi
       .spyOn(HTMLFormElement.prototype, "requestSubmit")
-      .mockImplementation(() => undefined);
-    const range = screen.getByRole("combobox", { name: "Range" });
+      .mockImplementation(() => {
+        submitted.push(sent(range, "range"));
+      });
 
-    // A pick from the open list (a click or a tap) applies.
-    fireEvent.pointerDown(range);
-    fireEvent.change(range, { target: { value: "7d" } });
-    expect(submit).toHaveBeenCalledTimes(1);
+    // A pick from the open list (a click or a tap) applies the new value.
+    await pickOption(user, range, "Last 7 days");
+    expect(submitted).toEqual(["7d"]);
 
-    // An arrow key on the closed select steps the value and reloads nothing
-    // (WCAG 3.2.2): the page keeps focus on the select.
-    fireEvent.keyDown(range, { key: "ArrowDown" });
-    fireEvent.change(range, { target: { value: "30d" } });
+    // A letter on the closed trigger would pick a match without opening the
+    // list. It reloads nothing (WCAG 3.2.2), so focus stays on the trigger.
+    range.focus();
+    await user.keyboard("L");
     expect(submit).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(range, { key: "Enter" });
+    expect(range).toHaveFocus();
+    expect(range).toHaveTextContent("Last 7 days");
+
+    // A pick from the list of another filter applies too.
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Result" }),
+      "denied",
+    );
     expect(submit).toHaveBeenCalledTimes(2);
-
-    // A stepped value applies when focus leaves, and a clean blur does nothing.
-    const result = screen.getByRole("combobox", { name: "Result" });
-    fireEvent.keyDown(result, { key: "ArrowDown" });
-    fireEvent.change(result, { target: { value: "deny" } });
-    fireEvent.blur(result);
-    expect(submit).toHaveBeenCalledTimes(3);
-    fireEvent.blur(result);
-    expect(submit).toHaveBeenCalledTimes(3);
   });
 
   it("opens an event's recorded facts from a 44 px summary on a phone", async () => {
@@ -753,9 +768,10 @@ describe("Events", () => {
     await renderAudit();
 
     expect(
-      within(screen.getByRole("combobox", { name: "Actor" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
+      await optionNames(
+        userEvent.setup(),
+        screen.getByRole("combobox", { name: "Actor" }),
+      ),
     ).toEqual(["All actors", "Humans", "Agents", "Services"]);
   });
 
@@ -834,9 +850,9 @@ describe("Events", () => {
     answer({ window: recordOf([event({ actor: GONE })]) });
     await renderAudit({ actor: GONE });
 
-    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
-    expect(actor.value).toBe(GONE);
-    expect(actor.selectedOptions[0]?.textContent).toBe(GONE);
+    const actor = screen.getByRole("combobox", { name: "Actor" });
+    expect(sent(actor, "actor")).toBe(GONE);
+    expect(actor).toHaveTextContent(GONE);
   });
 
   it("names the picked actor from the roster, and by email when they set no name", async () => {
@@ -858,8 +874,9 @@ describe("Events", () => {
     answer({ window: recordOf([denied]) });
     await renderAudit({ actor: ADA });
 
-    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
-    expect(actor.selectedOptions[0]?.textContent).toBe("ada@acme.test");
+    expect(screen.getByRole("combobox", { name: "Actor" })).toHaveTextContent(
+      "ada@acme.test",
+    );
   });
 
   it("prints actors by public id when the roster read fails, and keeps the page (negative)", async () => {
