@@ -332,7 +332,7 @@
           "unavailable": "Oxagen could not open the steering PR just now. Try again in a minute.",
           "pending_approval": "Opening this steering PR waits on an approval. Open it again once the request is approved.",
           "exhausted": "This workspace has reached a usage limit. Open the steering PR again once the limit resets.",
-          "too_large": "This draft is too large to save in one request. Discard some edits, then open the steering PR again.",
+          "too_large": "This draft is over the 960 KiB this page can send in one request. Discard some edits, then open the steering PR again. The Oxagen API and MCP tools save drafts up to 8 MiB.",
           "draft_not_found": "Oxagen holds no saved draft for this server. Open the steering PR again to save your edits.",
           "draft_unchanged": "The steering PR already holds these edits.",
           "draft_unreadable": "The saved draft no longer matches the draft format. Discard the draft, then make the edits again.",

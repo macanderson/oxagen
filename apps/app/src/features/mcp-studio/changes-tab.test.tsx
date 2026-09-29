@@ -889,7 +889,7 @@ describe("ChangesTab save and Review failures", () => {
     renderTab(STRIPE, { save: save.save });
     openSteeringPr();
     expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
-      "This draft is too large to save in one request. Discard some edits, then open the steering PR again.",
+      "This draft is over the 960 KiB this page can send in one request. Discard some edits, then open the steering PR again. The Oxagen API and MCP tools save drafts up to 8 MiB.",
     );
   });
 
