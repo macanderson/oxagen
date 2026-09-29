@@ -17,13 +17,14 @@ import {
   FileDescriptorProtoSchema,
   FileOptionsSchema,
   type DescriptorProto,
+  type FieldDescriptorProto,
   type FileDescriptorProto,
 } from "@bufbuild/protobuf/wkt";
 import { describe, expect, it } from "vitest";
 import { TOOL_KEY_MAX } from "../contract/primitives";
 import { Notes } from "../graphql/notes";
 import type { ImportedFile, ImportNote } from "../model/import-result";
-import { jsonNameOf, mapEntryNameOf } from "./descriptors";
+import { doubleText, jsonNameOf, mapEntryNameOf } from "./descriptors";
 import { GrpcImportError, type GrpcImportErrorCode } from "./errors";
 import { importGrpc } from "./index";
 import { toolKeyFor } from "./names";
@@ -162,6 +163,32 @@ describe("mapEntryNameOf", () => {
 
   it.each(names)("names the entry of %s %s", (field, entry) => {
     expect(mapEntryNameOf(field)).toBe(entry);
+  });
+});
+
+describe("doubleText", () => {
+  // Each expected text is what C's printf gives with %.15g, or with %.17g where %.15g does not read back.
+  const texts: [number, string][] = [
+    [1e20, "1e+20"],
+    [1e10, "10000000000"],
+    [1e15, "1e+15"],
+    [123_456_789_012_345, "123456789012345"],
+    [0.1, "0.1"],
+    [1e-5, "1e-05"],
+    [0.0001, "0.0001"],
+    [-2.5, "-2.5"],
+    [-0, "-0"],
+    [0, "0"],
+    [1 / 3, "0.33333333333333331"],
+    [0.1 + 0.2, "0.30000000000000004"],
+    [Infinity, "inf"],
+    [-Infinity, "-inf"],
+    [Number.NaN, "nan"],
+    [Number.MAX_VALUE, "1.7976931348623157e+308"],
+  ];
+
+  it.each(texts)("writes %d as %s", (value, text) => {
+    expect(doubleText(value)).toBe(text);
   });
 });
 
@@ -323,6 +350,36 @@ describe("buildFile messages", () => {
     );
   });
 
+  it("marks a proto3 optional extension proto3_optional and makes no oneof for it, as protoc does", () => {
+    const file = fileOf(
+      p3(
+        'import "google/protobuf/descriptor.proto";',
+        "extend google.protobuf.MessageOptions { optional int32 top = 50001; }",
+        "message M {",
+        "  extend google.protobuf.MessageOptions {",
+        "    optional int32 inner = 50002;",
+        "  }",
+        "}",
+      ),
+    );
+    const extension = (name: string, number: number): FieldDescriptorProto =>
+      create(FieldDescriptorProtoSchema, {
+        name,
+        number,
+        label: L.OPTIONAL,
+        type: T.INT32,
+        jsonName: name,
+        extendee: ".google.protobuf.MessageOptions",
+        proto3Optional: true,
+      });
+    expectSame(FieldDescriptorProtoSchema, at(file.extension, 0), extension("top", 50_001));
+    expectSame(
+      DescriptorProtoSchema,
+      messageNamed(file, "M"),
+      create(DescriptorProtoSchema, { name: "M", extension: [extension("inner", 50_002)] }),
+    );
+  });
+
   it("keeps a json_name that tells two JSON names apart and leaves it out of the field options", () => {
     const message = messageOf(p3("message M {", "  string foo_bar = 1;", '  string fooBar = 2 [json_name = "other"];', "}"));
     expect(message.field.map((field) => field.jsonName)).toStrictEqual(["fooBar", "other"]);
@@ -368,6 +425,34 @@ describe("buildFile enums", () => {
   it("lets a proto2 enum start at a value other than 0", () => {
     const enumType = at(fileOf(p2("enum E { E_ONE = 1; }")).enumType, 0);
     expect(enumType.value.map((value) => [value.name, value.number])).toStrictEqual([["E_ONE", 1]]);
+  });
+
+  it("reads max as 2^31 - 1 only where the text writes max, across every reserved statement", () => {
+    // protobufjs reads max and 536870911 as the same number, so the literal 536870911 must stay as written.
+    const file = fileOf(
+      p3(
+        "message M {",
+        "  enum Inner {",
+        "    INNER_ZERO = 0;",
+        "    reserved 1, 3 to 536870911;",
+        '    reserved "INNER_OLD";',
+        "    reserved 536870912 to max;",
+        "  }",
+        "}",
+        "enum E {",
+        "  E_ZERO = 0;",
+        "  reserved 5 to 536870911;",
+        "}",
+      ),
+    );
+    const inner = at(messageNamed(file, "M").enumType, 0);
+    expect(inner.reservedRange.map((range) => [range.start, range.end])).toStrictEqual([
+      [1, 1],
+      [3, 536_870_911],
+      [536_870_912, 2_147_483_647],
+    ]);
+    expect(inner.reservedName).toStrictEqual(["INNER_OLD"]);
+    expect(at(file.enumType, 0).reservedRange.map((range) => [range.start, range.end])).toStrictEqual([[5, 536_870_911]]);
   });
 });
 
@@ -426,6 +511,31 @@ describe("buildFile default values", () => {
       dropped("big", "past 2^53, which protobufjs rounds"),
       dropped("lines", escape),
     ]);
+  });
+
+  it("writes a float or double default in protoc's own form, whatever form the text uses", () => {
+    const { files, notes } = build(
+      p2(
+        "message M {",
+        "  optional double big = 1 [default = 1e10];",
+        "  optional double huge = 2 [default = 1e20];",
+        "  optional double negative_zero = 3 [default = -0.0];",
+        "  optional float tiny = 4 [default = 0.00001];",
+        "  optional double tenth = 5 [default = 0.1];",
+        "  optional double third = 6 [default = 0.3333333333333333];",
+        "}",
+      ),
+    );
+    expect(defaultsOf(messageNamed(fileNamed(files), "M"))).toStrictEqual([
+      ["big", "10000000000"],
+      ["huge", "1e+20"],
+      ["negative_zero", "-0"],
+      ["tiny", "1e-05"],
+      ["tenth", "0.1"],
+      // %.15g gives 0.333333333333333, which reads back as another double, so protoc writes 17 digits.
+      ["third", "0.33333333333333331"],
+    ]);
+    expect(notes).toStrictEqual([]);
   });
 });
 
@@ -490,13 +600,52 @@ describe("buildFile options", () => {
     expect(error.message.endsWith(". Correct or remove the option.")).toBe(true);
   });
 
-  it("refuses a built-in option set to a value of the wrong type, in the same words", () => {
-    // A wart: the option exists, and the refusal still says MessageOptions does not define it.
+  it("refuses a built-in option set to a value of the wrong type, and says the type is wrong", () => {
     const error = refusal(p3('message M { option deprecated = "yes"; }'));
-    expect(error.code).toBe("unsupported");
+    expect(error.code).toBe("invalid");
     expect(error.file).toBe(A);
-    expect(error.message).toContain("a.proto sets an option on p.M that google.protobuf.MessageOptions does not define: ");
-    expect(error.message.endsWith(". Correct or remove the option.")).toBe(true);
+    expect(error.message).toContain(
+      "a.proto sets an option on p.M to a value of the wrong type for google.protobuf.MessageOptions: ",
+    );
+    expect(error.message).not.toContain("does not define");
+    expect(error.message.endsWith(". Correct the value.")).toBe(true);
+  });
+
+  it("refuses a wrong-typed option on a field by its JSON name too", () => {
+    const error = refusal(p3("message M { string a = 1 [deprecated = 5]; }"));
+    expect(error.code).toBe("invalid");
+    expect(error.message).toContain("a.proto sets an option on p.M.a to a value of the wrong type for google.protobuf.FieldOptions: ");
+  });
+
+  const features: [string, string, string][] = [
+    [
+      "a field option",
+      p3("message M { string a = 1 [features.field_presence = EXPLICIT]; }"),
+      "a.proto sets features.field_presence on p.M.a. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.",
+    ],
+    [
+      "a message option",
+      p2("message M { option features.utf8_validation = NONE; optional string a = 1; }"),
+      "a.proto sets features.utf8_validation on p.M. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.",
+    ],
+    [
+      "an enum option",
+      p3("enum E { option features.enum_type = CLOSED; E_ZERO = 0; }"),
+      "a.proto sets features.enum_type on p.E. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.",
+    ],
+  ];
+
+  it.each(features)("refuses a feature set as %s, as protoc does outside an editions file", (_label, text, message) => {
+    expectRefusal(text, "invalid", A, message);
+  });
+
+  it("refuses a feature set as a file option, by its own name", () => {
+    expectRefusal(
+      p3("option features.field_presence = EXPLICIT;", "message M { string a = 1; }"),
+      "invalid",
+      A,
+      "a.proto sets the file option features.field_presence. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.",
+    );
   });
 });
 
@@ -540,6 +689,37 @@ describe("buildFile refusals", () => {
     expect(at(messageOf(p3(`message M { string a = ${number}; }`)).field, 0).number).toBe(number);
   });
 
+  const extensionNumbers: [string, string, string][] = [
+    ["a top-level extension numbered 19500", "extend google.protobuf.MessageOptions { optional int32 x = 19500; }", "p.x 19500"],
+    [
+      "an extension inside a message numbered 0",
+      "message M { extend google.protobuf.MessageOptions { optional int32 x = 0; } }",
+      "p.M.x 0",
+    ],
+  ];
+
+  it.each(extensionNumbers)("refuses %s, as it does a field", (_label, text, numbered) => {
+    expectRefusal(
+      p2('import "google/protobuf/descriptor.proto";', text),
+      "invalid",
+      A,
+      `a.proto numbers the extension ${numbered}. A field number runs from 1 to 536,870,911 and skips 19,000 to 19,999, which protobuf reserves, so renumber it.`,
+    );
+  });
+
+  it("refuses map_entry set by hand, as protoc does", () => {
+    expectRefusal(
+      p3("message E { option map_entry = true; }", "message M { E e = 1; }"),
+      "invalid",
+      A,
+      "a.proto sets map_entry on the message p.E. protoc sets it only on the entry message it makes for a map field, so remove the option and declare a map<K, V> field instead.",
+    );
+  });
+
+  it("accepts map_entry set to false, which protoc also accepts", () => {
+    expect(messageOf(p3("message M { option map_entry = false; }")).options?.mapEntry).toBe(false);
+  });
+
   it("refuses a required extension in proto3", () => {
     // protobufjs reads `required` inside an extend block in any syntax, so descriptors.ts checks it.
     expectRefusal(
@@ -566,10 +746,14 @@ describe("buildFile refusals", () => {
       "a.proto starts the enum p.TaskState at RUNNING = 1. A proto3 enum's first value must be 0, so add a value such as TASK_STATE_UNSPECIFIED = 0 before it.",
     ],
     [
-      // A wart: the suggestion does not split an acronym, so HTTPCode suggests HTTPCODE_UNSPECIFIED.
       "a nested enum whose name starts with an acronym",
       "message M { enum HTTPCode { OK = 200; } }",
-      "a.proto starts the enum p.M.HTTPCode at OK = 200. A proto3 enum's first value must be 0, so add a value such as HTTPCODE_UNSPECIFIED = 0 before it.",
+      "a.proto starts the enum p.M.HTTPCode at OK = 200. A proto3 enum's first value must be 0, so add a value such as HTTP_CODE_UNSPECIFIED = 0 before it.",
+    ],
+    [
+      "an enum whose name ends with an acronym",
+      "enum StatusRPC { DONE = 1; }",
+      "a.proto starts the enum p.StatusRPC at DONE = 1. A proto3 enum's first value must be 0, so add a value such as STATUS_RPC_UNSPECIFIED = 0 before it.",
     ],
   ];
 
@@ -707,13 +891,21 @@ describe("type name resolution", () => {
     expect(messageNamed(file, "N").field.map((field) => field.typeName)).toStrictEqual([".p.Inner"]);
   });
 
-  it("refuses a dotted name whose first part an inner scope holds, as protoc does", () => {
-    // A wart: protoc says the name resolved to p.M.q.Other and suggests .q.Other. This says only that no import defines it.
+  it("refuses a dotted name whose first part an inner scope holds, and says how protoc read it", () => {
     expectRefusal(
       { "a.proto": p3('import "b.proto";', "message M {", "  message q {}", "  q.Other o = 1;", "}"), "b.proto": other },
       "unresolved",
       A,
-      "In a.proto, the field p.M.o names q.Other, which none of its imports defines. Define q.Other, or import the file that does.",
+      "In a.proto, the field p.M.o names q.Other, which protoc reads as p.M.q.Other because the message p.M.q is in a nearer scope. Nothing defines p.M.q.Other. Write .q.Other to start from the outermost scope.",
+    );
+  });
+
+  it("asks for the full name when the shadowed name is not defined from the root either", () => {
+    expectRefusal(
+      p3("message M {", "  message q {}", "  q.Other o = 1;", "}"),
+      "unresolved",
+      A,
+      "In a.proto, the field p.M.o names q.Other, which protoc reads as p.M.q.Other because the message p.M.q is in a nearer scope. Nothing defines p.M.q.Other. Write the full name with a leading dot to start from the outermost scope.",
     );
   });
 
@@ -734,13 +926,21 @@ describe("type name resolution", () => {
     expect(at(message.field, 0).typeName).toBe(".Thing");
   });
 
-  it("passes over a service of the name and refuses when no outer scope defines a type", () => {
-    // A wart: a.proto defines S, as a service, and the refusal says none of its imports defines it. protoc says S is not a type.
+  it("passes over a service of the name and, when no outer scope defines a type, says what the name is", () => {
     expectRefusal(
       p3("message M { S s = 1; }", "service S {}"),
       "unresolved",
       A,
-      "In a.proto, the field p.M.s names S, which none of its imports defines. Define S, or import the file that does.",
+      "In a.proto, the field p.M.s names S, which is the service p.S. It must name a message or an enum.",
+    );
+  });
+
+  it("says a request type names a service when that is all the name finds", () => {
+    expectRefusal(
+      p3("message M {}", "service S { rpc Get(S) returns (M); }"),
+      "unresolved",
+      A,
+      "In a.proto, the request type of p.S/Get names S, which is the service p.S. It must name a message.",
     );
   });
 });

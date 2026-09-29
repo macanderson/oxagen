@@ -17,6 +17,13 @@ export interface FoundSymbol {
   kind: SymbolKind;
 }
 
+/** Why a lookup that protoc would explain found nothing. */
+export type LookupMiss =
+  /** A dotted name whose first part an inner scope holds, so protoc reads the name from there and finds nothing. */
+  | { reason: "shadowed"; first: FoundSymbol; readAs: string }
+  /** A one-part name whose innermost match is not a type, such as a service, and no outer scope defines a type. */
+  | { reason: "not_type"; found: FoundSymbol };
+
 interface Entry {
   kind: SymbolKind;
   /** The files that declare it. Only a package has more than one. */
@@ -63,6 +70,26 @@ export class Symbols {
       if (found.kind === "message" || found.kind === "enum") return found;
     }
     return this.find(ref, visible);
+  }
+
+  /**
+   * Why lookup found nothing for `ref`, when protoc says more than that
+   * nothing defines it, or undefined when nothing more explains it. It walks
+   * the scopes as lookup does.
+   */
+  explain(ref: string, scope: string, visible: ReadonlySet<string>): LookupMiss | undefined {
+    if (ref.startsWith(".")) return undefined;
+    const dot = ref.indexOf(".");
+    const first = dot === -1 ? ref : ref.slice(0, dot);
+    const parts = scope === "" ? [] : scope.split(".");
+    for (let end = parts.length; end > 0; end -= 1) {
+      const prefix = parts.slice(0, end).join(".");
+      const found = this.find(`${prefix}.${first}`, visible);
+      if (found === undefined) continue;
+      if (dot !== -1) return { reason: "shadowed", first: found, readAs: `${prefix}.${ref}` };
+      if (found.kind !== "message" && found.kind !== "enum") return { reason: "not_type", found };
+    }
+    return undefined;
   }
 
   /** The definition with this full name, when one of the visible files declares it. */
