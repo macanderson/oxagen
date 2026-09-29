@@ -1,19 +1,19 @@
 # GitHub App setup
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
-**Last verified against code:** 2026-06-28.
+**Last verified against code:** 2026-09-29.
 
-This document is the setup reference for the two GitHub Apps Oxagen uses. For each app, it lists
-every configuration value, the callback and webhook endpoints the code expects, the permissions
-and events to subscribe to, and the values that differ between **development** and **production**.
+This document is the setup reference for the one GitHub App Oxagen uses (ADR-228). It lists every
+configuration value, the callback and webhook endpoints the code expects, the permissions and
+events to subscribe to, and the values that differ between **development** and **production**.
 
-| App | What it acts on | Sections |
-| --- | --- | --- |
-| **Oxagen** | Your code repositories. It feeds the **provider-metadata connector** and opens governed pull requests. | [TL;DR](#tldr) through [Verification checklist](#verification-checklist) |
-| **Oxagen Steering** | Steering repos only. It creates each one and holds its settings. | [Oxagen Steering](#oxagen-steering) |
+| What the app acts on | Sections |
+| --- | --- |
+| Your code repositories. It feeds the **provider-metadata connector** and opens governed pull requests. | [TL;DR](#tldr) through [Verification checklist](#verification-checklist) |
+| Steering repos. It creates each one and holds its settings. | [Steering repos](#steering-repos) |
 
-Register each app twice, once for development and once for production, for reasons 2 and 3 in
-[Why two separate apps](#why-two-separate-apps).
+Register the app twice, once for development and once for production, for the reasons in
+[Why a dev app and a production app](#why-a-dev-app-and-a-production-app).
 
 > **Launch boundary (2026-07-21):** the connector ingests repository, ref, commit,
 > pull-request, issue, release, and workflow metadata. It does not ingest repository
@@ -29,13 +29,13 @@ For the customer-facing "how do I connect my repo" walkthrough, see
 
 | Decision | Answer |
 | --- | --- |
-| How many GitHub Apps? | **Two, each registered twice.** Oxagen and Oxagen Steering, each with a dev copy and a production copy. See [Why two apps](#why-two-separate-apps) and [Oxagen Steering](#oxagen-steering). |
+| How many GitHub Apps? | **One, registered twice (ADR-228).** A dev copy and a production copy. See [Why a dev app and a production app](#why-a-dev-app-and-a-production-app). |
 | What kind of credential? | A **GitHub App** (not an OAuth App). The flow calls `/user/installations`, which only exists for GitHub Apps. |
 | What grants repo access today? | Ingestion runs on the **user-to-server OAuth token**, limited by the App's **permissions**. Governed pull requests use an installation token minted with `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY`, and fall back to the user token (`packages/github/src/workspace-token.ts`). |
-| Steering repos | **Oxagen Steering**, a second app with Administration and Deployments write. See [Oxagen Steering](#oxagen-steering). |
-| OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback` |
+| Steering repos | The same app, which adds Administration and Deployments write. See [Steering repos](#steering-repos). |
+| OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. It serves every connect, steering included. |
 | Webhook URL | App-level `{NEXT_PUBLIC_API_URL}/webhooks/github/app` — **live**. See [Webhooks](#webhooks). |
-| Setup URL | Optional. Recommended → app sources page, with **Redirect on update** ON. See [Setup URL](#setup-url-post-install-redirect). |
+| Setup URL | Blank. GitHub turns it off while OAuth during installation is on. See [Setup URL](#setup-url-post-install-redirect). |
 
 ---
 
@@ -94,9 +94,9 @@ that stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's O
 
 ---
 
-## Why two separate apps
+## Why a dev app and a production app
 
-Create **two** GitHub Apps and keep their credentials in separate environments:
+Register the app twice, and keep each copy's credentials in its own environment:
 
 | App | Used by | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
 | --- | --- | --- | --- |
@@ -112,8 +112,9 @@ Reasons:
 3. **Blast-radius separation.** Re-generating the dev App's secret or rotating its private key must
    not disrupt production ingestion.
 
-GitHub Apps *do* allow up to 10 callback URLs, so callbacks alone could be shared; the
-single webhook URL and secret isolation still require two apps.
+A GitHub App allows up to 10 callback URLs, so callbacks alone could be shared. The single
+webhook URL and secret isolation still need two registrations. Code repositories and steering repos
+share each one (ADR-228).
 
 ---
 
@@ -146,6 +147,9 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
   returns every connect to the first URL in the list. A second or wildcard entry never receives a
   connect. Keep `https://api.oxagen.sh/oauth/github/callback` first until ADR-215 step A3 puts
   `https://api.oxagen.app/oauth/github/callback` there.
+- **Every connect returns here.** The code repository connect and the steering connect both land on
+  this callback. The signed state names what the connect is for, so no connect needs a URL of its
+  own.
 - **Expire user authorization tokens — leave OFF for now.** The callback stores a `refresh_token`
   when present, but there is **no token-refresh job wired yet**. Non-expiring user tokens avoid
   silent sync failures until refresh is implemented. (Revisit when installation tokens land.)
@@ -154,31 +158,26 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 
 ### Setup URL (post-install redirect)
 
-The **Setup URL** is where GitHub sends users *after they install or reconfigure the App from
-GitHub's own UI* (it receives `installation_id` and `setup_action=install|update`). It is **distinct
-from the OAuth Callback URL**.
+The **Setup URL** is where GitHub sends someone after an install from GitHub's own pages. GitHub
+turns the field off while **Request user authorization (OAuth) during installation** is on, and
+**Redirect on update** does nothing without a Setup URL.
 
 | Field | Dev | Prod |
 | --- | --- | --- |
-| **Setup URL** | `http://localhost:3000/github/setup` | `https://app.oxagen.sh/github/setup` |
-| **Redirect on update** | ✅ on | ✅ on |
+| **Setup URL** | blank | blank |
+| **Redirect on update** | off | off |
 
-**Recommendation: set a Setup URL and enable "Redirect on update".** Set it
-to **`/github/setup`** (the implemented landing route, `apps/app/src/app/github/setup/page.tsx`), not
-`/connections/github/setup` (which does not exist and would 404).
-
-- It guarantees that a user who installs the App directly from GitHub (rather than starting inside
-  Oxagen) lands back in the product to finish wiring the connection.
-- **Redirect on update = ON** brings the user back whenever they add/remove repositories from the
-  installation, so Oxagen can reconcile the repo selection. **This leg is the common case for the
-  in-app connect flow too**: when the App is ALREADY installed, GitHub treats a subsequent connect as
-  an installation *update* and uses this stateless Setup URL (carrying `installation_id` +
-  `setup_action`, NO OAuth `state`) — NOT the OAuth callback. The `/github/setup` route resolves the
-  user's workspace and the wizard recovers the in-progress connection from a sessionStorage handoff,
-  so the wizard resumes Step 2 instead of restarting. If this URL is wrong/blank, that resume breaks.
-- **The first-ever install** (App not yet installed) goes through the OAuth callback
-  (`/oauth/github/callback`) instead, which round-trips our signed `state` and redirects straight to
-  `…/knowledge/sources?setup=github&connectionId=…`.
+- **A first install returns to the OAuth callback.** GitHub sends `code`, `installation_id`,
+  `setup_action`, and the signed `state` to the first Callback URL, and the callback finishes the
+  connect.
+- **An update returns nowhere.** When the organization already has the app, GitHub shows
+  **Configure** on the install page and drops the state. Every in-app connect for an installed
+  organization therefore goes through `login/oauth/authorize` (`buildIdentityAuthUrl` in
+  `packages/github/src/install-url.ts`), which returns a code and the state to the callback.
+- **An install with no state** records its installation id in the platform registry and redirects
+  to `{NEXT_PUBLIC_APP_URL}/?github_installed=1`. The `installation` webhook enriches the record.
+- `apps/app/src/app/github/setup/route.ts` (`handleGithubSetup`) still answers a Setup URL leg from
+  an older registration. A current registration never sends one.
 
 ### Permissions
 
@@ -194,6 +193,8 @@ These grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
 | **Checks** | Write | Report each governed-file check as a check run on the head commit, and run the CI tasks a governed pull request needs. |
 | **Issues** | Read-only | Ingest issues + issue comments. |
 | **Commit statuses** | Read-only *(optional)* | Useful if status/check context is ingested later. |
+| **Administration** | Read and write | Create each steering repo, apply its rulesets and merge settings, turn Actions off, and create the `steering` environment. See [Steering repos](#steering-repos). |
+| **Deployments** | Read and write | Record each published steering version as a deployment to the `steering` environment. |
 
 **Organization permissions:**
 
@@ -214,6 +215,12 @@ Oxagen writes to a branch and never to the production branch; it opens and close
 merges only what a person merges, under the governance mode the repository itself declares
 (`.oxagen/rules/governance.toml`); and nothing it writes can grant a tool, raise a tier or lift a
 budget. See `docs/specs/repository-binding/README.md`.
+
+**Administration write reaches every repository an installation covers** (ADR-228). Before ADR-228
+a second app held it, so an installation on code repositories never did. Oxagen uses it only in the
+steering repo code paths, and the steering repo's `Oxagen merges` ruleset names this app as its only
+bypass actor. ADR-228 lists the token paths that can reach a steering repo and which of them refuse
+it.
 
 ### Where can this App be installed?
 
@@ -237,6 +244,8 @@ How it works:
 
 1. **Verify** the raw body's `x-hub-signature-256` (HMAC-SHA256, constant-time) against the App's
    single webhook secret `GITHUB_APP_WEBHOOK_SECRET`. Missing secret → **503**; bad signature → **401**.
+   A verified delivery that can change a steering repo's settings also asks for a health read. See
+   [Health webhooks](#health-webhooks). A failure there is logged and never fails the delivery.
 2. **Lifecycle** events (`ping`, `installation`, `installation_repositories`) are acked. On
    `installation` `deleted`/`suspend`, the matching connections are set to `paused`.
 3. **Resolve** target connection(s): `connector_id = 'github'`, `status = 'connected'`, matching
@@ -274,6 +283,8 @@ How it works:
 | `issue_comment` | `comment` |
 | `release` | `release` |
 | `repository` | `repository` |
+| `repository_ruleset` | none. It asks for a steering repo health read. |
+| `branch_protection_configuration` | none. It asks for a steering repo health read. |
 
 `installation` and `installation_repositories` are delivered automatically (no subscription needed)
 and drive the pause-on-uninstall reconciliation.
@@ -300,9 +311,9 @@ Most GitHub connector variables live in the **`api`** service (read in `apps/api
 | `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
 | `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Dev App webhook secret | Prod App webhook secret |
 | `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (dev value) | `openssl rand -hex 32` (distinct prod value) |
-| `GITHUB_APP_ID` | no | api, app, mcp (installation tokens) | Dev App → App ID | Prod App → App ID |
-| `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens) | Dev App → generated private key (PEM) | Prod App → generated private key (PEM) |
-| `GITHUB_APP_SLUG` | no | api, app, mcp (optional) | Dev App → public slug | Prod App → public slug |
+| `GITHUB_APP_ID` | no | api, app, mcp (installation tokens, steering) | Dev App → App ID | Prod App → App ID |
+| `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens, steering) | Dev App → generated private key (PEM) | Prod App → generated private key (PEM) |
+| `GITHUB_APP_SLUG` | no | api (required for the steering connect and provisioning); app, mcp (optional) | Dev App → public slug | Prod App → public slug |
 | `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://api.oxagen.sh` |
 | `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://app.oxagen.sh` |
 | `INGESTION_CRYPTO_PROVIDER` | no | optional | `env` | `env` (or `kms`) |
@@ -322,7 +333,8 @@ Notes:
   connecting user's OAuth token.
 - **`GITHUB_APP_SLUG`** is the path segment in `https://github.com/apps/<slug>`. Oxagen uses it to
   link you to GitHub's install and configure page. When it is unset, the connection dialog reads
-  the slug from an existing installation.
+  the slug from an existing installation. The steering connect and steering provisioning need it.
+  See [Configuration](#configuration).
 
 ### Setting prod values
 
@@ -340,8 +352,8 @@ After configuring an App and its env vars:
 1. **Config presence:** `pnpm env:check` passes; `GITHUB_APP_CLIENT_ID` /
    `GITHUB_APP_INSTALL_STATE_SECRET` resolve (the `auth-url` route returns **503** if either is missing).
 2. **Authorize URL:** `GET /v1/{org}/{ws}/connections/github/auth-url?connectionId=con_...` returns a
-   `https://github.com/login/oauth/authorize?...` URL whose `redirect_uri` is
-   `{NEXT_PUBLIC_API_URL}/oauth/github/callback` and matches the App's Callback URL exactly.
+   `https://github.com/login/oauth/authorize?...` URL with no `redirect_uri`. The App's first
+   Callback URL must be `{NEXT_PUBLIC_API_URL}/oauth/github/callback` exactly.
 3. **Round-trip:** complete the browser flow; confirm a row in `ingestion.oauth_accounts`
    (`provider = 'github'`, non-null `access_token_enc`) and that the connection links to it.
 4. **Installations/repos:** `.../connections/github/installations` and `.../repositories` return
@@ -352,27 +364,38 @@ After configuring an App and its env vars:
 6. **Webhook:** with the App's webhook pointed at `/webhooks/github/app`, push a commit (or open a
    PR) to a connected repo; confirm a 2xx delivery in the App's **Advanced → Recent Deliveries** and
    an `ingestion/entity.received` event in Inngest. (Records persist only for mapped record types.)
+7. **Steering:** as an organization Owner, connect GitHub from onboarding. Confirm the redirect
+   carries `steering=connected` and a row in `ingestion.oauth_accounts` has
+   `provider = 'github_steering'`.
 
 ---
 
-## Oxagen Steering
+## Steering repos
 
-Oxagen Steering is the GitHub App Oxagen uses on steering repos and nowhere else. A steering repo
-holds steering records. Each workspace gets a private repository named `oxagen-<workspace-slug>`,
-and the organization gets `<org>/oxagen`. The Oxagen app keeps the permissions in
-[Permissions](#permissions). Nothing in this section changes them.
+A steering repo holds steering records. Each workspace gets a private repository named
+`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen`. The Oxagen app creates and
+runs them with the permissions in [Permissions](#permissions), Administration and Deployments
+write included.
 
-### Reason for a separate app
+### Reason for one app
 
-Administration write lets an app create repositories and change their settings. Oxagen Steering
-needs it to create and configure steering repos. Keeping it off the Oxagen app means an
-installation on your code repositories never holds it.
+Until ADR-228, a second app, Oxagen Steering, held Administration write, so an installation on code
+repositories never did. ADR-228 folds it into the Oxagen app for two reasons:
+
+1. GitHub returns every install and every authorization to an app's first Callback URL, because
+   `installations/new` takes no `redirect_uri`. A second app needed its own callback route, its
+   own credentials, and its own webhook secret, and production never registered it (#4634).
+2. An owner had to install two apps on one organization and could install one without the other.
+
+The cost is that Administration write reaches every repository an installation covers, and the app
+that holds the `Oxagen merges` bypass is the app every Oxagen installation token comes from.
+ADR-228 records which token paths refuse the steering repo and which do not yet.
 
 ### Provisioning steps
 
 The durable job `steering-repo/provision` (`packages/handlers/src/steering_repo.provision.ts`) runs
-these steps. An Oxagen Steering installation token makes every change on GitHub except the one in step 2.
-Every step is safe to repeat, and a rerun adopts what an earlier run made.
+these steps. An installation token for the Oxagen app makes every change on GitHub except the one in
+step 2. Every step is safe to repeat, and a rerun adopts what an earlier run made.
 
 1. It creates the repository in your GitHub organization. When the name is taken, it tries `-2`,
    `-3`, and so on.
@@ -382,44 +405,40 @@ Every step is safe to repeat, and a rerun adopts what an earlier run made.
 4. It applies the prescribed settings (`packages/oxagen/src/steering-repo/settings-baseline.ts`) and
    reads them back:
    - The `Oxagen steering` ruleset on `main` requires the `Oxagen steering` status check, pinned to
-     the Oxagen Steering app so no one else can post it. It has no bypass actors.
-   - The `Oxagen merges` ruleset on `main` restricts updates. Its only bypass actor is Oxagen
-     Steering, so every steering PR reaches `main` through Oxagen.
+     the Oxagen app so no one else can post it. It has no bypass actors.
+   - The `Oxagen merges` ruleset on `main` restricts updates. Its only bypass actor is the Oxagen
+     app, so every steering PR reaches `main` through Oxagen.
    - Squash merges only, and head branches deleted after a merge.
    - Actions off.
    - The `steering` environment, which accepts deployments from `main` only.
 5. It records version 1 as a deployment to the `steering` environment.
 6. For a workspace repo, it binds the repository to the workspace with role `steering`.
 
-### Added permissions
-
-Oxagen Steering holds every repository and organization permission in
-[Permissions](#permissions), at the same access. It adds two repository permissions:
-
-| Permission | Access | Why |
-| --- | --- | --- |
-| **Administration** | Read and write | Create the steering repo in the organization, apply its rulesets and merge settings, turn Actions off, and create the `steering` environment. |
-| **Deployments** | Read and write | Record each published version as a deployment to the `steering` environment. |
-
 ### Installation
 
-An organization owner installs Oxagen Steering on your GitHub organization. With **Request user
+An organization owner installs the Oxagen app on your GitHub organization. With **Request user
 authorization (OAuth) during installation** on, the install also authorizes that owner. Onboarding
 stores the owner's user-to-server token in `ingestion.oauth_accounts` with
 `provider = 'github_steering'`.
 
 Onboarding starts the connect at
-`GET /v1/{org_slug}/connections/steering/github?app=steering&mode=install|authorize&return_to=<path>`
+`GET /v1/{org_slug}/connections/steering/github?mode=install|authorize&return_to=<path>`
 (`apps/api/src/routes/v1/github-oauth.ts`). Only an organization Owner or Admin may call it.
-`mode=install` sends the owner to the app's `installations/new` page. `mode=authorize` sends them to
-`login/oauth/authorize`, for an owner whose organization already has the app installed: GitHub
-returns a code from an install only the first time. Both carry a signed state with purpose
-`steering`, and GitHub returns to the app's Callback URL, `GET /oauth/github/steering`. That route
-exchanges the code with the app's client ID and secret, stores the token, and sends the provision
-event again for each scope that waits on a connection. It then redirects to `return_to` with
-`steering=connected`, or with `steering=error&code=<reason>` when a step after the state check
-fails. The same start route with `app=oxagen&mode=install` installs the Oxagen app and binds no
-repository.
+
+- `mode=install` sends the owner to the app's `installations/new` page, which installs the app and
+  authorizes the owner in one pass. Onboarding offers it first.
+- `mode=authorize` sends the owner to `login/oauth/authorize`. Use it when the organization already
+  has the app. GitHub then shows **Configure** on the install page, drops the state, and returns no
+  code.
+
+Both carry a state signed with purpose `steering`, and GitHub returns both to the app's one
+callback, `GET /oauth/github/callback`. The callback checks the signature and the purpose, and
+answers 400 to a state signed for anything else. For a steering state it records the installation
+id in the platform registry, exchanges the code with `GITHUB_APP_CLIENT_ID` and
+`GITHUB_APP_CLIENT_SECRET`, stores the token, and sends the provision event again for each scope
+that waits on a connection. It then redirects to `return_to` with `steering=connected`, or with
+`steering=error&code=<reason>` when a step after the state check fails. The start route ignores the
+retired `app` parameter. `GET /oauth/github/steering` is gone and answers 404.
 
 Provisioning reads the owner's installations with that token (`GET /user/installations`) and makes
 one change with it: `PUT /user/installations/{installation_id}/repositories/{repository_id}`. That
@@ -429,31 +448,13 @@ already covers the new repository, so provisioning skips the call.
 
 When no token is stored, or GitHub answers 401, 403, or 404, provisioning stops at the
 `add_to_installation` step with `steering_reauthorize`. Oxagen raises a banner that asks an
-organization owner to authorize Oxagen Steering again. A retry starts from that step.
+organization owner to authorize the Oxagen app again. A retry starts from that step.
 
-### Webhook subscriptions
+### Health webhooks
 
-Oxagen Steering sends webhooks so Oxagen hears about a change to a steering repo's settings when
-it happens. Provisioning needs none of them.
-
-| Field | Dev | Prod |
-| --- | --- | --- |
-| **Active** | On | On |
-| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://api.oxagen.sh/webhooks/github/app` |
-| **Secret** | value of `OXAGEN_STEERING_APP_WEBHOOK_SECRET` (dev) | value of `OXAGEN_STEERING_APP_WEBHOOK_SECRET` (prod) |
-| **SSL verification** | Enable | Enable |
-
-The URL is the one the Oxagen app uses. The route
-(`apps/api/src/routes/v1/github-webhook.ts`) tells a steering delivery apart by its
-`x-github-hook-installation-target-id` header, which equals `OXAGEN_STEERING_APP_ID`. It verifies
-the delivery with `OXAGEN_STEERING_APP_WEBHOOK_SECRET` alone and sends it to the steering repo
-health read. A steering delivery never reaches ingestion or the installation lifecycle in
-[Webhooks](#webhooks). The route can tell a steering delivery apart only while
-`OXAGEN_STEERING_APP_ID` is set. While the ID is set and `OXAGEN_STEERING_APP_WEBHOOK_SECRET` is
-unset, the route answers every steering delivery with 200, logs an error, and asks for no health
-read.
-
-Subscribe to these events:
+The app's one webhook in [Webhooks](#webhooks) also tells Oxagen about a change to a steering
+repo's settings when it happens. Provisioning needs none of these events. The last three are in the
+ingestion list already. Add the first two:
 
 | GitHub event | Why Oxagen reads it |
 | --- | --- |
@@ -466,64 +467,58 @@ Subscribe to these events:
 GitHub sends `installation` and `installation_repositories` without a subscription. Oxagen reads
 them when a steering repo leaves the installation, or when the app is suspended or removed.
 
-Each delivery that can change a steering repo's health sends one `steering-repo/health.requested`
-event per scope that holds the repo (`packages/handlers/src/steering-repo/health.events.ts`). The
-durable job `steering-repo/health-check`
-(`packages/inngest-functions/src/functions/steering-repo.sweep.ts`) reads the repo's settings and
-stores its health. While the repo is not healthy, the job fails the `Oxagen steering` check on
-every open steering PR. The job `steering-repo/health-sweep` asks for the same read for every ready
-steering repo every 10 minutes, so a lost delivery delays a drift report until the next sweep.
+The route (`apps/api/src/routes/v1/github-webhook.ts`) verifies each delivery with
+`GITHUB_APP_WEBHOOK_SECRET`. A verified delivery that can change a steering repo's health sends one
+`steering-repo/health.requested` event per scope that holds the repo
+(`packages/handlers/src/steering-repo/health.events.ts`), and then goes on to the installation
+lifecycle and ingestion. A failure to send is logged and never fails the delivery. The durable job
+`steering-repo/health-check` (`packages/inngest-functions/src/functions/steering-repo.sweep.ts`)
+reads the repo's settings and stores its health. While the repo is not healthy, the job fails the
+`Oxagen steering` check on every open steering PR. The job `steering-repo/health-sweep` asks for
+the same read for every ready steering repo every 10 minutes, so a lost delivery delays a drift
+report until the next sweep.
 
 ### Configuration
 
-Set six variables on the **`api`** service, where the connect routes, the webhook route, and the
-provisioning job run. `steeringAppFromEnv()` in `packages/handlers/src/steering_repo.provision.ts`
-reads the App ID, the private key and the slug. When any of those is unset, or the App ID is not a positive integer,
-provisioning stops with `steering_app_unconfigured`. The connect routes read the first five and
-`GITHUB_APP_INSTALL_STATE_SECRET`, which signs the connect's state. When one is unset, the connect
-answers 503 with `steering_app_unconfigured` and names the variable.
-
-| Variable | Secret | Required where | Dev value (`apps/api/.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
-| --- | --- | --- | --- | --- |
-| `OXAGEN_STEERING_APP_ID` | no | api (steering provisioning) | Dev Steering App → App ID | Prod Steering App → App ID |
-| `OXAGEN_STEERING_APP_CLIENT_ID` | no | api (steering connect) | Dev Steering App → Client ID | Prod Steering App → Client ID |
-| `OXAGEN_STEERING_APP_CLIENT_SECRET` | yes | api (steering connect) | Dev Steering App → generated client secret | Prod Steering App → generated client secret |
-| `OXAGEN_STEERING_APP_PRIVATE_KEY` | yes | api (steering provisioning) | Dev Steering App → generated private key (PEM) | Prod Steering App → generated private key (PEM) |
-| `OXAGEN_STEERING_APP_SLUG` | no | api (steering provisioning) | Dev Steering App → public slug | Prod Steering App → public slug |
-| `OXAGEN_STEERING_APP_WEBHOOK_SECRET` | yes | api (steering webhook) | Dev Steering App → webhook secret | Prod Steering App → webhook secret |
-
-The connect routes and provisioning do not read `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Only the
-webhook route in [Webhook subscriptions](#webhook-subscriptions) reads it.
+Steering adds no variables. It reads the app's own from
+[Environment variables](#environment-variables). `steeringAppFromEnv()` in
+`packages/handlers/src/lib/steering-app.ts` reads `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and
+`GITHUB_APP_SLUG`. When any of those is unset, or the App ID is not a positive integer, provisioning
+stops with `steering_app_unconfigured`. The steering connect reads those three,
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, and `GITHUB_APP_INSTALL_STATE_SECRET`. When one
+is unset, it answers 503 with `github_app_unconfigured` and names the variable.
 
 Oxagen compares the slug with the app GitHub names on the `steering` deployment when it reads the
 settings back.
 
+The `OXAGEN_STEERING_APP_*` variables are retired, and nothing reads them. Delete them from
+Parameter Store after the deploy that carries ADR-228.
+
 ### Setup checklist
 
-Create each copy at **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App**, or
-under your organization's settings to own it at the organization level.
+On each copy of the app, from its settings page on GitHub:
 
-1. Name it `Oxagen Steering` for production and `Oxagen Steering (Dev)` for development.
-2. Set **Homepage URL** to `https://app.oxagen.sh` for production and `http://localhost:3000` for
-   development.
-3. Turn on **Request user authorization (OAuth) during installation**.
-4. Set **Callback URL** to `{NEXT_PUBLIC_API_URL}/oauth/github/steering`:
-   `http://localhost:4000/oauth/github/steering` for development and
-   `https://api.oxagen.sh/oauth/github/steering` for production. This route stores the owner's
-   token.
-5. Leave **Expire user authorization tokens** off. Provisioning reuses the stored owner token, and
+1. Keep **Request user authorization (OAuth) during installation** on, and leave **Setup URL**
+   blank.
+2. Keep `{NEXT_PUBLIC_API_URL}/oauth/github/callback` first in **Callback URLs**. Steering needs no
+   URL of its own.
+3. Leave **Expire user authorization tokens** off. Provisioning reuses the stored owner token, and
    no job refreshes it.
-6. Leave **Setup URL** blank.
-7. Turn **Webhook → Active** on. Set the URL, the secret, and the events in
-   [Webhook subscriptions](#webhook-subscriptions).
-8. Grant every permission in [Permissions](#permissions). Then add **Administration: Read and
-   write** and **Deployments: Read and write**.
-9. Set **Where can this GitHub App be installed?** to **Any account** for production, so customers
-   can install it on their organizations. **Only on this account** is fine for development.
-10. Generate a private key and a client secret. Copy the App ID, the Client ID and the public slug.
-    Set the six variables in [Configuration](#configuration), with the webhook secret from step 7.
-11. Ask an organization owner to install the app on the GitHub organization, on all repositories or
-    on selected repositories.
+4. Under **Permissions**, add **Administration: Read and write** and **Deployments: Read and
+   write**. GitHub asks the owner of each existing installation to accept them. Until an owner
+   does, that installation keeps its old permissions, and provisioning cannot create a repository
+   through it.
+5. Under **Subscribe to events**, add `repository_ruleset` and `branch_protection_configuration`.
+6. Ask an organization owner to install the app on the GitHub organization, on all repositories or
+   on selected repositories, or to accept the new permissions on an installation it already has.
+
+### Moving from the Oxagen Steering app
+
+A steering connection made through the retired app holds a token that app issued. The Oxagen app's
+installations are invisible to that token, so provisioning stops with `steering_reauthorize`, and an
+owner connects again from onboarding. A steering repo the retired app set up names that app in its
+rulesets, so its health read reports drift until an organization admin repairs it
+(`repair_steering_repo`). Uninstall the retired app from the organization after the repair.
 
 ### GitLab
 
@@ -536,8 +531,8 @@ Maintainer role or higher and the `api` scope. Onboarding sends it to
 must report the token's user as a bot named `group_<id>_bot…` for the group's id. It refuses a
 personal access token, which reaches every group its person belongs to, and a project or parent
 group token, which belongs to something other than this group. Oxagen stores the token in
-`ingestion.oauth_accounts` with `provider = 'gitlab_steering'` and uses it the way it uses Oxagen
-Steering on GitHub. The
+`ingestion.oauth_accounts` with `provider = 'gitlab_steering'` and uses it the way it uses the
+Oxagen app on GitHub. The
 token's bot user acts on steering repos. The prescribed settings protect `main` so no one pushes
 and only that bot user merges. That protection needs GitLab Premium.
 
@@ -573,7 +568,7 @@ Resolved in code (kept here for history):
 - ✅ **Status-constraint bug** — activation now writes `connected` (was the invalid `active`, which
   violated `source_connections_status_check`).
 - ✅ **Setup URL landing route** — implemented at **`/github/setup`**
-  (`apps/app/src/app/github/setup/page.tsx`); resolves the membership-gated workspace and the wizard
+  (`apps/app/src/app/github/setup/route.ts`), kept for older registrations (ADR-228); resolves the membership-gated workspace and the wizard
   recovers the in-progress connection via a sessionStorage handoff so it resumes Step 2 (not Step 1).
   `/installations` + `/repositories` fall back to (and link) the org's GitHub OAuth account when the
   Setup-URL "update" leg left the connection unlinked.

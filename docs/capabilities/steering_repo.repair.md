@@ -43,6 +43,6 @@ A setting that still differs after the write leaves the answer `drifted`. The re
 |---|---|---|
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin |
 | `not_found` | `steering_repo_not_ready` | the workspace has no steering repo that is ready |
-| `conflict` | `steering_app_unconfigured` | this deployment has no Oxagen Steering app settings |
+| `conflict` | `steering_app_unconfigured` | this deployment has no Oxagen GitHub App settings |
 | `conflict` | `steering_repo_disconnected` | Oxagen can no longer reach the repository. An organization admin must connect it again |
 | `conflict` | `steering_revert_refused` | the host would not merge the pull request that puts `main` back, such as when `main` moved. Select Repair settings again |
