@@ -87,6 +87,42 @@ Each refusal answers `conflict` (409) unless the table says otherwise.
 | `tool_not_offered`, `tool_not_found`, `tool_key_collision` | The source does not offer an imported tool, an edit names an unknown tool, or two tools make one key | Remove or rename the edit the message names |
 | `production_branch_missing` | The steering repo has no production branch | Restore the branch, then Review |
 
+## Discover a server's tools
+
+A source changes after you import it: a tool gains a parameter, another disappears, a registry package ships a new version. Discovery reads what the source offers now and compares it with the lock on the production branch. Three capabilities start a discovery and read what it found.
+
+| Capability | API route | What it does |
+|---|---|---|
+| `start_studio_discovery` | `POST /v1/{org}/{ws}/tools/studio/discovery/start` | Queues one discovery of one server folder |
+| `get_studio_discovery` | `POST /v1/{org}/{ws}/tools/studio/discovery/get` | Reads the latest discovery's status and outcome |
+| `list_studio_tools` | `POST /v1/{org}/{ws}/tools/studio/tools/list` | Lists the imported tools, then the offered tools no key imports |
+
+An org Owner or Admin, or a workspace Owner or Member, can start a discovery. A workspace Viewer can also read the discovery and list the tools.
+
+A discovery takes these steps:
+
+1. It reads `server.toml`, `tools.toml`, and `tools.lock.json` on the production branch.
+2. It reads the tools the source offers and writes each one to `mcp.tool_snapshots`.
+3. It builds a new lock and compares it with the served one.
+4. When an imported tool changed, or a registry package moved to a new version, it opens or updates one sync steering PR with the new lock.
+5. It records the outcome on the server's discovery.
+
+Until the sync steering PR merges, the gateway withholds each tool whose input schema changed and each tool the new lock drops. A tool the source newly offers opens no PR. It shows on the Tools tab as available until you import it.
+
+Poll `get_studio_discovery` while the status reads `queued` or `running`. A discovery ends `succeeded` or `failed`. A run times out after 10 minutes and retries twice, and a failed run keeps the open PR and the withheld tools. A discovery that stays `queued` or `running` for over an hour reads `stalled: true`, and the hourly sweep asks for it again.
+
+| Outcome | What it means |
+|---|---|
+| `unchanged` | No imported tool changed, so the lock stands |
+| `pr_opened` | The discovery opened the sync steering PR |
+| `pr_updated` | The discovery added a commit to the open sync steering PR |
+| `needs_digest` | A registry package has a newer version, and discovery cannot read the digest the lock pins. It records the version and opens no PR |
+| `skipped` | The schedule does not allow this run, or the new lock matches the one the open PR already proposes |
+
+`sync.schedule` in `server.toml` decides which triggers run a discovery. `start_studio_discovery` and a merged sync steering PR always run one. A push to the steering repo runs one only for `on-change`. A changed tool list and a new registry version run one unless the schedule is `manual`. The hourly sweep runs one for a `daily` server whose last discovery is a day old, and once for an `on-change` server that has never finished one.
+
+`list_studio_tools` suggests a classification for each available tool from what the snapshot keeps: the name, the description, the input schema, and the MCP hints. A snapshot keeps no request template, so an OpenAPI, GraphQL, or gRPC tool's suggestion falls back to `fail_safe` until you classify it. An available tool's token count is an estimate that leaves out the title and the output schema.
+
 ## Other writers of the folder
 
 Oxagen's MCP server discovery also opens steering PRs under `tools/`. It uses the same writer as Review, so every tools steering PR follows the same branch rule, file limit, labels, and `Oxagen steering` check. ADR-224 (`docs/adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md` in the repository) records the design.

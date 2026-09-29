@@ -1921,6 +1921,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_studio_draft",
       "domain": "tool",
       "surfaces": [
@@ -2856,6 +2867,17 @@
     {
       "name": "list_sso_providers",
       "domain": "org",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_studio_tools",
+      "domain": "tool",
       "surfaces": [
         "api",
         "mcp"
@@ -4265,6 +4287,17 @@
     {
       "name": "start_mcp_authorization",
       "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_studio_discovery",
+      "domain": "tool",
       "surfaces": [
         "api",
         "mcp"

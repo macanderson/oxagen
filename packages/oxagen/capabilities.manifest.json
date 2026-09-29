@@ -6924,6 +6924,40 @@
       }
     },
     {
+      "name": "get_studio_discovery",
+      "file": "tool.studio.discovery.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "start_studio_discovery",
+      "file": "tool.studio.discovery.start.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_studio_draft",
       "file": "tool.studio.draft.get.ts",
       "domain": "tool",
@@ -6960,6 +6994,23 @@
     {
       "name": "open_studio_review",
       "file": "tool.studio.review.open.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_studio_tools",
+      "file": "tool.studio.tools.list.ts",
       "domain": "tool",
       "mode": "sync",
       "surfaces": [
