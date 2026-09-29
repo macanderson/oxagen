@@ -3,7 +3,12 @@
 // five tabs landing where it lives now, the query values each view keeps,
 // and a 404 for a segment that names nothing.
 import { describe, expect, it } from "vitest";
-import { resolveSteeringRoute, shelfLink, steeringLink } from "./view";
+import {
+  resolveSteeringRoute,
+  shelfLink,
+  skillRowsParam,
+  steeringLink,
+} from "./view";
 
 const AT = { org: "acme", ws: "core" };
 const BASE = "/acme/core/steering";
@@ -118,6 +123,13 @@ describe("resolveSteeringRoute", () => {
       expect(resolve(["skills"], { rows })).toMatchObject({
         view: { rows: 100 },
       });
+    }
+  });
+
+  it("leaves the skill inventory's default size off the address and writes any other", () => {
+    expect(skillRowsParam(100)).toBeUndefined();
+    for (const rows of [10, 25, 50]) {
+      expect(skillRowsParam(rows)).toBe(String(rows));
     }
   });
 

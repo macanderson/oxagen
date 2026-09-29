@@ -211,6 +211,14 @@ function viewOf(
  * The view a Steering request names: `segments` is the path under
  * `/steering` (none on the bare route) and `query` the search values.
  */
+/**
+ * The Skills inventory's page size as an address carries it: left off at the
+ * default, so a route that forwards the size needs no contract import (#4693).
+ */
+export function skillRowsParam(rows: number): string | undefined {
+  return rows === SKILL_PAGE ? undefined : String(rows);
+}
+
 export function resolveSteeringRoute(
   at: SteeringAt,
   segments: readonly string[] | undefined,

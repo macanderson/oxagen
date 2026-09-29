@@ -416,12 +416,12 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome, the invoices cursor and the page size to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await BILLING(),
-      routeProps(SEGMENTS, { checkout: "success", cursor: "c2" }),
+      routeProps(SEGMENTS, { checkout: "success", cursor: "c2", rows: "25" }),
       title("billing"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
@@ -435,6 +435,7 @@ describe("the Billing page", () => {
       viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
+      rows: "25",
     });
   });
 
@@ -447,6 +448,7 @@ describe("the Billing page", () => {
     expect(Billing.mock.calls[0]?.[0]).toMatchObject({
       checkout: null,
       cursor: null,
+      rows: null,
     });
   });
 });

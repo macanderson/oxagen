@@ -2,4 +2,4 @@
 // nothing else reaches into the folder (eslint: `@/features/*/*` is restricted).
 export { SteeringLoading } from "./page-state";
 export { Steering } from "./steering";
-export { resolveSteeringRoute } from "./view";
+export { resolveSteeringRoute, skillRowsParam } from "./view";
