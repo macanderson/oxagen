@@ -178,6 +178,16 @@ describe("CellOverflow", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent(LONG);
   });
 
+  it("shows a cut titled value to focus, since the browser shows its title only to a pointer", async () => {
+    page();
+    const titled = screen.getByTestId("titled");
+    measure(titled, 900, 300);
+    fireEvent.focusIn(titled);
+    const card = await screen.findByRole("tooltip");
+    expect(card).toHaveTextContent(LONG);
+    expect(card).toHaveAttribute("data-slot", "hover-card-content");
+  });
+
   it("hides the value when the pointer moves to a value that fits", async () => {
     page();
     const description = screen.getByTestId("description");
