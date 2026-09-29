@@ -9,7 +9,7 @@
 // so rather than drawing rows it would have to invent. Selecting a row opens
 // that pull request on this tab (`changes/<id>`), where its checks, what merge
 // will do, and Merge and Close live.
-import { FileText } from "lucide-react";
+import { FileTextIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { KeyboardEvent } from "react";
 import type {
@@ -301,7 +301,7 @@ function ChangeRow({
     >
       <td className={cell}>
         <span className="flex min-w-0 items-center gap-2">
-          <FileText
+          <FileTextIcon
             aria-hidden="true"
             className="size-3.5 flex-none text-dim"
           />

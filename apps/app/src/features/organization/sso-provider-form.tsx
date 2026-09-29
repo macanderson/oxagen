@@ -15,7 +15,11 @@ import {
   useState,
 } from "react";
 import type { SsoProtocol, SsoProvider } from "@/data/contracts/org";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  textareaBase,
+} from "@/ui/control-styles";
 import { Field, PasswordField } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -62,7 +66,7 @@ function TextAreaField({
         spellCheck={false}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className={`${inputBase} font-mono text-xs`}
+        className={`${textareaBase} font-mono text-xs`}
         {...area}
       />
       {error ? (

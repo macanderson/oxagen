@@ -7,14 +7,14 @@
 // opens over a scrim.
 import { Dialog } from "@base-ui/react/dialog";
 import {
-  ArrowLeftRight,
-  Bell,
-  Building,
-  Ellipsis,
-  type LucideIcon,
-  Search,
-  UserRound,
-} from "lucide-react";
+  ArrowsLeftRightIcon,
+  BellIcon,
+  BuildingIcon,
+  DotsThreeIcon,
+  type Icon as PhosphorIcon,
+  MagnifyingGlassIcon,
+  UserIcon,
+} from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { AskStella } from "./assistant-launcher";
@@ -125,7 +125,7 @@ function tileCount(key: NavKey, counts: ShellCounts): number | null {
  * at the square's size in its place.
  */
 type TileLead =
-  | { icon: LucideIcon; mark?: undefined }
+  | { icon: PhosphorIcon; mark?: undefined }
   | { icon?: undefined; mark: ReactNode };
 
 /** `.mtile`: an icon, a name, one line under it, and a count where something waits. */
@@ -295,7 +295,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           className={`${slotClass} col-start-5`}
         >
           {moreCurrent ? <CurrentMarker /> : null}
-          <Ellipsis aria-hidden="true" className="size-5" />
+          <DotsThreeIcon aria-hidden="true" className="size-5" />
           <span>{t("mobileNav.more")}</span>
           {counts.unrecorded.includes("audit") ? (
             <SlotCount
@@ -372,7 +372,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               })}
             >
               <Tile
-                icon={Search}
+                icon={MagnifyingGlassIcon}
                 label={t("mobileNav.search")}
                 sub={t("mobileNav.searchSub")}
               />
@@ -386,7 +386,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               })}
             >
               <Tile
-                icon={Bell}
+                icon={BellIcon}
                 label={t("mobileNav.notifications")}
                 sub={
                   unread === null
@@ -408,7 +408,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               })}
             >
               <Tile
-                icon={UserRound}
+                icon={UserIcon}
                 label={t("mobileNav.account")}
                 sub={data.viewer.name ?? data.viewer.email}
               />
@@ -425,7 +425,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               })}
             >
               <Tile
-                icon={Building}
+                icon={BuildingIcon}
                 label={t("switcher.org")}
                 sub={data.org.name}
               />
@@ -440,7 +440,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
                 })}
               >
                 <Tile
-                  icon={ArrowLeftRight}
+                  icon={ArrowsLeftRightIcon}
                   label={t("switcher.ws")}
                   sub={wsName}
                 />

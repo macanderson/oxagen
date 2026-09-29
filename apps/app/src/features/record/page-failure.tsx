@@ -10,7 +10,7 @@
 // that says what they would do: no contract lets a person ask for a role
 // (#3820) or open an incident from a page (#3847), and a button that silently
 // does nothing is worse than one that says why it cannot.
-import { CircleAlert, Lock } from "lucide-react";
+import { LockIcon, WarningCircleIcon } from "@phosphor-icons/react/ssr";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Read } from "@/data/read";
@@ -115,7 +115,7 @@ export function PageFailure({
         <StateWrap
           testId="record-denied"
           tone="denied"
-          icon={<Lock className="size-5" />}
+          icon={<LockIcon className="size-5" />}
           title={t("denied.title")}
           actions={
             <>
@@ -168,7 +168,7 @@ export function PageFailure({
         <StateWrap
           testId="record-pending"
           tone="quiet"
-          icon={<Lock className="size-5" />}
+          icon={<LockIcon className="size-5" />}
           title={t("pending.title")}
           actions={
             <SafeLink to={routes.fleet(org, ws)} className={buttonSecondary}>
@@ -184,7 +184,7 @@ export function PageFailure({
         <StateWrap
           testId="record-error"
           tone="failed"
-          icon={<CircleAlert className="size-5" />}
+          icon={<WarningCircleIcon className="size-5" />}
           title={t("error.title")}
           actions={
             <>

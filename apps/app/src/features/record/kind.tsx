@@ -4,20 +4,20 @@
 // the brand gold, so a reader never mistakes what a record IS for how it is
 // DOING. The class strings are written out in full per kind because Tailwind
 // only generates the classes it can read in the source.
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import {
-  ArrowRight,
-  Bookmark,
-  Heart,
-  List,
-  type LucideIcon,
-  ShieldMinus,
-  Target,
-} from "lucide-react";
+  ArrowRightIcon,
+  BookmarkSimpleIcon,
+  HeartIcon,
+  ListBulletsIcon,
+  ShieldSlashIcon,
+  TargetIcon,
+} from "@phosphor-icons/react/ssr";
 import { useTranslations } from "next-intl";
 import type { RecordKind } from "@/data/contracts/steering";
 
 type Face = {
-  icon: LucideIcon;
+  icon: PhosphorIcon;
   /** The kind hue as ink. */
   ink: string;
   /** `.kb`: ink, 45% of the hue on the border, 12% behind. */
@@ -31,7 +31,7 @@ type Face = {
 
 export const KIND_FACE: Record<RecordKind, Face> = {
   rule: {
-    icon: ArrowRight,
+    icon: ArrowRightIcon,
     ink: "text-kind-rule",
     badge: "text-kind-rule border-kind-rule/45 bg-kind-rule/12",
     tile: "text-kind-rule border-kind-rule/32 bg-kind-rule/14",
@@ -39,7 +39,7 @@ export const KIND_FACE: Record<RecordKind, Face> = {
     rule: "border-l-kind-rule",
   },
   constraint: {
-    icon: ShieldMinus,
+    icon: ShieldSlashIcon,
     ink: "text-kind-constraint",
     badge:
       "text-kind-constraint border-kind-constraint/45 bg-kind-constraint/12",
@@ -48,7 +48,7 @@ export const KIND_FACE: Record<RecordKind, Face> = {
     rule: "border-l-kind-constraint",
   },
   procedure: {
-    icon: List,
+    icon: ListBulletsIcon,
     ink: "text-kind-procedure",
     badge: "text-kind-procedure border-kind-procedure/45 bg-kind-procedure/12",
     tile: "text-kind-procedure border-kind-procedure/32 bg-kind-procedure/14",
@@ -56,7 +56,7 @@ export const KIND_FACE: Record<RecordKind, Face> = {
     rule: "border-l-kind-procedure",
   },
   fact: {
-    icon: Target,
+    icon: TargetIcon,
     ink: "text-kind-fact",
     badge: "text-kind-fact border-kind-fact/45 bg-kind-fact/12",
     tile: "text-kind-fact border-kind-fact/32 bg-kind-fact/14",
@@ -64,7 +64,7 @@ export const KIND_FACE: Record<RecordKind, Face> = {
     rule: "border-l-kind-fact",
   },
   memory: {
-    icon: Bookmark,
+    icon: BookmarkSimpleIcon,
     ink: "text-kind-memory",
     badge: "text-kind-memory border-kind-memory/45 bg-kind-memory/12",
     tile: "text-kind-memory border-kind-memory/32 bg-kind-memory/14",
@@ -72,7 +72,7 @@ export const KIND_FACE: Record<RecordKind, Face> = {
     rule: "border-l-kind-memory",
   },
   preference: {
-    icon: Heart,
+    icon: HeartIcon,
     ink: "text-kind-preference",
     badge:
       "text-kind-preference border-kind-preference/45 bg-kind-preference/12",

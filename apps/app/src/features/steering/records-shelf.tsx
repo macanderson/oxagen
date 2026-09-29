@@ -17,14 +17,14 @@
 // line (rendered, cited, violated), have no store yet: each prints "not
 // recorded" and names the issue that tracks it.
 import {
-  ArrowRight,
-  Bookmark,
-  CircleDot,
-  Heart,
-  List,
-  type LucideIcon,
-  ShieldMinus,
-} from "lucide-react";
+  ArrowRightIcon,
+  BookmarkSimpleIcon,
+  HeartIcon,
+  type Icon as PhosphorIcon,
+  ListBulletsIcon,
+  RecordIcon,
+  ShieldSlashIcon,
+} from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import {
@@ -58,40 +58,40 @@ export type BundleHead = { version: number; headCommit: string | null };
 /** A kind is an icon and a hue, never a hue alone (globals.css `--kind-*`). */
 const KIND_FACE: Record<
   RecordKind,
-  { icon: LucideIcon; ink: string; bar: string; tile: string }
+  { icon: PhosphorIcon; ink: string; bar: string; tile: string }
 > = {
   rule: {
-    icon: ArrowRight,
+    icon: ArrowRightIcon,
     ink: "text-kind-rule",
     bar: "border-l-kind-rule",
     tile: "border-kind-rule/40 bg-kind-rule/10",
   },
   constraint: {
-    icon: ShieldMinus,
+    icon: ShieldSlashIcon,
     ink: "text-kind-constraint",
     bar: "border-l-kind-constraint",
     tile: "border-kind-constraint/40 bg-kind-constraint/10",
   },
   procedure: {
-    icon: List,
+    icon: ListBulletsIcon,
     ink: "text-kind-procedure",
     bar: "border-l-kind-procedure",
     tile: "border-kind-procedure/40 bg-kind-procedure/10",
   },
   fact: {
-    icon: CircleDot,
+    icon: RecordIcon,
     ink: "text-kind-fact",
     bar: "border-l-kind-fact",
     tile: "border-kind-fact/40 bg-kind-fact/10",
   },
   memory: {
-    icon: Bookmark,
+    icon: BookmarkSimpleIcon,
     ink: "text-kind-memory",
     bar: "border-l-kind-memory",
     tile: "border-kind-memory/40 bg-kind-memory/10",
   },
   preference: {
-    icon: Heart,
+    icon: HeartIcon,
     ink: "text-kind-preference",
     bar: "border-l-kind-preference",
     tile: "border-kind-preference/40 bg-kind-preference/10",
@@ -164,7 +164,7 @@ function KindIcon({
   className: string;
 }) {
   const Icon = KIND_FACE[kind].icon;
-  return <Icon aria-hidden="true" className={className} strokeWidth={1.8} />;
+  return <Icon aria-hidden="true" className={className} />;
 }
 
 const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;

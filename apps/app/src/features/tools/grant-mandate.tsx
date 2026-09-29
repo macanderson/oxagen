@@ -37,7 +37,12 @@ import {
   chooseToolPatterns,
 } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  inputBase,
+  mono,
+  textareaBase,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { RecordMultiPicker, RecordPicker } from "@/ui/record-picker";
@@ -618,7 +623,7 @@ export function GrantMandate({
               maxLength={PURPOSE_MAX}
               rows={2}
               defaultValue={prefill.purpose}
-              className={inputBase}
+              className={textareaBase}
             />
           </Field>
           <Field id={id("validFrom")} label={label("validFrom")}>

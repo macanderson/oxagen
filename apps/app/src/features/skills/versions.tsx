@@ -20,6 +20,7 @@ import {
   panelBody,
   panelHeader,
   panelTitle,
+  textareaBase,
 } from "@/ui/control-styles";
 import { Badge } from "@/ui/badge";
 import { FormAlert } from "@/ui/form-feedback";
@@ -145,7 +146,7 @@ export function SkillVersions({
             <label htmlFor="skill-config-text">{t("toml")}</label>
             <textarea
               id="skill-config-text"
-              className={`${inputBase} font-mono`}
+              className={`${textareaBase} font-mono`}
               rows={18}
               maxLength={200000}
               value={text}

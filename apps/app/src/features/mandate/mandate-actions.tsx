@@ -19,7 +19,12 @@ import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
 import { isChangeable } from "@/data/contracts/mandates";
 import { decimalFromMicros } from "@/data/contracts/money";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  textareaBase,
+} from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -436,7 +441,7 @@ function Revoke({ org, ws, mandate, here }: Place) {
               required
               rows={2}
               maxLength={2000}
-              className={inputBase}
+              className={textareaBase}
             />
           </Field>
           {failure === null ? null : (

@@ -11,7 +11,7 @@
 // #3941). A free-text question has no answer form in the app yet; it is
 // answered on the API, MCP, or CLI. The row never offers an answer it cannot
 // send.
-import { MessageCircleQuestion } from "lucide-react";
+import { ChatCircleDotsIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { InterjectionItem } from "@/data/contracts/interjections";
 import { linkText } from "@/ui/control-styles";
@@ -54,7 +54,7 @@ export function InterjectionRow({
         aria-hidden="true"
         className="grid size-7 flex-none place-items-center rounded-lg border border-border bg-card text-info"
       >
-        <MessageCircleQuestion className="size-3.5" />
+        <ChatCircleDotsIcon className="size-3.5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

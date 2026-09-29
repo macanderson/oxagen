@@ -8,6 +8,7 @@ import {
   buttonSecondary,
   inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
 import { FormAlert } from "@/ui/form-feedback";
@@ -157,7 +158,7 @@ export function CloneEditor({
           <label>
             {t("source")}
             <textarea
-              className={`${inputBase} ${mono} min-h-64`}
+              className={`${textareaBase} ${mono} min-h-64`}
               value={draft.source}
               disabled={pending}
               onChange={(e) => {

@@ -7,11 +7,11 @@
 // each mark is recorded, and how many unread rows past the list it left alone.
 // On a phone it rises as a bottom sheet like every dialog.
 import {
-  AlertTriangle,
-  CheckCheck,
-  Clock3,
-  GitPullRequest,
-} from "lucide-react";
+  ChecksIcon,
+  ClockIcon,
+  GitPullRequestIcon,
+  WarningIcon,
+} from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { ShellNotification } from "@/data/contracts/shell";
@@ -30,19 +30,19 @@ import { useShellCounts } from "./use-activity";
 function Glyph({ n }: { n: ShellNotification }) {
   const tone =
     n.event === "approval.requested"
-      ? { Icon: Clock3, cls: "border-info/40 bg-info/10 text-info" }
+      ? { Icon: ClockIcon, cls: "border-info/40 bg-info/10 text-info" }
       : n.event === "approval.resolved"
         ? {
-            Icon: CheckCheck,
+            Icon: ChecksIcon,
             cls: "border-success/40 bg-success/10 text-success",
           }
         : n.kind === "member" || n.kind === "run"
           ? {
-              Icon: GitPullRequest,
+              Icon: GitPullRequestIcon,
               cls: "border-gold/40 bg-gold/10 text-accent-text",
             }
           : {
-              Icon: AlertTriangle,
+              Icon: WarningIcon,
               cls: "border-error/40 bg-error/10 text-error-ink",
             };
   const { Icon, cls } = tone;

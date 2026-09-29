@@ -10,7 +10,7 @@
 // per bound repository (`get_repository_tree`); a repository that is not
 // linked has no binding to read through, so its tree reads as not read. The
 // delivery counters and the code graph have no store yet and say so.
-import { FolderGit2 } from "lucide-react";
+import { FolderSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
@@ -301,7 +301,7 @@ function Row({
     >
       <td className={cell}>
         <span className="flex min-w-0 items-center gap-2">
-          <FolderGit2
+          <FolderSimpleIcon
             aria-hidden="true"
             className="size-3.5 flex-none text-dim"
           />

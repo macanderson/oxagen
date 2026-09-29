@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
 import { Avatar } from "@/ui/avatar";
+import { menuItem, menuPopup, menuSeparator } from "@/ui/control-styles";
 import { useNavigate } from "@/ui/navigation";
 import { initials } from "./format";
 import { useRecoveryCodeVault } from "./recovery-code-vault";
@@ -19,9 +20,6 @@ import { liveSignOut } from "./session-client";
 import type { ShellData } from "./shell-data";
 import { type AccountTab, useShellState } from "./shell-state";
 import { nextTheme } from "./theme";
-
-const itemClass =
-  "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-menu-item-fg outline-none data-[highlighted]:bg-menu-item-highlighted-bg data-[highlighted]:text-menu-item-highlighted-fg";
 
 const LINKS: readonly { tab: AccountTab; testId: string }[] = [
   { tab: "profile", testId: "open-account" },
@@ -97,17 +95,18 @@ export function UserMenu({ data }: { data: ShellData }) {
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={8} align="end" className="z-50">
-          <Menu.Popup className="w-[250px] rounded-xl border border-menu-popup-border bg-menu-popup-bg p-1.5 text-menu-popup-fg shadow-lg outline-none">
-            <div className="mb-1 border-b border-menu-separator px-2.5 pb-2 pt-1.5">
+          <Menu.Popup className={`${menuPopup} w-[250px]`}>
+            <div className="px-3 pb-2 pt-2">
               <p className="truncate text-sm font-semibold">{displayName}</p>
               <p className="truncate font-mono text-xs text-muted-foreground">
                 {viewer.email}
               </p>
             </div>
+            <Menu.Separator className={menuSeparator} />
             {LINKS.map(({ tab, testId }) => (
               <Menu.Item
                 key={tab}
-                className={itemClass}
+                className={menuItem}
                 data-testid={testId}
                 onClick={() => {
                   openAccount(tab);
@@ -116,9 +115,9 @@ export function UserMenu({ data }: { data: ShellData }) {
                 <span className="flex-1">{t(`userMenu.${tab}`)}</span>
               </Menu.Item>
             ))}
-            <Menu.Separator className="my-1 h-px bg-menu-separator" />
+            <Menu.Separator className={menuSeparator} />
             <Menu.Item
-              className={itemClass}
+              className={menuItem}
               closeOnClick={false}
               data-testid="switch-theme"
               onClick={() => {
@@ -128,7 +127,7 @@ export function UserMenu({ data }: { data: ShellData }) {
               <span className="flex-1">{t("userMenu.switchTheme")}</span>
             </Menu.Item>
             <Menu.Item
-              className={itemClass}
+              className={menuItem}
               data-testid="sign-out"
               closeOnClick={false}
               onClick={() => void signOut()}

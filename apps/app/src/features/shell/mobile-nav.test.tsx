@@ -482,8 +482,11 @@ describe("More sheet", () => {
     expect(mark.outerHTML).toBe(
       present(launcher.querySelector('svg[data-mark="stella-icon"]')).outerHTML,
     );
-    // No glyph from the icon set stands in for it.
-    expect(tile.querySelector("svg.lucide")).toBeNull();
+    // No glyph from the icon set stands in for it. Every Phosphor glyph draws
+    // on a 256 grid, and the sheet's other tiles prove the selector finds one.
+    const glyph = 'svg[viewBox="0 0 256 256"]';
+    expect(sheet.querySelector(glyph)).not.toBeNull();
+    expect(tile.querySelector(glyph)).toBeNull();
 
     // The name is the launcher's, markup and all: "stella*" in the wordmark
     // face, lowercase, with the asterisk in the accent and hidden from

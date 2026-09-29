@@ -38,7 +38,7 @@ import {
   useState,
 } from "react";
 import { Badge, type BadgeTone } from "./badge";
-import { inputBase, mono } from "./control-styles";
+import { inputBase, menuItemActive, menuSurface, mono } from "./control-styles";
 import { ProviderIcon } from "./provider-icon";
 
 /** A logo: the vendor's https icon, or the initial of `name` on a tile. */
@@ -317,7 +317,7 @@ function OptionList({
   const more = matches.length - shown.length;
   const partial = source.status === "ready" && source.page.partial;
   return (
-    <div className="mt-1 overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-sm">
+    <div className={`${menuSurface} mt-1`}>
       {rows.length > 0 ? (
         <div
           id={listId}
@@ -344,8 +344,8 @@ function OptionList({
                 onClick={() => {
                   onPick(row.value);
                 }}
-                className={`flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-[13px] ${
-                  active ? "bg-accent text-accent-foreground" : ""
+                className={`flex cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2 text-sm ${
+                  active ? menuItemActive : ""
                 }`}
               >
                 <span
