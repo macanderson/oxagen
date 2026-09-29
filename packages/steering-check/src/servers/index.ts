@@ -205,18 +205,24 @@ function toolField(tool: string, field: string | undefined): string {
 }
 
 /**
- * The tool checks the seam leaves out, since another check reports the same
- * fault. The references check reports a credential the vault does not hold as
- * credential-exists, with its line and the closest name. The lock stands in
- * for what the source offers, so tool_not_offered would repeat two compile
- * findings: lock-matches reports a tool the lock does not hold, and it passes
- * one whose operation the OpenAPI document holds, which the next sync adds.
- * server-compiles reports a locked tool that selects nothing.
+ * The tool checks the seam leaves out of this run, since another check the run
+ * selects reports the same fault. The lock stands in for what the source
+ * offers, so tool_not_offered would repeat two compile findings: lock-matches
+ * reports a tool the lock does not hold, and it passes one whose operation the
+ * OpenAPI document holds, which the next sync adds. server-compiles reports a
+ * locked tool that selects nothing. The references check reports a credential
+ * the vault does not hold as credential-exists, with its line and the closest
+ * name. A run that leaves out the references check keeps unknown_credential,
+ * so a compile-only run still fails on a credential the vault lacks.
  */
-const REPORTED_ELSEWHERE: ReadonlySet<string> = new Set(["unknown_credential", "tool_not_offered"]);
+function reportedElsewhere(checks: CheckInput["checks"]): ReadonlySet<string> {
+  const rules = new Set(["tool_not_offered"]);
+  if (checks === undefined || checks.includes("references")) rules.add("unknown_credential");
+  return rules;
+}
 
 function lintFindings(name: string, texts: FolderTexts, found: readonly LintFinding[]): Finding[] {
-  return found.filter((item) => !REPORTED_ELSEWHERE.has(item.rule)).map((item) => {
+  return found.map((item) => {
     const onTool = item.tool !== undefined;
     const field = item.tool === undefined ? (item.field ?? null) : toolField(item.tool, item.field);
     return find({
@@ -506,7 +512,7 @@ async function broughtByChange(
  * whose check throws reports one internal error, and the other folders still run.
  */
 export async function checkServerFolders(
-  input: Pick<CheckInput, "files" | "base" | "context">,
+  input: Pick<CheckInput, "files" | "base" | "context" | "checks">,
   options: ServerCheckOptions = {},
 ): Promise<ServerCheckOutcome> {
   const context: LintContext = {
@@ -514,7 +520,10 @@ export async function checkServerFolders(
     credentials: new Set(input.context.credentials.map((credential) => `${CREDENTIAL_REF_PREFIX}${credential}`)),
     accepted_unchanged: new Set(),
   };
-  const lint = options.lint ?? toolChecks;
+  const toolCheck = options.lint ?? toolChecks;
+  const skipped = reportedElsewhere(input.checks);
+  const lint: ServerLint = (folder, lintContext) =>
+    toolCheck(folder, lintContext).filter((item) => !skipped.has(item.rule));
   const { changed, removed } = changedPaths(input.files, input.base);
   const change: Change = { base: input.base, changed, removed };
   const findings: Finding[] = [];

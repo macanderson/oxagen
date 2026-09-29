@@ -4,8 +4,9 @@
 // Every hour the sweep asks for a discovery of each published server that
 // was never discovered, of each daily server whose last discovery is a day
 // old, and of each server with an open sync steering PR, so a merge releases
-// the tools discovery withheld. Each event carries an id for the hour, so a
-// retried sweep sends nothing twice.
+// the tools discovery withheld. It asks again for each discovery that has
+// sat queued or running for an hour. Each event carries an id for the hour,
+// so a retried sweep sends nothing twice.
 import { createFunction } from "../create-function";
 import { mcpServerDiscoveryRunner } from "../lib/mcp-server-discovery-runner";
 

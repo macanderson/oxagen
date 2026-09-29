@@ -301,6 +301,20 @@ export function gitlabCredentialRejected(fullName: string): HandlerError {
   });
 }
 
+/**
+ * The same refusal for a steering project the provisioner bound. Its calls
+ * use the group access token the organization stored, not a project token,
+ * so the repair is to connect the group again (#4666). Only an organization
+ * owner or admin can store a group token (apps/api/src/routes/v1/gitlab-oauth.ts).
+ */
+export function gitlabGroupCredentialRejected(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "gitlab_credential_rejected",
+    message: `GitLab refused the group access token stored for the group that holds the steering project ${fullName}. It was revoked, expired, or lost access to the project. An organization owner or admin must connect the group again with a new group access token.`,
+  });
+}
+
 /** What the GitLab seam is built from; the tests pass fakes. */
 export interface SteeringGitLabDeps {
   readConnection: typeof readGitLabConnection;
@@ -462,6 +476,12 @@ export function createSteeringGitLab(
   // a client built with one workspace's token serves only that handle.
   const clients = new WeakMap<SteeringRepository, GitLabClient>();
   const rests = new WeakMap<SteeringRepository, GitLabRest>();
+  // The handles whose client holds the organization's group access token.
+  const groupTokens = new WeakSet<SteeringRepository>();
+  const rejected = (repo: SteeringRepository): HandlerError =>
+    groupTokens.has(repo)
+      ? gitlabGroupCredentialRejected(repo.fullName)
+      : gitlabCredentialRejected(repo.fullName);
   const makeRest = deps.rest ?? ((token: string) => gitlabRest({ token }));
   const linkAccount = deps.linkAccount ?? linkedOxagenUser;
   const handle = (
@@ -484,7 +504,7 @@ export function createSteeringGitLab(
     try {
       return await fn(gl, project);
     } catch (err) {
-      if (isStatus(err, 401)) throw gitlabCredentialRejected(repo.fullName);
+      if (isStatus(err, 401)) throw rejected(repo);
       throw gitlabRefused(err);
     }
   };
@@ -513,7 +533,7 @@ export function createSteeringGitLab(
         project,
       );
     } catch (err) {
-      if (isStatus(err, 401)) throw gitlabCredentialRejected(repo.fullName);
+      if (isStatus(err, 401)) throw rejected(repo);
       throw gitlabRefused(err);
     }
   };
@@ -549,7 +569,9 @@ export function createSteeringGitLab(
         project = await gl.getProject(connection.projectId);
       } catch (err) {
         if (isStatus(err, 401))
-          throw gitlabCredentialRejected(connection.approvedFullName);
+          throw connection.steeringGroupId === undefined
+            ? gitlabCredentialRejected(connection.approvedFullName)
+            : gitlabGroupCredentialRejected(connection.approvedFullName);
         if (isStatus(err, 404))
           throw new HandlerError({
             code: "not_found",
@@ -590,6 +612,7 @@ export function createSteeringGitLab(
       };
       clients.set(repo, gl);
       rests.set(repo, makeRest(token));
+      if (connection.steeringGroupId !== undefined) groupTokens.add(repo);
       return repo;
     },
 

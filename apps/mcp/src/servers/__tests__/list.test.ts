@@ -1,6 +1,9 @@
 // list.test.ts: which tools a run lists, and with which annotations (lane M15).
+import { SearchIndex, SearchIndexError, type Embedder } from "@oxagen/mcp-studio";
 import { requireCedarRuntime, type PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
+import { callServed } from "../call";
+import { servedRanker } from "../embeddings";
 import { listServed } from "../list";
 import { ServedCache, compileDecider, matchAgent } from "../snapshot";
 import {
@@ -13,6 +16,7 @@ import {
   run,
   server,
   sourceNamed,
+  textOf,
   view,
 } from "./fixtures";
 
@@ -205,6 +209,37 @@ describe("listServed in search mode", () => {
     const list = listServed(await view(published({ servers: [searchBilling, catalog] }), ports));
     const call = list.find((entry) => entry.name === "billing__call");
     expect(call?.annotations).toEqual({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+  });
+
+  it("lists a search-mode server in full while its embedder throws", async () => {
+    let embeds = 0;
+    const failing: Embedder = {
+      key: "k".repeat(32),
+      embed: () => {
+        embeds += 1;
+        return Promise.reject(new SearchIndexError("unreachable", "The embeddings endpoint answered HTTP 503.", 503));
+      },
+    };
+    const index = new SearchIndex({
+      embedder: failing,
+      store: { read: () => Promise.resolve([]), write: () => Promise.resolve() },
+      namespace: "ws_1",
+    });
+    const { ports, recorded } = fakePorts();
+    const ranked = { ...ports, rank: servedRanker("ws_1", () => Promise.resolve(index)) };
+    const v = await view(published({ servers: [searchBilling, catalog] }), ranked);
+
+    expect(names(listServed(v))).toEqual(["billing__search", "billing__describe", "billing__call", "catalog__list_products"]);
+    expect(embeds).toBe(0);
+    expect(recorded.logs).toEqual([]);
+
+    // The same ports fail a search's ranking, so the listing above ran beside a live failure.
+    const searched = await callServed(v, ranked, "billing__search", { query: "refund" });
+    expect(textOf(searched)).toContain("create_refund");
+    expect(embeds).toBeGreaterThan(0);
+    expect(recorded.logs).toEqual([
+      expect.objectContaining({ message: "The search index failed, so search ranked by keyword." }),
+    ]);
   });
 
   it("lists no search tools for a server that serves no tool", async () => {
