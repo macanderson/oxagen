@@ -87,7 +87,7 @@ export function ChartContainer({
   children: ComponentProps<typeof ResponsiveContainer>["children"];
 }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-  const style: Record<string, string> = {};
+  const style: CSSProperties & Record<`--${string}`, string> = {};
   for (const [key, series] of Object.entries(config)) {
     if (SERIES_KEY.test(key)) style[`--color-${key}`] = series.color;
   }
@@ -98,7 +98,7 @@ export function ChartContainer({
         aria-label={label}
         data-slot="chart"
         data-chart={`chart-${id}`}
-        style={style as CSSProperties}
+        style={style}
         className={`flex min-w-0 justify-center text-xs tabular-nums ${RECHARTS_DEFAULTS} ${className}`}
       >
         <ResponsiveContainer initialDimension={initialDimension}>

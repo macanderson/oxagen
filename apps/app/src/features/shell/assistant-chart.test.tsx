@@ -98,14 +98,17 @@ describe("AssistantChartBlock", () => {
     });
     const rows = within(table).getAllByRole("row", { hidden: true });
     expect(rows).toHaveLength(4);
-    expect(within(rows[1]!).getByText("$12.50")).toBeTruthy();
-    expect(within(rows[2]!).getByText("not recorded")).toBeTruthy();
-    expect(within(rows[3]!).getByText("$30.00")).toBeTruthy();
+    const [, first, second, third] = rows;
+    if (!first || !second || !third) throw new Error("the table lost a row");
+    expect(within(first).getByText("$12.50")).toBeTruthy();
+    expect(within(second).getByText("not recorded")).toBeTruthy();
+    expect(within(third).getByText("$30.00")).toBeTruthy();
   });
 
   it("marks a null tile as not recorded rather than zero", () => {
     draw(DASHBOARD);
-    const tile = screen.getByText("Slowest run").parentElement!;
+    const tile = screen.getByText("Slowest run").parentElement;
+    if (!tile) throw new Error("the tile label has no parent");
     expect(within(tile).getByText("not recorded")).toBeTruthy();
     expect(within(tile).queryByText("0")).toBeNull();
   });
@@ -140,7 +143,7 @@ describe("AssistantChartBlock", () => {
         title: `A ${kind} chart`,
         series: [{ label: "Done" }, { label: "Failed" }],
         rows: Array.from({ length: rowCount }, (_, i) => ({
-          label: `Row ${i}`,
+          label: `Row ${String(i)}`,
           values: [i, i === 0 ? null : 1],
         })),
       }),

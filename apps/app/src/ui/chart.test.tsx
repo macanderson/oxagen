@@ -17,12 +17,12 @@ import {
 
 afterEach(cleanup);
 
-type TooltipPayload = NonNullable<
+type TooltipEntry = NonNullable<
   ComponentProps<typeof ChartTooltipContent>["payload"]
->;
-type LegendPayload = NonNullable<
+>[number];
+type LegendEntry = NonNullable<
   ComponentProps<typeof ChartLegendContent>["payload"]
->;
+>[number];
 
 const CONFIG: ChartConfig = {
   done: { label: "Done", color: "var(--chart-1)" },
@@ -39,12 +39,22 @@ function inChart(child: ReactElement) {
   );
 }
 
-const point = (dataKey: string, value: number | null) => ({
+// A point with no value is a gap: the series was not recorded that day.
+const point = (dataKey: string, value?: number): TooltipEntry => ({
   dataKey,
   value,
   color: `var(--color-${dataKey})`,
   payload: { day: "1 Sep" },
+  graphicalItemId: dataKey,
 });
+
+function tooltipIn(container: HTMLElement): HTMLElement {
+  const tooltip = container.querySelector<HTMLElement>(
+    '[data-slot="chart-tooltip"]',
+  );
+  if (!tooltip) throw new Error("the tooltip did not draw");
+  return tooltip;
+}
 
 describe("ChartContainer", () => {
   it("is a named image that carries each series colour", () => {
@@ -62,7 +72,7 @@ describe("ChartTooltipContent", () => {
     const view = inChart(
       <ChartTooltipContent
         active={false}
-        payload={[point("done", 3)] as unknown as TooltipPayload}
+        payload={[point("done", 3)]}
       />,
     );
     expect(view.container.querySelector('[data-slot="chart-tooltip"]')).toBeNull();
@@ -73,15 +83,11 @@ describe("ChartTooltipContent", () => {
       <ChartTooltipContent
         active
         label="1 Sep"
-        payload={
-          [point("done", 3), point("failed", null)] as unknown as TooltipPayload
-        }
+        payload={[point("done", 3), point("failed")]}
         formatValue={(value) => `${String(value)} runs`}
       />,
     );
-    const tooltip = view.container.querySelector<HTMLElement>(
-      '[data-slot="chart-tooltip"]',
-    )!;
+    const tooltip = tooltipIn(view.container);
     expect(within(tooltip).getByText("1 Sep")).toBeTruthy();
     expect(within(tooltip).getByText("3 runs")).toBeTruthy();
     expect(within(tooltip).getByText("Done")).toBeTruthy();
@@ -93,19 +99,17 @@ describe("ChartTooltipContent", () => {
     const view = inChart(
       <ChartTooltipContent
         active
-        payload={[point("done", 1234.5)] as unknown as TooltipPayload}
+        payload={[point("done", 1234.5)]}
       />,
     );
-    const tooltip = view.container.querySelector<HTMLElement>(
-      '[data-slot="chart-tooltip"]',
-    )!;
+    const tooltip = tooltipIn(view.container);
     expect(within(tooltip).getByText("1,234.5")).toBeTruthy();
     expect(within(tooltip).queryByText("Done")).toBeNull();
   });
 });
 
 describe("ChartLegendContent", () => {
-  const item = (dataKey: string) => ({
+  const item = (dataKey: string): LegendEntry => ({
     dataKey,
     value: dataKey,
     color: `var(--color-${dataKey})`,
@@ -114,7 +118,7 @@ describe("ChartLegendContent", () => {
 
   it("draws nothing for a single series", () => {
     inChart(
-      <ChartLegendContent payload={[item("done")] as unknown as LegendPayload} />,
+      <ChartLegendContent payload={[item("done")]} />,
     );
     expect(screen.queryByRole("list")).toBeNull();
   });
@@ -122,7 +126,7 @@ describe("ChartLegendContent", () => {
   it("lists each series by its configured label", () => {
     inChart(
       <ChartLegendContent
-        payload={[item("done"), item("failed")] as unknown as LegendPayload}
+        payload={[item("done"), item("failed")]}
       />,
     );
     const legend = screen.getByRole("list");
@@ -152,10 +156,12 @@ describe("ChartTable", () => {
     });
     const rows = within(table).getAllByRole("row", { hidden: true });
     expect(rows).toHaveLength(3);
+    const last = rows.at(2);
+    if (!last) throw new Error("the table lost a row");
     expect(
-      within(rows[2]!).getByRole("rowheader", { name: "2 Sep", hidden: true }),
+      within(last).getByRole("rowheader", { name: "2 Sep", hidden: true }),
     ).toBeTruthy();
-    expect(within(rows[2]!).getByText("5").className).toContain("text-right");
+    expect(within(last).getByText("5").className).toContain("text-right");
     await expectNoAxe(view.container);
   });
 });

@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { AssistantMarkdown } from "./assistant-markdown";
 
@@ -29,7 +30,7 @@ const CHART = {
 
 describe("AssistantMarkdown", () => {
   it("draws an oxagen-chart fence as a chart once the renderer loads", async () => {
-    render(
+    const view = render(
       <IntlProvider>
         <AssistantMarkdown>
           {`Here is the chart.\n\n\`\`\`oxagen-chart\n${JSON.stringify(CHART)}\n\`\`\`\n`}
@@ -41,6 +42,7 @@ describe("AssistantMarkdown", () => {
       await screen.findByTestId("assistant-chart", {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Runs by agent" })).toBeTruthy();
+    await expectNoAxe(view.container);
   });
 
   it("reaches the chart renderer only through a dynamic import", () => {

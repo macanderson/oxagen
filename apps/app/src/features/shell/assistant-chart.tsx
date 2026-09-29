@@ -170,7 +170,7 @@ function shortTick(label: string): string {
   return label.length > TICK_CHARS ? `${label.slice(0, TICK_CHARS - 1)}…` : label;
 }
 
-function NotRecorded() {
+function Gap() {
   const t = useTranslations("ui.chart");
   return <span className="text-muted-foreground">{t("notRecorded")}</span>;
 }
@@ -186,7 +186,7 @@ function Figure({
 }) {
   const t = useTranslations("shell.assistant.chart");
   const locale = useLocale();
-  if (value === null) return <NotRecorded />;
+  if (value === null) return <Gap />;
   const figure = formatterFor(format, locale, false)(value);
   return (
     <span className="font-mono tabular-nums">
@@ -200,11 +200,11 @@ function Figure({
 function SpecChart({ chart }: { chart: ChartSpecChart }) {
   const t = useTranslations("shell.assistant.chart");
   const locale = useLocale();
-  const keys = chart.series.map((_, index) => `s${index}`);
+  const keys = chart.series.map((_, index) => `s${String(index)}`);
   const config: ChartConfig = Object.fromEntries(
     chart.series.map((series, index) => [
-      `s${index}`,
-      { label: series.label, color: `var(--chart-${index + 1})` },
+      `s${String(index)}`,
+      { label: series.label, color: `var(--chart-${String(index + 1)})` },
     ]),
   );
   const data = chart.rows.map((row) => ({

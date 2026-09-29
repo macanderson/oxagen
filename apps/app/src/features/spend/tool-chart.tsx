@@ -17,7 +17,8 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { RankedSpendChart, rankInOneCurrency } from "./ranked-spend-chart";
+import { rankInOneCurrency } from "./rank-in-one-currency";
+import { RankedSpendChart } from "./ranked-spend-chart";
 
 const METRICS = ["cumulative", "perRun", "perCall"] as const;
 type Metric = (typeof METRICS)[number];

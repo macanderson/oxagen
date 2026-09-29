@@ -109,9 +109,11 @@ export function SpendByDayChart({
           cells: [
             row.day,
             row.money === null ? (
-              <NotRecordedValue />
+              <NotRecordedValue key="spend" />
             ) : (
-              <span className="font-mono">{row.money}</span>
+              <span key="spend" className="font-mono">
+                {row.money}
+              </span>
             ),
           ],
         }))}

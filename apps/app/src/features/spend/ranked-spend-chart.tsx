@@ -7,14 +7,10 @@
 // from ratioOfMicros (INV-09); the money printed at its end is the exact
 // figure, formatted from the row's micros. The caller leaves out a key whose
 // amount was not recorded rather than drawing it as a zero, and ranks its
-// items with rankInOneCurrency, because two currencies share no scale.
+// items with rankInOneCurrency (./rank-in-one-currency), because two currencies share no scale.
 import { useLocale } from "next-intl";
 import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
-import {
-  byMicrosDescending,
-  type Money,
-  ratioOfMicros,
-} from "@/data/contracts/money";
+import { ratioOfMicros } from "@/data/contracts/money";
 import {
   type ChartConfig,
   ChartContainer,
@@ -23,34 +19,9 @@ import {
   chartAxis,
 } from "@/ui/chart";
 import { formatMoney, type MoneyPrecision } from "@/ui/money-format";
-
-/** One ranked key and its amount. */
-export type RankedSpendItem = { key: string; value: Money };
+import type { RankedSpendItem } from "./rank-in-one-currency";
 
 type RankedRow = { key: string; ratio: number; money: string };
-
-/**
- * The items one chart draws, largest first, and how many it leaves out. A bar
- * is a share of the leading amount, and an amount in another currency has no
- * share of it (ratioOfMicros returns null), so a bar for it would be a guess.
- * The chart keeps the currency most items carry, the earlier code on a tie.
- * The caller's footer names the rest, which the table beside it still holds.
- */
-export function rankInOneCurrency(items: readonly RankedSpendItem[]): {
-  ranked: RankedSpendItem[];
-  otherCurrency: number;
-} {
-  const counts = new Map<string, number>();
-  for (const { value } of items)
-    counts.set(value.currency, (counts.get(value.currency) ?? 0) + 1);
-  const currency = [...counts].sort(
-    ([a, x], [b, y]) => y - x || a.localeCompare(b),
-  )[0]?.[0];
-  const ranked = items
-    .filter(({ value }) => value.currency === currency)
-    .sort((a, b) => byMicrosDescending(a.value, b.value));
-  return { ranked, otherCurrency: items.length - ranked.length };
-}
 
 /** The height of one bar's row, and the bar within it (dataviz: 24px at most). */
 const ROW_HEIGHT = 32;

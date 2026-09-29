@@ -5,8 +5,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Money } from "@/data/contracts/money";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { rankInOneCurrency } from "./ranked-spend-chart";
+import { rankInOneCurrency } from "./rank-in-one-currency";
 import { ToolChart } from "./tool-chart";
 
 afterEach(cleanup);
@@ -52,8 +53,8 @@ describe("rankInOneCurrency", () => {
 });
 
 describe("ToolChart", () => {
-  it("counts a tool billed in another currency in the footer", () => {
-    render(
+  it("counts a tool billed in another currency in the footer", async () => {
+    const view = render(
       <IntlProvider>
         <ToolChart
           tools={[
@@ -67,5 +68,6 @@ describe("ToolChart", () => {
     expect(screen.getByTestId("spend-tool-chart")).toHaveTextContent(
       "The leading 2 of 3. The table holds every tool. One tool is billed in another currency and shown in the table only.",
     );
+    await expectNoAxe(view.container);
   });
 });

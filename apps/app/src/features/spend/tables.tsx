@@ -37,7 +37,8 @@ import {
   UnmeteredNote,
 } from "./figures";
 import { NotBacked } from "./not-backed";
-import { RankedSpendChart, rankInOneCurrency } from "./ranked-spend-chart";
+import { rankInOneCurrency } from "./rank-in-one-currency";
+import { RankedSpendChart } from "./ranked-spend-chart";
 import {
   cacheHitRate,
   classesOf,
