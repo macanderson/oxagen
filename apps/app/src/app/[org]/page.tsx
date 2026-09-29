@@ -32,18 +32,13 @@ export default async function OrganizationPage({
   const query = await searchParams;
   const tab = parseOrganizationTab(query.tab);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<OrganizationSkeleton />}>
-        <Organization
-          ctx={ctx}
-          source={dataSource()}
-          tab={tab}
-          slack={parseSlackOutcome(query.slack)}
-        />
-      </Suspense>
-    </main>
+    <Suspense fallback={<OrganizationSkeleton />}>
+      <Organization
+        ctx={ctx}
+        source={dataSource()}
+        tab={tab}
+        slack={parseSlackOutcome(query.slack)}
+      />
+    </Suspense>
   );
 }

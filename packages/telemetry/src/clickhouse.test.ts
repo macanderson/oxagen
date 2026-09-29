@@ -301,7 +301,7 @@ describe("insert helpers — insertRows delegation", () => {
     });
   });
 
-  it("insertTokenUsage delegates to token_usage table", async () => {
+  it("stampTokenUsage stamps trace ids, attribution, and the cache-write default", () => {
     const row: TokenUsageRow = {
       execution_step_id: "11111111-1111-1111-1111-111111111111",
       org_id: "o1",
@@ -317,38 +317,35 @@ describe("insert helpers — insertRows delegation", () => {
       prompt_hash: "abc123def456abc1",
       created_at: new Date().toISOString(),
     };
-    await mod.insertTokenUsage([row]);
-    // A real UUID is passed straight through unchanged (no coalescing).
-    // insertTokenUsage also auto-stamps trace_id/span_id from the active OTEL
-    // context (empty strings with no tracer) and principal attribution from
-    // the ambient tenant scope (sentinels outside any scope — migration 0023).
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "token_usage",
-      values: [
-        {
-          ...row,
-          // insertTokenUsage coalesces the optional fourth token class to 0
-          // (matches the ClickHouse column DEFAULT, migration 0026).
-          cache_write_tokens: 0,
-          trace_id: "",
-          span_id: "",
-          principal_id: mod.NIL_UUID,
-          principal_kind: "",
-          user_id: mod.NIL_UUID,
-          capability_name: "",
-        },
-      ],
-      format: "JSONEachRow",
-    });
+    // A real UUID passes through unchanged. stampTokenUsage also stamps
+    // trace_id/span_id from the active OTEL context (empty strings with no
+    // tracer) and principal attribution from the ambient tenant scope
+    // (sentinels outside any scope, migration 0023).
+    expect(mod.stampTokenUsage([row])).toEqual([
+      {
+        ...row,
+        // stampTokenUsage coalesces the optional fourth token class to 0
+        // (matches the ClickHouse column DEFAULT, migration 0026).
+        cache_write_tokens: 0,
+        trace_id: "",
+        span_id: "",
+        principal_id: mod.NIL_UUID,
+        principal_kind: "",
+        user_id: mod.NIL_UUID,
+        capability_name: "",
+      },
+    ]);
+    // Stamping writes nothing. Delivery goes through billing.usage_outbox.
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   // Regression: the production CANNOT_PARSE_INPUT_ASSERTION_FAILED (code 27)
   // flood was caused by non-UUID correlation strings reaching the UUID column.
-  // Callers now express "no execution step" as null; insertTokenUsage must
+  // Callers now express "no execution step" as null; stampTokenUsage must
   // coalesce null → the nil UUID so the non-nullable UUID key column always
   // receives a parseable value. These tests fail on the pre-fix code (which
   // passed the row through verbatim, sending JSON `null` into a UUID column).
-  it("coalesces a null execution_step_id to the nil UUID before inserting", async () => {
+  it("coalesces a null execution_step_id to the nil UUID when stamping", () => {
     const row: TokenUsageRow = {
       execution_step_id: null,
       org_id: "o1",
@@ -364,28 +361,21 @@ describe("insert helpers — insertRows delegation", () => {
       prompt_hash: "deadbeefdeadbeef",
       created_at: new Date().toISOString(),
     };
-    await mod.insertTokenUsage([row]);
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    const call = insertMock.mock.calls[0]![0] as {
-      table: string;
-      values: TokenUsageRow[];
-      format: string;
-    };
-    expect(call.table).toBe("token_usage");
-    expect(call.values[0]!.execution_step_id).toBe(mod.NIL_UUID);
+    const [stamped] = mod.stampTokenUsage([row]);
+    expect(stamped!.execution_step_id).toBe(mod.NIL_UUID);
     // NIL_UUID must be a valid UUID shape (ClickHouse UUID text parser accepts it).
     expect(mod.NIL_UUID).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
     // The other fields are preserved verbatim.
-    expect(call.values[0]!.org_id).toBe("o1");
-    expect(call.values[0]!.input_tokens).toBe(7);
+    expect(stamped!.org_id).toBe("o1");
+    expect(stamped!.input_tokens).toBe(7);
   });
 
   // A text caller that actually wrote cache must forward the real
   // cache_write_tokens count (the fourth token class) — not lose it to the
   // coalescing default — so the billing rollup prices it at the write premium.
-  it("forwards a real cache_write_tokens count through to the row", async () => {
+  it("forwards a real cache_write_tokens count through to the row", () => {
     const row: TokenUsageRow = {
       execution_step_id: "33333333-3333-3333-3333-333333333333",
       org_id: "o1",
@@ -402,13 +392,12 @@ describe("insert helpers — insertRows delegation", () => {
       prompt_hash: "cafecafecafecafe",
       created_at: new Date().toISOString(),
     };
-    await mod.insertTokenUsage([row]);
-    const call = insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] };
-    expect(call.values[0]!.cache_write_tokens).toBe(3_000);
-    expect(call.values[0]!.cached_tokens).toBe(2_000);
+    const [stamped] = mod.stampTokenUsage([row]);
+    expect(stamped!.cache_write_tokens).toBe(3_000);
+    expect(stamped!.cached_tokens).toBe(2_000);
   });
 
-  it("coalesces only the null rows in a mixed batch, leaving real UUIDs intact", async () => {
+  it("coalesces only the null rows in a mixed batch, leaving real UUIDs intact", () => {
     const realUuid = "22222222-2222-2222-2222-222222222222";
     const base = {
       org_id: "o1",
@@ -424,12 +413,10 @@ describe("insert helpers — insertRows delegation", () => {
       prompt_hash: "h",
       created_at: new Date().toISOString(),
     };
-    await mod.insertTokenUsage([
+    const values = mod.stampTokenUsage([
       { ...base, execution_step_id: null },
       { ...base, execution_step_id: realUuid },
     ]);
-    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] })
-      .values;
     expect(values[0]!.execution_step_id).toBe(mod.NIL_UUID);
     expect(values[1]!.execution_step_id).toBe(realUuid);
   });
@@ -502,7 +489,7 @@ describe("insert helpers — insertRows delegation", () => {
     // beforeEach vi.resetModules() gives clickhouse.ts a fresh @oxagen/tenancy
     // instance, so a top-level import here would write to a different ALS.
     const { runInTenantScope } = await import("@oxagen/tenancy");
-    await runInTenantScope(
+    const values = runInTenantScope(
       {
         orgId: ORG,
         workspaceId: WS,
@@ -511,10 +498,8 @@ describe("insert helpers — insertRows delegation", () => {
         userId: USER,
         capabilityName: "query_ontology",
       },
-      () => mod.insertTokenUsage([row]),
+      () => mod.stampTokenUsage([row]),
     );
-    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] })
-      .values;
     expect(values[0]!.principal_id).toBe(PRINCIPAL);
     expect(values[0]!.principal_kind).toBe("agent");
     expect(values[0]!.user_id).toBe(USER);
@@ -687,7 +672,6 @@ describe("insert helpers — insertRows delegation", () => {
   it("no-ops when rows array is empty (any insert helper)", async () => {
     await mod.insertExecutionLogs([]);
     await mod.insertEvents([]);
-    await mod.insertTokenUsage([]);
     expect(insertMock).not.toHaveBeenCalled();
   });
 });

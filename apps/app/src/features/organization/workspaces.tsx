@@ -229,7 +229,7 @@ function Actions({
   const t = useTranslations("organization.workspaces");
   const live = workspace.archivedAt === null;
   return (
-    <div className="flex gap-2 max-md:flex-wrap">
+    <div data-actions="" className="flex gap-2 max-md:flex-wrap">
       {live && workspace.role !== null ? (
         <SafeLink
           to={routes.fleet(org, workspace.slug)}

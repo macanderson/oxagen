@@ -323,7 +323,9 @@
    that spans columns holds an empty state, a group heading, or a total, so it
    keeps its own layout. A `pre` keeps its line breaks and scrolls sideways
    instead. The phone's card layout (src/ui/phone.css) keeps its own rules
-   below the md breakpoint. */
+   below the md breakpoint. The clip does not cut a stretched row link: its
+   `after:absolute after:inset-0` box takes the row, which is `relative`, as its
+   containing block, so a click on any cell still reaches the link (#4674). */
 @media (width >= 48rem) {
   table thead th {
     white-space: nowrap;
@@ -336,9 +338,24 @@
     white-space: nowrap;
   }
 
-  table tbody :is(td, th):not([colspan]) :not(textarea, pre, pre *) {
+  table tbody :is(td, th):not([colspan]) :not(textarea, pre, pre *, [data-wrap], [data-wrap] *) {
     flex-wrap: nowrap;
     white-space: nowrap;
+  }
+
+  /* A cell that holds a row's action buttons shows every button. An ellipsis
+     would hide a button with nothing to reveal it, and the cap would clip it
+     mid-label (#4674). The group carries `data-actions`. */
+  table tbody :is(td, th):not([colspan]):has([data-actions]) {
+    max-width: none;
+    overflow: visible;
+  }
+
+  /* A message under a control in a cell, such as a form error, wraps. A cut
+     sentence leaves out the part that says what to do (#4674). The message
+     carries `data-wrap`. */
+  table tbody :is(td, th):not([colspan]) [data-wrap] {
+    white-space: normal;
   }
 
   /* A cut cell with nothing focusable in it, or a cut line marked

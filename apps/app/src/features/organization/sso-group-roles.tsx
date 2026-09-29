@@ -142,9 +142,12 @@ export function SsoGroupRoles({
                       }}
                     />
                     {error === null ? null : (
+                      // A cell keeps its text on one line. A refusal is a
+                      // sentence, so it wraps to be read whole (#4674).
                       <p
                         id={`${idBase}-group-${String(row.key)}-error`}
-                        className="mt-1 text-sm text-error-ink md:truncate"
+                        data-wrap=""
+                        className="mt-1 text-sm text-error-ink"
                       >
                         {error}
                       </p>

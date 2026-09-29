@@ -50,7 +50,10 @@ type Seal = RunChain["seals"][number];
  */
 const narrowTable = "overflow-x-auto [&_table]:min-w-0";
 
-/** A chain head in a narrow column: its first 8 hex digits. The whole head is the cell's title. */
+/**
+ * A chain head in a narrow column: its first 8 hex digits. The cell carries
+ * the whole head for its hover card.
+ */
 function shortDigest(digest: string) {
   return `${digest.slice(digest.indexOf(":") + 1, digest.indexOf(":") + 9)}…`;
 }
@@ -526,7 +529,7 @@ function CheckpointRow({
       </td>
       <td
         className={`${cell} ${mono} whitespace-nowrap text-[11px]`}
-        title={checkpoint.chainHead}
+        data-truncate={checkpoint.chainHead}
       >
         {shortDigest(checkpoint.chainHead)}
       </td>

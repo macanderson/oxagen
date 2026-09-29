@@ -41,6 +41,7 @@ import { createListRecordsHandler } from "./context.records.list";
 import { stringify } from "smol-toml";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
 import {
   memoryVersionStore,
   publish as publishBundle,
@@ -52,6 +53,13 @@ import {
 } from "@oxagen/steering-bundle";
 import { logger } from "./logger";
 import { heldVersionStore } from "./steering-repo/version-store";
+import { syncPublished } from "./steering-repo/publisher";
+import {
+  initialSteeringRepoState,
+  runSteeringRepoStep,
+  type ProvisionDeps,
+  type SteeringRepoState,
+} from "./steering_repo.provision";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
@@ -70,25 +78,6 @@ const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
 const BRANCH = `steering/${LINEAGE}`;
 const GOVERNANCE = ".oxagen/rules/governance.toml";
-
-/** A steering record as an author writes one: no id or hash yet. */
-function steeringRecord(lineage: string): string {
-  return [
-    "---",
-    "schema: steering-record/v1",
-    `lineage: ${lineage}`,
-    "label: A rule",
-    "kind: rule",
-    "force: should",
-    "scope: workspace",
-    "status: active",
-    "origin: user",
-    "---",
-    "",
-    "Do not re-read CHANGELOG.md more than once in a run.",
-    "",
-  ].join("\n");
-}
 
 /**
  * The fixture steering repo on main, with a clock after its ledger's last
@@ -155,6 +144,53 @@ function s5Publisher() {
       ),
   };
   return { tip, store, deps, publish, publisher };
+}
+
+/**
+ * Provisioning's deps for a GitHub workspace whose steps through
+ * publish_version finished at `commit`, so bind_repository is the one step
+ * left. The repository is the fixture steering repo.
+ */
+function provisionedThrough(commit: string): ProvisionDeps {
+  const at = new Date("2026-09-26T11:00:00.000Z");
+  const state: SteeringRepoState = {
+    ...initialSteeringRepoState(at),
+    step: "publish_version",
+    provider: "github",
+    repository: {
+      id: 519,
+      owner: "a-intel",
+      name: "oxagen-core-platform",
+      full_name: "a-intel/oxagen-core-platform",
+      initial_branch: "main",
+    },
+    commit_sha: commit,
+    deployment_id: 1,
+  };
+  return {
+    now: () => at,
+    load: async () => ({
+      target: {
+        org_slug: "a-intel",
+        workspace: { slug: "core-platform", name: "Core platform" },
+      },
+      state: structuredClone(state),
+      connection: {
+        provider: "github",
+        installation_id: 1,
+        account_login: "a-intel",
+      },
+    }),
+    saveState: async () => undefined,
+    saveConnection: async () => undefined,
+    github: () => null,
+    gitlab: () => ({ groups: async () => [], group: async () => null }),
+    bind: async () => "rpb_steering",
+    notifyReauthorize: async () => undefined,
+    steeringHook: () => {
+      throw new Error("a GitHub steering repo registers no hook");
+    },
+  };
 }
 
 /** A publisher with a stubbed publish() and a lock that holds nothing. */
@@ -939,6 +975,9 @@ describe("merge_context_pr", () => {
       mergedCommit: "0000000000000000000000000000000000000519",
       promotionEvent: { seq: 1 },
       bundleVersion: { before: 0, after: 1 },
+      // A legacy repository has no version store, so the merge publishes no
+      // steering version (#4732).
+      publishedVersion: null,
     });
     expect(() => contextPrMerge.output.parse(out)).not.toThrow();
 
@@ -1990,45 +2029,229 @@ describe("merge_context_pr", () => {
     expect(h.store.ledger).toHaveLength(2);
   });
 
-  it("in a steering repo, fails the one required check when the branch changes a path outside its folder", async () => {
+  it("in a steering repo, writes a new record as a steering record under steering/, and the one required check passes", async () => {
     const h = steeringHarness();
     const id = await proposed(h);
     const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
-    expect(out.status).toBe("checks_failed");
-    expect(out.checks.find((c) => c.name === "schema")).toMatchObject({
-      status: "failed",
-      summary: expect.stringContaining(
-        `${PATH} is outside every folder a steering PR may change`,
-      ),
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      branch: BRANCH,
+      path: `steering/business-rules/${LINEAGE}.md`,
     });
+    expect(out.checks.every((c) => c.status === "passed")).toBe(true);
     expect(h.github.checkRuns).toEqual([
       expect.objectContaining({
         name: "Oxagen steering",
         headSha: "head1",
-        conclusion: "failure",
+        conclusion: "success",
       }),
     ]);
+    // The file is a steering record with no id or hash: the merge stamps both.
+    const text = await h.github.readFile(REPO, out.pr!.path, BRANCH);
+    const read = readSteeringRecord(text!);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.record).toMatchObject({
+      schema: "steering-record/v1",
+      lineage: LINEAGE,
+      kind: "business-rule",
+      force: "should",
+      scope: "workspace",
+      status: "active",
+      origin: "user",
+      provenance: { source: "proposal", uri: `oxagen:proposal/${id}` },
+    });
+    expect(read.record.id).toBeUndefined();
+    expect(read.record.hash).toBeUndefined();
+  });
+
+  it("in a steering repo, retries onto the PR GitHub opened when recording it failed, at the same steering path and branch", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h);
+    const store = h.store;
+    const update = store.updateProposal.bind(store);
+    let fail = true;
+    store.updateProposal = async (rowId, patch, from, guard) => {
+      if (fail && patch.status === "pr_open") {
+        fail = false;
+        throw new Error("db blip");
+      }
+      return update(rowId, patch, from, guard);
+    };
+    const open = createOpenContextPrHandler(h);
+    await expect(open({ proposalId: id }, ctx())).rejects.toThrow("db blip");
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "proposed",
+      prNumber: null,
+      branch: BRANCH,
+      path: null,
+    });
+
+    const out = await open({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      number: 519,
+      branch: BRANCH,
+      path: `steering/business-rules/${LINEAGE}.md`,
+      headSha: "head2",
+    });
+    // Both attempts wrote the one file on the one branch.
+    expect(h.github.commits.map((c) => [c.branch, c.path])).toEqual([
+      [BRANCH, `steering/business-rules/${LINEAGE}.md`],
+      [BRANCH, `steering/business-rules/${LINEAGE}.md`],
+    ]);
+    expect(h.github.pulls).toHaveLength(1);
+    expect(h.github.checkRuns).toHaveLength(1);
+    expect(h.github.checkRuns[0]!.headSha).toBe("head2");
+  });
+
+  it("in a steering repo, writes a revision where the record lives now and keeps the fields the proposal does not set", async () => {
+    const h = steeringHarness();
+    const lineage = "a-intel.platform.tenant-queries";
+    const recordAt = `steering/platform/${lineage}.md`;
+    const at = new Date("2026-09-20T12:00:00.000Z");
+    h.store.records.push({
+      id: "id-tenant-queries",
+      publicId: "ctr_tenant_queries",
+      createdAt: at,
+      createdById: null,
+      updatedById: null,
+      updatedAt: at,
+      deletedAt: null,
+      deletedById: null,
+      orgId: SCOPE.orgId,
+      workspaceId: SCOPE.workspaceId,
+      slug: lineage,
+      label: "Tenant queries use withTenantDb",
+      activeVersionId: null,
+      version: 1,
+      checksum: null,
+      title: "Tenant queries use withTenantDb",
+      status: "active",
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      sharingScope: "repository",
+      statement: "Every tenant table query goes through withTenantDb.",
+      commitSha: "0000000000000000000000000000000000000001",
+      path: recordAt,
+      publishedAt: at,
+      activatedByUserId: null,
+      activatedAt: at,
+    } as never);
+    const id = await proposed(h, {
+      record: {
+        lineageId: lineage,
+        kind: "rule",
+        force: "must",
+        sharingScope: "repository",
+        statement:
+          "Every query on a tenant table goes through withTenantDb(ctx, fn), in handlers and in jobs.",
+      },
+    });
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    const branch = `steering/${lineage}`;
+    expect(out.pr).toMatchObject({ branch, path: recordAt });
+    expect(h.github.commits.map((c) => c.path)).toEqual([recordAt]);
+
+    const read = readSteeringRecord(
+      (await h.github.readFile(REPO, recordAt, branch))!,
+    );
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.record).toMatchObject({
+      lineage,
+      label: "Tenant queries use withTenantDb",
+      kind: "code-rule",
+      force: "must",
+      scope: "repository",
+      repos: ["github.com/a-intel/platform"],
+      applies_to: ["packages/handlers/**/*.ts", "packages/database/src/**"],
+      load: "match",
+      provenance: { source: "proposal", uri: `oxagen:proposal/${id}` },
+    });
+    // The statement changed, so the old description no longer describes it.
+    expect(read.record.description).toBeUndefined();
+    expect(read.record.id).toBeUndefined();
+    expect(read.record.hash).toBeUndefined();
+    expect(read.body.trim()).toBe(
+      "Every query on a tenant table goes through withTenantDb(ctx, fn), in handlers and in jobs.",
+    );
+  });
+
+  it("in a steering repo, writes a memory where the curator puts one, on a memory/ branch", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h, {
+      record: {
+        lineageId: LINEAGE,
+        kind: "memory",
+        force: "info",
+        sharingScope: "workspace",
+        statement: "CHANGELOG.md is regenerated on release, so one read per run is enough.",
+      },
+    });
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    expect(out.pr).toMatchObject({
+      branch: `memory/${LINEAGE}`,
+      path: `steering/memory/workspace/general/${LINEAGE}.md`,
+    });
+    const read = readSteeringRecord(
+      (await h.github.readFile(REPO, out.pr!.path, `memory/${LINEAGE}`))!,
+    );
+    expect(read.ok && read.record.kind).toBe("memory");
+  });
+
+  it("in a steering repo, refuses a new repository-scoped proposal before anything reaches the host", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h, {
+      record: { ...proposalInput().record, sharingScope: "repository" },
+    });
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "repository_scope_needs_repo",
+    });
+    expect(h.github.branches).toHaveLength(0);
+    expect(h.github.commits).toHaveLength(0);
+    expect(h.github.pulls).toHaveLength(0);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "proposed",
+      branch: null,
+      path: null,
+    });
+  });
+
+  it("in a steering repo, keeps the .oxagen/rules/ path a row recorded before #4731, and its Schema check names the branch it belongs on", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h);
+    // The row recorded the legacy path before steering records were written.
+    h.store.proposals[0]!.path = PATH;
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_failed");
+    expect(out.pr).toMatchObject({ branch: BRANCH, path: PATH });
+    const schema = out.checks.find((c) => c.name === "schema")!;
+    expect(schema.status).toBe("failed");
+    expect(schema.summary).toContain(`${PATH} is outside every folder`);
+    // The file stays a TOML record file.
+    expect(parseChecked((await h.github.readFile(REPO, PATH, BRANCH))!)).toMatchObject({
+      ok: true,
+    });
   });
 
   /**
-   * A steering-repo PR whose row passed. The proposal writer still writes
-   * .oxagen/rules/, which a steering repo refuses (the test above), so the
-   * branch is rewritten into a steering record and the row marked passed.
+   * A steering PR opened the way a person opens one, whose checks passed:
+   * a new rule written as a steering record at steering/business-rules/.
    */
   async function steeringPrPassed(h: Harness) {
     const id = await proposed(h);
-    await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
-    const recordAt = `steering/platform/${LINEAGE}.md`;
-    h.github.remove(BRANCH, PATH);
-    const head = h.github.commit(BRANCH, recordAt, steeringRecord(LINEAGE));
-    const row = h.store.proposals[0]!;
-    Object.assign(row, {
-      status: "checks_passed",
-      headSha: head,
-      path: recordAt,
-      checks: row.checks.map((c) => ({ ...c, status: "passed" })),
-    });
-    return { id, head, recordAt };
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_passed");
+    const row = h.store.proposals.find((p) => p.publicId === id)!;
+    return { id, head: row.headSha!, recordAt: row.path! };
   }
 
   /**
@@ -2114,11 +2337,61 @@ describe("merge_context_pr", () => {
 
     expect(out.status).toBe("merged");
     expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    // The output names the steering version, which differs from the ledger
+    // count: the ledger held no entry before this merge (#4732).
+    expect(out.publishedVersion).toBe(2);
+    expect(out.bundleVersion).toEqual({ before: 0, after: 1 });
+    expect(() => contextPrMerge.output.parse(out)).not.toThrow();
     await expect(s5.publish.mock.results[0]!.value).resolves.toMatchObject({
       status: "published",
       version: 2,
       commit: "0000000000000000000000000000000000000519",
     });
+    expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
+      version: 2,
+      commit: "0000000000000000000000000000000000000519",
+    });
+    expect(h.github.deployments).toEqual([
+      expect.objectContaining({
+        sha: "0000000000000000000000000000000000000519",
+        description: "Steering version 2 from #519",
+      }),
+    ]);
+  });
+
+  it("in a new steering repo, the first merge after provisioning publishes version 2 with no sync between them", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    // Provisioning's last step binds the repo, then publishes its first
+    // commit through the store the merge numbers from. No sync runs after it.
+    const first = "5eed000000000000000000000000000000000000";
+    s5.tip.head = first;
+    const deps = {
+      ...provisionedThrough(first),
+      publishFirst: async () =>
+        syncPublished(await s5.publisher.publish(REPO, s5.tip.head)),
+    };
+    await expect(
+      runSteeringRepoStep(
+        deps,
+        { kind: "workspace", ...SCOPE },
+        "bind_repository",
+      ),
+    ).resolves.toMatchObject({ status: "ready" });
+    s5.tip.head = "0000000000000000000000000000000000000519";
+
+    const out = await createMergeContextPrHandler(h, {
+      publisher: () => s5.publisher,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+    expect(out.status).toBe("merged");
+    expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    // Each commit has its own number: the first commit is version 1 and the
+    // merge commit is version 2.
+    await expect(
+      s5.store.versionAt(BUNDLE_IDENTITY.repository, first),
+    ).resolves.toMatchObject({ version: 1 });
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 2,
       commit: "0000000000000000000000000000000000000519",
@@ -2294,8 +2567,10 @@ describe("merge_context_pr", () => {
       })({ proposalId: id }, ctx({ userId: REVIEWER }));
       expect(out.status).toBe("merged");
       expect(h.store.ledger).toHaveLength(1);
-      // Version 1 never went live, so no deployment names it.
+      // Version 1 never went live, so no deployment names it, and the
+      // output reports no published version.
       expect(h.github.deployments).toHaveLength(0);
+      expect(out.publishedVersion).toBeNull();
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({ commit: "0000000000000000000000000000000000000519", version: 1 }),
         expect.stringContaining("publish() answered stale"),

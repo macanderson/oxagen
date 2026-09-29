@@ -23,7 +23,8 @@ export const STEERING_IMPORT_OUTCOMES = [
  *
  * It answers one outcome:
  *   imported           the steering PRs and the cleanup PR are open
- *   provisioned        the workspace had no repository to read, so the run
+ *   provisioned        the workspace had no repository to read, or it started
+ *                      fresh from a legacy sources connection, so the run
  *                      only created the steering repo
  *   nothing_to_import  the workspace already has a steering repo
  *   needs_choices      some v0.1 rules need a kind or some constraints need an
@@ -37,10 +38,14 @@ export const STEERING_IMPORT_OUTCOMES = [
  * (conflict `steering_import_running`), a repository on a host other than
  * GitHub (conflict `steering_import_provider_unsupported`), a repository
  * Oxagen can no longer reach (conflict `steering_import_source_unreachable`),
- * a repository the workspace reads with no binding (conflict
- * `steering_import_legacy_connection`), and a branch it writes that already
+ * a repository the workspace reads through a legacy sources connection with
+ * no binding (conflict `steering_import_legacy_connection`), and a branch it writes that already
  * holds changes it did not make (conflict `steering_import_branch_taken`).
  * When provisioning fails, the old repository steers the workspace again.
+ *
+ * Legacy sources connections retire (#4684). A call with `startFresh` gives
+ * such a workspace an empty steering repo and imports nothing from the legacy
+ * repository.
  *
  * Org Owners and Admins, and workspace Owners. The handler checks the role
  * itself (INV-29). The import is a one-time move a person starts, so the
@@ -50,7 +55,7 @@ export const steeringRepoImport = registerCapability({
   name: "import_workspace_steering",
   domain: "repository",
   description:
-    "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges.",
+    "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges. A workspace on a legacy sources connection sets startFresh instead: the run creates an empty steering repo and imports nothing.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -71,6 +76,14 @@ export const steeringRepoImport = registerCapability({
         .optional(),
       /** The effect of each v0.1 constraint, keyed by its old lineage. */
       constraintEffects: z.record(z.string(), recordEffectSchema).optional(),
+      // describe() sits on the boolean: the schema generator drops a
+      // description set on the optional wrapper.
+      startFresh: z
+        .boolean()
+        .describe(
+          "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository.",
+        )
+        .optional(),
     })
     .strict(),
   output: z.object({

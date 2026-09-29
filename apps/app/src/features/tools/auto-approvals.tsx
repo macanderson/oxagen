@@ -175,7 +175,7 @@ function Row({
       </td>
       {canWrite ? (
         <td className={cell}>
-          <span className="flex gap-2 max-md:flex-wrap">
+          <span data-actions="" className="flex gap-2 max-md:flex-wrap">
             <RuleEditor at={at} existing={rule} />
             <RuleDelete at={at} rule={rule} />
           </span>
