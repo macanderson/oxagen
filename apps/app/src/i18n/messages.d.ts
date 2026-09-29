@@ -9349,11 +9349,20 @@ type Messages = {
       };
       moreRuns: string;
       reported: string;
+      ungrouped: {
+        label: string;
+        note: {
+          agent: string;
+          operator: string;
+          model: string;
+        };
+      };
       budget: {
         label: string;
         used: string;
         position: string;
         reached: string;
+        notEnforced: string;
         none: string;
       };
       by: {

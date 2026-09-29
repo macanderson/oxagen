@@ -336,13 +336,34 @@ describe("get_spend by MCP server", () => {
     ]);
   });
 
-  it("never lets the rest drop below zero", () => {
+  it("splits the run's cost among the servers when their estimates come to more", () => {
     const shares = mcpServerShares(
       mcpRun(100n, [
         { name: "mcp__github__get_file", calls: 1, costMicros: 150n },
       ]),
     );
-    expect(shares.at(-1)?.micros).toBe(0n);
+    expect(shares.map((s) => [s.key, s.micros])).toEqual([
+      ["github", 100n],
+      ["~other", 0n],
+    ]);
+  });
+
+  it("keeps the split summing to the run when the proportions round down", () => {
+    const shares = mcpServerShares(
+      mcpRun(100n, [
+        { name: "mcp__github__get_file", calls: 1, costMicros: 100n },
+        { name: "mcp__linear__list_issues", calls: 1, costMicros: 100n },
+        { name: "mcp__slack__post", calls: 1, costMicros: 100n },
+      ]),
+    );
+    expect(shares.map((s) => [s.key, s.micros])).toEqual([
+      ["github", 33n],
+      ["linear", 33n],
+      ["slack", 33n],
+      ["~other", 1n],
+    ]);
+    const sum = shares.reduce((acc, s) => acc + (s.micros ?? 0n), 0n);
+    expect(sum).toBe(100n);
   });
 
   it("answers server rows costliest first, then Everything else, summing to the total, with no daily read", async () => {

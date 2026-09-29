@@ -131,7 +131,18 @@ describe("parseSpendView", () => {
       drill: null,
       finding: null,
     });
+  });
+
+  it("opens a finding saved on the bare path on the findings tab, from when Findings was the landing tab", () => {
     expect(parseSpendView(undefined, "fnd_01k5rtgh")).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: "fnd_01k5rtgh",
+    });
+  });
+
+  it("opens Month on the bare path when its finding is not a finding's id (negative)", () => {
+    expect(parseSpendView(undefined, "arun_01k5rtgh")).toEqual({
       tab: "month",
       drill: null,
       finding: null,

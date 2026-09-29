@@ -627,19 +627,20 @@ describe("Spend › Month", () => {
     });
   }
 
-  const byAgent = () =>
-    month([
-      row("acme.core.triage", {
-        cost: cost("9000000"),
-        runs: 8,
-        topRuns: [triage],
-      }),
-      row("acme.core.review", {
-        cost: cost("3345678"),
-        runs: 4,
-        topRuns: [],
-      }),
-    ]);
+  const byAgentRows = () => [
+    row("acme.core.triage", {
+      cost: cost("9000000"),
+      runs: 8,
+      topRuns: [triage],
+    }),
+    row("acme.core.review", {
+      cost: cost("3345678"),
+      runs: 4,
+      topRuns: [],
+    }),
+  ];
+
+  const byAgent = () => month(byAgentRows());
 
   /** Every read answers, with the month grouped as `read` says. */
   function loadedMonth(read: () => Read<SpendReport> = byAgent) {
@@ -761,9 +762,46 @@ describe("Spend › Month", () => {
     expect(rest).toHaveTextContent("83.8%");
     expect(
       screen.getByText(
-        "The harness reported $3.35 of this total. The gateway metered the rest.",
+        "The harness reported $3.35 of this total. The gateway metered or estimated the rest.",
       ),
     ).toBeInTheDocument();
+    // Everything else already holds the rest, so nothing is left ungrouped.
+    expect(screen.queryByText("Not grouped")).toBeNull();
+  });
+
+  it("adds a Not grouped row for the spend no group carries, so the rows sum to the total", async () => {
+    loadedMonth(() =>
+      month([
+        row("acme.core.triage", {
+          cost: cost("9000000"),
+          runs: 8,
+          topRuns: [triage],
+        }),
+      ]),
+    );
+    await renderSpend();
+    const rest = rowOf("~ungrouped");
+    expect(rest).toHaveTextContent("Not grouped");
+    expect(rest).toHaveTextContent(
+      "Runs with no agent recorded, or not yet in the daily rollup",
+    );
+    expect(rest).toHaveTextContent("$3.35");
+    expect(rest).toHaveTextContent("27.1%");
+    expect(within(rest).queryByRole("button")).toBeNull();
+  });
+
+  it("adds no Not grouped row when the groups carry the whole total (negative)", async () => {
+    loadedMonth();
+    await renderSpend();
+    expect(screen.queryByText("Not grouped")).toBeNull();
+  });
+
+  it("says how many open runs the total estimates", async () => {
+    loadedMonth(() => month(byAgentRows(), { estimatedRuns: 2 }));
+    await renderSpend();
+    expect(screen.getByTestId("spend-month-estimate")).toHaveTextContent(
+      "includes estimates for 2 open runs",
+    );
   });
 
   it("meters the workspace's monthly budget beside the total", async () => {
@@ -787,6 +825,27 @@ describe("Spend › Month", () => {
     await renderSpend();
     expect(screen.getByText("102% of $18,000.00")).toBeInTheDocument();
     expect(screen.getByText("Reached")).toBeInTheDocument();
+    expect(screen.queryByText("Not enforced")).toBeNull();
+  });
+
+  it("marks a budget that is not enforced, and draws its reach as no alarm", async () => {
+    loadedMonth();
+    const [first, ...rest] = budgetRows;
+    if (first === undefined) throw new Error("no budget");
+    budgets.mockResolvedValue(
+      readOk([
+        { ...first, enabled: false, ratio: 1.02, state: "exceeded" },
+        ...rest,
+      ]),
+    );
+    await renderSpend();
+    expect(screen.getByText("Reached")).toBeInTheDocument();
+    expect(screen.getByText("Not enforced")).toBeInTheDocument();
+    const bar = screen.getByRole("img", {
+      name: "102% of the monthly budget used",
+    }).firstElementChild;
+    expect(bar).toHaveClass("bg-link");
+    expect(bar).not.toHaveClass("bg-destructive");
   });
 
   it("links to Budgets when the workspace sets no monthly budget", async () => {
@@ -1473,9 +1532,9 @@ describe("Spend › drill", () => {
     const crumb = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumb).getByRole("link")).toHaveAttribute(
       "href",
-      "/acme/core-platform/spend?by=operator",
+      "/acme/core-platform/spend/findings",
     );
-    expect(crumb).toHaveTextContent("By operator");
+    expect(crumb).toHaveTextContent("Findings");
     expect(tile("Budget position")).toHaveTextContent("not recorded");
   });
 

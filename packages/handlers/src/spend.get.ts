@@ -132,8 +132,10 @@ export function mcpServerOf(tool: string): string | null {
  * rate (ADR-199): input the run's own cost already counts. The rest is the
  * run's cost less every server's part, so the rows sum to the run. Only a
  * run that called a priced server tool has an estimated remainder; any
- * other run's remainder is its whole cost at its own basis. The remainder
- * never drops below zero.
+ * other run's remainder is its whole cost at its own basis. When the
+ * servers' estimates come to more than the run cost, as when a run ends on a
+ * large result no model call read, the servers split the run's cost in
+ * proportion and the rest is what their rounding leaves.
  */
 export function mcpServerShares(run: RunTotalsRecord): RunShare[] {
   const servers = new Map<string, RunShare>();
@@ -162,14 +164,18 @@ export function mcpServerShares(run: RunTotalsRecord): RunShare[] {
     serverTokens += tool.resultTokens ?? 0;
   }
   const estimated = serverMicros > 0n;
+  if (run.costMicros !== null && serverMicros > run.costMicros) {
+    let scaled = 0n;
+    for (const share of servers.values()) {
+      if (share.micros === null) continue;
+      share.micros = (share.micros * run.costMicros) / serverMicros;
+      scaled += share.micros;
+    }
+    serverMicros = scaled;
+  }
   const rest: RunShare = {
     key: OTHER_SPEND_KEY,
-    micros:
-      run.costMicros === null
-        ? null
-        : run.costMicros > serverMicros
-          ? run.costMicros - serverMicros
-          : 0n,
+    micros: run.costMicros === null ? null : run.costMicros - serverMicros,
     basis:
       run.costBasis === null
         ? null
@@ -304,7 +310,9 @@ function spendByDay(
   const byDay = new Map<string, RunTotalsRecord[]>();
   for (const run of runs) {
     const day = utcDay(run.startedAt);
-    byDay.set(day, [...(byDay.get(day) ?? []), run]);
+    const list = byDay.get(day) ?? [];
+    list.push(run);
+    byDay.set(day, list);
   }
   return daysBetween(from, to).map((day) => {
     const f = sumFigures((byDay.get(day) ?? []).map(runFigure));
