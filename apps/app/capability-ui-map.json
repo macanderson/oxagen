@@ -1812,12 +1812,38 @@
       "verifiedBy": "run-outcomes-providers"
     },
     "get_steering_deliveries": {
-      "route": "/[org]/[ws]/steering?tab=deliveries",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Delivery tab showing included and cut records per recorded run",
+      "route": "/[org]/[ws]/steering/assignments",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering › Assignments shows the records each recorded run was given and the records it cut (features/steering/tabs/assignments.tsx)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
-      "verifiedAt": "2026-09-22",
-      "verifiedBy": "steering-rescue-ci"
+      "verifiedAt": "2026-09-29",
+      "verifiedBy": "steering-2961-residue"
+    },
+    "get_steering_freshness": {
+      "route": "/[org]/[ws]/steering/gates",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering › Gates › Steering freshness shows the published version, the repository, the newest record and the two freshness gates (features/steering/tabs/gates.tsx, features/steering/freshness.tsx)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-29",
+      "verifiedBy": "steering-2961-residue",
+      "also": [
+        {
+          "route": "/[org]/[ws]/steering/records",
+          "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+          "entry": "Steering › Library › Records marks each record the last merge published with the bundle version (features/steering/tabs/records.tsx, features/steering/records-shelf.tsx)",
+          "proof": "apps/app/src/features/steering/steering.test.tsx",
+          "verifiedAt": "2026-09-29",
+          "verifiedBy": "steering-2961-residue"
+        },
+        {
+          "route": "/[org]/[ws]/steering/records/[lineage]",
+          "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+          "entry": "The record page reads the freshness to name the steering repository a revision's pull request goes to (features/record/record.tsx)",
+          "proof": "apps/app/src/features/record/record.test.tsx",
+          "verifiedAt": "2026-09-29",
+          "verifiedBy": "steering-2961-residue"
+        }
+      ]
     },
     "get_steering_repo": {
       "route": "/[org]/[ws]/repositories",
