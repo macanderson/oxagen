@@ -44,6 +44,7 @@ import {
   type ServedPorts,
   type ServedRoute,
   type ServedRun,
+  type ServedTransport,
 } from "./types";
 
 type Scope = { orgId: string; workspaceId: string };
@@ -210,10 +211,11 @@ function localTransport(route: ServedRoute): Transport {
 }
 
 /** The transport for the network the environment names. */
-export function transportFor(route: ServedRoute): Transport {
+export function transportFor(route: ServedRoute): ServedTransport {
   if (route.network === "local") return localTransport(route);
   // A relay:<name> network goes through this process's relay broker (lane M12).
-  if (route.network.startsWith("relay:")) return relayTransport(route.run);
+  // Its transport can refuse a call before runTool claims an approval.
+  if (route.network.startsWith("relay:")) return relayTransport(route);
   cloud ??= createCloudTransport();
   return cloud;
 }

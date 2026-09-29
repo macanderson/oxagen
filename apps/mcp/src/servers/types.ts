@@ -5,7 +5,7 @@
 // workspace's published steering version and calls them through the
 // executor. Everything that touches the database, the vault, or the network
 // is a port here, so list, call, and search run in tests with fakes.
-import type { CredentialSource, ManifestServer, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
+import type { CredentialSource, ManifestServer, ResolvedCredential, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
 import type { CedarRuntime, PolicyFile } from "@oxagen/policy";
 import type { Ranker } from "./search";
 
@@ -66,6 +66,18 @@ export interface ServedRoute {
   network: string;
   server: ManifestServer;
   run: ServedRun;
+}
+
+/** A route's Transport, which can say before any send that it would refuse the call. */
+export interface ServedTransport extends Transport {
+  /**
+   * Why this route would refuse the call before sending it, or null when it
+   * would take it. It gets the credential runTool read, or null when the
+   * server needs none. runTool asks before it claims an approval, so a call
+   * the route cannot send leaves the approval for the retry. It sends
+   * nothing. A route without it is checked only when the call is sent.
+   */
+  refusal?(credential: ResolvedCredential | null): Promise<string | null>;
 }
 
 /** The servers and tools a person switched off in Oxagen. */
@@ -218,7 +230,7 @@ export interface ServedPorts {
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */
-  transport(route: ServedRoute): Transport;
+  transport(route: ServedRoute): ServedTransport;
   meter(event: MeterEvent): Promise<void>;
   /** Cedar's evaluator, or null when it is not installed. */
   cedar(): Promise<CedarRuntime | null>;

@@ -17,7 +17,6 @@ import {
   type CredentialSource,
   type ManifestServer,
   type ResolvedCredential,
-  type Transport,
 } from "@oxagen/mcp-studio";
 import { decideToolCall, type ToolCallVerdict } from "@oxagen/policy";
 import { findInServer, resolveName } from "./names";
@@ -34,6 +33,7 @@ import {
   type ServedAgent,
   type ServedPorts,
   type ServedRoute,
+  type ServedTransport,
 } from "./types";
 
 interface Answer {
@@ -132,7 +132,7 @@ export function sandboxOf(server: ManifestServer): { name: string; network: stri
   return sandbox === undefined ? null : { name: sandbox[0], network: sandbox[1].network };
 }
 
-function transportFor(ports: ServedPorts, route: ServedRoute): Transport | ServedRouteError {
+function transportFor(ports: ServedPorts, route: ServedRoute): ServedTransport | ServedRouteError {
   try {
     return ports.transport(route);
   } catch (error) {
@@ -372,6 +372,7 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   // the approval unused. The executor then gets the credential already read.
   // The request is the one the executor would build.
   let credentials: CredentialSource = ports.credentials;
+  let credentialRead: ResolvedCredential | null = null;
   if (server.auth !== null) {
     let credential: ResolvedCredential;
     try {
@@ -400,10 +401,27 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     }
     if (credential.type === "missing") return refusal(`${credential.message}\n${credential.connect_url}`, "failed");
     const read = credential;
+    credentialRead = read;
     credentials = { resolve: () => Promise.resolve(read) };
   }
 
   if (approved !== null) {
+    // A route that can tell it would refuse the call, such as a relay that is
+    // not connected, says so here, before the claim, so the approval stays
+    // for the retry. A route can still fail after the claim: a relay can
+    // drop between this check and the send.
+    let refused: string | null;
+    try {
+      refused = (await transport.refusal?.(credentialRead)) ?? null;
+    } catch (error) {
+      ports.log.warn("Oxagen could not check the route, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      refused = `Oxagen could not check the route for ${tool.name}, so it did not send it. Call it again in a minute.`;
+    }
+    if (refused !== null) return refusal(refused, "failed");
+
     let claimed: boolean;
     try {
       claimed = await ports.approvals.claim(approved.request, approved.approvers);

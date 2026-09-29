@@ -1,11 +1,11 @@
 // call.test.ts: a served tools/call from each source in each exposure mode,
 // decided on the real tool, parked, refused, and metered (lane M15).
-import type { CallToolResult, ManifestServer, RequestKind } from "@oxagen/mcp-studio";
+import type { CallToolResult, ManifestServer, RequestKind, ResolvedCredential } from "@oxagen/mcp-studio";
 import type { PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
 import { callServed, sandboxOf } from "../call";
 import type { Ranker, SearchEntry } from "../search";
-import { ServedRouteError, type PublishedTools, type ServedRun } from "../types";
+import { ServedRouteError, type PublishedTools, type ServedRun, type ServedTransport } from "../types";
 import {
   AGENT,
   DIGEST,
@@ -63,6 +63,12 @@ function expectCarried(recorded: Recorded, carrier: RequestKind | "local"): void
 
 function outcomes(recorded: Recorded): string[] {
   return recorded.meter.map((event) => `${event.kind} ${event.tool} ${event.outcome}`);
+}
+
+/** A route whose Transport checks the call with check. The fake Senders never use the Transport. */
+function refusingTransport(check: (credential: ResolvedCredential | null) => Promise<string | null>): ServedTransport {
+  const unused = (): Promise<never> => Promise.reject(new Error("A fake Sender answers every call."));
+  return { http: unused, grpc: unused, local: unused, refusal: check };
 }
 
 function nothingSent(recorded: Recorded): void {
@@ -300,6 +306,83 @@ describe("callServed policy decisions", () => {
     expect(recorded.credentials).toEqual([]);
     nothingSent(recorded);
     expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("leaves an approval unused when the route would refuse the call before sending it", async () => {
+    const down =
+      "Relay corp is not connected to Oxagen. Start the relay in your network, or read its logs for why it cannot connect.";
+    const checked: Array<ResolvedCredential | null> = [];
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      transport: () =>
+        refusingTransport((credential) => {
+          checked.push(credential);
+          return Promise.resolve(down);
+        }),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(result?.isError).toBe(true);
+    expect(textOf(result)).toBe(down);
+    expect(recorded.approvals).toHaveLength(1);
+    expect(recorded.claims).toEqual([]);
+    // The route checks the credential runTool read, so it reads it only once.
+    expect(recorded.credentials).toHaveLength(1);
+    expect(checked).toEqual([{ type: "bearer", token: "tok_never_logged" }]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("claims the approval and sends when the route would take the call", async () => {
+    let checks = 0;
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      transport: () =>
+        refusingTransport(() => {
+          checks += 1;
+          return Promise.resolve(null);
+        }),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(result?.isError).not.toBe(true);
+    expect(checks).toBe(1);
+    expect(recorded.claims).toEqual([{ request: recorded.approvals[0], approvers: 1 }]);
+    expectCarried(recorded, "http");
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund allowed"]);
+  });
+
+  it("leaves an approval unused when the route check throws, and logs only the error's name", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      transport: () => refusingTransport(() => Promise.reject(new Error("broker holds tok_route_secret"))),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not check the route for billing__create_refund, so it did not send it. Call it again in a minute.",
+    );
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not check the route, so the call was not sent.",
+        fields: { tool: "billing__create_refund", error: "Error" },
+      },
+    ]);
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("does not ask the route before sending a call that needs no approval", async () => {
+    let checks = 0;
+    const { call, recorded } = await setup({
+      transport: () =>
+        refusingTransport(() => {
+          checks += 1;
+          return Promise.resolve("never asked");
+        }),
+    });
+    const result = await call("billing__list_charges");
+    expect(result?.isError).not.toBe(true);
+    expect(checks).toBe(0);
+    expectCarried(recorded, "http");
   });
 
   it("leaves an approval unused when the credential lookup fails", async () => {
