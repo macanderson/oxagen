@@ -186,8 +186,8 @@ function join(path: string, key: string): string {
 }
 
 /**
- * A list of strings, each passing `check`, with no repeats. Returns null and
- * records a problem when the value is not one.
+ * A list of strings, each passing `check`, with no repeats unless `unique` is
+ * false. Returns null and records a problem when the value is not one.
  */
 function readList<T extends string>(
   problems: Problems,
@@ -196,6 +196,7 @@ function readList<T extends string>(
   check: (item: unknown) => item is T,
   expected: string,
   minItems = 0,
+  unique = true,
 ): T[] | null {
   if (!Array.isArray(value)) {
     problems.bad(path, `a list of ${expected}`);
@@ -212,7 +213,7 @@ function readList<T extends string>(
       problems.bad(`${path}[${i}]`, expected);
       return null;
     }
-    if (out.includes(item)) {
+    if (unique && out.includes(item)) {
       problems.bad(path, `a list with no repeats. ${item} appears twice`);
       return null;
     }
@@ -348,7 +349,8 @@ function readDone(problems: Problems, value: unknown): string[] {
     problems.missing("done.criteria");
     return [];
   }
-  return readList(problems, value.criteria, "done.criteria", isText, "criteria", 1) ?? [];
+  // The schema lets a criterion repeat, so the parser does too.
+  return readList(problems, value.criteria, "done.criteria", isText, "criteria", 1, false) ?? [];
 }
 
 /** Read the [accept] table. A file without one accepts by operator. */

@@ -30,6 +30,7 @@ import {
   advanceWorkflow,
   type Hold,
   type RefusalCode,
+  type StageRecord,
   type WorkflowAction,
   type WorkflowEvent,
   type WorkflowState,
@@ -224,8 +225,9 @@ export class WorkflowRunner {
     const builds: { role: string; sessionId: string; record: GatewaySession | null }[] = [];
     for (const stage of state.workflow.stages) {
       if (stage.kind !== "build") continue;
-      const record = state.stages.find((candidate) => candidate.role === stage.role);
-      for (const run of record?.runs ?? []) {
+      const record = state.stages.find((candidate) => candidate.role === stage.role) as StageRecord;
+      for (const run of record.runs) {
+        // A run that never started, such as one whose launch failed, made no model calls.
         if (run.sessionId === null) continue;
         builds.push({ role: stage.role, sessionId: run.sessionId, record: await this.ports.gateway.session(run.sessionId) });
       }
