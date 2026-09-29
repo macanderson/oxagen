@@ -59,6 +59,15 @@ function toThreadMessage(message: StoredMessage): ThreadMessage | null {
       approvalId: call.approvalId,
     })),
     stopped: message.stopped,
+    // The digest stays behind: the flyout draws a chip, not a checksum.
+    attachments: message.attachments.map(
+      ({ publicId, name, mediaType, sizeBytes }) => ({
+        publicId,
+        name,
+        mediaType,
+        sizeBytes,
+      }),
+    ),
   };
 }
 

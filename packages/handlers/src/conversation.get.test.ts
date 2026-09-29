@@ -42,6 +42,7 @@ import { makeCTX } from "./test-utils/fixtures";
 const dialect = new PgDialect();
 const CONVERSATIONS = getTableName(schema.conversations);
 const MESSAGES = getTableName(schema.messages);
+const GENERATED_ASSETS = getTableName(schema.generatedAssets);
 
 interface Read {
   table: string;
@@ -116,12 +117,17 @@ const MESSAGE_ROWS = [
 ];
 
 /**
- * A transaction that answers the conversation read from `conversations` and
- * the message read from `messages`, and records each read's WHERE clause.
+ * A transaction that answers the conversation read from `conversations`, the
+ * message read from `messages` and the file read from `generated_assets`, and
+ * records each read's WHERE clause.
  */
 function run(
   input: { conversationId: string | null; limit?: number },
-  answers: { conversations?: unknown[]; messages?: unknown[] },
+  answers: {
+    conversations?: unknown[];
+    messages?: unknown[];
+    attachments?: unknown[];
+  },
   ctx: CapabilityContext = makeCTX(),
 ) {
   const reads: Read[] = [];
@@ -135,7 +141,9 @@ function run(
           const rows =
             name === CONVERSATIONS
               ? (answers.conversations ?? [])
-              : (answers.messages ?? []);
+              : name === GENERATED_ASSETS
+                ? (answers.attachments ?? [])
+                : (answers.messages ?? []);
           return {
             orderBy: () => ({
               limit: () => Promise.resolve(rows),
@@ -194,6 +202,38 @@ const LEDGER = new Map<string, RunToolCallRecord[]>([
     ],
   ],
 ]);
+
+const SHA = "a".repeat(64);
+
+/** One file as `generated_assets` holds it once `ask_assistant` linked it. */
+function fileRow(
+  publicId: string,
+  messageId: string | null,
+  over: Record<string, unknown> = {},
+) {
+  return {
+    publicId,
+    messageId,
+    mimeType: "image/png",
+    sizeBytes: 2048n,
+    metadata: { displayName: `${publicId}.png`, sha256: SHA },
+    ...over,
+  };
+}
+
+// Two files sent with the first question and one with the second, in the
+// order they were uploaded.
+const FILE_ROWS = [
+  fileRow("gen_01a", "m1", {
+    metadata: { displayName: "chart.png", sha256: SHA },
+  }),
+  fileRow("gen_01b", "m1", {
+    mimeType: "application/pdf",
+    sizeBytes: 512n,
+    metadata: { displayName: "budget.pdf", sha256: "b".repeat(64) },
+  }),
+  fileRow("gen_01c", "m3"),
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -487,6 +527,141 @@ describe("get_conversation", () => {
     ]);
     expect(messages[2]?.toolCalls).toEqual([]);
     expect(messages[3]?.toolCalls).toHaveLength(2);
+  });
+
+  it("lists the files sent with each question, in the order they were uploaded", async () => {
+    const { out } = run(
+      { conversationId: null },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: MESSAGE_ROWS,
+        attachments: FILE_ROWS,
+      },
+    );
+    const result = await out;
+    const messages = result.conversation?.messages ?? [];
+    expect(messages[0]?.attachments).toEqual([
+      {
+        publicId: "gen_01a",
+        name: "chart.png",
+        mediaType: "image/png",
+        sizeBytes: 2048,
+        sha256: SHA,
+      },
+      {
+        publicId: "gen_01b",
+        name: "budget.pdf",
+        mediaType: "application/pdf",
+        sizeBytes: 512,
+        sha256: "b".repeat(64),
+      },
+    ]);
+    expect(messages[2]?.attachments.map((a) => a.publicId)).toEqual([
+      "gen_01c",
+    ]);
+    // A reply never carries files.
+    expect(messages[1]?.attachments).toEqual([]);
+    expect(messages[3]?.attachments).toEqual([]);
+    // The answer is one the contract accepts.
+    expect(() => conversationGet.output.parse(result)).not.toThrow();
+  });
+
+  it("reads the files once, inside the tenant fence, and only the person's finished uploads that are not deleted", async () => {
+    const { reads, out } = run(
+      { conversationId: "cnv_01k9x2" },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: MESSAGE_ROWS,
+        attachments: FILE_ROWS,
+      },
+    );
+    await out;
+    // One read for the whole conversation, not one per message.
+    const fileReads = reads.filter((r) => r.table === GENERATED_ASSETS);
+    expect(fileReads).toHaveLength(1);
+    const where = fileReads[0]?.where ?? "";
+    expect(where).toMatch(/"conversation_id" = \$/);
+    expect(where).toMatch(/"org_id" = \$/);
+    expect(where).toMatch(/"workspace_id" = \$/);
+    expect(where).toMatch(/"user_id" = \$/);
+    expect(where).toMatch(/"source" = \$/);
+    expect(where).toMatch(/"status" = \$/);
+    expect(where).toMatch(/"deleted_at" is null/);
+    expect(where).toMatch(/"message_id" is not null/);
+    expect(fileReads[0]?.params).toEqual(
+      expect.arrayContaining([
+        CONVERSATION_ROW.id,
+        "org_1",
+        "ws_1",
+        "u_1",
+        "user_upload",
+        "ready",
+      ]),
+    );
+  });
+
+  it("answers an empty list on every message of a conversation sent without files", async () => {
+    const { out } = run(
+      { conversationId: null },
+      { conversations: [CONVERSATION_ROW], messages: MESSAGE_ROWS },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages.map((m) => m.attachments)).toEqual([[], [], [], []]);
+  });
+
+  it("names a file by its id when the upload kept no name", async () => {
+    const unnamed = fileRow("gen_01d", "m1", { metadata: { sha256: SHA } });
+    const { out } = run(
+      { conversationId: null },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: MESSAGE_ROWS,
+        attachments: [unnamed],
+      },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages[0]?.attachments[0]?.name).toBe("gen_01d");
+  });
+
+  it("drops a stored file that does not parse and keeps the rest of the thread (negative)", async () => {
+    const broken = fileRow("gen_01e", "m1", {
+      metadata: { displayName: "notes.txt" },
+    });
+    const { out } = run(
+      { conversationId: null },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: MESSAGE_ROWS,
+        attachments: [broken, FILE_ROWS[2]],
+      },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    expect(messages).toHaveLength(4);
+    expect(messages[0]?.attachments).toEqual([]);
+    expect(messages[2]?.attachments.map((a) => a.publicId)).toEqual([
+      "gen_01c",
+    ]);
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ publicId: "gen_01e" }),
+      expect.stringContaining("attachment"),
+    );
+  });
+
+  it("leaves out a file linked to no message, or to a message outside the page returned (negative)", async () => {
+    const unlinked = fileRow("gen_01f", null);
+    const { out } = run(
+      { conversationId: null, limit: 2 },
+      {
+        conversations: [CONVERSATION_ROW],
+        messages: MESSAGE_ROWS,
+        attachments: [...FILE_ROWS, unlinked],
+      },
+    );
+    const messages = (await out).conversation?.messages ?? [];
+    const sent = messages.flatMap((m) => m.attachments.map((a) => a.publicId));
+    // The page is the second question and its reply: the first question's
+    // files and the unlinked file are not on it.
+    expect(sent).toEqual(["gen_01c"]);
   });
 
   it("reads an API key's conversations as the person who created the key", async () => {

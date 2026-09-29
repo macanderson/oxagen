@@ -14,9 +14,18 @@
 // Each reply's `toolCalls` is read from its run in the ledger, the one record
 // of what the turn called, with the builder `ask_assistant` uses. Nothing is
 // copied onto the message. One ledger read answers every reply returned.
+//
+// Each question's `attachments` are the files `ask_assistant` linked to it
+// (`linkTurnAttachments` in @oxagen/agent), read in the same transaction as
+// the messages with one query for the whole conversation (#4690). A file that
+// was deleted, or never finished storing, is left out.
 import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { assistantParkedCardSchema } from "@oxagen/oxagen/contracts/assistant.ask";
+import {
+  assistantAttachmentSchema,
+  type AssistantAttachment,
+} from "@oxagen/oxagen/contracts/assistant.attachment.upload";
 import {
   conversationGet,
   type ConversationGetInput,
@@ -28,7 +37,15 @@ import { toolCallsFromLedger } from "@oxagen/agent/runtime/assistant-tool-calls"
 import { schema, withTenantDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import type { RunStore, RunToolCallRecord } from "@oxagen/run-ledger";
-import { and, asc, desc, eq, isNull, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  type SQL,
+} from "drizzle-orm";
 import { walkActiveBranch } from "./lib/conversation-markdown";
 import { ledgerStore } from "./lib/run-read";
 import { logger } from "./logger";
@@ -49,8 +66,23 @@ type MessageRow = {
   createdAt: Date;
 };
 
-/** A message as the conversation store holds it, before its tool calls. */
-type StoredMessage = Omit<ConversationMessage, "toolCalls">;
+/** A file linked to a message, as `generated_assets` holds it. */
+type AttachmentRow = {
+  publicId: string;
+  messageId: string | null;
+  mimeType: string;
+  sizeBytes: bigint | null;
+  metadata: unknown;
+};
+
+/**
+ * A message as the conversation store holds it, before its tool calls and
+ * files. `rowId` is the internal id the files are linked by. It never leaves
+ * this handler.
+ */
+type StoredMessage = Omit<ConversationMessage, "toolCalls" | "attachments"> & {
+  rowId: string;
+};
 
 export interface ConversationGetDeps {
   /** The run ledger's read of many runs' tool calls in one query. */
@@ -122,7 +154,34 @@ async function getConversation(
         ),
       )
       .orderBy(asc(schema.messages.createdAt));
-    return { conversation, rows };
+    // Every file sent in this conversation, in one read. Only the person's own
+    // uploads that finished storing and are not deleted count.
+    const files: AttachmentRow[] = await tx
+      .select({
+        publicId: schema.generatedAssets.publicId,
+        messageId: schema.generatedAssets.messageId,
+        mimeType: schema.generatedAssets.mimeType,
+        sizeBytes: schema.generatedAssets.sizeBytes,
+        metadata: schema.generatedAssets.metadata,
+      })
+      .from(schema.generatedAssets)
+      .where(
+        and(
+          eq(schema.generatedAssets.conversationId, conversation.id),
+          eq(schema.generatedAssets.orgId, ctx.orgId),
+          eq(schema.generatedAssets.workspaceId, ctx.workspaceId),
+          eq(schema.generatedAssets.userId, userId),
+          eq(schema.generatedAssets.source, "user_upload"),
+          eq(schema.generatedAssets.status, "ready"),
+          isNull(schema.generatedAssets.deletedAt),
+          isNotNull(schema.generatedAssets.messageId),
+        ),
+      )
+      .orderBy(
+        asc(schema.generatedAssets.createdAt),
+        asc(schema.generatedAssets.id),
+      );
+    return { conversation, rows, files };
   });
 
   if (result === null) {
@@ -143,19 +202,21 @@ async function getConversation(
     });
   }
 
-  const { conversation, rows } = result;
+  const { conversation, rows, files } = result;
   const thread = walkActiveBranch(rows, conversation.activeLeafMessageId)
     .map(toMessage)
     .filter((m): m is StoredMessage => m !== null);
   const page = thread.slice(-input.limit);
   const truncated = page.length < thread.length;
   const callsByRun = await readReplyToolCalls(deps, page, ctx);
-  const messages: ConversationMessage[] = page.map((message) => ({
+  const filesByMessage = attachmentsByMessage(files);
+  const messages: ConversationMessage[] = page.map(({ rowId, ...message }) => ({
     ...message,
     toolCalls:
       message.role === "assistant" && message.runId !== null
         ? toolCallsFromLedger(callsByRun.get(message.runId) ?? [])
         : [],
+    attachments: filesByMessage.get(rowId) ?? [],
   }));
 
   logger.info(
@@ -236,6 +297,7 @@ function toMessage(row: MessageRow): StoredMessage | null {
   if (!ROLES.has(row.role as ConversationMessage["role"])) return null;
   const metadata = isRecord(row.metadata) ? row.metadata : {};
   return {
+    rowId: row.id,
     publicId: row.publicId,
     role: row.role as ConversationMessage["role"],
     content: row.content,
@@ -267,6 +329,44 @@ function parkedCardsOf(stored: unknown): ConversationMessage["parkedCards"] {
     }
   }
   return cards;
+}
+
+/**
+ * The files of each message, keyed by the message's internal id, in the
+ * order the query read them. The name is the one the person's device gave,
+ * which the upload keeps in `metadata.displayName`. A row that does not parse
+ * as an attachment is dropped and logged rather than failing the read, as a
+ * parked card is.
+ */
+function attachmentsByMessage(
+  files: readonly AttachmentRow[],
+): ReadonlyMap<string, AssistantAttachment[]> {
+  const byMessage = new Map<string, AssistantAttachment[]>();
+  for (const file of files) {
+    if (file.messageId === null) continue;
+    const metadata = isRecord(file.metadata) ? file.metadata : {};
+    const parsed = assistantAttachmentSchema.safeParse({
+      publicId: file.publicId,
+      name:
+        typeof metadata.displayName === "string" && metadata.displayName
+          ? metadata.displayName
+          : file.publicId,
+      mediaType: file.mimeType,
+      sizeBytes: file.sizeBytes === null ? null : Number(file.sizeBytes),
+      sha256: metadata.sha256,
+    });
+    if (!parsed.success) {
+      logger.warn(
+        { publicId: file.publicId, issues: parsed.error.issues.length },
+        "conversation.get: dropped a stored attachment that does not parse",
+      );
+      continue;
+    }
+    const list = byMessage.get(file.messageId);
+    if (list) list.push(parsed.data);
+    else byMessage.set(file.messageId, [parsed.data]);
+  }
+  return byMessage;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

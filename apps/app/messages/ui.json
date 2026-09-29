@@ -166,8 +166,7 @@
       "range": "{from}–{to} of {total}",
       "rangeEmpty": "0 of 0",
       "previous": "Previous page",
-      "next": "Next page",
-      "page": "Page {page}"
+      "next": "Next page"
     },
     "listTable": {
       "search": "Search this list",

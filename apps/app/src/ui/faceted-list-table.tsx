@@ -1,11 +1,12 @@
 "use client";
 // A list table with the design's list tools (the mockup's `ltTable`,
-// `ltBar` and `ltPager` in engine.js): a search box, a filter per small
-// enumeration column, a rows-per-page select, sortable column headers, and a
-// numbered pager under the table reading "1–10 of 75". The rows arrive whole,
-// in the order the caller means them to be read, and every tool works over
-// them in the browser; a header sorts on its first press, reverses on its
-// second, and gives the caller's order back on its third.
+// `ltBar` and `ltPager` in engine.js): a search box and a filter per small
+// enumeration column above the table, sortable column headers, and under the
+// table the pager every list draws (ui/pagination): Rows and the range,
+// "1–10 of 75", on the left, Previous and Next on the right. The rows arrive
+// whole, in the order the caller means them to be read, and every tool works
+// over them in the browser; a header sorts on its first press, reverses on
+// its second, and gives the caller's order back on its third.
 //
 // Each row is drawn by the caller (`node`, a `<tr>`), with the plain text the
 // tools compare beside it, so a cell can hold a link or a badge and still be
@@ -16,7 +17,7 @@
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ComponentProps, type ReactNode, useMemo, useState } from "react";
-import { buttonSecondary } from "./control-styles";
+import { RowsPager } from "./pagination";
 import { headCell } from "./table";
 
 export type ListColumn = {
@@ -75,19 +76,6 @@ function compare(
     numeric: true,
     sensitivity: "base",
   });
-}
-
-/** The page numbers the pager draws: all of them to seven, else the ends and the neighbours. */
-export function pageNumbers(page: number, pages: number): (number | "gap")[] {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  const shown: (number | "gap")[] = [1];
-  const lo = Math.max(2, page - 1);
-  const hi = Math.min(pages - 1, page + 1);
-  if (lo > 2) shown.push("gap");
-  for (let n = lo; n <= hi; n++) shown.push(n);
-  if (hi < pages - 1) shown.push("gap");
-  shown.push(pages);
-  return shown;
 }
 
 export function ListTable({
@@ -218,24 +206,6 @@ export function ListTable({
             ))}
           </BarSelect>
         ))}
-        <label className="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-          {t("rows")}
-          <BarSelect
-            data-rows=""
-            aria-label={t("rows")}
-            value={per}
-            onChange={(event) => {
-              setPer(Number(event.target.value));
-              setPage(1);
-            }}
-          >
-            {PER_PAGE.map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? t("allRows") : n}
-              </option>
-            ))}
-          </BarSelect>
-        </label>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table
@@ -290,72 +260,43 @@ export function ListTable({
           </tbody>
         </table>
       </div>
-      <nav
-        aria-label={t("pager")}
-        className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-[12px] text-muted-foreground"
-      >
-        <span className="font-mono" data-range="">
-          {total === 0
+      <RowsPager
+        className="border-t border-border px-4"
+        label={t("pager")}
+        rowsLabel={t("rows")}
+        perPage={per}
+        sizes={PER_PAGE}
+        onPerPage={(size) => {
+          setPer(size);
+          setPage(1);
+        }}
+        sizeLabel={(size) => (size === 0 ? t("allRows") : String(size))}
+        range={
+          total === 0
             ? t("rangeEmpty")
             : t("range", {
                 from: String(from),
                 to: String(to),
                 total: String(total),
-              })}
-        </span>
-        <span className="flex items-center gap-1">
-          <button
-            type="button"
-            data-touch-target=""
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={t("previous")}
-            disabled={current <= 1}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            ‹
-          </button>
-          {pageNumbers(current, pages).map((n, index) =>
-            n === "gap" ? (
-              <span
-                // Two gaps can sit in one pager; the index keeps them apart.
-                key={`gap-${String(index)}`}
-                aria-hidden="true"
-                className="px-1"
-              >
-                …
-              </span>
-            ) : (
-              <button
-                key={n}
-                type="button"
-                data-touch-target=""
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px] aria-[current=page]:border-gold aria-[current=page]:text-foreground`}
-                aria-current={n === current ? "page" : undefined}
-                aria-label={t("page", { page: String(n) })}
-                onClick={() => {
-                  setPage(n);
-                }}
-              >
-                {n}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            data-touch-target=""
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={t("next")}
-            disabled={current >= pages}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            ›
-          </button>
-        </span>
-      </nav>
+              })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
+        previous={
+          current <= 1
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+      />
     </div>
   );
 }

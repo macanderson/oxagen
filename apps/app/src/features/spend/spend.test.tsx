@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The Spend page against its rev1 design (oxagen-roadmap mockups/pages/
-// spend.md) on a fake DataSource: the header with its one gold action, the
+// The Spend page against the rev1 mockup's spec it was built from (mockups/
+// pages/spend.md, not at ADR-226's pin) on a fake DataSource: the header with its one gold action, the
 // four summary tiles, the tabs with their counts, every tab's panels and
 // columns in the design's order, one key's drill, the evidence and stub
 // dialogs, and each state (empty, loading, error, denied, waiting). Every
@@ -667,9 +667,13 @@ describe("Spend › Findings", () => {
       "fnd_01k5rtop",
       "fnd_01k5rtgh",
     ]);
-    expect(screen.getByRole("navigation", { name: "Pages" })).toHaveTextContent(
-      "1 to 2 of 2",
-    );
+    // The range sits in the pager beside Rows, outside the Previous and Next
+    // landmark.
+    const pager = screen
+      .getByRole("navigation", { name: "Pages" })
+      .closest("[data-rows-pager]");
+    expect(pager).toHaveTextContent("1 to 2 of 2");
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 

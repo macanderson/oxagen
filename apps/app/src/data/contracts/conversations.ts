@@ -1,10 +1,10 @@
 // The assistant's thread as the flyout reopens it (#4163): the viewer's
 // latest conversation in a workspace, read back through `get_conversation`,
-// and the turns on it. Only what the flyout draws is carried: the question,
-// the reply with the run it was recorded as, the tool calls that run made
-// (#4161), and the writes it parked. The flyout's session list (#4435) reads
-// the viewer's active conversations through `list_conversations`, one row
-// each.
+// and the turns on it. Only what the flyout draws is carried: the question
+// with the files sent with it (#4690), the reply with the run it was recorded
+// as, the tool calls that run made (#4161), and the writes it parked. The
+// flyout's session list (#4435) reads the viewer's active conversations
+// through `list_conversations`, one row each.
 import { z } from "zod";
 import { PublicId } from "./common";
 
@@ -38,9 +38,21 @@ const ToolCall = z.object({
 });
 
 /**
- * One turn's half. A question carries no run, parks nothing, and calls no
- * tool. A reply carries the run it was recorded as, or null when no turn
- * recorded one, and the tool calls that run made.
+ * A file the person sent with a question (#4690), as `get_conversation` reads
+ * it. `publicId` is the `gen_` id the attachment read route serves it by.
+ */
+const Attachment = z.object({
+  publicId: PublicId,
+  name: z.string().min(1),
+  mediaType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+});
+
+/**
+ * One turn's half. A question carries no run, parks nothing, calls no tool,
+ * and lists the files sent with it. A reply carries the run it was recorded
+ * as, or null when no turn recorded one, the tool calls that run made, and no
+ * files.
  */
 export const ThreadMessage = z.object({
   id: PublicId,
@@ -51,6 +63,8 @@ export const ThreadMessage = z.object({
   toolCalls: z.array(ToolCall),
   /** The person stopped the turn, so `text` is what it reached (#4164). */
   stopped: z.boolean(),
+  /** The files sent with a question, in upload order. Empty on a reply. */
+  attachments: z.array(Attachment),
 });
 export type ThreadMessage = z.infer<typeof ThreadMessage>;
 
