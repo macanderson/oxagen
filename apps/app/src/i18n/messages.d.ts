@@ -3152,6 +3152,7 @@ type Messages = {
       offBadge: string;
       search: string;
       rows: string;
+      pager: string;
       noMatch: string;
       importNamed: string;
       range: string;

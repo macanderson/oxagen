@@ -516,8 +516,11 @@ describe("ToolsTab filters and paging", () => {
     expect(screen.queryByTestId("studio-tool-tool_000")).toBeNull();
     await user.click(previous);
     expect(screen.getByText(range(1, 10, 600))).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Rows"), "25");
-    expect(screen.getByText(range(1, 25, 600))).toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Rows per page" }));
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    await waitFor(() => {
+      expect(screen.getByText(range(1, 25, 600))).toBeInTheDocument();
+    });
   });
 
   it("combines filters, so Warehouse shows no available tool that only reads", async () => {

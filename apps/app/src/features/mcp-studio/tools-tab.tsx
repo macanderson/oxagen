@@ -282,7 +282,6 @@ export function ToolsTab({
             list={list}
             searchLabel={t("search")}
             filters={filters}
-            rowsLabel={t("rows")}
           />
           <div className="min-w-0 overflow-x-auto">
             <table
@@ -426,6 +425,8 @@ export function ToolsTab({
           </div>
           <ListPager
             list={list}
+            label={t("pager")}
+            rowsLabel={t("rows")}
             range={(from, to, total) => t("range", { from, to, total })}
             previousLabel={t("previous")}
             nextLabel={t("next")}
