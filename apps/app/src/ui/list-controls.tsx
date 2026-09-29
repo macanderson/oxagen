@@ -148,7 +148,7 @@ function BarSelect({
       items={items}
       value={value}
       onValueChange={(next) => {
-        if (next !== null) onValue(next);
+        if (next !== null && next !== value) onValue(next);
       }}
     >
       <SelectTrigger {...trigger}>
