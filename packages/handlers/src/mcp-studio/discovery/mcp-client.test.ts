@@ -29,7 +29,12 @@ import {
   type IntrospectRequest,
   type McpListRequest,
 } from "./mcp-client";
-import { createScrubber, REDACTED, scrubbedMessage } from "./scrub";
+import {
+  createScrubber,
+  MIN_SECRET_LENGTH,
+  REDACTED,
+  scrubbedMessage,
+} from "./scrub";
 import { DiscoveryRefused } from "./types";
 
 const TOKEN = "tok-s3cr3t-9f8e7d";
@@ -545,6 +550,47 @@ describe("placeCredential", () => {
       `The ${what} holds a line break or a NUL, so no request can carry it.`,
     );
     expect(refusal.message).not.toContain(secret);
+  });
+
+  it.each<[string, SendCredential]>([
+    ["access token", { type: "bearer", token: "t0k" }],
+    ["password", { type: "basic", username: "bot", password: "pw1" }],
+    ["API key", { type: "api_key", value: "k" }],
+  ])("refuses a %s the scrubber is too short to catch", (what, credential) => {
+    const refusal = thrownBy(() =>
+      placeCredential(
+        apiKeyAuth({ type: "api_key", in: "header", name: "X-Api-Key" }),
+        credential,
+        createScrubber(),
+      ),
+    );
+    expect(refusal.code).toBe("credential");
+    expect(refusal.message).toBe(
+      `The ${what} is shorter than ${MIN_SECRET_LENGTH} characters, so discovery cannot keep it out of what it writes.`,
+    );
+  });
+
+  it("places a secret at the scrubber's minimum length and scrubs it", () => {
+    const short = "k".repeat(MIN_SECRET_LENGTH);
+    const scrubber = createScrubber();
+    expect(
+      placeCredential(
+        apiKeyAuth({ type: "api_key", in: "header", name: "X-Api-Key" }),
+        { type: "api_key", value: short },
+        scrubber,
+      ),
+    ).toEqual({ headers: [["X-Api-Key", short]], query: [] });
+    expect(scrubber.scrub(`echo ${short}`)).toBe(`echo ${REDACTED}`);
+  });
+
+  it("places a short basic user name, since only the password is secret", () => {
+    expect(
+      placeCredential(
+        null,
+        { type: "basic", username: "b", password: PASSWORD },
+        createScrubber(),
+      ).headers,
+    ).toHaveLength(1);
   });
 });
 

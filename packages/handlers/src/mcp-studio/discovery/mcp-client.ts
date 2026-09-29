@@ -25,7 +25,7 @@ import {
   type SendCredential,
   type Transport,
 } from "@oxagen/mcp-studio";
-import type { Scrubber } from "./scrub";
+import { MIN_SECRET_LENGTH, type Scrubber } from "./scrub";
 import { DiscoveryRefused } from "./types";
 
 /**
@@ -147,6 +147,22 @@ function checked(value: string, what: string): string {
 }
 
 /**
+ * A secret the scrubber can keep out of what discovery writes. The scrubber
+ * skips a value shorter than MIN_SECRET_LENGTH, so an upstream that echoes
+ * one back could put it in an error row, a snapshot, or a steering PR.
+ */
+function secret(value: string, what: string): string {
+  const safe = checked(value, what);
+  if (safe.length < MIN_SECRET_LENGTH) {
+    throw new DiscoveryRefused(
+      "credential",
+      `The ${what} is shorter than ${MIN_SECRET_LENGTH} characters, so discovery cannot keep it out of what it writes.`,
+    );
+  }
+  return safe;
+}
+
+/**
  * Place the credential as the executor does: a bearer token or a basic pair
  * in Authorization, and an API key where the scheme names. Each value goes
  * into the scrubber before any request carries it.
@@ -165,7 +181,7 @@ export function placeCredential(
         "Discovery through a relay is not available yet.",
       );
     case "bearer": {
-      const token = checked(credential.token, "access token");
+      const token = secret(credential.token, "access token");
       scrubber.add(token);
       return { headers: [["Authorization", `Bearer ${token}`]], query: [] };
     }
@@ -177,7 +193,7 @@ export function placeCredential(
           "A basic credential's user name cannot hold a colon (RFC 7617).",
         );
       }
-      const password = checked(credential.password, "password");
+      const password = secret(credential.password, "password");
       scrubber.add(password);
       const pair = Buffer.from(`${username}:${password}`, "utf8").toString(
         "base64",
@@ -197,7 +213,7 @@ export function placeCredential(
           "An API key needs an api_key auth scheme that names where it goes.",
         );
       }
-      const value = checked(credential.value, "API key");
+      const value = secret(credential.value, "API key");
       scrubber.add(value);
       switch (apply.in) {
         case "header":

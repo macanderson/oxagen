@@ -6,8 +6,11 @@
 // error body, so every text discovery stores or sends passes through the
 // scrubber of the run, which knows each secret the run placed.
 
-/** A secret shorter than this is not scrubbed, so a one-letter value cannot erase the text. */
-const MIN_SECRET_LENGTH = 4;
+/**
+ * A secret shorter than this is not scrubbed, so a one-letter value cannot
+ * erase the text. Discovery refuses to place a shorter secret at all.
+ */
+export const MIN_SECRET_LENGTH = 4;
 
 export const REDACTED = "[redacted]";
 
