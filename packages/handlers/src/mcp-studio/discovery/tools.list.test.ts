@@ -86,6 +86,7 @@ const CREATE_CUSTOMER: RawTool = {
 };
 
 const STRIPE_SERVER = [
+  "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
   'schema = "mcp-server/v1"',
   'name = "stripe"',
   'label = "Stripe"',
@@ -113,6 +114,7 @@ const STRIPE_SERVER = [
 ].join("\n");
 
 const STRIPE_TOOLS = [
+  "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
   'schema = "mcp-tools/v1"',
   "",
   "[tools.list_charges]",

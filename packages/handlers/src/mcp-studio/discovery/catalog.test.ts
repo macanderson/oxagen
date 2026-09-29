@@ -127,11 +127,16 @@ const STRIPE_SOURCE: McpLockSource = {
 };
 
 /** A tools.toml with no keys, for a server nothing is imported from yet. */
-const NO_TOOLS = ['schema = "mcp-tools/v1"', ""].join("\n");
+const NO_TOOLS = [
+  "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
+  'schema = "mcp-tools/v1"',
+  "",
+].join("\n");
 
 /** A server built from a definition Oxagen fetches from a url. */
 function definitionServer(type: "openapi" | "grpc"): string {
   return [
+    "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
     'schema = "mcp-server/v1"',
     'name = "ledger"',
     'label = "Ledger"',
