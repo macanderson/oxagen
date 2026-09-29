@@ -279,7 +279,11 @@ describe("tenant policy manifest", () => {
     // 150 adds mcp.studio_drafts (M11, #4686, 2026-09-28).
     // 151 adds mcp.server_discoveries (M10, #4682, 2026-09-28).
     // 152 adds mcp.relays (M12, #4685, 2026-09-28).
-    expect(POLICY_MANIFEST.length).toBe(152);
+    // 162 adds the ten work.* tables: collectors, inbound_events, items,
+    // item_links, triage_decisions, triage_corrections, done_records,
+    // done_verdicts, autonomy_events and training_exports (C0, #4735,
+    // 2026-09-29).
+    expect(POLICY_MANIFEST.length).toBe(162);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

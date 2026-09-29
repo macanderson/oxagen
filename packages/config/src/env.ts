@@ -171,6 +171,12 @@ export const baseEnvSchema = z.object({
   // Slack token rotation MUST be enabled in the Slack app settings.
   SLACK_DATA_CLIENT_ID: z.string().optional(),
   SLACK_DATA_CLIENT_SECRET: z.string().optional(),
+  // The Oxagen Slack app (not the SLACK_DATA_* connector above). Optional: an
+  // environment without them hides Connect Slack and posts no Slack notices.
+  SLACK_APP_ID: z.string().optional(),
+  SLACK_APP_CLIENT_ID: z.string().optional(),
+  SLACK_APP_CLIENT_SECRET: z.string().optional(),
+  SLACK_APP_SIGNING_SECRET: z.string().optional(),
   ZOOM_DATA_CLIENT_ID: z.string().optional(),
   ZOOM_DATA_CLIENT_SECRET: z.string().optional(),
   SALESFORCE_DATA_CLIENT_ID: z.string().optional(),

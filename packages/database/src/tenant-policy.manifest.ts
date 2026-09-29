@@ -416,4 +416,28 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // hosts may run a local server. Read by the cloud gateway before it signs
   // a local call envelope.
   { table: "tacho.machine_group_members", policyClass: "standard" },
+
+  // ── work.* — work items and the agent work around them
+  //   (agent-work-spec.html, Storage). Every one carries org_id +
+  //   workspace_id NOT NULL → standard tenant_isolation.
+  // A collector, mirrored from its file under work/collectors/.
+  { table: "work.collectors", policyClass: "standard" },
+  // An event a collector heard, keyed by the provider's delivery id.
+  { table: "work.inbound_events", policyClass: "standard" },
+  // A work item and its seventeen fields.
+  { table: "work.items", policyClass: "standard" },
+  // A link between two work items.
+  { table: "work.item_links", policyClass: "standard" },
+  // A triage decision and its triage/v1 output.
+  { table: "work.triage_decisions", policyClass: "standard" },
+  // A field a person changed on a triage decision.
+  { table: "work.triage_corrections", policyClass: "standard" },
+  // A locked done record and its done-record/v1 body.
+  { table: "work.done_records", policyClass: "standard" },
+  // A done record's verdict change. Append only.
+  { table: "work.done_verdicts", policyClass: "standard" },
+  // An autonomy level change. Append only.
+  { table: "work.autonomy_events", policyClass: "standard" },
+  // An export of training examples.
+  { table: "work.training_exports", policyClass: "standard" },
 ];

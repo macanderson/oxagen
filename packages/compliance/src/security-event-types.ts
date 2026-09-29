@@ -460,6 +460,32 @@ export interface RunIssueAuthorizationDetail {
 }
 
 /**
+ * Evidence recorded when an organization connects Slack for steering repo
+ * health notices (`plugin.credential_set`, #4608). `teamId` is the Slack
+ * workspace's id, and `replaced` counts the earlier bot tokens this one
+ * replaced. Never the token.
+ */
+export interface SlackNoticesConnectDetail {
+  feature: "slack_notices";
+  provider: "slack";
+  teamId: string;
+  replaced: number;
+}
+
+/**
+ * Evidence recorded when an organization disconnects Slack
+ * (`plugin.credential_revoked`, #4608). `removed` counts the stored bot
+ * tokens deleted, and `revokedAtSlack` counts the ones Slack confirmed it
+ * revoked.
+ */
+export interface SlackNoticesDisconnectDetail {
+  feature: "slack_notices";
+  provider: "slack";
+  removed: number;
+  revokedAtSlack: number;
+}
+
+/**
  * Evidence recorded on an SSO provider's lifecycle events
  * (`sso.provider_created`, `sso.domain_verified`, `sso.provider_updated`,
  * `sso.provider_deleted`). It names the provider and never carries its
@@ -678,6 +704,8 @@ export type SecurityEventDetail =
   | ScimRequestDeniedDetail
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
+  | SlackNoticesConnectDetail
+  | SlackNoticesDisconnectDetail
   | RunOutcomesPolicyChangeDetail
   | OperatorPseudonymsChangeDetail
   | RuntimeContainmentChangeDetail

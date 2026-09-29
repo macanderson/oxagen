@@ -66,6 +66,8 @@ The commit holds only the files that differ from the branch it lands on. The con
 | `conflict` (409) | `tools_branch_moved`: a commit landed on `tools/<server>` while Review built the folder. Review again |
 | `conflict` (409) | `production_branch_missing`: the steering repo has no production branch |
 | `conflict` (409) | `tools_unclassified`: an imported tool has no risk, side effect, or egress |
+| `conflict` (409) | `test_holds_credential`: a saved test carries an `authorization`, `proxy-authorization`, or `cookie` header. Remove the header, save the draft, and Review again. A draft stored before the save checked tests meets this refusal here |
+| `conflict` (409) | `test_invalid`: a saved test does not make one recorded exchange |
 | `conflict` (409) | `folder_invalid` or `definition_path_invalid`: the folder does not validate or lock, or the definition names a file outside the folder |
 | `conflict` (409) | `server_toml_missing`, `server_toml_invalid`, or `server_name_mismatch`: server.toml is absent, does not parse, or names another server |
 | `conflict` (409) | `source_required`, `source_invalid`, or `importer_not_built`: Review needs the source, the source does not import, or its importer has not shipped |

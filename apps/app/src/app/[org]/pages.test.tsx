@@ -939,6 +939,30 @@ describe("Organization", () => {
       ctx,
       source,
       tab: "people",
+      slack: null,
+    });
+  });
+
+  it("hands Notifications the Slack outcome the callback named, and none for a value it did not (negative)", async () => {
+    requireViewer.mockResolvedValue({ orgSlug: "acme", orgRole: "owner" });
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "notifications", slack: "connected" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "notifications",
+      slack: "connected",
+    });
+    Organization.mockClear();
+    await expectOrganizationRoute(
+      await import("./page"),
+      routeProps(SEGMENTS, { tab: "notifications", slack: "xoxb-token" }),
+      title("people"),
+    );
+    expect(Organization.mock.calls[0]?.[0]).toMatchObject({
+      tab: "notifications",
+      slack: null,
     });
   });
 

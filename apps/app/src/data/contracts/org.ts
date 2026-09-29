@@ -245,6 +245,57 @@ export const ModelCredential = z.object({
 export type ModelCredential = z.infer<typeof ModelCredential>;
 
 /**
+ * One Slack channel as `list_slack_channels` and `get_slack_connection` report
+ * it. `channelRef` is Slack's own channel id (`C…` or `G…`), a foreign id, so
+ * it carries the `…Ref` name (INV-11). A private channel appears only when the
+ * Oxagen bot is already a member of it.
+ */
+export const SlackChannel = z.object({
+  channelRef: z.string().min(1).max(32),
+  name: z.string().min(1).max(200),
+  isPrivate: z.boolean(),
+});
+export type SlackChannel = z.infer<typeof SlackChannel>;
+
+/**
+ * The last post to Slack that failed: Slack's error code, or Oxagen's own code
+ * when the stored token could not be read, and when it happened.
+ */
+export const SlackFailure = z.object({
+  code: z.string().min(1).max(100),
+  at: z.iso.datetime({ offset: true }),
+});
+export type SlackFailure = z.infer<typeof SlackFailure>;
+
+/**
+ * The organisation's Slack connection as `get_slack_connection` reports it
+ * (#4608): whether this deployment has a Slack app at all (`configured`),
+ * whether the organisation connected one, the Slack workspace name, the
+ * channel steering repo health notices post to, and the last failed post.
+ * Never the bot token: the contract has no field for it, and this view model
+ * has none either.
+ */
+export const SlackConnection = z.object({
+  configured: z.boolean(),
+  connected: z.boolean(),
+  teamName: z.string().min(1).max(200).nullable(),
+  channel: SlackChannel.nullable(),
+  lastFailure: SlackFailure.nullable(),
+  connectedAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type SlackConnection = z.infer<typeof SlackConnection>;
+
+/**
+ * The channels `list_slack_channels` returns, and whether Slack held more
+ * than the list carries.
+ */
+export const SlackChannelList = z.object({
+  channels: z.array(SlackChannel),
+  truncated: z.boolean(),
+});
+export type SlackChannelList = z.infer<typeof SlackChannelList>;
+
+/**
  * The roles `change_member_role` can grant. `bootstrapOrgIAM` seeds four
  * org-scoped roles (`ORG_ROLES`, packages/handlers/src/iam-provision.ts:55-60)
  * and the handler resolves `newRole` against that set; `member` and `viewer`
