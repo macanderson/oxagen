@@ -1,6 +1,7 @@
 // call.test.ts: a served tools/call from each source in each exposure mode,
 // decided on the real tool, parked, refused, and metered (lane M15).
 import type { CallToolResult, ManifestServer, RequestKind } from "@oxagen/mcp-studio";
+import type { PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
 import { callServed, sandboxOf, unbuiltRoute } from "../call";
 import type { Ranker, SearchEntry } from "../search";
@@ -11,6 +12,7 @@ import {
   HASH,
   NOW,
   OPERATOR,
+  POLICIES,
   RELAY,
   SOURCES,
   fakePorts,
@@ -212,12 +214,69 @@ describe("callServed policy decisions", () => {
     expect(outcomes(recorded)).toEqual(["call billing__create_refund parked"]);
   });
 
-  it("sends an approved call", async () => {
-    const { call, recorded } = await setup({ approval: () => Promise.resolve({ state: "approved", id: "apr_3" }) });
+  it("sends an approved call and uses its approval", async () => {
+    const { call, recorded } = await setup({ approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }) });
     const result = await call("billing__create_refund", REFUND);
     expect(result?.isError).not.toBe(true);
     expectCarried(recorded, "http");
+    expect(recorded.claims).toEqual([{ request: recorded.approvals[0], approvers: 1 }]);
+    expect(recorded.requested).toEqual([]);
     expect(outcomes(recorded)).toEqual(["call billing__create_refund allowed"]);
+  });
+
+  it("does not send a call whose approval another call used first", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      claim: () => Promise.resolve(false),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Approval apr_3 no longer covers billing__create_refund, because another call used it or it expired. Oxagen did not send the call. Call the tool again with the same arguments to ask for a new approval.",
+    );
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("fails a call when its approval cannot be used, and logs only the error's name", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+      claim: () => Promise.reject(new Error("approval_requests for org_1 is locked")),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not use approval apr_3 for billing__create_refund, so it was not sent. Call it again in a minute.",
+    );
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not use the approval, so the call was not sent.",
+        fields: { tool: "billing__create_refund", error: "Error" },
+      },
+    ]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("leaves an approval unused when the call cannot be sent", async () => {
+    const version = published({
+      servers: [
+        server({
+          ...sourceNamed("billing"),
+          environments: {
+            production: { sandbox: false, network: "cloud", credential: "oxagen:credential/billing-live" },
+          },
+        }),
+      ],
+    });
+    const { call, recorded } = await setup(
+      { approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }) },
+      version,
+    );
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toContain("billing has no sandbox environment");
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
   });
 
   it("denies a call a person refused", async () => {
@@ -363,6 +422,121 @@ describe("callServed off switches", () => {
     expect(textOf(result)).toBe("Oxagen withholds billing__list_charges from every agent, so it was not sent.");
     nothingSent(recorded);
     expect(outcomes(recorded)).toEqual(["call billing__list_charges denied"]);
+  });
+});
+
+/** A rule that asks this many people to approve a refund over $1,000, like payments.two-approvers. */
+function approversRule(people: number): PolicyFile {
+  return {
+    path: "policy/approvals.cedar",
+    text: `@id("refunds.${people}-approvers")
+@decision("require_approval")
+forbid (principal, action, resource)
+when {
+  context.tool.impacts.contains("moves_money") &&
+  context.args has amount &&
+  context.args.amount > 100000
+}
+unless { context.approval.granted && context.approval.approvers >= ${people} };`,
+  };
+}
+
+/** The fixture policies with the approval rule replaced by one that asks for `people` approvers. */
+function needsApprovers(people: number): PublishedTools {
+  return published({
+    policies: [approversRule(people), ...POLICIES.filter((file) => file.path !== "policy/approvals.cedar")],
+  });
+}
+
+const LARGE_REFUND = { charge: "ch_1", amount: 245_000 };
+
+function approvedBy(approvers: number): PortOptions {
+  return { approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers }) };
+}
+
+describe("callServed approver counts", () => {
+  it("parks the first call under a two-person rule like any approval", async () => {
+    const { call, recorded } = await setup({}, needsApprovers(2));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(textOf(result)).toBe(
+      "billing__create_refund waits for a person's approval under refunds.2-approvers. Oxagen opened approval apr_1. Call the tool again with the same arguments once it is approved.",
+    );
+    expect(recorded.requested).toEqual([]);
+    expect(recorded.claims).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund parked"]);
+  });
+
+  it("parks a call a two-person rule holds after one approval, and asks another person", async () => {
+    const { call, recorded } = await setup(approvedBy(1), needsApprovers(2));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(result?.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      "billing__create_refund needs approval from another person under refunds.2-approvers. One person has approved it so far. Oxagen opened approval apr_4. Call the tool again with the same arguments once another person approves it.",
+    );
+    expect(recorded.requested).toEqual([{ ...recorded.approvals[0], reasons: ["refunds.2-approvers"] }]);
+    expect(recorded.claims).toEqual([]);
+    expect(recorded.credentials).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund parked"]);
+  });
+
+  it("sends a call a two-person rule holds once two people approved, and uses both approvals", async () => {
+    const { call, recorded } = await setup(approvedBy(2), needsApprovers(2));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(result?.isError).not.toBe(true);
+    expectCarried(recorded, "http");
+    expect(recorded.requested).toEqual([]);
+    expect(recorded.claims).toEqual([{ request: recorded.approvals[0], approvers: 2 }]);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund allowed"]);
+  });
+
+  it("does not send a call when fewer people answer for it at the claim than at the decision", async () => {
+    const { call, recorded } = await setup({ ...approvedBy(2), claim: () => Promise.resolve(false) }, needsApprovers(2));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(textOf(result)).toContain("Approval apr_3 no longer covers billing__create_refund");
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
+  });
+
+  it("counts the people so far when a rule asks for three", async () => {
+    const { call } = await setup(approvedBy(2), needsApprovers(3));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(textOf(result)).toContain("under refunds.3-approvers. 2 people have approved it so far. Oxagen opened approval apr_4.");
+  });
+
+  it("counts no person for an approval an automatic rule resolved", async () => {
+    const { call } = await setup(approvedBy(0), needsApprovers(2));
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(textOf(result)).toContain("No person has approved it yet.");
+  });
+
+  it("sends a refund under the limit without asking anyone", async () => {
+    const { call, recorded } = await setup({}, needsApprovers(2));
+    const result = await call("billing__create_refund", REFUND);
+    expect(result?.isError).not.toBe(true);
+    expect(recorded.approvals).toEqual([]);
+    expect(recorded.claims).toEqual([]);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund allowed"]);
+  });
+
+  it("fails a call when another approval cannot be opened", async () => {
+    const { call, recorded } = await setup(
+      { ...approvedBy(1), another: () => Promise.reject(new Error("approvals table is locked")) },
+      needsApprovers(2),
+    );
+    const result = await call("billing__create_refund", LARGE_REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not open an approval for billing__create_refund, so it was not sent. Call it again in a minute.",
+    );
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not open an approval, so the call was not sent.",
+        fields: { tool: "billing__create_refund", error: "Error" },
+      },
+    ]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
 });
 

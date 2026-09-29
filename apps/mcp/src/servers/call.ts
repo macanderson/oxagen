@@ -23,6 +23,7 @@ import { unserved, visibleTools, type ServedTool, type ServedView } from "./snap
 import {
   ServedRouteError,
   type Admission,
+  type ApprovalRequest,
   type ApprovalState,
   type EmergencyDeny,
   type MeterKind,
@@ -230,6 +231,21 @@ async function emergencyRefusal(
   );
 }
 
+/** The refusal for an approval Oxagen could not read or open. Logs only the error's name. */
+function approvalFailed(ports: ServedPorts, tool: string, error: unknown): Answer {
+  ports.log.warn("Oxagen could not open an approval, so the call was not sent.", { tool, error: errorName(error) });
+  return refusal(`Oxagen could not open an approval for ${tool}, so it was not sent. Call it again in a minute.`, "failed");
+}
+
+/**
+ * How many people approved a call so far, as a sentence. An approval an
+ * auto-approval rule resolved names no person, so it counts none.
+ */
+function peopleApproved(approvers: number): string {
+  if (approvers === 0) return "No person has approved it yet.";
+  return approvers === 1 ? "One person has approved it so far." : `${approvers} people have approved it so far.`;
+}
+
 /** Decide one call to an imported tool, park it or run it, and say how it ended. */
 async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, args: Record<string, unknown>): Promise<Answer> {
   const { server, tool } = entry;
@@ -285,27 +301,27 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     });
 
   let verdict = decide();
+  // The approvals the call is sent on. Claimed just before the call is sent,
+  // so a call that fails a later check leaves them for the retry.
+  let approved: { request: ApprovalRequest; id: string; approvers: number } | null = null;
   if (verdict.decision === "require_approval" && verdict.errors.length === 0) {
+    const request: ApprovalRequest = {
+      run: view.run,
+      agent,
+      tool: tool.name,
+      version: tool.version,
+      publication:
+        view.published === null ? null : { repository: view.published.repository, version: view.published.version },
+      server: server.name,
+      args,
+      reasons: verdict.reasons,
+      risk: tool.classification.risk,
+    };
     let approval: ApprovalState;
     try {
-      approval = await ports.approvals.settle({
-        run: view.run,
-        agent,
-        tool: tool.name,
-        version: tool.version,
-        publication:
-          view.published === null ? null : { repository: view.published.repository, version: view.published.version },
-        server: server.name,
-        args,
-        reasons: verdict.reasons,
-        risk: tool.classification.risk,
-      });
+      approval = await ports.approvals.settle(request);
     } catch (error) {
-      ports.log.warn("Oxagen could not open an approval, so the call was not sent.", {
-        tool: tool.name,
-        error: errorName(error),
-      });
-      return refusal(`Oxagen could not open an approval for ${tool.name}, so it was not sent. Call it again in a minute.`, "failed");
+      return approvalFailed(ports, tool.name, error);
     }
     if (approval.state === "pending") {
       return refusal(
@@ -316,7 +332,22 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     if (approval.state === "refused") {
       return refusal(`A person refused ${tool.name} under approval ${approval.id}, so it was not sent.`, "denied");
     }
-    verdict = decide({ granted: true, approvers: 1 });
+    // The second decision reads how many distinct people approved, so a rule
+    // that asks for two people parks the call again after one.
+    verdict = decide({ granted: true, approvers: approval.approvers });
+    if (verdict.decision === "require_approval" && verdict.errors.length === 0) {
+      let another: { id: string };
+      try {
+        another = await ports.approvals.requestAnother({ ...request, reasons: verdict.reasons });
+      } catch (error) {
+        return approvalFailed(ports, tool.name, error);
+      }
+      return refusal(
+        `${tool.name} needs approval from another person under ${verdict.reasons.join(", ")}. ${peopleApproved(approval.approvers)} Oxagen opened approval ${another.id}. Call the tool again with the same arguments once another person approves it.`,
+        "parked",
+      );
+    }
+    approved = { request, id: approval.id, approvers: approval.approvers };
   }
   if (verdict.errors.length > 0) {
     return refusal(
@@ -334,6 +365,25 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   }
   const transport = transportFor(ports, { network: environment.network, server, run: view.run });
   if (transport instanceof ServedRouteError) return refusal(transport.message, "failed");
+
+  if (approved !== null) {
+    let claimed: boolean;
+    try {
+      claimed = await ports.approvals.claim(approved.request, approved.approvers);
+    } catch (error) {
+      ports.log.warn("Oxagen could not use the approval, so the call was not sent.", {
+        tool: tool.name,
+        error: errorName(error),
+      });
+      return refusal(`Oxagen could not use approval ${approved.id} for ${tool.name}, so it was not sent. Call it again in a minute.`, "failed");
+    }
+    if (!claimed) {
+      return refusal(
+        `Approval ${approved.id} no longer covers ${tool.name}, because another call used it or it expired. Oxagen did not send the call. Call the tool again with the same arguments to ask for a new approval.`,
+        "failed",
+      );
+    }
+  }
 
   try {
     const result = await execute(

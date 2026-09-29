@@ -340,6 +340,10 @@ export interface Recorded {
   meter: MeterEvent[];
   logs: LogLine[];
   approvals: ApprovalRequest[];
+  /** The calls that asked for one more approval. */
+  requested: ApprovalRequest[];
+  /** The approvals a call used, with the number of people it needed. */
+  claims: Array<{ request: ApprovalRequest; approvers: number }>;
   /** The calls checked against the kill switches. */
   emergencyDenies: EmergencyCall[];
   credentials: CredentialRequest[];
@@ -353,6 +357,10 @@ export interface PortOptions {
   withheld?: string[];
   admit?: (run: ServedRun) => Promise<Admission>;
   approval?: (request: ApprovalRequest) => Promise<ApprovalState>;
+  /** Answers requestAnother. Defaults to a new pending approval, apr_4. */
+  another?: (request: ApprovalRequest) => Promise<{ id: string }>;
+  /** Answers claim. Defaults to true. */
+  claim?: (request: ApprovalRequest, approvers: number) => Promise<boolean>;
   /** The kill switch that stops a call. Defaults to none. */
   emergencyDeny?: (call: EmergencyCall) => Promise<EmergencyDeny | null>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
@@ -379,6 +387,8 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     meter: [],
     logs: [],
     approvals: [],
+    requested: [],
+    claims: [],
     emergencyDenies: [],
     credentials: [],
     routes: [],
@@ -420,6 +430,14 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
       settle: (request) => {
         recorded.approvals.push(request);
         return options.approval?.(request) ?? Promise.resolve({ state: "pending", id: "apr_1" });
+      },
+      requestAnother: (request) => {
+        recorded.requested.push(request);
+        return options.another?.(request) ?? Promise.resolve({ id: "apr_4" });
+      },
+      claim: (request, approvers) => {
+        recorded.claims.push({ request, approvers });
+        return options.claim?.(request, approvers) ?? Promise.resolve(true);
       },
     },
     credentials: {

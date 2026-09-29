@@ -78,7 +78,13 @@ export interface OffSwitches {
 
 /** Where a parked call's approval stands. */
 export type ApprovalState =
-  | { state: "approved"; id: string }
+  | {
+      state: "approved";
+      /** The first approval that answers for the call. */
+      id: string;
+      /** The distinct people who approved the call. A rule can ask for more than one. */
+      approvers: number;
+    }
   | { state: "pending"; id: string }
   | { state: "refused"; id: string };
 
@@ -107,10 +113,22 @@ export interface ApprovalRequest {
 
 export interface ServedApprovals {
   /**
-   * Find the approval for this exact call, or open one. An approved
-   * approval is claimed, so it lets one call through.
+   * Where the approvals for this exact call stand, opening one when there is
+   * none. A refusal outweighs a pending approval, and a pending approval
+   * outweighs the approved ones. Settling uses no approval: only claim does.
    */
   settle(request: ApprovalRequest): Promise<ApprovalState>;
+  /**
+   * Open one more approval for a call whose approvals are too few for its
+   * rule. When one is already pending, that one answers.
+   */
+  requestAnother(request: ApprovalRequest): Promise<{ id: string }>;
+  /**
+   * Use every approval that answers for the call, so they let this one call
+   * through and no other. False when fewer than `approvers` people still
+   * answer for it, because another call used them or they expired.
+   */
+  claim(request: ApprovalRequest, approvers: number): Promise<boolean>;
 }
 
 /** The facts about one call that a kill switch can name. */
