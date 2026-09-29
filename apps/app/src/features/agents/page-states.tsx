@@ -189,16 +189,15 @@ export function AgentNeverRan({ fleet }: { fleet: SafePath }) {
 /**
  * The loading state: the shell stays, and the body is four tile blocks and a
  * panel of seven rows (spec, States), each bone the design's `.sk` shimmer,
- * so no figure flashes as a zero before the reads land. The frame keeps the page's container classes but is not
- * `main#main`: while the page streams in, the document holds this fallback
- * and the hidden page together, and only the page may own the landmark, or
- * the skip link gets two targets and page-load's strict locator fails
- * (#4036, and Billing on 2026-09-24).
+ * so no figure flashes as a zero before the reads land. The frame sits inside
+ * the shell's `main#main`, the page's one landmark (ADR-227). A `main` here
+ * would give the skip link two targets while the page streams in beside it,
+ * and page-load's strict locator would fail (#4036, #4053).
  */
 export function AgentLoading() {
   const t = useTranslations("agents.states");
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10">
+    <div className="flex w-full flex-col gap-4">
       <div
         role="status"
         aria-busy="true"

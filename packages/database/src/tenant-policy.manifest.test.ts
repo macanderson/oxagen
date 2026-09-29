@@ -46,8 +46,9 @@ describe("tenant policy manifest", () => {
   });
 
   it("omits immutable children that carry no org columns", () => {
-    // A manifest policy on them cannot compile. RLS is not transitive via FK,
-    // so agent.agent_versions has no row isolation of its own (#2156).
+    // A manifest policy on them cannot compile. agent.agent_versions carries
+    // its own policy that checks the parent agent instead
+    // (20260929124500_agent_versions_rls.sql, #2156).
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).not.toContain("agent.agent_versions");
   });

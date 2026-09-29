@@ -131,6 +131,15 @@ describe("the release run's rows", () => {
     expect(read.output).toContain("## 4.10.3");
   });
 
+  it("keeps each path whole for the hover card, and the row's line when nothing was shortened (#4692)", () => {
+    const tools = rows.filter((row) => row.kind === "tool");
+    const read = toolOf(tools.find((row) => toolOf(row).name === "Read"));
+    expect(read.arg).toBe("…/platform/CHANGELOG.md");
+    expect(read.whole).toBe("/Users/mbell/src/platform/CHANGELOG.md");
+    const list = toolOf(tools[0]);
+    expect(list.whole).toBe(list.arg);
+  });
+
   it("reads a new file as a diff of additions, and an edit as its change", () => {
     const tools = rows.filter((row) => row.kind === "tool");
     const write = toolOf(tools.find((row) => toolOf(row).name === "Write"));

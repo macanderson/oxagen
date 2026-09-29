@@ -90,27 +90,47 @@ export async function chSelect<T>(q: {
   return result.json<T>();
 }
 
-/** Scope the source before any caller predicate, grouping, or aggregation. */
-function scopeSelectSource(query: string): string {
-  const source = /\bFROM\s+([a-z_][a-z0-9_]*)(\s+FINAL)?(?=\s|$)/i.exec(query);
+/**
+ * Replace each query parameter's name with `x`s of the same length, so a
+ * parameter named `from` or `in` is not read as a keyword. Only the name of a
+ * whole `{name:Type}` placeholder changes. Offsets into the result are
+ * offsets into the query.
+ */
+function maskParameterNames(query: string): string {
+  return query.replace(
+    /\{([a-z_]\w*)(?=:[^{}]*\})/gi,
+    (_match, name: string) => `{${"x".repeat(name.length)}`,
+  );
+}
+
+/**
+ * Scope the source before any caller predicate, grouping, or aggregation.
+ * Throws `TenantScopeError` for a query shape the fence cannot scope.
+ * Exported so a reader can check its query without a ClickHouse client.
+ */
+export function scopeSelectSource(query: string): string {
+  const shape = maskParameterNames(query);
+  const source = /\bFROM\s+([a-z_][a-z0-9_]*)(\s+FINAL)?(?=\s|$)/i.exec(shape);
   const supported =
-    /^\s*SELECT\b/i.test(query) &&
-    (query.match(/\bSELECT\b/gi)?.length ?? 0) === 1 &&
-    (query.match(/\bFROM\b/gi)?.length ?? 0) === 1 &&
+    /^\s*SELECT\b/i.test(shape) &&
+    (shape.match(/\bSELECT\b/gi)?.length ?? 0) === 1 &&
+    (shape.match(/\bFROM\b/gi)?.length ?? 0) === 1 &&
     // IN may read another table without a FROM. Admit value lists and array
     // parameters only, so table names and table functions cannot add a source.
-    !/\bIN\b(?!\s*(?:\(|\[|\{[a-z_]\w*:Array\())/i.test(query) &&
+    !/\bIN\b(?!\s*(?:\(|\[|\{[a-z_]\w*:Array\())/i.test(shape) &&
     !/;|--|\/\*|\*\/|#|\b(?:JOIN|UNION|INTERSECT|EXCEPT|WITH|INTO|SETTINGS|FORMAT)\b/i.test(
-      query,
+      shape,
     );
   if (!supported || !source) {
     throw new TenantScopeError(
       "ClickHouse org_id isolation requires a single-table SELECT",
     );
   }
-  const tail = query.slice(source.index + source[0].length);
+  const end = source.index + source[0].length;
   if (
-    !/^\s*(?:$|WHERE\b|GROUP\s+BY\b|HAVING\b|ORDER\s+BY\b|LIMIT\b)/i.test(tail)
+    !/^\s*(?:$|WHERE\b|GROUP\s+BY\b|HAVING\b|ORDER\s+BY\b|LIMIT\b)/i.test(
+      shape.slice(end),
+    )
   ) {
     throw new TenantScopeError(
       "ClickHouse org_id isolation does not support this table source",
@@ -121,6 +141,6 @@ function scopeSelectSource(query: string): string {
   return (
     query.slice(0, source.index) +
     `FROM (SELECT * FROM ${table}${final} WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}) AS ${table}` +
-    tail
+    query.slice(end)
   );
 }
