@@ -46,6 +46,8 @@ const SCOPE = {
 const PRODUCTION_HEAD = "1111111111111111111111111111111111111111";
 const BRANCH_HEAD = "2222222222222222222222222222222222222222";
 const NEW_SHA = "3333333333333333333333333333333333333333";
+/** A production commit older than PRODUCTION_HEAD, which a caller read before a merge. */
+const READ_SHA = "4444444444444444444444444444444444444444";
 const NOW = new Date("2026-09-28T21:00:00.000Z");
 
 const GITHUB_REPO: SteeringRepository = {
@@ -134,6 +136,10 @@ function fakeHost(options: FakeHostOptions = {}) {
     async ensureBranch(target, branch, fromBranch, opts) {
       record("ensureBranch", target, { branch, fromBranch, opts });
       branches.set(branch, opts?.at ?? PRODUCTION_HEAD);
+    },
+    async deleteBranch(target, branch) {
+      record("deleteBranch", target, { branch });
+      branches.delete(branch);
     },
     async commitFiles(target, commit) {
       record("commitFiles", target, commit);
@@ -374,6 +380,78 @@ describe("createToolsPullRequestOpener, a new PR", () => {
     ).toEqual(["ensureBranch", "commitFiles", "openPullRequest", "reportCheckRun"]);
   });
 
+  it("branches from the commit the caller read, not a newer production head", async () => {
+    const { host } = fakeHost();
+    await opener(host).open(SCOPE, args({ at: READ_SHA }));
+
+    // A merge after READ_SHA stays out of this commit's parent, so the PR
+    // cannot undo it.
+    expect(host.ensureBranch).toHaveBeenCalledWith(
+      GITHUB_REPO,
+      "tools/billing",
+      "main",
+      { exclusive: true, at: READ_SHA },
+    );
+    expect(host.commitFiles).toHaveBeenCalledWith(
+      GITHUB_REPO,
+      expect.objectContaining({ branch: "tools/billing", parent: READ_SHA }),
+    );
+    expect(mocks.checkSteeringChange).toHaveBeenCalledWith(
+      expect.objectContaining({ head: NEW_SHA, base: READ_SHA }),
+    );
+  });
+
+  it("answers the open PR when the check does not report", async () => {
+    const { host } = fakeHost();
+    vi.mocked(host.reportCheckRun).mockRejectedValueOnce(
+      new Error("check runs are down"),
+    );
+    const result = await opener(host).open(SCOPE, args());
+
+    expect(result).toEqual({
+      number: 17,
+      url: "https://example.test/acme/steering/pull/17",
+      branch: "tools/billing",
+      headSha: NEW_SHA,
+    });
+    expect(host.deleteBranch).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ head: NEW_SHA }),
+      "tools.pr.open: the Oxagen steering check was not reported",
+    );
+  });
+
+  it("deletes the branch when the PR does not open, so a retry succeeds", async () => {
+    const { host, branches } = fakeHost();
+    const down = new Error("pull requests are down");
+    vi.mocked(host.openPullRequest).mockRejectedValueOnce(down);
+
+    await expect(opener(host).open(SCOPE, args())).rejects.toBe(down);
+    expect(host.deleteBranch).toHaveBeenCalledWith(GITHUB_REPO, "tools/billing");
+    expect(branches.has("tools/billing")).toBe(false);
+    expect(host.reportCheckRun).not.toHaveBeenCalled();
+
+    const result = await opener(host).open(SCOPE, args());
+    expect(result.number).toBe(17);
+  });
+
+  it("passes on the first failure when the branch cannot be deleted", async () => {
+    const { host } = fakeHost();
+    const down = new Error("pull requests are down");
+    vi.mocked(host.openPullRequest).mockRejectedValueOnce(down);
+    vi.mocked(host.deleteBranch).mockRejectedValueOnce(
+      new Error("refs are down"),
+    );
+
+    await expect(opener(host).open(SCOPE, args())).rejects.toBe(down);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "tools/billing" }),
+      "tools.pr.open: the branch of a PR that did not open was not deleted",
+    );
+  });
+
   it("refuses a branch that already exists", async () => {
     const { host } = fakeHost({
       branches: { main: PRODUCTION_HEAD, "tools/billing": BRANCH_HEAD },
@@ -538,6 +616,36 @@ describe("createToolsPullRequestOpener, an existing PR", () => {
     expect(
       await reasonOf(opener(host).open(SCOPE, args({ existing: { number: 12 } }))),
     ).toBe("tools_pr_not_open");
+  });
+
+  it("adds the commit when the branch is still at the commit the caller read", async () => {
+    const { host } = fakeHost({
+      branches: { main: PRODUCTION_HEAD, "tools/billing": BRANCH_HEAD },
+      openPr: OPEN_PR,
+    });
+    const result = await opener(host).open(
+      SCOPE,
+      args({ existing: { number: 12 }, at: BRANCH_HEAD }),
+    );
+    expect(result.headSha).toBe(NEW_SHA);
+    expect(host.commitFiles).toHaveBeenCalledWith(
+      GITHUB_REPO,
+      expect.objectContaining({ parent: BRANCH_HEAD }),
+    );
+  });
+
+  it("refuses a branch that moved off the commit the caller read", async () => {
+    const { host } = fakeHost({
+      branches: { main: PRODUCTION_HEAD, "tools/billing": BRANCH_HEAD },
+      openPr: OPEN_PR,
+    });
+    expect(
+      await reasonOf(
+        opener(host).open(SCOPE, args({ existing: { number: 12 }, at: READ_SHA })),
+      ),
+    ).toBe("tools_branch_moved");
+    expect(host.commitFiles).not.toHaveBeenCalled();
+    expect(host.updatePullRequest).not.toHaveBeenCalled();
   });
 
   it("refuses when the branch is gone", async () => {

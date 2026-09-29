@@ -453,7 +453,7 @@ function defaultOf(field: Field, where: string, build: Build): string | undefine
     if (INTEGER_TYPES.has(field.type)) {
       return Number.isSafeInteger(raw) ? String(raw) : drop("past 2^53, which protobufjs rounds");
     }
-    return doubleText(raw);
+    return field.type === "float" ? floatText(raw) : doubleText(raw);
   }
   if (typeof raw !== "string") return drop("import cannot read");
   if ((field.type === "string" || field.type === "bytes") && build.escapedDefaults.has(raw)) {
@@ -463,11 +463,9 @@ function defaultOf(field: Field, where: string, build: Build): string | undefine
 }
 
 /**
- * A float or double as protoc writes it in default_value: C's %.15g, or
- * %.17g when %.15g does not read back as the same number. 1e20 is "1e+20",
- * 0.1 is "0.1", and -0 is "-0". JavaScript rounds an exact tie away from
- * zero and C rounds it to even, so a value that falls exactly halfway at the
- * last digit kept, such as 1234567890123456.25, can end one digit off.
+ * A double as protoc writes it in default_value: C's %.15g, or %.17g when
+ * %.15g does not read back as the same number (SimpleDtoa). 1e20 is
+ * "1e+20", 0.1 is "0.1", and -0 is "-0".
  */
 export function doubleText(value: number): string {
   if (Number.isNaN(value)) return "nan";
@@ -478,20 +476,101 @@ export function doubleText(value: number): string {
   return Number(short) === value ? short : formatG(value, 17);
 }
 
-/** C's %.<precision>g for a finite number. */
-function formatG(value: number, precision: number): string {
-  const [mantissa = "", exp = "0"] = value.toExponential(precision - 1).split("e");
-  const exponent = Number(exp);
-  if (exponent < -4 || exponent >= precision) {
-    const sign = exponent < 0 ? "-" : "+";
-    return `${trimZeros(mantissa)}e${sign}${String(Math.abs(exponent)).padStart(2, "0")}`;
-  }
-  return trimZeros(value.toFixed(precision - 1 - exponent));
+/** FLT_MAX, the largest finite float32. */
+const FLOAT_MAX = 3.4028234663852886e38;
+/**
+ * protoc's MAX_FLOAT_AS_DOUBLE_ROUNDED. A double above FLT_MAX and no larger
+ * than this rounds down to FLT_MAX. A larger one becomes inf.
+ */
+const FLOAT_MAX_ROUNDED = 3.4028235677973366e38;
+
+/**
+ * A float as protoc writes it in default_value. protoc casts the double it
+ * parsed to float32 (SafeDoubleToFloat), then writes that float with C's
+ * %.6g, or %.9g when %.6g does not read back as the same float (SimpleFtoa).
+ * So 0.3333333333333333 is "0.333333343", 1e10 is "1e+10", and 1e39 is "inf".
+ */
+export function floatText(value: number): string {
+  const float = toFloat32(value);
+  if (Number.isNaN(float)) return "nan";
+  if (float === Infinity) return "inf";
+  if (float === -Infinity) return "-inf";
+  if (Object.is(float, -0)) return "-0";
+  const short = formatG(float, 6);
+  return Math.fround(Number(short)) === float ? short : formatG(float, 9);
 }
 
-/** Drops the trailing zeros after a decimal point, and the point when nothing follows it. */
-function trimZeros(text: string): string {
-  return text.includes(".") ? text.replace(/\.?0+$/, "") : text;
+/** A double cast to float32 the way protoc's SafeDoubleToFloat casts it. */
+function toFloat32(value: number): number {
+  if (value > FLOAT_MAX) {
+    return value <= FLOAT_MAX_ROUNDED ? FLOAT_MAX : Infinity;
+  }
+  if (value < -FLOAT_MAX) {
+    return value >= -FLOAT_MAX_ROUNDED ? -FLOAT_MAX : -Infinity;
+  }
+  return Math.fround(value);
+}
+
+/**
+ * C's %.<precision>g for a finite number. It rounds the number's exact binary
+ * value and breaks an exact tie to even, as C does. JavaScript's toExponential
+ * breaks a tie upward instead, so 0.0001220703125 (2^-13) at nine digits
+ * would come out "0.000122070313" where C writes "0.000122070312".
+ */
+function formatG(value: number, precision: number): string {
+  if (value === 0) return "0";
+  if (value < 0) return `-${formatG(-value, precision)}`;
+  const { coefficient, scale } = exactDecimal(value);
+  const digits = coefficient.toString();
+  let exponent = digits.length - 1 - scale;
+  let kept: bigint;
+  if (digits.length <= precision) {
+    kept = coefficient * 10n ** BigInt(precision - digits.length);
+  } else {
+    const unit = 10n ** BigInt(digits.length - precision);
+    const rest = coefficient % unit;
+    const half = unit / 2n;
+    kept = coefficient / unit;
+    if (rest > half || (rest === half && kept % 2n === 1n)) kept += 1n;
+  }
+  let text = kept.toString();
+  if (text.length > precision) {
+    // Rounding carried into a new digit, as 9.99 does at two digits.
+    text = text.slice(0, precision);
+    exponent += 1;
+  }
+  if (exponent < -4 || exponent >= precision) {
+    const sign = exponent < 0 ? "-" : "+";
+    const power = String(Math.abs(exponent)).padStart(2, "0");
+    return `${pointed(text.slice(0, 1), text.slice(1))}e${sign}${power}`;
+  }
+  if (exponent < 0) return pointed("0", `${"0".repeat(-exponent - 1)}${text}`);
+  return pointed(text.slice(0, exponent + 1), text.slice(exponent + 1));
+}
+
+/**
+ * whole.fraction with the fraction's trailing zeros dropped. When no digit is
+ * left after the point, the point goes too.
+ */
+function pointed(whole: string, fraction: string): string {
+  const kept = fraction.replace(/0+$/, "");
+  return kept ? `${whole}.${kept}` : whole;
+}
+
+/** A positive finite double's exact value as coefficient / 10^scale. */
+function exactDecimal(value: number): { coefficient: bigint; scale: number } {
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, value);
+  const bits = view.getBigUint64(0);
+  const biased = Number((bits >> 52n) & 0x7ffn);
+  const fraction = bits & 0xf_ffff_ffff_ffffn;
+  // A subnormal has no implicit leading bit. Its exponent is the smallest
+  // normal's.
+  const mantissa = biased === 0 ? fraction : fraction | (1n << 52n);
+  const power = (biased === 0 ? 1 : biased) - 1075;
+  if (power >= 0) return { coefficient: mantissa << BigInt(power), scale: 0 };
+  // m / 2^k is m * 5^k / 10^k.
+  return { coefficient: mantissa * 5n ** BigInt(-power), scale: -power };
 }
 
 /** The string and bytes defaults a file writes with a backslash, as protobufjs unescapes them. */

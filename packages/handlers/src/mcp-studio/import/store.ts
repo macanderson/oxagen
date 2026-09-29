@@ -169,13 +169,24 @@ async function readLive(
   server: string,
   lock: boolean,
 ): Promise<(Row & { id: string }) | null> {
-  const query = tx
+  if (lock) {
+    // Lock the draft row in its own query. Postgres cannot lock the nullable
+    // side of the left join below, and it refuses the schema-qualified name
+    // Drizzle writes for `FOR UPDATE OF`. The joined read that follows starts
+    // after the lock is held, so it sees what any earlier save committed.
+    await tx
+      .select({ id: drafts.id })
+      .from(drafts)
+      .where(liveDraft(scope, server))
+      .limit(1)
+      .for("update");
+  }
+  const [row] = await tx
     .select(columns)
     .from(drafts)
     .leftJoin(servers, eq(servers.id, drafts.mcpServerId))
     .where(liveDraft(scope, server))
     .limit(1);
-  const [row] = lock ? await query.for("update", { of: drafts }) : await query;
   return (row as (Row & { id: string }) | undefined) ?? null;
 }
 

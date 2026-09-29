@@ -4,7 +4,9 @@
 import { describe, expect, it } from "vitest";
 import { getCapability } from "../registry";
 import {
+  STUDIO_DRAFT_OPS_BYTES_MAX,
   STUDIO_DRAFT_OPS_MAX,
+  STUDIO_SERVER_TOML_MAX,
   studioSourceBytes,
   toolStudioDraftSave,
   toolStudioDraftSaveInputObject,
@@ -110,6 +112,50 @@ describe("save_studio_draft input", () => {
     expect(
       toolStudioDraftSave.input.safeParse({ server: "ledger", ops }).success,
     ).toBe(false);
+  });
+
+  it("refuses edits larger than a draft holds, counted in UTF-8 bytes", () => {
+    // Each test edit at its field limits is about 640 KiB, so 12 fit under 8
+    // MiB and 13 do not.
+    const test = {
+      kind: "test" as const,
+      tool: "search",
+      environment: "staging",
+      args: "a".repeat(65_536),
+      request: "r".repeat(65_536),
+      raw: "w".repeat(262_144),
+      shaped: "s".repeat(262_144),
+    };
+    const under = Array.from({ length: 12 }, () => test);
+    const over = Array.from({ length: 13 }, () => test);
+    expect(JSON.stringify(under).length).toBeLessThan(STUDIO_DRAFT_OPS_BYTES_MAX);
+    expect(JSON.stringify(over).length).toBeGreaterThan(STUDIO_DRAFT_OPS_BYTES_MAX);
+
+    expect(
+      toolStudioDraftSave.input.safeParse({ server: "ledger", ops: under }).success,
+    ).toBe(true);
+    const refused = toolStudioDraftSave.input.safeParse({ server: "ledger", ops: over });
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues.map((issue) => issue.path)).toEqual([["ops"]]);
+  });
+
+  it("measures server.toml in UTF-8 bytes, the unit the table checks", () => {
+    // "é" is one UTF-16 unit and two UTF-8 bytes.
+    const fits = `# ${"é".repeat(STUDIO_SERVER_TOML_MAX / 2 - 2)}`;
+    const over = `# ${"é".repeat(STUDIO_SERVER_TOML_MAX / 2)}`;
+    expect(new TextEncoder().encode(fits).length).toBe(STUDIO_SERVER_TOML_MAX - 2);
+    expect(over.length).toBeLessThan(STUDIO_SERVER_TOML_MAX);
+
+    expect(
+      toolStudioDraftSave.input.safeParse({ server: "ledger", ops: [], serverToml: fits }).success,
+    ).toBe(true);
+    const refused = toolStudioDraftSave.input.safeParse({
+      server: "ledger",
+      ops: [],
+      serverToml: over,
+    });
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues.map((issue) => issue.path)).toEqual([["serverToml"]]);
   });
 
   it("exposes the base object's fields for the MCP tool", () => {

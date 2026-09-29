@@ -87,7 +87,10 @@ import { billingStatementExport } from "@oxagen/oxagen/contracts/billing.stateme
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
-import { toolStudioDraftSave } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+import {
+  STUDIO_DRAFT_BODY_BYTES_MAX,
+  toolStudioDraftSave,
+} from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { toolStudioDraftGet } from "@oxagen/oxagen/contracts/tool.studio.draft.get";
 import { toolStudioReviewOpen } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
@@ -2313,4 +2316,35 @@ describe("thin capability routes", () => {
       expect(mocks.invoke).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("tool.studio.draft.save body limit", () => {
+  it("answers 413 for a body larger than any draft, before it parses or invokes", async () => {
+    // 1 MiB chunks, sent until the body passes the limit. The stream carries
+    // no content-length, so the limit counts the bytes it reads.
+    const chunk = new TextEncoder().encode(" ".repeat(1024 * 1024));
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent > STUDIO_DRAFT_BODY_BYTES_MAX) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunk.slice());
+        sent += chunk.length;
+      },
+    });
+
+    const res = await toolStudioDraftSaveRoute.fetch(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
+
+    expect(res.status).toBe(413);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
 });

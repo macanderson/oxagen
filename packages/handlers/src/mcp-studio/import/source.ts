@@ -5,9 +5,8 @@
 // tools the source offers, the files the folder vendors, and what the lock
 // records about them.
 //
-// The gRPC importer is lane M3's. Until it lands on main it throws
-// NotBuiltError, and Review refuses with `importer_not_built`. The importer is
-// a parameter, so the tests drive a gRPC import through the same seam.
+// The gRPC importer is a parameter, so a test can pass its own. An importer
+// that throws NotBuiltError makes Review refuse with `importer_not_built`.
 import { HandlerError } from "@oxagen/oxagen";
 import type { StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import {
