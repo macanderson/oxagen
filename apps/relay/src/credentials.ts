@@ -11,8 +11,13 @@
 // - bearer: RELAY_CREDENTIAL_BILLING_API_TOKEN
 // - basic: RELAY_CREDENTIAL_BILLING_API_USERNAME and RELAY_CREDENTIAL_BILLING_API_PASSWORD
 // - header: RELAY_CREDENTIAL_BILLING_API_VALUE, sent in the header the envelope names
+// - mutual_tls: RELAY_CREDENTIAL_BILLING_API_CERT and RELAY_CREDENTIAL_BILLING_API_KEY,
+//   a PEM client certificate and its unencrypted PEM private key. The relay
+//   adds no header. It presents the certificate in the TLS handshake with the
+//   upstream, and the envelope schema allows it only on an https target.
 //
 // No log line and no error message holds a secret's value.
+import { createPrivateKey, X509Certificate, type KeyObject } from "node:crypto";
 import type { RelayEnvelope } from "@oxagen/mcp-studio";
 import { CREDENTIAL_ENV_PREFIX } from "./config";
 
@@ -20,9 +25,19 @@ export type HeaderEntry = [name: string, value: string];
 
 export type RelayCredential = NonNullable<RelayEnvelope["credential"]>;
 
-export type CredentialPart = "TOKEN" | "USERNAME" | "PASSWORD" | "VALUE";
+export type CredentialPart = "TOKEN" | "USERNAME" | "PASSWORD" | "VALUE" | "CERT" | "KEY";
 
-export type CredentialOutcome = { ok: true; headers: HeaderEntry[] } | { ok: false; message: string };
+/** A mutual_tls credential: the PEM certificate and key the relay presents to the upstream. */
+export interface ClientCertificate {
+  /** The credential's name. Senders key their TLS agents by it and name it in errors. */
+  name: string;
+  cert: string;
+  key: string;
+}
+
+export type CredentialOutcome =
+  | { ok: true; headers: HeaderEntry[]; clientCert?: ClientCertificate }
+  | { ok: false; message: string };
 
 // The characters each kind of request can carry in a value. An HTTP header
 // takes what Node takes (its checkInvalidHeaderChar): tab, printable ASCII,
@@ -38,6 +53,35 @@ const CARRIER: Record<"http" | "grpc", string> = { http: "an HTTP header", grpc:
 /** The variable that holds one part of a credential. */
 export function credentialEnvName(name: string, part: CredentialPart): string {
   return `${CREDENTIAL_ENV_PREFIX}${name.toUpperCase().replace(/-/g, "_")}_${part}`;
+}
+
+/**
+ * Why a certificate and key cannot be presented, or undefined when they can.
+ * Each message names the variable, never its value, and never passes on
+ * OpenSSL's own text, which can quote the input.
+ */
+function certificateProblem(name: string, cert: string, key: string): string | undefined {
+  const certVar = credentialEnvName(name, "CERT");
+  const keyVar = credentialEnvName(name, "KEY");
+  let certificate: X509Certificate;
+  try {
+    certificate = new X509Certificate(cert);
+  } catch {
+    return `${certVar} does not hold a PEM certificate.`;
+  }
+  let privateKey: KeyObject;
+  try {
+    privateKey = createPrivateKey(key);
+  } catch {
+    return `${keyVar} does not hold an unencrypted PEM private key.`;
+  }
+  let matches = false;
+  try {
+    matches = certificate.checkPrivateKey(privateKey);
+  } catch {
+    matches = false;
+  }
+  return matches ? undefined : `${keyVar} holds a key that does not match the certificate in ${certVar}.`;
 }
 
 /**
@@ -90,6 +134,17 @@ export function addCredential(
       }
       entry = [credential.header, read("VALUE")];
       break;
+    case "mutual_tls": {
+      // A PEM in one environment line often arrives with its line breaks
+      // written as \n, as RELAY_TRUSTED_KEYS may.
+      const cert = read("CERT").replace(/\\n/g, "\n");
+      const key = read("KEY").replace(/\\n/g, "\n");
+      const problem = problems.length > 0 ? problems.join(" ") : certificateProblem(credential.name, cert, key);
+      if (problem !== undefined) {
+        return { ok: false, message: `Credential ${credential.name} is not set up: ${problem}` };
+      }
+      return { ok: true, headers: [...headers], clientCert: { name: credential.name, cert, key } };
+    }
     default: {
       const scheme = (credential as { scheme: string }).scheme;
       return {

@@ -41,11 +41,28 @@ docker push <your-registry>/oxagen-relay:$TAG
 
 The image holds Node 24 and one bundled file, `/opt/oxagen-relay/relay.cjs`. It runs as user 1000 and exposes no port.
 
+## Get a relay token
+
+Register the relay with Oxagen's API. The API key acts as the person who created it, and that person must be an Owner or Admin of the organization:
+
+```sh
+curl -X POST "https://api.oxagen.sh/v1/$ORG_SLUG/$WORKSPACE_SLUG/tools/relays" \
+  -H "Authorization: Bearer $OXAGEN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "billing"}'
+```
+
+The answer holds the relay's `publicId`, `name`, `createdAt`, and `token`. The token starts with `oxr_`. Copy it into your secret store now. Oxagen keeps only its SHA-256 and cannot show the token again. Set `RELAY_NAME` to the name you registered.
+
+A workspace holds one live relay per name. To register a name again, revoke the old relay first.
+
+To revoke a relay, post its name to `/tools/relays/revoke` under the same base URL, or call the `revoke_relay` MCP tool. Revoked tokens below says what the relay then does.
+
 ## Run with Docker
 
 ```sh
 docker run --rm \
-  -e RELAY_BROKER_URL=wss://relay.oxagen.sh \
+  -e RELAY_BROKER_URL=wss://mcp.oxagen.sh \
   -e RELAY_TOKEN \
   -e RELAY_NAME=billing \
   -e RELAY_WORKSPACE=wrk_0123456789abcdefghijkl \
@@ -61,7 +78,7 @@ docker run --rm \
 | Variable | Required | Meaning |
 |---|---|---|
 | `RELAY_BROKER_URL` | Yes | The broker's `wss://` address. A URL with no path gets `/relay/v1/connect`. |
-| `RELAY_TOKEN` | Yes | The relay token. It holds no spaces or line breaks. |
+| `RELAY_TOKEN` | Yes | The relay token from Get a relay token. It holds no spaces or line breaks. |
 | `RELAY_NAME` | Yes | The relay's name in Oxagen: up to 63 lowercase letters, digits, and hyphens. |
 | `RELAY_WORKSPACE` | Yes | The workspace id, `wrk_` and 22 characters. |
 | `RELAY_TRUSTED_KEYS` | Yes | One or more PEM public keys. A value with `\n` escapes on one line also works. |
@@ -81,7 +98,7 @@ helm install billing-relay apps/relay/chart \
   --namespace oxagen-relay --create-namespace \
   --set image.repository=<your-registry>/oxagen-relay \
   --set image.tag=$TAG \
-  --set relay.brokerUrl=wss://relay.oxagen.sh \
+  --set relay.brokerUrl=wss://mcp.oxagen.sh \
   --set relay.name=billing \
   --set relay.workspace=wrk_0123456789abcdefghijkl \
   --set-file relay.trustedKeys=oxagen-relay-signing.pem \
@@ -151,14 +168,23 @@ For a credential named `billing-api`, the relay reads:
 | `bearer` | `RELAY_CREDENTIAL_BILLING_API_TOKEN` |
 | `basic` | `RELAY_CREDENTIAL_BILLING_API_USERNAME` and `RELAY_CREDENTIAL_BILLING_API_PASSWORD` |
 | `header` | `RELAY_CREDENTIAL_BILLING_API_VALUE`, sent in the header the envelope names |
+| `mutual_tls` | `RELAY_CREDENTIAL_BILLING_API_CERT` and `RELAY_CREDENTIAL_BILLING_API_KEY` |
 
-The credential replaces any header of the same name. A token or header value for an HTTP call may hold tab, printable ASCII, and the characters from U+0080 to U+00FF. For a gRPC call it may hold printable ASCII only. A basic user name may not hold a colon. The relay refuses a value that breaks these rules with `credential_missing`, and its message names the variable without quoting the value.
+A bearer, basic, or header credential replaces any header of the same name. A token or header value for an HTTP call may hold tab, printable ASCII, and the characters from U+0080 to U+00FF. For a gRPC call it may hold printable ASCII only. A basic user name may not hold a colon. The relay refuses a value that breaks these rules with `credential_missing`, and its message names the variable without quoting the value.
+
+A `mutual_tls` credential adds no header. The relay presents the client certificate in the TLS handshake with the upstream, so Oxagen names one only for an `https` target. `_CERT` holds the certificate and `_KEY` its unencrypted private key, both as PEM text. A PEM written on one line, with each line break as `\n`, works too. The relay refuses a certificate that does not parse, a key that does not parse, or a key that does not match the certificate with `credential_missing`, and its message names the variable without quoting the value.
 
 With Helm, put the variables in a Secret and set `credentials.existingSecret` to its name.
 
 ## Private certificate authorities
 
 The relay trusts Node's built-in certificate authorities. When your servers use a private one, put its certificate in a ConfigMap and set `extraCaCerts.configMap`. The chart mounts it and sets `NODE_EXTRA_CA_CERTS`. With Docker, mount the file and set `NODE_EXTRA_CA_CERTS` to its path.
+
+## Revoked tokens
+
+When Oxagen revokes a relay token, the broker refuses the next connect with 401. A relay that is already connected stops within 30 seconds. The broker checks each live connection's token every 30 seconds and closes the connection with WebSocket code 4001 once the token no longer checks. The relay then logs `"event":"token_revoked"` and keeps dialing, and the broker answers each dial with 401.
+
+To bring the relay back, get a new relay token as Get a relay token describes, set `RELAY_TOKEN` to it, and restart the relay.
 
 ## Start and stop
 

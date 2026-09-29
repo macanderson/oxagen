@@ -1,6 +1,7 @@
 // credentials.test.ts: the variable each credential reads, and the header addCredential adds to a request.
 import { describe, expect, it } from "vitest";
 import { addCredential, credentialEnvName, type CredentialOutcome, type HeaderEntry, type RelayCredential } from "./credentials";
+import { testCertificate } from "./test/certificate";
 
 const BEARER: RelayCredential = { name: "billing-api", scheme: "bearer" };
 const BASIC: RelayCredential = { name: "billing-api", scheme: "basic" };
@@ -10,6 +11,9 @@ const TOKEN_VAR = "RELAY_CREDENTIAL_BILLING_API_TOKEN";
 const USERNAME_VAR = "RELAY_CREDENTIAL_BILLING_API_USERNAME";
 const PASSWORD_VAR = "RELAY_CREDENTIAL_BILLING_API_PASSWORD";
 const VALUE_VAR = "RELAY_CREDENTIAL_BILLING_API_VALUE";
+const MUTUAL: RelayCredential = { name: "billing-api", scheme: "mutual_tls" };
+const CERT_VAR = "RELAY_CREDENTIAL_BILLING_API_CERT";
+const KEY_VAR = "RELAY_CREDENTIAL_BILLING_API_KEY";
 
 function storeOf(entries: Record<string, string>): ReadonlyMap<string, string> {
   return new Map(Object.entries(entries));
@@ -33,6 +37,8 @@ describe("credentialEnvName", () => {
     expect(credentialEnvName("a-b-c", "PASSWORD")).toBe("RELAY_CREDENTIAL_A_B_C_PASSWORD");
     expect(credentialEnvName("ledger2", "VALUE")).toBe("RELAY_CREDENTIAL_LEDGER2_VALUE");
     expect(credentialEnvName("billing-api", "USERNAME")).toBe(USERNAME_VAR);
+    expect(credentialEnvName("billing-api", "CERT")).toBe(CERT_VAR);
+    expect(credentialEnvName("billing-api", "KEY")).toBe(KEY_VAR);
   });
 });
 
@@ -203,5 +209,67 @@ describe("addCredential", () => {
       ok: true,
       headers: [["X-Trace-Id", "t-1"]],
     });
+  });
+});
+
+describe("addCredential with a mutual_tls credential", () => {
+  const pair = testCertificate();
+
+  it("adds no header and hands back the certificate and key", () => {
+    const headers: HeaderEntry[] = [["accept", "application/json"]];
+    const outcome = addCredential(headers, MUTUAL, storeOf({ [CERT_VAR]: pair.cert, [KEY_VAR]: pair.key }), "http");
+
+    expect(outcome).toEqual({
+      ok: true,
+      headers: [["accept", "application/json"]],
+      clientCert: { name: "billing-api", cert: pair.cert, key: pair.key },
+    });
+    expect(headersOf(outcome)).not.toBe(headers);
+  });
+
+  it("reads a certificate and key written on one line with escaped line breaks", () => {
+    const store = storeOf({ [CERT_VAR]: pair.cert.replace(/\n/g, "\\n"), [KEY_VAR]: pair.key.replace(/\n/g, "\\n") });
+    const outcome = addCredential([], MUTUAL, store, "grpc");
+
+    expect(outcome).toEqual({ ok: true, headers: [], clientCert: { name: "billing-api", cert: pair.cert, key: pair.key } });
+  });
+
+  it("names each missing variable", () => {
+    expect(messageOf(addCredential([], MUTUAL, storeOf({ [KEY_VAR]: pair.key }), "http"))).toBe(
+      `Credential billing-api is not set up: Set ${CERT_VAR} in the relay's environment.`,
+    );
+    expect(messageOf(addCredential([], MUTUAL, storeOf({ [CERT_VAR]: pair.cert }), "http"))).toBe(
+      `Credential billing-api is not set up: Set ${KEY_VAR} in the relay's environment.`,
+    );
+    expect(messageOf(addCredential([], MUTUAL, new Map(), "http"))).toBe(
+      `Credential billing-api is not set up: Set ${CERT_VAR} in the relay's environment. Set ${KEY_VAR} in the relay's environment.`,
+    );
+  });
+
+  it("refuses a value that is not a certificate, naming the variable and not the value", () => {
+    const message = messageOf(
+      addCredential([], MUTUAL, storeOf({ [CERT_VAR]: "not-a-cert-s3cret", [KEY_VAR]: pair.key }), "http"),
+    );
+
+    expect(message).toBe(`Credential billing-api is not set up: ${CERT_VAR} does not hold a PEM certificate.`);
+    expect(message).not.toContain("s3cret");
+  });
+
+  it("refuses a value that is not a private key, naming the variable and not the value", () => {
+    const message = messageOf(
+      addCredential([], MUTUAL, storeOf({ [CERT_VAR]: pair.cert, [KEY_VAR]: "not-a-key-s3cret" }), "http"),
+    );
+
+    expect(message).toBe(`Credential billing-api is not set up: ${KEY_VAR} does not hold an unencrypted PEM private key.`);
+    expect(message).not.toContain("s3cret");
+  });
+
+  it("refuses a key that does not match the certificate", () => {
+    const other = testCertificate("another");
+    const message = messageOf(addCredential([], MUTUAL, storeOf({ [CERT_VAR]: pair.cert, [KEY_VAR]: other.key }), "http"));
+
+    expect(message).toBe(
+      `Credential billing-api is not set up: ${KEY_VAR} holds a key that does not match the certificate in ${CERT_VAR}.`,
+    );
   });
 });

@@ -35,6 +35,18 @@ export function validateInput(schema: unknown, value: unknown): string[] {
   return new Checker(schema).check(schema, value, "input", 0).slice(0, MAX_ISSUES);
 }
 
+/**
+ * The isError text for arguments the input schema refuses, or null when they
+ * conform. Two callers ask this question: the executor, before it shapes the
+ * input, and a served call, before it claims its approval. They share the
+ * builder so the sentence an agent reads is the same from either path.
+ */
+export function inputRefusal(schema: unknown, value: unknown): string | null {
+  const issues = validateInput(schema, value);
+  if (issues.length === 0) return null;
+  return `The arguments do not match the tool's input schema. ${issues.join(" ")}`;
+}
+
 const TYPE_NAMES: Record<string, string> = {
   string: "a string",
   number: "a number",

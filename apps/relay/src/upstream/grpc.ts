@@ -5,12 +5,13 @@
 // byte-level client, as mcp-studio's carrier does: the serializers pass bytes
 // through, so the relay needs no generated code and never decodes a message.
 // An https target dials with TLS against Node's trusted roots, and an http
-// target dials cleartext HTTP/2.
+// target dials cleartext HTTP/2. A mutual_tls credential adds its client
+// certificate to the TLS handshake.
 //
 // Each response message goes back as one data frame. The call's status goes
 // back as the trailers frame, after the last message.
-import { Client, credentials, Metadata, type StatusObject } from "@grpc/grpc-js";
-import type { HeaderEntry } from "../credentials";
+import { Client, credentials, Metadata, type ChannelCredentials, type StatusObject } from "@grpc/grpc-js";
+import type { ClientCertificate, HeaderEntry } from "../credentials";
 import { MAX_GRPC_MESSAGE_BYTES } from "../sink";
 import type { RelayGrpcTarget, UpstreamCall } from "./types";
 
@@ -35,6 +36,16 @@ const GRPC_DEADLINE_GRACE_MS = 1_000;
 export function grpcDialAddress(target: RelayGrpcTarget): string {
   const port = target.port ?? (target.scheme === "https" ? 443 : 80);
   return `dns:${target.host}:${port}`;
+}
+
+/**
+ * The channel credentials for one call. grpc-js loads a client certificate
+ * when it builds them, so a bad pair throws here, before any connection opens.
+ */
+export function grpcChannelCredentials(target: RelayGrpcTarget, clientCert?: ClientCertificate): ChannelCredentials {
+  if (target.scheme !== "https") return credentials.createInsecure();
+  if (clientCert === undefined) return credentials.createSsl(null);
+  return credentials.createSsl(null, Buffer.from(clientCert.key, "utf8"), Buffer.from(clientCert.cert, "utf8"));
 }
 
 /** The metadata as grpc-js takes it. A -bin value arrives as base64 and goes out as bytes. */
@@ -72,8 +83,16 @@ export function createGrpcUpstream(options: GrpcUpstreamOptions): GrpcUpstream {
 }
 
 function sendGrpc(call: UpstreamCall<RelayGrpcTarget>, options: GrpcUpstreamOptions, open: Set<Client>): void {
-  const { target, sink, signal, deadlineMs } = call;
+  const { target, sink, signal, deadlineMs, clientCert } = call;
   if (signal.aborted) return;
+
+  // The envelope schema already refuses a mutual_tls credential on an http
+  // target. This check keeps a certificate from being dropped in silence if
+  // that ever changes.
+  if (clientCert !== undefined && target.scheme !== "https") {
+    sink.fail("upstream", `Credential ${clientCert.name} presents a client certificate, which needs an https target.`, false);
+    return;
+  }
 
   let metadata: Metadata;
   try {
@@ -86,9 +105,24 @@ function sendGrpc(call: UpstreamCall<RelayGrpcTarget>, options: GrpcUpstreamOpti
     return;
   }
 
+  let channelCredentials: ChannelCredentials;
+  try {
+    channelCredentials = grpcChannelCredentials(target, clientCert);
+  } catch {
+    // OpenSSL's message can quote the input, so the relay names the credential only.
+    sink.fail(
+      "upstream",
+      clientCert === undefined
+        ? `The relay could not set up TLS for ${target.host}.`
+        : `The relay could not load the client certificate for credential ${clientCert.name}.`,
+      false,
+    );
+    return;
+  }
+
   const client = new Client(
     grpcDialAddress(target),
-    target.scheme === "https" ? credentials.createSsl(null) : credentials.createInsecure(),
+    channelCredentials,
     {
       // grpc-js refuses a larger message with RESOURCE_EXHAUSTED, which the
       // broker reads as a response too large to carry.

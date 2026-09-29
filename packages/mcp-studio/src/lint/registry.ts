@@ -29,8 +29,9 @@ function callableRemote(entry: RegistryEntry): boolean {
  * Whether the local gateway could start the entry's package of this type once
  * server.toml picks it. registryLaunch refuses on source.registry_type only
  * for faults in the package itself: none or several of the type, a transport
- * other than stdio, another runner, or an argument no source.arguments key
- * can set. Faults on source.env and source.arguments are the operator's to fix.
+ * other than stdio, another runner, an argument no source.arguments key can
+ * set, or two settable arguments that share a key. Faults on source.env and
+ * source.arguments are the operator's to fix.
  */
 function packageRuns(source: RegistrySource, entry: RegistryEntry, type: RegistryType): boolean {
   const launch = registryLaunch({ source: { ...source, registry_type: type }, entry, digest: "" });
@@ -213,7 +214,7 @@ function lintKeys(
     if (count < 2 || !settable.has(name)) continue;
     report("argument_without_value", {
       tool: undefined,
-      field: `source.arguments.${name}`,
+      field: "source.registry_type",
       message: `The ${type} package has ${count} arguments keyed ${name}, so source.arguments cannot tell them apart.`,
       fix: other,
     });

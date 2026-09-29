@@ -25,11 +25,24 @@ export const MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024;
 /** The size of each HTTP body part the relay sends back. */
 export const DATA_CHUNK_BYTES = 64 * 1024;
 
-/** How often the relay sends a heartbeat. The ALB closes a connection idle for 60 seconds. */
+/**
+ * How often the relay sends a heartbeat. Oxagen's ALB closes a connection
+ * idle for 300 seconds, and many proxies close one after 60. A heartbeat every
+ * 20 seconds keeps the connection open through both.
+ */
 export const DEFAULT_HEARTBEAT_MS = 20_000;
 
 /** How many heartbeat intervals either side waits before it treats the connection as down. */
 export const DEFAULT_MISSED_HEARTBEATS = 3;
+
+/**
+ * How often the broker checks a live connection's relay token again. A token
+ * revoked while its relay is connected stops working within this time.
+ */
+export const DEFAULT_REVOCATION_CHECK_MS = 30_000;
+
+/** The WebSocket close code for a connection whose relay token Oxagen revoked. */
+export const CLOSE_TOKEN_REVOKED = 4001;
 
 /** The WebSocket close code for a hello that does not match the relay token's record. */
 export const CLOSE_HELLO_MISMATCH = 4003;
