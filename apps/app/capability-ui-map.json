@@ -2000,6 +2000,59 @@
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "start_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Connect Slack, shown to an Owner or Admin while no workspace is connected (features/organization/notifications-controls.tsx)",
+      "testid": "slack-connect",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "authorize_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: after Connect Slack, Slack sends the browser back through /api/slack/oauth/callback, which finishes the connection and returns to this tab with the outcome (features/organization/slack-callback.ts)",
+      "proof": "apps/app/src/features/organization/slack-callback.test.ts",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "get_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: the workspace, the channel, when it was connected, and the last post Slack refused (features/organization/notifications.tsx)",
+      "testid": "org-slack",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "list_slack_channels": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Pick a channel or Change channel opens the channel picker (features/organization/notifications-controls.tsx)",
+      "testid": "slack-pick",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "set_slack_channel": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Save in the channel picker (features/organization/notifications-controls.tsx)",
+      "testid": "slack-picker",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "delete_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Disconnect, then Disconnect again in the confirm (features/organization/notifications-controls.tsx)",
+      "testid": "slack-disconnect",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
     }
   }
 }

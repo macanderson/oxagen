@@ -8,6 +8,8 @@ export {
   OrganizationModelFunding,
   OrganizationRoles,
   parseOrganizationTab,
+  parseSlackOutcome,
 } from "./organization";
+export { handleSlackCallback } from "./slack-callback";
 export { OrganizationSkeleton } from "./states";
 export { Sso } from "./sso";

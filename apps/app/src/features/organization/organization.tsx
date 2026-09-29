@@ -12,15 +12,18 @@ import {
   firstParam,
   type OrganizationQueryTab,
   routes,
+  type SlackConnectOutcome,
 } from "@/shared/safe-path";
 import { ApiKeys } from "./api-keys";
 import type { ApiKeysView } from "./api-keys-view";
 import { CostCenters } from "./cost-centers";
 import { DataPlaneTab } from "./data-plane";
 import { ModelFundingTab } from "./model-funding";
+import { NotificationsTab } from "./notifications";
 import { OrganizationFrame } from "./frame";
 import { InvitationsTab, PeopleTab } from "./people";
 import { RolesTab } from "./roles";
+import { OUTCOME_KEYS } from "./slack-failure";
 import { WorkspacesTab } from "./workspaces";
 
 const QUERY_TABS: readonly OrganizationQueryTab[] = [
@@ -29,6 +32,7 @@ const QUERY_TABS: readonly OrganizationQueryTab[] = [
   "workspaces",
   "dataPlane",
   "costCenters",
+  "notifications",
 ];
 
 /** The `?tab=` value on `/{org}`; anything it does not name is People. */
@@ -39,15 +43,37 @@ export function parseOrganizationTab(
   return QUERY_TABS.find((tab) => tab === wanted) ?? "people";
 }
 
-/** `/{org}`: People, Invitations, Workspaces, Data plane or Cost centers. */
+function isSlackOutcome(value: string): value is SlackConnectOutcome {
+  return Object.hasOwn(OUTCOME_KEYS, value);
+}
+
+/**
+ * The `?slack=` value on `/{org}`: how a Slack connection attempt ended, as
+ * the OAuth callback named it. Any other value is none, so a URL cannot put
+ * its own words on the Notifications tab.
+ */
+export function parseSlackOutcome(
+  value: string | string[] | undefined,
+): SlackConnectOutcome | null {
+  const wanted = firstParam(value);
+  return wanted !== undefined && isSlackOutcome(wanted) ? wanted : null;
+}
+
+/**
+ * `/{org}`: People, Invitations, Workspaces, Data plane, Cost centers or
+ * Notifications. `slack` is how a Slack connection attempt ended, and only
+ * Notifications shows it.
+ */
 export function Organization({
   ctx,
   source,
   tab,
+  slack = null,
 }: {
   ctx: OrgCtx;
   source: DataSource;
   tab: OrganizationQueryTab;
+  slack?: SlackConnectOutcome | null;
 }) {
   return (
     <OrganizationFrame
@@ -72,6 +98,8 @@ export function Organization({
             return dataPlane(ctx, source, workspaces);
           case "costCenters":
             return <CostCenters ctx={ctx} source={source} />;
+          case "notifications":
+            return notifications(ctx, source, slack);
           default:
             return (
               <PeopleTab
@@ -134,6 +162,19 @@ async function dataPlane(
       workspaces={workspaces}
     />
   );
+}
+
+/**
+ * The Notifications tab's one read of its own, the Slack connection, made
+ * inside the frame so a viewer the frame refused never reaches it.
+ */
+async function notifications(
+  ctx: OrgCtx,
+  source: DataSource,
+  outcome: SlackConnectOutcome | null,
+) {
+  const read = await source.org.slackConnection(ctx);
+  return <NotificationsTab org={ctx.orgSlug} read={read} outcome={outcome} />;
 }
 
 /** `/{org}/roles`: the Roles tab, with the SSO group mappings beneath it. */

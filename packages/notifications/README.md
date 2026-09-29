@@ -15,6 +15,9 @@ other transactional message from the API, app, or MCP server.
   - The transactional email templates: password reset, email verification,
     invitation, re-authorization, low balance, payment failed, payment
     receipt, and book access (`src/notifications/`).
+  - Slack notices: `notifyOrgSlack`, the organization's Slack connection
+    (the encrypted bot token and the picked channel), and the five Slack Web
+    API calls they make (`src/slack/`).
 - **Does not own:**
   - Per-organization usage metering for a send. The calling handler owns it.
   - Retries and a durable outbox. Neither exists (see "What happens when a
@@ -23,8 +26,10 @@ other transactional message from the API, app, or MCP server.
     [`@oxagen/rules`](../rules/README.md) (`src/approval-notify.ts`).
 - **Depends on:**
   - `@oxagen/config`: `requireEnv` for the `SMTP_*` settings.
-  - `@oxagen/database`: `withSystemDb` for the notification feed rows and the
-    organization manager lookup.
+  - `@oxagen/database`: `withSystemDb` for the notification feed rows, the
+    organization manager lookup, and the Slack connection.
+  - `@oxagen/crypto`: the ingestion key that seals and opens the Slack bot
+    token.
 - **Used by:** `apps/api`, `apps/app_deprecated`, `@oxagen/auth`,
   `@oxagen/billing`, `@oxagen/handlers`, and `@oxagen/plugins`.
 
@@ -36,6 +41,9 @@ other transactional message from the API, app, or MCP server.
 | `sendEmail` | export | `packages/notifications/src/send-email.ts` | `packages/handlers/src/workspace.invite.send.ts`, `packages/handlers/src/lib/manage-invitation.ts`, `apps/api/src/routes/v1/cms.ts` |
 | `sendEmailFireAndForget` | export | `packages/notifications/src/send-email.ts` | `packages/auth/src/auth.ts` |
 | `notifyOrgManagers` | export | `packages/notifications/src/notifications/notify-org-managers.ts` | `packages/plugins/src/oauth/mark-reauth.ts`, `packages/billing/src/dunning.ts`, `packages/billing/src/receipts.ts`, `packages/billing/src/autoreload.ts` |
+| `notifyOrgSlack` | export | `packages/notifications/src/slack/notify-org-slack.ts` | `packages/handlers/src/steering-repo/health.hosts.ts` |
+| Slack connection store | export (`./slack`) | `packages/notifications/src/slack/slack-connection.ts` | `packages/handlers/src/lib/slack-notices.ts` |
+| Slack network boundary | boundary | `packages/notifications/src/slack/slack-api.ts` | `https://slack.com/api/` |
 | `isEmailTransportConfigured` | export | `packages/notifications/src/transport.ts` | `apps/api/src/bootstrap.ts`, `apps/api/src/routes/health.ts` |
 | SMTP network boundary | boundary | `packages/notifications/src/smtp-transport.ts` | `SMTP_HOST` and `SMTP_PORT` |
 
@@ -43,7 +51,11 @@ other transactional message from the API, app, or MCP server.
 
 - `.` (`src/index.ts`): `sendEmail`, `sendEmailFireAndForget`,
   `emailTransport`, `isEmailTransportConfigured`, `createSmtpTransport`,
-  `sendEmailInputSchema`, the notification service, and every template.
+  `sendEmailInputSchema`, the notification service, every template, and
+  `notifyOrgSlack`.
+- `./slack` (`src/slack/index.ts`): the Slack connection store, the Slack Web
+  API client, and `notifyOrgSlack` with its message builder. The handlers
+  that connect Slack and pick a channel import it.
 
 ## Tests
 
@@ -51,7 +63,8 @@ other transactional message from the API, app, or MCP server.
 pnpm --filter @oxagen/notifications test:unit src/send-email.test.ts
 ```
 
-Tests sit beside their source under `src/` and `src/notifications/`.
+Tests sit beside their source under `src/`, `src/notifications/`, and
+`src/slack/`.
 
 ## Usage
 

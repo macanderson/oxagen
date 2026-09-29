@@ -161,6 +161,13 @@ const ROLE_CHECKED_CONTRACTS = [
   "list_capability_registry",
   "browse_plugin_catalog",
   "get_catalog_plugin",
+  // Slack notices for steering repo health changes (#4608): Owner or Admin.
+  "start_slack_connection",
+  "authorize_slack_connection",
+  "get_slack_connection",
+  "list_slack_channels",
+  "set_slack_channel",
+  "delete_slack_connection",
   // M12 (#4685): a relay token lets a process in your network carry the
   // workspace's calls, so only an org Owner or Admin mints or revokes one.
   "create_relay",
