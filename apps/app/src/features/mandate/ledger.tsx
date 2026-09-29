@@ -90,6 +90,7 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
           {t("state")}
         </span>
         <LedgerStateSelect
+          key={view.state ?? ""}
           id="ledger-state"
           aria-labelledby="ledger-state-label"
           defaultValue={view.state ?? ""}
@@ -100,7 +101,7 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
               label: t(`kind.${state}`),
             })),
           ]}
-          className="w-full data-[size=default]:h-10"
+          className="w-full data-[size=default]:h-10 max-md:text-base"
         />
       </span>
       <button type="submit" className={`${control} font-medium`}>
