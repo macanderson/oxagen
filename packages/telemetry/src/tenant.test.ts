@@ -114,6 +114,9 @@ describe("clickhouse tenant seam", () => {
     "SELECT * FROM events WHERE id IN {ids:Array(UUID)}",
     "SELECT count() FROM events WHERE 1 = 1 OR org_id = {orgId:UUID}",
     "SELECT org_id FROM events FINAL GROUP BY org_id",
+    // A parameter may share a keyword's name (#2972).
+    "SELECT * FROM events WHERE ts >= {from:DateTime64(3)} AND ts < {to:DateTime64(3)}",
+    "SELECT * FROM events WHERE id IN {in:Array(UUID)} AND ts >= {select:DateTime64(3)}",
   ])(
     "scopes the source independently of the outer expression: %s",
     async (sql) => {
@@ -151,6 +154,10 @@ describe("clickhouse tenant seam", () => {
     "SELECT * FROM remote('host', 'table')",
     "SELECT * FROM events JOIN foreign_events USING (org_id)",
     "SELECT * FROM events; SELECT * FROM foreign_events",
+    // A keyword-named parameter hides nothing outside its own braces.
+    "SELECT * FROM events WHERE ts >= {from:DateTime64(3)} UNION ALL SELECT * FROM foreign_events",
+    "SELECT * FROM events WHERE id IN {from:UUID}",
+    "SELECT * FROM {from:Identifier}",
   ])(
     "refuses unsupported query syntax before contacting ClickHouse: %s",
     async (sql) => {

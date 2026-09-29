@@ -184,6 +184,22 @@ describe("the Roles panel", () => {
     ).toBeEnabled();
   });
 
+  // The table clips a body cell unless it holds `[data-actions]`, so Edit,
+  // Duplicate and Delete must all sit inside that one marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderRoles();
+    const free = within(rowOf("rol_free00000000000000000"));
+    const group = free
+      .getByRole("button", { name: "Delete" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(free.getByRole("button", { name: "Edit" }));
+    expect(group).toContainElement(
+      free.getByRole("button", { name: "Duplicate" }),
+    );
+    expect(group?.closest("td")).not.toBeNull();
+  });
+
   it("filters by kind", async () => {
     const user = userEvent.setup();
     await renderRoles();

@@ -155,10 +155,10 @@ export function RepositorySetup({
  * Whether the panel draws the GitHub doors, and so reads the installations
  * they offer. A workspace with no steering repository gets them. So does any
  * workspace with no GitHub installation attached, whatever its steering head:
- * Oxagen reads a provisioned head through the Oxagen Steering app, so the head
- * can be live while the workspace has no installation, and linking a code
- * repository still needs one (ADR-212). A bound workspace with an installation
- * attached gets none.
+ * Oxagen reads a provisioned head through the organization's steering
+ * connection, so the head can be live while the workspace has no installation,
+ * and linking a code repository still needs one (ADR-212). A bound workspace
+ * with an installation attached gets none.
  */
 function offersDoors(value: WorkspaceRepository): boolean {
   return value.repository === null || !value.github.connected;

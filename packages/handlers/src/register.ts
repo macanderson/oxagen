@@ -650,6 +650,37 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./org.model_credential.verify"))
         .orgModelCredentialVerifyHandler as CapabilityHandlerFn,
   );
+  // Slack notices for steering repo health changes (#4608).
+  registerHandler(
+    "start_slack_connection",
+    async () =>
+      (await import("./org.slack_connection.start")).handler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "authorize_slack_connection",
+    async () =>
+      (await import("./org.slack_connection.authorize")).handler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_slack_connection",
+    async () =>
+      (await import("./org.slack_connection.get")).handler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_slack_channels",
+    async () =>
+      (await import("./org.slack_channels.list")).handler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_slack_channel",
+    async () =>
+      (await import("./org.slack_channel.set")).handler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_slack_connection",
+    async () =>
+      (await import("./org.slack_connection.delete")).handler as CapabilityHandlerFn,
+  );
   registerHandler(
     "list_sso_providers",
     async () =>

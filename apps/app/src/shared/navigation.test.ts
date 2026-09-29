@@ -14,12 +14,16 @@ const { canonicalHostRedirect } = await import("./canonical-host");
 const { parseCheckoutUrl } = await import("./checkout-url");
 const { parseLoopbackUri } = await import("./loopback-uri");
 const { routes } = await import("./safe-path");
+const { parseSlackAuthorizationUrl } = await import(
+  "./slack-authorization-url"
+);
 const {
   permanentRedirectTo,
   redirectTo,
   redirectToCanonicalHost,
   redirectToCheckout,
   redirectToLoopback,
+  redirectToSlackAuthorization,
   responseRedirect,
 } = await import("./navigation");
 
@@ -53,6 +57,17 @@ describe("redirectToCheckout", () => {
   it("sends the browser to the Checkout page as parsed", () => {
     expect(() => redirectToCheckout(checkout)).toThrow(
       "NEXT_REDIRECT https://checkout.stripe.com/c/pay/cs_test_a1#fidkdWxOYHwnPyd1blpxYHZxWjA0",
+    );
+  });
+});
+
+describe("redirectToSlackAuthorization", () => {
+  it("sends the browser to Slack's authorize page as parsed", () => {
+    const authorize = `https://slack.com/oauth/v2/authorize?client_id=123.456&state=${"s".repeat(43)}`;
+    const slack = parseSlackAuthorizationUrl(authorize);
+    if (slack === null) throw new Error("fixture: Slack authorize URL refused");
+    expect(() => redirectToSlackAuthorization(slack)).toThrow(
+      `NEXT_REDIRECT ${authorize}`,
     );
   });
 });

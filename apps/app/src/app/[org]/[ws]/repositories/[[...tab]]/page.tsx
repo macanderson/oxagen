@@ -43,10 +43,7 @@ export default async function RepositoriesPage({
   const query = await searchParams;
   const t = await getTranslations("repositories.steeringRepo");
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6"
-    >
+    <>
       <Suspense
         fallback={
           <p role="status" className="text-[13px] text-muted-foreground">
@@ -74,6 +71,6 @@ export default async function RepositoriesPage({
       <Suspense fallback={null}>
         <InstructionFindings ctx={ctx} />
       </Suspense>
-    </main>
+    </>
   );
 }

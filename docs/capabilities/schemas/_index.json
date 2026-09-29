@@ -221,6 +221,14 @@
       "consumes": []
     },
     {
+      "name": "authorize_slack_connection",
+      "domain": "org",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "bind_agent_environment",
       "domain": "agent",
       "surfaces": [
@@ -740,6 +748,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "delete_slack_connection",
+      "domain": "org",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -1839,6 +1855,14 @@
       "consumes": []
     },
     {
+      "name": "get_slack_connection",
+      "domain": "org",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_spend",
       "domain": "spend",
       "surfaces": [
@@ -2849,6 +2873,14 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_slack_channels",
+      "domain": "org",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -4183,6 +4215,14 @@
       "consumes": []
     },
     {
+      "name": "set_slack_channel",
+      "domain": "org",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_spend_budget",
       "domain": "billing",
       "surfaces": [
@@ -4269,6 +4309,14 @@
         "api",
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_slack_connection",
+      "domain": "org",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

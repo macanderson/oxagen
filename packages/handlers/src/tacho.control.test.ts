@@ -32,10 +32,19 @@ import {
   clearSteeringCacheForTests,
   type SteeringRow,
 } from "./lib/tacho-steering";
-import { tachoBundleGetHandler } from "./tacho.bundle.get";
-import { ackPatch, tachoCommandFetchHandler } from "./tacho.command.fetch";
+import { fixtureDelivery, readFixtureFile } from "./steering.test-support";
+import {
+  createTachoBundleGetHandler,
+  tachoBundleGetHandler,
+} from "./tacho.bundle.get";
+import {
+  ackPatch,
+  createTachoCommandFetchHandler,
+  tachoCommandFetchHandler,
+} from "./tacho.command.fetch";
 import { tachoEnrollmentRevokeHandler } from "./tacho.enrollment.revoke";
 import { tachoHostListHandler } from "./tacho.host.list";
+import { NOTHING_PUBLISHED, type TachoPublished } from "./tacho.published";
 import { tachoSessionGetHandler } from "./tacho.session.get";
 import { tachoSessionListHandler } from "./tacho.session.list";
 
@@ -675,6 +684,127 @@ describe("fetch_commands", () => {
     // Keeps the line above from holding vacuously: the gate has to make a
     // difference to the bundle in this fixture at all.
     expect(rolledBack.etag).not.toBe(stillCurrent.etag);
+  });
+});
+
+// The daemon compares the envelope's `bundle_etag` with the etag its bundle
+// came with, and refetches the bundle whenever they differ (`onControl` in
+// packages/tacho/src/collector/daemon.ts). An envelope that names any etag
+// other than the one `get_tacho_bundle` serves costs the host a bundle request
+// on every ingest batch and every command poll, and the answer is always
+// not_modified (#2592).
+describe("control envelope etag", () => {
+  const FETCH = {
+    schema: "tacho.commands.v2" as const,
+    host_enrollment_id: HOST_PUBLIC,
+    acknowledgements: [],
+  };
+
+  it("moves when a must record becomes active, and names the etag get_tacho_bundle serves", async () => {
+    const db: Fake = {
+      hosts: [host()],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+      records: [],
+    };
+    wire(db);
+    // No `daemon` object, so the poll leaves the host's features as stored.
+    const envelope = async () =>
+      (await tachoCommandFetchHandler({ ...FETCH }, MACHINE)).control
+        .bundle_etag;
+    const served = async () =>
+      (
+        await tachoBundleGetHandler(
+          { host_enrollment_id: HOST_PUBLIC },
+          MACHINE,
+        )
+      ).etag;
+
+    const before = await envelope();
+    expect(before).toBe(await served());
+
+    // The row a merge leaves: an active record joined to its pinned `must`
+    // version. publishMerge takes a table lock and writes through insert and
+    // update chains that this fake cannot turn into the steering read's
+    // joined rows, so the row stands in for the merge.
+    db.records = [
+      {
+        slug: "no-force-push",
+        activatedAt: "2026-09-02T00:00:00.000Z",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        versionKind: "constraint",
+        versionForce: "must",
+        versionConstraintEffect: "forbid",
+        versionStatement: "Never force-push to the production branch.",
+        recordKind: "constraint",
+        recordForce: "must",
+        recordConstraintEffect: "forbid",
+        recordStatement: "Never force-push to the production branch.",
+      },
+    ];
+    const after = await envelope();
+    expect(after).not.toBe(before);
+    expect(after).toBe(await served());
+  });
+
+  it("names the etag get_tacho_bundle served to a host that parses skills", async () => {
+    const db: Fake = {
+      hosts: [host({ bundleFeatures: ["skills"] })],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+    };
+    wire(db);
+    // Skills are read outside any tenant transaction, because the version
+    // store's port opens its own. A read inside one throws here. The reader
+    // answers a failed read with no skills, so the assertions below fail.
+    const inner = mocks.withTenantDb.getMockImplementation();
+    let open = 0;
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        open += 1;
+        try {
+          return await inner?.(fn);
+        } finally {
+          open -= 1;
+        }
+      },
+    );
+    const outside = () => {
+      if (open > 0) throw new Error("read inside a tenant transaction");
+    };
+    const skills: TachoPublished = {
+      published: async () => {
+        outside();
+        return fixtureDelivery();
+      },
+      readAsset: async (source, bundle, file) => {
+        outside();
+        return readFixtureFile(source, bundle, file);
+      },
+      recallUnreviewed: async () => "off",
+    };
+    const poll = (published: TachoPublished) =>
+      createTachoCommandFetchHandler({ published })(
+        { ...FETCH, daemon: { bundle_features: ["skills"] } },
+        MACHINE,
+      );
+
+    const served = await createTachoBundleGetHandler({ published: skills })(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect(served.bundle?.skills?.length).toBeGreaterThan(0);
+
+    const control = (await poll(skills)).control;
+    expect(control.bundle_etag).toBe(served.etag);
+    // Keeps the line above from holding vacuously: the skills have to move
+    // the etag away from the policy's in this fixture at all.
+    const policyOnly = (await poll(NOTHING_PUBLISHED)).control;
+    expect(policyOnly.bundle_etag).not.toBe(served.etag);
   });
 });
 

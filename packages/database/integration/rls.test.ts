@@ -18,11 +18,11 @@
  *
  * NOTE ON SUPERUSER AND RLS: PostgreSQL superusers bypass RLS unconditionally
  * even when FORCE ROW LEVEL SECURITY is set. In production, the application
- * connects as a non-superuser role. This suite creates a non-superuser role
- * `rls_test_role` and uses `SET ROLE rls_test_role` within each isolation
- * transaction so the RLS policies are evaluated. The superuser session is used
- * only for seeding, cleanup, and role management where bypass-by-default is
- * the desired behaviour.
+ * connects as `oxagen_app`, which the migrations create without BYPASSRLS and
+ * grant. Each isolation transaction runs `SET LOCAL ROLE oxagen_app`, so the
+ * policies and the grants under test are the ones the migrations install.
+ * Missing role provisioning fails. The superuser session is used only for
+ * seeding and cleanup, where bypass-by-default is the desired behaviour.
  *
  * CI: rls-integration job (TENANT_RLS_ENFORCEMENT_ENABLED=true, clean DB).
  * Local: DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
@@ -60,43 +60,27 @@ const REPO_BINDING_B = "00000000-0000-0000-0003-000000000002";
 const REPO_BINDING_HEAD_A = "00000000-0000-0000-0004-000000000001";
 const REPO_BINDING_HEAD_B = "00000000-0000-0000-0004-000000000002";
 
-// The non-superuser role used for isolation assertions. Must not be a
-// superuser or replication role. Created in beforeAll, dropped in afterAll.
-const APP_ROLE = "rls_test_app_role";
+/**
+ * The real application role. Non-superuser and no BYPASSRLS, so the policies
+ * apply. The migrations create it, and beforeAll fails when it is missing.
+ */
+const APP_ROLE = "oxagen_app";
 
 // ---------------------------------------------------------------------------
 // Seed + setup
 // ---------------------------------------------------------------------------
 
 beforeAll(async () => {
-  // 1. Create a non-superuser role and grant it SELECT / INSERT on the tables
-  //    used in the isolation assertions.
-  // Use sql.unsafe() for DDL that can't use parameterized queries.
-  await sql.unsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
-        CREATE ROLE "${APP_ROLE}" NOLOGIN NOSUPERUSER;
-      END IF;
-    END$$
-  `);
-
-  // Grant privileges so the role can see tables (but RLS still gates rows).
-  await sql.unsafe(`GRANT USAGE ON SCHEMA chat TO "${APP_ROLE}"`);
-  await sql.unsafe(
-    `GRANT SELECT, INSERT ON chat.conversations TO "${APP_ROLE}"`,
-  );
-  await sql.unsafe(`GRANT USAGE ON SCHEMA workspace TO "${APP_ROLE}"`);
-  await sql.unsafe(
-    `GRANT SELECT ON workspace.workspace_users TO "${APP_ROLE}"`,
-  );
-  await sql.unsafe(`GRANT USAGE ON SCHEMA ingestion TO "${APP_ROLE}"`);
-  await sql.unsafe(
-    `GRANT SELECT ON ingestion.repository_bindings TO "${APP_ROLE}"`,
-  );
-  await sql.unsafe(
-    `GRANT SELECT ON ingestion.repository_binding_heads TO "${APP_ROLE}"`,
-  );
+  // 1. Require the migrated application role. A role this suite created and
+  //    granted for itself would prove its own grants, not production's.
+  const [role] = await sql<{ exists: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${APP_ROLE}) AS exists
+  `;
+  if (!role?.exists) {
+    throw new Error(
+      "RLS isolation proof requires the migrated oxagen_app role",
+    );
+  }
 
   // 2. Seed minimal fixture rows. All inserts run as superuser (bypass on).
   await sql.begin(async (tx) => {
@@ -203,32 +187,6 @@ afterAll(async () => {
     await tx`DELETE FROM workspace.workspaces WHERE id IN (${WS_A}, ${WS_B})`;
     await tx`DELETE FROM org.organizations WHERE id IN (${ORG_A}, ${ORG_B})`;
   });
-
-  // Drop the test role (best-effort; revoking grants first).
-  await sql
-    .unsafe(`REVOKE ALL ON chat.conversations FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE ALL ON workspace.workspace_users FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE ALL ON ingestion.repository_bindings FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(
-      `REVOKE ALL ON ingestion.repository_binding_heads FROM "${APP_ROLE}"`,
-    )
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE USAGE ON SCHEMA chat FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE USAGE ON SCHEMA workspace FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE USAGE ON SCHEMA ingestion FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql.unsafe(`DROP ROLE IF EXISTS "${APP_ROLE}"`).catch(() => undefined);
 
   await sql.end({ timeout: 5 });
 });

@@ -20,6 +20,11 @@
 //                  `.oxagen/` files the steering repo now holds. A file the
 //                  old repository changed after the run read it stays.
 //
+// A workspace that reads its repository through a legacy sources connection
+// has no binding, and legacy connections retire (#4684). The run refuses it
+// unless the call sets `startFresh`. It then only creates the steering repo,
+// and nothing from the legacy repository is imported.
+//
 // The run merges nothing. A person merges the import steering PRs in order,
 // then the cleanup PR last. Everything that touches the database or a host is
 // a dependency, so the tests run the whole flow against fakes.
@@ -189,6 +194,8 @@ export type ImportScope = { orgId: string; workspaceId: string };
 export interface ImportInput {
   ruleKinds?: Readonly<Record<string, RuleKind>>;
   constraintEffects?: Readonly<Record<string, RecordEffect>>;
+  /** A workspace on a legacy sources connection starts on an empty steering repo. */
+  startFresh?: boolean;
 }
 
 export interface ImportResult {
@@ -205,7 +212,7 @@ export interface ImportResult {
 export type SteeringHeadRead =
   /** No steering head and no legacy connection. */
   | { kind: "none" }
-  /** The head hangs from an Oxagen Steering connection: the steering repo exists. */
+  /** The head hangs from a steering connection: the steering repo exists. */
   | { kind: "provisioned"; fullName: string }
   /** A host the import does not read, such as GitLab. */
   | { kind: "unsupported"; provider: string; fullName: string }
@@ -555,7 +562,7 @@ export async function runSteeringImport(
   };
 
   try {
-    return await advance(scope, state, deps, save);
+    return await advance(scope, state, deps, save, input.startFresh === true);
   } catch (err) {
     state.status = "failed";
     state.error = isHandlerError(err)
@@ -571,6 +578,7 @@ async function advance(
   state: SteeringImportState,
   deps: SteeringImportDeps,
   save: () => Promise<void>,
+  startFresh: boolean,
 ): Promise<ImportResult> {
   // One conversion per run. The inputs are pinned, so every call answers the
   // same files.
@@ -631,10 +639,15 @@ async function advance(
           `Oxagen can no longer reach ${head.fullName}, the repository that steers this workspace. Connect it again, then run the import.`,
         );
       case "legacy":
-        throw conflict(
-          "steering_import_legacy_connection",
-          `The workspace reads ${head.fullName} through a sources connection with no binding. The import reads only a bound repository, and Oxagen cannot bind a legacy connection, so this workspace cannot import yet.`,
-        );
+        // Legacy connections retire (#4684). The owner agrees to start fresh,
+        // because the steering repo replaces what the legacy repository held.
+        if (!startFresh)
+          throw conflict(
+            "steering_import_legacy_connection",
+            `The workspace reads ${head.fullName} through a legacy sources connection, and Oxagen does not import from one. Run the import again with startFresh set to true to create an empty steering repo. Nothing is imported, the .oxagen/ files stay in ${head.fullName}, and the steering repo steers the workspace from then on.`,
+          );
+        state.source = null;
+        break;
       case "none":
         state.source = null;
         break;

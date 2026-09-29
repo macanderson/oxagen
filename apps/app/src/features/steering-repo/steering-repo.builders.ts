@@ -149,6 +149,7 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

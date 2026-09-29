@@ -530,7 +530,7 @@ design intent (one seam, three enforcers, fail-closed):
    `db()`" would therefore break auth (api-key/membership resolution), Stripe
    webhooks, the usage-rollup cron, and the no-scope audit write the moment the
    migration lands. `withSystemDb` (sets `app.rls_bypass='on'`, no scope required)
-   is the audited, greppable escape hatch for those legitimately cross-/pre-scope
+   is the explicit, greppable escape hatch for those legitimately cross-/pre-scope
    operations. Raw `db()` is now ESLint-banned everywhere except the Better Auth
    adapter, so all access is either `withTenantDb` (scoped) or `withSystemDb`
    (bypass) — no fragile per-callsite allowlist.

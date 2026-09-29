@@ -1,0 +1,21 @@
+# The Zendesk collector in agent-work-spec.html (Collectors), copied verbatim.
+schema = "collector/v1"
+name = "support-zendesk"
+label = "Support escalations"
+type = "zendesk"
+connection = "conn_01K5ZD7Q4R"   # Oxagen holds the OAuth token
+
+[scope]
+subdomain = "aintel"
+views = ["Engineering escalations"]
+
+[defaults]
+labels = ["Bug"]
+workflow = "fix-test-verify-review"
+
+[write_back]
+certify_note = true    # tasks-spec.md §5.4
+send_note = true
+status = false
+close = false
+labels = false

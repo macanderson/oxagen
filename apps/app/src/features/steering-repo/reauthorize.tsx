@@ -1,7 +1,8 @@
-// Re-authorize: the way back when Oxagen Steering lost its grant. On GitHub
-// the API route signs the state and sends the person to GitHub's authorization
-// page, and GitHub returns them to `returnTo`. On GitLab the group token is
-// pasted again on onboarding's connect step.
+// Re-authorize: the way back when Oxagen lost its grant on the host. On GitHub
+// the API route signs the state and sends the person to the Oxagen app's
+// authorization page, and GitHub returns them through the app's callback to
+// `returnTo`. On GitLab the group token is pasted again on onboarding's
+// connect step.
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { routes, type SafePath } from "@/shared/safe-path";
@@ -37,11 +38,7 @@ export function ReauthorizeLink({
   return (
     <a
       // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub. SafeLink would prefetch it through next/link, and ui/navigation has no plain-anchor link for a SafePath (#4518)
-      href={steeringGithubHref(
-        org,
-        { app: "steering", mode: "authorize" },
-        returnTo,
-      )}
+      href={steeringGithubHref(org, { mode: "authorize" }, returnTo)}
       data-testid={testId}
       data-provider="github"
       className={buttonSecondary}
@@ -53,8 +50,8 @@ export function ReauthorizeLink({
 
 /**
  * The notice a step shows when its error asks an owner to authorize Oxagen
- * Steering again. Everyone reads why provisioning stopped. Only an owner or
- * admin gets the link, because the API refuses anyone else.
+ * again. Everyone reads why provisioning stopped. Only an owner or admin gets
+ * the link, because the API refuses anyone else.
  */
 export function ReauthorizeNotice({
   org,

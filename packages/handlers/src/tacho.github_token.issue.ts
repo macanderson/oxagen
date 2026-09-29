@@ -8,13 +8,14 @@
 // it never names the installation, for the reason
 // repository.github-connection.ts gives (ADR-027).
 //
-// The workspace's steering repository takes changes through a steering PR.
-// This handler never mints an Oxagen Steering app token for it. That app holds
-// the only bypass on the "Oxagen merges" ruleset, so its token could merge
-// without Oxagen's queue, stamp, and publish. The token comes from the
-// workspace's own installation, which the rulesets stop at main. When that
-// installation does not cover the steering repository, the handler refuses
-// with `conflict: steering_repo_propose_only`.
+// The workspace's steering repository takes changes through a steering PR,
+// and this handler never mints a token for it. It refuses with
+// `conflict: steering_repo_propose_only` before it reads an installation.
+// Steering and code repositories share one GitHub App (ADR-228), and that app
+// holds the only bypass on the "Oxagen merges" ruleset. A ruleset bypass
+// follows the app, not the token's permissions, so any token this handler
+// minted for the steering repository could merge without Oxagen's queue,
+// stamp, and publish.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError } from "@oxagen/oxagen";
@@ -103,7 +104,7 @@ export async function selectGovernedRepository(
   };
 }
 
-/** The refusal for a steering repository the workspace token cannot write. */
+/** The refusal for the steering repository, which takes changes only through a steering PR. */
 function steeringRepoProposeOnly(): HandlerError {
   return new HandlerError({
     code: "conflict",
@@ -111,17 +112,6 @@ function steeringRepoProposeOnly(): HandlerError {
     message:
       "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.",
   });
-}
-
-/**
- * GitHub's HTTP status on a refused mint, or null. `createAppInstallationToken`
- * throws a plain Error whose message starts with the status, and its own test
- * pins that format.
- */
-function mintRefusalStatus(err: unknown): number | null {
-  if (!(err instanceof Error)) return null;
-  const match = /^GitHub App token mint failed \((\d{3})\)/.exec(err.message);
-  return match ? Number(match[1]) : null;
 }
 
 export interface GithubTokenIssueDeps {
@@ -209,17 +199,17 @@ export function createTachoGithubTokenIssueHandler(
       { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin"] },
     );
+    // Refused before any installation is read: every token this app mints
+    // carries its ruleset bypass (ADR-228).
+    if (repo.steering) {
+      logger.info(
+        { ...scope, repository: repo.fullName },
+        "tacho.github_token.issue: refused a token for the steering repository",
+      );
+      throw steeringRepoProposeOnly();
+    }
     const installation = await deps.installation(scope);
     if (!installation) {
-      // No installation covers the steering repository, and attaching one
-      // may not reach it either. The steering PR path always does.
-      if (repo.steering) {
-        logger.info(
-          { ...scope, repository: repo.fullName },
-          "tacho.github_token.issue: steering repository has no installation",
-        );
-        throw steeringRepoProposeOnly();
-      }
       throw new HandlerError({
         code: "conflict",
         reason: "github_not_connected",
@@ -234,16 +224,6 @@ export function createTachoGithubTokenIssueHandler(
         repositoryId: Number(repo.providerRepositoryId),
       });
     } catch (err) {
-      // GitHub answers 422 when the installation does not cover a repository
-      // in the mint's scope. For the steering repository that is the designed
-      // outcome, so the handler names the steering PR path.
-      if (repo.steering && mintRefusalStatus(err) === 422) {
-        logger.info(
-          { ...scope, repository: repo.fullName },
-          "tacho.github_token.issue: installation does not cover steering repository",
-        );
-        throw steeringRepoProposeOnly();
-      }
       logger.error(
         { err, repository: repo.fullName },
         "GitHub refused the scoped token mint",

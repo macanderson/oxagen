@@ -1,27 +1,37 @@
 // audit-exempt: opening the PR publishes nothing (the record steers nothing until merge, MC spec §10.3); the kernel capability.invoke_* audit records the open and merge_context_pr emits steering.published.
 //
 // open_context_pr (ADR-061; MC spec §10.3 steps 1-2). On a `proposed` row:
-// the branch `steering/<lineage>` from the production branch, the single
-// record file, the PR, then the six checks one at a time. Each outcome is
-// written to the row before the next check starts, and the host gets one
-// required check, "Oxagen steering", with every outcome in its summary
-// (steering-repo-spec, Steering PR flow). The row records the branch before
-// the host is touched, so a call
-// that failed after GitHub opened the PR is retried onto that PR; a PR on the
-// branch is adopted only when its body names this proposal. On a row
-// whose PR is already open the checks run again on the same PR, against its
-// current head, while it still targets the production branch. The file that
-// is checked is the one read back from that head, never the text this process
-// built, together with every path the head changes; once every check passes
-// the row carries the identity stamped in that file: the merge gate pins the
-// merge to this head and the registry is written from the row. Every write
+// a branch from the production branch, the single record file, the PR, then
+// the six checks one at a time. Where the file goes depends on the repo's
+// layout (#4731):
+//
+// - Legacy: `.oxagen/rules/<lineage>.toml` on `steering/<lineage>`.
+// - Steering (steering/governance.toml on the production branch): a steering
+//   record, `steering/<kind folder>/<lineage>.md` on `steering/<lineage>`, or
+//   for a memory `steering/memory/workspace/general/<lineage>.md` on
+//   `memory/<lineage>` (context.steering.record.ts).
+//
+// A revision is written where the record's file lives now.
+//
+// Each outcome is written to the row before the next check starts, and the
+// host gets one required check, "Oxagen steering", with every outcome in its
+// summary (steering-repo-spec, Steering PR flow). The row records the branch
+// before the host is touched, so a call that failed after GitHub opened the
+// PR is retried onto that PR; a PR on the branch is adopted only when its body
+// names this proposal. On a row whose PR is already open the checks run again
+// on the same PR, against its current head, while it still targets the
+// production branch. The file that is checked is the one read back from that
+// head, never the text this process built, together with every path the head
+// changes; once every check passes the row carries the record's identity from
+// that file (for a steering record, the id and hash the merge will stamp):
+// the merge gate pins the merge to this head and the registry is written from
+// the row. Every write
 // after the checks start is tied to the head they read, so a re-run that
 // recorded a newer head wins and this call's outcome is refused `head_moved`.
 //
-// In a steering repo (steering/governance.toml on the production branch) the
-// branch must also name the folder its paths live in; a branch that does not
-// fails the Schema check. `recheckContextPr` runs the same checks when the
-// merge queue brings a passed PR's branch up to date.
+// In a steering repo the branch must also name the folder its paths live in;
+// a branch that does not fails the Schema check. `recheckContextPr` runs the
+// same checks when the merge queue brings a passed PR's branch up to date.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import {
@@ -63,6 +73,11 @@ import {
   proposalMoved,
   type ProposalRow,
 } from "./context.steering.store";
+import {
+  isSteeringRecordPath,
+  renderSteeringRecord,
+  steeringRecordPath,
+} from "./context.steering.record";
 import { isRepositoryRecord } from "./context.steering.sync.plan";
 import {
   bodyNamesProposal,
@@ -73,7 +88,12 @@ import {
   readSteeringLayout,
   type SteeringLayout,
 } from "./steering-repo/merge-queue";
-import { branchScopeRefusal, steeringBranch } from "./steering-repo/stamp";
+import {
+  branchPrefixForPath,
+  branchScopeRefusal,
+  stampRecordText,
+  steeringBranch,
+} from "./steering-repo/stamp";
 
 const OPEN_PR: readonly ProposalStatus[] = [
   "pr_open",
@@ -141,17 +161,29 @@ export function createOpenContextPrHandler(
     // A revision is written where the record's file lives now. A person can
     // rename or move a record file on the host (ADR-184), and a revision
     // written to the derived path would leave a second file holding the same
-    // lineage. A record the registry has never seen takes the derived path.
+    // lineage. A record the registry has never seen takes the derived path,
+    // in the format the repo's layout reads.
     const held = await deps.store.findRecord(scope, row.lineageId);
     const heldPath = held?.record.path ?? null;
+    const steering = layout.layout === "steering";
     const path =
       row.path ??
-      (isRepositoryRecord(heldPath) && heldPath
-        ? heldPath
-        : recordFilePath(row.lineageId));
+      (steering
+        ? isSteeringRecordPath(heldPath)
+          ? heldPath
+          : steeringRecordPath(row.kind as RecordKind, row.lineageId)
+        : isRepositoryRecord(heldPath) && heldPath
+          ? heldPath
+          : recordFilePath(row.lineageId));
     // A row that already names a branch keeps it: a retry, or a PR opened
     // on `context/<lineage>` before steering PRs took the `steering/` prefix.
-    const branch = row.branch ?? steeringBranch(row.lineageId);
+    // In a steering repo the branch names the folder the file is in, so a
+    // memory goes on `memory/<lineage>`.
+    const branch =
+      row.branch ??
+      (steering
+        ? `${branchPrefixForPath(path) ?? "steering"}/${row.lineageId}`
+        : steeringBranch(row.lineageId));
     if (!isOpen(row.status)) {
       // An open PR on the branch is this proposal's only when an earlier call
       // for it opened the PR and failed before recording it: the body names it.
@@ -166,35 +198,72 @@ export function createOpenContextPrHandler(
           message: `${existing.htmlUrl} is already open on ${branch}; one concern, one pull request`,
         });
       }
+      // The file carries the record's name (ADR-178): the proposal's when it
+      // renames the record, else the name the record already has, else one
+      // derived from the slug. It is built before anything is written, so a
+      // proposal the layout cannot hold is refused with nothing on the host.
+      const label =
+        row.label ?? held?.record.label ?? contextRecordLabel(row.lineageId);
+      // Who raised the proposal: a person, or an agent over an API key.
+      const origin = row.createdById ? ("user" as const) : ("inferred" as const);
+      // The format follows the path: a steering record for a path the
+      // steering layout reads as one, else a TOML record file. A row opened
+      // before #4731 keeps its .oxagen/rules/ path, and its TOML file.
+      let file: { content: string; id: string; hash: string };
+      if (isSteeringRecordPath(path)) {
+        // A revision keeps the fields the proposal does not own, such as
+        // tools and applies_to, so it reads the file it replaces.
+        const current =
+          path === heldPath
+            ? await deps.github.readFile(repo, path, repo.defaultBranch)
+            : null;
+        const record = renderSteeringRecord(
+          {
+            lineageId: row.lineageId,
+            label,
+            kind: row.kind as RecordKind,
+            constraintEffect:
+              (row.constraintEffect as ConstraintEffect | null) ?? null,
+            force: row.force,
+            sharingScope: row.sharingScope,
+            statement: row.statement,
+            origin,
+            proposalPublicId: row.publicId,
+          },
+          current,
+        );
+        file = { content: record.text, id: record.id, hash: record.hash };
+      } else {
+        const toml = buildRecordFile({
+          lineageId: row.lineageId,
+          label,
+          kind: row.kind as RecordKind,
+          force: row.force as RecordForce,
+          sharingScope: row.sharingScope as PublishedSharingScope,
+          statement: row.statement,
+          origin,
+          proposalPublicId: row.publicId,
+          setId: setIdFor(repo),
+        });
+        const record = toml.record[0]!;
+        file = {
+          content: serializeRecordFile(toml),
+          id: record.record_id,
+          hash: record.record_hash,
+        };
+      }
       if (row.branch !== branch) {
         row = await deps.store.updateProposal(row.id, { branch }, ["proposed"]);
       }
-      // The file carries the record's name (ADR-178): the proposal's when it
-      // renames the record, else the name the record already has, else one
-      // derived from the slug.
-      const file = buildRecordFile({
-        lineageId: row.lineageId,
-        label:
-          row.label ?? held?.record.label ?? contextRecordLabel(row.lineageId),
-        kind: row.kind as RecordKind,
-        force: row.force as RecordForce,
-        sharingScope: row.sharingScope as PublishedSharingScope,
-        statement: row.statement,
-        // Who raised the proposal: a person, or an agent over an API key.
-        origin: row.createdById ? "user" : "inferred",
-        proposalPublicId: row.publicId,
-        setId: setIdFor(repo),
-      });
-      const record = file.record[0]!;
       const stamped: ProposalRow = {
         ...row,
-        stampedRecordId: record.record_id,
-        recordHash: record.record_hash,
+        stampedRecordId: file.id,
+        recordHash: file.hash,
       };
       await deps.github.ensureBranch(repo, branch, repo.defaultBranch);
       const { commitSha } = await deps.github.putFile(repo, {
         path,
-        content: serializeRecordFile(file),
+        content: file.content,
         message: `steering: propose ${row.lineageId}`,
         branch,
       });
@@ -220,8 +289,8 @@ export function createOpenContextPrHandler(
           prNumber: pr.number,
           prUrl: pr.htmlUrl,
           headSha: commitSha,
-          stampedRecordId: record.record_id,
-          recordHash: record.record_hash,
+          stampedRecordId: file.id,
+          recordHash: file.hash,
           checks: pendingChecks(),
           updatedById: actingUserId,
         },
@@ -285,6 +354,25 @@ export function createOpenContextPrHandler(
 }
 
 type CheckDeps = Pick<SteeringDeps, "store" | "github" | "now">;
+
+/**
+ * The id and hash of the record in a file that passed every check. A steering
+ * record carries neither until the merge stamps it, so they are the ones the
+ * stamp will write. A TOML record file carries its own.
+ */
+function checkedIdentity(
+  path: string,
+  fileText: string,
+): { id: string; hash: string } | null {
+  if (isSteeringRecordPath(path)) {
+    const stamped = stampRecordText(fileText);
+    return stamped.ok ? { id: stamped.id, hash: stamped.hash } : null;
+  }
+  const parsed = parseChecked(fileText);
+  if (!parsed.ok) return null;
+  const record = parsed.file.record[0]!;
+  return { id: record.record_id, hash: record.record_hash };
+}
 
 interface HeadChecks {
   scope: { orgId: string; workspaceId: string };
@@ -415,17 +503,14 @@ async function runHeadChecks(
 
   // Every check passed, so the file parses and its stamp recomputes: the
   // row now describes the record at this head, the one the merge publishes.
-  const parsed = allPassed ? parseChecked(fileText) : null;
+  const identity = allPassed ? checkedIdentity(path, fileText) : null;
   return deps.store.updateProposal(
     row.id,
     {
       status: allPassed ? "checks_passed" : "checks_failed",
       checks: row.checks.map((c) => ({ ...c, detailsUrl })),
-      ...(parsed?.ok
-        ? {
-            stampedRecordId: parsed.file.record[0]!.record_id,
-            recordHash: parsed.file.record[0]!.record_hash,
-          }
+      ...(identity
+        ? { stampedRecordId: identity.id, recordHash: identity.hash }
         : {}),
     },
     ["checks_running"],

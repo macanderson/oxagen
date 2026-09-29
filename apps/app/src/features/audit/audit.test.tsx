@@ -172,6 +172,7 @@ const source: DataSource = {
     costCenters: refuse,
     modelCredential: refuse,
     dataPlane: refuse,
+    slackConnection: refuse,
     workspaceFacts: refuse,
     sso: refuse,
   },

@@ -35,27 +35,22 @@ export default async function AgentsPage({
   const user = await getAuthUser();
   const viewerName = user === null ? "" : user.name || user.email;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<AgentsLoading />}>
-        <Agents
-          ctx={ctx}
-          source={dataSource()}
-          cursor={firstParam(cursor) ?? null}
-          showRetired={firstParam(deregistered) === "show"}
-          viewerName={viewerName}
-          header={
-            <PageHeader
-              eyebrow={ctx.wsName}
-              title={t("pages.agents")}
-              description={t("agents.list.description")}
-              actions={<AgentsCreate org={org} ws={ws} />}
-            />
-          }
-        />
-      </Suspense>
-    </main>
+    <Suspense fallback={<AgentsLoading />}>
+      <Agents
+        ctx={ctx}
+        source={dataSource()}
+        cursor={firstParam(cursor) ?? null}
+        showRetired={firstParam(deregistered) === "show"}
+        viewerName={viewerName}
+        header={
+          <PageHeader
+            eyebrow={ctx.wsName}
+            title={t("pages.agents")}
+            description={t("agents.list.description")}
+            actions={<AgentsCreate org={org} ws={ws} />}
+          />
+        }
+      />
+    </Suspense>
   );
 }

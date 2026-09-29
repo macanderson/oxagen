@@ -206,6 +206,19 @@ describe("routes", () => {
     );
   });
 
+  it("puts Notifications on /{org} as ?tab=, with only the callback's outcome beside it", () => {
+    expect(routes.notifications("acme")).toBe("/acme?tab=notifications");
+    expect(routes.organization("acme", "notifications")).toBe(
+      routes.notifications("acme"),
+    );
+    expect(routes.notifications("acme", { slack: "connected" })).toBe(
+      "/acme?tab=notifications&slack=connected",
+    );
+    expect(routes.notifications("a/b", { slack: "expired" })).toBe(
+      "/a%2Fb?tab=notifications&slack=expired",
+    );
+  });
+
   it("builds Audit's tabs, its export and a data export's download with every segment encoded", () => {
     expect(routes.audit("acme")).toBe("/acme/audit");
     expect(routes.audit("acme", { outcome: "deny", range: undefined })).toBe(

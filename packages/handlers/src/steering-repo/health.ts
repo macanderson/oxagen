@@ -398,10 +398,10 @@ export function renderHealthReport(state: HealthState): HealthReport {
     lines.push(
       "Oxagen lost access to the repository. Oxagen will not merge or publish until an organization admin reconnects it.",
       "",
-      `✗ ${state.reason ?? "The repository no longer answers Oxagen Steering."}`,
+      `✗ ${state.reason ?? "The repository no longer answers the Oxagen GitHub App."}`,
       "",
       publishedLine(state.published_version),
-      "Repair: an organization admin connects the repository to Oxagen Steering again.",
+      "Repair: an organization admin connects the repository to the Oxagen GitHub App again.",
     );
   } else {
     lines.push(

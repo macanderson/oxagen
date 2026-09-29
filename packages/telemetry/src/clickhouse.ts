@@ -10,6 +10,12 @@ import { isCircuitOpenError } from "./circuit-breaker";
 
 // The client guards every remote operation, including streamed response bodies.
 // Callers still own durable delivery. A breaker is not a telemetry outbox.
+//
+// Token usage has an outbox (ADR-134). @oxagen/billing stages each call's row
+// in the Postgres table billing.usage_outbox, then delivers it here with
+// insertDurableTokenUsage, which writes durable_token_usage. Every reader
+// queries the metered_token_usage view, which combines that table with the
+// token_usage rows written before the outbox. Nothing writes token_usage now.
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -358,7 +364,7 @@ export interface TokenUsageRow {
   /**
    * UUID of the execution step that drove this LLM/embedding call, or `null`
    * when there is no step (e.g. fire-and-forget ingestion embeddings). `null`
-   * is coalesced to the nil UUID at the insert boundary (see `insertTokenUsage`
+   * is coalesced to the nil UUID when the row is stamped (see `stampTokenUsage`
    * / `NIL_UUID`) because the underlying ClickHouse column is a non-nullable
    * sorting-key `UUID`. NEVER pass a non-UUID correlation string here — it makes
    * ClickHouse abort the whole row (CANNOT_PARSE_INPUT_ASSERTION_FAILED).
@@ -381,7 +387,7 @@ export interface TokenUsageRow {
    * premium (~1.25x base input on Anthropic, 5-min TTL). Also a subset of
    * `input_tokens`. Optional at the type boundary — non-text callers (embeddings,
    * image/video generation) never write cache, so they omit it and it coalesces
-   * to 0 in `insertTokenUsage`, matching the ClickHouse column DEFAULT (migration
+   * to 0 in `stampTokenUsage`, matching the ClickHouse column DEFAULT (migration
    * 0026). Text callers routed through `@oxagen/ai` forward the real count.
    */
   cache_write_tokens?: number;
@@ -394,7 +400,7 @@ export interface TokenUsageRow {
   created_at: string;
   /**
    * OTEL trace id (32-char lowercase hex) of the enclosing distributed trace.
-   * Stamped automatically by insertTokenUsage() via currentTraceIds().
+   * Stamped automatically by stampTokenUsage() via currentTraceIds().
    * Empty string when no trace is active (OTEL not initialised or no active span).
    */
   trace_id?: string;
@@ -402,7 +408,7 @@ export interface TokenUsageRow {
   span_id?: string;
   /**
    * Acting IAM principal uuid (migration 0023). Stamped automatically by
-   * insertTokenUsage() from the ambient tenant scope
+   * stampTokenUsage() from the ambient tenant scope
    * (@oxagen/tenancy getPrincipalAttribution) — same pattern as trace_id.
    * Nil UUID when no principal was resolved. Explicit caller values win.
    */
@@ -488,12 +494,12 @@ export interface TokenUsageByStepRow {
 }
 
 /**
- * Batch-sum `token_usage` grouped by `execution_step_id` — the fan-out/lineage
- * read path (query_lineage): one query resolves spend + model + principal for
- * every node in a dispatch tree instead of N per-node reads. Org-scoped only
- * (no workspace filter) because a dispatch tree's runs all share one org by
- * construction and the caller already tenant-scopes the execution_step_id set
- * via Postgres.
+ * Batch-sum `metered_token_usage` grouped by `execution_step_id` for the
+ * fan-out/lineage read path (query_lineage): one query resolves spend + model
+ * + principal for every node in a dispatch tree instead of N per-node reads.
+ * Org-scoped only (no workspace filter) because a dispatch tree's runs all
+ * share one org by construction and the caller already tenant-scopes the
+ * execution_step_id set via Postgres.
  *
  * Every UInt64 sum is coerced with `Number()` per the ClickHouse
  * JSONEachRow-returns-decimal-strings gotcha (see sumTokenUsage above); at
@@ -501,9 +507,9 @@ export interface TokenUsageByStepRow {
  * Number.MAX_SAFE_INTEGER, unlike an org-wide cumulative sum.
  *
  * Returns a Map so callers can do O(1) per-node lookups; ids absent from the
- * result had zero token_usage rows. NIL_UUID is filtered out of the request
- * (never a real execution step) and an empty input short-circuits without a
- * network call. Does NOT catch its own errors — callers on a read path that
+ * result had zero metered_token_usage rows. NIL_UUID is filtered out of the
+ * request (never a real execution step) and an empty input short-circuits
+ * without a network call. Does NOT catch its own errors. Callers on a read path that
  * must never fail on a degraded ClickHouse (e.g. query_lineage) are expected
  * to wrap this in try/catch and degrade to zero-spend nodes.
  */
@@ -661,9 +667,6 @@ export const stampTokenUsage = (rows: readonly TokenUsageRow[]) => {
     }))
   );
 };
-
-export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
-  insertRows("token_usage", stampTokenUsage(rows));
 
 /** The delivery UUID stays stable across uncertain insert acknowledgments. */
 export const insertDurableTokenUsage = (id: string, row: TokenUsageRow) =>

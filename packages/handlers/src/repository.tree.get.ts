@@ -6,7 +6,7 @@
 //      (`not_found: repository_not_linked`).
 //   2. A client for the workspace's installation
 //      (`conflict: github_not_connected`). A steering repository on a
-//      `github_steering` connection reads through the Oxagen Steering app.
+//      `github_steering` connection reads through the Oxagen GitHub App.
 //   3. The repository as GitHub reports it now, for its default branch; one
 //      the installation cannot see, and one whose immutable id is no longer
 //      the bound one, are both `not_found: repository_not_installed`.

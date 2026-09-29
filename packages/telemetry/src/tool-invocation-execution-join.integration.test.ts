@@ -1,17 +1,14 @@
-// The witness for #2615: a tool_invocations row from any of this table's
-// seven producers should come back attached to the run that produced it,
-// when queried against its `execution_step_id`.
+// The witness for #2615: a tool_invocations row comes back attached to the
+// run that produced it when queried against its `execution_step_id`.
 //
-// The read side was never dead in the way `skill-execution-join`'s was — no
-// query in this codebase joins `tool_invocations` to `token_usage` on
-// `execution_step_id` today — but the shape of the defect is identical: six
-// of the table's seven producers hardcoded `execution_step_id: null` (the
-// materialize-tools.ts factory covers the seventh), so a row from any of
-// them could never be attributed to a run even if a join existed. This test
-// builds that join directly, the way a future cost-per-run report would, and
-// proves each fixed producer's row shape actually correlates — plus a
-// control recording the OLD behaviour (`execution_step_id: null`), which
-// must stay invisible to the same join.
+// No query in this codebase joins `tool_invocations` to metered token usage
+// on `execution_step_id` today. The defect was that producers hardcoded
+// `execution_step_id: null`, so a row could never be attributed to a run even
+// if a join existed. This test builds that join directly, the way a future
+// cost-per-run report would, and proves a producer's row shape correlates. A
+// control records the old behaviour (`execution_step_id: null`), which must
+// stay invisible to the same join. packages/telemetry/README.md lists the
+// producers.
 //
 // Live server rather than a mock, on this package's existing convention: a
 // mocked client accepts any SQL without complaint, so it cannot tell a join
@@ -77,7 +74,7 @@ async function toolInvocationRunCost(args: {
       ) AS ti
       INNER JOIN (
         SELECT execution_step_id, sum(cost_usd_micros) AS cost_usd_micros
-        FROM token_usage
+        FROM metered_token_usage
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
         GROUP BY execution_step_id
@@ -99,15 +96,15 @@ async function toolInvocationRunCost(args: {
 
 describe.skipIf(!chUp)("tool_invocations -> token_usage join (#2615)", () => {
   it("attributes a run's token cost to a tool_invocations row that recorded its executionStepId", async () => {
-    const { insertToolInvocation, insertTokenUsage } = await import(
-      "./clickhouse"
-    );
+    const { insertToolInvocation, insertDurableTokenUsage, stampTokenUsage } =
+      await import("./clickhouse");
 
     const orgId = randomUUID();
     const workspaceId = randomUUID();
     const executionStepId = randomUUID();
 
-    await insertTokenUsage([
+    // Seeded the way the usage outbox delivers it (ADR-134).
+    const [usage] = stampTokenUsage([
       {
         execution_step_id: executionStepId,
         org_id: orgId,
@@ -124,6 +121,7 @@ describe.skipIf(!chUp)("tool_invocations -> token_usage join (#2615)", () => {
         created_at: new Date().toISOString(),
       },
     ]);
+    await insertDurableTokenUsage(randomUUID(), usage!);
 
     // Shaped exactly as agent.background-task.execute.ts (and the other
     // three fixed inngest emitters) now build the row: a real run identity,
@@ -165,15 +163,15 @@ describe.skipIf(!chUp)("tool_invocations -> token_usage join (#2615)", () => {
   }, 30_000);
 
   it("cannot attribute a run's cost to a tool_invocations row recorded the pre-#2615 way (execution_step_id: null)", async () => {
-    const { insertToolInvocation, insertTokenUsage } = await import(
-      "./clickhouse"
-    );
+    const { insertToolInvocation, insertDurableTokenUsage, stampTokenUsage } =
+      await import("./clickhouse");
 
     const orgId = randomUUID();
     const workspaceId = randomUUID();
     const executionStepId = randomUUID();
 
-    await insertTokenUsage([
+    // Seeded the way the usage outbox delivers it (ADR-134).
+    const [usage] = stampTokenUsage([
       {
         execution_step_id: executionStepId,
         org_id: orgId,
@@ -190,6 +188,7 @@ describe.skipIf(!chUp)("tool_invocations -> token_usage join (#2615)", () => {
         created_at: new Date().toISOString(),
       },
     ]);
+    await insertDurableTokenUsage(randomUUID(), usage!);
 
     // The control: the SAME shape every one of the six producers wrote
     // before #2615 — a real message_id, but execution_step_id hardcoded to

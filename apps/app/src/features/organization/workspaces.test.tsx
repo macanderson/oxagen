@@ -313,6 +313,23 @@ describe("Workspaces", () => {
     expect(within(other).getByRole("button", { name: "Edit" })).toBeTruthy();
   });
 
+  // The table clips a body cell unless it holds `[data-actions]`, so every
+  // control in the row must sit inside that one marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderTab();
+    const mine = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m"));
+    const group = mine
+      .getByRole("button", { name: "Archive" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(mine.getByRole("link", { name: "Open" }));
+    expect(group).toContainElement(mine.getByRole("button", { name: "Edit" }));
+    expect(group).toContainElement(
+      mine.getByTestId("edit-workspace-avatar-wrk_0a1b2c3d4e5f6g7h8j9k0m"),
+    );
+    expect(group?.closest("td")).not.toBeNull();
+  });
+
   it("marks an archived workspace and offers it no control but copying its id", async () => {
     await renderTab();
     const archived = row("wrk_2c3d4e5f6g7h8j9k0m1n2p");

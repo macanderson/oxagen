@@ -60,6 +60,7 @@ After the initial sync, Oxagen keeps provider metadata current as the repository
 ## Security
 
 - A GitHub App holds the connection, with permissions you review before installing.
+- The same app creates your workspace's steering repo and holds its settings. For that it has Administration and Deployments write, and both reach every repository you select.
 - Oxagen **encrypts the authorization token at rest** and scopes it to your organization and workspace. The token stays in Oxagen. No agent receives it.
 - Oxagen sees only the repositories you select.
 - Revoke the connection at any time by uninstalling the Oxagen app from GitHub, or by removing the source in Oxagen.

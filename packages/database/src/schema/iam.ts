@@ -120,13 +120,19 @@ export const roles = iamSchema.table(
   },
   (t) => ({
     orgNameIdx: index("roles_org_name_idx").on(t.orgId, t.name),
-    // One role of each name per scope kind in an org (#2158). The seeded set
-    // carries an org "Owner" and a workspace "Owner", so the name is unique
-    // per (org, scope_kind), never per org alone; `lower()` because the
-    // membership CHECKs compare role names case-insensitively. Migration
-    // 20260915140000 creates the index (an expression index is not
-    // expressible in Drizzle DDL); `create_role` reads its 23505 as
-    // `conflict`.
+    // Two unique indexes on lower(name) keep role names apart. Both are
+    // expression indexes, which Drizzle DDL cannot express, so migrations
+    // create them. `lower()` matches the membership CHECKs, which compare role
+    // names case-insensitively.
+    //   20260915140000 creates `roles_org_scope_name_uq` on (org_id,
+    //   scope_kind, lower(name)): one role of each name per scope kind
+    //   (#2158). The seeded set carries an org "Owner" and a workspace
+    //   "Owner", so the key cannot be the org alone.
+    //   20260915141000 adds `roles_org_custom_name_uq` on (org_id,
+    //   lower(name)) where `is_system_default` is false. A custom name is
+    //   unique across both scope kinds, because the agent role handlers
+    //   resolve a role by name with no scope (#2964).
+    // `create_role` reads a 23505 from either index as `conflict`.
     scopeKindCheck: check(
       "roles_scope_kind_check",
       sql`${t.scopeKind} IN ('org', 'workspace')`,

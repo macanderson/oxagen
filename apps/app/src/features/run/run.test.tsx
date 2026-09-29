@@ -4277,15 +4277,15 @@ describe("loading", () => {
     await expectNoAxe(container);
   });
 
-  it("leaves main#main to the page, and draws four blocks and seven rows with no figure (negative)", () => {
+  it("leaves main#main to the shell, and draws four blocks and seven rows with no figure (negative)", () => {
     render(
       <IntlProvider>
         <RunLoading />
       </IntlProvider>,
     );
     // While the page streams in, this fallback and the hidden page share the
-    // document, so a second main#main here would give the skip link two
-    // targets (#4036). The frame is a plain container with the page's classes.
+    // document inside the shell's main#main, so a main here would give the
+    // skip link two targets (#4036, ADR-227). The frame is a plain container.
     expect(document.getElementById("main")).toBeNull();
     expect(document.querySelector("main")).toBeNull();
     // The design's skeleton: shapes only, so nothing reads as a figure.

@@ -41,10 +41,23 @@ import {
   healthHostFor,
   healthNotificationTitle,
   type LocatedTarget,
+  notifyAdmins,
   unconnectedHealthHost,
 } from "./health.hosts";
 
-const mocks = vi.hoisted(() => ({ warn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+  calls: [] as string[],
+  notifyOrgManagers: vi.fn(),
+  notifyOrgSlack: vi.fn(),
+}));
+
+// The notice senders have their own tests in @oxagen/notifications. Here they
+// only need to receive the right notice, in the right order.
+vi.mock("@oxagen/notifications", () => ({
+  notifyOrgManagers: mocks.notifyOrgManagers,
+  notifyOrgSlack: mocks.notifyOrgSlack,
+}));
 
 vi.mock("../logger", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../logger")>()),
@@ -171,7 +184,7 @@ describe("githubHealthHost.observe", () => {
 
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "The repository acme/steering was deleted, or Oxagen Steering can no longer see it.",
+      reason: "The repository acme/steering was deleted, or the Oxagen GitHub App can no longer see it.",
     });
   });
 
@@ -185,7 +198,7 @@ describe("githubHealthHost.observe", () => {
 
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "GitHub refused to show Oxagen Steering the settings of acme/steering.",
+      reason: "GitHub refused to show the Oxagen GitHub App the settings of acme/steering.",
     });
   });
 
@@ -228,7 +241,7 @@ describe("githubHealthHost.observe", () => {
     );
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "Oxagen Steering is no longer installed on acme.",
+      reason: "The Oxagen GitHub App is no longer installed on acme.",
     });
   });
 
@@ -238,7 +251,7 @@ describe("githubHealthHost.observe", () => {
     );
     expect(await host.observe()).toEqual({
       kind: "disconnected",
-      reason: "The Oxagen Steering installation on acme is suspended.",
+      reason: "The Oxagen GitHub App installation on acme is suspended.",
     });
   });
 
@@ -821,9 +834,9 @@ describe("unconnectedHealthHost", () => {
 // ── Host for a target ────────────────────────────────────────────────────────
 
 const APP_ENV = {
-  OXAGEN_STEERING_APP_ID: "4242",
-  OXAGEN_STEERING_APP_PRIVATE_KEY: "private-key",
-  OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+  GITHUB_APP_ID: "4242",
+  GITHUB_APP_PRIVATE_KEY: "private-key",
+  GITHUB_APP_SLUG: "oxagen-steering",
 };
 const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
@@ -870,11 +883,11 @@ describe("healthHostFor", () => {
     });
   });
 
-  it("returns null and logs when the deployment has no Oxagen Steering app", () => {
+  it("returns null and logs when the deployment has no Oxagen GitHub App", () => {
     expect(healthHostFor(located("github", GITHUB_CONNECTION), {})).toBeNull();
     expect(mocks.warn).toHaveBeenCalledWith(
       { orgId: "org-1", workspaceId: "ws-1" },
-      expect.stringContaining("the Oxagen Steering app is not configured"),
+      expect.stringContaining("the Oxagen GitHub App is not configured"),
     );
   });
 
@@ -971,5 +984,78 @@ describe("healthEmailHtml", () => {
     expect(healthEmailHtml('Rules & "checks"', "Line <one>\nLine two")).toBe(
       "<p><strong>Rules &amp; &quot;checks&quot;</strong></p><p>Line &lt;one&gt;<br>Line two</p>",
     );
+  });
+});
+
+describe("notifyAdmins", () => {
+  const TARGET = located("github", null).target;
+  const ENV = { APP_URL: "https://app.oxagen.sh" };
+
+  function reset(): void {
+    mocks.calls.length = 0;
+    mocks.notifyOrgManagers.mockReset().mockImplementation(async () => {
+      mocks.calls.push("managers");
+    });
+    mocks.notifyOrgSlack.mockReset().mockImplementation(async () => {
+      mocks.calls.push("slack");
+      return { outcome: "posted", channelId: "C1", ts: null };
+    });
+  }
+
+  it("sends the in-app notice and email, then one Slack message with the same text", async () => {
+    reset();
+    await notifyAdmins(TARGET, state("drifted"), REPORT, ENV);
+    const title = healthNotificationTitle(state("drifted"), "acme/steering");
+    expect(mocks.calls).toEqual(["managers", "slack"]);
+    expect(mocks.notifyOrgManagers).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      kind: "security",
+      title,
+      body: REPORT.summary,
+      deepLink: "/acme/main/repositories",
+      emailHtml: healthEmailHtml(title, REPORT.summary),
+    });
+    expect(mocks.notifyOrgSlack).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyOrgSlack).toHaveBeenCalledWith(
+      {
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        kind: "security",
+        title,
+        body: REPORT.summary,
+        deepLink: "/acme/main/repositories",
+      },
+      ENV,
+    );
+  });
+
+  it("leaves out the workspace for the organization's own steering repo", async () => {
+    reset();
+    const target = { ...TARGET, scope: { orgId: "org-1", workspaceId: null } };
+    await notifyAdmins(target, state("disconnected"), REPORT, ENV);
+    expect(mocks.notifyOrgManagers.mock.calls[0]![0]).not.toHaveProperty("workspaceId");
+    expect(mocks.notifyOrgSlack.mock.calls[0]![0]).not.toHaveProperty("workspaceId");
+  });
+
+  it("throws a failed Slack post, so the next health read sends the notice again", async () => {
+    reset();
+    const failure = new Error("Slack chat.postMessage failed: ratelimited");
+    mocks.notifyOrgSlack.mockRejectedValueOnce(failure);
+    await expect(notifyAdmins(TARGET, state("drifted"), REPORT, ENV)).rejects.toBe(failure);
+    expect(mocks.notifyOrgManagers).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not post to Slack when the in-app notice fails", async () => {
+    reset();
+    mocks.notifyOrgManagers.mockRejectedValueOnce(new Error("db down"));
+    await expect(notifyAdmins(TARGET, state("drifted"), REPORT, ENV)).rejects.toThrow("db down");
+    expect(mocks.notifyOrgSlack).not.toHaveBeenCalled();
+  });
+
+  it("reads process.env when no env is passed", async () => {
+    reset();
+    await notifyAdmins(TARGET, state("drifted"), REPORT);
+    expect(mocks.notifyOrgSlack.mock.calls[0]![1]).toBe(process.env);
   });
 });

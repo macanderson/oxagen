@@ -2,7 +2,7 @@
 // #4560).
 //
 // It loads a scope's steering repo from the settings provisioning wrote,
-// binds `HealthHost` to GitHub through the Oxagen Steering app and to GitLab
+// binds `HealthHost` to GitHub through the Oxagen GitHub App and to GitLab
 // through the group access token, and tells the organization's owners and
 // admins when the repo changes state. health.ts holds the decisions, and
 // ./diverged.ts holds the history reads and the revert pull request.
@@ -173,11 +173,11 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
         const status = mintStatus(err);
         if (status === 404)
           return disconnected(
-            `Oxagen Steering is no longer installed on ${input.account}.`,
+            `The Oxagen GitHub App is no longer installed on ${input.account}.`,
           );
         if (status === 403)
           return disconnected(
-            `The Oxagen Steering installation on ${input.account} is suspended.`,
+            `The Oxagen GitHub App installation on ${input.account} is suspended.`,
           );
         throw err;
       }
@@ -188,7 +188,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
       }>("GET", `/repositories/${seg(input.repositoryId)}`, undefined, [403, 404]);
       if (found.data === null)
         return disconnected(
-          `The repository ${fullName()} was deleted, or Oxagen Steering can no longer see it.`,
+          `The repository ${fullName()} was deleted, or the Oxagen GitHub App can no longer see it.`,
         );
       address = { owner: found.data.owner.login, name: found.data.name };
       let actual: gh.ObservedGithubSettings;
@@ -202,7 +202,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
       } catch (err) {
         if (!refused(err)) throw err;
         return disconnected(
-          `GitHub refused to show Oxagen Steering the settings of ${found.data.full_name}.`,
+          `GitHub refused to show the Oxagen GitHub App the settings of ${found.data.full_name}.`,
         );
       }
       return {
@@ -624,7 +624,7 @@ export function healthHostFor(
     if (config === null) {
       logger.warn(
         { orgId: target.scope.orgId, workspaceId: target.scope.workspaceId },
-        "steering-repo.health: the Oxagen Steering app is not configured, so this deployment cannot read the steering repo",
+        "steering-repo.health: the Oxagen GitHub App is not configured, so this deployment cannot read the steering repo",
       );
       return null;
     }
@@ -682,22 +682,43 @@ export function healthEmailHtml(title: string, summary: string): string {
   return `<p><strong>${escapeHtml(title)}</strong></p><p>${lines}</p>`;
 }
 
-async function notifyAdmins(
+/**
+ * Tell the organization's Owners and Admins that the steering repo changed
+ * state: an in-app notice and an email to each, then one message in the
+ * Slack channel the organization picked, when it has one. A throw from
+ * either leaves the notified state as it was, so the next health read sends
+ * the notice again.
+ */
+export async function notifyAdmins(
   target: HealthTarget,
   state: HealthState,
   report: HealthReport,
+  env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<void> {
-  const { notifyOrgManagers } = await import("@oxagen/notifications");
+  const { notifyOrgManagers, notifyOrgSlack } = await import("@oxagen/notifications");
   const title = healthNotificationTitle(state, target.repository.full_name);
+  const workspace =
+    target.scope.workspaceId !== null ? { workspaceId: target.scope.workspaceId } : {};
   await notifyOrgManagers({
     orgId: target.scope.orgId,
-    ...(target.scope.workspaceId !== null ? { workspaceId: target.scope.workspaceId } : {}),
+    ...workspace,
     kind: "security",
     title,
     body: report.summary,
     deepLink: target.deepLink,
     emailHtml: healthEmailHtml(title, report.summary),
   });
+  await notifyOrgSlack(
+    {
+      orgId: target.scope.orgId,
+      ...workspace,
+      kind: "security",
+      title,
+      body: report.summary,
+      deepLink: target.deepLink,
+    },
+    env,
+  );
 }
 
 // ── Production dependencies ──────────────────────────────────────────────────
@@ -720,7 +741,7 @@ export function productionHealthDeps(
       const found = located.get(target);
       return found === undefined ? null : healthHostFor(found, env);
     },
-    notify: notifyAdmins,
+    notify: (target, state, report) => notifyAdmins(target, state, report, env),
   };
 }
 
