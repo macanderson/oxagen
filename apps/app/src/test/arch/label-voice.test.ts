@@ -1,4 +1,4 @@
-// INV-34 (ARCHITECTURE.md §4): every label in messages/*.json is plain
+// INV-35 (ARCHITECTURE.md §4): every label in messages/*.json is plain
 // (CLAUDE.md, Labels and headings; ADR-226, amendment of 2026-09-29). A
 // heading names the thing, a button names what it acts on, and a caption
 // states one fact. The v3 mockup's wording is not the design of record, so a
@@ -60,7 +60,7 @@ const PROBE = {
   },
 };
 
-describe("label voice (INV-34)", () => {
+describe("label voice (INV-35)", () => {
   const catalogs = loadCatalogs(path.join(APP_DIR, "messages"));
 
   it("every heading, button, and caption in messages/*.json is plain", () => {

@@ -161,7 +161,8 @@ function Caption() {
  * The gate every register step sits in (mockup `regShell`): top bar, rail, the
  * step, and the caption. There is no sidebar and no top bar of the app in the
  * design; the organization layout still draws them around this route until the
- * shell carries a gate frame, so this is the page body inside it.
+ * shell carries a gate frame, so this is the page body inside the shell's
+ * `main#main` (ADR-227) and adds no landmark of its own.
  */
 export async function RegisterGate({
   ctx,
@@ -177,10 +178,9 @@ export async function RegisterGate({
   const user = await getAuthUser();
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug };
   return (
-    <main
-      id="main"
+    <div
       data-testid="register-gate"
-      className="flex w-full flex-col bg-app-panel-bg px-4 pb-14"
+      className="flex w-full flex-col bg-app-panel-bg"
     >
       <div className={column}>
         <TopBar
@@ -192,7 +192,7 @@ export async function RegisterGate({
         <div className="flex flex-col gap-[18px] pt-7">{children}</div>
       </div>
       <Caption />
-    </main>
+    </div>
   );
 }
 

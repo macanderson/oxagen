@@ -143,7 +143,7 @@ Mac set this rule on 2026-09-21 and restated it on 2026-09-29, after the steerin
 - **Subtext under a heading is one sentence or nothing.** Cut slogans such as "One concern, one pull request." and "The harness owns the context window."
 - **The mockup's wording does not override this rule.** ADR-226 makes the v3 mockup the design of record for layout and behavior. Many of its labels break this rule, so rename a mockup label when you port it, and keep the mockup's structure.
 
-Load `clear-prose` before you write any of these strings. `apps/app/src/test/arch/label-voice.test.ts` (INV-34) fails CI on the shapes it can read in `apps/app/messages/*.json`. It cannot read meaning, so read every catalogue diff for a slogan too.
+Load `clear-prose` before you write any of these strings. `apps/app/src/test/arch/label-voice.test.ts` (INV-35) fails CI on the shapes it can read in `apps/app/messages/*.json`. It cannot read meaning, so read every catalogue diff for a slogan too.
 
 ## Type
 

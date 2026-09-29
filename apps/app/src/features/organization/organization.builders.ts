@@ -1,7 +1,7 @@
 // Typed Organization values for the Organization component tests
 // (ARCHITECTURE.md §5): a role row, a catalogue entry, the roles read, a
-// workspace row, one API key, an identity provider and the SSO read, and a
-// DataSource that answers the organization reads with what a test hands it while recording the arguments
+// workspace row, one API key, an identity provider and the SSO read, a Slack
+// connection, and a DataSource that answers the organization reads with what a test hands it while recording the arguments
 // it was called with. Every other port refuses, so a section that reads
 // outside its own port fails the test rather than passing on a stub.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
@@ -14,6 +14,7 @@ import type {
   Permission,
   Role,
   RoleCatalog,
+  SlackConnection,
   SsoProvider,
   SsoSettings,
   Workspace,
@@ -102,6 +103,24 @@ export function dataPlane(overrides: Partial<DataPlane> = {}): DataPlane {
   };
 }
 
+/**
+ * A Slack workspace connected with no channel picked yet, as
+ * `get_slack_connection` answers right after the OAuth callback.
+ */
+export function slackConnection(
+  overrides: Partial<SlackConnection> = {},
+): SlackConnection {
+  return {
+    configured: true,
+    connected: true,
+    teamName: "Acme Robotics",
+    channel: null,
+    lastFailure: null,
+    connectedAt: "2026-09-20T08:00:00.000Z",
+    ...overrides,
+  };
+}
+
 /** An OIDC provider whose domain is proven, with one group mapped to admin. */
 export function ssoProvider(overrides: Partial<SsoProvider> = {}): SsoProvider {
   return {
@@ -171,6 +190,7 @@ type OrgReads = {
   modelCredential?: Read<ModelCredential>;
   dataPlane?: Read<DataPlane>;
   sso?: Read<SsoSettings>;
+  slackConnection?: Read<SlackConnection>;
   costCenters?: Read<CostCenterList>;
   /** What each workspace answers `org.workspaceFacts`, by slug. */
   workspaceFacts?: Readonly<Record<string, Read<WorkspaceFacts>>>;
@@ -188,6 +208,7 @@ export function orgSource(reads: OrgReads): {
     modelCredential: [],
     dataPlane: [],
     sso: [],
+    slackConnection: [],
     costCenters: [],
     workspaceFacts: [],
   };
@@ -266,6 +287,7 @@ export function orgSource(reads: OrgReads): {
       modelCredential: answer(reads.modelCredential, "modelCredential"),
       dataPlane: answer(reads.dataPlane, "dataPlane"),
       sso: answer(reads.sso, "sso"),
+      slackConnection: answer(reads.slackConnection, "slackConnection"),
       workspaceFacts: (ctx: { wsSlug: string }, ...rest: unknown[]) => {
         calls.workspaceFacts.push([ctx, ...rest]);
         const { wsSlug } = ctx;

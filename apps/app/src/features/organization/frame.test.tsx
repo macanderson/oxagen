@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // The Organization frame (pages/organization.md): the org.admin check on the
-// server, the header and the seven design tabs with their counts, and the
-// empty, error and denied states that replace the body. Each state's copy is
-// the design's, verbatim, and every state is checked with axe.
+// server, the header, the seven design tabs with their counts and then
+// Notifications (#4608), and the empty, error and denied states that replace
+// the body. Each state's copy is the design's, verbatim, and every state is
+// checked with axe.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -178,12 +179,14 @@ describe("loaded", () => {
         "Model funding and routes",
         "Data plane",
         "API keys",
+        "Notifications",
       ]);
       expect(tabs[0]).toHaveAttribute("aria-current", "page");
       expect(tabs[0]).toHaveAttribute("aria-selected", "true");
       expect(tabs[1]).toHaveAttribute("aria-selected", "false");
       expect(tabs[2]).toHaveAttribute("href", "/acme?tab=invitations");
       expect(tabs[5]).toHaveAttribute("href", "/acme?tab=dataPlane");
+      expect(tabs[7]).toHaveAttribute("href", "/acme?tab=notifications");
       expect(screen.getByTestId("tab-body")).toBeInTheDocument();
       // A write's receipt goes to the root layout's toaster (ADR-221), so the
       // frame mounts no stack of its own.

@@ -10,7 +10,8 @@
       "invitations": "Invitations",
       "workspaces": "Workspaces",
       "dataPlane": "Data plane",
-      "costCenters": "Cost centers"
+      "costCenters": "Cost centers",
+      "notifications": "Notifications"
     },
     "roles": {
       "owner": "org.owner",
@@ -1052,10 +1053,82 @@
       "workspaceSaved": "{name} was saved. Recorded in the audit record.",
       "workspaceArchived": "{name} was archived. Recorded in the audit record.",
       "modelKeySaved": "Your key was saved. The next assistant turn uses it. Recorded in the audit record.",
-      "modelKeyRemoved": "Your key was removed. Turns run on Oxagen's key from the next call. Recorded in the audit record."
+      "modelKeyRemoved": "Your key was removed. Turns run on Oxagen's key from the next call. Recorded in the audit record.",
+      "slackChannelSaved": "Notices now post to #{name}. Recorded in the audit record.",
+      "slackDisconnected": "Slack was disconnected, and Oxagen stopped posting there. Recorded in the audit record."
     },
     "avatar": {
       "open": "Edit avatar"
+    },
+    "notifications": {
+      "title": "Slack",
+      "about": "Oxagen posts each change in a steering repo’s health to the channel you pick here. The in-app notice and the email keep going out.",
+      "status": {
+        "connected": "connected",
+        "notConnected": "not connected",
+        "unavailable": "unavailable"
+      },
+      "unavailable": "Slack is unavailable on this deployment because it has no Slack app credentials. Contact your Oxagen admin.",
+      "notConnected": "No Slack workspace is connected.",
+      "readOnly": "Only an organization owner or admin can change Slack.",
+      "connect": "Connect Slack",
+      "connecting": "Opening Slack",
+      "facts": {
+        "workspace": "Slack workspace",
+        "channel": "Channel",
+        "connectedAt": "Connected"
+      },
+      "noChannel": "None picked. Oxagen posts nothing until you pick one.",
+      "channelName": "#{name}",
+      "channelNamePrivate": "#{name} (private)",
+      "picker": {
+        "open": "Pick a channel",
+        "change": "Change channel",
+        "loading": "Loading channels",
+        "label": "Channel",
+        "placeholder": "Choose a channel",
+        "invite": "A private channel appears after you run /invite @Oxagen in it and reload this page.",
+        "truncated": "Slack holds more channels than this list shows, so yours may be missing.",
+        "empty": "Slack returned no channel Oxagen can post to.",
+        "save": "Save",
+        "saving": "Saving",
+        "cancel": "Cancel"
+      },
+      "disconnect": {
+        "open": "Disconnect",
+        "confirm": "Disconnect Slack? Oxagen deletes the stored token, asks Slack to revoke it, and stops posting. The in-app notice and the email keep going out.",
+        "yes": "Disconnect",
+        "pending": "Disconnecting",
+        "cancel": "Keep Slack connected"
+      },
+      "lastFailure": {
+        "label": "Last failed post",
+        "notInChannel": "The bot is not in the channel. Run /invite @Oxagen in it.",
+        "channelNotFound": "The channel was deleted, or the bot cannot see it. Pick another channel.",
+        "isArchived": "The channel is archived. Unarchive it in Slack, or pick another channel.",
+        "tokenRevoked": "Someone removed the app from Slack or revoked its token. Select Disconnect, then Connect Slack.",
+        "missingScope": "Slack did not grant every scope the app asks for. Select Disconnect, then Connect Slack.",
+        "tokenUnreadable": "Oxagen could not decrypt the stored token. Select Disconnect, then Connect Slack.",
+        "other": "Slack refused the post: {code}."
+      },
+      "outcome": {
+        "connected": "Slack is connected. Pick the channel notices post to.",
+        "cancelled": "You cancelled in Slack, so Oxagen connected nothing.",
+        "expired": "The connect link expired or belongs to someone else. Select Connect Slack to start again.",
+        "refused": "Slack did not grant what Oxagen needs. Select Connect Slack to start again.",
+        "pendingApproval": "Connecting Slack is waiting for approval.",
+        "unavailable": "Slack or Oxagen did not answer. Select Connect Slack to try again."
+      },
+      "failure": {
+        "notConnected": "No Slack workspace is connected. Select Connect Slack.",
+        "broken": "The Slack connection no longer works. Select Disconnect, then Connect Slack.",
+        "channelGone": "That channel cannot take posts because it was deleted or archived. Pick another channel.",
+        "connectionChanged": "Someone connected another Slack workspace. Reload the page.",
+        "invalid": "Oxagen refused that channel. Pick another one.",
+        "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
+        "unavailable": "Slack or Oxagen did not answer: {code}. Try again.",
+        "refused": "The change was refused: {code}. Nothing was changed."
+      }
     }
   }
 }
