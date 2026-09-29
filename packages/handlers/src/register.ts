@@ -74,10 +74,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
   });
   // MCP server discovery (lane M10, #4682) runs in ./mcp-studio/discovery,
   // which @oxagen/inngest-functions cannot import. It is loaded on the first
-  // run, not at boot.
+  // run, not at boot. A run that finds a change opens a tools steering PR
+  // through M11's opener (#4686). The discovery seams refuse that PR until
+  // the opener is installed, so each run installs it before the sync starts.
   setMcpServerDiscoveryRunner({
-    run: async (data) =>
-      (await import("./mcp-studio/discovery/entry")).runDiscoveryEvent(data),
+    run: async (data) => {
+      const [entry, { installDiscoverySeams }, { toolsPullRequestOpener }] =
+        await Promise.all([
+          import("./mcp-studio/discovery/entry"),
+          import("./mcp-studio/discovery/seams"),
+          import("./tools.pr.open"),
+        ]);
+      installDiscoverySeams({ opener: toolsPullRequestOpener });
+      return entry.runDiscoveryEvent(data);
+    },
     sweep: async (now) =>
       (await import("./mcp-studio/discovery/entry")).planDiscoverySweep(now),
   });
