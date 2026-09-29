@@ -104,7 +104,9 @@ type Events = {
 
   // Provision a steering repo (lane S1, #4450). create_workspace sends it for
   // the new workspace, and create_organization for `<org>/oxagen`, where
-  // workspaceId is null. Sending it again resumes from the step that stopped.
+  // workspaceId is null. The headless backfill (#4683) sends it for each
+  // workspace that never started provisioning. Sending it again resumes from
+  // the step that stopped.
   "steering-repo/provision.requested": {
     data: {
       orgId: string;
