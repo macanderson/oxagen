@@ -186,10 +186,11 @@ export interface ServedLog {
   warn(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type ServedRouteCode = "relay_not_built" | "local_unavailable";
+export type ServedRouteCode = "local_unavailable";
 
 /**
- * A network route Oxagen cannot carry a call on yet. The call ends with an
+ * A network route that cannot carry this call, such as a local route with no
+ * signing key, no enrolled machine, or no launch spec. The call ends with an
  * isError result that says so, and nothing is sent.
  */
 export class ServedRouteError extends Error {

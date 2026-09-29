@@ -3,7 +3,7 @@
 import type { CallToolResult, ManifestServer, RequestKind } from "@oxagen/mcp-studio";
 import type { PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
-import { callServed, sandboxOf, unbuiltRoute } from "../call";
+import { callServed, sandboxOf } from "../call";
 import type { Ranker, SearchEntry } from "../search";
 import { ServedRouteError, type PublishedTools, type ServedRun } from "../types";
 import {
@@ -766,25 +766,14 @@ describe("callServed kill switches", () => {
 });
 
 describe("callServed routes", () => {
-  it("refuses a relay route with a typed error and sends nothing", async () => {
+  it("sends a relay route's call through the transport its network names", async () => {
     const version = published({ servers: [...SOURCES.map(server), server(RELAY)] });
     const { call, recorded } = await setup({}, version);
     const result = await call("corp__list_users");
-    expect(result?.isError).toBe(true);
-    expect(textOf(result)).toBe(
-      "Oxagen cannot send calls over relay:corp yet, so it sent nothing. Ask a workspace admin to give the server a cloud or local sandbox environment.",
-    );
-    expect(recorded.routes).toEqual([]);
-    nothingSent(recorded);
-    expect(outcomes(recorded)).toEqual(["call corp__list_users failed"]);
-  });
-
-  it("names the relay route error by its code", () => {
-    const error = unbuiltRoute("relay:corp");
-    expect(error).toBeInstanceOf(ServedRouteError);
-    expect(error?.code).toBe("relay_not_built");
-    expect(unbuiltRoute("cloud")).toBeNull();
-    expect(unbuiltRoute("local")).toBeNull();
+    expect(result?.isError).not.toBe(true);
+    expect(recorded.routes.map((route) => route.network)).toEqual(["relay:corp"]);
+    expectCarried(recorded, "http");
+    expect(outcomes(recorded)).toEqual(["call corp__list_users allowed"]);
   });
 
   it("answers with the route's own error when the machine cannot take the call", async () => {

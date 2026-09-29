@@ -132,21 +132,7 @@ export function sandboxOf(server: ManifestServer): { name: string; network: stri
   return sandbox === undefined ? null : { name: sandbox[0], network: sandbox[1].network };
 }
 
-/**
- * The refusal for a network Oxagen cannot carry a call on yet. A relay
- * waits for lane M12, so nothing is sent over one.
- */
-export function unbuiltRoute(network: string): ServedRouteError | null {
-  if (!network.startsWith("relay:")) return null;
-  return new ServedRouteError(
-    "relay_not_built",
-    `Oxagen cannot send calls over ${network} yet, so it sent nothing. Ask a workspace admin to give the server a cloud or local sandbox environment.`,
-  );
-}
-
 function transportFor(ports: ServedPorts, route: ServedRoute): Transport | ServedRouteError {
-  const unbuilt = unbuiltRoute(route.network);
-  if (unbuilt !== null) return unbuilt;
   try {
     return ports.transport(route);
   } catch (error) {

@@ -28,7 +28,6 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { relayTransport } from "../relay";
 import { postgresApprovals } from "./approvals";
-import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
@@ -212,8 +211,6 @@ function localTransport(route: ServedRoute): Transport {
 
 /** The transport for the network the environment names. */
 export function transportFor(route: ServedRoute): Transport {
-  const unbuilt = unbuiltRoute(route.network);
-  if (unbuilt !== null) throw unbuilt;
   if (route.network === "local") return localTransport(route);
   // A relay:<name> network goes through this process's relay broker (lane M12).
   if (route.network.startsWith("relay:")) return relayTransport(route.run);
