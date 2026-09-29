@@ -56,10 +56,17 @@ beforeEach(() => {
 describe("spend port", () => {
   it("byGroup reads get_spend at the level asked for", async () => {
     kernelRead.mockResolvedValue(
-      readOk({ period, groupBy: "operator", total: figure, rows: [] }),
+      readOk({
+        period,
+        groupBy: "operator",
+        total: figure,
+        days: [],
+        reported: null,
+        rows: [],
+      }),
     );
     expect(await spend.byGroup(ctx, "operator", period)).toEqual(
-      readOk({ period, total: figure, rows: [] }),
+      readOk({ period, total: figure, days: [], reported: null, rows: [] }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: spendGet,
@@ -74,6 +81,8 @@ describe("spend port", () => {
         period,
         groupBy: "model",
         total: figure,
+        days: [],
+        reported: null,
         rows: [],
         estimatedRuns: 3,
       }),
@@ -82,7 +91,14 @@ describe("spend port", () => {
     expect(open.ok && open.value.estimatedRuns).toBe(3);
 
     kernelRead.mockResolvedValue(
-      readOk({ period, groupBy: "model", total: figure, rows: [] }),
+      readOk({
+        period,
+        groupBy: "model",
+        total: figure,
+        days: [],
+        reported: null,
+        rows: [],
+      }),
     );
     const older = await spend.byGroup(ctx, "model", period);
     expect(older.ok).toBe(true);
@@ -92,7 +108,14 @@ describe("spend port", () => {
   it("fleet reads get_spend at the model level over the day asked for", async () => {
     const day = { from: "2026-09-15", to: "2026-09-15" };
     kernelRead.mockResolvedValue(
-      readOk({ period: day, groupBy: "model", total: figure, rows: [] }),
+      readOk({
+        period: day,
+        groupBy: "model",
+        total: figure,
+        days: [],
+        reported: null,
+        rows: [],
+      }),
     );
     expect(await spend.fleet(ctx, day)).toEqual(
       readOk({ period: day, spend: figure.cost, cacheHitRate: null }),
@@ -246,6 +269,8 @@ describe("spend port", () => {
         period,
         groupBy: "operator",
         total: { ...figure, cost: { micros: "1.5", currency: "USD" } },
+        days: [],
+        reported: null,
         rows: [],
       }),
     );
