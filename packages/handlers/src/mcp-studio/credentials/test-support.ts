@@ -22,6 +22,7 @@ import {
   connectStateSchema,
   type CredentialStore,
   type CredentialTokenUpdate,
+  type CredentialValue,
   type NewOperatorToken,
   type OperatorKey,
   type OperatorTokenUpdate,
@@ -210,6 +211,24 @@ export class MemoryCredentialStore implements CredentialStore {
     this.writes.push(`markCredentialNeedsReauth ${id}`);
     const row = this.credentials.get(id);
     if (row !== undefined) this.credentials.set(id, { ...row, status: "needs_reauth" });
+  }
+
+  async setCredential(value: CredentialValue): Promise<{ id: string; created: boolean }> {
+    const existing = await this.credentialByName(value.name);
+    const id = existing?.id ?? randomUUID();
+    this.writes.push(`setCredential ${id}`);
+    this.credentials.set(id, {
+      id,
+      name: value.name,
+      authKind: value.authKind,
+      status: "active",
+      oauthClientId: value.oauthClientId,
+      scopes: [],
+      expiresAt: null,
+      lastRefreshedAt: null,
+      ...value.sealed,
+    });
+    return { id, created: existing === null };
   }
 
   async operatorToken(key: OperatorKey): Promise<StoredOperatorToken | null> {

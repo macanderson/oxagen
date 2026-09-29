@@ -6892,6 +6892,23 @@
       }
     },
     {
+      "name": "set_mcp_credential",
+      "file": "tool.studio.credential.set.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_studio_draft",
       "file": "tool.studio.draft.get.ts",
       "domain": "tool",

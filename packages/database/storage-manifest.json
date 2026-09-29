@@ -3647,6 +3647,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "set_mcp_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "set_mcp_enabled",
       "reads": [],

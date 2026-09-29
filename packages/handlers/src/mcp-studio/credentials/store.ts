@@ -10,10 +10,11 @@
 //
 // Every read and write filters by the store's org and workspace and runs under
 // row-level security, so a row from another workspace reads as absent.
+import { randomUUID } from "node:crypto";
 import { schema, type Tx, withOrgDb, withSystemDb, withTenantDb } from "@oxagen/database";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 const credentials = schema.mcpCredentials;
@@ -56,6 +57,22 @@ export interface CredentialTokenUpdate {
   expiresAt: Date | null;
   scopes: string[];
   refreshedAt: Date;
+}
+
+/**
+ * A named credential's value, as set_mcp_credential writes it. The secret
+ * columns the kind does not use are null in `sealed`, so a replace that
+ * changes the kind clears what the old kind stored.
+ */
+export interface CredentialValue {
+  name: string;
+  /** secret for a service secret, oauth for an OAuth client. */
+  authKind: "secret" | "oauth";
+  /** The OAuth client id, or null for a service secret. */
+  oauthClientId: string | null;
+  sealed: SealedSecrets & { tokenKmsKeyId: string };
+  /** The person who set the value, for the row's audit columns. */
+  actorUserId: string | null;
 }
 
 /** One mcp.operator_tokens row. */
@@ -105,6 +122,13 @@ export interface CredentialStore {
   credentialById(id: string): Promise<StoredCredential | null>;
   saveCredentialTokens(id: string, update: CredentialTokenUpdate): Promise<void>;
   markCredentialNeedsReauth(id: string): Promise<void>;
+  /**
+   * Create the named credential, or replace the value of the one this
+   * workspace holds by that name. A replace keeps the row's id, so the
+   * operator tokens that point at it stay attached. `created` is false on a
+   * replace.
+   */
+  setCredential(value: CredentialValue): Promise<{ id: string; created: boolean }>;
   operatorToken(key: OperatorKey): Promise<StoredOperatorToken | null>;
   /** Insert the operator's token, or replace the one the operator had. */
   saveOperatorToken(row: NewOperatorToken): Promise<void>;
@@ -207,6 +231,47 @@ export function postgresCredentialStore(scope: CredentialScope): CredentialStore
           .set({ status: "needs_reauth", updatedAt: new Date() })
           .where(and(credentialIn, eq(credentials.id, id))),
       );
+    },
+
+    async setCredential(value) {
+      const now = new Date();
+      // A new value starts a new credential: no token, no scopes, no expiry.
+      const columns = {
+        authKind: value.authKind,
+        ...value.sealed,
+        oauthClientId: value.oauthClientId,
+        scopes: [] as string[],
+        expiresAt: null,
+        status: "active",
+        lastRefreshedAt: null,
+      };
+      const [row] = await inScope((tx) =>
+        tx
+          .insert(credentials)
+          .values({
+            orgId,
+            workspaceId,
+            // The column predates named credentials and keys a plugin
+            // install's row. A named credential belongs to no listing, and
+            // the (workspace, listing) unique index needs a distinct value.
+            orgListingId: randomUUID(),
+            name: value.name,
+            createdById: value.actorUserId,
+            updatedById: value.actorUserId,
+            ...columns,
+          })
+          .onConflictDoUpdate({
+            target: [credentials.workspaceId, credentials.name],
+            set: { ...columns, updatedAt: now, updatedById: value.actorUserId },
+          })
+          // xmax is 0 on a row this statement inserted and set on a row the
+          // conflict path updated, so one statement answers both questions.
+          .returning({ id: credentials.id, created: sql<boolean>`(xmax = 0)` }),
+      );
+      if (row === undefined) {
+        throw new Error(`Writing the ${value.name} credential returned no row.`);
+      }
+      return { id: row.id, created: row.created };
     },
 
     async operatorToken(key) {

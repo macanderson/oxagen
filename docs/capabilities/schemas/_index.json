@@ -4009,6 +4009,17 @@
       "consumes": []
     },
     {
+      "name": "set_mcp_credential",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_mcp_enabled",
       "domain": "agent",
       "surfaces": [

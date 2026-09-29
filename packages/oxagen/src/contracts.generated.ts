@@ -412,6 +412,7 @@ import "./contracts/tool.declaration.list";
 import "./contracts/tool.declaration.publish";
 import "./contracts/tool.import";
 import "./contracts/tool.state.set";
+import "./contracts/tool.studio.credential.set";
 import "./contracts/tool.studio.draft.get";
 import "./contracts/tool.studio.draft.save";
 import "./contracts/tool.studio.review.open";
