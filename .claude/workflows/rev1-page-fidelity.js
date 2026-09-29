@@ -1,6 +1,6 @@
 export const meta = {
   name: 'rev1-page-fidelity',
-  description: 'Build rev1 pages (any of shell, fleet, agents, runtimes, billing, steering) to the mockups in oxagen-roadmap, file backend-gap issues, and integrate onto one branch and PR',
+  description: 'Retired 2026-09-28 (ADR-226). Built rev1 pages to the rev1 mockup in oxagen-roadmap, which roadmap #234 removed',
   whenToUse: 'When apps/app pages must match mockups/pages/<page>.md in macanderson/oxagen-roadmap exactly, in every state, desktop and mobile.',
   phases: [
     { title: 'Build', detail: 'one builder per lane in its own worktree: mock screenshots, build, backend-gap issues' },
@@ -8,6 +8,11 @@ export const meta = {
     { title: 'Finish', detail: 'coverage audit, generators, merge main, PR, CI' },
   ],
 }
+
+// Retired 2026-09-28. This workflow reads the rev1 mockup (missioncontrol.html, engine.js, engine.css, catalog.mjs), which roadmap #234 removed.
+// docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md names the design of record: the v3 mockup at the commit it pins, and the brand kit.
+// The prompts below are kept as history. Port a lane to the v3 mockup before you run it again.
+throw new Error('Retired: the rev1 mockup this workflow reads is gone. Read docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md and build from the v3 mockup at its pin.')
 
 // args: { branch (required: the session's push branch), session (required: the session id, e.g. session_01...),
 //         only (lane ids to build; default all), prTitle, repo, roadmap, worktrees,

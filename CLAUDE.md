@@ -114,12 +114,15 @@ Oxagen wraps four agent harnesses as equals (ADR-101): **Claude Code, Codex, Cur
 
 `apps/app` has its own components at `src/ui/`, feature lanes at `src/features/`, and data ports at `src/data/`. Import UI through `@/ui/<name>`. `apps/docs` and `apps/app_deprecated` use `@/components/ui/<name>`. See AGENTS.md for the import rule and its enforcement limits.
 
+Before you start a UI slice, read ADR-226, then the v3 mockup at the commit it pins, then the kit's tokens. The rev1 mockup (`mc.html`, `missioncontrol.html`, `engine.css`) is gone, and a page row or log entry that cites it is history.
+
 Use these files to inspect the current app:
 
 | Concern | Source |
 |---|---|
 | Routes | `apps/app/src/app/` and `apps/app/e2e/routes.ts` |
 | Architecture and enforced invariants | `apps/app/ARCHITECTURE.md` and `apps/app/src/test/arch/` |
+| Design of record | `docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md`: the v3 mockup at its pin for layout and behavior, and the brand kit (`packages/ui/src/styles/house-tokens.css`) for tokens, type, and marks |
 | Shell and assistant flyout | `apps/app/src/features/shell/` |
 | Server data adapters | `apps/app/src/data/live/` |
 | Capability to UI bindings | `apps/app/capability-ui-map.json` |

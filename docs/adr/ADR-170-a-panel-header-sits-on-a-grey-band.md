@@ -1,6 +1,6 @@
 # ADR-170: A panel header sits on a grey band, and the dark page is ink
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-226](./ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md)
 - **Date:** 2026-09-24
 - **Owners:** app
 - **Amends:** ADR-132 (the rule "Headers are flat", for panel headers only).

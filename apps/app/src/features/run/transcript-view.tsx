@@ -180,7 +180,7 @@ function lineClick(open: () => void): () => void {
   };
 }
 
-// ── The design's rules, as class recipes (ADR-132) ──────────────────────────
+// ── The design's rules, as class recipes (ADR-226) ──────────────────────────
 
 /**
  * `.txs { font-family:var(--mono); font-size:12.5px; line-height:1.65;

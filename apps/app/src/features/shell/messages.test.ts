@@ -45,7 +45,7 @@ describe("messages/shell.json", () => {
   it("carries a catalog only for the chrome that renders", () => {
     // The command menu carries the mockup's groups, its runs coming from
     // search_tools (ARCHITECTURE.md §1.2). The Account dialog and the assistant render and write
-    // (update_profile, ask_assistant); the rev1 design put the approvals
+    // (update_profile, ask_assistant); the rev1 mockup put the approvals
     // drawer and the bell back in the top bar (fleet.md "Shell"). `choices`
     // is the words a record picker's tool rows carry (choice-actions.ts).
     // The avatar editor's words live in `ui.avatarEditor`, because one editor

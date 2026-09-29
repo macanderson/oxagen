@@ -1,6 +1,6 @@
 # ADR-130: Spend and operator feedback lead the app
 
-Status: Accepted
+Status: Superseded by [ADR-226](./ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md), which keeps its spend decisions, its two correction paths, and its rule for retained UI code
 Date: 2026-09-20
 
 ## Context
