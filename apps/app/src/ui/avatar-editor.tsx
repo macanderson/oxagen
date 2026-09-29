@@ -409,11 +409,7 @@ function AvatarEditor({
                         edit({ icon });
                       }}
                     >
-                      <Glyph
-                        className="size-[18px]"
-                        strokeWidth={1.8}
-                        aria-hidden
-                      />
+                      <Glyph className="size-[18px]" aria-hidden />
                     </button>
                   );
                 })}

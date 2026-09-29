@@ -8,7 +8,12 @@
 //
 // The host reads the workspace's main repository each time it opens, because
 // every wizard ends on a pull request against it. It writes nothing itself.
-import { Compass, GraduationCap, type LucideIcon, Wrench } from "lucide-react";
+import {
+  CompassIcon,
+  GraduationCapIcon,
+  type Icon as PhosphorIcon,
+  WrenchIcon,
+} from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import {
   lazy,
@@ -42,10 +47,10 @@ const CloneEditor = lazy(() =>
   import("./clone-editor").then((module) => ({ default: module.CloneEditor })),
 );
 
-const KIND_ICONS: Record<CreateKind, LucideIcon> = {
-  tool: Wrench,
-  skill: GraduationCap,
-  record: Compass,
+const KIND_ICONS: Record<CreateKind, PhosphorIcon> = {
+  tool: WrenchIcon,
+  skill: GraduationCapIcon,
+  record: CompassIcon,
 };
 
 /** The kinds the chooser offers: offered in `CREATE_KINDS`, and carried here. */

@@ -4,7 +4,11 @@
 // `wzPrStep`). A kind module composes its steps out of these, so the agent,
 // context record and tool wizards read the same as the skill wizard without
 // copying it.
-import { Check, GitPullRequestArrow, Sparkles } from "lucide-react";
+import {
+  CheckIcon,
+  GitPullRequestIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import { SourceFilename } from "@/ui/source-filename";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
@@ -43,7 +47,7 @@ export function Rail({
                   : "border-border bg-card"
             }`}
           >
-            {s.state === "done" ? <Check className="size-2.5" /> : s.n}
+            {s.state === "done" ? <CheckIcon className="size-2.5" /> : s.n}
           </span>
           <span>{t(`steps.${s.id}`)}</span>
           {s.state === "done" ? (
@@ -135,7 +139,7 @@ export function DraftNote({ title, body }: { title: string; body: string }) {
       data-testid="draft-note"
       className="mb-3 flex items-start gap-3 rounded-lg border border-border border-l-2 border-l-brand bg-muted/40 px-3.5 py-3"
     >
-      <Sparkles
+      <SparkleIcon
         aria-hidden="true"
         className="mt-0.5 size-4 flex-none text-muted-foreground"
       />
@@ -268,7 +272,7 @@ export function PullRequestPlan({
       <p>{lead}</p>
       <div className={`${panel} overflow-hidden`}>
         <p className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          <GitPullRequestArrow aria-hidden="true" className="size-3.5" />
+          <GitPullRequestIcon aria-hidden="true" className="size-3.5" />
           <span className={`${mono} text-foreground`}>
             {base ?? t("unknownBase")}
           </span>

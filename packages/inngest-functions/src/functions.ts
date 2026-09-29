@@ -54,6 +54,7 @@ import { ingestionWebhookProvision } from "./functions/ingestion.webhook-provisi
 import { ingestionWebhookRenew } from "./functions/ingestion.webhook-renew";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
 import { mcpCredentialGrantRetention } from "./functions/mcp.credential-grant-retention";
+import { assistantAttachmentSweep } from "./functions/assistant.attachment-sweep";
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
@@ -132,6 +133,7 @@ export const functions: any[] = [
   ingestionWebhookRenew,
   mcpToolSnapshotRetention,
   mcpCredentialGrantRetention,
+  assistantAttachmentSweep,
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,

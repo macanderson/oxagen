@@ -130,6 +130,14 @@
       "turnId": {
         "type": "string",
         "format": "uuid"
+      },
+      "attachments": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "maxItems": 10
       }
     },
     "required": [

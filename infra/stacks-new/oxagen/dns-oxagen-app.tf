@@ -182,6 +182,71 @@ resource "aws_route53_record" "oxagen_app_alb" {
 }
 
 # ---------------------------------------------------------------------------
+# The API
+# ---------------------------------------------------------------------------
+
+# api.oxagen.app serves the API beside api.oxagen.sh, which stays in service
+# for the CLIs, webhooks, and OAuth callbacks that call it (ADR-215, amendment
+# of 2026-09-28, #4709). No listener rule redirects it: a webhook POST and an
+# Authorization header do not survive a redirect. Until Caddyfile.alb is
+# installed with the name, Caddy answers it with a 404.
+#
+# The name has its own certificate. A new name on either certificate above
+# would replace one the ALB is serving.
+resource "aws_acm_certificate" "api_oxagen_app" {
+  domain_name       = "api.oxagen.app"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Brand = local.brand }
+}
+
+resource "aws_route53_record" "api_oxagen_app_cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.api_oxagen_app.domain_validation_options : dvo.domain_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }
+  }
+
+  zone_id         = aws_route53_zone.oxagen_app.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.value]
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "api_oxagen_app" {
+  certificate_arn         = aws_acm_certificate.api_oxagen_app.arn
+  validation_record_fqdns = [for r in aws_route53_record.api_oxagen_app_cert_validation : r.fqdn]
+}
+
+resource "aws_lb_listener_certificate" "api_oxagen_app" {
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.api_oxagen_app.certificate_arn
+}
+
+resource "aws_route53_record" "api_oxagen_app" {
+  zone_id = aws_route53_zone.oxagen_app.zone_id
+  name    = "api.oxagen.app"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.app.dns_name
+    zone_id                = aws_lb.app.zone_id
+    evaluate_target_health = true
+  }
+
+  # The name reaches the ALB only after the ALB holds its certificate.
+  depends_on = [aws_lb_listener_certificate.api_oxagen_app]
+}
+
+# ---------------------------------------------------------------------------
 # Out of the vanity set
 # ---------------------------------------------------------------------------
 

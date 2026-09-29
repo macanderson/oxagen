@@ -743,6 +743,86 @@ describe("compile resolves auth", () => {
     expect(compiled.auth).toStrictEqual({ mode: "service", scheme: "acme_key", apply: scheme });
   });
 
+  /** An OpenAPI server whose auth.scheme names a mutual TLS scheme, with these environments and this mode. */
+  function mutualTls(
+    environments: Record<string, Record<string, unknown>>,
+    mode: "service" | "operator-oauth" = "service",
+  ): CompileInput {
+    const openapi = server({
+      ...definitionServer("openapi"),
+      auth: { mode, scheme: "mtls", credential: "oxagen:credential/acme" },
+      environments,
+    });
+    return input({ server: openapi, tools: none, upstream: [], security_schemes: { mtls: { type: "mutual_tls" } } });
+  }
+
+  it("applies a mutual TLS scheme when every environment routes through a relay", () => {
+    const compiled = compile(
+      mutualTls({
+        test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+        live: { url: "https://api.acme.example/v1", network: "relay:acme-west" },
+      }),
+    );
+    expect(compiled.auth).toStrictEqual({ mode: "service", scheme: "mtls", apply: { type: "mutual_tls" } });
+  });
+
+  it("refuses a mutual TLS scheme when one environment routes over cloud, and names that one", () => {
+    expect(
+      issues(
+        mutualTls({
+          test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+          live: { url: "https://api.acme.example/v1", network: "cloud" },
+        }),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.scheme",
+        message:
+          "auth.scheme mtls is mutual TLS, which only a relay that holds the client certificate can present. Environment live routes over cloud. Set each environment's network to relay:<name>.",
+      },
+    ]);
+  });
+
+  it("refuses a mutual TLS scheme when a relay environment's url is http, and names that environment", () => {
+    expect(
+      issues(
+        mutualTls({
+          test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+          live: { url: "http://api.acme.internal/v1", network: "relay:acme-west" },
+        }),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.scheme",
+        message:
+          "auth.scheme mtls is mutual TLS, which presents the client certificate in a TLS handshake. Environment live has no https url. Set each environment's url to an https:// endpoint.",
+      },
+    ]);
+  });
+
+  it("refuses a mutual TLS scheme in operator-oauth mode, even when every route is a relay", () => {
+    expect(
+      issues(
+        mutualTls(
+          {
+            test: { sandbox: true, url: "https://test.acme.example/v1", network: "relay:acme-east" },
+            live: { url: "https://api.acme.example/v1", network: "relay:acme-west" },
+          },
+          "operator-oauth",
+        ),
+      ),
+    ).toStrictEqual([
+      {
+        tool: undefined,
+        field: "auth.mode",
+        message:
+          "auth.mode operator-oauth cannot present mutual TLS scheme mtls, because the operator's OAuth token carries no client certificate. Set auth.mode to service.",
+      },
+    ]);
+  });
+
   it("applies nothing for mode none, or for a server with no auth", () => {
     expect(compile(input({ server: server(definitionServer("openapi")), tools: none, upstream: [] })).auth).toBeNull();
     const local = { ...REMOTE, auth: undefined, source: { type: "local", command: "acme-mcp", machines: ["dev-laptops"] } };
@@ -766,12 +846,12 @@ describe("compile resolves auth", () => {
       message: "auth.scheme acme_key is not a security scheme the OpenAPI document declares.",
     },
     {
-      label: "a mutual TLS scheme",
+      label: "a mutual TLS scheme on the cloud route",
       openapi: true,
       scheme: "mtls",
       schemes: { mtls: { type: "mutual_tls" } },
       message:
-        "auth.scheme mtls is mutual TLS, which compile cannot apply. Route the server through a relay that holds the client certificate.",
+        "auth.scheme mtls is mutual TLS, which only a relay that holds the client certificate can present. Environment prod routes over cloud. Set each environment's network to relay:<name>.",
     },
     {
       label: "a scheme that is not built in",

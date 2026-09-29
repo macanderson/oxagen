@@ -120,6 +120,8 @@ export interface GovernedTurnAttachment {
   data: Uint8Array;
   /** IANA media type, e.g. "image/png", "video/mp4". */
   mediaType: string;
+  /** The file's name as the person gave it, when there is one. */
+  filename?: string;
 }
 
 /**
@@ -546,7 +548,12 @@ export function buildTurnUserMessage(
       ...attachments.map((a) =>
         a.kind === "image"
           ? ({ type: "image", image: a.data, mediaType: a.mediaType } as const)
-          : ({ type: "file", data: a.data, mediaType: a.mediaType } as const),
+          : ({
+              type: "file",
+              data: a.data,
+              mediaType: a.mediaType,
+              ...(a.filename ? { filename: a.filename } : {}),
+            } as const),
       ),
     ],
   };

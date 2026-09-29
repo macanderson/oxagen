@@ -95,6 +95,55 @@ describe("fromModelMessage", () => {
     });
   });
 
+  it("names a file attachment by its filename and round-trips the name", () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+    const [m] = fromModelMessage({
+      role: "user",
+      content: [
+        { type: "text", text: "read this" },
+        {
+          type: "file",
+          data: bytes,
+          mediaType: "application/pdf",
+          filename: "brief.pdf",
+        },
+      ],
+    });
+    expect(m?.attachments?.[0]?.name).toBe("brief.pdf");
+    const [back] = toModelMessages([m as CompletionMessage]);
+    expect(back).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: "read this" },
+        {
+          type: "file",
+          data: Buffer.from(bytes),
+          mediaType: "application/pdf",
+          filename: "brief.pdf",
+        },
+      ],
+    });
+  });
+
+  it("gives an unnamed part no filename on the way back", () => {
+    const [back] = toModelMessages([
+      {
+        role: "user",
+        content: "q",
+        attachments: [
+          {
+            name: "attachment-1",
+            media_type: "application/pdf",
+            byte_len: 1,
+            source: { type: "data", base64: "JQ==" },
+          },
+        ],
+      },
+    ]);
+    const part = (back?.content as { filename?: string }[])[1];
+    expect(part).not.toHaveProperty("filename");
+  });
+
   it("drops reasoning parts and refuses a part it cannot carry", () => {
     const [m] = fromModelMessage({
       role: "assistant",

@@ -48,6 +48,7 @@ import {
   buttonSecondary,
   inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
@@ -255,7 +256,7 @@ function OAuthClientFields({
           rows={2}
           defaultValue={scopes}
           autoComplete="off"
-          className={`${inputBase} ${mono}`}
+          className={`${textareaBase} ${mono}`}
         />
       </Field>
       {docs === null ? null : (
@@ -987,7 +988,7 @@ export function ImportProvider({
                             required
                             autoComplete="off"
                             placeholder={t("authConfigPlaceholder")}
-                            className={`${inputBase} ${mono}`}
+                            className={`${textareaBase} ${mono}`}
                           />
                         </Field>
                       )}

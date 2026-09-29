@@ -139,6 +139,12 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
+import type { SentAttachment } from "./assistant-attachment-files";
+import {
+  AssistantAttachmentChips,
+  AssistantAttachmentPicker,
+  useAssistantAttachments,
+} from "./assistant-attachments";
 import { readAssistantReply } from "./assistant-actions";
 import {
   ASSISTANT_ENGINE_REASON_ID,
@@ -205,6 +211,8 @@ type Entry =
       kind: "asked";
       id: string;
       text: string;
+      /** The files the question carried, shown under it (ADR-222). */
+      files?: readonly SentAttachment[];
       /**
        * The turn this question started, for Stop: the id the flyout minted
        * and the workspace it was asked in. A question read back from the
@@ -313,6 +321,8 @@ const EMPTY_THREAD: Thread = {
 type Refusal =
   | "denied"
   | "invalid"
+  | "attachment"
+  | "attachmentModel"
   | "exhausted"
   | "noCredit"
   | "spendCap"
@@ -475,6 +485,13 @@ function refusalKey(result: Refused): Refusal {
     case "denied":
       return "denied";
     case "invalid":
+      // A file on the message broke a rule. A model that cannot read the
+      // file asks for a different change than a file that is too large.
+      if (result.field === "attachments") {
+        return result.code.startsWith("model_cannot_read")
+          ? "attachmentModel"
+          : "attachment";
+      }
       return "invalid";
     case "pending_approval":
       return "parked";
@@ -513,6 +530,10 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
       return <>{t("denied")}</>;
     case "invalid":
       return <>{t("invalid")}</>;
+    case "attachment":
+      return <>{t("attachment")}</>;
+    case "attachmentModel":
+      return <>{t("attachmentModel")}</>;
     case "exhausted":
       return <>{t("exhausted")}</>;
     // The way out is a top-up on Billing, where the usage credit balance and
@@ -589,6 +610,8 @@ export function AssistantFlyout({
     useShellState();
   const pathname = usePathname();
   const { org, ws, rest } = parseShellPath(pathname);
+  // The files on the composer, stored in the workspace the person is in.
+  const attachments = useAssistantAttachments(org ?? "", ws ?? "");
   // The route the person is standing on, and what that page says it is showing.
   // Read here rather than in the submit handler because it is a subscription.
   const route = rest[0] ?? "fleet";
@@ -826,6 +849,9 @@ export function AssistantFlyout({
       pending ||
       // An engine that reported itself down takes no turn. The draft stays.
       engineDown ||
+      // A file still uploading, or one that failed, holds the composer's
+      // send until it lands or is removed. "Ask again" sends no files.
+      (fromDraft && (attachments.uploading || attachments.failed)) ||
       content === "" ||
       content.length > ASSISTANT_CONTENT_MAX ||
       org === null ||
@@ -860,11 +886,18 @@ export function AssistantFlyout({
     const asked = scope;
     const { conversationId } = thread;
     const answeringId = `${id}-s`;
+    const files = fromDraft ? attachments.take() : [];
     updateThread(asked, (t) => ({
       ...t,
       entries: [
         ...t.entries,
-        { kind: "asked", id, text: content, turn: { id: turnId, org, ws } },
+        {
+          kind: "asked",
+          id,
+          text: content,
+          turn: { id: turnId, org, ws },
+          ...(files.length === 0 ? {} : { files }),
+        },
         {
           kind: "answering",
           id: answeringId,
@@ -900,6 +933,9 @@ export function AssistantFlyout({
         {
           conversationId,
           content,
+          ...(files.length === 0
+            ? {}
+            : { attachments: files.map((f) => f.publicId) }),
           route,
           turnId,
           entityId,
@@ -1277,9 +1313,21 @@ export function AssistantFlyout({
                       scrollAnchor={entry.kind === "asked"}
                     >
                       {entry.kind === "asked" ? (
-                        <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
-                          {entry.text}
-                        </p>
+                        <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
+                          <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
+                            {entry.text}
+                          </p>
+                          {entry.files === undefined ? null : (
+                            <AssistantAttachmentChips
+                              files={entry.files.map((f) => ({
+                                ...f,
+                                state: "done" as const,
+                                problem: null,
+                              }))}
+                              testId="assistant-sent-attachments"
+                            />
+                          )}
+                        </div>
                       ) : entry.kind === "answering" ? (
                         <AssistantAnswering
                           text={entry.text}
@@ -1439,7 +1487,27 @@ export function AssistantFlyout({
                     composerRef.current?.focus();
                   }}
                 />
-                <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                <AssistantAttachmentChips
+                  files={attachments.files}
+                  onRemove={attachments.remove}
+                  testId="assistant-attachments"
+                />
+                <div
+                  className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (e.dataTransfer.files.length === 0) return;
+                    e.preventDefault();
+                    if (pending) return;
+                    attachments.add(Array.from(e.dataTransfer.files));
+                  }}
+                >
+                  <AssistantAttachmentPicker
+                    onFiles={attachments.add}
+                    disabled={pending}
+                  />
                   <textarea
                     ref={composerRef}
                     rows={2}
@@ -1450,6 +1518,24 @@ export function AssistantFlyout({
                     aria-describedby={`${ASSISTANT_PANEL_ID}-send-hint`}
                     placeholder={t("composer.placeholder")}
                     data-testid="assistant-composer"
+                    onPaste={(e) => {
+                      // A pasted screenshot or file attaches. Pasted text
+                      // goes into the draft as usual. A spreadsheet, a
+                      // document or a web page copies a picture of the
+                      // selection beside its text and HTML, and the text is
+                      // what the person meant, so that paste stays text.
+                      const pasted = Array.from(e.clipboardData.files);
+                      const types = Array.from(e.clipboardData.types);
+                      if (
+                        pasted.length === 0 ||
+                        (types.includes("text/plain") &&
+                          types.includes("text/html"))
+                      ) {
+                        return;
+                      }
+                      e.preventDefault();
+                      attachments.add(pasted);
+                    }}
                     onChange={(e) => {
                       if (shownScope === null) return;
                       const value = e.target.value;
@@ -1482,7 +1568,13 @@ export function AssistantFlyout({
                             stopping: stopping === running.id,
                           }
                     }
-                    sendDisabled={pending || engineDown || draft.trim() === ""}
+                    sendDisabled={
+                      pending ||
+                      engineDown ||
+                      draft.trim() === "" ||
+                      attachments.uploading ||
+                      attachments.failed
+                    }
                     unavailableReasonId={
                       engineDown ? ASSISTANT_ENGINE_REASON_ID : null
                     }
@@ -1508,6 +1600,14 @@ export function AssistantFlyout({
                     className="mt-2 text-[13px] leading-5 text-muted-foreground"
                   >
                     {t("composer.stopFailed")}
+                  </p>
+                ) : null}
+                {attachments.failed ? (
+                  <p
+                    data-testid="assistant-attachments-blocked"
+                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                  >
+                    {t("attachments.blocked")}
                   </p>
                 ) : null}
                 {thread.draftTooLong ? (

@@ -6,7 +6,7 @@
 // the mockup's ✕ (`.dlg-h .iconbtn.x`) as well, named for the dialog it
 // closes, and it follows `dismissible` like the footer's Close.
 import { Dialog } from "@base-ui/react/dialog";
-import { X } from "lucide-react";
+import { XIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { createContext, type ReactNode, use, useState } from "react";
 import { createPortal } from "react-dom";
@@ -110,7 +110,7 @@ export function SheetDialog({
       <Dialog.Portal>
         <Dialog.Backdrop
           data-scrim=""
-          className="fixed inset-0 z-50 bg-overlay-scrim"
+          className="fixed inset-0 z-50 bg-overlay-scrim supports-backdrop-filter:backdrop-blur-xs"
         />
         {/* Base UI marks the popup role=dialog but never aria-modal. The
             backdrop makes everything behind it inert, so the dialog is
@@ -119,7 +119,7 @@ export function SheetDialog({
           aria-modal="true"
           data-sheet=""
           data-testid={testId}
-          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-xl ${width}`}`}
+          className={`fixed z-50 flex flex-col overflow-hidden border border-dialog-border bg-dialog-bg text-dialog-fg shadow-2xl ${side ? "inset-y-0 right-0 w-full max-w-lg" : `left-1/2 top-[12vh] max-h-[76dvh] w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-4xl ${width}`}`}
         >
           <SheetHandle />
           <div
@@ -147,9 +147,9 @@ export function SheetDialog({
               data-dialog-dismiss=""
               data-header-close=""
               aria-label={headerClose ? t("close") : t("dismiss", { title })}
-              className="grid size-8 flex-none place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
+              className="grid size-8 flex-none place-items-center rounded-4xl text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
             >
-              <X aria-hidden="true" className="size-3.5" />
+              <XIcon aria-hidden="true" className="size-3.5" />
             </Dialog.Close>
           </div>
           {tabs ? <div className="px-4">{tabs}</div> : null}

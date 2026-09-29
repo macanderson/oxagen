@@ -95,6 +95,13 @@ import {
   type GovernedTurnUsage,
 } from "./governed-turn";
 import {
+  instructionWithAttachments,
+  type LoadedTurnAttachments,
+  linkTurnAttachments,
+  loadTurnAttachments,
+} from "./assistant-attachments";
+
+import {
   compactHistory,
   loadConversationHistory,
   type LoadedHistory,
@@ -133,6 +140,13 @@ function allowedRoles(grants: Record<string, string | undefined>): string[] {
     .map(([role]) => role);
 }
 
+/** A turn with no files. */
+const NO_ATTACHMENTS: LoadedTurnAttachments = {
+  parts: [],
+  inlineText: "",
+  refs: [],
+};
+
 export interface AssistantTurnRequest {
   /** The person's context: `userId` is required, a turn is always someone's. */
   ctx: CapabilityContext;
@@ -144,6 +158,11 @@ export interface AssistantTurnRequest {
   conversationId: string | null;
   content: string;
   pageContext: AssistantPageContext | null;
+  /**
+   * The public ids of files the person uploaded for this turn
+   * (`upload_assistant_attachment`, ADR-222).
+   */
+  attachments?: readonly string[];
   /** Makes the turn goal-shaped: a verifier judges each round against it. */
   goal?: AssistantGoal;
   /** Per-turn MCP server allowlist; empty loads every workspace server. */
@@ -363,12 +382,24 @@ export async function prepareAssistantTurn(
     "assistant turn model",
   );
 
+  // The files, read and checked before anything is written, so a file the
+  // model cannot read refuses the turn the way a kill switch does.
+  const attachments = request.attachments?.length
+    ? await loadTurnAttachments({
+        scope,
+        userId,
+        publicIds: request.attachments,
+        catalogId: identity.catalogId,
+      })
+    : NO_ATTACHMENTS;
+
   return {
     userId,
     run: (hooks = {}) =>
       runPreparedTurn({
         request: personRequest,
         userId,
+        attachments,
         funding,
         turnModel,
         modelId,
@@ -392,6 +423,8 @@ interface PreparedInputs {
   effort: "low" | "medium" | "high" | undefined;
   /** The agent the turn runs as; null when the workspace has none yet. */
   assistant: AssistantAgentState | null;
+  /** The person's files for this turn, already read and checked. */
+  attachments: LoadedTurnAttachments;
   hooks: AssistantTurnHooks;
 }
 
@@ -413,9 +446,23 @@ async function runPreparedTurn(
     history,
     promptTitled,
   } = await inScope(() =>
-    withTenantDb((tx) =>
-      appendUserMessage(tx, scope, userId, request, p.request.surface),
-    ),
+    withTenantDb(async (tx) => {
+      const appended = await appendUserMessage(
+        tx,
+        scope,
+        userId,
+        request,
+        p.request.surface,
+      );
+      await linkTurnAttachments(tx, {
+        scope,
+        userId,
+        rowIds: p.attachments.refs.map((ref) => ref.id),
+        conversationId: appended.conversationId,
+        messageId: appended.userMessageId,
+      });
+      return appended;
+    }),
   );
   // Sent after the commit, so the titler can read the row. Never throws.
   if (promptTitled) {
@@ -692,7 +739,15 @@ async function runPreparedTurn(
         historyContext:
           compacted.frame !== null && compacted.frame.text !== null ? 1 : 0,
       },
-      instruction: request.content,
+      // The text files ride the instruction; the stored message keeps only
+      // what the person typed (ADR-222).
+      instruction: instructionWithAttachments(
+        request.content,
+        p.attachments.inlineText,
+      ),
+      ...(p.attachments.parts.length > 0
+        ? { attachments: p.attachments.parts }
+        : {}),
       tools: belt.tools,
       modelTools: belt.modelTools,
       mutatingToolNames: materialised.mutatingToolNames,

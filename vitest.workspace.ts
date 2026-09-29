@@ -22,5 +22,6 @@ export default [
   "apps/cli/vitest.config.ts",
   "apps/desktop/vitest.config.ts",
   "apps/mcp/vitest.config.ts",
+  "apps/relay/vitest.config.ts",
   "tools/*/vitest.config.ts",
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { PencilSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useId, useRef, useState } from "react";
 import { inputBase, mono } from "@/ui/control-styles";
@@ -61,7 +61,7 @@ export function SourceFilename({
           }}
         >
           <span className="min-w-0 break-all">{path}</span>
-          <Pencil
+          <PencilSimpleIcon
             aria-hidden="true"
             className="size-3 shrink-0 text-muted-foreground"
           />

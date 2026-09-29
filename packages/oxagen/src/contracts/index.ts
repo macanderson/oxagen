@@ -160,6 +160,7 @@ import { runRecentList } from "./run.recent.list";
 // The shell (#2968): the in-app agent on stella-serve, the command menu, the
 // sidebar counts and the account preferences.
 import { assistantAsk } from "./assistant.ask";
+import { assistantAttachmentUpload } from "./assistant.attachment.upload";
 import { assistantEngineGet } from "./assistant.engine.get";
 import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
@@ -820,6 +821,7 @@ export {
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,
@@ -1245,6 +1247,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,

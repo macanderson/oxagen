@@ -94,6 +94,26 @@ describe("responseRedirect", () => {
     expect(res.status).toBe(308);
     expect(res.headers.get("location")).toBe("https://app.oxagen.sh/acme");
   });
+
+  it("keeps the visitor's host when the server addresses the request by its own", () => {
+    const res = responseRedirect(
+      new Request("https://localhost:3000/github/setup?installation_id=1", {
+        headers: { host: "app.oxagen.sh" },
+      }),
+      routes.root(),
+    );
+    expect(res.headers.get("location")).toBe("https://app.oxagen.sh/");
+  });
+
+  it("ignores a Host header that is not a bare host (negative)", () => {
+    const res = responseRedirect(
+      new Request("https://app.oxagen.sh/github/setup", {
+        headers: { host: "evil.example/x" },
+      }),
+      routes.root(),
+    );
+    expect(res.headers.get("location")).toBe("https://app.oxagen.sh/");
+  });
 });
 
 describe("redirectToCanonicalHost", () => {

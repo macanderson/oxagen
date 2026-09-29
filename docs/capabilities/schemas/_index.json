@@ -4603,6 +4603,17 @@
       "consumes": []
     },
     {
+      "name": "upload_assistant_attachment",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "upsert_schema_label",
       "domain": "schema",
       "surfaces": [

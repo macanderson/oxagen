@@ -4189,6 +4189,16 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "upload_assistant_attachment",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "upsert_schema_label",
       "reads": [],

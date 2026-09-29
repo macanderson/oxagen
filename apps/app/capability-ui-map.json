@@ -1651,6 +1651,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "upload_assistant_attachment": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The paperclip on the assistant flyout's composer, and files pasted or dropped on it. Each file uploads over the API's attachment route as soon as it is attached (features/shell/assistant-attachments.tsx, features/shell/assistant-attachment-files.ts)",
+      "testid": "assistant-attach",
+      "proof": "apps/app/src/features/shell/assistant-flyout.attachments.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "session_3c9a5306"
+    },
     "verify_model_credential": {
       "route": "/[org]/model-funding",
       "page": "apps/app/src/app/[org]/model-funding/page.tsx",
