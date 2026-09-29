@@ -71,6 +71,18 @@ export function createRetrySteeringRepoProvisionHandler(
       return { status: current.status };
     }
 
+    // Resolved and refused before the state flip below, so a caller with no
+    // principal behind it (a deleted API key, a session gone stale) never
+    // leaves the record stuck in "provisioning" with no event ever sent.
+    const actorUserId = await resolveActingUserId(ctx);
+    if (actorUserId === null) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "no_principal",
+        message: "retry_steering_repo_provision: no signed-in user or API key creator behind this call",
+      });
+    }
+
     const now = deps.now();
     const retrying: SteeringRepoState = {
       ...current,
@@ -80,7 +92,6 @@ export function createRetrySteeringRepoProvisionHandler(
     };
     await deps.saveState(scope, retrying);
 
-    const actorUserId = await resolveActingUserId(ctx);
     const request: SteeringRepoProvisionRequest = {
       orgId: ctx.orgId,
       workspaceId: scope.kind === "workspace" ? scope.workspaceId : null,
@@ -117,6 +128,8 @@ export function createRetrySteeringRepoProvisionHandler(
 
 async function loadSteeringRepoState(scope: SteeringRepoScope): Promise<SteeringRepoState | null> {
   if (scope.kind === "organization") {
+    // tenancy: filtered by orgId, which scopeOf took from the capability
+    // context the kernel already scoped to the caller's own organization.
     const [org] = await withSystemDb((tx) =>
       tx
         .select({ settings: schema.organizations.settings })
@@ -126,6 +139,8 @@ async function loadSteeringRepoState(scope: SteeringRepoScope): Promise<Steering
     );
     return org ? readSteeringRepoState(org.settings) : null;
   }
+  // tenancy: filtered by workspaceId and orgId together, both from the
+  // capability context the kernel already scoped to the caller.
   const [workspace] = await withSystemDb((tx) =>
     tx
       .select({ settings: schema.workspaces.settings })

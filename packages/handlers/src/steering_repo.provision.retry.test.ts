@@ -101,6 +101,20 @@ describe("retry_steering_repo_provision handler", () => {
     expect(h.sends).toEqual([]);
   });
 
+  it("refuses a call with no principal behind it, and leaves the failed state untouched", async () => {
+    const initial = failedState();
+    const h = harness(initial);
+    const handler = createRetrySteeringRepoProvisionHandler(h.deps);
+    const noPrincipalCtx = makeCTX({ userId: null, apiKeyId: null });
+    await expect(
+      handler(steeringRepoProvisionRetry.input.parse({}), noPrincipalCtx),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
+    // Refused before the state flip, so a retry that finds no principal
+    // never strands the record in "provisioning" with no event ever sent.
+    expect(h.saves).toEqual([]);
+    expect(h.sends).toEqual([]);
+  });
+
   it("refuses a scope with no steering repo state to retry", async () => {
     const h = harness(null);
     const handler = createRetrySteeringRepoProvisionHandler(h.deps);
