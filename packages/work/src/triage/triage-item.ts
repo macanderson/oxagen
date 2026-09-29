@@ -14,7 +14,7 @@
 //   input digest come from the input.
 import type { Sha256Digest } from "@oxagen/run-evidence";
 import { notBuiltAsync } from "../not-built";
-import type { PriorityLabel, TriageDecision, Workflow } from "../types";
+import type { PriorityLabel, TriageDecision } from "../types";
 
 /** The work item as triage reads it. Every text field is outside text. */
 export interface TriageWorkItem {
@@ -85,11 +85,6 @@ export interface TriageInput {
   priorities: TriagePriorities;
   openWork: readonly TriageOpenItem[];
   fileTrees: readonly TriageFileTree[];
-  /**
-   * The workspace's workflows, keyed by slug. A decision names one of these slugs
-   * or null. The Shared contract's list of inputs leaves this out; see the C0 PR.
-   */
-  workflows: Readonly<Record<string, Workflow>>;
   model: TriageModelClient;
 }
 

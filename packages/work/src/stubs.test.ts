@@ -73,7 +73,6 @@ describe("stubs", () => {
       priorities: { lineage: "aintel.work.priorities", hash: DIGEST, body: "1. Paying customers first." },
       openWork: [],
       fileTrees: [{ repo: "aintel/billing-service", paths: ["src/export.ts"] }],
-      workflows: {},
       model: {
         complete: () => Promise.reject(new Error("The stub must not call the model.")),
       },
