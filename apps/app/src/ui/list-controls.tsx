@@ -3,13 +3,21 @@
 // `ltBar`, `ltPager`, `ltCards`): a search box, a sort or a column filter, and
 // under the rows a pager that holds the rows-per-page select (ui/pagination).
 // The state is local to the list: a search narrows what is on screen and
-// changes nothing it reads.
+// changes nothing it reads. A filter and the sort are the app's Select, so
+// their lists open on the translucent menu surface, as the mockup draws them.
 //
 // Strings arrive as props, already translated by the caller, so the kit
 // carries no catalogue of its own for a control whose words differ per list
 // ("Search records", "Search this list").
 import { useId, useMemo, useState } from "react";
 import { RowsPager } from "@/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/ui/select";
 
 /** The rows-per-page choices, as shadcn's pagination example offers them. */
 const PER_PAGE = [10, 25, 50, 100] as const;
@@ -118,8 +126,44 @@ export function useList<T>(
   };
 }
 
-const select =
-  "min-h-9 rounded-md border border-input-border bg-input-bg px-2 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-input-ring sm:text-[13px]";
+const searchBox =
+  "min-h-9 min-w-40 flex-1 rounded-md border border-input-border bg-input-bg px-2.5 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-input-ring sm:text-[13px]";
+
+/** One select in the bar: a trigger showing the chosen label, and its list. */
+function BarSelect({
+  items,
+  value,
+  onValue,
+  ...trigger
+}: {
+  items: readonly { value: string; label: string }[];
+  value: string;
+  onValue: (next: string) => void;
+  id?: string;
+  "aria-label"?: string;
+  "aria-labelledby"?: string;
+}) {
+  return (
+    <Select
+      items={items}
+      value={value}
+      onValueChange={(next) => {
+        if (next !== null) onValue(next);
+      }}
+    >
+      <SelectTrigger {...trigger}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 /** `.lt-bar`: search, then the filters or the sort. */
 export function ListBar<T>({
@@ -153,44 +197,35 @@ export function ListBar<T>({
         onChange={(event) => {
           list.setQuery(event.target.value);
         }}
-        className={`${select} min-w-40 flex-1 px-2.5`}
+        className={searchBox}
       />
-      {(filters ?? []).map((filter) => (
-        <select
-          key={filter.key}
-          aria-label={allLabel?.(filter.label) ?? filter.label}
-          value={list.filters[filter.key] ?? ""}
-          onChange={(event) => {
-            list.setFilter(filter.key, event.target.value);
-          }}
-          className={select}
-        >
-          <option value="">{allLabel?.(filter.label) ?? filter.label}</option>
-          {filter.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ))}
-      {sortLabel !== undefined && sorts !== undefined && sorts.length > 0 ? (
-        <label htmlFor={`${id}-sort`} className="flex items-center gap-2">
-          {sortLabel}
-          <select
-            id={`${id}-sort`}
-            value={list.sort}
-            onChange={(event) => {
-              list.setSort(event.target.value);
+      {(filters ?? []).map((filter) => {
+        const all = allLabel?.(filter.label) ?? filter.label;
+        return (
+          <BarSelect
+            key={filter.key}
+            aria-label={all}
+            items={[{ value: "", label: all }, ...filter.options]}
+            value={list.filters[filter.key] ?? ""}
+            onValue={(next) => {
+              list.setFilter(filter.key, next);
             }}
-            className={select}
-          >
-            {sorts.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        );
+      })}
+      {sortLabel !== undefined && sorts !== undefined && sorts.length > 0 ? (
+        <span className="flex items-center gap-2">
+          <span id={`${id}-sort`}>{sortLabel}</span>
+          <BarSelect
+            aria-labelledby={`${id}-sort`}
+            items={sorts.map((sort) => ({
+              value: sort.value,
+              label: sort.label,
+            }))}
+            value={list.sort}
+            onValue={list.setSort}
+          />
+        </span>
       ) : null}
     </div>
   );
