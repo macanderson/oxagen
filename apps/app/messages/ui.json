@@ -239,7 +239,7 @@
         "photo": "Photo"
       },
       "icon": "Icon",
-      "iconHint": "Lucide glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
+      "iconHint": "Phosphor glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
       "letters": "Letters",
       "lettersHint": "Up to {max}.",
       "typeface": "Typeface",
@@ -280,6 +280,10 @@
       },
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
+    },
+    "chart": {
+      "notRecorded": "not recorded",
+      "table": "Table"
     },
     "toast": {
       "region": "Notifications",

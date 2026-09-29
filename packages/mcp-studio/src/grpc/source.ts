@@ -97,6 +97,16 @@ export function scanHeader(name: string, text: string): ProtoHeader {
         const kind: ImportKind = first === "public" || first === "weak" ? first : "plain";
         if (kind !== "plain") tokens.next();
         header.imports.push({ path: literal(), kind });
+      } else if (token === "option") {
+        // protobufjs copies a file-level feature onto every top-level definition, so it is refused here, by its own name.
+        const option = tokens.peek();
+        if (option === "features" || option?.startsWith("features.") === true) {
+          throw new GrpcImportError(
+            "invalid",
+            `${name} sets the file option ${option}. Features are valid only in an editions file, and import reads proto2 and proto3 files, so remove the option.`,
+            name,
+          );
+        }
       }
     }
   }

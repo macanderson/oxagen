@@ -566,6 +566,47 @@ describe("verifyRequest", () => {
       });
       expectRefused(check(frame), "invalid");
     });
+
+    // A value a test can look for in every refusal message, to show the secret stays out of it.
+    const SECRET = "admin.billing.internal";
+    const withValue = testConfig(key, { credentials: new Map([["RELAY_CREDENTIAL_BILLING_API_VALUE", SECRET]]) });
+
+    it.each(["Host", "content-length", "Transfer-Encoding", "connection", "upgrade"])(
+      "refuses an HTTP header credential that names %s as invalid, and never quotes the secret",
+      (header) => {
+        const frame = requestFrame(key, { credential: { name: "billing-api", scheme: "header", header } });
+        const result = expectRefused(check(frame, { config: withValue }), "invalid");
+        expect(result.message).toContain(`the ${header.toLowerCase()} header`);
+        expect(result.message).not.toContain(SECRET);
+      },
+    );
+
+    it.each(["grpc-timeout", "Grpc-Encoding", "trace-bin", "content-type", "te", "host", "x!key"])(
+      "refuses a gRPC header credential that names %s as invalid, and never quotes the secret",
+      (header) => {
+        const frame = requestFrame(key, { target: GRPC_TARGET, credential: { name: "billing-api", scheme: "header", header } });
+        const result = expectRefused(check(frame, { config: withValue }), "invalid");
+        expect(result.message).toContain(`the ${header.toLowerCase()} header`);
+        expect(result.message).not.toContain(SECRET);
+      },
+    );
+
+    it("checks a credential's header before the host allowlist, as it checks the signed headers", () => {
+      const frame = requestFrame(key, {
+        target: httpTarget({ host: "elsewhere.internal" }),
+        credential: { name: "billing-api", scheme: "header", header: "Host" },
+      });
+      expectRefused(check(frame, { config: withValue }), "invalid");
+    });
+
+    it.each<[string, EnvelopeTarget, string]>([
+      ["an HTTP", HTTP_TARGET, "X-Api-Key"],
+      ["a gRPC", GRPC_TARGET, "x-api-key"],
+    ])("accepts a header credential on %s call that names an ordinary header, and adds it", (_label, target, name) => {
+      const frame = requestFrame(key, { target, credential: { name: "billing-api", scheme: "header", header: "X-Api-Key" } });
+      const result = expectAccepted(check(frame, { config: withValue }));
+      expect(result.headers).toEqual([[name, SECRET]]);
+    });
   });
 
   describe("accepted requests", () => {

@@ -2,25 +2,23 @@
 // By tool's chart (spec "By tool"): one chart at a time under a three-button
 // switcher, Cumulative spend, Avg per run and Avg per call, in that order. It
 // holds the leading twelve tools by the metric shown; the table beside it
-// holds every one. A bar's width is layout and never a printed figure; the
-// money beside it is. A tool whose metric was not recorded is left out of the
-// chart rather than drawn as a zero.
+// holds every one. The bars come from the chart kit through RankedSpendChart.
+// A bar's length is layout and never a printed figure; the money at its end
+// is. A tool whose metric was not recorded is left out of the chart rather
+// than drawn as a zero, and so is a tool billed in another currency than the
+// chart's, which the footer counts.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
-  byMicrosDescending,
-  type Money as MoneyValue,
-  ratioOfMicros,
-} from "@/data/contracts/money";
-import {
-  mono,
   panel,
   panelFooter,
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
-import { Money } from "@/ui/money";
-import { formatCount, ratioWidth } from "@/ui/money-format";
+import { formatCount } from "@/ui/money-format";
+import { rankInOneCurrency } from "./rank-in-one-currency";
+import { RankedSpendChart } from "./ranked-spend-chart";
 
 const METRICS = ["cumulative", "perRun", "perCall"] as const;
 type Metric = (typeof METRICS)[number];
@@ -39,14 +37,13 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
   const t = useTranslations("spend.toolChart");
   const locale = useLocale();
   const [metric, setMetric] = useState<Metric>("cumulative");
-  const ranked = tools
-    .flatMap((tool) => {
+  const { ranked, otherCurrency } = rankInOneCurrency(
+    tools.flatMap((tool) => {
       const value = tool[metric];
       return value === null ? [] : [{ key: tool.key, value }];
-    })
-    .sort((a, b) => byMicrosDescending(a.value, b.value));
+    }),
+  );
   const shown = ranked.slice(0, CHART_MAX);
-  const peak = shown[0]?.value ?? null;
   return (
     <section
       aria-labelledby="spend-tool-chart"
@@ -83,40 +80,21 @@ export function ToolChart({ tools }: { tools: readonly ToolChartItem[] }) {
           {t("empty")}
         </p>
       ) : (
-        <div
-          role="img"
-          aria-label={t("label", { metric: t(`metric.${metric}`) })}
-          className="flex flex-col gap-2.5 px-4 py-3.5"
-        >
-          {shown.map(({ key, value }) => {
-            const ratio = peak === null ? null : ratioOfMicros(value, peak);
-            return (
-              <div key={key} data-key={key} className="flex flex-col gap-1">
-                <span className="flex items-baseline justify-between gap-2 text-[12px]">
-                  <span className={`${mono} min-w-0 truncate`}>{key}</span>
-                  <span className="font-semibold">
-                    <Money
-                      value={value}
-                      precision={metric === "cumulative" ? "cents" : "exact"}
-                    />
-                  </span>
-                </span>
-                <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <span
-                    className="block h-full bg-gold"
-                    style={{ width: ratioWidth(ratio ?? 0) }}
-                  />
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <RankedSpendChart
+          items={shown}
+          label={t("label", { metric: t(`metric.${metric}`) })}
+          seriesLabel={t(`metric.${metric}`)}
+          precision={metric === "cumulative" ? "cents" : "exact"}
+        />
       )}
       <p className={panelFooter}>
         {t("footer", {
           shown: formatCount(shown.length, locale),
           total: formatCount(tools.length, locale),
         })}
+        {otherCurrency > 0
+          ? ` ${t("otherCurrency", { count: otherCurrency })}`
+          : null}
       </p>
     </section>
   );

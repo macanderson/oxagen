@@ -1,0 +1,260 @@
+{
+  "name": "open_studio_review",
+  "domain": "tool",
+  "description": "Open one steering PR from Studio's draft for a server folder: server.toml, tools.toml, tools.lock.json, the vendored definition, and saved tests on the branch tools/<server>. Refuses while a tool the draft imports has no risk, side effect, or egress.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "revision": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "required": [
+      "server"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "branch": {
+        "type": "string"
+      },
+      "headSha": {
+        "type": "string"
+      },
+      "imported": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "removed": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "reclassified": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "before": {
+              "type": "object",
+              "properties": {
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "sideEffect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write",
+                    "irreversible"
+                  ]
+                },
+                "egress": {
+                  "type": "string",
+                  "enum": [
+                    "local",
+                    "org_tenant",
+                    "third_party"
+                  ]
+                },
+                "impacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "risk",
+                "sideEffect",
+                "egress",
+                "impacts"
+              ],
+              "additionalProperties": false
+            },
+            "after": {
+              "type": "object",
+              "properties": {
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "sideEffect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write",
+                    "irreversible"
+                  ]
+                },
+                "egress": {
+                  "type": "string",
+                  "enum": [
+                    "local",
+                    "org_tenant",
+                    "third_party"
+                  ]
+                },
+                "impacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "risk",
+                "sideEffect",
+                "egress",
+                "impacts"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "tool",
+            "before",
+            "after"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "tokens": {
+        "type": "object",
+        "properties": {
+          "definitions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "budget": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "definitions",
+          "budget"
+        ],
+        "additionalProperties": false
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "rule": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info"
+              ]
+            },
+            "tool": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "field": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "fix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule",
+            "level",
+            "tool",
+            "field",
+            "message",
+            "fix"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "number",
+      "url",
+      "branch",
+      "headSha",
+      "imported",
+      "removed",
+      "reclassified",
+      "tokens",
+      "findings"
+    ],
+    "additionalProperties": false
+  }
+}

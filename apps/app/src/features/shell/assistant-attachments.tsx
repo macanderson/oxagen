@@ -14,14 +14,14 @@
 // question links its name to the stored file, so the person can open what
 // they sent.
 import {
-  CircleAlert,
-  File,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  Paperclip,
-  X,
-} from "lucide-react";
+  FileCsvIcon,
+  FileIcon,
+  FileImageIcon,
+  FileTextIcon,
+  PaperclipIcon,
+  WarningCircleIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -205,7 +205,7 @@ export function AssistantAttachmentPicker({
         }}
         className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-app-link-fg outline-none hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
       >
-        <Paperclip aria-hidden="true" className="size-4" />
+        <PaperclipIcon aria-hidden="true" className="size-4" />
       </button>
     </>
   );
@@ -234,16 +234,16 @@ function kindOf(mediaType: string): Kind {
 function KindIcon({ kind }: { kind: Kind }) {
   switch (kind) {
     case "image":
-      return <FileImage aria-hidden="true" />;
+      return <FileImageIcon aria-hidden="true" />;
     case "csv":
-      return <FileSpreadsheet aria-hidden="true" />;
+      return <FileCsvIcon aria-hidden="true" />;
     case "pdf":
     case "markdown":
     case "text":
     case "json":
-      return <FileText aria-hidden="true" />;
+      return <FileTextIcon aria-hidden="true" />;
     default:
-      return <File aria-hidden="true" />;
+      return <FileIcon aria-hidden="true" />;
   }
 }
 
@@ -333,7 +333,7 @@ export function AssistantAttachmentChips({
           >
             <AttachmentMedia>
               {file.state === "error" ? (
-                <CircleAlert aria-hidden="true" />
+                <WarningCircleIcon aria-hidden="true" />
               ) : (
                 <KindIcon kind={kind} />
               )}
@@ -372,7 +372,7 @@ export function AssistantAttachmentChips({
                     onRemove(file.key);
                   }}
                 >
-                  <X aria-hidden="true" />
+                  <XIcon aria-hidden="true" />
                 </AttachmentAction>
               </AttachmentActions>
             )}

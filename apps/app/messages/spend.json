@@ -478,6 +478,9 @@
       "on": "on {day}",
       "average": "Average",
       "sparkline": "Spend by day from {from} to {to}",
+      "noPricedDay": "No day in this window carries a priced run.",
+      "day": "Day",
+      "spend": "Spend",
       "cross": {
         "tool": "By tool",
         "agent": "By agent",
@@ -747,6 +750,12 @@
         "failed": "The setting did not save. Try again."
       }
     },
+    "agentChart": {
+      "title": "Cumulative spend",
+      "label": "Cumulative spend for the leading agents",
+      "footer": "The leading {shown} of {total}. The table holds every agent.",
+      "otherCurrency": "{count, plural, one {One agent is} other {# agents are}} billed in another currency and shown in the table only."
+    },
     "toolChart": {
       "metric": {
         "cumulative": "Cumulative spend",
@@ -756,7 +765,8 @@
       "switcher": "Chart",
       "label": "{metric} for the leading tools",
       "empty": "No tool has a recorded amount.",
-      "footer": "The leading {shown} of {total}. The table holds every tool."
+      "footer": "The leading {shown} of {total}. The table holds every tool.",
+      "otherCurrency": "{count, plural, one {One tool is} other {# tools are}} billed in another currency and shown in the table only."
     }
   }
 }

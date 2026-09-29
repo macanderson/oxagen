@@ -122,7 +122,7 @@
 // under it, a restored thread opens at its last question, and a button returns
 // a reader who scrolled up to the newest message.
 import { WarningCircleIcon } from "@phosphor-icons/react";
-import { List, SquarePen } from "lucide-react";
+import { ListIcon, NotePencilIcon } from "@phosphor-icons/react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -1195,7 +1195,7 @@ export function AssistantFlyout({
               }}
               className={HEADER_BUTTON}
             >
-              <List aria-hidden="true" className="size-4" />
+              <ListIcon aria-hidden="true" className="size-4" />
             </button>
             <button
               type="button"
@@ -1214,7 +1214,7 @@ export function AssistantFlyout({
               }}
               className={HEADER_BUTTON}
             >
-              <SquarePen aria-hidden="true" className="size-4" />
+              <NotePencilIcon aria-hidden="true" className="size-4" />
             </button>
           </>
         ) : null}

@@ -394,6 +394,48 @@ message M {
     const printed = expectRoundTrip(filesOf(source));
     expect(printed.text).toContain("  repeated TagsEntry tags = 1;\n  repeated ItemsEntry items = 2;");
   });
+
+  it("writes a proto3 optional extension with its label, at the top level and inside a message", () => {
+    const source = `syntax = "proto3";
+package p;
+import "google/protobuf/descriptor.proto";
+extend google.protobuf.MessageOptions { optional int32 top = 50001; }
+message M {
+  extend google.protobuf.MessageOptions { optional int32 inner = 50002; }
+}
+`;
+    const printed = expectRoundTrip(filesOf(source));
+    expect(printed.notes).toStrictEqual([]);
+    expect(printed.text).toContain("extend google.protobuf.MessageOptions {\n  optional int32 top = 50001;\n}");
+    expect(printed.text).toContain("  extend google.protobuf.MessageOptions {\n    optional int32 inner = 50002;\n  }");
+  });
+
+  it("writes an enum reserved range that ends at 536870911 as that number, and one that ends at 2^31 - 1 as max", () => {
+    const files = mutated(filesOf('syntax = "proto2"; package p; enum E { E_ZERO = 0; }'), (file) => {
+      at(file.enumType, 0).reservedRange = [
+        create(EnumDescriptorProto_EnumReservedRangeSchema, { start: 5, end: 536_870_911 }),
+        create(EnumDescriptorProto_EnumReservedRangeSchema, { start: 600_000_000, end: 2_147_483_647 }),
+      ];
+    });
+    const printed = expectRoundTrip(files);
+    expect(printed.text).toContain("  reserved 5 to 536870911, 600000000 to max;");
+    expect(printed.notes).toStrictEqual([]);
+  });
+
+  const doubleDefaults: [string, string][] = [
+    ["-0", "  optional double x = 1 [default = -0.0];"],
+    ["1e+20", "  optional double x = 1 [default = 1e+20];"],
+    ["0.30000000000000004", "  optional double x = 1 [default = 0.30000000000000004];"],
+  ];
+
+  it.each(doubleDefaults)("writes the double default %s so it reads back unchanged", (value, line) => {
+    const files = mutated(filesOf('syntax = "proto2"; package p; message M { optional double x = 1; }'), (file) => {
+      fieldAt(file).defaultValue = value;
+    });
+    const printed = expectRoundTrip(files);
+    expect(printed.text).toContain(line);
+    expect(printed.notes).toStrictEqual([]);
+  });
 });
 
 describe("printProto type names", () => {
@@ -770,6 +812,23 @@ const refusals: RefusalCase[] = [
     detail: "the value of the field p.M.tags is .p.Nope, which is not a message that a.proto or its imports define",
   },
   {
+    name: "a map entry whose key type no map field allows",
+    source: 'syntax = "proto3"; package p; message M { map<string, string> tags = 1; }',
+    mutate: (file) => {
+      at(at(messageAt(file).nestedType, 0).field, 0).type = T.FLOAT;
+    },
+    detail:
+      "the field p.M.tags names the map entry p.M.TagsEntry, but the key has the type float, and a map key is an integer, a bool, or a string",
+  },
+  {
+    name: "a map field that is not repeated",
+    source: 'syntax = "proto3"; package p; message M { map<string, string> tags = 1; }',
+    mutate: (file) => {
+      fieldAt(file).label = L.OPTIONAL;
+    },
+    detail: "the field p.M.tags names the map entry p.M.TagsEntry, but it is not repeated",
+  },
+  {
     name: "an enum with no values",
     mutate: (file) => {
       at(file.enumType, 0).value = [];
@@ -826,11 +885,12 @@ const refusals: RefusalCase[] = [
     detail: "the message the extension p.x extends is .p.E, which is not a message that a.proto or its imports define",
   },
   {
-    name: "a proto3 optional extension",
+    name: "a proto3 optional extension in a proto2 file",
+    source: 'syntax = "proto2"; package p; message M { extensions 100 to 200; } extend M { optional int32 x = 100; }',
     mutate: (file) => {
-      file.extension.push(field({ name: "x", number: 100, type: T.INT32, extendee: ".p.M", proto3Optional: true }));
+      at(file.extension, 0).proto3Optional = true;
     },
-    detail: "the extension p.x is a proto3 optional extension, which import does not read",
+    detail: "the extension p.x is proto3 optional in a proto2 file",
   },
   {
     name: "an extension name that is not an identifier in a file with no package",
@@ -1037,6 +1097,18 @@ extend google.protobuf.MessageOptions { int32 x_y = 50000; }
       },
     ]);
     expectReadsBackAs(changed, fileNamed(files));
+  });
+
+  it("notes a double default that reads back in protoc's form", () => {
+    const source = 'syntax = "proto2"; package p; message M { optional double x = 1; }';
+    const changed = mutated(filesOf(source), (file) => {
+      fieldAt(file).defaultValue = "1e+10";
+    });
+    const expected = fileNamed(filesOf('syntax = "proto2"; package p; message M { optional double x = 1 [default = 10000000000]; }'));
+    const printed = expectReadsBackAs(changed, expected);
+    expect(printed.notes).toStrictEqual([
+      "The .proto text import writes for a.proto changes the default value of the field p.M.x from 1e+10 to 10000000000. Both are the same number, and the second is how protoc writes it.",
+    ]);
   });
 
   it("gives every note no tool", () => {

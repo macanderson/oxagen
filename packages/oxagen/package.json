@@ -35,6 +35,7 @@
     "./skills": "./src/skills.ts",
     "./configuration-clone": "./src/configuration-clone.ts",
     "./run-outcomes": "./src/run-outcomes.ts",
+    "./chart-spec": "./src/chart-spec.ts",
     "./context-record-label": "./src/context-record-label.ts",
     "./agent-version-config": "./src/agent-version-config.ts",
     "./run-enrichment": "./src/run-enrichment.ts",
