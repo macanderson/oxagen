@@ -566,6 +566,16 @@ describe("Linked work", () => {
     if (captured === undefined) throw new Error("a captured diff");
     expect(within(captured).getByText("patch retained")).toBeTruthy();
     expect(within(captured).getByRole("link", { name: "fr 31" })).toBeTruthy();
+    // The short digest carries the whole one for its hover card (#4692). The
+    // pull request's patch has a digest of its own, so the test names the
+    // captured diff's digest rather than any sha256.
+    const [diff] = runWork().diffs;
+    if (diff?.digest == null) throw new Error("a captured diff's digest");
+    const digest = captured.querySelector("code");
+    expect(digest).toHaveAttribute("data-truncate", diff.digest);
+    expect(digest).toHaveTextContent(`sha256:${"9".repeat(12)}…`);
+    expect(digest?.textContent).not.toContain(diff.digest);
+    expect(digest).not.toHaveAttribute("title");
   });
 
   it("counts the inferred rows against the total, and none is inferred", async () => {

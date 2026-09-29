@@ -43,7 +43,7 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 ## Sources
 
 - **Provisioning** comes from the `steering_repo` key of the workspace's settings, which the provisioning job writes.
-- **The published version** comes from the steering publication of the repository. Provisioning records version 1 as a host deployment and writes no publication, so the read answers 1 once `publish_version` has finished and before the first publish writes one.
+- **The published version** comes from the steering publication of the repository. Provisioning records version 1 as a host deployment in `publish_version`. In a workspace, `bind_repository` then publishes the first commit through the version store as version 1, so the first merged steering PR publishes version 2 (#4732). An organization's repository has no bind step, so its version store holds nothing until the first publish. Until a publication exists, the read answers 1 once `publish_version` has finished.
 - **Health and differences** come from the last health read. With no read yet, `health` is null and `differences` is empty.
 
 ## No provisioning state

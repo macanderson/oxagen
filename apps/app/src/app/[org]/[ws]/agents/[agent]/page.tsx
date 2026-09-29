@@ -22,17 +22,12 @@ export default async function AgentPage({
   const ctx = await requireViewer(org, ws);
   const { tab, cursor } = await searchParams;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Agent
-        ctx={ctx}
-        source={dataSource()}
-        agent={agent}
-        tab={firstParam(tab) ?? null}
-        cursor={firstParam(cursor) ?? null}
-      />
-    </main>
+    <Agent
+      ctx={ctx}
+      source={dataSource()}
+      agent={agent}
+      tab={firstParam(tab) ?? null}
+      cursor={firstParam(cursor) ?? null}
+    />
   );
 }

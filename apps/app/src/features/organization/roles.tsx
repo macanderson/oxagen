@@ -177,7 +177,7 @@ export function RolesTab({
       <Permissions key="permissions" role={role} />,
       <HeldBy key="held" role={role} />,
       <Origin key="origin" role={role} origin={originOf(role)} />,
-      <div key="actions" className="flex gap-2 max-md:flex-wrap">
+      <div key="actions" data-actions="" className="flex gap-2 max-md:flex-wrap">
         <RoleEditor
           org={org}
           catalog={catalog.catalog}

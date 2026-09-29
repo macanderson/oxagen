@@ -365,6 +365,51 @@ describe("runSteeringImport: workspaces with nothing to read", () => {
     expect(world.source.pulls).toHaveLength(0);
   });
 
+  it("tells a workspace on a legacy connection how to start fresh", async () => {
+    const world = new World();
+    world.heads.clear();
+    world.head = { kind: "legacy", fullName: "a-intel/platform" };
+
+    await expect(world.run({})).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_import_legacy_connection",
+      message: expect.stringContaining("startFresh"),
+    });
+    expect(world.provisionCalls).toBe(0);
+  });
+
+  it("gives a workspace on a legacy connection an empty steering repo when it starts fresh", async () => {
+    const world = new World();
+    world.heads.clear();
+    world.head = { kind: "legacy", fullName: "a-intel/platform" };
+
+    const result = await world.run({ startFresh: true });
+
+    expect(result).toMatchObject({
+      outcome: "provisioned",
+      steeringRepository: "a-intel/platform-steering",
+      pullRequests: [],
+      cleanup: null,
+      leftForAPerson: 0,
+    });
+    expect(world.provisionCalls).toBe(1);
+    expect(world.demoteCalls).toBe(0);
+    expect(world.steering.pulls).toHaveLength(0);
+    expect(world.source.pulls).toHaveLength(0);
+  });
+
+  it("starts a legacy workspace fresh on the call the refusal asks for", async () => {
+    const world = new World();
+    world.heads.clear();
+    world.head = { kind: "legacy", fullName: "a-intel/platform" };
+
+    expect(await refusal(world.run({}))).toBe("steering_import_legacy_connection");
+    const result = await world.run({ startFresh: true });
+
+    expect(result).toMatchObject({ outcome: "provisioned", pullRequests: [], cleanup: null });
+    expect(world.provisionCalls).toBe(1);
+  });
+
   it("answers nothing_to_import for a workspace that has a steering repo", async () => {
     const world = new World();
     world.heads.set(OLD_HEAD, "linked");

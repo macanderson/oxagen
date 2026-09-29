@@ -130,6 +130,7 @@ describe("mergeContextPr", () => {
       mergedCommit: "4d5e6f7a8b9c",
       promotionEvent: { id: "ctp_8qm2x4", seq: 42, chainDigest: "sha256:ab" },
       bundleVersion: { before: 41, after: 42 },
+      publishedVersion: null,
     });
     expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
       ok: true,
@@ -175,6 +176,7 @@ describe("mergePrWithoutReview", () => {
       mergedCommit: "4d5e6f7a8b9c",
       promotionEvent: { id: "ctp_8qm2x4", seq: 42, chainDigest: "sha256:ab" },
       bundleVersion: { before: 41, after: 42 },
+      publishedVersion: null,
     });
     expect(await mergePrWithoutReview("acme", "core-platform", ID)).toEqual({
       ok: true,

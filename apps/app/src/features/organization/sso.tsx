@@ -200,7 +200,7 @@ function Providers({
               </td>
               {canEdit ? (
                 <td className={cell}>
-                  <div className="flex gap-2 max-md:flex-wrap">
+                  <div data-actions="" className="flex gap-2 max-md:flex-wrap">
                     {canSetUp ? (
                       <SsoProviderDialog org={org} provider={provider} />
                     ) : null}

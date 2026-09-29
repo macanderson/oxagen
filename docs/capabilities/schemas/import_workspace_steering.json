@@ -1,7 +1,7 @@
 {
   "name": "import_workspace_steering",
   "domain": "repository",
-  "description": "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges.",
+  "description": "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges. A workspace on a legacy sources connection sets startFresh instead: the run creates an empty steering repo and imports nothing.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -38,6 +38,10 @@
             "forbid"
           ]
         }
+      },
+      "startFresh": {
+        "type": "boolean",
+        "description": "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository."
       }
     },
     "additionalProperties": false

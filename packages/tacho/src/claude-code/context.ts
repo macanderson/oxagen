@@ -4,6 +4,7 @@
  */
 import { createHash } from "node:crypto";
 import type { ChainCursor } from "../chain";
+import { isSha256Digest, type Sha256Digest } from "../digest";
 import type { TachoEvent } from "../envelope";
 
 export type AgentIdentity = TachoEvent["agent"];
@@ -46,6 +47,73 @@ export const DEFAULT_SECRET_ENV_PATTERN =
 
 export function digestText(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
+
+/**
+ * The steering text a `SessionStart` answer handed the agent. `tacho-hook`
+ * writes it into the spool file when it answers from the cached bundle, so
+ * the daemon's replay can seal what the agent saw. The bundle the daemon
+ * holds by then may be a newer one.
+ */
+export interface DeliveredContext {
+  /**
+   * `digestText` of the bundle's `context.system`, which is what the control
+   * plane's manifest names as `text_digest`. Absent when the answer carried
+   * no text.
+   */
+  digest?: Sha256Digest;
+  /** Its length in UTF-16 code units, which `oxagen.delivered_chars` counts. */
+  chars: number;
+  /**
+   * The etag of the bundle the answer came from. Equal text does not make
+   * equal bundles: a permission, a skill or a cut record can change while
+   * the text stays the same. So a replay seals the bundle's manifest only
+   * when the daemon still holds this bundle.
+   */
+  bundle_etag?: string;
+}
+
+/**
+ * What an answer from the bundle with `bundleEtag` delivered when it handed
+ * the agent `text`. Null means no text.
+ */
+export function deliveredContext(
+  text: string | null,
+  bundleEtag: string,
+): DeliveredContext {
+  return text === null
+    ? { chars: 0, bundle_etag: bundleEtag }
+    : { digest: digestText(text), chars: text.length, bundle_etag: bundleEtag };
+}
+
+/**
+ * The delivery a replay carries, or undefined when it carries none that can
+ * be read. A replay comes from a spool file or a local post, and neither is
+ * parsed on the way in. A malformed value is treated as absent, because
+ * sealing it would claim a digest nothing proves.
+ */
+export function readDeliveredContext(
+  value: unknown,
+): DeliveredContext | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { digest, chars, bundle_etag } = value as Record<string, unknown>;
+  if (typeof chars !== "number" || !Number.isSafeInteger(chars) || chars < 0)
+    return undefined;
+  if (digest !== undefined && !isSha256Digest(digest)) return undefined;
+  // A spool written before the etag was recorded carries none. Its digest
+  // still stands, and its replay seals no manifest frame.
+  if (
+    bundle_etag !== undefined &&
+    (typeof bundle_etag !== "string" ||
+      bundle_etag.length === 0 ||
+      bundle_etag.length > 128)
+  )
+    return undefined;
+  return {
+    ...(digest !== undefined ? { digest } : {}),
+    chars,
+    ...(bundle_etag !== undefined ? { bundle_etag } : {}),
+  };
 }
 
 /** Keep only the harness-relevant, non-secret environment members. */

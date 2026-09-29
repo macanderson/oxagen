@@ -5,7 +5,7 @@
 //   - rows are added and removed here, and Save sends the whole table,
 //     because `set_sso_group_roles` keeps exactly the rows it is sent;
 //   - the role select never offers owner;
-//   - a refused row is named on that row;
+//   - a refused row is named on that row, in a message that wraps;
 //   - a viewer who cannot write sees the rows with no control.
 import {
   cleanup,
@@ -144,11 +144,12 @@ describe("SsoGroupRoles", () => {
     await waitFor(() => {
       expect(row2).toHaveAttribute("aria-invalid", "true");
     });
-    expect(
-      screen.getByText(
-        "This group already has a row. Give each group one role.",
-      ),
-    ).toBeTruthy();
+    const message = screen.getByText(
+      "This group already has a row. Give each group one role.",
+    );
+    // The cell keeps text on one line. The refusal wraps (#4674).
+    expect(message).toHaveAttribute("data-wrap");
+    expect(message).not.toHaveClass("md:truncate");
     expect(
       screen.getByRole("textbox", { name: "Group name, row 1" }),
     ).not.toHaveAttribute("aria-invalid");

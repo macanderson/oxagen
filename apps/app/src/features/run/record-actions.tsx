@@ -52,8 +52,9 @@ const EXPORT_POLL_BUDGET_MS = 120_000;
  *
  * `navigator.clipboard` is absent over plain HTTP and refused by a browser
  * whose permission is denied, so the copy is attempted and its outcome is
- * announced either way. The full digest stays in the element's title and in
- * the copy, and the button never claims a copy that failed.
+ * announced either way. The full digest shows in a hover card on the short
+ * form and goes whole into the copy, and the button never claims a copy that
+ * failed.
  */
 function CopyDigest({ digest }: { digest: string }) {
   const t = useTranslations("run.record.export");
@@ -73,7 +74,7 @@ function CopyDigest({ digest }: { digest: string }) {
     <span className="flex flex-wrap items-center gap-2">
       <code
         data-testid="export-digest"
-        title={digest}
+        data-truncate={digest}
         className={`${mono} rounded-md bg-muted px-2 py-1 text-xs`}
       >
         {short}
