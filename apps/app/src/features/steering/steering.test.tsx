@@ -436,7 +436,11 @@ describe("the hub", () => {
   it("opens Skills with the page the URL names and gives the gold to Add a skill", async () => {
     const calls = await renderSteering("/skills?cursor=c2");
     expect(calls.proposals).toEqual([]);
-    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ ctx, cursor: "c2" });
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({
+      ctx,
+      cursor: "c2",
+      rows: 100,
+    });
     expect(screen.getByTestId("skills-tab")).toHaveAttribute(
       "data-cursor",
       "c2",
@@ -445,6 +449,14 @@ describe("the hub", () => {
       "data-create",
       "skill",
     );
+  });
+
+  it("hands Skills the page size the URL names (#4693)", async () => {
+    await renderSteering("/skills?rows=25&cursor=c2");
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({
+      cursor: "c2",
+      rows: 25,
+    });
   });
 
   it("presses the Context PRs segment on /proposals/prs", async () => {

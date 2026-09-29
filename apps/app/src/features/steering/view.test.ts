@@ -101,6 +101,26 @@ describe("resolveSteeringRoute", () => {
     });
   });
 
+  it("reads the size Rows per page picked under the skill inventory, 100 by default (#4693)", () => {
+    expect(resolve(["skills"])).toMatchObject({ view: { rows: 100 } });
+    for (const rows of [10, 25, 50, 100]) {
+      expect(resolve(["skills"], { rows: String(rows) })).toMatchObject({
+        view: { shelf: "skills", rows },
+      });
+    }
+    expect(
+      resolve(["skills"], { rows: "25", cursor: "c2" }),
+    ).toMatchObject({ view: { rows: 25, cursor: "c2" } });
+  });
+
+  it("reads a size the skill inventory does not offer as 100 (negative)", () => {
+    for (const rows of ["0", "7", "200", "-10", "many", ""]) {
+      expect(resolve(["skills"], { rows })).toMatchObject({
+        view: { rows: 100 },
+      });
+    }
+  });
+
   it("names the Compiler's agent from its segment", () => {
     expect(resolve(["compiler", "release-manager"])).toMatchObject({
       view: { tab: "compiler", agent: "release-manager" },

@@ -8614,7 +8614,11 @@ type Messages = {
       noneReported: string;
       notReported: string;
       list: string;
-      next: string;
+      pager: {
+        label: string;
+        first: string;
+        next: string;
+      };
     };
     row: {
       sessions: string;

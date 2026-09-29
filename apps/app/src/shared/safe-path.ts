@@ -456,11 +456,17 @@ export const routes = {
     ),
   /**
    * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
-   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
+   * `cursor` opens a later page of the inventory, and `rows` is the size of
+   * a page when it is off the default (#4693). `/{org}/{ws}/skills`
    * redirects here.
    */
-  skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+  skills: (
+    org: string,
+    ws: string,
+    q?: { cursor?: string; rows?: string },
+  ): SafePath =>
     withQuery(pathOf(org, ws, "steering", "skills"), {
+      rows: q?.rows,
       cursor: q?.cursor,
     }),
   /**
@@ -541,7 +547,7 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
-      /** How many proposals a page holds; only on Proposals (#4693). */
+      /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
       rows?: string;
       offset?: string;
       proposal?: string;

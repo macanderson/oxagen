@@ -2,8 +2,9 @@
 // tabs, each a path segment, and on the Library a shelf, also a path segment.
 // `/steering` and `/steering/library` are the Library's All shelf;
 // `/steering/records`, `/skills`, `/memory`, `/ontology` and `/instructions`
-// are its other shelves. A filter, a page offset, the rows a Proposals page
-// holds (#4693), a selected proposal and a Skills cursor stay query values.
+// are its other shelves. A filter, a page offset, the rows a Proposals or
+// Skills page holds (#4693), a selected proposal and a Skills cursor stay
+// query values.
 //
 // Every address written before the five tabs still lands. `/steering/policy`
 // is Gates, `/steering/preview/<agent>` is `/steering/compiler/<agent>`,
@@ -20,6 +21,7 @@ import {
   type RecordKind,
   STEERING_PAGE,
 } from "@/data/contracts/steering";
+import { SKILL_PAGE, SKILL_ROWS } from "@/data/contracts/skills";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 /** The five tabs, in the design's order; each answers one question. */
@@ -70,8 +72,9 @@ export type SteeringView = {
   kind: RecordKind | null;
   offset: number;
   /**
-   * How many proposals a page of either Proposals segment holds, one of
-   * PROPOSAL_ROWS. `STEERING_PAGE` on every other tab.
+   * How many rows a page holds: on either Proposals segment one of
+   * PROPOSAL_ROWS, on the Skills shelf one of SKILL_ROWS, and
+   * `STEERING_PAGE` everywhere else.
    */
   rows: number;
   /** Only on the Context PRs segment: the Context PR selected. */
@@ -176,11 +179,13 @@ function viewOf(
     offset:
       rawOffset !== undefined && OFFSET.test(rawOffset) ? Number(rawOffset) : 0,
     // A size Rows does not offer reads as the default, so a hand-typed URL
-    // cannot ask for more proposals than a page shows.
+    // cannot ask for more rows than a page shows.
     rows:
       tab === "proposals"
         ? (PROPOSAL_ROWS.find((size) => size === rawRows) ?? STEERING_PAGE)
-        : STEERING_PAGE,
+        : shelf === "skills"
+          ? (SKILL_ROWS.find((size) => size === rawRows) ?? SKILL_PAGE)
+          : STEERING_PAGE,
     proposal:
       segment === "prs" &&
       rawProposal !== undefined &&

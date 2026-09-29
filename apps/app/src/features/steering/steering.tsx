@@ -121,6 +121,7 @@ async function Body({
                   ctx={ctx}
                   source={source}
                   cursor={view.cursor}
+                  rows={view.rows}
                   view={view.skillView}
                 />
               </Suspense>

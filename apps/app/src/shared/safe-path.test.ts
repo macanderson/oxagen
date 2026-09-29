@@ -350,6 +350,12 @@ describe("routes", () => {
     expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
       "/acme/core-platform/steering/skills?cursor=c+2%26x",
     );
+    expect(routes.skills("acme", "core-platform", { rows: "25" })).toBe(
+      "/acme/core-platform/steering/skills?rows=25",
+    );
+    expect(
+      routes.skills("acme", "core-platform", { cursor: "c2", rows: "10" }),
+    ).toBe("/acme/core-platform/steering/skills?rows=10&cursor=c2");
     expect(
       routes.spend("acme", "core-platform", {
         tab: "agent",

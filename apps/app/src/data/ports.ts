@@ -621,9 +621,10 @@ export interface DataSource {
    */
   skills: {
     configuration(ctx: WsCtx): Promise<Read<SkillConfiguration>>;
+    /** `limit` is the page size, one of SKILL_ROWS; absent reads list_skills' default. */
     inventory(
       ctx: WsCtx,
-      q: { cursor: string | null },
+      q: { cursor: string | null; limit?: number },
     ): Promise<Read<SkillInventory>>;
   };
   /**

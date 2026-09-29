@@ -612,6 +612,22 @@ describe("the Skills route", () => {
     expect(Skills).not.toHaveBeenCalled();
   });
 
+  it("keeps the page size the URL named on the way to the tab (#4693)", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await SKILLS()).default(
+          routeProps(SEGMENTS, { cursor: "c2", rows: "25" }),
+        ),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering/skills?rows=25&cursor=c2",
+    );
+  });
+
   it.each<[string[], Record<string, string>, string]>([
     [["search"], {}, "/acme/core-platform/steering/skills?view=search"],
     [["versions"], {}, "/acme/core-platform/steering/skills?view=versions"],
@@ -619,6 +635,16 @@ describe("the Skills route", () => {
       ["catalog"],
       { cursor: "c2" },
       "/acme/core-platform/steering/skills?cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { cursor: "c2", rows: "25" },
+      "/acme/core-platform/steering/skills?rows=25&cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { rows: "7" },
+      "/acme/core-platform/steering/skills",
     ],
     [
       ["a-intel.release-notes", "source"],
