@@ -1,5 +1,5 @@
 // run.test.ts: the run one MCP request belongs to, and where its operator
-// role comes from (lane M15).
+// and their role come from (lane M15).
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import { describe, expect, it } from "vitest";
 import { resolveServedRun, type RunSources, type ServedHost, type ServedSession } from "../run";
@@ -20,7 +20,15 @@ function context(overrides: Partial<CapabilityContext> = {}): CapabilityContext 
   };
 }
 
-const HOST: ServedHost = { id: "host_1", publicId: "tch_1", runtime: "ci-linux-01", operatorRole: "member" };
+const ENROLLER = "5a8e2c41-9b7d-4f16-8c3e-0d2f6a1b7e94";
+
+const HOST: ServedHost = {
+  id: "host_1",
+  publicId: "tch_1",
+  runtime: "ci-linux-01",
+  operator: ENROLLER,
+  operatorRole: "member",
+};
 
 interface Asked {
   sessions: Array<{ hostId: string; sessionUuid: string }>;
@@ -39,7 +47,7 @@ function sources(host: ServedHost | null = HOST, session: ServedSession | null =
 }
 
 describe("resolveServedRun", () => {
-  it("takes the operator role from the key's host and the harness from the named session", async () => {
+  it("takes the operator and their role from the key's host and the harness from the named session", async () => {
     const { read } = sources();
     expect(await resolveServedRun(context(), read)).toEqual({
       orgId: "org_1",
@@ -48,6 +56,7 @@ describe("resolveServedRun", () => {
       sessionId: SESSION,
       runtime: "ci-linux-01",
       harness: "claude-code",
+      operator: ENROLLER,
       operatorRole: "member",
       machine: "tch_1",
       runPublicId: "tse_1",
@@ -71,6 +80,13 @@ describe("resolveServedRun", () => {
     const run = await resolveServedRun(context(), read);
     expect(run).not.toBeNull();
     expect(run).not.toHaveProperty("operatorRole");
+  });
+
+  it("leaves the operator out when the host records no enroller", async () => {
+    const { read } = sources({ ...HOST, operator: null, operatorRole: null });
+    const run = await resolveServedRun(context(), read);
+    expect(run).not.toBeNull();
+    expect(run).not.toHaveProperty("operator");
   });
 
   it("reads no session for a header that is not a UUID", async () => {

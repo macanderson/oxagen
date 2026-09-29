@@ -37,6 +37,14 @@ const mockRemove = vi.fn();
 vi.mock("@oxagen/database/member-lifecycle", () => ({
   removeOrgMemberInTx: mockRemove,
 }));
+// ── MCP server tokens ────────────────────────────────────────────────────────
+// What revokeDepartedMember does is proven in
+// mcp-studio/credentials/revoke.test.ts. Here the handler's job is to call it
+// for the removed person, after the removal commits.
+const mockRevokeDepartedMember = vi.fn();
+vi.mock("./mcp-studio/credentials/revoke", () => ({
+  revokeDepartedMember: mockRevokeDepartedMember,
+}));
 const REMOVAL = {
   userId: "target-user",
   wasMember: true,
@@ -159,6 +167,7 @@ describe("orgMemberRemoveHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRemove.mockResolvedValue(REMOVAL);
+    mockRevokeDepartedMember.mockResolvedValue({ revoked: 0, failed: [] });
   });
 
   it("no authenticated principal → forbidden", async () => {
@@ -276,6 +285,7 @@ describe("orgMemberRemoveHandler", () => {
     expect(mockTx.delete).not.toHaveBeenCalled();
     expect(mockTx.update).not.toHaveBeenCalled();
     expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
+    expect(mockRevokeDepartedMember).not.toHaveBeenCalled();
   });
 
   it("happy path → removes member, emits audit event, returns removed:true", async () => {
@@ -343,6 +353,71 @@ describe("orgMemberRemoveHandler", () => {
       summaryEvent: null,
       requestId: "req-123",
     });
+
+    // The removed member's MCP server tokens are revoked, once the removal ran.
+    expect(mockRevokeDepartedMember).toHaveBeenCalledOnce();
+    expect(mockRevokeDepartedMember).toHaveBeenCalledWith({
+      orgId: "org-abc",
+      userId: "target-user",
+    });
+    expect(mockRemove.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRevokeDepartedMember.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("a token revocation that fails still answers removed:true, after the removal", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]); // actor principal
+      if (callCount === 2) return build([{ roleName: "Owner" }]); // actor PRA = Owner
+      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]); // target orgUser
+      if (callCount === 4) return build([{ id: "owner-role-id" }]); // Owner role row
+      if (callCount === 5) return build([{ n: 2 }]); // 2 owners — no lockout
+      if (callCount === 6) return build([{ id: "target-principal-id" }]); // target principal
+      return build([]); // target holds no Owner PRA
+    });
+    mockTx.update = vi.fn();
+    mockTx.delete = vi.fn();
+    mockRevokeDepartedMember.mockRejectedValueOnce(new Error("connection reset"));
+
+    await expect(
+      orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx()),
+    ).resolves.toMatchObject({ removed: true, targetUserId: "target-user" });
+    expect(mockRemove).toHaveBeenCalledOnce();
+    expect(mockRevokeDepartedMember).toHaveBeenCalledWith({
+      orgId: "org-abc",
+      userId: "target-user",
+    });
+    expect(mockEmitSecurityEvent).toHaveBeenCalledOnce();
+  });
+
+  it("a removal that throws revokes no token", async () => {
+    let callCount = 0;
+    mockTx.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      const build = (result: unknown[]) => ({
+        from: selectChain(result).select().from,
+      });
+      if (callCount === 1) return build([{ id: "actor-principal-id" }]);
+      if (callCount === 2) return build([{ roleName: "Owner" }]);
+      if (callCount === 3) return build([{ id: "target-ou", role: "member" }]);
+      if (callCount === 4) return build([{ id: "owner-role-id" }]);
+      if (callCount === 5) return build([{ n: 2 }]);
+      if (callCount === 6) return build([{ id: "target-principal-id" }]);
+      return build([]);
+    });
+    mockTx.update = vi.fn();
+    mockTx.delete = vi.fn();
+    mockRemove.mockRejectedValueOnce(new Error("serialization failure"));
+
+    await expect(
+      orgMemberRemoveHandler({ targetUserId: "target-user" }, makeCtx()),
+    ).rejects.toThrow("serialization failure");
+    expect(mockRevokeDepartedMember).not.toHaveBeenCalled();
   });
 
   it("a member named by public id is resolved to their user id, after the actor gate", async () => {
@@ -384,6 +459,11 @@ describe("orgMemberRemoveHandler", () => {
       mockTx,
       expect.objectContaining({ userId: "target-user-uuid" }),
     );
+    // Tokens belong to the user id, so the revocation gets the resolved one.
+    expect(mockRevokeDepartedMember).toHaveBeenCalledWith({
+      orgId: "org-abc",
+      userId: "target-user-uuid",
+    });
   });
 
   it("a public id that names nobody in this org → not_found, nothing deleted", async () => {

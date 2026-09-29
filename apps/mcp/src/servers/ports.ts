@@ -6,9 +6,11 @@
 // reach: it reads rows, hands them on, and picks the transport the
 // environment's network names.
 import { assertGauAvailable, BillingSuspendedError, GauExhaustedError, recordGovernedActions } from "@oxagen/billing";
+import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
 import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
+import { workspaceCredentialSource } from "@oxagen/handlers/mcp-studio/credentials/connect";
 import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-calls/groups-store";
 import { launchSpecFor, machineGroupsOf } from "@oxagen/handlers/mcp-studio/local-calls/launch";
@@ -17,16 +19,14 @@ import { createLocalTransport } from "@oxagen/handlers/mcp-studio/local-calls/tr
 import { searchIndexFor } from "@oxagen/handlers/mcp-studio/search-index";
 import { postgresVersionStore } from "@oxagen/handlers/steering-repo/version-store";
 import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-scope";
-import { createCloudTransport, type Transport } from "@oxagen/mcp-studio";
-import { resolveCredentialKms } from "@oxagen/plugins";
-import { decryptCredentialSecrets } from "@oxagen/plugins/credentials";
+import { createCloudTransport, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
 import type { CedarRuntime } from "@oxagen/policy";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { postgresApprovals } from "./approvals";
 import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
-import { workspaceCredentialSource, type CredentialRow, type CredentialStore } from "./credentials";
+import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
 import { METER_LABEL, meterEntry } from "./meter";
 import type { PublishedSources } from "./published";
@@ -87,36 +87,32 @@ export function readOffSwitches(run: ServedRun): Promise<OffSwitches> {
   );
 }
 
-/** The workspace's mcp.credentials, read by name and decrypted with the deployment's key. */
-export function credentialStore(run: ServedRun): CredentialStore {
+/** The slugs of the run's organization and workspace, which a connect link names. */
+async function scopeSlugs(scope: Scope): Promise<{ orgSlug: string; workspaceSlug: string }> {
+  const [row] = await runInTenantScope(scope, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ orgSlug: schema.organizations.slug, workspaceSlug: schema.workspaces.slug })
+        .from(schema.workspaces)
+        .innerJoin(schema.organizations, eq(schema.organizations.id, schema.workspaces.orgId))
+        .where(and(eq(schema.workspaces.id, scope.workspaceId), eq(schema.workspaces.orgId, scope.orgId)))
+        .limit(1),
+    ),
+  );
+  if (row === undefined) throw new Error("The run's workspace does not exist.");
+  return row;
+}
+
+/**
+ * The vault's CredentialSource for one run, built on the first call that
+ * needs a credential. Its connect link is the API's connect route for the
+ * run's workspace.
+ */
+export function servedCredentials(run: ServedRun): CredentialSource {
   const scope = scopeOf(run);
-  return {
-    read: (name) =>
-      runInTenantScope(scope, () =>
-        withTenantDb(async (tx): Promise<CredentialRow | null> => {
-          const c = schema.mcpCredentials;
-          const [row] = await tx
-            .select({
-              status: c.status,
-              tokenKmsKeyId: c.tokenKmsKeyId,
-              accessTokenEnc: c.accessTokenEnc,
-              refreshTokenEnc: c.refreshTokenEnc,
-              secretEnc: c.secretEnc,
-              oauthClientSecretEnc: c.oauthClientSecretEnc,
-            })
-            .from(c)
-            .where(and(eq(c.orgId, scope.orgId), eq(c.workspaceId, scope.workspaceId), eq(c.name, name)))
-            .limit(1);
-          return row ?? null;
-        }),
-      ),
-    async decrypt(row) {
-      const kms = resolveCredentialKms();
-      if (kms === null) return null;
-      const secrets = await decryptCredentialSecrets(row, kms);
-      return { accessToken: secrets.accessToken, secret: secrets.secret };
-    },
-  };
+  return lazyCredentialSource(async () =>
+    workspaceCredentialSource({ ...scope, ...(await scopeSlugs(scope)), apiBaseUrl: apiPublicOrigin() }),
+  );
 }
 
 // One broker per process. A machine's local gateway long-polls this process
@@ -221,7 +217,7 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     withheld: async () => new Set<string>(),
     admit: admitServed,
     approvals: postgresApprovals(),
-    credentials: workspaceCredentialSource(credentialStore(run)),
+    credentials: servedCredentials(run),
     transport: transportFor,
     meter: meterServed,
     cedar: loadCedar,
@@ -267,7 +263,10 @@ export const postgresRunSources: RunSources = {
             .limit(1);
           operatorRole = operatorRoleOf(member?.role);
         }
-        if (host.runtimeId === null) return { id: host.id, publicId: host.publicId, runtime: null, operatorRole };
+        const operator = host.enrolledBy;
+        if (host.runtimeId === null) {
+          return { id: host.id, publicId: host.publicId, runtime: null, operator, operatorRole };
+        }
         const runtimes = schema.runtimes;
         const [runtime] = await tx
           .select({ slug: runtimes.slug })
@@ -281,7 +280,7 @@ export const postgresRunSources: RunSources = {
             ),
           )
           .limit(1);
-        return { id: host.id, publicId: host.publicId, runtime: runtime?.slug ?? null, operatorRole };
+        return { id: host.id, publicId: host.publicId, runtime: runtime?.slug ?? null, operator, operatorRole };
       }),
     );
   },
