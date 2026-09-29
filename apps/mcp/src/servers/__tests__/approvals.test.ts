@@ -59,6 +59,9 @@ vi.mock("@oxagen/database", () => ({
   // Each column reads as its own name, so a predicate names the columns it tests.
   schema: { approvalRequests: new Proxy({}, { get: (_target, key) => String(key) }) },
   withTenantDb: <T>(fn: (tx: unknown) => Promise<T>) => fn(db.tx),
+  // The same fake, so a role gate that reads through withOrgDb (ADR-086)
+  // never reaches the real one (check:db-mock-seams).
+  withOrgDb: <T>(fn: (tx: unknown) => Promise<T>) => fn(db.tx),
 }));
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: <T>(_scope: unknown, fn: () => Promise<T>) => fn(),
@@ -222,6 +225,12 @@ describe("postgresApprovals.requestAnother", () => {
     await expect(approvals.requestAnother(request())).resolves.toEqual({ id: "apr_2" });
     expect(db.state.inserted).toEqual([]);
   });
+
+  it("holds the lock on the call's key", async () => {
+    db.state.rows = [approved("apr_1", "usr_a")];
+    await approvals.requestAnother(request());
+    expect(db.state.locks).toEqual([expect.objectContaining({ values: [servedResumeKey(request())] })]);
+  });
 });
 
 describe("postgresApprovals.claim", () => {
@@ -231,6 +240,24 @@ describe("postgresApprovals.claim", () => {
     expect(db.state.updates).toHaveLength(1);
     expect(db.state.updates[0]?.set).toEqual({ tokenUsedAt: new Date(NOW) });
     // The predicate names the key and the resolution, never one row's id.
+    expect(db.state.updates[0]?.where).toEqual({
+      and: [db.state.reads[0], { eq: ["resolution", "approved"] }],
+    });
+  });
+
+  it("holds the lock on the call's key", async () => {
+    db.state.rows = [approved("apr_1", "usr_a")];
+    await approvals.claim(request(), 1);
+    expect(db.state.locks).toEqual([expect.objectContaining({ values: [servedResumeKey(request())] })]);
+  });
+
+  it("marks the approvals it counted at the instant it counted them, even as the clock moves", async () => {
+    // Each read of this clock is one second later than the last.
+    let tick = 0;
+    const ticking = postgresApprovals(() => NOW + tick++ * 1000);
+    db.state.rows = [approved("apr_1", "usr_a"), approved("apr_2", "usr_b")];
+    await expect(ticking.claim(request(), 2)).resolves.toBe(true);
+    expect(db.state.updates[0]?.set).toEqual({ tokenUsedAt: new Date(NOW) });
     expect(db.state.updates[0]?.where).toEqual({
       and: [db.state.reads[0], { eq: ["resolution", "approved"] }],
     });
