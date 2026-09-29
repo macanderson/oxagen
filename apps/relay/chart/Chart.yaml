@@ -1,0 +1,8 @@
+apiVersion: v2
+name: oxagen-relay
+description: The Oxagen relay, which carries signed calls from Oxagen to servers and APIs in a private network.
+type: application
+# The chart's own version. Raise it when a template or a value changes.
+version: 0.1.0
+# No appVersion: the image tag you set in values.yaml names the relay version,
+# and the pods' app.kubernetes.io/version label reads it from there.

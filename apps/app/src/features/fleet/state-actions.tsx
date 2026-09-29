@@ -12,7 +12,12 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Badge } from "@/ui/badge";
-import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
+import {
+  buttonPrimary,
+  buttonSecondary,
+  inputBase,
+  textareaBase,
+} from "@/ui/control-styles";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
@@ -209,7 +214,7 @@ export function RequestAccess({
           <textarea
             id={whyId}
             rows={3}
-            className={`${inputBase} resize-y max-md:min-h-11 max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
           />
           <p className="text-xs text-muted-foreground">{t("note")}</p>
           <p

@@ -1,0 +1,34 @@
+{
+  "name": "@oxagen/relay-broker",
+  "version": "2.1.3",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@oxagen/billing": "workspace:*",
+    "@oxagen/mcp-studio": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
+    "ws": "8.21.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@oxagen/tacho": "workspace:*",
+    "@types/node": "25.9.8",
+    "@types/ws": "8.18.1",
+    "@vitest/coverage-v8": "2.1.9",
+    "eslint": "9.39.5",
+    "typescript": "6.0.3",
+    "vitest": "2.1.9"
+  }
+}

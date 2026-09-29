@@ -1,7 +1,12 @@
 // Form status pieces: an announced alert, a pending-aware submit button, and a
 // centred outcome panel. Words stay in the text ink; red is carried by the
 // glyph and the border, so every tone passes AA on the panel.
-import { CircleCheck, LoaderCircle, Lock, TriangleAlert } from "lucide-react";
+import {
+  CheckCircleIcon,
+  CircleNotchIcon,
+  LockIcon,
+  WarningIcon,
+} from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
 import {
   buttonDanger,
@@ -24,7 +29,7 @@ export function FormAlert({
       data-testid={testId}
       className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-foreground"
     >
-      <TriangleAlert
+      <WarningIcon
         aria-hidden
         className="mt-0.5 size-4 flex-none text-destructive"
       />
@@ -80,7 +85,7 @@ export function SubmitButton({
     >
       {pending ? (
         <>
-          <LoaderCircle
+          <CircleNotchIcon
             aria-hidden
             className="size-4 animate-spin motion-reduce:animate-none"
           />
@@ -130,11 +135,11 @@ export function OutcomePanel({
   const glyph =
     icon ??
     (tone === "ok" ? (
-      <CircleCheck aria-hidden className="size-5" />
+      <CheckCircleIcon aria-hidden className="size-5" />
     ) : tone === "deny" ? (
-      <Lock aria-hidden className="size-5" />
+      <LockIcon aria-hidden className="size-5" />
     ) : (
-      <TriangleAlert aria-hidden className="size-5" />
+      <WarningIcon aria-hidden className="size-5" />
     ));
   return (
     <section

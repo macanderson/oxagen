@@ -285,6 +285,8 @@
       "resize": "Resize stella",
       "close": "Close stella",
       "thinking": "Working…",
+      "transcript": "Conversation with stella",
+      "scrollToEnd": "Scroll to the newest message",
       "recordedAs": "recorded as",
       "cost": {
         "label": "cost",
@@ -413,9 +415,37 @@
         "sendHintModEnter": "Cmd+Enter or Ctrl+Enter to send, Enter for a new line",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
+      "attachments": {
+        "add": "Attach files",
+        "list": "Attached files",
+        "remove": "Remove {name}",
+        "open": "Open {name} in a new tab",
+        "uploading": "Uploading…",
+        "blocked": "Remove the files that failed before you send.",
+        "kinds": {
+          "image": "Image",
+          "pdf": "PDF",
+          "csv": "CSV",
+          "json": "JSON",
+          "markdown": "Markdown",
+          "text": "Text",
+          "file": "File"
+        },
+        "problem": {
+          "type": "Unsupported type",
+          "size": "Too large",
+          "empty": "Empty file",
+          "count": "Over 10 files",
+          "total": "Over the message total",
+          "bytes": "Contents unreadable",
+          "upload": "Upload failed"
+        }
+      },
       "refused": {
         "denied": "You do not have permission to ask stella in this workspace.",
         "invalid": "That question was refused. A question is 1 to 32,768 characters.",
+        "attachment": "A file on this question was refused. Remove it, or attach a smaller file of a type stella reads.",
+        "attachmentModel": "The model stella uses in this workspace cannot read one of these files. Remove the images or PDFs and ask again.",
         "exhausted": "This organization has no budget left for stella.",
         "noCredit": "This organization has no credit left for stella. An owner can add credit on Billing, or store a model key under Model funding.",
         "noCreditLink": "Buy usage credits on Billing",
@@ -463,6 +493,13 @@
         "recordedUseful": "Recorded as useful against this run.",
         "recordedWrong": "Recorded as wrong against this run.",
         "failed": "Your rating was not recorded. Try again."
+      },
+      "chart": {
+        "drawing": "Drawing the chart…",
+        "unreadable": "This chart could not be read, so its block prints as sent.",
+        "source": "Source: {source}",
+        "item": "Item",
+        "withUnit": "{value} {unit}"
       }
     },
     "approvals": {

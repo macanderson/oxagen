@@ -116,7 +116,13 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert, List, SquarePen } from "lucide-react";
+//
+// The transcript scrolls in shadcn's message scroller (`ui/message-scroller`,
+// ADR-221). A question just asked moves to the top with its reply growing
+// under it, a restored thread opens at its last question, and a button returns
+// a reader who scrolled up to the newest message.
+import { WarningCircleIcon } from "@phosphor-icons/react";
+import { ListIcon, NotePencilIcon } from "@phosphor-icons/react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -133,6 +139,12 @@ import {
   assistantDraftOf,
 } from "@/shared/assistant-draft";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
+import type { SentAttachment } from "./assistant-attachment-files";
+import {
+  AssistantAttachmentChips,
+  AssistantAttachmentPicker,
+  useAssistantAttachments,
+} from "./assistant-attachments";
 import { readAssistantReply } from "./assistant-actions";
 import {
   ASSISTANT_ENGINE_REASON_ID,
@@ -183,6 +195,14 @@ import { useShellState } from "./shell-state";
 import { useEngineHealth } from "./use-engine-health";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/ui/message-scroller";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { StellaIcon, StellaWordmark } from "@/ui/stella-mark";
 
@@ -191,6 +211,8 @@ type Entry =
       kind: "asked";
       id: string;
       text: string;
+      /** The files the question carried, shown under it (ADR-222). */
+      files?: readonly SentAttachment[];
       /**
        * The turn this question started, for Stop: the id the flyout minted
        * and the workspace it was asked in. A question read back from the
@@ -299,6 +321,8 @@ const EMPTY_THREAD: Thread = {
 type Refusal =
   | "denied"
   | "invalid"
+  | "attachment"
+  | "attachmentModel"
   | "exhausted"
   | "noCredit"
   | "spendCap"
@@ -357,13 +381,6 @@ function focusComposerOr(
   if (composer !== null && !composer.disabled) composer.focus();
   else fallback?.focus();
 }
-
-/**
- * How close to the bottom still counts as reading the newest turn. A few
- * pixels of rounding or a trailing margin must not unpin a reader who never
- * scrolled.
- */
-const PIN_SLACK_PX = 32;
 
 function subscribeToWidth(onChange: () => void): () => void {
   const mql = window.matchMedia(COVERS_THE_APP);
@@ -468,6 +485,13 @@ function refusalKey(result: Refused): Refusal {
     case "denied":
       return "denied";
     case "invalid":
+      // A file on the message broke a rule. A model that cannot read the
+      // file asks for a different change than a file that is too large.
+      if (result.field === "attachments") {
+        return result.code.startsWith("model_cannot_read")
+          ? "attachmentModel"
+          : "attachment";
+      }
       return "invalid";
     case "pending_approval":
       return "parked";
@@ -506,6 +530,10 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
       return <>{t("denied")}</>;
     case "invalid":
       return <>{t("invalid")}</>;
+    case "attachment":
+      return <>{t("attachment")}</>;
+    case "attachmentModel":
+      return <>{t("attachmentModel")}</>;
     case "exhausted":
       return <>{t("exhausted")}</>;
     // The way out is a top-up on Billing, where the usage credit balance and
@@ -582,13 +610,14 @@ export function AssistantFlyout({
     useShellState();
   const pathname = usePathname();
   const { org, ws, rest } = parseShellPath(pathname);
+  // The files on the composer, stored in the workspace the person is in.
+  const attachments = useAssistantAttachments(org ?? "", ws ?? "");
   // The route the person is standing on, and what that page says it is showing.
   // Read here rather than in the submit handler because it is a subscription.
   const route = rest[0] ?? "fleet";
   const declaredRecord = usePageRecord(route);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   // A monotonic key per entry: two turns in the same millisecond would collide
   // on a clock-derived one, and React needs these stable across re-renders.
@@ -605,10 +634,10 @@ export function AssistantFlyout({
       open: assistantOpen,
       restore: restoreEntry,
     });
-  // Whether the reader is at the bottom of the transcript. A streamed reply
-  // grows fragment by fragment, and the growth follows the tail only while the
-  // reader has not scrolled up to read something else.
-  const pinnedRef = useRef(true);
+  // How many conversations have been opened from the list. The transcript's
+  // scroller keys on it, so an opened conversation remounts and lands at its
+  // last question the way a restored thread does.
+  const [openedCount, setOpenedCount] = useState(0);
   // The turn whose stop is on its way or has been taken, so Stop does not
   // send twice, and the turn whose stop failed, so the flyout can say so.
   const [stopping, setStopping] = useState<string | null>(null);
@@ -730,22 +759,6 @@ export function AssistantFlyout({
     return release;
   }, [modal]);
 
-  // Keep the newest turn in view. A new entry, such as the question just
-  // asked, always scrolls to it. A streamed reply growing in place follows
-  // the tail only while the reader is pinned there. Guarded because scrollTo
-  // is a browser affordance jsdom does not implement, and the shell's own
-  // tests mount this host on every render — a cosmetic scroll must not fail
-  // them.
-  const entryCountRef = useRef(entries.length);
-  useEffect(() => {
-    const log = logRef.current;
-    const added = entries.length !== entryCountRef.current;
-    entryCountRef.current = entries.length;
-    if (log === null || typeof log.scrollTo !== "function") return;
-    if (!added && !pinnedRef.current) return;
-    log.scrollTo({ top: log.scrollHeight });
-  }, [entries]);
-
   // The width the person left the panel at. The cookie is read as a store:
   // the server renders the designed width, and the first client read corrects
   // it while the panel is still closed and out of sight.
@@ -836,6 +849,9 @@ export function AssistantFlyout({
       pending ||
       // An engine that reported itself down takes no turn. The draft stays.
       engineDown ||
+      // A file still uploading, or one that failed, holds the composer's
+      // send until it lands or is removed. "Ask again" sends no files.
+      (fromDraft && (attachments.uploading || attachments.failed)) ||
       content === "" ||
       content.length > ASSISTANT_CONTENT_MAX ||
       org === null ||
@@ -870,11 +886,18 @@ export function AssistantFlyout({
     const asked = scope;
     const { conversationId } = thread;
     const answeringId = `${id}-s`;
+    const files = fromDraft ? attachments.take() : [];
     updateThread(asked, (t) => ({
       ...t,
       entries: [
         ...t.entries,
-        { kind: "asked", id, text: content, turn: { id: turnId, org, ws } },
+        {
+          kind: "asked",
+          id,
+          text: content,
+          turn: { id: turnId, org, ws },
+          ...(files.length === 0 ? {} : { files }),
+        },
         {
           kind: "answering",
           id: answeringId,
@@ -910,6 +933,9 @@ export function AssistantFlyout({
         {
           conversationId,
           content,
+          ...(files.length === 0
+            ? {}
+            : { attachments: files.map((f) => f.publicId) }),
           route,
           turnId,
           entityId,
@@ -1169,7 +1195,7 @@ export function AssistantFlyout({
               }}
               className={HEADER_BUTTON}
             >
-              <List aria-hidden="true" className="size-4" />
+              <ListIcon aria-hidden="true" className="size-4" />
             </button>
             <button
               type="button"
@@ -1188,7 +1214,7 @@ export function AssistantFlyout({
               }}
               className={HEADER_BUTTON}
             >
-              <SquarePen aria-hidden="true" className="size-4" />
+              <NotePencilIcon aria-hidden="true" className="size-4" />
             </button>
           </>
         ) : null}
@@ -1238,185 +1264,219 @@ export function AssistantFlyout({
             refusal keeps its own `role="alert"`, which is assertive and
             interrupts.
 
-            The region is this container, which renders on every pass, rather
-            than the list inside it, which appears with the first turn: a
-            polite region inserted in the same commit as the text it holds is
-            announced unreliably, so only the contents may be conditional.
+            The region is the scroller's content, which renders on every pass
+            and carries `role="log"`, rather than the entries inside it, which
+            appear with the first turn: a polite region inserted in the same
+            commit as the text it holds is announced unreliably, so only the
+            contents may be conditional.
+
+            The scroller remounts on a workspace switch and on a conversation
+            opened from the list, so each opens at its last question. A new
+            question is the scroll anchor: it moves to the top, and the reply
+            grows under it.
           */}
-          <div
-            ref={logRef}
-            role="log"
-            className="min-h-0 flex-1 overflow-y-auto p-4"
-            onScroll={(e) => {
-              const log = e.currentTarget;
-              const gap = log.scrollHeight - log.scrollTop - log.clientHeight;
-              pinnedRef.current = gap < PIN_SLACK_PX;
-            }}
+          <MessageScrollerProvider
+            key={`${shownSlugs?.org ?? ""}/${shownSlugs?.ws ?? ""}:${String(openedCount)}`}
+            autoScroll
+            defaultScrollPosition="last-anchor"
           >
-            {entries.length === 0 ? (
-              <div
-                className="flex flex-col gap-2 py-6"
-                data-testid="assistant-intro"
-              >
-                <h3 className="text-[13px] leading-5 font-semibold">
-                  {t("intro.title")}
-                </h3>
-                <p className="text-[13px] leading-5 text-muted-foreground">
-                  {t("intro.body")}
-                </p>
-                <AssistantSuggestions />
-              </div>
-            ) : (
-              <ol className="flex flex-col gap-3" data-testid="assistant-log">
-                {entries.map((entry) => (
-                  <li key={entry.id}>
-                    {entry.kind === "asked" ? (
-                      <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
-                        {entry.text}
-                      </p>
-                    ) : entry.kind === "answering" ? (
-                      <AssistantAnswering
-                        text={entry.text}
-                        tools={entry.tools}
-                      />
-                    ) : entry.kind === "dropped" ? (
-                      <AssistantDropped
-                        text={entry.text}
-                        runId={entry.runId}
-                        load={entry.load}
-                        org={entry.org}
-                        ws={entry.ws}
-                        retryDisabled={pending}
-                        onLoad={() => {
-                          if (shownScope !== null)
-                            void loadReply(shownScope, entry);
-                        }}
-                        onRetry={() => {
-                          void send(entry.question, { fromDraft: false });
-                        }}
-                      />
-                    ) : entry.kind === "answered" ? (
-                      <div data-testid="assistant-answer">
-                        <AssistantMarkdown>{entry.text}</AssistantMarkdown>
-                        {entry.stopped === true ? (
-                          <p
-                            data-testid="assistant-stopped"
-                            className="mt-1 text-[12px] text-muted-foreground"
-                          >
-                            {t("stopped")}
-                          </p>
-                        ) : null}
-                        <p
-                          data-testid="assistant-recorded-as"
-                          className="mt-1 font-mono text-[11px] text-muted-foreground"
-                        >
-                          {t("recordedAs")}{" "}
-                          {org !== null && ws !== null ? (
-                            <SafeLink
-                              to={routes.run(org, ws, entry.runId)}
-                              className={linkText}
-                            >
-                              {entry.runId}
-                            </SafeLink>
-                          ) : (
-                            entry.runId
-                          )}
+            <MessageScroller className="min-h-0 flex-1">
+              <MessageScrollerViewport aria-label={t("transcript")}>
+                <MessageScrollerContent
+                  className="gap-3 p-4"
+                  // Named only once there is a turn, as the list it replaced
+                  // was: the intro is not the log.
+                  data-testid={
+                    entries.length === 0 ? undefined : "assistant-log"
+                  }
+                >
+                  {entries.length === 0 ? (
+                    <MessageScrollerItem messageId="intro">
+                      <div
+                        className="flex flex-col gap-2 py-6"
+                        data-testid="assistant-intro"
+                      >
+                        <h3 className="text-[13px] leading-5 font-semibold">
+                          {t("intro.title")}
+                        </h3>
+                        <p className="text-[13px] leading-5 text-muted-foreground">
+                          {t("intro.body")}
                         </p>
-                        <AssistantToolCalls calls={entry.toolCalls} />
-                        {/* What the run cost, from its record (#4167). */}
-                        {shownScope === null ? null : (
-                          <AssistantReplyCost
-                            scope={shownScope}
-                            runId={entry.runId}
-                          />
-                        )}
-                        {entry.parked.length === 0 ? null : (
-                          <p
-                            data-testid="assistant-parked"
-                            className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
-                          >
-                            {t("parked", { count: entry.parked.length })}
+                        <AssistantSuggestions />
+                      </div>
+                    </MessageScrollerItem>
+                  ) : null}
+                  {entries.map((entry) => (
+                    <MessageScrollerItem
+                      key={entry.id}
+                      messageId={entry.id}
+                      scrollAnchor={entry.kind === "asked"}
+                    >
+                      {entry.kind === "asked" ? (
+                        <div className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1">
+                          <p className="w-fit max-w-full rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
+                            {entry.text}
                           </p>
-                        )}
-                        {/* Each parked write as a card, with Approve and Deny
-                            (#4162). */}
-                        {entry.parked.length === 0 ||
-                        threadOrg === undefined ||
-                        threadWs === undefined ? null : (
-                          <AssistantParkedApprovals
-                            org={threadOrg}
-                            ws={threadWs}
-                            runId={entry.runId}
-                            cards={entry.parked}
-                          />
-                        )}
-                        {/*
-                          Useful or wrong, recorded against the run (#4169).
-                          Only inside a workspace, like the run link: the vote
-                          names the workspace the thread was asked in. A
-                          stopped reply keeps its controls: the turn still
-                          saved an assistant message under this run (#4164),
-                          so the vote resolves to it.
-                        */}
-                        {(() => {
-                          const conversation =
-                            entry.conversationId ?? thread.conversationId;
-                          return org !== null &&
-                            ws !== null &&
-                            conversation !== null ? (
-                            <AssistantReplyFeedback
-                              org={org}
-                              ws={ws}
-                              conversationId={conversation}
+                          {entry.files === undefined ? null : (
+                            <AssistantAttachmentChips
+                              files={entry.files.map((f) => ({
+                                ...f,
+                                state: "done" as const,
+                                problem: null,
+                              }))}
+                              testId="assistant-sent-attachments"
+                            />
+                          )}
+                        </div>
+                      ) : entry.kind === "answering" ? (
+                        <AssistantAnswering
+                          text={entry.text}
+                          tools={entry.tools}
+                        />
+                      ) : entry.kind === "dropped" ? (
+                        <AssistantDropped
+                          text={entry.text}
+                          runId={entry.runId}
+                          load={entry.load}
+                          org={entry.org}
+                          ws={entry.ws}
+                          retryDisabled={pending}
+                          onLoad={() => {
+                            if (shownScope !== null)
+                              void loadReply(shownScope, entry);
+                          }}
+                          onRetry={() => {
+                            void send(entry.question, { fromDraft: false });
+                          }}
+                        />
+                      ) : entry.kind === "answered" ? (
+                        <div data-testid="assistant-answer">
+                          <AssistantMarkdown>{entry.text}</AssistantMarkdown>
+                          {entry.stopped === true ? (
+                            <p
+                              data-testid="assistant-stopped"
+                              className="mt-1 text-[12px] text-muted-foreground"
+                            >
+                              {t("stopped")}
+                            </p>
+                          ) : null}
+                          <p
+                            data-testid="assistant-recorded-as"
+                            className="mt-1 font-mono text-[11px] text-muted-foreground"
+                          >
+                            {t("recordedAs")}{" "}
+                            {org !== null && ws !== null ? (
+                              <SafeLink
+                                to={routes.run(org, ws, entry.runId)}
+                                className={linkText}
+                              >
+                                {entry.runId}
+                              </SafeLink>
+                            ) : (
+                              entry.runId
+                            )}
+                          </p>
+                          <AssistantToolCalls calls={entry.toolCalls} />
+                          {/* What the run cost, from its record (#4167). */}
+                          {shownScope === null ? null : (
+                            <AssistantReplyCost
+                              scope={shownScope}
                               runId={entry.runId}
                             />
-                          ) : null;
-                        })()}
-                      </div>
-                    ) : (
-                      <div>
-                        <p
-                          role="alert"
-                          data-testid={`assistant-${entry.code}`}
-                          className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
-                        >
-                          <CircleAlert
-                            aria-hidden="true"
-                            className="mt-0.5 size-4 flex-none text-error"
-                          />
-                          <span>
-                            <RefusalText code={entry.code} org={org} />
-                          </span>
-                        </p>
-                        {entry.detail === null ? null : (
+                          )}
+                          {entry.parked.length === 0 ? null : (
+                            <p
+                              data-testid="assistant-parked"
+                              className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+                            >
+                              {t("parked", { count: entry.parked.length })}
+                            </p>
+                          )}
+                          {/* Each parked write as a card, with Approve and Deny
+                              (#4162). */}
+                          {entry.parked.length === 0 ||
+                          threadOrg === undefined ||
+                          threadWs === undefined ? null : (
+                            <AssistantParkedApprovals
+                              org={threadOrg}
+                              ws={threadWs}
+                              runId={entry.runId}
+                              cards={entry.parked}
+                            />
+                          )}
+                          {/*
+                            Useful or wrong, recorded against the run (#4169).
+                            Only inside a workspace, like the run link: the vote
+                            names the workspace the thread was asked in. A
+                            stopped reply keeps its controls: the turn still
+                            saved an assistant message under this run (#4164),
+                            so the vote resolves to it.
+                          */}
+                          {(() => {
+                            const conversation =
+                              entry.conversationId ?? thread.conversationId;
+                            return org !== null &&
+                              ws !== null &&
+                              conversation !== null ? (
+                              <AssistantReplyFeedback
+                                org={org}
+                                ws={ws}
+                                conversationId={conversation}
+                                runId={entry.runId}
+                              />
+                            ) : null;
+                          })()}
+                        </div>
+                      ) : (
+                        <div>
                           <p
-                            data-testid="assistant-refusal-code"
-                            className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                            role="alert"
+                            data-testid={`assistant-${entry.code}`}
+                            className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
                           >
-                            {entry.detail}
+                            <WarningCircleIcon
+                              aria-hidden="true"
+                              className="mt-0.5 size-4 flex-none text-error"
+                            />
+                            <span>
+                              <RefusalText code={entry.code} org={org} />
+                            </span>
                           </p>
-                        )}
-                        {RETRYABLE.has(entry.code) && inWorkspace ? (
-                          <button
-                            type="button"
-                            data-testid="assistant-retry"
-                            disabled={pending || engineDown}
-                            onClick={() => {
-                              void send(entry.question, { fromDraft: false });
-                            }}
-                            className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
-                          >
-                            {t("retry")}
-                          </button>
-                        ) : null}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            )}
-            {pending ? <AssistantThinking label={t("thinking")} /> : null}
-          </div>
+                          {entry.detail === null ? null : (
+                            <p
+                              data-testid="assistant-refusal-code"
+                              className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                            >
+                              {entry.detail}
+                            </p>
+                          )}
+                          {RETRYABLE.has(entry.code) && inWorkspace ? (
+                            <button
+                              type="button"
+                              data-testid="assistant-retry"
+                              disabled={pending || engineDown}
+                              onClick={() => {
+                                void send(entry.question, { fromDraft: false });
+                              }}
+                              className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                            >
+                              {t("retry")}
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </MessageScrollerItem>
+                  ))}
+                  {pending ? (
+                    <MessageScrollerItem messageId="thinking">
+                      <AssistantThinking label={t("thinking")} />
+                    </MessageScrollerItem>
+                  ) : null}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton label={t("scrollToEnd")} />
+            </MessageScroller>
+          </MessageScrollerProvider>
 
           <div className="flex-none border-t border-border px-3 py-3">
             {inWorkspace ? (
@@ -1427,7 +1487,27 @@ export function AssistantFlyout({
                     composerRef.current?.focus();
                   }}
                 />
-                <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                <AssistantAttachmentChips
+                  files={attachments.files}
+                  onRemove={attachments.remove}
+                  testId="assistant-attachments"
+                />
+                <div
+                  className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (e.dataTransfer.files.length === 0) return;
+                    e.preventDefault();
+                    if (pending) return;
+                    attachments.add(Array.from(e.dataTransfer.files));
+                  }}
+                >
+                  <AssistantAttachmentPicker
+                    onFiles={attachments.add}
+                    disabled={pending}
+                  />
                   <textarea
                     ref={composerRef}
                     rows={2}
@@ -1438,6 +1518,24 @@ export function AssistantFlyout({
                     aria-describedby={`${ASSISTANT_PANEL_ID}-send-hint`}
                     placeholder={t("composer.placeholder")}
                     data-testid="assistant-composer"
+                    onPaste={(e) => {
+                      // A pasted screenshot or file attaches. Pasted text
+                      // goes into the draft as usual. A spreadsheet, a
+                      // document or a web page copies a picture of the
+                      // selection beside its text and HTML, and the text is
+                      // what the person meant, so that paste stays text.
+                      const pasted = Array.from(e.clipboardData.files);
+                      const types = Array.from(e.clipboardData.types);
+                      if (
+                        pasted.length === 0 ||
+                        (types.includes("text/plain") &&
+                          types.includes("text/html"))
+                      ) {
+                        return;
+                      }
+                      e.preventDefault();
+                      attachments.add(pasted);
+                    }}
                     onChange={(e) => {
                       if (shownScope === null) return;
                       const value = e.target.value;
@@ -1470,7 +1568,13 @@ export function AssistantFlyout({
                             stopping: stopping === running.id,
                           }
                     }
-                    sendDisabled={pending || engineDown || draft.trim() === ""}
+                    sendDisabled={
+                      pending ||
+                      engineDown ||
+                      draft.trim() === "" ||
+                      attachments.uploading ||
+                      attachments.failed
+                    }
                     unavailableReasonId={
                       engineDown ? ASSISTANT_ENGINE_REASON_ID : null
                     }
@@ -1496,6 +1600,14 @@ export function AssistantFlyout({
                     className="mt-2 text-[13px] leading-5 text-muted-foreground"
                   >
                     {t("composer.stopFailed")}
+                  </p>
+                ) : null}
+                {attachments.failed ? (
+                  <p
+                    data-testid="assistant-attachments-blocked"
+                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                  >
+                    {t("attachments.blocked")}
                   </p>
                 ) : null}
                 {thread.draftTooLong ? (
@@ -1536,7 +1648,7 @@ export function AssistantFlyout({
               onOpened={(opened) => {
                 if (scope === null) return;
                 openThread(scope, opened);
-                pinnedRef.current = true;
+                setOpenedCount((count) => count + 1);
                 showThread();
               }}
               onShowCurrent={showThread}

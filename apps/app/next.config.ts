@@ -39,6 +39,13 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: serverActionsAllowedOrigins },
+    // Both Phosphor entries are barrels of ~1,500 glyphs. Next optimizes
+    // lucide-react by default but not these, so each import would pull the
+    // whole barrel through the compiler.
+    optimizePackageImports: [
+      "@phosphor-icons/react",
+      "@phosphor-icons/react/ssr",
+    ],
   },
   // Workspace packages export TypeScript source.
   transpilePackages: [

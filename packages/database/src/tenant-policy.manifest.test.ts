@@ -275,7 +275,8 @@ describe("tenant policy manifest", () => {
     // 147 adds agent.steering_repo_health (S2, #4560, 2026-09-27).
     // 148 adds mcp.operator_tokens (M8, #4668, 2026-09-28).
     // 149 adds mcp.search_embeddings (M15, ADR-217, 2026-09-28).
-    expect(POLICY_MANIFEST.length).toBe(149);
+    // 150 adds mcp.studio_drafts (M11, #4686, 2026-09-28).
+    expect(POLICY_MANIFEST.length).toBe(150);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

@@ -19,7 +19,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "./avatar";
-import { mono } from "./control-styles";
+import { mono, popoverSurface } from "./control-styles";
 
 export type OperatorIdentity = {
   /** The principal public id; the key, never the label. */
@@ -140,7 +140,7 @@ export function OperatorName({
               role="tooltip"
               data-testid="operator-card"
               style={place}
-              className="animate-in fixed z-50 block w-max min-w-56 max-w-xs rounded-xl border border-border bg-card px-3.5 py-3 text-left text-sm font-normal whitespace-normal text-card-foreground shadow-md"
+              className={`${popoverSurface} animate-in fixed z-50 block w-max min-w-56 max-w-xs px-4 py-3 text-left text-sm font-normal whitespace-normal`}
             >
               <span className="flex items-center gap-2.5">
                 <Avatar

@@ -7,7 +7,11 @@
 // *Request access* and *Open an incident* are drawn, disabled, with the line
 // that says what they would do: no contract lets a person ask for a role
 // (#3820) or open an incident from a page (#3847).
-import { CircleAlert, Lock, PanelTop } from "lucide-react";
+import {
+  BrowserIcon,
+  LockIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { PAGE_FAILURES } from "@/data/read";
@@ -137,7 +141,7 @@ export function ErrorBody({
     <StateWrap
       testId="repositories-error"
       tone="failed"
-      icon={<CircleAlert className="size-5" />}
+      icon={<WarningCircleIcon className="size-5" />}
       title={t("title")}
       actions={
         <>
@@ -206,7 +210,7 @@ export function DeniedBody({
     <StateWrap
       testId="repositories-denied"
       tone="denied"
-      icon={<Lock className="size-5" />}
+      icon={<LockIcon className="size-5" />}
       title={t("title")}
       actions={
         <>
@@ -266,7 +270,7 @@ export function EmptyBody({ onAddOxagen }: { onAddOxagen: () => void }) {
     <StateWrap
       testId="repositories-empty"
       tone="quiet"
-      icon={<PanelTop className="size-5" />}
+      icon={<BrowserIcon className="size-5" />}
       title={t("empty.title")}
       actions={
         <button

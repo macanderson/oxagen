@@ -3,7 +3,12 @@
 // button, the bell, the approvals button left of the avatar, and the user
 // menu. There is no assistant button here: the launcher lives at the foot of
 // the sidebar.
-import { Bell, Menu, Search, ShieldCheck } from "lucide-react";
+import {
+  BellIcon,
+  ListIcon,
+  MagnifyingGlassIcon,
+  ShieldCheckIcon,
+} from "@phosphor-icons/react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Fragment } from "react";
@@ -120,7 +125,7 @@ export function Topbar({ data }: { data: ShellData }) {
           setDrawerOpen(true);
         }}
       >
-        <Menu aria-hidden="true" className="size-4" />
+        <ListIcon aria-hidden="true" className="size-4" />
       </button>
       <Breadcrumbs data={data} />
       <button
@@ -133,7 +138,7 @@ export function Topbar({ data }: { data: ShellData }) {
         data-touch-target=""
         className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
       >
-        <Search aria-hidden="true" className="size-3.5" />
+        <MagnifyingGlassIcon aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
@@ -157,7 +162,7 @@ export function Topbar({ data }: { data: ShellData }) {
         }}
         className={iconButton}
       >
-        <Bell aria-hidden="true" className="size-4" />
+        <BellIcon aria-hidden="true" className="size-4" />
         {unread !== null && unread > 0 ? (
           <span
             aria-hidden="true"
@@ -183,7 +188,7 @@ export function Topbar({ data }: { data: ShellData }) {
         }}
         className={approvalsOpen ? iconButtonPressed : iconButton}
       >
-        <ShieldCheck aria-hidden="true" className="size-4" />
+        <ShieldCheckIcon aria-hidden="true" className="size-4" />
         {waiting !== null && waiting.count > 0 ? (
           <span
             aria-hidden="true"

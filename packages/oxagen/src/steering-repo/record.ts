@@ -30,17 +30,15 @@ import { encodingIssues, schemaIssues, type FileIssue } from "./files";
 import { uniqueArray, withRules } from "./json-schema";
 import { DESCRIPTION_MAX, SKILL_DESCRIPTION_MAX } from "./tokens";
 
+import { recordEffectSchema } from "./record-effect";
 import { recordKindSchema } from "./record-kind";
 
+export { recordEffectSchema, type RecordEffect } from "./record-effect";
 export { RECORD_KINDS, recordKindSchema, type RecordKind } from "./record-kind";
 
 /** `must` and `should` reach every request; `may` and `info` reach one they fit. */
 export const recordForceSchema = z.enum(["must", "should", "may", "info"]);
 export type RecordForce = z.output<typeof recordForceSchema>;
-
-/** A constraint's effect. `allow` does not exist: a record never grants authority. */
-export const recordEffectSchema = z.enum(["require", "forbid"]);
-export type RecordEffect = z.output<typeof recordEffectSchema>;
 
 export const recordScopeSchema = z.enum([
   "workspace",

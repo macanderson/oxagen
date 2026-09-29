@@ -10,7 +10,7 @@
 // organization requires SSO and the session was not an SSO one: the entry
 // starts open under a notice saying why. LoginForm places the entry under the
 // card, or above it when it starts open.
-import { KeyRound } from "lucide-react";
+import { KeyIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
@@ -93,7 +93,7 @@ export function SsoSignIn({
           data-testid="sso-required"
           className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground"
         >
-          <KeyRound
+          <KeyIcon
             aria-hidden
             className="mt-0.5 size-4 flex-none text-muted-foreground"
           />
@@ -138,7 +138,7 @@ export function SsoSignIn({
           }}
           className={`${buttonSecondary} justify-start`}
         >
-          <KeyRound aria-hidden className="size-4 flex-none" />
+          <KeyIcon aria-hidden className="size-4 flex-none" />
           <span>{tSso("entry")}</span>
         </button>
       )}

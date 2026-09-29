@@ -13,7 +13,7 @@
 // first, so a repeat copy is announced again, and a click that settles after
 // a later one has started leaves the status alone. A refusal stays until the
 // next click, because it tells you what to do instead.
-import { Check, Copy } from "lucide-react";
+import { CheckIcon, CopyIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { mono } from "@/ui/control-styles";
@@ -61,13 +61,13 @@ export function CopyId({
     }
   }
 
-  const Icon = state === "copied" ? Check : Copy;
+  const Icon = state === "copied" ? CheckIcon : CopyIcon;
   return (
     <span
       data-copy-id={value}
       className="inline-flex max-w-full items-center gap-0.5 text-[11px] text-dim"
     >
-      <code className={`${mono} min-w-0 select-all truncate`} title={value}>
+      <code className={`${mono} min-w-0 select-all truncate`} data-truncate={value}>
         {value}
       </code>
       <button

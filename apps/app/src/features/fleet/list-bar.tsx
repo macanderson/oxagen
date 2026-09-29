@@ -1,16 +1,16 @@
 "use client";
 // The Runs panel's list controls (fleet.md): the search box, the Status, Tier
-// and Replay facets, the pull-request filter, the column picker and the rows
-// per page. The search and the facets change the URL's list query, and the
+// and Replay facets, the pull-request filter and the column picker. The rows
+// per page sit in the pager under the table. The search and the facets change the URL's list query, and the
 // server read applies them across the workspace (#3837). No control here
 // filters the rows one page returned.
 //
 // The facet options are the closed vocabularies the read filters on
 // (`list-query.ts`), so a facet can pick a tier no run on this page carries.
 // The search sends what was typed once typing pauses, or at once on Enter.
-import { Columns3 } from "lucide-react";
+import { ColumnsIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { type SyntheticEvent, useEffect, useId, useRef, useState } from "react";
+import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
 import {
@@ -20,7 +20,6 @@ import {
   TIER_FACET,
   withList,
 } from "./list-query";
-import { PAGE_SIZES, type PageSize, pageSizeOf } from "./prefs";
 
 /**
  * How long typing must pause before the search is sent. Exported for its
@@ -158,8 +157,6 @@ function SearchBox({
 export function RunsListBar({
   list,
   onList,
-  pageSize,
-  onPageSize,
   pullRequests,
   onPullRequests,
   onColumns,
@@ -167,8 +164,6 @@ export function RunsListBar({
   list: FleetListQuery;
   /** Read the list again with this query: a navigation to its URL. */
   onList: (next: FleetListQuery) => void;
-  pageSize: PageSize;
-  onPageSize: (size: PageSize) => void;
   pullRequests: PullRequestFilter;
   onPullRequests: (filter: PullRequestFilter) => void;
   onColumns: () => void;
@@ -176,7 +171,6 @@ export function RunsListBar({
   const t = useTranslations("fleet.runs");
   const status = useTranslations("ui.runStatus");
   const grade = useTranslations("ui.replayGrade");
-  const rowsId = useId();
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-[9px]">
       <SearchBox
@@ -240,30 +234,9 @@ export function RunsListBar({
         onClick={onColumns}
         className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-xs`}
       >
-        <Columns3 aria-hidden className="size-3.5" />
+        <ColumnsIcon aria-hidden className="size-3.5" />
         {t("columnsPicker.open")}
       </button>
-      <label
-        htmlFor={rowsId}
-        className="ms-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground"
-      >
-        {t("rows")}
-        <select
-          id={rowsId}
-          data-testid="rows-per-page"
-          value={String(pageSize)}
-          onChange={(event) => {
-            onPageSize(pageSizeOf(event.target.value));
-          }}
-          className={selectBase}
-        >
-          {PAGE_SIZES.map((size) => (
-            <option key={size} value={String(size)}>
-              {String(size)}
-            </option>
-          ))}
-        </select>
-      </label>
       {pullRequests === "any" ? null : (
         <p
           data-testid="pr-filter-note"

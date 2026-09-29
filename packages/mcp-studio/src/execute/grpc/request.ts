@@ -7,6 +7,7 @@
 import { relayGrpcTargetSchema } from "../../contract/relay-envelope";
 import type { ManifestAuth } from "../../contract/manifest";
 import type { GrpcRequest } from "../../model/upstream-tool";
+import { mutualTlsMismatch } from "../apply-credential";
 import type { RelayCredential } from "../credentials";
 import type { SendCredential } from "../sender";
 import type { GrpcTarget, HeaderEntry } from "../transport";
@@ -97,6 +98,8 @@ export function buildCredentials(
   credential: SendCredential,
   network: string,
 ): CallCredentials {
+  const mismatch = mutualTlsMismatch(auth, credential);
+  if (mismatch !== undefined) throw new RequestError("Invalid credential", mismatch);
   switch (credential.type) {
     case "none":
       return { metadata: [], relay_credential: undefined };

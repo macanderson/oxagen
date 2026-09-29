@@ -1,14 +1,14 @@
 // One operator's, agent's or tool's spend over its trailing window (#2962;
 // spec "Drill"): the crumb back to its tab, the header with Open the agent (an
 // agent only) and Export this view, the potential savings its own findings
-// hold, the kind's stat tiles, spend by day as a sparkline with its peak and
+// hold, the kind's stat tiles, spend by day as a chart with its peak and
 // average, the cross-cuts, and its findings. get_spend_drill answers the
 // totals, the averages, the series and the tools its runs called; every other
 // tile the design draws prints "not recorded" until the rollup carries it
 // (#2962), and the per-key report behind Export this view waits on a contract
 // that takes a key.
 import { useLocale, useTranslations } from "next-intl";
-import { divMicros, maxMoney, ratioOfMicros } from "@/data/contracts/money";
+import { divMicros, maxMoney } from "@/data/contracts/money";
 import type {
   SpendDrill,
   SpendDrillKind,
@@ -39,6 +39,7 @@ import {
 } from "./figures";
 import { GAP_ISSUE, NotBacked, NotBackedPanel } from "./not-backed";
 import { findingsOn, savingOf, sumCost } from "./rollup";
+import { SpendByDayChart } from "./spend-by-day-chart";
 import { StubDialog } from "./stub-dialog";
 import { Empty, Panel } from "./tables";
 import type { SpendAt } from "./view";
@@ -138,7 +139,10 @@ function TileValue({ tile, drill }: { tile: TileKey; drill: SpendDrill }) {
   }
 }
 
-/** Spend by day: a sparkline over the window, with its peak and average. */
+/**
+ * Spend by day: an area over the window, with its peak and average. A window
+ * with no priced day says so instead of drawing an empty chart.
+ */
 function SpendByDay({ drill }: { drill: SpendDrill }) {
   const t = useTranslations("spend.drill");
   const costs = drill.series.flatMap((day) =>
@@ -151,20 +155,6 @@ function SpendByDay({ drill }: { drill: SpendDrill }) {
     peak === null
       ? null
       : (drill.series.find((day) => day.cost?.micros === peak.micros) ?? null);
-  // The points are layout: each day's height is its share of the peak. A day
-  // with no priced run sits on the baseline and is named in the table below.
-  const width = 300;
-  const height = 48;
-  const step = drill.series.length > 1 ? width / (drill.series.length - 1) : 0;
-  const points = drill.series
-    .map((day, index) => {
-      const ratio =
-        day.cost === null || peak === null
-          ? 0
-          : (ratioOfMicros(day.cost, peak) ?? 0);
-      return `${String(Math.round(index * step))},${String(Math.round(height - ratio * height))}`;
-    })
-    .join(" ");
   return (
     <Panel
       id="spend-drill-days"
@@ -182,26 +172,18 @@ function SpendByDay({ drill }: { drill: SpendDrill }) {
         </span>
       }
     >
-      <div className="px-4 py-3.5">
-        <svg
-          role="img"
-          aria-label={t("sparkline", {
+      {peak === null ? (
+        <Empty>{t("noPricedDay")}</Empty>
+      ) : (
+        <SpendByDayChart
+          series={drill.series}
+          peak={peak}
+          label={t("sparkline", {
             from: drill.period.from,
             to: drill.period.to,
           })}
-          viewBox={`0 0 ${String(width)} ${String(height)}`}
-          preserveAspectRatio="none"
-          className="h-14 w-full text-gold"
-        >
-          <polyline
-            points={points}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      </div>
+        />
+      )}
     </Panel>
   );
 }

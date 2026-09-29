@@ -22,7 +22,7 @@
 // a binding in hand, the wizard moves the production branch if the person
 // changed it (`set_production_branch`), then opens the pull request
 // (`open_init_pr`). Each is a governed write the kernel gates on its own.
-import { Check } from "lucide-react";
+import { CheckIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { LinkedRepository } from "@/data/contracts/repository";
@@ -32,6 +32,7 @@ import {
   buttonSecondary,
   inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { GitHubLink } from "@/ui/navigation";
@@ -362,7 +363,7 @@ export function InitWizard({
                 aria-hidden="true"
                 className={`grid size-4 place-items-center rounded-full border text-[10px] ${key === step && opened === null ? "border-gold bg-gold text-on-gold" : "border-border"}`}
               >
-                {done ? <Check className="size-2.5" /> : position + 1}
+                {done ? <CheckIcon className="size-2.5" /> : position + 1}
               </span>
               {t(`steps.${key}`)}
             </li>
@@ -724,7 +725,7 @@ function TomlField({
         data-testid={testId}
         rows={9}
         spellCheck={false}
-        className={`min-h-40 font-mono text-base sm:text-xs ${inputBase}`}
+        className={`min-h-40 font-mono text-base sm:text-xs ${textareaBase}`}
         value={value}
         onChange={(event) => {
           onChange(event.target.value);

@@ -1935,6 +1935,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_draft",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_subscription",
       "domain": "billing",
       "surfaces": [
@@ -2076,6 +2087,17 @@
     {
       "name": "import_tools",
       "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "import_workspace_steering",
+      "domain": "repository",
       "surfaces": [
         "api",
         "mcp"
@@ -3042,6 +3064,17 @@
       "consumes": []
     },
     {
+      "name": "open_studio_review",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "parse_memory_import",
       "domain": "agent",
       "surfaces": [
@@ -3498,6 +3531,16 @@
       "consumes": []
     },
     {
+      "name": "render_chart",
+      "domain": "assistant",
+      "surfaces": [
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "repair_steering_repo",
       "domain": "repository",
       "surfaces": [
@@ -3737,6 +3780,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "save_studio_draft",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -4635,6 +4689,17 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "upload_assistant_attachment",
+      "domain": "assistant",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

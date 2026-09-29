@@ -21,11 +21,13 @@ Name the org and workspace to link without a prompt, for example in CI:
 oxagen init --org acme --workspace payments
 ```
 
-Then write the steering your workspace has published into `.oxagen/`:
+If your workspace's steering repo still holds an `.oxagen/` tree, write it into this directory's `.oxagen/`:
 
 ```bash
 oxagen pull
 ```
+
+A steering repo in the current layout keeps its steering records under `steering/`, so skip this step for one.
 
 ## 2. Check the spend ceiling
 

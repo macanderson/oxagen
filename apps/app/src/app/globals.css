@@ -61,6 +61,17 @@
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
   --color-code-punct: var(--code-punct);
+  /* The corner scale of the chosen shadcn preset (base-maia, radius 0.45rem):
+     each step is a multiple of --radius, as the shadcn CLI writes it, so the
+     kit's additive steps give way here. `rounded-4xl` is the pill a maia
+     button and input wear; `rounded-2xl` is a card, a popover and a menu. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 @layer base {
@@ -99,6 +110,19 @@
     --fk-gov: #1baf7a;
     --fk-ctx: #4a3aa7;
     --fk-op: #e87ba4;
+    /* Chart series (ui/chart.tsx), assigned in this order and never cycled:
+       violet, magenta, blue, orange, aqua. They are the frame-kind family
+       above in a fixed series order, checked for colour-vision separation on
+       the white panel and on ink. No gold (identity) and no state hue. The
+       kit's chart tokens use ember, gold and the state colours, so the app
+       sets its own here. */
+    --chart-1: #4a3aa7;
+    --chart-2: #e87ba4;
+    --chart-3: #2a78d6;
+    --chart-4: #eb6834;
+    --chart-5: #1baf7a;
+    --chart-grid: color-mix(in oklab, var(--border) 70%, transparent);
+    --chart-baseline: var(--border);
     --k-constraint: #a0397f;
     --k-procedure: #5f7a1f;
     --k-fact: #1e7392;
@@ -110,6 +134,8 @@
     --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
+    /* The preset's radius. The kit's knob is 0.5rem; the scale above reads it. */
+    --ui-radius: 0.45rem;
     --muted-surface: var(--_stone-100);
     --data-surface: var(--ox-paper-hl);
     /* A panel header is a light grey band over the white panel (ADR-170). */
@@ -177,6 +203,11 @@
     --fk-gov: #199e70;
     --fk-ctx: #9085e9;
     --fk-op: #d55181;
+    --chart-1: #9085e9;
+    --chart-2: #d55181;
+    --chart-3: #3987e5;
+    --chart-4: #d95926;
+    --chart-5: #199e70;
     --k-constraint: #d677b5;
     --k-procedure: #a6b95e;
     --k-fact: #5cb5d6;
@@ -218,6 +249,11 @@
       --fk-gov: #199e70;
       --fk-ctx: #9085e9;
       --fk-op: #d55181;
+      --chart-1: #9085e9;
+      --chart-2: #d55181;
+      --chart-3: #3987e5;
+      --chart-4: #d95926;
+      --chart-5: #199e70;
       --k-constraint: #d677b5;
       --k-procedure: #a6b95e;
       --k-fact: #5cb5d6;
@@ -301,9 +337,10 @@
     white-space: nowrap;
   }
 
-  /* A cut cell with nothing focusable in it takes a keyboard stop
-     (features/shell/cell-overflow.tsx), and shows where focus is. */
-  table tbody [data-cell-cut]:focus-visible {
+  /* A cut cell with nothing focusable in it, or a cut line marked
+     `data-truncate`, takes a keyboard stop (features/shell/cell-overflow.tsx),
+     and shows where focus is. */
+  [data-cell-cut]:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: -2px;
   }

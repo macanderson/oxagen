@@ -29,8 +29,8 @@ import {
 import {
   buttonDanger,
   buttonSecondary,
-  inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -169,7 +169,7 @@ function SealDialog({
               onChange={(event) => {
                 setReason(event.target.value);
               }}
-              className={`${inputBase} resize-y`}
+              className={`${textareaBase} resize-y`}
             />
             <p className="text-xs text-muted-foreground">{t("reasonHelp")}</p>
             {failure === null ? null : (

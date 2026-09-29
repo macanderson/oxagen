@@ -4841,6 +4841,7 @@ type Messages = {
         za: string;
       };
       rows: string;
+      pager: string;
       nothing: string;
       range: string;
       previous: string;
@@ -5110,6 +5111,7 @@ type Messages = {
       search: string;
       all: string;
       rows: string;
+      pager: string;
       range: string;
       previous: string;
       next: string;
@@ -7868,6 +7870,8 @@ type Messages = {
       resize: string;
       close: string;
       thinking: string;
+      transcript: string;
+      scrollToEnd: string;
       recordedAs: string;
       cost: {
         label: string;
@@ -7996,9 +8000,37 @@ type Messages = {
         sendHintModEnter: string;
         draftTooLong: string;
       };
+      attachments: {
+        add: string;
+        list: string;
+        remove: string;
+        open: string;
+        uploading: string;
+        blocked: string;
+        kinds: {
+          image: string;
+          pdf: string;
+          csv: string;
+          json: string;
+          markdown: string;
+          text: string;
+          file: string;
+        };
+        problem: {
+          type: string;
+          size: string;
+          empty: string;
+          count: string;
+          total: string;
+          bytes: string;
+          upload: string;
+        };
+      };
       refused: {
         denied: string;
         invalid: string;
+        attachment: string;
+        attachmentModel: string;
         exhausted: string;
         noCredit: string;
         noCreditLink: string;
@@ -8046,6 +8078,13 @@ type Messages = {
         recordedUseful: string;
         recordedWrong: string;
         failed: string;
+      };
+      chart: {
+        drawing: string;
+        unreadable: string;
+        source: string;
+        item: string;
+        withUnit: string;
       };
     };
     approvals: {
@@ -8741,6 +8780,9 @@ type Messages = {
       on: string;
       average: string;
       sparkline: string;
+      noPricedDay: string;
+      day: string;
+      spend: string;
       cross: {
         tool: string;
         agent: string;
@@ -9010,6 +9052,12 @@ type Messages = {
         failed: string;
       };
     };
+    agentChart: {
+      title: string;
+      label: string;
+      footer: string;
+      otherCurrency: string;
+    };
     toolChart: {
       metric: {
         cumulative: string;
@@ -9020,6 +9068,7 @@ type Messages = {
       label: string;
       empty: string;
       footer: string;
+      otherCurrency: string;
     };
   };
   steering: {
@@ -11142,6 +11191,14 @@ type Messages = {
       };
       failed: string;
       photoPlaceholder: string;
+    };
+    chart: {
+      notRecorded: string;
+      table: string;
+    };
+    toast: {
+      region: string;
+      close: string;
     };
   };
 };

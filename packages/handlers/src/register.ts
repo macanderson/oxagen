@@ -1,5 +1,9 @@
 import { setConversationOpenedSender } from "@oxagen/agent/runtime/conversation-opened-event";
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import {
+  registerServerFolderWriter,
+  registerSteeringPrOpener,
+} from "@oxagen/agent/runtime/steering-pr";
 import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
@@ -177,6 +181,29 @@ registerHandlersOnce("@oxagen/handlers", () => {
     return runInTenantScope(scope, () =>
       refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
     );
+  });
+  // A tools steering PR opens through tools.pr.open.ts (M11). In a workspace
+  // whose servers live in its steering repo, registering a server, enabling
+  // a plugin, and importing tools open one through the server folder writer
+  // (M13, ADR-209) instead of writing rows. steeringWriter() needs both
+  // halves. Each loads on its first call, so boot opens no host client.
+  registerSteeringPrOpener({
+    hasSteeringRepo: async (scope) =>
+      (await import("./tools.pr.open")).steeringPrOpener.hasSteeringRepo(scope),
+    open: async (request) =>
+      (await import("./tools.pr.open")).steeringPrOpener.open(request),
+    readFile: async (scope, path) =>
+      (await import("./tools.pr.open")).steeringPrOpener.readFile(scope, path),
+  });
+  registerServerFolderWriter({
+    addServer: async (request) =>
+      (await import("./mcp-studio/migrate"))
+        .createServerFolderWriter()
+        .addServer(request),
+    addTools: async (request) =>
+      (await import("./mcp-studio/migrate"))
+        .createServerFolderWriter()
+        .addTools(request),
   });
   // The findings pass (detector 6, prompt habits) opens a steering record
   // proposal for each instruction operators repeat. The proposal path lives
@@ -779,6 +806,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./conversation.attachment.add"))
         .conversationAttachmentAddHandler as CapabilityHandlerFn,
   );
+  // A file attached to an in-app assistant message (#4690, ADR-222).
+  registerHandler(
+    "upload_assistant_attachment",
+    async () =>
+      (await import("./assistant.attachment.upload"))
+        .assistantAttachmentUploadHandler as CapabilityHandlerFn,
+  );
   // A person's verdict on an assistant reply (#4169). The turn itself is
   // `ask_assistant`, bound in @oxagen/agent; the verdict needs none of the
   // agent runtime, so it binds here.
@@ -787,6 +821,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./assistant.reply_feedback.record"))
         .assistantReplyFeedbackRecordHandler as CapabilityHandlerFn,
+  );
+  // A chart or small dashboard the assistant draws in its reply. It reads no
+  // store: the handler checks the spec and returns it as a fenced block.
+  registerHandler(
+    "render_chart",
+    async () =>
+      (await import("./assistant.chart.render"))
+        .assistantChartRenderHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "export_data",
@@ -1097,6 +1139,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./steering_repo.repair"))
         .repairSteeringRepoHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "import_workspace_steering",
+    async () =>
+      (await import("./steering_repo.import"))
+        .importWorkspaceSteeringHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_steering_freshness",
@@ -1487,6 +1535,25 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./mcp-studio/local-calls/machine-group.list"))
         .tachoMachineGroupListHandler as CapabilityHandlerFn,
+  );
+  // Studio's drafts and Review (lane M11, ADR-224).
+  registerHandler(
+    "save_studio_draft",
+    async () =>
+      (await import("./mcp-studio/import/draft.save"))
+        .saveStudioDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_studio_draft",
+    async () =>
+      (await import("./mcp-studio/import/draft.get"))
+        .getStudioDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "open_studio_review",
+    async () =>
+      (await import("./mcp-studio/import/review.open"))
+        .openStudioReviewHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "fetch_commands",

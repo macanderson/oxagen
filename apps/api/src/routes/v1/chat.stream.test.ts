@@ -361,6 +361,34 @@ describe("POST chat/stream — the turn on the wire", () => {
     expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("turnId");
   });
 
+  // The composer uploads each file first and sends the ids with the text
+  // (#4690, ADR-222). Dropped here, the turn would answer without the files.
+  it("carries the attached upload ids to ask_assistant, and sends none when there are none", async () => {
+    await post({ content: "hi", attachments: ["gen_a1", "gen_b2"] }).then((r) =>
+      r.text(),
+    );
+    expect(mocks.invoke).toHaveBeenLastCalledWith(
+      "ask_assistant",
+      expect.objectContaining({ attachments: ["gen_a1", "gen_b2"] }),
+      CTX,
+      { surface: "api" },
+    );
+
+    await post({ content: "hi", attachments: [] }).then((r) => r.text());
+    expect(mocks.invoke.mock.lastCall?.[1]).not.toHaveProperty("attachments");
+  });
+
+  it("refuses an attachment id that is not an upload id, and more than ten files, with 400 (negative)", async () => {
+    const bad = await post({ content: "hi", attachments: ["../etc/passwd"] });
+    expect(bad.status).toBe(400);
+    const many = await post({
+      content: "hi",
+      attachments: Array.from({ length: 11 }, (_, i) => `gen_${i}`),
+    });
+    expect(many.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   it("refuses a turn id that is not a uuid with 400 before the turn starts (negative)", async () => {
     const res = await post({ content: "hi", turnId: "not-a-uuid" });
     expect(res.status).toBe(400);
@@ -473,6 +501,14 @@ describe("POST chat/stream — the turn on the wire", () => {
       "assistant_model_key_limit",
     ],
     [
+      "an attachment the rules refused",
+      Object.assign(new Error("This file is too large."), {
+        code: "attachment_refused",
+        reason: "too_large",
+      }),
+      "attachment_refused",
+    ],
+    [
       "an unknown conversation",
       new HandlerError({ code: "not_found", reason: "conversation_not_found" }),
       "conversation_not_found",
@@ -488,7 +524,12 @@ describe("POST chat/stream — the turn on the wire", () => {
       mocks.invoke.mockImplementationOnce(failAfterPrepared(err));
       const { events, done } = await readSse(await post({ content: "hi" }));
       expect(events).toEqual([
-        { type: "error", message: (err as Error).message, code },
+        {
+          type: "error",
+          message: (err as Error).message,
+          code,
+          ...(code === "attachment_refused" ? { reason: "too_large" } : {}),
+        },
       ]);
       expect(done).toBe("[DONE]");
     },

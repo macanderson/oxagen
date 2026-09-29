@@ -16,7 +16,7 @@
 // total. The page size and the columns shown are the person's saved choice
 // (`prefs.ts`), kept in a cookie the page reads on the server. The chips
 // filter the rows of the page, because parked comes from the approvals read.
-import { ArrowUpDown } from "lucide-react";
+import { ArrowsDownUpIcon } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -52,7 +52,6 @@ import {
   buttonDanger,
   buttonPrimary,
   buttonSecondary,
-  inputBase,
   mono,
   panel,
   panelHeader,
@@ -62,6 +61,7 @@ import {
   statTerm,
   statTile,
   statValue,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
@@ -72,7 +72,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { LiveRefresh } from "@/ui/live-refresh";
-import { ToastStack, useToasts } from "@/ui/toast";
+import { toast } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import {
   DiffCell,
@@ -1021,7 +1021,7 @@ function PauseDialog({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            className={`${inputBase} resize-y max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:text-base`}
           />
           <p className="text-xs text-muted-foreground">
             {ledger ? command("ledgerReasonHelp") : t("note")}
@@ -1094,7 +1094,6 @@ export function FleetBoard({
   const [picking, setPicking] = useState(false);
   const [reading, startReading] = useTransition();
   const [pausing, setPausing] = useState<RunRow | null>(null);
-  const { toasts, toast } = useToasts();
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [, startExport] = useTransition();
   const columns = shownColumns(prefs);
@@ -1208,8 +1207,6 @@ export function FleetBoard({
           onList={(next) => {
             readList(next);
           }}
-          pageSize={prefs.pageSize}
-          onPageSize={changePageSize}
           pullRequests={pullRequests}
           onPullRequests={changeFilter}
           onColumns={() => {
@@ -1297,7 +1294,7 @@ export function FleetBoard({
                         className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         {label}
-                        <ArrowUpDown aria-hidden className="size-3" />
+                        <ArrowsDownUpIcon aria-hidden className="size-3" />
                       </button>
                     </th>
                   );
@@ -1344,6 +1341,7 @@ export function FleetBoard({
         <RunsPager
           list={list}
           pageSize={prefs.pageSize}
+          onPageSize={changePageSize}
           rows={runs.length}
           {...(total === undefined ? {} : { total })}
           {...(totalBound === undefined ? {} : { totalBound })}
@@ -1360,8 +1358,6 @@ export function FleetBoard({
         prefs={prefs}
         onChange={save}
       />
-      {/* The design confirms an export or a queued pause with a toast. */}
-      <ToastStack toasts={toasts} testId="runs-toasts" />
       {/* One dialog per run it opens on, so nothing one run's dialog showed
           carries into the next. */}
       <PauseDialog

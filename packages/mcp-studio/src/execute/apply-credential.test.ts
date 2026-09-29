@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { ManifestAuth } from "../contract/manifest";
 import { placeCredential } from "./apply-credential";
+import type { SendCredential } from "./sender";
 import { BuildError } from "./util";
 
 const oauth: ManifestAuth = { mode: "service", scheme: "oauth", apply: { type: "oauth2" } };
@@ -105,5 +106,43 @@ describe("placeCredential", () => {
       placeCredential(oauth, { type: "relay", credential: { name: "billing-token", scheme: "bearer" } }, "cloud"),
     );
     expect(error.message).toContain("relay network");
+  });
+});
+
+describe("placeCredential for mutual TLS", () => {
+  const mtls: ManifestAuth = { mode: "service", scheme: "mtls", apply: { type: "mutual_tls" } };
+  const certificate = { name: "billing-cert", scheme: "mutual_tls" as const };
+
+  it("hands the relay its client certificate and adds nothing to the request", () => {
+    expect(placeCredential(mtls, { type: "relay", credential: certificate }, "relay:a-intel-east")).toEqual({
+      headers: [],
+      query: [],
+      cookies: [],
+      relay_credential: certificate,
+    });
+  });
+
+  it("refuses any other credential for a mutual TLS server", () => {
+    const others: SendCredential[] = [
+      { type: "none" },
+      { type: "bearer", token: "tok_1" },
+      { type: "relay", credential: { name: "billing-token", scheme: "bearer" } },
+    ];
+    for (const credential of others) {
+      const error = refusal(() => placeCredential(mtls, credential, "relay:a-intel-east"));
+      expect(error.message).toBe(
+        "A mutual TLS server needs a client certificate that a relay holds, and this call's credential is not one.",
+      );
+    }
+  });
+
+  it("refuses a client certificate for a server that is not mutual TLS", () => {
+    const relayed: SendCredential = { type: "relay", credential: certificate };
+    expect(refusal(() => placeCredential(oauth, relayed, "relay:a-intel-east")).message).toBe(
+      "A relay's client certificate fits only a mutual TLS server, and this server's scheme is oauth2.",
+    );
+    expect(refusal(() => placeCredential(null, relayed, "relay:a-intel-east")).message).toBe(
+      "A relay's client certificate fits only a mutual TLS server, and this server's scheme is none.",
+    );
   });
 });

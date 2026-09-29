@@ -10,7 +10,11 @@
 // mode a session recorded, and a subagents row appears under the checkout
 // when the session started any; the design draws neither, and both show only
 // what the record holds.
-import { Folder, GitBranch, GitPullRequest } from "lucide-react";
+import {
+  FolderIcon,
+  GitBranchIcon,
+  GitPullRequestIcon,
+} from "@phosphor-icons/react/ssr";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
@@ -269,7 +273,7 @@ function MachineChip({
           : facts
       }
     >
-      <Folder aria-hidden="true" className="size-3 flex-none" />
+      <FolderIcon aria-hidden="true" className="size-3 flex-none" />
       {machine}
       {enrolled ? (
         <span className="text-dim">{t("pathNotCaptured")}</span>
@@ -352,7 +356,7 @@ function WhereFromRow({
           code
           testId="run-branch"
         >
-          <GitBranch aria-hidden="true" className="size-3 flex-none" />
+          <GitBranchIcon aria-hidden="true" className="size-3 flex-none" />
           {branch}
         </ForgeChip>
       )}
@@ -439,7 +443,7 @@ function PullChip({
   const target = url === null ? null : parsePullRequestUrl(url);
   const content = (
     <>
-      <GitPullRequest aria-hidden="true" className="size-3 flex-none" />
+      <GitPullRequestIcon aria-hidden="true" className="size-3 flex-none" />
       {label}
     </>
   );
@@ -564,7 +568,7 @@ function WhereFromWork({
           code
           testId="run-branch"
         >
-          <GitBranch aria-hidden="true" className="size-3 flex-none" />
+          <GitBranchIcon aria-hidden="true" className="size-3 flex-none" />
           {branch}
         </ForgeChip>
       )}

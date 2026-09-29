@@ -150,3 +150,37 @@ export function formatRatio(ratio: number, locale: string): string {
     maximumFractionDigits: 1,
   }).format(ratio);
 }
+
+/** A plain measured number with at most two decimals, for a chart's tooltip and table. */
+export function formatDecimal(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
+
+/** A number short enough for an axis tick: 1.2K, 3.4M. */
+export function formatCompactNumber(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+/**
+ * An amount in a named currency given as a decimal, for a chart the assistant
+ * drew from figures it read. The app's own money is micros and prints through
+ * formatMoney. `compact` shortens it for an axis tick.
+ */
+export function formatCurrencyAmount(
+  value: number,
+  currency: string,
+  locale: string,
+  compact = false,
+): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+    ...(compact ? { notation: "compact" as const } : {}),
+  }).format(value);
+}

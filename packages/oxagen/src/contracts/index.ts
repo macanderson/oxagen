@@ -160,10 +160,12 @@ import { runRecentList } from "./run.recent.list";
 // The shell (#2968): the in-app agent on stella-serve, the command menu, the
 // sidebar counts and the account preferences.
 import { assistantAsk } from "./assistant.ask";
+import { assistantAttachmentUpload } from "./assistant.attachment.upload";
 import { assistantEngineGet } from "./assistant.engine.get";
 import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
 import { assistantTurnCancel } from "./assistant.turn.cancel";
+import { assistantChartRender } from "./assistant.chart.render";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -289,6 +291,9 @@ import { toolClassificationSchema } from "./tool.classification";
 import { toolVersionList } from "./tool.version.list";
 import { toolClassificationSet } from "./tool.classification.set";
 import { toolImport } from "./tool.import";
+import { toolStudioDraftSave } from "./tool.studio.draft.save";
+import { toolStudioDraftGet } from "./tool.studio.draft.get";
+import { toolStudioReviewOpen } from "./tool.studio.review.open";
 import { credentialGrantList } from "./credential.grant.list";
 import { killSwitchSet } from "./kill_switch.set";
 import { killSwitchList } from "./kill_switch.list";
@@ -309,6 +314,7 @@ import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
+import { steeringRepoImport } from "./steering_repo.import";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -840,10 +846,12 @@ export {
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
+  assistantChartRender,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -974,6 +982,9 @@ export {
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDraftSave,
+  toolStudioDraftGet,
+  toolStudioReviewOpen,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
@@ -988,6 +999,7 @@ export {
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoImport,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1270,10 +1282,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runSummarize,
   runRecentList,
   assistantAsk,
+  assistantAttachmentUpload,
   assistantEngineGet,
   assistantReplyGet,
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
+  assistantChartRender,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1404,6 +1418,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolVersionList,
   toolClassificationSet,
   toolImport,
+  toolStudioDraftSave,
+  toolStudioDraftGet,
+  toolStudioReviewOpen,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
@@ -1417,6 +1434,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
+  steeringRepoImport,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

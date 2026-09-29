@@ -16,7 +16,7 @@
 // rises from the bottom edge with a drag handle, a scrim, safe-area padding
 // and a full-width footer button (ARCHITECTURE.md §1.2, the phone shell;
 // src/ui/phone.css).
-import { KeyRound, Lock } from "lucide-react";
+import { KeyIcon, LockIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
@@ -1115,7 +1115,7 @@ function SecurityTab({
             <span
               className={`${listIcon} ${viewer.twoFactorEnabled ? "bg-success/15 text-success" : ""}`}
             >
-              <Lock className="size-3" aria-hidden />
+              <LockIcon className="size-3" aria-hidden />
             </span>
             <div className={listBody}>
               <p className={listTitle}>{t("authenticator")}</p>
@@ -1275,7 +1275,7 @@ function SecurityTab({
             {sessions.sessions.map((s) => (
               <div key={s.token} className={listRow}>
                 <span className={listIcon}>
-                  <KeyRound className="size-3" aria-hidden />
+                  <KeyIcon className="size-3" aria-hidden />
                 </span>
                 <div className={listBody}>
                   <p className={listTitle}>

@@ -94,6 +94,8 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_assistant_engine
 - get_assistant_reply
 - record_reply_feedback
+- render_chart
+- upload_assistant_attachment
 
 ## audit
 
@@ -376,6 +378,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_main_repository
 - get_repository_tree
 - get_steering_repo
+- import_workspace_steering
 - link_repository
 - list_github_installations
 - list_installation_repositories
@@ -532,10 +535,13 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## tool
 
+- get_studio_draft
 - import_tools
 - list_tool_declarations
 - list_tool_versions
+- open_studio_review
 - publish_tool_declaration
+- save_studio_draft
 - set_tool_classification
 - set_tool_state
 
