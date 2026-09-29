@@ -1,88 +1,140 @@
 "use client";
-// The mockup's toast stack (engine.css `#toast` and `.toast`, engine.js
-// `toast()`): one row per event, newest at the bottom, centred above the
-// page's foot, each row a tone dot and one sentence, gone after 4.2 seconds.
-// On a phone the stack clears the thumb bar.
+// shadcn's toast in the base-maia style (ADR-221), written from
+// `ui.shadcn.com/r/styles/base-maia/toast.json` over Base UI's toast. One
+// toaster sits in the root layout, and any client code shows a line with
+// `toast(text, tone)`, so a toast outlives the component that raised it: a
+// dialog that closes, or a tab that remounts after a write re-reads the page.
 //
-// The stack is one polite live region that is always mounted, so a screen
-// reader announces a row the moment it is added. The dot's hue is the state
-// vocabulary the badges use and never the gold.
-import { useCallback, useEffect, useRef, useState } from "react";
+// The stack keeps maia's shape: newest in front, older ones peeking behind,
+// the stack opening on hover or focus, a swipe down or right to dismiss. It
+// sits where the mockup's toast sat (engine.css `#toast`), centred above the
+// page's foot, and on a phone it clears the thumb bar. The surface is the
+// translucent popup surface every menu and hover card uses. The tone is an
+// icon in the state vocabulary the badges use, never the gold.
+//
+// Every toast is polite: the viewport is a live region, and Base UI keeps a
+// toast on screen while the pointer or focus is inside the stack.
+import { Toast } from "@base-ui/react/toast";
+import {
+  CheckCircleIcon,
+  type Icon,
+  InfoIcon,
+  WarningIcon,
+  XCircleIcon,
+  XIcon,
+} from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
+import { Button } from "./button";
 
-export type ToastTone = "allowed" | "approval" | "denied" | "failed";
-
-type Toast = { id: number; text: string; tone: ToastTone };
+type ToastTone = "allowed" | "approval" | "denied" | "failed";
 
 /**
- * engine.js: `setTimeout(function(){t.remove();},4200)`. Also the life of an
- * Organization write's receipt (features/organization/receipt.tsx).
+ * engine.js: `setTimeout(function(){t.remove();},4200)`. Every toast leaves
+ * after this long unless the pointer or focus is in the stack.
+ *
+ * @internal Exported for the component tests that wait it out.
  */
 export const TOAST_MS = 4200;
 
-const DOT: Record<ToastTone, string> = {
-  allowed: "bg-success",
-  approval: "bg-info",
-  denied: "bg-warning",
-  failed: "bg-error",
+const TONES: Record<ToastTone, { icon: Icon; className: string }> = {
+  allowed: { icon: CheckCircleIcon, className: "text-success" },
+  approval: { icon: InfoIcon, className: "text-info" },
+  denied: { icon: WarningIcon, className: "text-warning" },
+  failed: { icon: XCircleIcon, className: "text-error" },
 };
 
-/** The rows on screen and the one way to add a row. */
-export function useToasts(): {
-  toasts: readonly Toast[];
-  toast: (text: string, tone?: ToastTone) => void;
-} {
-  const [toasts, setToasts] = useState<readonly Toast[]>([]);
-  const nextIdRef = useRef(0);
-  const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
-  useEffect(() => {
-    const pending = timersRef.current;
-    return () => {
-      for (const timer of pending) clearTimeout(timer);
-      pending.clear();
-    };
-  }, []);
-  const toast = useCallback((text: string, tone: ToastTone = "allowed") => {
-    nextIdRef.current += 1;
-    const id = nextIdRef.current;
-    setToasts((rows) => [...rows, { id, text, tone }]);
-    const timer = setTimeout(() => {
-      timersRef.current.delete(timer);
-      setToasts((rows) => rows.filter((row) => row.id !== id));
-    }, TOAST_MS);
-    timersRef.current.add(timer);
-  }, []);
-  return { toasts, toast };
+function isTone(type: string): type is ToastTone {
+  return Object.hasOwn(TONES, type);
 }
 
-export function ToastStack({
-  toasts,
-  testId,
-}: {
-  toasts: readonly Toast[];
-  testId: string;
-}) {
+function toneOf(type: string | undefined): ToastTone {
+  return type !== undefined && isTone(type) ? type : "allowed";
+}
+
+// One manager for the app. `add` reaches whichever <Toaster /> is subscribed.
+// Base UI's provider subscribes in an effect, so the root layout renders the
+// toaster before the page: React runs sibling effects in order, and a page's
+// mount effect that calls `toast()` then finds the toaster listening. With no
+// toaster mounted, `add` has no listener and the line is dropped.
+const manager = Toast.createToastManager();
+
+/** Shows one line in the app's toast stack. */
+export function toast(text: string, tone: ToastTone = "allowed"): void {
+  manager.add({ title: text, type: tone });
+}
+
+/** The app's one toast stack. The root layout mounts it once. */
+export function Toaster() {
+  const t = useTranslations("ui.toast");
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      data-testid={testId}
-      data-toast-stack=""
-      className="pointer-events-none fixed bottom-[70px] left-1/2 z-[60] grid w-max max-w-[92vw] -translate-x-1/2 justify-items-center gap-2 max-md:bottom-[calc(88px+env(safe-area-inset-bottom))]"
-    >
-      {toasts.map((row) => (
-        <div
-          key={row.id}
-          data-toast=""
-          data-tone={row.tone}
-          className="flex max-w-[min(560px,92vw)] items-center gap-2.5 rounded-[11px] border border-rule bg-card px-4 py-[11px] text-[12.5px] text-card-foreground shadow-lg"
+    <Toast.Provider toastManager={manager} timeout={TOAST_MS} limit={3}>
+      <Toast.Portal>
+        <Toast.Viewport
+          aria-label={t("region")}
+          data-testid="toasts"
+          className="pointer-events-none fixed inset-x-4 bottom-[70px] z-[60] mx-auto w-auto max-w-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:bottom-[calc(88px+env(safe-area-inset-bottom))]"
         >
-          <span
-            aria-hidden="true"
-            className={`size-[7px] flex-none rounded-full ${DOT[row.tone]}`}
-          />
-          <span>{row.text}</span>
-        </div>
-      ))}
-    </div>
+          <ToastList closeLabel={t("close")} />
+        </Toast.Viewport>
+      </Toast.Portal>
+    </Toast.Provider>
   );
+}
+
+function ToastList({ closeLabel }: { closeLabel: string }) {
+  const { toasts } = Toast.useToastManager();
+  return toasts.map((item) => {
+    const tone = toneOf(item.type);
+    const { icon: ToneIcon, className: toneClass } = TONES[tone];
+    return (
+      <Toast.Root
+        key={item.id}
+        toast={item}
+        data-toast=""
+        data-tone={tone}
+        className={
+          "group/toast pointer-events-auto absolute right-0 bottom-0 isolate z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 will-change-transform select-none dark:ring-foreground/10 " +
+          "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 " +
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
+          "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))] " +
+          "h-(--height) [transform:translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))] [transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms] " +
+          "after:absolute after:top-full after:left-0 after:h-[calc(var(--gap)+1px)] after:w-full after:content-[''] " +
+          "data-expanded:h-(--toast-height) data-expanded:[transform:translateX(var(--toast-swipe-movement-x))_translateY(var(--offset-y))] " +
+          "data-limited:opacity-0 data-starting-style:[transform:translateY(150%)] " +
+          "[&[data-ending-style]:not([data-limited]):not([data-swipe-direction])]:[transform:translateY(150%)] " +
+          "data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))] " +
+          "data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))] " +
+          "data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))] " +
+          "data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))] " +
+          "data-expanded:data-ending-style:data-[swipe-direction=down]:[transform:translateY(calc(var(--toast-swipe-movement-y)+150%))] " +
+          "data-expanded:data-ending-style:data-[swipe-direction=left]:[transform:translateX(calc(var(--toast-swipe-movement-x)-150%))_translateY(var(--offset-y))] " +
+          "data-expanded:data-ending-style:data-[swipe-direction=right]:[transform:translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))] " +
+          "data-expanded:data-ending-style:data-[swipe-direction=up]:[transform:translateY(calc(var(--toast-swipe-movement-y)-150%))]"
+        }
+      >
+        <Toast.Content className="flex h-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] data-behind:opacity-0 data-expanded:opacity-100">
+          <ToneIcon
+            aria-hidden="true"
+            weight="fill"
+            className={`size-4 shrink-0 ${toneClass}`}
+          />
+          {/* A paragraph, not Base UI's default <h2>: a toast is a line of
+              news, and it names the toast's dialog either way. */}
+          <Toast.Title
+            render={<p />}
+            className="min-w-0 flex-1 text-sm font-medium"
+          >
+            {item.title}
+          </Toast.Title>
+          <Toast.Close
+            aria-label={closeLabel}
+            render={<Button variant="ghost" size="icon-sm" />}
+            className="relative shrink-0 after:absolute after:-inset-2 after:content-['']"
+          >
+            <XIcon aria-hidden="true" />
+          </Toast.Close>
+        </Toast.Content>
+      </Toast.Root>
+    );
+  });
 }

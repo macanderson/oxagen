@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { getMetadataBase } from "@/shared/app-url";
+import { Toaster } from "@/ui/toast";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -75,7 +76,13 @@ export default async function RootLayout({
   return (
     <html lang={await getLocale()} dir="ltr" suppressHydrationWarning>
       <body className="min-h-dvh bg-app-canvas font-sans text-foreground antialiased">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          {/* Before the page on purpose: the toaster subscribes in an effect,
+              and React runs sibling effects in order, so a toast a page
+              raises on mount finds it listening (@/ui/toast). */}
+          <Toaster />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

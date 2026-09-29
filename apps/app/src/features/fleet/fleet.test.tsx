@@ -21,6 +21,7 @@ import { STALE_REREAD_MS } from "@/data/contracts/runs";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { Toaster } from "@/ui/toast";
 import {
   agentPage,
   approvalItem,
@@ -201,7 +202,14 @@ async function renderFleet(
 ) {
   const { source, calls } = fleetSource(reads);
   const element = await Fleet({ ctx, source, cursor, banners, ...view });
-  const { container } = render(<IntlProvider>{element}</IntlProvider>);
+  // The root layout mounts the app's one toaster (ADR-221). The page's
+  // confirmations land there, so the harness mounts it the same way.
+  const { container } = render(
+    <IntlProvider>
+      <Toaster />
+      {element}
+    </IntlProvider>,
+  );
   return { container, calls };
 }
 
@@ -1568,7 +1576,7 @@ describe("the Runs panel", () => {
       "core-platform",
       "arun_sealed",
     );
-    // The design confirms with a toast in the page's polite live region.
+    // The design confirms with a toast in the app's polite live region.
     const toast = await screen.findByText(
       "Export bundle queued for arun_sealed.",
     );
@@ -1576,7 +1584,7 @@ describe("the Runs panel", () => {
       "data-tone",
       "allowed",
     );
-    expect(screen.getByTestId("runs-toasts")).toHaveAttribute(
+    expect(screen.getByTestId("toasts")).toHaveAttribute(
       "aria-live",
       "polite",
     );
@@ -1623,14 +1631,17 @@ describe("list controls", () => {
       "href",
       "/acme/core-platform?cursor=c2",
     );
-    expect(screen.getByTestId("rows-per-page")).toHaveValue("25");
+    expect(screen.getByTestId("rows-per-page")).toHaveTextContent("25");
   });
 
   it("saves a new page size in the cookie and reads the newest runs again at that size", async () => {
     await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
     const user = userEvent.setup();
-    await user.selectOptions(screen.getByTestId("rows-per-page"), "50");
-    expect(document.cookie).toContain("fleet_view=v1|50|");
+    await user.click(screen.getByTestId("rows-per-page"));
+    await user.click(await screen.findByRole("option", { name: "50" }));
+    await waitFor(() => {
+      expect(document.cookie).toContain("fleet_view=v1|50|");
+    });
     expect(refresh).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
   });
@@ -1643,16 +1654,19 @@ describe("list controls", () => {
       { pullRequests: "with" },
     );
     const user = userEvent.setup();
-    await user.selectOptions(screen.getByTestId("rows-per-page"), "10");
-    expect(push).toHaveBeenCalledWith("/acme/core-platform?prs=with");
+    await user.click(screen.getByTestId("rows-per-page"));
+    await user.click(await screen.findByRole("option", { name: "10" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/core-platform?prs=with");
+    });
     expect(refresh).not.toHaveBeenCalled();
   });
 
   it("reads again only when the page size actually changes (negative)", async () => {
     await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
-    fireEvent.change(screen.getByTestId("rows-per-page"), {
-      target: { value: "25" },
-    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("rows-per-page"));
+    await user.click(await screen.findByRole("option", { name: "25" }));
     expect(refresh).not.toHaveBeenCalled();
     expect(document.cookie).not.toContain("fleet_view");
   });
