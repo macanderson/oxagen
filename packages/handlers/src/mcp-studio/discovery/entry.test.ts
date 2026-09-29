@@ -418,6 +418,7 @@ describe("planDiscoverySweep", () => {
       ]),
       openPullRequests: vi.fn(async () => [{ scope: SCOPE, server: "stripe" }]),
       stalled: vi.fn(async () => []),
+      registryMoved: vi.fn(async () => []),
       onChangeByRepo: vi.fn(async () => []),
     };
 
@@ -453,6 +454,7 @@ describe("planDiscoverySweep", () => {
         { scope: SCOPE, server: "github", trigger: "manual" as const },
         { scope: SCOPE, server: "Bad Name", trigger: "push" as const },
       ]),
+      registryMoved: vi.fn(async () => []),
       onChangeByRepo: vi.fn(async () => []),
     };
 
@@ -469,6 +471,65 @@ describe("planDiscoverySweep", () => {
         "manual",
         `mcp-discovery:manual:${ORG}:${WS}:github:2026-09-28T15`,
       ],
+    ]);
+  });
+
+  it("asks for a registry_version discovery when the catalog lists a newer version", async () => {
+    const other = { orgId: ORG, workspaceId: "ws_other" };
+    const sweep = {
+      undiscovered: vi.fn(async () => []),
+      dueDaily: vi.fn(async () => []),
+      openPullRequests: vi.fn(async () => []),
+      stalled: vi.fn(async () => []),
+      registryMoved: vi.fn(async () => [
+        { scope: SCOPE, server: "github" },
+        { scope: other, server: "github" },
+        { scope: SCOPE, server: "Bad Name" },
+      ]),
+      onChangeByRepo: vi.fn(async () => []),
+    };
+
+    const planned = await planDiscoverySweep(NOW, { sweep });
+
+    expect(sweep.registryMoved).toHaveBeenCalledWith(SWEEP_LIMIT);
+    expect(planned.map((e) => [e.data.server, e.data.trigger, e.id])).toEqual([
+      [
+        "github",
+        "registry_version",
+        `mcp-discovery:registry_version:${ORG}:${WS}:github:2026-09-28T15`,
+      ],
+      [
+        "github",
+        "registry_version",
+        `mcp-discovery:registry_version:${ORG}:ws_other:github:2026-09-28T15`,
+      ],
+    ]);
+  });
+
+  it("sends no registry_version event for a server already scheduled this hour", async () => {
+    const sweep = {
+      undiscovered: vi.fn(async () => [{ scope: SCOPE, server: "github" }]),
+      dueDaily: vi.fn(async () => [{ scope: SCOPE, server: "linear" }]),
+      openPullRequests: vi.fn(async () => [{ scope: SCOPE, server: "notion" }]),
+      stalled: vi.fn(async () => []),
+      registryMoved: vi.fn(async () => [
+        { scope: SCOPE, server: "github" },
+        { scope: SCOPE, server: "linear" },
+        { scope: SCOPE, server: "notion" },
+      ]),
+      onChangeByRepo: vi.fn(async () => []),
+    };
+
+    const planned = await planDiscoverySweep(NOW, { sweep });
+
+    // A scheduled discovery reads the registry's newest version itself, so
+    // github and linear get one event each. lock_merged reads no registry,
+    // so notion keeps its registry_version event.
+    expect(planned.map((e) => [e.data.server, e.data.trigger])).toEqual([
+      ["github", "schedule"],
+      ["linear", "schedule"],
+      ["notion", "lock_merged"],
+      ["notion", "registry_version"],
     ]);
   });
 });

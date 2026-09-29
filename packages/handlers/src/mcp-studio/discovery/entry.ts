@@ -356,28 +356,38 @@ export async function runDiscoveryEvent(
  * - lock_merged, for every server with an open sync steering PR, so a merge
  *   releases the withheld tools and a closed PR is let go;
  * - the row's own trigger, for every discovery queued or running for an
- *   hour, so a lost event or a dead worker does not strand the request.
+ *   hour, so a lost event or a dead worker does not strand the request;
+ * - registry_version, for every on-change or daily registry server whose
+ *   synced catalog lists a version discovery has not seen. The sweep runs
+ *   hourly and catalog sync every six hours, so a new version is asked for
+ *   within the catalog cycle that brought it.
  *
- * Each event carries an id for the hour, so a sweep that runs twice in one
- * hour sends each event once.
+ * A server that already has a schedule event this hour gets no
+ * registry_version event, because a scheduled discovery reads the registry's
+ * newest version too. Each event carries an id for the hour, so a sweep that
+ * runs twice in one hour sends each event once.
  */
 export async function planDiscoverySweep(
   now: Date,
   deps: Pick<DiscoveryEntryDeps, "sweep"> = {},
 ): Promise<DiscoveryRequestEvent[]> {
   const sweep = deps.sweep ?? postgresDiscoverySweepStore;
-  const [fresh, due, open, stalled] = await Promise.all([
+  const [fresh, due, open, stalled, moved] = await Promise.all([
     sweep.undiscovered(SWEEP_LIMIT),
     sweep.dueDaily(new Date(now.getTime() - DAILY_MS), SWEEP_LIMIT),
     sweep.openPullRequests(SWEEP_LIMIT),
     sweep.stalled(new Date(now.getTime() - STALLED_MS), SWEEP_LIMIT),
+    sweep.registryMoved(SWEEP_LIMIT),
   ]);
   const hour = now.toISOString().slice(0, 13);
   const events = new Map<string, DiscoveryRequestEvent>();
+  const scheduled = new Set<string>();
   const add = (targets: DiscoveryTarget[], trigger: DiscoveryTrigger) => {
     for (const target of targets) {
       if (!serverNameSchema.safeParse(target.server).success) continue;
       const key = discoveryKey(target.scope, target.server);
+      if (trigger === "schedule") scheduled.add(key);
+      if (trigger === "registry_version" && scheduled.has(key)) continue;
       const id = `mcp-discovery:${trigger}:${key}:${hour}`;
       if (!events.has(id))
         events.set(id, requestEvent(target, trigger, null, id));
@@ -387,5 +397,6 @@ export async function planDiscoverySweep(
   add(due, "schedule");
   add(open, "lock_merged");
   for (const target of stalled) add([target], target.trigger);
+  add(moved, "registry_version");
   return [...events.values()];
 }

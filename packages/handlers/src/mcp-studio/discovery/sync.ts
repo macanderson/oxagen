@@ -248,7 +248,10 @@ async function readServerFiles(
   };
 }
 
-/** The source fields the push webhook matches on. */
+/**
+ * The source fields the push webhook matches on, and the registry name and
+ * version the hourly sweep compares with the synced catalog.
+ */
 export function sourceFields(
   parsed: McpServer,
   mcpServerId: string | null,
@@ -259,6 +262,7 @@ export function sourceFields(
       source.type === "graphql" ||
       source.type === "grpc") &&
     source.from === "repository";
+  const registry = source.type === "registry" ? source : null;
   return {
     kind: source.type,
     repo: linked ? (source.repo?.toLowerCase() ?? null) : null,
@@ -266,6 +270,8 @@ export function sourceFields(
     ref: linked ? (source.ref ?? null) : null,
     schedule: parsed.sync.schedule,
     mcpServerId,
+    registryName: registry?.server ?? null,
+    version: registry?.version ?? null,
   };
 }
 

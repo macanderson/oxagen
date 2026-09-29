@@ -23,7 +23,9 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
   or,
+  sql,
 } from "drizzle-orm";
 import type {
   DiscoveryOutcome,
@@ -70,6 +72,10 @@ export interface DiscoverySourceFields {
   ref: string | null;
   schedule: SyncSchedule;
   mcpServerId: string | null;
+  /** A registry server's source.server, the name the catalog lists it by. */
+  registryName: string | null;
+  /** A registry server's source.version. */
+  version: string | null;
 }
 
 /** What a finished discovery writes. */
@@ -204,6 +210,13 @@ export interface DiscoverySweepStore {
    * such a row, and no other read picks it up.
    */
   stalled(before: Date, limit: number): Promise<StalledTarget[]>;
+  /**
+   * Registry servers whose workspace catalog names a newer version than the
+   * one discovery last saw. A server that already ran a registry_version
+   * discovery after the catalog synced that entry is left out, so one
+   * catalog entry asks once, even when the discovery fails.
+   */
+  registryMoved(limit: number): Promise<DiscoveryTarget[]>;
   /** On-change servers whose definition lives in repo. */
   onChangeByRepo(repo: string): Promise<OnChangeTarget[]>;
 }
@@ -362,6 +375,8 @@ export const postgresDiscoveryStore: DiscoveryStore = {
           sourceRef: source.ref,
           schedule: source.schedule,
           mcpServerId: source.mcpServerId,
+          sourceRegistryName: source.registryName,
+          sourceVersion: source.version,
           updatedAt: now,
         })
         .where(scoped(scope, server)),
@@ -666,6 +681,62 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
       ...target(row),
       trigger: row.trigger as DiscoveryTrigger,
     }));
+  },
+
+  async registryMoved(limit) {
+    const r = schema.mcpRegistries;
+    const c = schema.mcpCatalogServers;
+    // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
+    // of the shared plane. It joins each registry server's row to the newest
+    // catalog entry of the same name in the same org and workspace, and
+    // selects the org, workspace, and server of each row whose catalog moved
+    // on. It reads no other column. The oldest finish goes first, so a sweep
+    // past the limit is fair.
+    const rows = await withSystemDb((tx) => {
+      // Catalog sync upserts only the entries a page returns, so an older
+      // version can keep is_latest after a newer one lands. The newest
+      // published entry decides.
+      const latest = tx
+        .select({ version: c.version, syncedAt: c.syncedAt })
+        .from(c)
+        .innerJoin(r, eq(r.id, c.registryId))
+        .where(
+          and(
+            eq(r.orgId, t.orgId),
+            eq(r.workspaceId, t.workspaceId),
+            eq(r.enabled, true),
+            eq(c.name, t.sourceRegistryName),
+            eq(c.isLatest, true),
+            ne(c.status, "deleted"),
+          ),
+        )
+        .orderBy(sql`${c.publishedAt} DESC NULLS LAST`, desc(c.syncedAt))
+        .limit(1)
+        .as("catalog_latest");
+      return tx
+        .select({ orgId: t.orgId, workspaceId: t.workspaceId, server: t.server })
+        .from(t)
+        .innerJoinLateral(latest, sql`true`)
+        .where(
+          and(
+            eq(t.sourceKind, "registry"),
+            isNotNull(t.sourceRegistryName),
+            inArray(t.schedule, ["on-change", "daily"]),
+            or(eq(t.status, "succeeded"), eq(t.status, "failed")),
+            // latest_version is what the last catalog read saw. Comparing
+            // source.version instead would ask every hour while the sync
+            // steering PR that moves it waits for review.
+            sql`${latest.version} IS DISTINCT FROM COALESCE(${t.latestVersion}, ${t.sourceVersion})`,
+            // One catalog entry asks once. A registry_version discovery that
+            // finished after the entry synced already answered it, even a
+            // failed one, which records no latest_version.
+            sql`NOT (${t.trigger} = 'registry_version' AND ${t.finishedAt} IS NOT NULL AND ${t.finishedAt} >= ${latest.syncedAt})`,
+          ),
+        )
+        .orderBy(sql`${t.finishedAt} ASC NULLS FIRST`, asc(t.id))
+        .limit(limit);
+    });
+    return rows.map(target);
   },
 
   async onChangeByRepo(repo) {

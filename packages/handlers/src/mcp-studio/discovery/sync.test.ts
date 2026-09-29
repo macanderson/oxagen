@@ -54,6 +54,7 @@ import {
   moveSourceVersion,
   runDiscovery,
   scheduleAllows,
+  sourceFields,
 } from "./sync";
 import {
   DiscoveryRefused,
@@ -1096,6 +1097,8 @@ describe("runDiscovery on each trigger", () => {
         ref: null,
         schedule: "daily",
         mcpServerId: "srv-1",
+        registryName: null,
+        version: null,
       },
       NOW,
     );
@@ -1454,5 +1457,28 @@ describe("moveSourceVersion", () => {
     expect(move).toThrow(
       `Discovery could not move source.version in ${serverTomlPath(server)} to 0.19.0. Import the new version in Studio.`,
     );
+  });
+});
+
+describe("sourceFields", () => {
+  it("keeps a registry server's name and version for the hourly sweep", () => {
+    expect(sourceFields(must(parseServerToml(GITHUB_SERVER)), "srv-2")).toEqual({
+      kind: "registry",
+      repo: null,
+      path: null,
+      ref: null,
+      schedule: "daily",
+      mcpServerId: "srv-2",
+      registryName: "io.github.github/github-mcp-server",
+      version: "0.18.0",
+    });
+  });
+
+  it("writes no registry name or version for a remote server", () => {
+    expect(sourceFields(must(parseServerToml(STRIPE_SERVER)), null)).toMatchObject({
+      kind: "remote",
+      registryName: null,
+      version: null,
+    });
   });
 });
