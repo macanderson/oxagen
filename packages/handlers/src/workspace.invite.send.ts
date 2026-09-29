@@ -144,7 +144,7 @@ export const workspaceInviteSendHandler: CapabilityHandler<
       );
       const orgName = orgRow?.name ?? ctx.orgId;
 
-      const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
+      const appUrl = process.env["APP_URL"] ?? "https://oxagen.app";
       const inviteUrl = `${appUrl}/invite/${row.publicId}`;
 
       await sendEmail({

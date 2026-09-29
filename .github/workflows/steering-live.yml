@@ -33,7 +33,7 @@ permissions:
 
 env:
   STEERING_LIVE_API_URL: https://api.oxagen.sh
-  STEERING_LIVE_APP_URL: https://app.oxagen.sh
+  STEERING_LIVE_APP_URL: https://oxagen.app
 
 jobs:
   live:

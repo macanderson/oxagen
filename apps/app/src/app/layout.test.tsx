@@ -48,6 +48,6 @@ describe("root layout metadata", () => {
 
   it("does not advertise localhost when the origin is unset (negative)", async () => {
     const { metadataBase } = await generateMetadata();
-    expect(String(metadataBase)).toBe("https://app.oxagen.sh/");
+    expect(String(metadataBase)).toBe("https://oxagen.app/");
   });
 });

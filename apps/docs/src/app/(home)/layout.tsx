@@ -10,7 +10,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
  * never leaks onto the documentation pages.
  */
 
-const APP_URL = "https://app.oxagen.sh";
+const APP_URL = "https://oxagen.app";
 
 /**
  * The copyright year is isolated behind a `use cache` boundary. Cache Components
@@ -147,7 +147,7 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             </span>
             <div className="flex flex-wrap items-center gap-4">
               <span className="font-mono">
-                app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh
+                oxagen.app · api.oxagen.sh · mcp.oxagen.sh
               </span>
               <ThemeSwitcher />
             </div>

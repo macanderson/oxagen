@@ -267,7 +267,7 @@ export async function onInvoicePaymentFailed(
   // handle is referenced here (its connection is already released to the pool).
   const { orgId, orgName } = notifyCtx;
   try {
-    const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
+    const appUrl = process.env["APP_URL"] ?? "https://oxagen.app";
     const billingUrl = `${appUrl}/settings/billing`;
     const template = paymentFailedTemplate({
       orgName,
