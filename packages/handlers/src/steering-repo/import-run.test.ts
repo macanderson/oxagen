@@ -552,6 +552,33 @@ describe("runSteeringImport: branches the import did not make", () => {
     expect(world.source.pulls).toHaveLength(0);
     expect(world.state).toMatchObject({ status: "failed", step: "provision", pull_requests: [] });
   });
+
+  it("names the file limit when the host cannot list the branch's changes", async () => {
+    const world = new World();
+    world.source.heads.set(IMPORT_CLEANUP_BRANCH, "base0");
+    world.source.commit(IMPORT_CLEANUP_BRANCH, "README.md", "one of many");
+    world.source.changedFiles = async (_repo, base, head) => {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "too_many_files",
+        message: `${head} changes 300 or more files against ${base}.`,
+      });
+    };
+
+    let caught: unknown;
+    try {
+      await world.run();
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(isHandlerError(caught) && caught.reason).toBe("steering_import_branch_taken");
+    expect((caught as Error).message).toContain(
+      `The branch ${IMPORT_CLEANUP_BRANCH} on ${REPO.fullName} already exists and changes 300 or more files.`,
+    );
+    expect(world.source.pulls).toHaveLength(0);
+    expect(world.source.stamps).toHaveLength(0);
+  });
 });
 
 describe("runSteeringImport: the old repository changes during the run", () => {

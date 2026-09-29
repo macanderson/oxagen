@@ -83,7 +83,7 @@ The first import steering PR lists what the import left and each dropped field. 
 | `conflict` | `steering_import_source_unreachable` | Oxagen can no longer reach the old repository, or its production branch is gone |
 | `conflict` | `steering_import_legacy_connection` | the workspace reads a repository through a sources connection with no binding. Bind the repository with `bind_main_repository`, then run the import |
 | `conflict` | `steering_import_source_gone` | the old repository's binding was removed while the run was going. Call again, and the next run reads the workspace afresh |
-| `conflict` | `steering_import_branch_taken` | a branch the import writes, such as `oxagen/import-cleanup`, already exists, and Oxagen cannot confirm it holds only this import's commit. Delete the branch, then call again |
+| `conflict` | `steering_import_branch_taken` | a branch the import writes, such as `oxagen/import-cleanup`, already exists, and Oxagen cannot confirm it holds only this import's commit. A branch that changes 300 or more files always refuses, and the message says so, because the host cannot list that many changes. Delete the branch, then call again |
 | `conflict` | `workspace_mismatch`, `governance_unreadable`, `workspace_toml_unreadable`, `too_many_files`, `branch_scope` | the converter cannot read the tree. Nothing changed |
 | `conflict` | `steering_repo_provisioning` | another request is creating the steering repo |
 | `conflict` | `steering_repo_provision_failed`, `steering_repo_already_bound`, `steering_app_unconfigured`, `repository_name_taken`, `no_connection`, `choose_connection` | the steering repo could not be created. The old repository steers the workspace again |

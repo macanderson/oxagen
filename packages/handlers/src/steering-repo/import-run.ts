@@ -48,7 +48,7 @@ import {
   type OxagenTreeConversion,
   type RuleKind,
 } from "./convert";
-import { isImportBranch } from "./stamp";
+import { isImportBranch, STEERING_PR_MAX_FILES } from "./stamp";
 
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
@@ -364,32 +364,42 @@ async function changedSince(
 }
 
 /**
- * Whether the branch at `head` holds only the commit this run writes on
- * `base`. The head descends from `base`, changes no path outside `files`, and
- * holds each file as the run writes it. The host lists at most 300 changed
- * files, so a longer list proves nothing.
+ * What a branch the run finds already made holds: only the run's commit
+ * (`held`), anything else (`other`), or more changed files than the host
+ * lists (`too_long`).
  */
-async function holdsRunCommit(
+type BranchProof = "held" | "other" | "too_long";
+
+/**
+ * Prove whether the branch at `head` holds only the commit this run writes on
+ * `base`. The head descends from `base`, changes no path outside `files`, and
+ * holds each file as the run writes it. The host lists fewer than
+ * `STEERING_PR_MAX_FILES + 1` changed files, so a longer list proves nothing.
+ */
+async function proveRunCommit(
   host: ImportHost,
   repo: SteeringRepository,
   base: string,
   head: string,
   files: readonly { path: string; content: string | null }[],
-): Promise<boolean> {
-  if (!(await host.holdsCommit(repo, head, base))) return false;
+): Promise<BranchProof> {
+  if (!(await host.holdsCommit(repo, head, base))) return "other";
   let changed: SteeringChangedFile[];
   try {
     changed = await host.changedFiles(repo, base, head);
   } catch (err) {
-    if (isHandlerError(err) && err.reason === "too_many_files") return false;
+    if (isHandlerError(err) && err.reason === "too_many_files")
+      return "too_long";
     throw err;
   }
   const expected = new Set(files.map((file) => file.path));
-  if (changed.some((file) => !expected.has(file.path))) return false;
+  if (changed.some((file) => !expected.has(file.path))) return "other";
   const held = await mapLimit(files, 8, (file) =>
     host.readFile(repo, file.path, head),
   );
-  return files.every((file, index) => (held[index] ?? null) === file.content);
+  return files.every((file, index) => (held[index] ?? null) === file.content)
+    ? "held"
+    : "other";
 }
 
 /**
@@ -415,11 +425,19 @@ async function commitOnce(
     await host.commitFiles(repo, { branch, parent: base, message, files: [...files] });
     return;
   }
-  if (head !== null && (await holdsRunCommit(host, repo, base, head, files)))
-    return;
+  const proof =
+    head === null
+      ? "other"
+      : await proveRunCommit(host, repo, base, head, files);
+  if (proof === "held") return;
+  const taken = `The branch ${branch} on ${repo.fullName} already exists`;
+  const why =
+    proof === "too_long"
+      ? `${taken} and changes ${STEERING_PR_MAX_FILES + 1} or more files. The host lists fewer changes than that, so Oxagen cannot confirm the branch holds only this import's commit.`
+      : `${taken}, and Oxagen cannot confirm it holds only this import's commit.`;
   throw conflict(
     "steering_import_branch_taken",
-    `The branch ${branch} on ${repo.fullName} already exists, and Oxagen cannot confirm it holds only this import's commit. Delete the branch, then run the import again.`,
+    `${why} Delete the branch, then run the import again.`,
   );
 }
 
