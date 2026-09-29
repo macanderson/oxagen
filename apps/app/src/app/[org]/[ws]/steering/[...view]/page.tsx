@@ -42,25 +42,20 @@ export default async function SteeringViewPage({
   if (route.kind === "redirect") redirectTo(route.to);
   if (route.kind === "not_found") notFound();
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<SteeringLoading />}>
-        <Steering
-          ctx={ctx}
-          source={dataSource()}
-          view={route.view}
-          header={(actions) => (
-            <PageHeader
-              eyebrow={ctx.wsName}
-              title={t("steering")}
-              description={st("description")}
-              actions={actions}
-            />
-          )}
-        />
-      </Suspense>
-    </main>
+    <Suspense fallback={<SteeringLoading />}>
+      <Steering
+        ctx={ctx}
+        source={dataSource()}
+        view={route.view}
+        header={(actions) => (
+          <PageHeader
+            eyebrow={ctx.wsName}
+            title={t("steering")}
+            description={st("description")}
+            actions={actions}
+          />
+        )}
+      />
+    </Suspense>
   );
 }

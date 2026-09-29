@@ -53,10 +53,23 @@ export const contextPrMerge = registerCapability({
           chainDigest: z.string(),
         })
         .strict(),
-      /** The workspace's steering version before and after: the ledger length. */
+      /**
+       * The number of entries in the workspace's promotion ledger before and
+       * after this merge. It counts merged records, not steering versions: a
+       * steering repo's first commit is version 1 and appends no ledger entry,
+       * so the two numbers differ there. `publishedVersion` is the steering
+       * version (#4732).
+       */
       bundleVersion: z
         .object({ before: z.number().int(), after: z.number().int() })
         .strict(),
+      /**
+       * The steering version this merge published, the number in its
+       * Oxagen-Version trailer. Null in a legacy repository, which has no
+       * version store, and null when publish() did not make the version live:
+       * the repository sync then publishes the production branch.
+       */
+      publishedVersion: z.number().int().positive().nullable(),
     })
     .strict(),
 });

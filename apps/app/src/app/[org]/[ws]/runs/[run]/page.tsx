@@ -27,22 +27,17 @@ export default async function RunPage({
   const { tab, kinds, frames, body, finding, reads, spine } =
     await searchParams;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10"
-    >
-      <Run
-        ctx={ctx}
-        source={dataSource()}
-        runId={run}
-        tab={firstParam(tab) ?? null}
-        kinds={firstParam(kinds) ?? null}
-        frames={firstParam(frames) ?? null}
-        body={firstParam(body) ?? null}
-        finding={firstParam(finding) ?? null}
-        reads={firstParam(reads) ?? null}
-        spine={firstParam(spine) ?? null}
-      />
-    </main>
+    <Run
+      ctx={ctx}
+      source={dataSource()}
+      runId={run}
+      tab={firstParam(tab) ?? null}
+      kinds={firstParam(kinds) ?? null}
+      frames={firstParam(frames) ?? null}
+      body={firstParam(body) ?? null}
+      finding={firstParam(finding) ?? null}
+      reads={firstParam(reads) ?? null}
+      spine={firstParam(spine) ?? null}
+    />
   );
 }

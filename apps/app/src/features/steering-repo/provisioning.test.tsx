@@ -46,7 +46,7 @@ const RETURN_TO = routes.repositories("acme", "core-platform");
 
 const REAUTHORIZE = {
   code: "steering_reauthorize",
-  message: "Oxagen Steering can no longer create repositories on this account.",
+  message: "Oxagen can no longer create repositories on this account.",
 };
 
 function provisioning(
@@ -272,7 +272,6 @@ describe("the steering repo provisioning", () => {
     );
     expect(href.pathname).toBe("/api/v1/acme/connections/steering/github");
     expect(Object.fromEntries(href.searchParams)).toEqual({
-      app: "steering",
       mode: "authorize",
       return_to: RETURN_TO,
     });

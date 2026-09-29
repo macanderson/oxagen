@@ -80,7 +80,7 @@ does not survive a redirect.
 |---|---|---|
 | 1 | CI | The PR that adds this record merges. `infra.yml` moves `oxagen.app` out of the vanity set, adds its certificate to the ALB, and points both names at the ALB. `oxagen.app` keeps redirecting to `app.oxagen.sh`, now from the ALB. |
 | 2 | Mac | Run `infra/tools/install-node-scripts.sh`, so Caddy routes `oxagen.app` and `www.oxagen.app` to the app. |
-| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, Linear, and each preregistered MCP client, and set the GitHub App's Setup URL to `https://oxagen.app/github/setup`. The API serves the GitHub App's callback and webhook, so they follow the API (step A3). |
+| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, Linear, and each preregistered MCP client. The GitHub App's Setup URL stays blank, because GitHub turns it off while OAuth during installation is on (ADR-228). The API serves the GitHub App's callback and webhook, so they follow the API (step A3). |
 | 4 | Agent | Open the cutover PR: `APP_PROD_URL` and the `app.oxagen.sh` fallbacks in code become `https://oxagen.app`, the listener rule goes, and links and deploy probes move to `oxagen.app`. |
 | 5 | Mac | After the cutover PR merges and before its `deploy app.oxagen.sh` job starts, set `BETTER_AUTH_URL`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and `OAUTH_PROXY_PRODUCTION_URL` under `/oxagen/production` to `https://oxagen.app` where they exist. Add it to `BETTER_AUTH_TRUSTED_ORIGINS` if that exists. Move the GitHub sign-in OAuth app's one callback URL to `https://oxagen.app/api/auth/callback/github`. |
 
@@ -161,7 +161,7 @@ docs.
 |---|---|---|
 | A1 | CI | The PR that adds this amendment merges. `infra.yml` issues the `api.oxagen.app` certificate, adds it to the ALB, and points the name at the ALB. |
 | A2 | Mac | Run `infra/tools/install-node-scripts.sh` after A1, even if step 2 already ran. Then `curl -s https://api.oxagen.app/health` answers from the API. |
-| A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. Do the same for the Oxagen Steering app with `/oauth/github/steering`. |
+| A3 | Mac | Once A2's check answers, set the `oxagen-connect` GitHub App's webhook URL to `https://api.oxagen.app/webhooks/github/app`, and put `https://api.oxagen.app/oauth/github/callback` first in its Callback URLs with `https://api.oxagen.sh/oauth/github/callback` after it. The code passes GitHub no `redirect_uri`, so every connect returns to the first Callback URL. The steering connect returns to the same callback, so no second app needs the change (ADR-228). |
 | A4 | Agent | Open the API cutover PR: `API_PROD_URL`, `DEFAULT_API_ORIGIN`, the docs, the CLI, and the desktop app name `https://api.oxagen.app`, and the deploy probes check it. |
 
 ## Amendment 2026-09-28: MCP and the docs move to oxagen.app

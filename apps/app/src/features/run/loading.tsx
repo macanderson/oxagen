@@ -6,12 +6,11 @@
 //
 // No figure, no zero and no stale row is drawn: the skeleton is shapes only.
 //
-// The frame keeps the page's container classes, so nothing jumps when the page
-// takes over, but it is not `main#main`. While the page streams in, the
-// document holds this fallback and the hidden page together, and only the page
-// may own the landmark: two would give the skip link two targets and fail the
-// page-load oracle's strict locator, as the onboarding gate did on 2026-09-24
-// (#4036).
+// The frame sits inside the shell's `main#main`, the page's one landmark
+// (ADR-227), so it takes the same padding the page does and nothing jumps when
+// the page takes over. A `main` here would give the skip link two targets
+// while the page streams in beside it and fail the page-load oracle's strict
+// locator, as the onboarding gate did on 2026-09-24 (#4036).
 import { useTranslations } from "next-intl";
 import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 
@@ -30,7 +29,7 @@ const sk = "block animate-pulse bg-hl motion-reduce:animate-none";
 export function RunLoading() {
   const t = useTranslations("run");
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-10">
+    <div className="flex w-full flex-col gap-4">
       <div
         role="status"
         aria-busy="true"

@@ -2383,7 +2383,8 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": false,
+        "app": true
       }
     },
     {

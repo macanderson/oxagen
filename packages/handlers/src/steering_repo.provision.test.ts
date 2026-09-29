@@ -246,8 +246,15 @@ class Harness {
     provider: "github" | "gitlab";
   }[] = [];
   readonly gitlabCalls: GitlabCall[] = [];
-  /** How many more times each dependency fails. */
-  readonly faults = { bind: 0, groups: 0 };
+  /** Every workspace the bind step published a first version for (#4732). */
+  readonly firstPublishes: { orgId: string; workspaceId: string }[] = [];
+  /** The version store holds the first commit as version 1. */
+  storeHoldsFirst = false;
+  /**
+   * How many more times each dependency fails. `stale` makes the first
+   * publish answer that the production branch moved.
+   */
+  readonly faults = { bind: 0, groups: 0, stale: 0 };
   userToken = true;
   groupToken = true;
   /** GitLab refuses the stored group token while the groups are listed. */
@@ -343,6 +350,18 @@ class Harness {
       steeringHook: (scope, projectId) => {
         this.hookRequests.push({ scope, projectId });
         return hookOf(scope, projectId, this.hookSecret);
+      },
+      // The version store answers `published` for the first head it sees and
+      // `current` after that, as steeringSyncPublish does.
+      publishFirst: (scope) => {
+        this.firstPublishes.push({ ...scope });
+        if (this.faults.stale > 0) {
+          this.faults.stale -= 1;
+          return Promise.resolve({ status: "stale", version: null });
+        }
+        const status = this.storeHoldsFirst ? "current" : "published";
+        this.storeHoldsFirst = true;
+        return Promise.resolve({ status, version: 1 });
       },
     };
   }
@@ -1047,6 +1066,8 @@ describe("the organization repo", () => {
     const h = new Harness(hub, null);
     expect(await provisionSteeringRepo(h.deps(), ORG_SCOPE)).toBe("ready");
     expect(h.binds).toEqual([]);
+    // An organization repo has no workspace, so no version store to publish to.
+    expect(h.firstPublishes).toEqual([]);
   });
 
   it("stops when another repository already holds the one name it may use", async () => {
@@ -1105,7 +1126,7 @@ describe("pick_connection", () => {
       code: "no_connection",
       isNonRetriable: true,
       message:
-        "This organization has no GitHub organization with Oxagen Steering installed and no GitLab group token. Connect one, then retry.",
+        "This organization has no GitHub organization with the Oxagen GitHub App installed and no GitLab group token. Connect one, then retry.",
     });
     expect(h.state(WS)).toMatchObject({
       status: "blocked",
@@ -1224,7 +1245,7 @@ describe("reauthorize", () => {
     await runSteeringRepoStep(deps, WS, "create_repository");
     const err = await expectReauthorize(h, "add_to_installation", "github");
     expect(err.message).toBe(
-      "No organization owner has authorized Oxagen Steering. An owner must authorize it.",
+      "No organization owner has authorized the Oxagen GitHub App for steering. An owner must authorize it.",
     );
     expect(h.state(WS)?.step).toBe("create_repository");
   });
@@ -1292,7 +1313,7 @@ describe("reauthorize", () => {
     await runSteeringRepoStep(deps, WS, "create_repository");
     const err = await expectReauthorize(h, "add_to_installation", "github");
     expect(err.message).toBe(
-      "The stored Oxagen Steering authorization cannot reach the installation on acme. An owner must authorize it again.",
+      "The stored steering authorization cannot reach the Oxagen GitHub App installation on acme. An owner must authorize it again.",
     );
   });
 
@@ -1330,7 +1351,7 @@ describe("reauthorize", () => {
 });
 
 describe("other stops", () => {
-  it("blocks without a banner when the Oxagen Steering app is not configured", async () => {
+  it("blocks without a banner when the Oxagen GitHub App is not configured", async () => {
     const h = new Harness(githubFake(), null);
     h.connections.set("org_1", GITHUB_CONNECTION);
     h.githubConfigured = false;
@@ -1727,4 +1748,68 @@ describe("a rerun after one failure", () => {
       expect(h.notified).toEqual([]);
     },
   );
+});
+
+// ── The first steering version ───────────────────────────────────────────────
+
+describe("the first steering version (#4732)", () => {
+  it("publishes the first commit through the version store once the workspace is bound", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    const deps = h.deps();
+    for (const step of STEERING_REPO_STEPS.slice(0, -1))
+      await runSteeringRepoStep(deps, WS, step);
+    // publish_version records the host deployment only.
+    expect(h.firstPublishes).toEqual([]);
+
+    expect(await runSteeringRepoStep(deps, WS, "bind_repository")).toEqual({
+      step: "bind_repository",
+      status: "ready",
+      ran: true,
+    });
+    expect(h.binds).toHaveLength(1);
+    expect(h.firstPublishes).toEqual([{ orgId: "org_1", workspaceId: "ws_1" }]);
+    expect(h.storeHoldsFirst).toBe(true);
+  });
+
+  it("answers current on a second run, so the store keeps one version for the first commit", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.firstPublishes).toHaveLength(2);
+    expect(h.state(WS)).toMatchObject({ status: "ready", error: null });
+  });
+
+  it("fails bind_repository when the branch moved during the publish, and a rerun converges", async () => {
+    const clean = await cleanGithubRun(WS);
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.faults.stale = 1;
+
+    const err = await runUntilStopped(h.deps(), WS);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect((err as Error).message).toMatch(/acme\/oxagen-support moved/);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "bind_repository",
+      error: { code: "step_failed" },
+    });
+    expect(h.storeHoldsFirst).toBe(false);
+
+    expect(await runUntilStopped(h.deps(), WS, "bind_repository")).toBeNull();
+    expect(h.state(WS)).toEqual(clean.state);
+    expect(hub.snapshot()).toEqual(clean.snapshot);
+    expect(h.firstPublishes).toHaveLength(2);
+    expect(h.storeHoldsFirst).toBe(true);
+  });
+
+  it("finishes the step when no version store is wired", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    const { publishFirst: _unused, ...deps } = h.deps();
+    expect(await provisionSteeringRepo(deps, WS)).toBe("ready");
+    expect(h.firstPublishes).toEqual([]);
+  });
 });

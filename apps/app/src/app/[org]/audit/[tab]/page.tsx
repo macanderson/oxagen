@@ -33,10 +33,7 @@ export default async function AuditTabPage({
   const t = await getTranslations("pages");
   const page = await getTranslations("audit");
   return (
-    <main
-      id="main"
-      className="group/audit mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
+    <div className="group/audit contents">
       {/* A state (empty, loading, error, denied) is shown alone, as the
           design draws it: the header stays in the document for its h1 and
           steps out of view. */}
@@ -56,6 +53,6 @@ export default async function AuditTabPage({
       <Suspense fallback={<AuditSkeleton />}>
         <Audit ctx={ctx} source={dataSource()} tab={tab} searchParams={query} />
       </Suspense>
-    </main>
+    </div>
   );
 }

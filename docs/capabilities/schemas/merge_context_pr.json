@@ -105,6 +105,17 @@
           "after"
         ],
         "additionalProperties": false
+      },
+      "publishedVersion": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
@@ -113,7 +124,8 @@
       "record",
       "mergedCommit",
       "promotionEvent",
-      "bundleVersion"
+      "bundleVersion",
+      "publishedVersion"
     ],
     "additionalProperties": false
   }

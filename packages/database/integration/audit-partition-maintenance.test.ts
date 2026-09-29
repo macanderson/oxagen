@@ -288,6 +288,8 @@ describe("audit partition maintenance", () => {
           workspace: currentId,
         });
         expect(first?.result.created).toHaveLength(3);
+        expect(first?.result.skipped).toEqual([]);
+        expect(first?.result.hasSkippedPartitions).toBe(false);
         expect(first?.result.dropped).toContain(expiredPartition);
         expect(first?.result.expiredDefaultRows).toBeGreaterThanOrEqual(1);
         const [lock] = await sql.begin(
@@ -298,6 +300,7 @@ describe("audit partition maintenance", () => {
         const [second] =
           await tx`SELECT security.maintain_audit_partitions() AS result`;
         expect(second?.result.created).toEqual([]);
+        expect(second?.result.skipped).toEqual([]);
         expect(second?.result.expiredDefaultRows).toBe(0);
         const rows =
           await tx`SELECT id, tableoid::regclass::text AS partition FROM security.security_events WHERE org_id = ${org}`;

@@ -6,19 +6,20 @@
 import type { SafePath } from "@/shared/safe-path";
 
 /**
- * `steering` is Oxagen Steering, the app that creates and administers steering
- * repos. `oxagen` is the Oxagen app that works on code repositories.
- * `install` opens the app's install page, and `authorize` opens GitHub's
- * authorization page for an app already installed (Re-authorize).
+ * GitHub has one Oxagen app, which creates steering repos and works on code
+ * repositories (ADR-228). `install` opens the app's install page, which
+ * installs it on a GitHub organization and authorizes the person in one pass.
+ * `authorize` opens GitHub's authorization page. It is the way back for an
+ * organization that already has the app, because GitHub's install page then
+ * shows Configure, which drops the signed state (Re-authorize).
  */
-export type SteeringGithubLeg =
-  | { app: "steering"; mode: "install" | "authorize" }
-  | { app: "oxagen"; mode: "install" };
+export type SteeringGithubLeg = { mode: "install" | "authorize" };
 
 /**
  * `GET /api/v1/{org}/connections/steering/github`: the API signs the state and
- * redirects to GitHub. GitHub returns to `/oauth/github/steering` (Oxagen
- * Steering) or `/oauth/github` (Oxagen), which sends the person to `returnTo`.
+ * redirects to GitHub. Both legs return through the app's one callback,
+ * `/oauth/github/callback`, which sends the person to `returnTo` with
+ * `?steering=connected` or `?steering=error&code=`.
  */
 export function steeringGithubHref(
   org: string,
@@ -26,7 +27,6 @@ export function steeringGithubHref(
   returnTo: SafePath,
 ): string {
   const query = new URLSearchParams({
-    app: leg.app,
     mode: leg.mode,
     return_to: returnTo,
   });

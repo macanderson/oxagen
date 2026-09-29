@@ -46,7 +46,8 @@ The output of `merge_context_pr`.
 | `record` | `{ id (ctr_…), lineageId, version, path }` | The published record and the version this merge created |
 | `mergedCommit` | `string` | The host's merge commit |
 | `promotionEvent` | `{ id (ctp_…), seq, chainDigest }` | The ledger entry |
-| `bundleVersion` | `{ before, after }` | The ledger length before and after |
+| `bundleVersion` | `{ before, after }` | The number of promotion ledger entries before and after. It counts merged records, not steering versions |
+| `publishedVersion` | `number` or `null` | The steering version this merge published, the number in its `Oxagen-Version` trailer. Null in a legacy repository, and null when publish() did not make the version live |
 
 ## Errors
 

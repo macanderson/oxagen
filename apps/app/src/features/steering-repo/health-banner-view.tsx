@@ -136,56 +136,54 @@ export function SteeringRepoHealthBannerView({
   }
 
   return (
-    <div className="px-4 pt-4">
-      <section
-        aria-labelledby={headingId}
-        data-testid="steering-repo-health-banner"
-        data-health={health}
-        data-provider={provider ?? "github"}
-        className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px] text-foreground"
-      >
-        <h2 id={headingId} className="text-[14px] font-semibold">
-          {t(`heading.${health}`)}
-        </h2>
-        <p>{t("body")}</p>
-        {differences.length > 0 ? (
-          <Differences differences={differences} />
-        ) : null}
-        {canAct && health === "drifted" ? (
-          <div className="flex flex-col items-start gap-2">
-            <button
-              type="button"
-              data-testid="steering-repo-repair"
-              data-touch-target=""
-              disabled={pending}
-              className={buttonSecondary}
-              onClick={() => {
-                void repair();
-              }}
-            >
-              {pending ? t("repairing") : t("repair")}
-            </button>
-            {failure === null ? null : (
-              <FormAlert testId="steering-repo-repair-failure">
-                {failure}
-              </FormAlert>
-            )}
-          </div>
-        ) : null}
-        {canAct && health === "disconnected" ? (
-          <div>
-            <ReauthorizeLink
-              org={org}
-              provider={provider}
-              returnTo={returnTo}
-              testId="steering-repo-banner-reauthorize"
-            />
-          </div>
-        ) : null}
-        {canAct && health === "diverged" ? (
-          <p data-testid="steering-repo-reverting">{t("reverting")}</p>
-        ) : null}
-      </section>
-    </div>
+    <section
+      aria-labelledby={headingId}
+      data-testid="steering-repo-health-banner"
+      data-health={health}
+      data-provider={provider ?? "github"}
+      className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px] text-foreground"
+    >
+      <h2 id={headingId} className="text-[14px] font-semibold">
+        {t(`heading.${health}`)}
+      </h2>
+      <p>{t("body")}</p>
+      {differences.length > 0 ? (
+        <Differences differences={differences} />
+      ) : null}
+      {canAct && health === "drifted" ? (
+        <div className="flex flex-col items-start gap-2">
+          <button
+            type="button"
+            data-testid="steering-repo-repair"
+            data-touch-target=""
+            disabled={pending}
+            className={buttonSecondary}
+            onClick={() => {
+              void repair();
+            }}
+          >
+            {pending ? t("repairing") : t("repair")}
+          </button>
+          {failure === null ? null : (
+            <FormAlert testId="steering-repo-repair-failure">
+              {failure}
+            </FormAlert>
+          )}
+        </div>
+      ) : null}
+      {canAct && health === "disconnected" ? (
+        <div>
+          <ReauthorizeLink
+            org={org}
+            provider={provider}
+            returnTo={returnTo}
+            testId="steering-repo-banner-reauthorize"
+          />
+        </div>
+      ) : null}
+      {canAct && health === "diverged" ? (
+        <p data-testid="steering-repo-reverting">{t("reverting")}</p>
+      ) : null}
+    </section>
   );
 }

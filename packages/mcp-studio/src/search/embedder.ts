@@ -7,8 +7,10 @@
 // Authorization header only. No message this module builds carries the key,
 // the endpoint's url, or any part of the endpoint's response body.
 //
-// These requests do not go through @oxagen/ai (ADR-217), so the caller gets
-// each request's token count through onUsage and records it.
+// These requests do not go through @oxagen/ai (ADR-217), so the caller meters
+// them: the embedder opens the caller's meter before each request. It closes
+// it with the token count once the endpoint answers 2xx, or as failed when
+// the endpoint refuses the request or never answers.
 import { concat, decodeText, encodeText, parseJson } from "../execute/body";
 import { createCloudTransport } from "../execute/cloud/transport";
 import { parseEndpoint } from "../execute/endpoint";
@@ -81,6 +83,29 @@ export interface EmbedUsage {
   durationMs: number;
 }
 
+/**
+ * One request's meter. The embedder opens it before the request and calls
+ * exactly one of these once the request ends. Neither may throw.
+ */
+export interface EmbedMeter {
+  /**
+   * The endpoint answered 2xx, so it did the work, and this is what it
+   * reported using. It runs even when the vectors are then refused, and
+   * `tokens` is null when the answer carried no readable count.
+   */
+  used(usage: EmbedUsage): void;
+  /** The endpoint refused the request or never answered, so it reports no usage. */
+  failed(): void;
+}
+
+/** What post() learned about the answer, filled in as it arrives. */
+interface Answer {
+  /** True once the endpoint answered 2xx. */
+  answered: boolean;
+  /** The answer's usage.total_tokens, once its body parsed. */
+  tokens: number | null;
+}
+
 /** How long one embeddings request may take. */
 export const EMBED_DEADLINE_MS = 10_000;
 
@@ -100,10 +125,10 @@ export interface HttpEmbedderOptions {
   /** True to send input_type, which Voyage AI reads. A custom endpoint may not accept it. */
   inputType: boolean;
   /**
-   * Called once for each request that returns its vectors, and never for one
-   * that fails. It must not throw.
+   * Opens a meter before each request is sent, so the usage is on record
+   * before the endpoint spends it. It must not reject.
    */
-  onUsage?: (usage: EmbedUsage) => void;
+  meter?: () => Promise<EmbedMeter>;
   /** The cloud Transport by default. A test passes a fake. */
   transport?: Pick<Transport, "http">;
   deadlineMs?: number;
@@ -118,49 +143,73 @@ export function httpEmbedder(options: HttpEmbedderOptions): Embedder {
   let transport = options.transport;
   const deadlineMs = options.deadlineMs ?? EMBED_DEADLINE_MS;
   const limit = options.maxResponseBytes ?? MAX_EMBED_RESPONSE_BYTES;
+
+  async function post(
+    sender: Pick<Transport, "http">,
+    target: HttpTarget,
+    texts: readonly string[],
+    purpose: EmbedPurpose,
+    signal: AbortSignal | undefined,
+    answer: Answer,
+  ): Promise<Float32Array[]> {
+    const headers: HeaderEntry[] = [
+      ["content-type", "application/json"],
+      ["accept", "application/json"],
+    ];
+    if (options.apiKey !== null) headers.push(["authorization", `Bearer ${options.apiKey}`]);
+    const body = { model: options.model, input: texts, ...(options.inputType ? { input_type: purpose } : {}) };
+    const controller = new AbortController();
+    const clock = new Clock(Date.now() + deadlineMs, signal ?? controller.signal, controller);
+    try {
+      const sent = await clock.race(
+        sender.http({
+          network: "cloud",
+          deadline_ms: deadlineMs,
+          signal: controller.signal,
+          relay_credential: undefined,
+          target,
+          headers,
+          body: encodeText(JSON.stringify(body)),
+        }),
+      );
+      if (sent.kind === "stopped") throw stopped(sent.stop);
+      if (sent.kind === "failed") throw sendFailure(sent.error);
+      const response = sent.value;
+      if (response.status < 200 || response.status > 299) {
+        // The body of an error can echo the request, so it is never read.
+        response.cancel();
+        throw statusFailure(response.status);
+      }
+      answer.answered = true;
+      const bytes = await readCapped(response, clock, limit);
+      const parsed = parseJson(decodeText(bytes));
+      if (!parsed.ok) throw malformed("The embeddings endpoint's response is not JSON.", response.status);
+      answer.tokens = tokensOf(parsed.value);
+      return vectorsOf(parsed.value, texts.length, response.status);
+    } finally {
+      clock.dispose();
+    }
+  }
+
   return {
     key: options.key,
     async embed(texts, purpose, signal) {
       if (texts.length === 0) return [];
       const target = targetOf(options.url);
-      transport ??= createCloudTransport();
-      const headers: HeaderEntry[] = [
-        ["content-type", "application/json"],
-        ["accept", "application/json"],
-      ];
-      if (options.apiKey !== null) headers.push(["authorization", `Bearer ${options.apiKey}`]);
-      const body = { model: options.model, input: texts, ...(options.inputType ? { input_type: purpose } : {}) };
-      const controller = new AbortController();
+      const sender = (transport ??= createCloudTransport());
+      const meter = await options.meter?.();
       const startedAt = Date.now();
-      const clock = new Clock(startedAt + deadlineMs, signal ?? controller.signal, controller);
+      const answer: Answer = { answered: false, tokens: null };
       try {
-        const sent = await clock.race(
-          transport.http({
-            network: "cloud",
-            deadline_ms: deadlineMs,
-            signal: controller.signal,
-            relay_credential: undefined,
-            target,
-            headers,
-            body: encodeText(JSON.stringify(body)),
-          }),
-        );
-        if (sent.kind === "stopped") throw stopped(sent.stop);
-        if (sent.kind === "failed") throw sendFailure(sent.error);
-        const response = sent.value;
-        if (response.status < 200 || response.status > 299) {
-          // The body of an error can echo the request, so it is never read.
-          response.cancel();
-          throw statusFailure(response.status);
-        }
-        const bytes = await readCapped(response, clock, limit);
-        const parsed = parseJson(decodeText(bytes));
-        if (!parsed.ok) throw malformed("The embeddings endpoint's response is not JSON.", response.status);
-        const vectors = vectorsOf(parsed.value, texts.length, response.status);
-        options.onUsage?.({ texts, purpose, tokens: tokensOf(parsed.value), durationMs: Date.now() - startedAt });
-        return vectors;
+        return await post(sender, target, texts, purpose, signal, answer);
       } finally {
-        clock.dispose();
+        // A 2xx answer was spent even when its vectors are refused, so its
+        // usage is reported. Only a refused or unanswered request is voided.
+        if (answer.answered) {
+          meter?.used({ texts, purpose, tokens: answer.tokens, durationMs: Date.now() - startedAt });
+        } else {
+          meter?.failed();
+        }
       }
     },
   };

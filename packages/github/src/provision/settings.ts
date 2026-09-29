@@ -2,7 +2,7 @@
 // baseline, and write only what differs.
 //
 // Oxagen holds the settings in settings-baseline.ts (@oxagen/oxagen). The
-// baseline names the Oxagen Steering app by a symbol. This module turns the
+// baseline names the Oxagen GitHub App by a symbol. This module turns the
 // symbol into the app's id where GitHub wants an id, and back into the symbol
 // when it reads, so a read compares with the baseline directly.
 import { seg, type GithubRest } from "./http";

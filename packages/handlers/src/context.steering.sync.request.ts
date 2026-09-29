@@ -31,6 +31,21 @@ const str = (v: unknown): string | null =>
   typeof v === "string" && v.length > 0 ? v : null;
 
 /**
+ * The branches a Context PR is opened on. open_context_pr names the branch
+ * for the folder its file is in: `steering/<lineage>`, or `memory/<lineage>`
+ * for a memory (#4731). A PR opened before the steering layout may still sit
+ * on a `context/` branch.
+ */
+const CONTEXT_PR_BRANCH_PREFIXES = ["steering/", "memory/", "context/"];
+
+function isContextPrBranch(ref: string | null): boolean {
+  return (
+    ref !== null &&
+    CONTEXT_PR_BRANCH_PREFIXES.some((prefix) => ref.startsWith(prefix))
+  );
+}
+
+/**
  * The branch a GitHub delivery moved or merged into, or null when the
  * delivery cannot change a workspace's steering.
  */
@@ -53,7 +68,7 @@ export function githubDeliveryBranch(
     // into the production branch arrives as that branch's push, which is
     // what changes records; asking on every PR edit would put the page into
     // "pending" for nothing.
-    if (!str(pr?.head?.ref)?.startsWith("context/")) return null;
+    if (!isContextPrBranch(str(pr?.head?.ref))) return null;
     return str(pr?.base?.ref);
   }
   return null;

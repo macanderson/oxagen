@@ -28,11 +28,6 @@ export default async function SpendPage({
   if (view === null) notFound();
   const ctx = await requireViewer(org, ws);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Spend ctx={ctx} source={dataSource()} view={view} />
-    </main>
+    <Spend ctx={ctx} source={dataSource()} view={view} />
   );
 }
