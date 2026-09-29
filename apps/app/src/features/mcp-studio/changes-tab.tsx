@@ -46,6 +46,7 @@ import {
 import type { StudioGap } from "./gaps";
 import type { StudioRecord, StudioSourceType, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
+import type { StudioAt } from "./route";
 import {
   type GetStudioDraft,
   getStudioDraft,
@@ -363,6 +364,7 @@ function Opened({ outcome }: { outcome: Outcome }) {
 }
 
 export function ChangesTab({
+  at,
   serverName,
   serverId,
   record,
@@ -374,6 +376,8 @@ export function ChangesTab({
   get = getStudioDraft,
   open = openStudioReview,
 }: {
+  /** The workspace the draft belongs to. */
+  at: StudioAt;
   /** The folder name M11 keys the draft by; null until the record names it. */
   serverName: string | null;
   serverId: string;
@@ -390,7 +394,7 @@ export function ChangesTab({
   open?: OpenStudioReview;
 }) {
   const t = useTranslations("mcpStudio.changes");
-  const draft = useStudioDraft({ serverName, serverId });
+  const draft = useStudioDraft({ at, serverName, serverId });
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const view = { tools };

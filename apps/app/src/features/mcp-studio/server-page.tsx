@@ -7,17 +7,24 @@
 // The page reads the registry, the switch board and the org's members, as the
 // Tools page does, plus the Studio record and, on Changes, the tool checks'
 // findings. The last two are seams that answer null until lanes M10 and M5
-// land. A failed registry read replaces the whole body the way it does on
-// Tools, and a server the workspace does not hold is its own state, so a
-// stale link never draws an empty page.
+// land. The registry read follows the server's cursor to its last page, so a
+// server with more versions than one page holds still shows every tool with
+// its version and off switch. A failed registry read, on any page, replaces
+// the whole body the way it does on Tools, and a server the workspace does
+// not hold is its own state, so a stale link never draws an empty page.
 //
 // The off switches are the Tools page's own controls (switch-controls.tsx),
 // drawn here on the server and handed to the tabs, so a flip here writes the
 // same row the Switches tab lists.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { KillSwitch, McpServer } from "@/data/contracts/tools";
+import type {
+  KillSwitch,
+  McpServer,
+  ToolVersion,
+} from "@/data/contracts/tools";
 import type { DataSource } from "@/data/ports";
+import { type Read, readOk } from "@/data/read";
 import {
   FlipControls,
   SwitchActor,
@@ -56,6 +63,42 @@ import { TryTab } from "./try-tab";
 
 type Member = { id: string; name: string | null; email: string };
 type DenyGeneration = { org: number; workspace: number };
+
+/**
+ * The most registry pages the page reads for one server: 1,000 versions at
+ * list_tool_versions' default of 50 a page. Past it the page shows the
+ * versions it read and the Tools count reads as a floor.
+ */
+const VERSION_PAGE_BOUND = 20;
+
+/** Every registry version of one server, and whether the last page was read. */
+type ServerVersions = { items: ToolVersion[]; complete: boolean };
+
+/**
+ * Walk the server-filtered registry cursor to its end, up to the bound. A
+ * failed page fails the whole read with that page's own refusal, since a
+ * view built from part of the registry would drop tools without saying so.
+ */
+async function serverVersions(
+  ctx: WsCtx,
+  source: DataSource,
+  serverId: string,
+): Promise<Read<ServerVersions>> {
+  const items: ToolVersion[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < VERSION_PAGE_BOUND; page += 1) {
+    const read = await source.tools.versions(ctx, {
+      category: null,
+      cursor,
+      serverId,
+    });
+    if (!read.ok) return read;
+    items.push(...read.value.items);
+    cursor = read.value.nextCursor;
+    if (cursor === null) return readOk({ items, complete: true });
+  }
+  return readOk({ items, complete: false });
+}
 
 /**
  * An org Owner or Admin: the roles `set_kill_switch` and the Studio writes
@@ -226,11 +269,7 @@ export async function StudioServer({
   const [servers, versions, board, members, record, checks] =
     await Promise.all([
       source.tools.mcpServers(ctx),
-      source.tools.versions(ctx, {
-        category: null,
-        cursor: null,
-        serverId: route.serverId,
-      }),
+      serverVersions(ctx, source, route.serverId),
       source.tools.killSwitches(ctx),
       source.org.members(ctx),
       readRecord(ctx, route.serverId),
@@ -325,7 +364,7 @@ export async function StudioServer({
         serverId={server.id}
         current={route.tab}
         tools={view.tools}
-        complete={versions.value.nextCursor === null}
+        complete={versions.value.complete}
       />
       <div
         role="tabpanel"
@@ -335,6 +374,7 @@ export async function StudioServer({
       >
         {route.tab === "tools" ? (
           <ToolsTab
+            at={at}
             serverName={view.serverName}
             serverId={server.id}
             record={view.record}
@@ -356,6 +396,7 @@ export async function StudioServer({
         ) : null}
         {route.tab === "try" ? (
           <TryTab
+            at={at}
             serverName={view.serverName}
             serverId={server.id}
             tools={view.tools}
@@ -366,6 +407,7 @@ export async function StudioServer({
         ) : null}
         {route.tab === "changes" ? (
           <ChangesTab
+            at={at}
             serverName={view.serverName}
             serverId={server.id}
             record={view.record}

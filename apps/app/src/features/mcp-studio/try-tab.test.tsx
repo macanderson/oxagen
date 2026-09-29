@@ -24,6 +24,7 @@ import {
   SCRATCH,
   seedDraft,
   STRIPE,
+  STUDIO_AT,
   studioTool,
   studioView,
   tryClean,
@@ -77,6 +78,7 @@ function renderTry(serverId: string, over: Partial<TryProps> = {}) {
   const view = studioView(serverId);
   return withIntl(
     <TryTab
+      at={STUDIO_AT}
       serverName={view.serverName}
       serverId={serverId}
       tools={view.tools}

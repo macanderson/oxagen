@@ -25,6 +25,7 @@ import type { WsRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import type { StudioRecord } from "./model";
 import type { StudioTab } from "./route";
 import type { FindingsReader, RecordReader } from "./seams";
 
@@ -100,6 +101,7 @@ const {
   SCRATCH,
   STRIPE,
   WAREHOUSE,
+  WAREHOUSE_PAGE_2,
   draftKey,
   idDraftKey,
   offSwitch,
@@ -109,6 +111,7 @@ const {
   studioFindings,
   studioMembers,
   studioSource,
+  warehouseVersions,
 } = await import("./studio.builders");
 
 type Reads = NonNullable<Parameters<typeof studioSource>[0]>;
@@ -145,26 +148,29 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 
 /**
  * The page on the Studio fakes: each read answers its fixture unless `reads`
- * says otherwise, the record seam answers each server's record fixture, and
- * the findings seam answers the three fixture findings.
+ * says otherwise, the record seam answers each server's record fixture unless
+ * `record` says otherwise, and the findings seam answers the three fixture
+ * findings.
  */
 async function renderStudio({
   serverId = STRIPE,
   tab = "tools",
   orgRole = "owner",
   reads = {},
+  record = recordOf,
   findings = () => Promise.resolve(studioFindings()),
 }: {
   serverId?: string;
   tab?: StudioTab;
   orgRole?: OrgRole;
   reads?: Reads;
+  record?: (serverId: string) => StudioRecord | null;
   findings?: FindingsReader;
 } = {}) {
   const ctx = viewer(orgRole);
   const { source, calls } = studioSource(reads);
   const readRecord = vi.fn<RecordReader>((_ctx, id) =>
-    Promise.resolve(recordOf(id)),
+    Promise.resolve(record(id)),
   );
   const readFindings = vi.fn<FindingsReader>(findings);
   withIntl(
@@ -255,6 +261,24 @@ describe("StudioServer failed reads", () => {
     expect(
       within(failure).getByRole("link", { name: "Try again" }),
     ).toHaveAttribute("href", studioHref(AT, STRIPE));
+    expect(screen.queryByTestId("studio-server")).toBeNull();
+  });
+
+  it("draws the Tools error in place of the page when a later version page fails", async () => {
+    const { calls } = await renderStudio({
+      serverId: WAREHOUSE,
+      reads: {
+        versions: (query) =>
+          query.cursor === null
+            ? readOk(warehouseVersions())
+            : readError("TOOLS_UNAVAILABLE", 503),
+      },
+    });
+    expect(calls.versions).toHaveLength(2);
+    const failure = screen.getByTestId("tools-error");
+    expect(
+      within(failure).getByRole("link", { name: "Try again" }),
+    ).toHaveAttribute("href", studioHref(AT, WAREHOUSE));
     expect(screen.queryByTestId("studio-server")).toBeNull();
   });
 
@@ -601,14 +625,36 @@ describe("StudioServer tabs", () => {
     expect(countOf("changes")).toBe("1");
   });
 
-  it("marks the Tools count as a floor when the registry has a later page", async () => {
+  it("follows the server's registry cursor to the last page and counts every tool", async () => {
     const { calls, ctx } = await renderStudio({
       serverId: WAREHOUSE,
       tab: "connection",
     });
     expect(calls.versions).toEqual([
       [ctx, { category: null, cursor: null, serverId: WAREHOUSE }],
+      [ctx, { category: null, cursor: WAREHOUSE_PAGE_2, serverId: WAREHOUSE }],
     ]);
+    expect(countOf("tools")).toBe("600");
+  });
+
+  it("counts the versions on every registry page when the server has no record", async () => {
+    await renderStudio({
+      serverId: WAREHOUSE,
+      tab: "connection",
+      record: () => null,
+    });
+    expect(countOf("tools")).toBe("200");
+  });
+
+  it("stops at 20 registry pages and marks the Tools count as a floor", async () => {
+    // A registry that always hands back a cursor: the page reads 20 pages,
+    // 1,000 versions at list_tool_versions' default page size, and stops.
+    const { calls } = await renderStudio({
+      serverId: WAREHOUSE,
+      tab: "connection",
+      reads: { versions: readOk(warehouseVersions()) },
+    });
+    expect(calls.versions).toHaveLength(20);
     expect(countOf("tools")).toBe("600+");
   });
 

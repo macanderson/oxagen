@@ -13,7 +13,7 @@
 //     environments, operator OAuth, and a tool with hidden and fixed inputs.
 //   - Scratch (`mcs_01k5s4`): a server with no tools.
 //   - Warehouse (`mcs_01k5s5`): 600 tools, 200 imported, over its budget, and
-//     a registry page that says there are more versions than it holds.
+//     a registry that pages its 200 versions over two cursor pages.
 //
 // Every credential is a vault reference. None of these values is a secret.
 import type { MemberList } from "@/data/contracts/org";
@@ -47,6 +47,7 @@ import {
   type StudioServerView,
   type StudioTool,
 } from "./model";
+import type { StudioAt } from "./route";
 import type {
   DraftDescription,
   GetStudioDraft,
@@ -185,19 +186,32 @@ export function warehouseTool(index: number): string {
 export const WAREHOUSE_TOOLS = 600;
 export const WAREHOUSE_IMPORTED = 200;
 
+/** The cursor Warehouse's first registry page hands to its second. */
+export const WAREHOUSE_PAGE_2 = "page-2";
+
 /**
- * Warehouse's first registry page: the first 100 of its 200 imported tools,
- * with a cursor to more. list_tool_versions pages at 100 at most.
+ * One of Warehouse's two registry pages, 100 of its 200 imported tools each
+ * (every third tool). The first, at no cursor, carries a cursor to the
+ * second; the second is the last. list_tool_versions pages at 100 at most.
  */
-export function warehouseVersions(): ToolVersionPage {
+export function warehouseVersions(
+  cursor: string | null = null,
+): ToolVersionPage {
+  const second = cursor === WAREHOUSE_PAGE_2;
   const items: VersionRow[] = [];
-  for (let index = 0; items.length < 100; index += 3) {
+  for (let row = second ? 100 : 0; row < (second ? 200 : 100); row += 1) {
+    const index = row * 3;
     items.push(
       versionRow(`wh${String(index)}`, WAREHOUSE, "warehouse", warehouseTool(index)),
     );
   }
   return ToolVersionPageShape.parse(
-    toToolVersionPage(toolVersionListOutput({ items, nextCursor: "page-2" })),
+    toToolVersionPage(
+      toolVersionListOutput({
+        items,
+        nextCursor: second ? null : WAREHOUSE_PAGE_2,
+      }),
+    ),
   );
 }
 
@@ -704,9 +718,12 @@ export function recordOf(serverId: string): StudioRecord | null {
   }
 }
 
-/** The registry page a server's Studio page reads. */
-export function versionsOf(serverId: string | null): ToolVersionPage {
-  return serverId === WAREHOUSE ? warehouseVersions() : studioVersions();
+/** The registry page a server's Studio page reads at a cursor. */
+export function versionsOf(
+  serverId: string | null,
+  cursor: string | null = null,
+): ToolVersionPage {
+  return serverId === WAREHOUSE ? warehouseVersions(cursor) : studioVersions();
 }
 
 /** One tool, joined, for a test of the tool panel alone. */
@@ -747,14 +764,17 @@ export function graphqlTool(): StudioTool {
 
 // ---- Drafts ---------------------------------------------------------------
 
+/** The workspace every Studio test renders in: the viewer's org and workspace. */
+export const STUDIO_AT: StudioAt = { org: "acme", ws: "core-platform" };
+
 /** The sessionStorage key of a draft keyed by the server's folder name. */
-export function draftKey(serverName: string): string {
-  return `oxagen.mcp-studio.draft.server.${serverName}`;
+export function draftKey(serverName: string, at: StudioAt = STUDIO_AT): string {
+  return `oxagen.mcp-studio.draft.${at.org}/${at.ws}.server.${serverName}`;
 }
 
 /** The sessionStorage key of a draft for a server whose record names no folder. */
-export function idDraftKey(serverId: string): string {
-  return `oxagen.mcp-studio.draft.id.${serverId}`;
+export function idDraftKey(serverId: string, at: StudioAt = STUDIO_AT): string {
+  return `oxagen.mcp-studio.draft.${at.org}/${at.ws}.id.${serverId}`;
 }
 
 /** Store a draft where the page reads it, before the page renders. */
@@ -1081,7 +1101,8 @@ export function studioSource(reads: StudioReads = {}) {
         calls.versions.push([ctx, q]);
         const read =
           reads.versions ??
-          ((query: VersionsQuery) => readOk(versionsOf(query.serverId)));
+          ((query: VersionsQuery) =>
+            readOk(versionsOf(query.serverId, query.cursor)));
         return Promise.resolve(typeof read === "function" ? read(q) : read);
       },
       grants: refuse,

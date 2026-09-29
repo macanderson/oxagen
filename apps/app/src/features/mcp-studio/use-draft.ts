@@ -5,10 +5,13 @@
 // the draft in memory for the page's life and every read and write is
 // guarded.
 //
-// A draft is keyed by the server's folder name, as lane M11 stores it
-// (`save_studio_draft`'s `server`). A server whose record has not named its
-// folder yet is keyed by its registry id until then; such a draft cannot be
-// saved, since Review needs the folder name.
+// A draft is keyed by the organization and workspace, then by the server's
+// folder name, as lane M11 stores it (`save_studio_draft`'s `server`). The
+// workspace comes first because sessionStorage is shared by the whole origin:
+// two workspaces can each hold a server whose folder is `stripe`, and neither
+// may read the other's draft. A server whose record has not named its folder
+// yet is keyed by its registry id until then; such a draft cannot be saved,
+// since Review needs the folder name.
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   type DraftOp,
@@ -17,16 +20,22 @@ import {
   stageChecked,
   unstage,
 } from "./draft";
+import type { StudioAt } from "./route";
 
 const EVENT = "oxagen:studio-draft";
 
-/** Which server a draft belongs to. */
-type DraftKey = { serverName: string | null; serverId: string };
+/** Which server a draft belongs to, and the workspace that holds it. */
+type DraftKey = { at: StudioAt; serverName: string | null; serverId: string };
 
-function keyOf({ serverName, serverId }: DraftKey): string {
+/**
+ * The draft's sessionStorage key. Slugs are URL path segments, so neither
+ * holds a "/" and the org and workspace pair cannot be read two ways.
+ */
+function keyOf({ at, serverName, serverId }: DraftKey): string {
+  const workspace = `oxagen.mcp-studio.draft.${at.org}/${at.ws}`;
   return serverName === null
-    ? `oxagen.mcp-studio.draft.id.${serverId}`
-    : `oxagen.mcp-studio.draft.server.${serverName}`;
+    ? `${workspace}.id.${serverId}`
+    : `${workspace}.server.${serverName}`;
 }
 
 /** Drafts held in memory when sessionStorage throws. */

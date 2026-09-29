@@ -4,9 +4,10 @@
 // (tabs.tsx): a tablist of links marked with `aria-selected` and
 // `aria-current`, scrolling in its own row on a phone.
 //
-// Tools counts the tools the page lists, with a plus when the registry has a
-// later page. Changes counts the draft's edits, which live in this browser tab,
-// so the count appears once the draft holds one.
+// Tools counts the tools the page lists, with a plus when the registry read
+// stopped at its page bound with a page left. Changes counts the draft's
+// edits, which live in this browser tab under this workspace, so the count
+// appears once the draft holds one.
 import { useLocale, useTranslations } from "next-intl";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -30,12 +31,15 @@ export function StudioTabs({
   serverId: string;
   current: StudioTab;
   tools: readonly Pick<StudioTool, "name" | "imported" | "tokens">[];
-  /** False when the registry read had a later page, so the count is a floor. */
+  /**
+   * False when the registry read stopped at its page bound with a page left,
+   * so the count is a floor.
+   */
   complete: boolean;
 }) {
   const t = useTranslations("mcpStudio.tabs");
   const locale = useLocale();
-  const draft = useStudioDraft({ serverName, serverId });
+  const draft = useStudioDraft({ at, serverName, serverId });
   const edits = draftCount({ tools }, draft.ops);
   const count = (tab: StudioTab): string | null => {
     switch (tab) {

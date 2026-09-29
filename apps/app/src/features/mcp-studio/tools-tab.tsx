@@ -32,6 +32,7 @@ import {
 } from "./draft";
 import type { StudioRecord, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
+import type { StudioAt } from "./route";
 import type { DraftDescription } from "./seams";
 import { ToolPanel } from "./tool-panel";
 import { useStudioDraft } from "./use-draft";
@@ -158,6 +159,7 @@ function Budget({
 }
 
 export function ToolsTab({
+  at,
   serverName,
   serverId,
   record,
@@ -167,6 +169,8 @@ export function ToolsTab({
   offFacts,
   draft,
 }: {
+  /** The workspace the draft belongs to. */
+  at: StudioAt;
   /** The folder name the draft is keyed by; null until the record names it. */
   serverName: string | null;
   serverId: string;
@@ -184,7 +188,7 @@ export function ToolsTab({
   const t = useTranslations("mcpStudio.tools");
   const registry = useTranslations("tools.registry");
   const locale = useLocale();
-  const studioDraft = useStudioDraft({ serverName, serverId });
+  const studioDraft = useStudioDraft({ at, serverName, serverId });
   const { ops } = studioDraft;
   const [openTool, setOpenTool] = useState<string | null>(null);
   /** The draft refused the last edit, because it would pass the draft's limits. */

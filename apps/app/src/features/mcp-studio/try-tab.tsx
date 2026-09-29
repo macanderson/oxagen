@@ -31,6 +31,7 @@ import { StateWrap } from "@/ui/state-wrap";
 import { scrubTest } from "./draft";
 import type { StudioEnvironment, StudioTool } from "./model";
 import { StudioNotRecorded } from "./not-recorded";
+import type { StudioAt } from "./route";
 import { type TryCall, type TryResult, tryCall } from "./seams";
 import { useStudioDraft } from "./use-draft";
 
@@ -96,6 +97,7 @@ function Output({
 }
 
 export function TryTab({
+  at,
   serverName,
   serverId,
   tools,
@@ -104,6 +106,8 @@ export function TryTab({
   canEdit,
   call = tryCall,
 }: {
+  /** The workspace the draft belongs to. */
+  at: StudioAt;
   /** The folder name the draft is keyed by; null until the record names it. */
   serverName: string | null;
   serverId: string;
@@ -115,7 +119,7 @@ export function TryTab({
   call?: TryCall;
 }) {
   const t = useTranslations("mcpStudio.try");
-  const draft = useStudioDraft({ serverName, serverId });
+  const draft = useStudioDraft({ at, serverName, serverId });
   const id = useId();
   const imported = tools.filter((tool) => tool.imported);
   const [environment, setEnvironment] = useState(

@@ -34,6 +34,7 @@ import {
   savedDraft,
   seedDraft,
   STRIPE,
+  STUDIO_AT,
   studioFindings,
   studioReview,
   studioView,
@@ -103,6 +104,7 @@ const PR_URL = "https://github.com/acme/steering/pull/4721";
 function renderTab(serverId: string, over: Partial<TabProps> = {}) {
   const view = studioView(serverId);
   const props: TabProps = {
+    at: STUDIO_AT,
     serverName: view.serverName,
     serverId,
     record: view.record,

@@ -33,6 +33,7 @@ import {
   SCRATCH,
   seedDraft,
   STRIPE,
+  STUDIO_AT,
   stripeRecord,
   studioBoard,
   studioTool,
@@ -112,6 +113,7 @@ function propsOf(
   over: Partial<TabProps> = {},
 ): TabProps {
   return {
+    at: STUDIO_AT,
     serverName: view.serverName,
     serverId: view.server.id,
     record: view.record,

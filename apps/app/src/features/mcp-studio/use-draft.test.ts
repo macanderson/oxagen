@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-// The Studio draft's store (#4678): one sessionStorage key per server, shared
-// by every hook on the page, and kept in memory when the browser refuses
-// storage.
+// The Studio draft's store (#4678): one sessionStorage key per server in each
+// workspace, shared by every hook on the page, and kept in memory when the
+// browser refuses storage.
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DraftOp } from "./draft";
-import { draftKey, idDraftKey, seedDraft } from "./studio.builders";
+import type { StudioAt } from "./route";
+import { draftKey, idDraftKey, STUDIO_AT, seedDraft } from "./studio.builders";
 import { useStudioDraft } from "./use-draft";
 
 const IMPORT: DraftOp = { kind: "import", tool: "create_refund" };
@@ -20,10 +21,18 @@ afterEach(() => {
 describe("useStudioDraft", () => {
   it("stages under the server's folder name and shares the draft", () => {
     const first = renderHook(() =>
-      useStudioDraft({ serverName: "stripe", serverId: "mcs_01k5s1" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "stripe",
+        serverId: "mcs_01k5s1",
+      }),
     );
     const second = renderHook(() =>
-      useStudioDraft({ serverName: "stripe", serverId: "mcs_01k5s1" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "stripe",
+        serverId: "mcs_01k5s1",
+      }),
     );
     let staged = false;
     act(() => {
@@ -36,9 +45,51 @@ describe("useStudioDraft", () => {
     );
   });
 
+  it.each<StudioAt>([
+    { org: "acme", ws: "payments" },
+    { org: "globex", ws: "core-platform" },
+  ])(
+    "keeps the draft in $org/$ws apart from a server with the same folder name here",
+    (elsewhere) => {
+      const here = renderHook(() =>
+        useStudioDraft({
+          at: STUDIO_AT,
+          serverName: "stripe",
+          serverId: "mcs_01k5s1",
+        }),
+      );
+      const there = renderHook(() =>
+        useStudioDraft({
+          at: elsewhere,
+          serverName: "stripe",
+          serverId: "mcs_01k5s9",
+        }),
+      );
+      act(() => {
+        here.result.current.stage(IMPORT);
+      });
+      expect(there.result.current.ops).toEqual([]);
+      act(() => {
+        there.result.current.stage(REMOVE);
+      });
+      expect(here.result.current.ops).toEqual([IMPORT]);
+      expect(there.result.current.ops).toEqual([REMOVE]);
+      expect(window.sessionStorage.getItem(draftKey("stripe"))).toBe(
+        JSON.stringify({ revision: 0, ops: [IMPORT] }),
+      );
+      expect(
+        window.sessionStorage.getItem(draftKey("stripe", elsewhere)),
+      ).toBe(JSON.stringify({ revision: 0, ops: [REMOVE] }));
+    },
+  );
+
   it("keys a server with no folder name by its registry id", () => {
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: null, serverId: "mcs_01k5s2" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: null,
+        serverId: "mcs_01k5s2",
+      }),
     );
     act(() => {
       result.current.stage(IMPORT);
@@ -50,7 +101,11 @@ describe("useStudioDraft", () => {
   it("reads a stored draft and its revision", () => {
     seedDraft(draftKey("billing"), { revision: 4, ops: [IMPORT, REMOVE] });
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: "billing", serverId: "mcs_01k5s3" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "billing",
+        serverId: "mcs_01k5s3",
+      }),
     );
     expect(result.current.revision).toBe(4);
     expect(result.current.ops).toEqual([IMPORT, REMOVE]);
@@ -58,7 +113,11 @@ describe("useStudioDraft", () => {
 
   it("refuses an edit that would break the draft", () => {
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: "stripe", serverId: "mcs_01k5s1" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "stripe",
+        serverId: "mcs_01k5s1",
+      }),
     );
     let staged = true;
     act(() => {
@@ -78,7 +137,11 @@ describe("useStudioDraft", () => {
   it("unstages one edit, discards the rest, and keeps the revision", () => {
     seedDraft(draftKey("billing"), { revision: 2, ops: [IMPORT, REMOVE] });
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: "billing", serverId: "mcs_01k5s3" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "billing",
+        serverId: "mcs_01k5s3",
+      }),
     );
     act(() => {
       result.current.unstage(0);
@@ -98,7 +161,11 @@ describe("useStudioDraft", () => {
 
   it("removes the key once a never-saved draft is empty", () => {
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: "stripe", serverId: "mcs_01k5s1" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "stripe",
+        serverId: "mcs_01k5s1",
+      }),
     );
     act(() => {
       result.current.stage(IMPORT);
@@ -117,7 +184,11 @@ describe("useStudioDraft", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(refuse);
     vi.spyOn(Storage.prototype, "removeItem").mockImplementation(refuse);
     const { result } = renderHook(() =>
-      useStudioDraft({ serverName: "scratch", serverId: "mcs_01k5s4" }),
+      useStudioDraft({
+        at: STUDIO_AT,
+        serverName: "scratch",
+        serverId: "mcs_01k5s4",
+      }),
     );
     act(() => {
       result.current.stage(IMPORT);
