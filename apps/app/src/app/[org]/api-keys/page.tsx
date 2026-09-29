@@ -37,14 +37,9 @@ export default async function ApiKeysPage({
   const { org } = await params;
   const orgCtx = await requireViewer(org);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<OrganizationSkeleton />}>
-        <ApiKeysBody org={org} orgCtx={orgCtx} searchParams={searchParams} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<OrganizationSkeleton />}>
+      <ApiKeysBody org={org} orgCtx={orgCtx} searchParams={searchParams} />
+    </Suspense>
   );
 }
 

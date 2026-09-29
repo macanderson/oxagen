@@ -17,7 +17,7 @@ const { requireViewer, RegisterAgent, RegisterGate, notFound, source } =
     )),
     RegisterGate: vi.fn(
       ({ children }: { children: ReactNode } & Record<string, unknown>) => (
-        <main data-testid="register-gate">{children}</main>
+        <div data-testid="register-gate">{children}</div>
       ),
     ),
     notFound: vi.fn(() => {
