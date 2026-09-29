@@ -7870,6 +7870,8 @@ type Messages = {
       resize: string;
       close: string;
       thinking: string;
+      transcript: string;
+      scrollToEnd: string;
       recordedAs: string;
       cost: {
         label: string;
