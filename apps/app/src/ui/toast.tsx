@@ -43,8 +43,12 @@ const TONES: Record<ToastTone, { icon: Icon; className: string }> = {
   failed: { icon: XCircleIcon, className: "text-error" },
 };
 
+function isTone(type: string): type is ToastTone {
+  return Object.hasOwn(TONES, type);
+}
+
 function toneOf(type: string | undefined): ToastTone {
-  return type !== undefined && type in TONES ? (type as ToastTone) : "allowed";
+  return type !== undefined && isTone(type) ? type : "allowed";
 }
 
 // One manager for the app. `add` reaches whichever <Toaster /> is subscribed.

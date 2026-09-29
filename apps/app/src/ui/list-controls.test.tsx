@@ -142,8 +142,9 @@ describe("the list controls", () => {
     const { container } = render(<Harness />);
     const bar = container.querySelector("[data-list-bar]");
     expect(bar?.querySelector('[role="combobox"]')).toBeNull();
-    const pager = container.querySelector("[data-rows-pager]");
-    const rows = within(pager as HTMLElement).getByRole("combobox", {
+    const pager = container.querySelector<HTMLElement>("[data-rows-pager]");
+    if (pager === null) throw new Error("the list has no pager");
+    const rows = within(pager).getByRole("combobox", {
       name: "Rows per page",
     });
     expect(rows.textContent).toContain("25");

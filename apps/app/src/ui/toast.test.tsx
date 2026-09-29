@@ -3,7 +3,14 @@
 // line in the toaster the root layout mounts, a polite region named from the
 // catalogue, each line gone after the design's 4.2 seconds or when its close
 // button is pressed.
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -71,15 +78,20 @@ describe("Toaster", () => {
     expect(rows()).toHaveLength(0);
   });
 
-  it("drops a line when its close button is pressed", () => {
+  it("drops a line when its close button is pressed", async () => {
     renderToaster();
     act(() => {
       toast("Key revoked. Recorded in the audit record.");
     });
+    // Base UI hides the close button from assistive technology until the
+    // stack opens on hover or focus, so the pointer enters the stack first.
+    fireEvent.mouseEnter(screen.getByTestId("toasts"));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(
-      screen.queryByText("Key revoked. Recorded in the audit record."),
-    ).toBeNull();
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Key revoked. Recorded in the audit record."),
+      ).toBeNull();
+    });
   });
 
   it("keeps no line once the toaster unmounts, so a later one starts empty (negative)", () => {
