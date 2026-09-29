@@ -243,6 +243,10 @@ import {
   githubOauthRoute,
   githubOauthCallbackRoute,
 } from "./routes/v1/github-oauth";
+import {
+  mcpStudioOauthRoute,
+  mcpStudioOauthCallbackRoute,
+} from "./routes/v1/mcp-studio.oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
 import { gitlabWebhookRoute } from "./routes/v1/gitlab-webhook";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
@@ -1224,6 +1228,9 @@ orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
 orgScoped.route("/audit/events/export", auditEventsExportRoute);
+// MCP Studio operator OAuth: connect and disconnect an operator's own account
+// with an MCP server's authorization server (mcp-studio-spec, Authentication).
+orgScoped.route("/mcp-studio/oauth", mcpStudioOauthRoute);
 // Creating a workspace needs an org and cannot need a workspace: the caller is
 // asking for their first one. Mounted only under the workspace-scoped group, the
 // REST surface could not take a new account past org creation — every attempt
@@ -1251,3 +1258,7 @@ app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).
 app.route("/oauth/github", githubOauthCallbackRoute);
+// Public MCP Studio OAuth callback. The one-time state and the cookie set by
+// the connect route bind it to the operator's browser, so it has no session
+// middleware either.
+app.route("/oauth/mcp-studio", mcpStudioOauthCallbackRoute);
