@@ -19,7 +19,7 @@ import { defaultSenders } from "./senders";
 import { shapeArguments } from "./shape-input";
 import { byteLength, resultRules, shapeJson, shapeToolResult, shapeValue } from "./shape-result";
 import type { CallToolResult, Transport } from "./transport";
-import { validateInput } from "./validate";
+import { inputRefusal } from "./validate";
 
 /** Where a call runs: the server, the environment, and the person running the agent. */
 export interface CallEnvironment {
@@ -82,8 +82,8 @@ export async function executeCall(
   transport: Transport,
   options: ExecuteOptions = {},
 ): Promise<ExecutedCall> {
-  const issues = validateInput(tool.definition.inputSchema, args);
-  if (issues.length > 0) return failed(`The arguments do not match the tool's input schema. ${issues.join(" ")}`);
+  const badArguments = inputRefusal(tool.definition.inputSchema, args);
+  if (badArguments !== null) return failed(badArguments);
 
   const { server, name } = environment;
   const env = Object.hasOwn(server.environments, name) ? server.environments[name] : undefined;

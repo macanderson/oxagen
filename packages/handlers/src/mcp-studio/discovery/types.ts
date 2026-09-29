@@ -61,11 +61,34 @@ export type DiscoveryRefusalCode =
 /** A refusal whose message a person can act on. It never holds a credential. */
 export class DiscoveryRefused extends Error {
   readonly code: DiscoveryRefusalCode;
+  /**
+   * True when the same request can succeed later, as after an outage or a
+   * timeout. False when it fails the same way until someone changes a file,
+   * a credential, or a setting.
+   */
+  readonly retriable: boolean;
 
-  constructor(code: DiscoveryRefusalCode, message: string) {
+  constructor(
+    code: DiscoveryRefusalCode,
+    message: string,
+    options: { retriable?: boolean } = {},
+  ) {
     super(message);
     this.name = "DiscoveryRefused";
     this.code = code;
+    this.retriable = options.retriable ?? false;
+  }
+}
+
+/**
+ * A discovery that failed for a reason that can pass. runDiscovery records
+ * the failure on the row first, then throws this so the durable function
+ * retries. Its message is the row's, with every credential removed.
+ */
+export class RetriableDiscoveryFailure extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RetriableDiscoveryFailure";
   }
 }
 

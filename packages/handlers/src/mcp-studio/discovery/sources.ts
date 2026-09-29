@@ -123,6 +123,13 @@ const CATALOG_TRIGGERS: ReadonlySet<DiscoveryTrigger> = new Set([
   "manual",
 ]);
 
+/** A definition type with its article, as a refusal names it. */
+const DEFINITION_LABELS: Record<DefinitionSource["type"], string> = {
+  openapi: "An OpenAPI",
+  graphql: "A GraphQL",
+  grpc: "A gRPC",
+};
+
 /** An OpenAPI scheme name a lock can hold. */
 const SCHEME_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -383,10 +390,12 @@ async function discoverRegistry(
 
   const [name, env] = environment(ctx, "sandbox");
   if (!moving || latest === undefined || latestVersion === undefined) {
+    // Check the served lock first, so a wrong lock sends no request.
+    const served = servedMcpSource(ctx, "registry");
     const listed = await listTools(ctx, name, env);
     return fromMcp(
       listed.tools,
-      withServerVersion(servedMcpSource(ctx, "registry"), listed.serverVersion),
+      withServerVersion(served, listed.serverVersion),
       {
         latestVersion,
         machine: null,
@@ -541,7 +550,7 @@ async function readDefinition(
     default:
       throw new DiscoveryRefused(
         "server_file",
-        `A ${source.type} definition cannot come from ${source.from}.`,
+        `${DEFINITION_LABELS[source.type]} definition cannot come from ${source.from}.`,
       );
   }
 }
@@ -609,7 +618,7 @@ async function discoverDefinition(
     machine: null,
   };
 
-  if (source.from === "introspection") {
+  if (source.type === "graphql" && source.from === "introspection") {
     const { result, origin } = await introspect(ctx);
     return {
       ...base,

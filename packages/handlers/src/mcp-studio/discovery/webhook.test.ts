@@ -24,9 +24,16 @@ import {
   routeGithubDiscoveryPush,
   routeGitlabDiscoveryPush,
   type DefinitionPush,
+  type GitlabProject,
 } from "./webhook";
 
 const SCOPE = { orgId: "org_1", workspaceId: "ws_1" };
+// The project of the connection that authenticated a GitLab delivery.
+const PROJECT: GitlabProject = {
+  id: "42",
+  path: "Platform/Billing",
+  host: "gitlab.example.com",
+};
 const OTHER = { orgId: "org_1", workspaceId: "ws_2" };
 
 function target(
@@ -43,6 +50,7 @@ function sweepDouble(targets: OnChangeTarget[]) {
     undiscovered: vi.fn(async () => []),
     dueDaily: vi.fn(async () => []),
     openPullRequests: vi.fn(async () => []),
+    stalled: vi.fn(async () => []),
     onChangeByRepo: vi.fn(async () => targets),
   } satisfies DiscoverySweepStore;
 }
@@ -67,6 +75,7 @@ function gitlabPush(overrides: Record<string, unknown> = {}) {
     after: "5f1c0e7a9b3d2c4e6f8a0b1c2d3e4f5a6b7c8d9e",
     ref: "refs/heads/main",
     project: {
+      id: 42,
       path_with_namespace: "Platform/Billing",
       web_url: "https://gitlab.example.com/Platform/Billing",
     },
@@ -136,8 +145,8 @@ describe("githubDefinitionPush", () => {
 });
 
 describe("gitlabDefinitionPush", () => {
-  it("names the repository by the instance's host and the project's path", () => {
-    expect(gitlabDefinitionPush(gitlabPush())).toEqual({
+  it("names the repository by the connection's host and path", () => {
+    expect(gitlabDefinitionPush(gitlabPush(), PROJECT)).toEqual({
       repo: "gitlab.example.com/platform/billing",
       name: "main",
       ref: "refs/heads/main",
@@ -146,24 +155,63 @@ describe("gitlabDefinitionPush", () => {
     });
   });
 
+  it("names gitlab.com when the connection names no host", () => {
+    expect(
+      gitlabDefinitionPush(gitlabPush(), { id: "42", path: "platform/billing" })
+        ?.repo,
+    ).toBe("gitlab.com/platform/billing");
+  });
+
+  it("takes the repository from the connection, never from the payload", () => {
+    const forged = gitlabPush({
+      project: {
+        id: 42,
+        path_with_namespace: "acme/payments-api",
+        web_url: "https://github.com/acme/payments-api",
+      },
+    });
+
+    expect(gitlabDefinitionPush(forged, PROJECT)?.repo).toBe(
+      "gitlab.example.com/platform/billing",
+    );
+  });
+
+  it("reads the project id from project_id when the project omits it", () => {
+    const push = gitlabPush({ project: undefined, project_id: 42 });
+
+    expect(gitlabDefinitionPush(push, PROJECT)?.repo).toBe(
+      "gitlab.example.com/platform/billing",
+    );
+  });
+
+  it("accepts a project id sent as a decimal string", () => {
+    const push = gitlabPush({ project: { id: "42" } });
+
+    expect(gitlabDefinitionPush(push, PROJECT)).not.toBeNull();
+  });
+
   it("reads a tag push", () => {
     expect(
       gitlabDefinitionPush(
         gitlabPush({ object_kind: "tag_push", ref: "refs/tags/v2" }),
+        PROJECT,
       ),
     ).toMatchObject({ name: "v2", ref: "refs/tags/v2" });
   });
 
   it("marks a push with more commits than the payload lists incomplete", () => {
     expect(
-      gitlabDefinitionPush(gitlabPush({ total_commits_count: 25 }))?.complete,
+      gitlabDefinitionPush(gitlabPush({ total_commits_count: 25 }), PROJECT)
+        ?.complete,
     ).toBe(false);
   });
 
   it("treats a push with no commit count as complete", () => {
     expect(
-      gitlabDefinitionPush(gitlabPush({ total_commits_count: undefined }))
-        ?.complete,
+      gitlabDefinitionPush(
+        gitlabPush({ total_commits_count: undefined }),
+        PROJECT,
+      )?.complete,
     ).toBe(true);
   });
 
@@ -172,17 +220,22 @@ describe("gitlabDefinitionPush", () => {
     ["a deleted ref", { after: "0000000000000000000000000000000000000000" }],
     ["no after commit", { after: undefined }],
     ["a ref that is not a branch or a tag", { ref: "refs/merge-requests/4/head" }],
-    ["no project", { project: undefined }],
-    [
-      "a web URL it cannot parse",
-      { project: { path_with_namespace: "platform/billing", web_url: "not a url" } },
-    ],
+    ["no project id", { project: { path_with_namespace: "Platform/Billing" } }],
+    ["another project's id", { project: { id: 7 } }],
+    ["another project's id in project_id", { project: undefined, project_id: 7 }],
+    ["a project id that is not an integer", { project: { id: 42.5 } }],
   ])("returns null for %s", (_case, overrides) => {
-    expect(gitlabDefinitionPush(gitlabPush(overrides))).toBeNull();
+    expect(gitlabDefinitionPush(gitlabPush(overrides), PROJECT)).toBeNull();
+  });
+
+  it("returns null when the connection names no path", () => {
+    expect(
+      gitlabDefinitionPush(gitlabPush(), { ...PROJECT, path: "" }),
+    ).toBeNull();
   });
 
   it("returns null for a body that is not an object", () => {
-    expect(gitlabDefinitionPush("push")).toBeNull();
+    expect(gitlabDefinitionPush("push", PROJECT)).toBeNull();
   });
 });
 
@@ -284,7 +337,9 @@ describe("routeGitlabDiscoveryPush", () => {
   it("asks for a push discovery of each server whose definition changed", async () => {
     const sweep = sweepDouble([target("billing", "api/billing.yaml")]);
 
-    await expect(routeGitlabDiscoveryPush(gitlabPush(), { sweep })).resolves.toBe(1);
+    await expect(
+      routeGitlabDiscoveryPush(gitlabPush(), PROJECT, { sweep }),
+    ).resolves.toBe(1);
 
     expect(sweep.onChangeByRepo).toHaveBeenCalledWith(
       "gitlab.example.com/platform/billing",
@@ -300,9 +355,24 @@ describe("routeGitlabDiscoveryPush", () => {
     const sweep = sweepDouble([target("billing", "api/billing.yaml")]);
 
     await expect(
-      routeGitlabDiscoveryPush(gitlabPush({ object_kind: "note" }), { sweep }),
+      routeGitlabDiscoveryPush(gitlabPush({ object_kind: "note" }), PROJECT, {
+        sweep,
+      }),
     ).resolves.toBe(0);
 
     expect(sweep.onChangeByRepo).not.toHaveBeenCalled();
+  });
+
+  it("reads no store for a push that names another project", async () => {
+    const sweep = sweepDouble([target("billing", "api/billing.yaml")]);
+
+    await expect(
+      routeGitlabDiscoveryPush(gitlabPush({ project: { id: 7 } }), PROJECT, {
+        sweep,
+      }),
+    ).resolves.toBe(0);
+
+    expect(sweep.onChangeByRepo).not.toHaveBeenCalled();
+    expect(entry.requestDiscoveries).not.toHaveBeenCalled();
   });
 });

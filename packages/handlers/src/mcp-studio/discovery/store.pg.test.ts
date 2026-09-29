@@ -1100,6 +1100,9 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
     const C = newScope(otherOrgId);
     const REPO = `github.com/acme-${tag}/defs`;
     const BEFORE = new Date("2026-09-28T12:00:00.000Z");
+    // The stalled cutoff sits before any row a test inserts at the clock's
+    // now, so only the rows seeded older than it can stall.
+    const STALE = new Date("2026-09-01T00:00:00.000Z");
     const ids = {
       fresh: randomUUID(),
       found: randomUUID(),
@@ -1293,6 +1296,43 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
             sourcePath: "specs/c.yaml",
             sourceRef: "main",
           }),
+          // stalled: rows that stalled.
+          discoveryRow(A, "s_queued", {
+            trigger: "push",
+            status: "queued",
+            requestedAt: shift(STALE, -3),
+          }),
+          discoveryRow(B, "s_running", {
+            trigger: "manual",
+            status: "running",
+            requestedAt: shift(STALE, -5),
+            startedAt: shift(STALE, -2),
+          }),
+          discoveryRow(C, "s_unstarted", {
+            trigger: "list_changed",
+            status: "running",
+            requestedAt: shift(STALE, -1),
+            startedAt: null,
+          }),
+          // stalled: rows that did not.
+          discoveryRow(A, "s_queued_recent", {
+            status: "queued",
+            requestedAt: shift(STALE, 1),
+          }),
+          discoveryRow(A, "s_started_recent", {
+            status: "running",
+            requestedAt: shift(STALE, -6),
+            startedAt: shift(STALE, 1),
+          }),
+          discoveryRow(A, "s_succeeded", {
+            requestedAt: shift(STALE, -6),
+            startedAt: shift(STALE, -6),
+          }),
+          discoveryRow(A, "s_failed", {
+            status: "failed",
+            requestedAt: shift(STALE, -6),
+            startedAt: shift(STALE, -6),
+          }),
         ]);
       });
     });
@@ -1377,10 +1417,26 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       );
     });
 
+    it("stalled lists queued and running rows older than the cutoff, oldest request first", async () => {
+      const stalled = await sweep.stalled(STALE, 10_000);
+      expect(ours(stalled)).toEqual(["B/s_running", "A/s_queued", "C/s_unstarted"]);
+      expect(stalled.find((target) => labelOf(target) === "A")).toEqual({
+        scope: A,
+        server: "s_queued",
+        trigger: "push",
+      });
+      expect(
+        stalled
+          .filter((target) => labelOf(target) !== undefined)
+          .map((target) => target.trigger),
+      ).toEqual(["manual", "push", "list_changed"]);
+    });
+
     it("each capped query returns no more rows than its limit", async () => {
       expect(await sweep.undiscovered(1)).toHaveLength(1);
       expect(await sweep.dueDaily(BEFORE, 1)).toHaveLength(1);
       expect(await sweep.openPullRequests(1)).toHaveLength(1);
+      expect(await sweep.stalled(STALE, 1)).toHaveLength(1);
     });
   });
 });

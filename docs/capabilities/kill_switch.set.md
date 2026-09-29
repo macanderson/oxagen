@@ -15,12 +15,13 @@ Kill switches at every level of MC spec §6.11 (ADR-072 §4, §5): a tool versio
 
 The flip takes effect at the next call boundary through the deny generation: the row write bumps `iam.authorization_deny_generations` in the same transaction (the table's trigger), the handler reads the vector back on that transaction, and every cached allow keyed by the old generation is stale. A connection switch revokes the connection's live credential grants in the same transaction, and the tool gateway asks the gate about each server and its connection before the server is reached on later turns, so a connection or tool-server switch leaves the server out of the turn with no connect, no tools/list and no new grant. Every flip that changes a switch is a `tool.kill_switch_flipped` security event carrying the actor and the capability; a flip that finds the switch already on changes nothing and emits none. The row carries what the switch stops, who flipped it on and why (`flipped_by_user_id`, `reason`), and who cleared it and why (`updated_by_id`, `cleared_reason`).
 
-## What a kill switch reaches, and what it does not
+## Coverage
 
-A switch is enforced in two places, and they are not the whole product:
+A switch is enforced in three places, and they are not the whole product:
 
 - **The tool gateway's per-turn gate** (`packages/agent/src/runtime/kill-switch-gate.ts`). Every tool `materializeTools` presents — a capability the in-app agent may call, and every external MCP tool — is checked against the switches that are on, before the call and again after a person answers an approval or consent card. This is the path that matches `tool_server`, `connection` and `class` switches.
 - **The kernel's agent-run IAM check** (`checkAgentRunIAM`, `packages/iam/src/check-iam.ts`). Emergency denies are consulted here for a call whose context carries an agent run.
+- **The served steering tools** (`apps/mcp/src/servers/kill-switch.ts`). Before mcp.oxagen.sh sends a call to a tool a steering repository publishes, it checks the call through the same per-turn gate. The switches that reach it are on the tool (`tool_version`), its server (`tool_server`), the service credential it signs in with (`connection`), the operator who enrolled the host, the workspace, the organization, and the tool's classes. A switch that reaches the call stops it before Oxagen opens an approval or reads a credential, and the meter records the call as denied. An `agent` switch does not reach it, because a steering agent is a file in the repository with no `agt_` id. An operator's own OAuth token is not a connection, so no `connection` switch reaches a call that signs in with one.
 
 The list `materializeTools` builds (`packages/agent/src/runtime/toolbelt.ts`) also leaves out a capability that an active deny names by its capability id, so the model is not shown a tool that every call would refuse. That holds for an agent run and for the in-app agent, which lists its tools as the person who asked.
 
@@ -28,7 +29,7 @@ The in-app agent also answers to the agent it runs as, the workspace's assistant
 
 An `operator`, `workspace`, `org` or `class` switch leaves the capability list as it is, and the per-turn gate refuses each call it reaches.
 
-A switch **does not** stop a caller that carries neither. A customer agent holding an Oxagen API key against `api.oxagen.sh` or `mcp.oxagen.sh` invokes capabilities with `principalKind: "human"` and no `agentRun`, so `checkIAM` never reaches `checkAgentRunIAM` and no emergency deny is consulted. An `org`, `operator`, `workspace` or `class` switch therefore does not stop that traffic. Governing it means an IAM policy or revoking the key.
+A switch **does not** stop a call that reaches none of them. A customer agent holding an Oxagen API key against `api.oxagen.sh` or `mcp.oxagen.sh` invokes capabilities with `principalKind: "human"` and no `agentRun`, so `checkIAM` never reaches `checkAgentRunIAM` and no emergency deny is consulted. An `org`, `operator`, `workspace` or `class` switch therefore does not stop that traffic. Governing it means an IAM policy or revoking the key. A served steering tool on `mcp.oxagen.sh` is the exception, because the third check above runs on every call to one.
 
 State this when an operator asks what a switch covers. An emergency control whose blast radius is overstated is worse than one whose limits are written down.
 
