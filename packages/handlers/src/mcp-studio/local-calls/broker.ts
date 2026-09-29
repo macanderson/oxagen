@@ -11,10 +11,12 @@
 // so a second reply with the same id is refused. That is the cloud side's
 // replay check. The local gateway keeps its own ledger of nonces.
 //
-// This broker lives in one process. With more than one API instance, the
-// instance that holds a machine's long-poll must be the one that dispatches
-// to it, or the broker needs a shared queue. The PR that adds the HTTP routes
-// decides which.
+// This broker lives in one process, so the instance that holds a machine's
+// long-poll must be the one that dispatches to it. #4773 chose one instance
+// over a shared queue: apps/mcp serves both the routes and the served-tools
+// call path, production runs it as one container on one node, and
+// tools/scripts/mcp-single-instance.test.ts fails when that changes. A second
+// instance needs a shared queue first.
 import { TransportError } from "@oxagen/mcp-studio";
 import {
   deliveryId,
@@ -22,6 +24,9 @@ import {
   type Delivery,
   type Reply,
 } from "@oxagen/tacho/local-servers";
+
+/** The two routes a machine's local gateway dials. tacho's cloud link names them, and apps/mcp serves them. */
+export { LOCAL_SERVERS_NEXT_PATH, LOCAL_SERVERS_REPLY_PATH } from "@oxagen/tacho/local-servers";
 
 /** How long a long-poll waits for a delivery before it returns none. */
 export const LONG_POLL_WAIT_MS = 25_000;
