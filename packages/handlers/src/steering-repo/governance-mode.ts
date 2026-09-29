@@ -10,7 +10,9 @@
 // so the branch-scope rule admits it. Oxagen runs the steering checks on the
 // PR's head and reports the required `Oxagen steering` check there.
 //
-// - Review: the PR stays open. It waits for an approval, like any steering PR.
+// - Review (team or regulated): the PR stays open and waits for review. A
+//   reviewed governance PR has no land path yet: merge_context_pr lands a PR
+//   from a proposal row, and this writes none (#4795, ADR-229).
 // - Land at once (solo, or the override): the PR goes through the steering
 //   merge queue. The queue brings the branch up to date, stamps the ledger
 //   line, squash-merges with the trailers, and publish() makes the version
@@ -71,9 +73,9 @@ export const STEERING_GOVERNANCE_PR_BODY = [
   "| `team` | the merger, after a workspace member other than the author approves |",
   "| `regulated` | the merger, after a workspace member other than the author approves |",
   "",
-  "Oxagen runs the `Oxagen steering` check on this PR. To land it, approve it here, then",
-  "set the same mode again from Edit workspace with **Apply now**. Oxagen merges it",
-  "through the steering merge queue, which stamps the ledger line.",
+  "Oxagen runs the `Oxagen steering` check on this PR, and only Oxagen merges into the",
+  "production branch. Oxagen does not land a reviewed governance change yet, so this PR",
+  "waits for review. Until Oxagen lands it, the mode in force stays as it is.",
 ].join("\n");
 
 /** The seams production binds. Tests pass their own. */
@@ -496,6 +498,9 @@ export async function setSteeringGovernanceMode(
     );
   }
 
+  // Two routes land here, and neither reads the host's approvals. Solo needs
+  // none, so the caller is the approver. Apply now in team or regulated is an
+  // explicit override: nobody approved it, and the ledger says so (ADR-229).
   const approval: MergeApproval = input.withoutReview
     ? { approvedBy: [], withoutReview: true }
     : { approvedBy: [input.actingUserId], withoutReview: false };

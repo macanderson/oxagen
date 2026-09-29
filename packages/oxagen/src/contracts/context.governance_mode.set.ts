@@ -59,6 +59,14 @@
  * never would. Under `solo` the flag changes nothing, because that route
  * commits anyway.
  *
+ * **A reviewed change in a steering repository waits.** Under `team` or
+ * `regulated`, the call opens the steering PR and answers `proposed`. Oxagen
+ * does not land a reviewed governance PR yet: `merge_context_pr` lands a PR
+ * from a proposal row, and this capability writes none (#4795, ADR-229). Apply
+ * now is never the way to land that PR. It is the override above, and it is
+ * recorded as one. Only Apply now in `team` or `regulated` emits
+ * `steering.governance_overridden`.
+ *
  * Refusals: `not_found: workspace_not_found`, `conflict: workspace_archived`,
  * `conflict: github_not_connected`, `not_found: repository_not_installed`,
  * `conflict: production_branch_missing`, `conflict: github_refused` with
@@ -73,7 +81,7 @@
  *
  * Roles: org Owner or Admin for any workspace of the organization; an Owner or
  * Admin of the workspace the call is scoped to for that workspace alone,
- * without `workspaceId` — the same gate `update_workspace_settings` applies,
+ * without `workspaceId`. That is the gate `update_workspace_settings` applies,
  * because this is edited from the same dialog.
  *
  * A settings write, never a governed action (ADR-052 exclusion 2):
@@ -162,7 +170,8 @@ export const contextGovernanceModeSet = registerCapability({
        * - `proposed`: the change is on its branch (`oxagen/governance`, or
        *   `steering/governance` in a steering repository) with a pull request
        *   open against the production branch. The mode in force is unchanged
-       *   until that pull request merges.
+       *   until that pull request merges. In a steering repository nothing in
+       *   Oxagen lands it yet (#4795).
        * - `unchanged`: the file already declares `mode`; nothing was written.
        */
       outcome: z.enum(["applied", "proposed", "unchanged"]),
