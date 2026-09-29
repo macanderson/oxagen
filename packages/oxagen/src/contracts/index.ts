@@ -362,6 +362,12 @@ import { orgModelCredentialDelete } from "./org.model_credential.delete";
 import { orgModelCredentialGet } from "./org.model_credential.get";
 import { orgModelCredentialSet } from "./org.model_credential.set";
 import { orgModelCredentialVerify } from "./org.model_credential.verify";
+import { orgSlackChannelSet } from "./org.slack_channel.set";
+import { orgSlackChannelsList } from "./org.slack_channels.list";
+import { orgSlackConnectionAuthorize } from "./org.slack_connection.authorize";
+import { orgSlackConnectionDelete } from "./org.slack_connection.delete";
+import { orgSlackConnectionGet } from "./org.slack_connection.get";
+import { orgSlackConnectionStart } from "./org.slack_connection.start";
 import { orgSsoCreate } from "./org.sso.create";
 import { orgSsoDelete } from "./org.sso.delete";
 import { orgSsoGroupRolesSet } from "./org.sso.group_roles.set";
@@ -655,6 +661,21 @@ export type {
   ModelCredentialView,
   ModelCredentialVerification,
 } from "./org.model_credential.shared";
+
+// Shared Slack notices wire schemas (#4608, not capabilities themselves),
+// re-exported so the app imports one shape for a connection and a channel.
+export {
+  slackChannelIdSchema,
+  slackChannelViewSchema,
+  slackConnectionViewSchema,
+  slackFailureViewSchema,
+  slackOAuthStateSchema,
+} from "./org.slack_connection.shared";
+export type {
+  SlackChannelView,
+  SlackConnectionView,
+  SlackFailureView,
+} from "./org.slack_connection.shared";
 
 // Shared enterprise-SSO wire schemas (ADR-145, not capabilities themselves),
 // re-exported so the app, the API route and the MCP tools import one shape.
@@ -1027,6 +1048,12 @@ export {
   orgModelCredentialGet,
   orgModelCredentialSet,
   orgModelCredentialVerify,
+  orgSlackChannelSet,
+  orgSlackChannelsList,
+  orgSlackConnectionAuthorize,
+  orgSlackConnectionDelete,
+  orgSlackConnectionGet,
+  orgSlackConnectionStart,
   orgSsoCreate,
   orgSsoDelete,
   orgSsoGroupRolesSet,
@@ -1452,6 +1479,12 @@ export const contracts: readonly CapabilityDeclaration[] = [
   orgModelCredentialGet,
   orgModelCredentialSet,
   orgModelCredentialVerify,
+  orgSlackChannelSet,
+  orgSlackChannelsList,
+  orgSlackConnectionAuthorize,
+  orgSlackConnectionDelete,
+  orgSlackConnectionGet,
+  orgSlackConnectionStart,
   orgSsoCreate,
   orgSsoDelete,
   orgSsoGroupRolesSet,
