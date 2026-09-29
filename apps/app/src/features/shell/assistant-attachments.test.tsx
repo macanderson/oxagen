@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { assistantAttachmentHref } from "./assistant-attachment-files";
 import {
   AssistantAttachmentChips,
   AssistantAttachmentPicker,
@@ -123,7 +124,7 @@ describe("AssistantAttachmentChips", () => {
     if (pdf === undefined) throw new Error("expected a file");
     const { container } = withIntl(
       <AssistantAttachmentChips
-        files={[{ ...pdf, href: "/api/v1/acme/core/assistant/attachments/gen_abc" }]}
+        files={[{ ...pdf, href: assistantAttachmentHref("acme", "core", "gen_abc") }]}
       />,
     );
     const link = screen.getByRole("link", { name: "Open report.pdf in a new tab" });

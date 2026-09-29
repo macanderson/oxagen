@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
+import type { SafePath } from "@/shared/safe-path";
 import {
   Attachment,
   AttachmentAction,
@@ -35,6 +36,7 @@ import {
   AttachmentTitle,
 } from "@/ui/attachment";
 import { formatByteSize } from "@/ui/money-format";
+import { FileTabLink } from "@/ui/navigation";
 import {
   ASSISTANT_ATTACHMENT_ACCEPT,
   assistantAttachmentHref,
@@ -81,7 +83,7 @@ export function useAssistantAttachments(
     setShownFor(workspace);
     setFiles([]);
   }
-  const lastKey = useRef(0);
+  const lastKeyRef = useRef(0);
 
   const settle = useCallback(
     (key: string, patch: Partial<AttachmentFile>) => {
@@ -98,8 +100,8 @@ export function useAssistantAttachments(
     (picked: readonly File[]) => {
       if (picked.length === 0) return;
       const planned = planAttachments(files, picked, () => {
-        lastKey.current += 1;
-        return `file-${String(lastKey.current)}`;
+        lastKeyRef.current += 1;
+        return `file-${String(lastKeyRef.current)}`;
       });
       setFiles((current) => [...current, ...planned]);
       planned.forEach((chip, index) => {
@@ -173,11 +175,11 @@ export function AssistantAttachmentPicker({
   disabled?: boolean;
 }) {
   const t = useTranslations("shell.assistant.attachments");
-  const input = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <>
       <input
-        ref={input}
+        ref={inputRef}
         type="file"
         multiple
         hidden
@@ -199,7 +201,7 @@ export function AssistantAttachmentPicker({
         title={t("add")}
         disabled={disabled}
         onClick={() => {
-          input.current?.click();
+          inputRef.current?.click();
         }}
         className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-app-link-fg outline-none hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
       >
@@ -306,7 +308,7 @@ export function AssistantAttachmentChips({
   files: readonly (Pick<
     AttachmentFile,
     "key" | "name" | "mediaType" | "size" | "state" | "problem"
-  > & { href?: string })[];
+  > & { href?: SafePath })[];
   onRemove?: (key: string) => void;
   testId?: string;
 }) {
@@ -341,16 +343,14 @@ export function AssistantAttachmentChips({
                 {file.href === undefined ? (
                   file.name
                 ) : (
-                  <a
-                    href={file.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <FileTabLink
+                    to={file.href}
                     aria-label={t("open", { name: file.name })}
                     data-testid="assistant-attachment-link"
                     className="text-app-link-fg underline-offset-2 outline-none hover:text-app-link-hover-fg hover:underline focus-visible:underline"
                   >
                     {file.name}
-                  </a>
+                  </FileTabLink>
                 )}
               </AttachmentTitle>
               <AttachmentDescription>

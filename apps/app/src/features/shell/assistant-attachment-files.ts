@@ -22,6 +22,7 @@ import {
   assistantAttachmentCategory,
   type AssistantAttachmentCategory,
 } from "@oxagen/oxagen/contracts/assistant.attachment.upload";
+import { pathOf, type SafePath } from "@/shared/safe-path";
 
 /** Where a file is on its way to the message. */
 type AttachmentFileState = "uploading" | "error" | "done";
@@ -68,7 +69,7 @@ export type AttachmentFile = {
 export type SentAttachment = Pick<
   AttachmentFile,
   "key" | "name" | "mediaType" | "size"
-> & { publicId: string; href: string };
+> & { publicId: string; href: SafePath };
 
 /** The `accept` list of the file picker: every type, and the extensions a device may not type. */
 export const ASSISTANT_ATTACHMENT_ACCEPT = [
@@ -245,8 +246,8 @@ export function assistantAttachmentHref(
   org: string,
   ws: string,
   publicId: string,
-): string {
-  return `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(ws)}/assistant/attachments/${encodeURIComponent(publicId)}`;
+): SafePath {
+  return pathOf("api", "v1", org, ws, "assistant", "attachments", publicId);
 }
 
 /** How long an upload may take before its chip settles to `upload`. */
