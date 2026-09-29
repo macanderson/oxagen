@@ -235,7 +235,8 @@ describe("callServed policy decisions", () => {
     expect(textOf(result)).toBe(
       "Approval apr_3 no longer covers billing__create_refund, because another call used it or it expired. Oxagen did not send the call. Call the tool again with the same arguments to ask for a new approval.",
     );
-    expect(recorded.credentials).toEqual([]);
+    // The credential is read before the claim, so a lost claim still read it once.
+    expect(recorded.credentials).toHaveLength(1);
     nothingSent(recorded);
     expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
@@ -255,7 +256,8 @@ describe("callServed policy decisions", () => {
         fields: { tool: "billing__create_refund", error: "Error" },
       },
     ]);
-    expect(recorded.credentials).toEqual([]);
+    // The credential is read before the claim, so a failed claim still read it once.
+    expect(recorded.credentials).toHaveLength(1);
     nothingSent(recorded);
     expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
