@@ -6,8 +6,9 @@
 // registry catalog, and opens a steering PR. Each of those sits behind a seam
 // here, so the tests run with fakes and another lane can install its part:
 //
-// - credentials: lane M8 builds the CredentialSource. Until it is installed,
-//   a server with auth is refused, and one with no auth needs none.
+// - credentials: lane M8's CredentialSource over the workspace's vault rows
+//   and its published servers (vaultCredentials). noCredentials refuses
+//   every request, for a process with no vault.
 // - local: lane M15 installs gatewayLocalReporter with the live broker.
 // - grpc: lane M3 builds gRPC reflection and descriptor reads.
 // - opener: lane M11's toolsPullRequestOpener (#4688) opens the tools
@@ -78,7 +79,7 @@ export function hostSteeringFiles(host: SteeringHost): SteeringFiles {
 /** The CredentialSource for one workspace. */
 export type DiscoveryCredentials = (scope: DiscoveryScope) => CredentialSource;
 
-/** Refuses every request until lane M8's credential source is installed. */
+/** Refuses every request: for a process with no vault, and for tests. */
 export const noCredentials: DiscoveryCredentials = () => ({
   resolve() {
     return Promise.reject(
@@ -89,6 +90,43 @@ export const noCredentials: DiscoveryCredentials = () => ({
     );
   },
 });
+
+/**
+ * Lane M8's CredentialSource for each workspace, built on first use. A
+ * missing credential refuses the discovery with the source's message, so the
+ * connect link the source also returns is never shown.
+ */
+export function vaultCredentials(
+  build: (scope: DiscoveryScope) => Promise<CredentialSource>,
+): DiscoveryCredentials {
+  return (scope) => {
+    let source: Promise<CredentialSource> | undefined;
+    return {
+      async resolve(request, signal) {
+        source ??= build(scope);
+        return (await source).resolve(request, signal);
+      },
+    };
+  };
+}
+
+/** The vault rows and the published servers of one workspace. */
+async function workspaceVault(
+  scope: DiscoveryScope,
+): Promise<CredentialSource> {
+  const [{ createCredentialSource }, { postgresCredentialStore }, published] =
+    await Promise.all([
+      import("../credentials/source"),
+      import("../credentials/store"),
+      import("../credentials/published-manifest"),
+    ]);
+  const servers = await published.publishedServers(scope);
+  return createCredentialSource({
+    store: postgresCredentialStore(scope),
+    server: (name) => servers.get(name),
+    connectUrl: () => "",
+  });
+}
 
 // ── Local servers ────────────────────────────────────────────────────────────
 
@@ -439,7 +477,7 @@ async function defaultSeams(): Promise<DiscoverySeams> {
     ]);
   return {
     steering: hostSteeringFiles(createSteeringHost()),
-    credentials: noCredentials,
+    credentials: vaultCredentials(workspaceVault),
     transport: cloudTransport,
     local: noLocalReporter,
     grpc: noGrpcDiscovery,
