@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 // The assistant's thread across a reload, a workspace rename, "New thread"
-// and the session list (#4163, #3313, #4435). The turn's stream and the reads
-// are fakes: the thread read answers the thread the record holds and the
-// workspace id the flyout files it under, and the list answers the sessions,
-// so each case shows what the person sees.
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+// and the session list (#4163, #3313, #4435), with the files sent in it
+// (#4690). The turn's stream and the reads are fakes: the thread read answers
+// the thread the record holds and the workspace id the flyout files it under,
+// and the list answers the sessions, so each case shows what the person sees.
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import {
@@ -81,6 +88,7 @@ const RECORDED: AssistantThread = {
       parked: [],
       toolCalls: [],
       stopped: false,
+      attachments: [],
     },
     {
       id: "msg_a2",
@@ -112,10 +120,37 @@ const RECORDED: AssistantThread = {
         },
       ],
       stopped: false,
+      attachments: [],
     },
   ],
   truncated: false,
 };
+
+// Two files sent with a question, as get_conversation reads them back
+// (#4690).
+const CHART = {
+  publicId: "gen_01k9chart",
+  name: "chart.png",
+  mediaType: "image/png",
+  sizeBytes: 2048,
+};
+const BUDGET = {
+  publicId: "gen_01k9budget",
+  name: "budget.pdf",
+  mediaType: "application/pdf",
+  sizeBytes: 512,
+};
+
+/** `thread` with `files` on each of its questions. */
+const withFiles = (
+  thread: AssistantThread,
+  files: AssistantThread["messages"][number]["attachments"],
+): AssistantThread => ({
+  ...thread,
+  messages: thread.messages.map((message) =>
+    message.role === "user" ? { ...message, attachments: files } : message,
+  ),
+});
 
 const loaded = (thread: AssistantThread | null, key = WORKSPACE) => ({
   ok: true,
@@ -245,6 +280,48 @@ describe("the assistant's thread across a reload", () => {
     expect(screen.queryByTestId("assistant-tool-calls")).toBeNull();
   });
 
+  // #4690: a restored question shows the files sent with it as the chips a
+  // live question shows, each opening the stored file in a new tab.
+  it("shows the files sent with a restored question as the chips it showed when sent", async () => {
+    loadAssistantThread.mockResolvedValue(
+      loaded(withFiles(RECORDED, [CHART, BUDGET])),
+    );
+    await openFlyout();
+
+    const sent = await screen.findByTestId("assistant-sent-attachments");
+    // In the order they were uploaded, each named as it was sent.
+    expect(
+      within(sent)
+        .getAllByTestId("assistant-attachment-link")
+        .map((link) => link.textContent),
+    ).toEqual(["chart.png", "budget.pdf"]);
+    const chart = within(sent).getByRole("link", {
+      name: "Open chart.png in a new tab",
+    });
+    expect(chart).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_01k9chart",
+    );
+    expect(chart).toHaveAttribute("target", "_blank");
+    expect(
+      within(sent).getByRole("link", { name: "Open budget.pdf in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_01k9budget",
+    );
+    // A sent file cannot be removed, and nothing waits on the composer.
+    expect(within(sent).queryByRole("button")).toBeNull();
+    expect(screen.queryByTestId("assistant-attachments")).toBeNull();
+    await expectNoAxe(sent);
+  });
+
+  it("draws no file row under a restored question sent without files (negative)", async () => {
+    await openFlyout();
+    await screen.findByText("what is live?");
+    expect(screen.queryByTestId("assistant-sent-attachments")).toBeNull();
+    expect(screen.queryByTestId("assistant-attachment-link")).toBeNull();
+  });
+
   // The thread read files the thread under the workspace's id, which holds
   // no slugs, so the cards take the slugs of the workspace on screen.
   it("draws a read-back thread's parked writes as cards for its workspace and run", async () => {
@@ -360,6 +437,38 @@ describe("the assistant's thread across a workspace rename (#3313)", () => {
     expect(await screen.findByText("what is live?")).toBeTruthy();
     expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
       "Three runs are live.",
+    );
+  });
+
+  // #4726 review: a thread kept across a rename links its files through the
+  // new slug. The read route knows only the workspace's current slug, so a
+  // link built at restore time would answer 404 after the rename.
+  it("links a kept thread's files through the new slug after a rename", async () => {
+    loadAssistantThread.mockResolvedValue(loaded(withFiles(RECORDED, [CHART])));
+    const { renavigate } = await openFlyout();
+    const before = await screen.findByTestId("assistant-sent-attachments");
+    expect(
+      within(before).getByRole("link", { name: "Open chart.png in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_01k9chart",
+    );
+
+    loadAssistantThread.mockResolvedValue(loaded(null));
+    renavigate("/acme/core-renamed");
+
+    await waitFor(() => {
+      expect(loadAssistantThread).toHaveBeenLastCalledWith(
+        "acme",
+        "core-renamed",
+      );
+    });
+    const after = screen.getByTestId("assistant-sent-attachments");
+    expect(
+      within(after).getByRole("link", { name: "Open chart.png in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-renamed/assistant/attachments/gen_01k9chart",
     );
   });
 
@@ -493,6 +602,7 @@ const OLDER: AssistantThread = {
       parked: [],
       toolCalls: [],
       stopped: false,
+      attachments: [],
     },
     {
       id: "msg_b2",
@@ -502,6 +612,7 @@ const OLDER: AssistantThread = {
       parked: [],
       toolCalls: [],
       stopped: false,
+      attachments: [],
     },
   ],
   truncated: false,
@@ -565,6 +676,29 @@ describe("the session list (#4435)", () => {
       conversationId: "cnv_01k8aa",
       content: "and production?",
     });
+  });
+
+  it("shows the files sent in a session it opens (#4690)", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    openAssistantSession.mockResolvedValue({
+      ok: true,
+      value: withFiles(OLDER, [CHART]),
+    });
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    expect(screen.queryByTestId("assistant-sent-attachments")).toBeNull();
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    const rows = await screen.findAllByTestId("assistant-session");
+
+    await user.click(nth(rows, 1, "the older session row"));
+
+    const sent = await screen.findByTestId("assistant-sent-attachments");
+    expect(
+      within(sent).getByRole("link", { name: "Open chart.png in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_01k9chart",
+    );
   });
 
   it("goes back to the thread from its own row without reading it again", async () => {
