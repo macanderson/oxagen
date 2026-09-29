@@ -447,7 +447,7 @@ function PriceTable({
           the size stays in reach. Changing the rows goes back to page 1. */}
       {entries.length === 0 ? null : (
         <RowsPager
-          label={list("pager")}
+          label={scheduled ? t("book.scheduledPages") : t("book.pages")}
           rowsLabel={list("rows")}
           perPage={perPage}
           sizes={BOOK_ROWS}

@@ -9006,6 +9006,8 @@ type Messages = {
         anyRegion: string;
         platformPriced: string;
         scheduled: string;
+        pages: string;
+        scheduledPages: string;
       };
       dialog: {
         open: string;

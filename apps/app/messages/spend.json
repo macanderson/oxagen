@@ -370,7 +370,9 @@
         "until": "until {day}",
         "anyRegion": "any region",
         "platformPriced": "The platform sets this one",
-        "scheduled": "Scheduled negotiated rates"
+        "scheduled": "Scheduled negotiated rates",
+        "pages": "Price book pages",
+        "scheduledPages": "Scheduled rate pages"
       },
       "dialog": {
         "open": "Set a negotiated rate",
