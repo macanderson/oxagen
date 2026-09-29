@@ -71,12 +71,12 @@ export function OperatorName({
   const rootRef = useRef<HTMLSpanElement>(null);
   const cardRef = useRef<HTMLSpanElement>(null);
   const [place, setPlace] = useState<CSSProperties>({});
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   useEffect(
     () => () => {
-      clearTimeout(closeTimer.current);
+      clearTimeout(closeTimerRef.current);
     },
     [],
   );
@@ -129,12 +129,12 @@ export function OperatorName({
       // React routes the portalled card's pointer events through this span,
       // so moving onto the card cancels the close that leaving the name armed.
       onMouseEnter={() => {
-        clearTimeout(closeTimer.current);
+        clearTimeout(closeTimerRef.current);
         setOpen(true);
       }}
       onMouseLeave={() => {
-        clearTimeout(closeTimer.current);
-        closeTimer.current = setTimeout(() => {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = setTimeout(() => {
           // Focus opened the card too, so the card stays while the name or
           // the card holds focus, whichever came first.
           const focused = document.activeElement;
@@ -147,7 +147,7 @@ export function OperatorName({
         }, CLOSE_DELAY_MS);
       }}
       onFocus={() => {
-        clearTimeout(closeTimer.current);
+        clearTimeout(closeTimerRef.current);
         setOpen(true);
       }}
       onBlur={(event) => {

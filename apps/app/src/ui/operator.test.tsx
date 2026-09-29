@@ -173,6 +173,12 @@ describe("OperatorName card", () => {
       act(() => {
         labelOf(root).focus();
       });
+      // jsdom collapses the selection on focus and queues `selectionchange`
+      // with setImmediate, which the fake clock counts. A zero tick runs it
+      // and leaves the close, 1ms short of due, pending if focus kept it.
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
       expect(vi.getTimerCount()).toBe(before);
       act(() => {
         vi.advanceTimersByTime(CLOSE_DELAY_MS * 2);
