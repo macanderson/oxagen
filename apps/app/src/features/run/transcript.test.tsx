@@ -375,13 +375,22 @@ describe("the rows", () => {
     const arg = within(list).getByTestId("tx-tool-arg");
     expect(arg).toHaveTextContent("a-intel/platform · state closed · base main");
     // A cut argument shows whole in the hover card, to focus too (#4692).
-    expect(arg).toHaveAttribute("data-truncate");
+    // This one shortens no path, so the card holds the line the row prints
+    // and opens only on overflow.
+    expect(arg).toHaveAttribute(
+      "data-truncate",
+      "a-intel/platform · state closed · base main",
+    );
     expect(arg).not.toHaveAttribute("title");
     expect(list).toHaveTextContent("1.1 s");
     expect(list).toHaveTextContent("7 lines");
-    expect(
-      within(toolRow("Read")).getByTestId("tx-tool-arg"),
-    ).toHaveTextContent("…/platform/CHANGELOG.md");
+    const read = within(toolRow("Read")).getByTestId("tx-tool-arg");
+    // The row shortens the path, and the card shows it in full.
+    expect(read).toHaveTextContent("…/platform/CHANGELOG.md");
+    expect(read).toHaveAttribute(
+      "data-truncate",
+      "/Users/mbell/src/platform/CHANGELOG.md",
+    );
     // No row reads as the model frame that carried the call.
     const names = screen
       .getAllByTestId("tx-tool-name")

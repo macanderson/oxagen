@@ -844,7 +844,7 @@ function ToolRow({
                 <span
                   data-testid="tx-tool-arg"
                   className="tx-arg"
-                  data-truncate={call.arg}
+                  data-truncate={call.whole ?? call.arg}
                 >
                   <Hi text={call.arg} q={q} />
                 </span>

@@ -25,6 +25,12 @@ const LONG =
 
 const GIVEN = "run_01J9Z3K4Q2W8XYV5T6R7S8P9M0";
 
+/** A line that carries the text it prints, as a transcript row's does. */
+const SAME = "a-intel/platform · state closed · base main";
+
+/** A mark with a newline and a double space, for a value its row prints on one line. */
+const SPACED = "git log --oneline\n  --since v4.10.3";
+
 /** Gives `node` the widths a browser measures for text cut at `clientWidth`. */
 function measure(node: HTMLElement, scrollWidth: number, clientWidth: number) {
   Object.defineProperty(node, "scrollWidth", {
@@ -120,6 +126,12 @@ function page() {
       <p data-truncate="Called Read and Grep" data-testid="given-whole">
         <span className="sr-only">Agent</span>
         Called Read and Grep
+      </p>
+      <p data-truncate={SAME} data-testid="given-same">
+        {SAME}
+      </p>
+      <p data-truncate={SPACED} data-testid="given-spaced">
+        git log --oneline --since v4.10.3
       </p>
       <button type="button">
         <span data-truncate="" data-testid="in-button">
@@ -296,6 +308,21 @@ describe("clippedElement", () => {
     expect(clippedElement(screen.getByTestId("given-whole"))).toBeNull();
   });
 
+  it("takes a value that carries its own text only while it is cut", () => {
+    page();
+    const same = screen.getByTestId("given-same");
+    expect(clippedElement(same)).toBeNull();
+    expect(clippedElement(same, true)).toBeNull();
+    measure(same, 900, 300);
+    expect(clippedElement(same)).toBe(same);
+  });
+
+  it("reads a mark's whitespace the way the row prints it", () => {
+    page();
+    // The row prints the mark's newline and double space as one space each.
+    expect(clippedElement(screen.getByTestId("given-spaced"))).toBeNull();
+  });
+
   it("skips a cell that spans columns and text outside a table", () => {
     page();
     const spanning = screen.getByTestId("spanning");
@@ -354,6 +381,7 @@ describe("markCutCells", () => {
     expect(screen.getByTestId("given")).toHaveAttribute("tabindex", "0");
     expect(screen.getByTestId("digest-cell")).toHaveAttribute("tabindex", "0");
     expect(screen.getByTestId("given-whole")).not.toHaveAttribute("tabindex");
+    expect(screen.getByTestId("given-same")).not.toHaveAttribute("tabindex");
   });
 
   it("gives no stop to a marked value inside a control", () => {

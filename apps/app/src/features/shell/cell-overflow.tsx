@@ -47,13 +47,19 @@ const CONTROL = `a[href], button, input, select, textarea, summary, [role="butto
 /**
  * Whether `node` shows less than its whole value: its text runs past its own
  * box, or its text leaves out part of the value it carries in `data-truncate`.
+ * Both are read with each run of whitespace as one space, because a row prints
+ * a value on one line that its mark carries with newlines.
  */
 function showsLess(node: HTMLElement): boolean {
-  const text = node.textContent.trim();
+  const text = oneLine(node.textContent);
   if (text === "") return false;
   if (node.scrollWidth > node.clientWidth) return true;
-  const given = node.getAttribute("data-truncate")?.trim() ?? "";
+  const given = oneLine(node.getAttribute("data-truncate") ?? "");
   return given !== "" && !text.includes(given);
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /** Whether `cell`, or anything in it, shows less than its whole value. */
