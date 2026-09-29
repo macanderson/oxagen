@@ -7,6 +7,7 @@
 // is a port here, so list, call, and search run in tests with fakes.
 import type { CredentialSource, ManifestServer, Senders, ToolManifest, Transport } from "@oxagen/mcp-studio";
 import type { CedarRuntime, PolicyFile } from "@oxagen/policy";
+import type { Ranker } from "./search";
 
 /** One agent from agents/<name>.toml (agent/v1), in the fields the gateway reads. */
 export interface ServedAgent {
@@ -46,6 +47,12 @@ export interface ServedRun {
   runtime: string;
   /** The harness the session reports, when it reports one. */
   harness: string | null;
+  /**
+   * The auth.users id of the person who enrolled the gateway key's host, when
+   * the host records one. They operate every session the host opens, so an
+   * operator-oauth server signs in with their token.
+   */
+  operator?: string;
   /** The role the gateway key's host enroller holds in the workspace now, when they hold one. */
   operatorRole?: string;
   /** The tacho.hosts public id of the machine the run is on. A local server runs there. */
@@ -165,6 +172,12 @@ export interface ServedPorts {
   /** Cedar's evaluator, or null when it is not installed. */
   cedar(): Promise<CedarRuntime | null>;
   log: ServedLog;
+  /**
+   * Ranks a search-mode server's search. Production ranks by the
+   * workspace's embeddings. Keyword ranking runs when this is absent or
+   * throws.
+   */
+  rank?: Ranker;
   /** Senders in place of the executor's defaults. Tests pass fakes. */
   senders?: Partial<Senders>;
   /** Milliseconds since the epoch. Tests pass a clock. */

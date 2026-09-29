@@ -284,6 +284,10 @@
     "chart": {
       "notRecorded": "not recorded",
       "table": "Table"
+    },
+    "toast": {
+      "region": "Notifications",
+      "close": "Close"
     }
   }
 }

@@ -243,6 +243,12 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.tool_snapshots", policyClass: "standard" },
   // The credential broker's grant log (#2958): orgScopeMixin → standard.
   { table: "mcp.credential_grants", policyClass: "standard" },
+  // Each operator's OAuth token for an operator-oauth server (M8, #4668):
+  // org_id + workspace_id NOT NULL → standard.
+  { table: "mcp.operator_tokens", policyClass: "standard" },
+  // One embedding per search entry of a search-mode server (M15, ADR-217):
+  // orgScopeMixin → standard.
+  { table: "mcp.search_embeddings", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },

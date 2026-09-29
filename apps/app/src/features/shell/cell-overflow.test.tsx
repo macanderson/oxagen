@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The whole value of a table cell whose text ends in an ellipsis: a pointer
-// resting on it, or focus landing in its cell, shows the value in one tooltip,
-// and a value that fits shows nothing. jsdom has no layout, so each case sets
+// The whole value of text that ends in an ellipsis, in a table cell or marked
+// `data-truncate`: a pointer resting on it, or focus landing on it, shows the
+// value in one hover card, and a value that fits shows nothing. jsdom has no layout, so each case sets
 // the widths a browser would measure.
 import {
   cleanup,
@@ -21,6 +21,8 @@ import {
 
 const LONG =
   "Watches the release branch and cuts a tag when every required check passes";
+
+const GIVEN = "run_01J9Z3K4Q2W8XYV5T6R7S8P9M0";
 
 /** Gives `node` the widths a browser measures for text cut at `clientWidth`. */
 function measure(node: HTMLElement, scrollWidth: number, clientWidth: number) {
@@ -78,6 +80,14 @@ function page() {
                 {LONG}
               </td>
             </tr>
+            <tr>
+              <td data-testid="holder">
+                <span data-truncate="" data-testid="cell-marked">
+                  {LONG}
+                </span>
+              </td>
+              <td>Fits</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -94,6 +104,17 @@ function page() {
         </tbody>
       </table>
       <p data-testid="outside">{LONG}</p>
+      <p data-truncate="" data-testid="marked">
+        {LONG}
+      </p>
+      <code data-truncate={GIVEN} data-testid="given">
+        run_01J9Z3K4
+      </code>
+      <button type="button">
+        <span data-truncate="" data-testid="in-button">
+          {LONG}
+        </span>
+      </button>
       <CellOverflow />
     </>,
   );
@@ -116,6 +137,16 @@ describe("CellOverflow", () => {
     fireEvent.pointerOver(description);
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(await screen.findByRole("tooltip")).toHaveTextContent(LONG);
+  });
+
+  it("shows the value an element marked outside a table gives", async () => {
+    page();
+    const given = screen.getByTestId("given");
+    measure(given, 640, 320);
+    fireEvent.pointerOver(given);
+    const card = await screen.findByRole("tooltip");
+    expect(card).toHaveTextContent(GIVEN);
+    expect(card).toHaveAttribute("data-slot", "hover-card-content");
   });
 
   it("shows nothing for a value that fits its cell", async () => {
@@ -208,6 +239,21 @@ describe("clippedElement", () => {
     expect(clippedElement(titled)).toBeNull();
   });
 
+  it("shows a titled value to focus, which the browser gives nothing", () => {
+    page();
+    const titled = screen.getByTestId("titled");
+    measure(titled, 900, 300);
+    expect(clippedElement(titled, true)).toBe(titled);
+  });
+
+  it("takes marked text outside a table only while it is cut", () => {
+    page();
+    const marked = screen.getByTestId("marked");
+    expect(clippedElement(marked)).toBeNull();
+    measure(marked, 900, 300);
+    expect(clippedElement(marked)).toBe(marked);
+  });
+
   it("skips a cell that spans columns and text outside a table", () => {
     page();
     const spanning = screen.getByTestId("spanning");
@@ -239,6 +285,35 @@ describe("markCutCells", () => {
     expect(name).not.toHaveAttribute("tabindex");
   });
 
+  it("gives a cut marked line outside a table a stop and takes it back once it fits", () => {
+    page();
+    const marked = screen.getByTestId("marked");
+    measure(marked, 900, 300);
+    markCutCells(document);
+    expect(marked).toHaveAttribute("tabindex", "0");
+    measure(marked, 300, 300);
+    markCutCells(document);
+    expect(marked).not.toHaveAttribute("tabindex");
+  });
+
+  it("leaves a marked value in a cell to the cell's one stop", () => {
+    page();
+    const holder = screen.getByTestId("holder");
+    const inCell = screen.getByTestId("cell-marked");
+    measure(inCell, 900, 300);
+    markCutCells(document);
+    expect(holder).toHaveAttribute("tabindex", "0");
+    expect(inCell).not.toHaveAttribute("tabindex");
+  });
+
+  it("gives no stop to a marked value inside a control", () => {
+    page();
+    const inButton = screen.getByTestId("in-button");
+    measure(inButton, 900, 300);
+    markCutCells(document);
+    expect(inButton).not.toHaveAttribute("tabindex");
+  });
+
   it("reads a cut value nested in a cell that fits", () => {
     page();
     const owner = screen.getByTestId("owner");
@@ -261,5 +336,20 @@ describe("CellOverflow keyboard stops", () => {
     await waitFor(() => {
       expect(description).toHaveAttribute("tabindex", "0");
     });
+  });
+
+  it("gives a stop to a cut line a growing transcript adds later", async () => {
+    page();
+    const transcript = document.createElement("div");
+    document.body.append(transcript);
+    const line = document.createElement("div");
+    line.setAttribute("data-truncate", LONG);
+    line.textContent = LONG;
+    measure(line, 900, 300);
+    transcript.append(line);
+    await waitFor(() => {
+      expect(line).toHaveAttribute("tabindex", "0");
+    });
+    transcript.remove();
   });
 });

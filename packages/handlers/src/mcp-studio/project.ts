@@ -904,7 +904,7 @@ async function applyPlan(
 }
 
 /** The workspace a bundle names, by its organization and workspace slugs. */
-async function resolveWorkspace(
+export async function resolveWorkspace(
   organization: string,
   workspace: string,
 ): Promise<{ orgId: string; workspaceId: string }> {
