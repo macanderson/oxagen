@@ -59,7 +59,7 @@ describe("headless workspace filter", () => {
   it("selects a workspace only when it has no steering head", () => {
     const { sql, params } = render(null);
     expect(sql).toMatch(
-      /not exists \(select 1 from "ingestion"\."repository_binding_heads" h where h\.workspace_id = "workspaces"\."id" and h\.role in \(\$\d+\)\)/,
+      /not exists \(select 1 from "ingestion"\."repository_binding_heads" h where h\.workspace_id = "workspace"\."workspaces"\."id" and h\.role in \(\$\d+\)\)/,
     );
     expect(params).toContain("steering");
   });
