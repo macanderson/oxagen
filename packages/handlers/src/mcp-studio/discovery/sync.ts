@@ -155,7 +155,8 @@ function messageOf(error: unknown): string {
  * Whether a trigger runs for a server's sync.schedule:
  *
  * - schedule: a daily server, and any server but a manual one that has
- *   never finished a discovery, so a new server's tools are found once.
+ *   never finished a discovery with its mcp.servers row live, so a new
+ *   server's tools are found and snapshotted once.
  * - push: an on-change server.
  * - list_changed and registry_version: any server but a manual one.
  * - manual and lock_merged: always.
@@ -190,11 +191,18 @@ export function scheduleAllows(
  * read its own failure as the discovery it is retrying: scheduleAllows would
  * answer false, the retry would record skipped without contacting the source,
  * and the row would be neither stalled nor picked up by the daily sweep.
+ *
+ * A run that finished before the server's mcp.servers row existed does not
+ * count either. It recorded the offered names, but it had no mcpServerId to
+ * write tool snapshots under, so list_studio_tools has no tools to show. The
+ * hourly sweep sends such a server a scheduled discovery once its row is live,
+ * and this answer lets that discovery run.
  */
 export function everFinished(
-  prior: Pick<DiscoveryRow, "status" | "finishedAt"> | null,
+  prior: Pick<DiscoveryRow, "status" | "finishedAt" | "mcpServerId"> | null,
 ): boolean {
   if (prior === null || prior.status === "failed") return false;
+  if (prior.mcpServerId === null) return false;
   return prior.finishedAt !== null;
 }
 

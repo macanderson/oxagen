@@ -987,6 +987,11 @@ describe("everFinished", () => {
       row({ status: "queued", finishedAt: null }),
       false,
     ],
+    [
+      "a prior that succeeded before its mcp.servers row existed",
+      row({ mcpServerId: null }),
+      false,
+    ],
   ])("reads %s as %s", (_label, prior, finished) => {
     expect(everFinished(prior)).toBe(finished);
   });
@@ -1144,6 +1149,41 @@ describe("runDiscovery on each trigger", () => {
     expect(h.steering.pullRequest).toHaveBeenCalledWith(41);
     expect(h.db.fns.recordSource).not.toHaveBeenCalled();
     expect(h.wire.http).not.toHaveBeenCalled();
+  });
+
+  it("runs a scheduled on-change discovery once its mcp.servers row is live, and snapshots the tools", async () => {
+    const h = harness({
+      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
+      prior: row({ schedule: "on-change", mcpServerId: null }),
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({ status: "succeeded", toolCount: 3 });
+    expect(h.wire.sent.map((sent) => sent.rpc)).toContain("tools/list");
+    expect(snapshotNames(h.db.fns)).toEqual([
+      "create_refund",
+      "list_charges",
+      "create_customer",
+    ]);
+    expect(h.db.fns.captureSnapshots).toHaveBeenCalledWith(
+      SCOPE,
+      "srv-1",
+      expect.any(Array),
+    );
+  });
+
+  it("skips a scheduled on-change discovery once one ran with its mcp.servers row live", async () => {
+    const h = harness({
+      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "on-change") }),
+      prior: row({ schedule: "on-change" }),
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({ status: "succeeded", outcome: "skipped" });
+    expect(h.wire.http).not.toHaveBeenCalled();
+    expect(h.db.fns.captureSnapshots).not.toHaveBeenCalled();
   });
 
   it("resolves as failed when no credential source is installed", async () => {
