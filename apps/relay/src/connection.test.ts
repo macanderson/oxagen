@@ -7,6 +7,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
 import {
+  CLOSE_TOKEN_REVOKED,
   decodeRelayFrame,
   encodeFrame,
   RELAY_PROTOCOL_VERSION,
@@ -586,6 +587,27 @@ describe("startRelay", () => {
     next.send(freshRequest(key, "call-3"));
     expect((await next.closed).code).toBe(1002);
     expect(upstream.calls).toHaveLength(2);
+  });
+
+  it("logs a revoked token when the broker closes with 4001, and keeps dialing", async () => {
+    const { broker, logs } = await setup();
+    const peer = await welcomed(broker);
+    peer.socket.close(CLOSE_TOKEN_REVOKED, "relay token revoked");
+    expect(await logs.waitFor("disconnected")).toMatchObject({ code: CLOSE_TOKEN_REVOKED });
+    expect(await logs.waitFor("token_revoked")).toStrictEqual({
+      message: "Oxagen revoked this relay's token. Mint a new relay token and restart the relay with it.",
+    });
+    await logs.waitFor("reconnecting");
+    await broker.peers.shift();
+  });
+
+  it("logs no revoked token for any other close", async () => {
+    const { broker, logs } = await setup();
+    const peer = await welcomed(broker);
+    peer.socket.close(4003, "hello mismatch");
+    expect(await logs.waitFor("disconnected")).toMatchObject({ code: 4003 });
+    await logs.waitFor("reconnecting");
+    expect(logs.named("token_revoked")).toStrictEqual([]);
   });
 
   it("stops: closes with 1000, closes the upstreams, and never dials again", async () => {

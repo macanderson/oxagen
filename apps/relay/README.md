@@ -160,6 +160,12 @@ With Helm, put the variables in a Secret and set `credentials.existingSecret` to
 
 The relay trusts Node's built-in certificate authorities. When your servers use a private one, put its certificate in a ConfigMap and set `extraCaCerts.configMap`. The chart mounts it and sets `NODE_EXTRA_CA_CERTS`. With Docker, mount the file and set `NODE_EXTRA_CA_CERTS` to its path.
 
+## Revoked tokens
+
+When Oxagen revokes a relay token, the broker refuses the next connect with 401. A relay that is already connected stops within 30 seconds. The broker checks each live connection's token every 30 seconds and closes the connection with WebSocket code 4001 once the token no longer checks. The relay then logs `"event":"token_revoked"` and keeps dialing, and the broker answers each dial with 401.
+
+To bring the relay back, create a new relay token, set `RELAY_TOKEN` to it, and restart the relay.
+
 ## Start and stop
 
 The relay waits twice `RELAY_CLOCK_SKEW_MS` after it starts before its first dial. It cannot tell an envelope issued before it started from a replay, so it refuses those, and the wait keeps it from taking calls it would refuse. With the default skew, the wait is 10 seconds.
