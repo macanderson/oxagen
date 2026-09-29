@@ -4,14 +4,19 @@
 // every list draws under its rows, laid out as shadcn's "icons only" example:
 // a Rows per page select on the left, Previous and Next on the right.
 //
-// Two changes from the registry: Previous and Next are buttons, because a
-// list here pages in the browser and a link cannot be disabled, and every
-// label arrives translated from the caller (INV-12). The fleet's pager pages
-// by address and keeps its own links, and draws `RowsField` on its left.
+// Two changes from the registry: every label arrives translated from the
+// caller (INV-12), and a step is a button unless the list pages by address.
+// A list that pages in the browser passes a function, and a missing step is
+// a disabled button, because a link cannot be disabled. A list that pages by
+// address, such as the audit record, passes the path, and the step is a link.
+// The fleet's pager keeps its own numbered links, and draws `RowsField` on
+// its left.
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { type ComponentProps, type ReactNode, useId } from "react";
+import type { SafePath } from "@/shared/safe-path";
 import { Button } from "@/ui/button";
 import { cn } from "@/ui/cn";
+import { SafeLink } from "@/ui/navigation";
 import {
   Select,
   SelectContent,
@@ -77,11 +82,17 @@ function PaginationNext({ className, text, ...props }: StepProps) {
   );
 }
 
-/** A press that turns the page, or null when there is no page that way. */
-type PagerStep = (() => void) | null;
+/**
+ * A press that turns the page, the address of the next page that way, or null
+ * when there is no page that way.
+ */
+type PagerStep = (() => void) | SafePath | null;
 
 function stepProps(step: PagerStep) {
-  return step === null ? { disabled: true } : { onClick: step };
+  if (step === null) return { disabled: true };
+  if (typeof step === "string")
+    return { nativeButton: false, render: <SafeLink to={step} /> };
+  return { onClick: step };
 }
 
 /**
@@ -93,6 +104,7 @@ export function RowsField({
   perPage,
   sizes,
   onPerPage,
+  sizeLabel = String,
   testId,
 }: {
   /** "Rows per page". */
@@ -100,11 +112,13 @@ export function RowsField({
   perPage: number;
   sizes: readonly number[];
   onPerPage: (size: number) => void;
+  /** How a size reads in the select, when a size such as 0 means "All". */
+  sizeLabel?: (size: number) => string;
   /** A `data-testid` for the select's trigger. */
   testId?: string;
 }) {
   const id = useId();
-  const items = sizes.map((size) => ({ value: size, label: String(size) }));
+  const items = sizes.map((size) => ({ value: size, label: sizeLabel(size) }));
   return (
     <div
       role="group"
@@ -156,7 +170,9 @@ export function RowsPager({
   perPage,
   sizes,
   onPerPage,
+  sizeLabel,
   range,
+  beside,
   previousLabel,
   nextLabel,
   previous,
@@ -170,7 +186,11 @@ export function RowsPager({
   perPage: number;
   sizes: readonly number[];
   onPerPage: (size: number) => void;
+  /** How a size reads in the select, when a size such as 0 means "All". */
+  sizeLabel?: (size: number) => string;
   range?: ReactNode;
+  /** Drawn after the range, such as a link to rows the list leaves out. */
+  beside?: ReactNode;
   previousLabel: string;
   nextLabel: string;
   previous: PagerStep;
@@ -191,6 +211,7 @@ export function RowsPager({
           perPage={perPage}
           sizes={sizes}
           onPerPage={onPerPage}
+          sizeLabel={sizeLabel}
         />
         {range === undefined ? null : (
           <span
@@ -200,14 +221,23 @@ export function RowsPager({
             {range}
           </span>
         )}
+        {beside}
       </div>
       <Pagination aria-label={label} className="mx-0 w-auto">
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious text={previousLabel} {...stepProps(previous)} />
+            <PaginationPrevious
+              text={previousLabel}
+              className="max-md:min-h-11"
+              {...stepProps(previous)}
+            />
           </PaginationItem>
           <PaginationItem>
-            <PaginationNext text={nextLabel} {...stepProps(next)} />
+            <PaginationNext
+              text={nextLabel}
+              className="max-md:min-h-11"
+              {...stepProps(next)}
+            />
           </PaginationItem>
         </PaginationContent>
       </Pagination>
