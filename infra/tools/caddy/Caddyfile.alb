@@ -177,7 +177,9 @@
 			reverse_proxy 127.0.0.1:3001
 		}
 
-		@docs host docs.oxagen.sh
+		# The docs answer on both names (ADR-215, amendment of 2026-09-28), and
+		# neither name redirects to the other.
+		@docs host docs.oxagen.sh docs.oxagen.app
 		handle @docs {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:3002
@@ -233,7 +235,10 @@
 			}
 		}
 
-		@mcp host mcp.oxagen.sh
+		# MCP answers on both names (ADR-215, amendment of 2026-09-28).
+		# mcp.oxagen.sh stays for the clients configured with it, and neither
+		# name redirects to the other.
+		@mcp host mcp.oxagen.sh mcp.oxagen.app
 		handle @mcp {
 			# Deliberately NOT encoded — see the old account's Caddyfile for why:
 			# MCP's streamable HTTP transport is `text/event-stream`, and a
