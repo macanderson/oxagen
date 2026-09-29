@@ -43,6 +43,11 @@ model that does not. And who can read a file once it is stored.
    to blob storage under `attachments/<org>/<workspace>/`. When a turn sends
    the file, the row is linked to the conversation and the person's message.
    No migration is needed. ClickHouse and the message rows keep no bytes.
+   A file still unlinked 24 hours after upload was never sent. The hourly
+   Inngest cron `assistant.attachment-sweep` deletes its bytes, then its row.
+   Each batch locks its rows with `FOR UPDATE SKIP LOCKED`, so a turn that
+   links a file mid-sweep waits and then links nothing. A blob the store
+   refuses to delete keeps its row for the next run.
 5. **Only the uploader reads a file, and only in its workspace.** The turn
    looks files up by public id, organisation, workspace, uploader, source and
    status together. The read route `GET
@@ -67,6 +72,10 @@ model that does not. And who can read a file once it is stored.
    attaches by the paperclip, by paste, or by drop. Each chip shows the
    file's kind and size as two separate elements, never joined by
    punctuation.
+   The composer gives up an upload after 60 seconds and marks the chip
+   failed, so a stalled request cannot hold the send button. A sent
+   message's chip links to the stored file through the read route and opens
+   it in a new tab.
 
 ## Consequences
 

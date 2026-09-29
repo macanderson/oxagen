@@ -161,7 +161,15 @@ describe("assistant flyout attachments", () => {
     const sent = await screen.findByTestId("assistant-sent-attachments");
     expect(within(sent).getByText("notes.md")).toBeTruthy();
     expect(within(sent).queryByRole("button")).toBeNull();
+    // The sent chip opens the stored file through the workspace's read route.
+    const link = within(sent).getByRole("link", { name: "Open notes.md in a new tab" });
+    expect(link).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_abc",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
     expect(screen.queryByTestId("assistant-attachments")).toBeNull();
+    await expectNoAxe(flyout);
   });
 
   it("sends no attachments field with a question that carries no files", async () => {

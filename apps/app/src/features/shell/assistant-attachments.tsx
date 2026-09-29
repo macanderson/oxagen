@@ -10,7 +10,9 @@
 // file the person can see on the composer.
 //
 // Each chip shows the file's kind and its size as two separate elements with
-// a gap between them, never joined by punctuation.
+// a gap between them, never joined by punctuation. A chip under a sent
+// question links its name to the stored file, so the person can open what
+// they sent.
 import {
   CircleAlert,
   File,
@@ -20,7 +22,7 @@ import {
   Paperclip,
   X,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useRef, useState } from "react";
 import {
   Attachment,
@@ -32,9 +34,10 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@/ui/attachment";
-import { useFormatter } from "@/ui/formatter";
+import { formatByteSize } from "@/ui/money-format";
 import {
   ASSISTANT_ATTACHMENT_ACCEPT,
+  assistantAttachmentHref,
   type AttachmentFile,
   type AttachmentProblem,
   planAttachments,
@@ -49,7 +52,10 @@ export type AssistantAttachments = {
   /** Attach files: each is checked, and each that passes starts uploading. */
   add: (files: readonly File[]) => void;
   remove: (key: string) => void;
-  /** The stored files, handed to the message, and the composer cleared. */
+  /**
+   * The stored files, handed to the message with the link that opens each
+   * one, and the composer cleared.
+   */
   take: () => SentAttachment[];
   /** A file is still uploading, so Send waits. */
   uploading: boolean;
@@ -78,12 +84,13 @@ export function useAssistantAttachments(
   const lastKey = useRef(0);
 
   const settle = useCallback(
-    (key: string, patch: Partial<AttachmentFile>) =>
+    (key: string, patch: Partial<AttachmentFile>) => {
       // A chip removed, or cleared by a workspace move, while its upload ran
       // has no key to match, so a late answer changes nothing.
       setFiles((current) =>
         current.map((f) => (f.key === key ? { ...f, ...patch } : f)),
-      ),
+      );
+    },
     [],
   );
 
@@ -92,7 +99,7 @@ export function useAssistantAttachments(
       if (picked.length === 0) return;
       const planned = planAttachments(files, picked, () => {
         lastKey.current += 1;
-        return `file-${lastKey.current}`;
+        return `file-${String(lastKey.current)}`;
       });
       setFiles((current) => [...current, ...planned]);
       planned.forEach((chip, index) => {
@@ -107,7 +114,7 @@ export function useAssistantAttachments(
             }),
           )
           .catch(() => ({ ok: false as const, problem: "upload" as const }))
-          .then((result) =>
+          .then((result) => {
             settle(
               chip.key,
               result.ok
@@ -117,18 +124,16 @@ export function useAssistantAttachments(
                     mediaType: result.mediaType,
                   }
                 : { state: "error", problem: result.problem },
-            ),
-          );
+            );
+          });
       });
     },
     [files, org, ws, settle],
   );
 
-  const remove = useCallback(
-    (key: string) =>
-      setFiles((current) => current.filter((f) => f.key !== key)),
-    [],
-  );
+  const remove = useCallback((key: string) => {
+    setFiles((current) => current.filter((f) => f.key !== key));
+  }, []);
 
   const take = useCallback((): SentAttachment[] => {
     const sent = files.flatMap((f) =>
@@ -140,13 +145,14 @@ export function useAssistantAttachments(
               mediaType: f.mediaType,
               size: f.size,
               publicId: f.publicId,
+              href: assistantAttachmentHref(org, ws, f.publicId),
             },
           ]
         : [],
     );
     setFiles([]);
     return sent;
-  }, [files]);
+  }, [files, org, ws]);
 
   return {
     files,
@@ -192,7 +198,9 @@ export function AssistantAttachmentPicker({
         aria-label={t("add")}
         title={t("add")}
         disabled={disabled}
-        onClick={() => input.current?.click()}
+        onClick={() => {
+          input.current?.click();
+        }}
         className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-app-link-fg outline-none hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
       >
         <Paperclip aria-hidden="true" className="size-4" />
@@ -278,37 +286,27 @@ function ProblemLabel({ problem }: { problem: AttachmentProblem }) {
   }
 }
 
-const MIB = 1024 * 1024;
-
-/** The file's size in KB or MB, in the viewer's locale. */
+/** The file's size in the viewer's locale, as the rest of the app prints one. */
 function SizeLabel({ bytes }: { bytes: number }) {
-  const format = useFormatter();
-  const large = bytes >= MIB;
-  return (
-    <span>
-      {format.number(large ? bytes / MIB : bytes / 1024, {
-        style: "unit",
-        unit: large ? "megabyte" : "kilobyte",
-        unitDisplay: "short",
-        maximumFractionDigits: 1,
-      })}
-    </span>
-  );
+  const locale = useLocale();
+  return <span>{formatByteSize(bytes, locale)}</span>;
 }
 
 /**
  * The files on the composer, or the files a sent message carried. Without
- * `onRemove` the chips have no Remove button, as under a sent question.
+ * `onRemove` the chips have no Remove button, as under a sent question. A
+ * file with an `href` links its name there, in a new tab: the read route
+ * serves an image, a PDF, or a text file inline.
  */
 export function AssistantAttachmentChips({
   files,
   onRemove,
   testId,
 }: {
-  files: readonly Pick<
+  files: readonly (Pick<
     AttachmentFile,
     "key" | "name" | "mediaType" | "size" | "state" | "problem"
-  >[];
+  > & { href?: string })[];
   onRemove?: (key: string) => void;
   testId?: string;
 }) {
@@ -339,7 +337,22 @@ export function AssistantAttachmentChips({
               )}
             </AttachmentMedia>
             <AttachmentContent>
-              <AttachmentTitle title={file.name}>{file.name}</AttachmentTitle>
+              <AttachmentTitle title={file.name}>
+                {file.href === undefined ? (
+                  file.name
+                ) : (
+                  <a
+                    href={file.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t("open", { name: file.name })}
+                    data-testid="assistant-attachment-link"
+                    className="text-app-link-fg underline-offset-2 outline-none hover:text-app-link-hover-fg hover:underline focus-visible:underline"
+                  >
+                    {file.name}
+                  </a>
+                )}
+              </AttachmentTitle>
               <AttachmentDescription>
                 <KindLabel kind={kind} />
                 {file.state === "uploading" ? (
@@ -355,7 +368,9 @@ export function AssistantAttachmentChips({
               <AttachmentActions>
                 <AttachmentAction
                   aria-label={t("remove", { name: file.name })}
-                  onClick={() => onRemove(file.key)}
+                  onClick={() => {
+                    onRemove(file.key);
+                  }}
                 >
                   <X aria-hidden="true" />
                 </AttachmentAction>

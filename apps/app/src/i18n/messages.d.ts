@@ -8000,6 +8000,7 @@ type Messages = {
         add: string;
         list: string;
         remove: string;
+        open: string;
         uploading: string;
         blocked: string;
         kinds: {

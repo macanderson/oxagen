@@ -226,10 +226,11 @@ export async function persistGeneratedAsset(
     access: "private",
   });
 
-  // tenancy: system bypass via withSystemDb (shared utility called from both
-  // kernel handlers and apps/app route handlers; the app's attachment-upload
-  // route calls this OUTSIDE any runInTenantScope, so orgId/workspaceId are
-  // carried explicitly in args as defense-in-depth) (see docs/specs/tenancy-rls/spec.md)
+  // tenancy: system bypass via withSystemDb. Kernel handlers and apps/app
+  // route handlers both call this, and the app's attachment-upload route calls
+  // it outside any runInTenantScope. The row is scoped by the orgId and
+  // workspaceId the caller verified, carried explicitly in args
+  // (see docs/specs/tenancy-rls/spec.md).
   const [row] = await withSystemDb(async (tx) => {
     const conversationId = await resolveConversationId(
       tx,

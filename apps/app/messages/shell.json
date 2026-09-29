@@ -417,6 +417,7 @@
         "add": "Attach files",
         "list": "Attached files",
         "remove": "Remove {name}",
+        "open": "Open {name} in a new tab",
         "uploading": "Uploading…",
         "blocked": "Remove the files that failed before you send.",
         "kinds": {

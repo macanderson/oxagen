@@ -27,7 +27,7 @@ function keys() {
   let n = 0;
   return () => {
     n += 1;
-    return `k${n}`;
+    return `k${String(n)}`;
   };
 }
 
@@ -37,7 +37,7 @@ function onComposer(
   state: AttachmentFile["state"] = "done",
 ): AttachmentFile {
   return {
-    key: `old-${mediaType}-${size}-${state}`,
+    key: `old-${mediaType}-${String(size)}-${state}`,
     name: "old",
     mediaType,
     size,
@@ -137,7 +137,7 @@ describe("planAttachments", () => {
 
   it("counts the files of one pick against each other", () => {
     const picked = Array.from({ length: ASSISTANT_ATTACHMENT_MAX_FILES + 1 }, (_, i) => ({
-      name: `f${i}.txt`,
+      name: `f${String(i)}.txt`,
       type: "text/plain",
       size: 1,
     }));
@@ -306,5 +306,58 @@ describe("uploadAssistantAttachment", () => {
       ok: false,
       problem: "upload",
     });
+  });
+
+  it("gives up on an upload still open after the limit, so the chip leaves uploading (negative)", async () => {
+    vi.useFakeTimers();
+    try {
+      const signals: AbortSignal[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          (_url: string, init: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              if (init.signal) signals.push(init.signal);
+              init.signal?.addEventListener("abort", () => {
+                reject(new DOMException("aborted", "AbortError"));
+              });
+            }),
+        ),
+      );
+      const pending = uploadAssistantAttachment("acme", "core", file, 1_000);
+      await vi.advanceTimersByTimeAsync(999);
+      expect(signals[0]?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual({ ok: false, problem: "upload" });
+      expect(signals[0]?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up when the answer's body never finishes arriving (negative)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_url: string, init: RequestInit) =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              new Promise((_resolve, reject) => {
+                init.signal?.addEventListener("abort", () => {
+                  reject(new DOMException("aborted", "AbortError"));
+                });
+              }),
+          }),
+        ),
+      );
+      const pending = uploadAssistantAttachment("acme", "core", file, 1_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(pending).resolves.toEqual({ ok: false, problem: "upload" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

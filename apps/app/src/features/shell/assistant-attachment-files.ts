@@ -20,12 +20,11 @@ import {
   ASSISTANT_ATTACHMENT_TURN_MAX_BYTES,
   ASSISTANT_ATTACHMENT_TYPES,
   assistantAttachmentCategory,
-  assistantAttachmentIdSchema,
   type AssistantAttachmentCategory,
 } from "@oxagen/oxagen/contracts/assistant.attachment.upload";
 
 /** Where a file is on its way to the message. */
-export type AttachmentFileState = "uploading" | "error" | "done";
+type AttachmentFileState = "uploading" | "error" | "done";
 
 /**
  * Why a file cannot be sent. Each one has its own sentence on the chip.
@@ -61,11 +60,15 @@ export type AttachmentFile = {
   problem: AttachmentProblem | null;
 };
 
-/** A file the message carries, as the transcript shows it after the send. */
+/**
+ * A file the message carries, as the transcript shows it after the send.
+ * `href` is the read route for the workspace the file was stored in, so the
+ * chip under the question opens the file the person sent.
+ */
 export type SentAttachment = Pick<
   AttachmentFile,
   "key" | "name" | "mediaType" | "size"
-> & { publicId: string };
+> & { publicId: string; href: string };
 
 /** The `accept` list of the file picker: every type, and the extensions a device may not type. */
 export const ASSISTANT_ATTACHMENT_ACCEPT = [
@@ -95,6 +98,8 @@ const TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
  * The type to declare for a file. A device often reports Markdown and CSV
  * as nothing, or as a type off the list, so an unknown type falls back to
  * the extension. The server reads the bytes either way.
+ *
+ * @internal Exported for the module's test.
  */
 export function mediaTypeOf(file: { name: string; type: string }): string {
   const declared = file.type.split(";")[0]?.trim().toLowerCase() ?? "";
@@ -180,7 +185,9 @@ export function planAttachments(
 export function readBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("read failed"));
+    };
     reader.onload = () => {
       const url = typeof reader.result === "string" ? reader.result : "";
       const comma = url.indexOf(",");
@@ -190,8 +197,11 @@ export function readBase64(file: Blob): Promise<string> {
   });
 }
 
+// The id's shape is the contract's `assistantAttachmentIdSchema`, restated
+// here: the contract package carries its own copy of zod, and a schema from
+// one copy cannot sit inside an object from the other.
 const storedSchema = z.object({
-  publicId: assistantAttachmentIdSchema,
+  publicId: z.string().regex(/^gen_[0-9a-z]+$/),
   mediaType: z.string(),
 });
 
@@ -199,7 +209,11 @@ const refusalSchema = z.object({
   error: z.object({ code: z.string().optional(), reason: z.string().optional() }),
 });
 
-/** The chip's problem for a refused upload, read from the route's envelope. */
+/**
+ * The chip's problem for a refused upload, read from the route's envelope.
+ *
+ * @internal Exported for the module's test.
+ */
 export function problemOfUpload(status: number, body: unknown): AttachmentProblem {
   if (status === 413) return "size";
   const parsed = refusalSchema.safeParse(body);
@@ -223,15 +237,40 @@ export type UploadResult =
   | { ok: false; problem: AttachmentProblem };
 
 /**
+ * Where the person opens a file they sent: the read route, through the same
+ * `/api/v1/*` rewrite the upload uses. The route serves the file only to the
+ * person who uploaded it, in the workspace it was stored in.
+ */
+export function assistantAttachmentHref(
+  org: string,
+  ws: string,
+  publicId: string,
+): string {
+  return `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(ws)}/assistant/attachments/${encodeURIComponent(publicId)}`;
+}
+
+/** How long an upload may take before its chip settles to `upload`. */
+const ASSISTANT_ATTACHMENT_UPLOAD_TIMEOUT_MS = 60_000;
+
+/**
  * Stores one file for the person, in the workspace they are in. Never
- * rejects: a network failure is the `upload` problem.
+ * rejects: a network failure, or an upload still open after
+ * `timeoutMs`, is the `upload` problem. Without the limit, a request that
+ * hangs keeps the chip `uploading` and the send button off until the page
+ * reloads.
  */
 export async function uploadAssistantAttachment(
   org: string,
   ws: string,
   file: { name: string; mediaType: string; data: string },
+  timeoutMs: number = ASSISTANT_ATTACHMENT_UPLOAD_TIMEOUT_MS,
 ): Promise<UploadResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
   let response: Response;
+  let body: unknown;
   try {
     response = await fetch(
       `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(ws)}/assistant/attachments/upload`,
@@ -241,12 +280,16 @@ export async function uploadAssistantAttachment(
         cache: "no-store",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(file),
+        signal: controller.signal,
       },
     );
+    body = await response.json().catch(() => null);
   } catch {
     return { ok: false, problem: "upload" };
+  } finally {
+    clearTimeout(timer);
   }
-  const body: unknown = await response.json().catch(() => null);
+  if (controller.signal.aborted) return { ok: false, problem: "upload" };
   if (!response.ok) {
     return { ok: false, problem: problemOfUpload(response.status, body) };
   }

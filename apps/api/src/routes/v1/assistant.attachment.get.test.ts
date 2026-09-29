@@ -91,7 +91,7 @@ describe("GET /assistant/attachments/:publicId", () => {
   });
 
   it.each([
-    ["missing, someone else's, or out of scope", new GeneratedAssetNotFoundError()],
+    ["missing, someone else's, or out of scope", new GeneratedAssetNotFoundError("gen_abc123")],
     ["asked with no identity", new GeneratedAssetForbiddenError()],
   ])(
     "answers the same 404 for a file that is %s (negative)",

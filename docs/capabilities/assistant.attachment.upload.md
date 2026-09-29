@@ -47,8 +47,10 @@ The file belongs to the person who uploaded it. Only that person can attach it t
 2. An image or a PDF must start with its format's signature. A text file must decode as UTF-8 and hold no NUL byte, and a JSON file must parse. A file that fails is refused and nothing is stored.
 3. An image or a PDF can be up to 4 MiB, and a text file up to 256 KiB.
 4. The bytes go to blob storage under `attachments/<org>/<workspace>/`. The row in `generated_assets` records the name, the type, the size, the SHA-256 and the storage key, with `source = user_upload` and `access_policy = user`. ClickHouse and the message rows keep no bytes.
-5. The file is linked to a conversation and a message when a turn sends it. A file uploaded and never sent stays unlinked.
+5. The file is linked to a conversation and a message when a turn sends it. A file still unlinked 24 hours after upload was never sent. The hourly sweep `assistant.attachment-sweep` deletes its bytes, then its row. A file the store refuses to delete keeps its row until a later run succeeds.
 6. The API route shares the chat route's rate budget under its own limiter key.
+7. The composer gives up an upload after 60 seconds and shows the chip as failed, so a stalled request cannot hold the send button.
+8. A sent message's chip links to the stored file through the read route, and opens it in a new tab.
 
 When a turn sends files, `ask_assistant` checks them again before anything is written: at most 10 files, images and PDFs together at most 4 MiB, text together at most 256 KiB, and a model that can read each image and PDF. Text files are added to the message the model reads, so every model reads them.
 

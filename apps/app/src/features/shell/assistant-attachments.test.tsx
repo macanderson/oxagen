@@ -28,8 +28,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const MIB = 1024 * 1024;
-
 function withIntl(children: ReactNode) {
   return render(<IntlProvider>{children}</IntlProvider>);
 }
@@ -52,7 +50,7 @@ describe("AssistantAttachmentChips", () => {
       key: "file-1",
       name: "report.pdf",
       mediaType: "application/pdf",
-      size: 2.5 * MIB,
+      size: 2_500_000,
       state: "done" as const,
       problem: null,
     },
@@ -68,7 +66,7 @@ describe("AssistantAttachmentChips", () => {
       key: "file-3",
       name: "huge.txt",
       mediaType: "text/plain",
-      size: MIB,
+      size: 1_000_000,
       state: "error" as const,
       problem: "size" as const,
     },
@@ -88,11 +86,14 @@ describe("AssistantAttachmentChips", () => {
   it("says a file is uploading, and names the problem on a refused one", () => {
     withIntl(<AssistantAttachmentChips files={files} onRemove={() => undefined} />);
     const [, uploading, refused] = screen.getAllByTestId("assistant-attachment");
+    if (uploading === undefined || refused === undefined) {
+      throw new Error("expected three chips");
+    }
     expect(uploading).toHaveAttribute("aria-busy", "true");
-    expect(within(uploading as HTMLElement).getByText("Uploading…")).toBeTruthy();
+    expect(within(uploading).getByText("Uploading…")).toBeTruthy();
     expect(refused).toHaveAttribute("data-state", "error");
-    expect(within(refused as HTMLElement).getByText("Too large")).toBeTruthy();
-    expect(within(refused as HTMLElement).getByText("Text")).toBeTruthy();
+    expect(within(refused).getByText("Too large")).toBeTruthy();
+    expect(within(refused).getByText("Text")).toBeTruthy();
   });
 
   it("removes the file whose Remove button is pressed", async () => {
@@ -117,6 +118,27 @@ describe("AssistantAttachmentChips", () => {
     );
   });
 
+  it("links a sent file's name to where it is stored, in a new tab", async () => {
+    const [pdf] = files;
+    if (pdf === undefined) throw new Error("expected a file");
+    const { container } = withIntl(
+      <AssistantAttachmentChips
+        files={[{ ...pdf, href: "/api/v1/acme/core/assistant/attachments/gen_abc" }]}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "Open report.pdf in a new tab" });
+    expect(link).toHaveAttribute("href", "/api/v1/acme/core/assistant/attachments/gen_abc");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(link).toHaveTextContent("report.pdf");
+    await expectNoAxe(container);
+  });
+
+  it("links nothing for a file without a stored place, as on the composer (negative)", () => {
+    withIntl(<AssistantAttachmentChips files={files} onRemove={() => undefined} />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
   it("draws nothing when there are no files", () => {
     const { container } = withIntl(<AssistantAttachmentChips files={[]} />);
     expect(container).toBeEmptyDOMElement();
@@ -127,7 +149,7 @@ describe("AssistantAttachmentPicker", () => {
   it("hands the picked files over", () => {
     const onFiles = vi.fn();
     withIntl(<AssistantAttachmentPicker onFiles={onFiles} />);
-    const input = screen.getByTestId("assistant-attach-input") as HTMLInputElement;
+    const input = screen.getByTestId("assistant-attach-input");
     const file = new File(["hello"], "notes.md", { type: "text/markdown" });
     fireEvent.change(input, { target: { files: [file] } });
     expect(onFiles).toHaveBeenCalledWith([file]);
@@ -160,7 +182,14 @@ describe("useAssistantAttachments", () => {
       sent = result.current.take();
     });
     expect(sent).toEqual([
-      { key: "file-1", name: "a.txt", mediaType: "text/plain", size: 5, publicId: "gen_abc" },
+      {
+        key: "file-1",
+        name: "a.txt",
+        mediaType: "text/plain",
+        size: 5,
+        publicId: "gen_abc",
+        href: "/api/v1/acme/core/assistant/attachments/gen_abc",
+      },
     ]);
     expect(result.current.files).toEqual([]);
   });
