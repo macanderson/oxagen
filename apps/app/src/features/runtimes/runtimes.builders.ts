@@ -221,6 +221,7 @@ export function runtimesSource(reads: {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

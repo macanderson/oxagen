@@ -34,23 +34,21 @@ export async function WorkspaceDenied({
   ]);
   const first = context.ok ? context.value.workspaces[0] : undefined;
   return (
-    <main id="main" className="mx-auto flex w-full max-w-6xl flex-col">
-      <PageDenied
-        title={t("workspace")}
-        orgName={ctx.orgName}
-        permission={t("permission", { ws })}
-        signedIn={{
-          name: user?.name || user?.email || t("unnamed"),
-          role: `org.${ctx.orgRole}`,
-          scope: ctx.orgSlug,
-        }}
-        decidedBy={null}
-        back={
-          first === undefined
-            ? routes.people(ctx.orgSlug)
-            : routes.fleet(ctx.orgSlug, first.slug)
-        }
-      />
-    </main>
+    <PageDenied
+      title={t("workspace")}
+      orgName={ctx.orgName}
+      permission={t("permission", { ws })}
+      signedIn={{
+        name: user?.name || user?.email || t("unnamed"),
+        role: `org.${ctx.orgRole}`,
+        scope: ctx.orgSlug,
+      }}
+      decidedBy={null}
+      back={
+        first === undefined
+          ? routes.people(ctx.orgSlug)
+          : routes.fleet(ctx.orgSlug, first.slug)
+      }
+    />
   );
 }

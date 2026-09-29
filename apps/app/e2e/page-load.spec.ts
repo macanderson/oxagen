@@ -40,9 +40,17 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
-    // A route with a loading.tsx streams its page into a hidden node beside
-    // the skeleton's own main#main before React swaps them, so wait for the
-    // one main the settled page keeps.
+    // Under the organization shell, the frame's main#main is in the document
+    // from the first byte, and a page streaming into a hidden node beside its
+    // skeleton brings no second one (ADR-227, #4053). One target holds at any
+    // moment, so this count does not retry: a second main fails it at once.
+    if ((await page.getByTestId("shell").count()) > 0) {
+      expect(
+        await page.locator("main#main").count(),
+        `${row.path} must hold one main#main while it streams`,
+      ).toBe(1);
+    }
+    // The onboarding gate's step owns its main, so wait for the settled step.
     await expect(page.locator("main#main")).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator("main#main")).toBeVisible();
     const desktopPath = test.info().outputPath("desktop.png");

@@ -1812,12 +1812,38 @@
       "verifiedBy": "run-outcomes-providers"
     },
     "get_steering_deliveries": {
-      "route": "/[org]/[ws]/steering?tab=deliveries",
-      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Delivery tab showing included and cut records per recorded run",
+      "route": "/[org]/[ws]/steering/assignments",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering › Assignments shows the records each recorded run was given and the records it cut (features/steering/tabs/assignments.tsx)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
-      "verifiedAt": "2026-09-22",
-      "verifiedBy": "steering-rescue-ci"
+      "verifiedAt": "2026-09-29",
+      "verifiedBy": "steering-2961-residue"
+    },
+    "get_steering_freshness": {
+      "route": "/[org]/[ws]/steering/gates",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering › Gates › Steering freshness shows the published version, the repository, the newest record and the two freshness gates (features/steering/tabs/gates.tsx, features/steering/freshness.tsx)",
+      "proof": "apps/app/src/features/steering/steering.test.tsx",
+      "verifiedAt": "2026-09-29",
+      "verifiedBy": "steering-2961-residue",
+      "also": [
+        {
+          "route": "/[org]/[ws]/steering/records",
+          "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+          "entry": "Steering › Library › Records marks each record the last merge published with the bundle version (features/steering/tabs/records.tsx, features/steering/records-shelf.tsx)",
+          "proof": "apps/app/src/features/steering/steering.test.tsx",
+          "verifiedAt": "2026-09-29",
+          "verifiedBy": "steering-2961-residue"
+        },
+        {
+          "route": "/[org]/[ws]/steering/records/[lineage]",
+          "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
+          "entry": "The record page reads the freshness to name the steering repository a revision's pull request goes to (features/record/record.tsx)",
+          "proof": "apps/app/src/features/record/record.test.tsx",
+          "verifiedAt": "2026-09-29",
+          "verifiedBy": "steering-2961-residue"
+        }
+      ]
     },
     "get_steering_repo": {
       "route": "/[org]/[ws]/repositories",
@@ -2000,6 +2026,59 @@
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "start_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Connect Slack, shown to an Owner or Admin while no workspace is connected (features/organization/notifications-controls.tsx)",
+      "testid": "slack-connect",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "authorize_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: after Connect Slack, Slack sends the browser back through /api/slack/oauth/callback, which finishes the connection and returns to this tab with the outcome (features/organization/slack-callback.ts)",
+      "proof": "apps/app/src/features/organization/slack-callback.test.ts",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "get_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: the workspace, the channel, when it was connected, and the last post Slack refused (features/organization/notifications.tsx)",
+      "testid": "org-slack",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "list_slack_channels": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Pick a channel or Change channel opens the channel picker (features/organization/notifications-controls.tsx)",
+      "testid": "slack-pick",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "set_slack_channel": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Save in the channel picker (features/organization/notifications-controls.tsx)",
+      "testid": "slack-picker",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "delete_slack_connection": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org]?tab=notifications Organization › Notifications › Slack: Disconnect, then Disconnect again in the confirm (features/organization/notifications-controls.tsx)",
+      "testid": "slack-disconnect",
+      "proof": "apps/app/src/features/organization/notifications.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "slack-health-notices (#4608)"
     }
   }
 }
