@@ -31,7 +31,6 @@ import {
 } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
 import { OrganizationHeader } from "./header";
-import { Receipts } from "./receipt";
 import {
   OrganizationDenied,
   OrganizationEmpty,
@@ -165,7 +164,6 @@ export async function OrganizationFrame({
           enterable,
         })
       }
-      <Receipts />
     </div>
   );
 }

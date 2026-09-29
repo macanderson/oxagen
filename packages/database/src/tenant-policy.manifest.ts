@@ -248,6 +248,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.operator_tokens", policyClass: "standard" },
   // MCP Studio drafts (M11, #4686): orgScopeMixin → standard.
   { table: "mcp.studio_drafts", policyClass: "standard" },
+  // One embedding per search entry of a search-mode server (M15, ADR-217):
+  // orgScopeMixin → standard.
+  { table: "mcp.search_embeddings", policyClass: "standard" },
 
   // ── notification.* (org_id NOT NULL, workspace_id nullable) ──────────────
   { table: "notification.notifications", policyClass: "workspace_nullable" },
