@@ -1540,6 +1540,53 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "oxagen-v2-355ea6b2a3f7" },
   },
 
+  // ── Slack app ─────────────────────────────────────────────────────────────────
+  // The Oxagen Slack app (infra/slack/manifest.json, docs/specs/slack-app.md).
+  // The app service runs the OAuth callback and the channel picker. The api
+  // posts steering health notices with the stored bot token, so it reads none
+  // of these. Not the SLACK_DATA_* pair above: that belongs to the retired data
+  // connector.
+  SLACK_APP_ID: {
+    group: "Slack app",
+    description:
+      "Oxagen Slack app id. The callback rejects an oauth.v2.access answer for another app.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SLACK_APP_CLIENT_ID: {
+    group: "Slack app",
+    description:
+      "Oxagen Slack app OAuth client id. Organization settings uses it to start the Connect Slack flow.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SLACK_APP_CLIENT_SECRET: {
+    group: "Slack app",
+    description:
+      "Oxagen Slack app OAuth client secret. The callback sends it to oauth.v2.access to exchange the code.",
+    secret: true,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SLACK_APP_SIGNING_SECRET: {
+    group: "Slack app",
+    description:
+      "Oxagen Slack app signing secret for verifying Slack requests. Nothing reads it yet. The C8 collector will.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Public URLs ───────────────────────────────────────────────────────────────
   NEXT_PUBLIC_APP_URL: {
     group: "Public URLs",

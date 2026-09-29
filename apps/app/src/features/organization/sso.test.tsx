@@ -352,12 +352,12 @@ describe("Sso: a read that did not list", () => {
     });
     expect(screen.getByTestId("sso-denied")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
-    // Single sign-on is not one of the design's seven tabs: the row stays,
+    // Single sign-on is not one of the design's eight tabs: the row stays,
     // and no tab is marked current on this page.
     const tabs = within(
       screen.getByRole("tablist", { name: "Organization" }),
     ).getAllByRole("tab");
-    expect(tabs).toHaveLength(7);
+    expect(tabs).toHaveLength(8);
     expect(tabs.some((tab) => tab.hasAttribute("aria-current"))).toBe(false);
     expect(
       tabs.every((tab) => tab.getAttribute("aria-selected") === "false"),

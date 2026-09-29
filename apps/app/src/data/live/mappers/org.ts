@@ -14,6 +14,7 @@ import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
 import type { orgDataPlaneGet } from "@oxagen/oxagen/contracts/org.data_plane.get";
 import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
+import type { orgSlackConnectionGet } from "@oxagen/oxagen/contracts/org.slack_connection.get";
 import type { orgSsoList } from "@oxagen/oxagen/contracts/org.sso.list";
 import type { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
@@ -26,6 +27,7 @@ import type {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SlackConnection,
   SsoSettings,
   WorkspaceFacts,
   WorkspaceList,
@@ -275,5 +277,33 @@ export function toDataPlane(
     schemaVersion: out.schemaVersion,
     lastVerifiedAt: out.lastVerifiedAt,
     rotatedAt: out.rotatedAt,
+  };
+}
+
+/**
+ * `get_slack_connection` onto the Notifications tab. Every field is named
+ * here, so nothing the contract gains later reaches the page unless this
+ * mapper copies it. Slack's channel id becomes `channelRef` (INV-11).
+ */
+export function toSlackConnection(
+  out: ContractOutput<typeof orgSlackConnectionGet>,
+): z.input<typeof SlackConnection> {
+  return {
+    configured: out.configured,
+    connected: out.connected,
+    teamName: out.teamName,
+    channel:
+      out.channel === null
+        ? null
+        : {
+            channelRef: out.channel.id,
+            name: out.channel.name,
+            isPrivate: out.channel.isPrivate,
+          },
+    lastFailure:
+      out.lastFailure === null
+        ? null
+        : { code: out.lastFailure.code, at: out.lastFailure.at },
+    connectedAt: out.connectedAt,
   };
 }

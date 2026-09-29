@@ -30,21 +30,22 @@ SSM holds the same four values under `/oxagen/production/` and `/oxagen/staging/
 | `SLACK_APP_CLIENT_SECRET` | The OAuth client secret |
 | `SLACK_APP_SIGNING_SECRET` | The secret Slack signs each request with |
 
-No code reads these names yet, so they are a proposal. The change that first reads them (#4608) adds them to `packages/config/src/registry.ts` and `.env.example`. Do not reuse `SLACK_DATA_*`. Those names belong to the de-registered Slack data connector.
+`packages/config/src/registry.ts` and `.env.example` register all four for `apps/app` (#4608). The app reads the client ID and secret to connect a workspace, and the app ID to refuse an install answered for another app. Nothing reads the signing secret yet. The C8 collector will, when it verifies Slack's requests. Do not reuse `SLACK_DATA_*`. Those names belong to the de-registered Slack data connector.
 
 To rotate the client secret or the signing secret, regenerate it on the settings page under Basic Information, then write the new value to both SSM paths.
 
 ## Redirect URLs
 
-The app accepts three OAuth redirect URLs:
+The app accepts four OAuth redirect URLs:
 
 ```
+https://oxagen.app/api/slack/oauth/callback
 https://app.oxagen.sh/api/slack/oauth/callback
 https://app.staging.oxagen.sh/api/slack/oauth/callback
 https://preview-app.oxagen.sh/api/slack/oauth/callback
 ```
 
-No route serves that path yet. Build the callback at `apps/app/src/app/api/slack/oauth/callback/route.ts` so its path matches. To use a different path, change the manifest first.
+`apps/app/src/app/api/slack/oauth/callback/route.ts` serves that path. The app builds the redirect from `APP_URL`, so the URL it sends Slack follows the app's origin. `oxagen.app` is listed ahead of the ADR-215 cutover, when `APP_URL` moves to it. To use a different path, change the manifest first.
 
 ## Scopes
 
@@ -58,6 +59,22 @@ The bot asks for four scopes:
 | `groups:read` | List the private channels the bot has joined |
 
 A feature that needs more scopes adds them to the manifest in the same PR.
+
+## Organization notices
+
+An Owner or Admin connects one Slack workspace to the organization in Organization settings, then picks one channel. Oxagen posts each steering repo health change to that channel, beside the in-app notice and the email (#4608).
+
+| Part | Where |
+|---|---|
+| Capabilities | `start_slack_connection`, `authorize_slack_connection`, `get_slack_connection`, `list_slack_channels`, `set_slack_channel`, `delete_slack_connection` (`docs/capabilities/`) |
+| Handlers | `packages/handlers/src/org.slack_*.ts`, with the shared parts in `lib/slack-notices.ts` |
+| Bot token | One `ingestion.oauth_accounts` row with provider `slack_notices`, encrypted with the ingestion key |
+| Team, channel, last failure | `organizations.settings.slack_notices` |
+| Post | `notifyOrgSlack` in `@oxagen/notifications` |
+
+The connect flow stores a single-use state nonce in `auth.verifications` for ten minutes, bound to the organization and the person who started it. The callback refuses a state another person or organization started. It also refuses an install for another app when `SLACK_APP_ID` is set, and an install whose token lacks `chat:write`.
+
+A post that Slack refuses until a person acts, such as a revoked token or an archived channel, is recorded on the connection and shown in Organization settings. Any other failure throws, so the next health read sends the notice again.
 
 ## Settings left off
 

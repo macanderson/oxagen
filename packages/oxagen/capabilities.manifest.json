@@ -3952,6 +3952,84 @@
       }
     },
     {
+      "name": "set_slack_channel",
+      "file": "org.slack_channel.set.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_slack_channels",
+      "file": "org.slack_channels.list.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "authorize_slack_connection",
+      "file": "org.slack_connection.authorize.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "delete_slack_connection",
+      "file": "org.slack_connection.delete.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_slack_connection",
+      "file": "org.slack_connection.get.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "start_slack_connection",
+      "file": "org.slack_connection.start.ts",
+      "domain": "org",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "app": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "create_sso_provider",
       "file": "org.sso.create.ts",
       "domain": "org",
