@@ -61,7 +61,7 @@ export function MonthTable({
         <tbody className="divide-y divide-border">
           {rows.map((row, index) => {
             const isOpen = open === row.key;
-            const listId = `spend-month-runs-${index}`;
+            const listId = `spend-month-runs-${String(index)}`;
             return [
               <tr
                 key={row.key}
@@ -78,7 +78,9 @@ export function MonthTable({
                       type="button"
                       aria-expanded={isOpen}
                       aria-controls={listId}
-                      onClick={() => setOpen(isOpen ? null : row.key)}
+                      onClick={() => {
+                        setOpen(isOpen ? null : row.key);
+                      }}
                       className="flex min-w-0 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
                       <CaretRightIcon
