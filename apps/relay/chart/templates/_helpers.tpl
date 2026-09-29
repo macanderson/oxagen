@@ -53,9 +53,9 @@ RELAY_TOKEN
 {{- define "oxagen-relay.validate" -}}
 {{- $_ := required "Set image.repository to the registry path of the relay image you built from apps/relay/Dockerfile." .Values.image.repository -}}
 {{- $_ := required "Set image.tag to the relay image tag you pushed." .Values.image.tag -}}
-{{- $_ := required "Set relay.brokerUrl to the broker address Oxagen gave you." .Values.relay.brokerUrl -}}
+{{- $_ := required "Set relay.brokerUrl to the broker's wss:// address." .Values.relay.brokerUrl -}}
 {{- $_ := required "Set relay.name to the relay's name in Oxagen." .Values.relay.name -}}
-{{- $_ := required "Set relay.workspace to the workspace id Oxagen shows for the relay." .Values.relay.workspace -}}
+{{- $_ := required "Set relay.workspace to the workspace id: wrk_ and 22 characters." .Values.relay.workspace -}}
 {{- $_ := required "Set relay.trustedKeys to the PEM public key Oxagen signs relay requests with." .Values.relay.trustedKeys -}}
 {{- if not .Values.relay.allowedHosts -}}
 {{- fail "Set relay.allowedHosts to the hosts the relay may reach." -}}

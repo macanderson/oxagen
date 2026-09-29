@@ -55,7 +55,7 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function brokerUrl(value: string | undefined, problems: string[]): string {
   if (value === undefined || value.trim() === "") {
-    problems.push("Set RELAY_BROKER_URL to the broker address Oxagen gave you, such as wss://relay.oxagen.sh.");
+    problems.push("Set RELAY_BROKER_URL to the broker's wss:// address, such as wss://relay.oxagen.sh.");
     return "";
   }
   const text = value.trim();
@@ -63,7 +63,7 @@ function brokerUrl(value: string | undefined, problems: string[]): string {
   try {
     url = new URL(text);
   } catch {
-    problems.push("RELAY_BROKER_URL is not a URL. Use the wss:// address Oxagen gave you.");
+    problems.push("RELAY_BROKER_URL is not a URL. Use the broker's wss:// address.");
     return "";
   }
   const loopback = LOOPBACK_HOSTS.has(url.hostname);
@@ -109,7 +109,7 @@ function relayName(value: string | undefined, problems: string[]): string {
 
 function workspace(value: string | undefined, problems: string[]): string {
   if (value === undefined || !workspacePublicIdSchema.safeParse(value).success) {
-    problems.push("Set RELAY_WORKSPACE to the workspace id Oxagen shows for the relay, such as wrk_ and 22 characters.");
+    problems.push("Set RELAY_WORKSPACE to the workspace id: wrk_ and 22 characters.");
     return "";
   }
   return value;

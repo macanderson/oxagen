@@ -17,11 +17,11 @@ image:
 imagePullSecrets: []
 
 relay:
-  # Required. The broker address Oxagen gave you, such as wss://relay.oxagen.sh.
+  # Required. The broker's wss:// address, such as wss://relay.oxagen.sh.
   brokerUrl: ""
   # Required. The relay's name in Oxagen: up to 63 lowercase letters, digits, and hyphens.
   name: ""
-  # Required. The workspace id Oxagen shows for the relay: wrk_ and 22 characters.
+  # Required. The workspace id: wrk_ and 22 characters.
   workspace: ""
   # Required. The PEM public key Oxagen signs relay requests with. More than
   # one key may follow each other, which lets Oxagen rotate its key.
