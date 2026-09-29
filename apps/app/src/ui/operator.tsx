@@ -135,10 +135,19 @@ export function OperatorName({
       onMouseLeave={() => {
         clearTimeout(closeTimer.current);
         closeTimer.current = setTimeout(() => {
+          // Focus opened the card too, so the card stays while the name or
+          // the card holds focus, whichever came first.
+          const focused = document.activeElement;
+          if (
+            rootRef.current?.contains(focused) === true ||
+            cardRef.current?.contains(focused) === true
+          )
+            return;
           setOpen(false);
         }, CLOSE_DELAY_MS);
       }}
       onFocus={() => {
+        clearTimeout(closeTimer.current);
         setOpen(true);
       }}
       onBlur={(event) => {
