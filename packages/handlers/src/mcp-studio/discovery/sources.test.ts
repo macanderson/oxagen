@@ -2313,7 +2313,8 @@ describe("servedDescriptorSet", () => {
       commit: COMMIT,
       read: (path) => Promise.resolve(held.get(path) ?? null),
       list: () => Promise.resolve([...held.keys()]),
-      pullRequest: () => Promise.resolve({ open: true, merged: false }),
+      pullRequest: () =>
+        Promise.resolve({ open: true, merged: false, headSha: null }),
     };
   }
 
