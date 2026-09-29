@@ -17,6 +17,7 @@ import {
   published,
   run,
   server,
+  sourceNamed,
   textOf,
   view,
   type PortOptions,
@@ -362,6 +363,115 @@ describe("callServed off switches", () => {
     expect(textOf(result)).toBe("Oxagen withholds billing__list_charges from every agent, so it was not sent.");
     nothingSent(recorded);
     expect(outcomes(recorded)).toEqual(["call billing__list_charges denied"]);
+  });
+});
+
+describe("callServed kill switches", () => {
+  const INCIDENT = "Refunds are paused during the incident.";
+  /** A switch at each scope a served call carries. */
+  const SCOPES: ReadonlyArray<{ targetKind: string; targetId: string; words: string }> = [
+    { targetKind: "tool_version", targetId: "tov_1", words: "tool version" },
+    { targetKind: "tool_server", targetId: "mcs_1", words: "tool server" },
+    { targetKind: "connection", targetId: "mcc_1", words: "connection" },
+    { targetKind: "operator", targetId: "usr_1", words: "operator" },
+    { targetKind: "workspace", targetId: "ws_1", words: "workspace" },
+    { targetKind: "org", targetId: "org_1", words: "org" },
+    { targetKind: "class", targetId: "moves_money", words: "class" },
+  ];
+
+  for (const { targetKind, targetId, words } of SCOPES) {
+    it(`refuses a call a ${words} switch stops, before any approval or credential`, async () => {
+      const { call, recorded } = await setup({
+        emergencyDeny: () => Promise.resolve({ id: "emd_1", targetKind, targetId, reason: INCIDENT }),
+      });
+      const result = await call("billing__create_refund", REFUND);
+      expect(result?.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        `Kill switch emd_1 on ${words} ${targetId} stops billing__create_refund, so Oxagen did not send it. Reason: Refunds are paused during the incident. Ask an admin to turn the switch off if the call must run.`,
+      );
+      expect(recorded.approvals).toEqual([]);
+      expect(recorded.credentials).toEqual([]);
+      expect(recorded.routes).toEqual([]);
+      nothingSent(recorded);
+      expect(outcomes(recorded)).toEqual(["call billing__create_refund denied"]);
+    });
+  }
+
+  it("ends the reason with one period whether or not the person wrote one", async () => {
+    const { call } = await setup({
+      emergencyDeny: () => Promise.resolve({ id: "emd_2", targetKind: "org", targetId: "org_1", reason: "Audit in progress " }),
+    });
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toContain("Reason: Audit in progress. Ask an admin");
+  });
+
+  it("names the server, the tool, the credential, and whether the tool only reads", async () => {
+    const { call, recorded } = await setup({ approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }) });
+    await call("billing__list_charges");
+    await call("billing__create_refund", REFUND);
+    await call("stripe__list_customers");
+    await call("files__read_file");
+    expect(recorded.emergencyDenies).toEqual([
+      { server: "billing", tool: "billing__list_charges", credential: "oxagen:credential/billing-sandbox", readOnly: true },
+      { server: "billing", tool: "billing__create_refund", credential: "oxagen:credential/billing-sandbox", readOnly: false },
+      { server: "stripe", tool: "stripe__list_customers", credential: null, readOnly: true },
+      { server: "files", tool: "files__read_file", credential: null, readOnly: true },
+    ]);
+  });
+
+  it("names no credential for a server with no sandbox environment", async () => {
+    const version = published({
+      servers: [
+        server({
+          ...sourceNamed("billing"),
+          environments: {
+            production: { sandbox: false, network: "cloud", credential: "oxagen:credential/billing-live" },
+            staging: { sandbox: false, network: "cloud", credential: "oxagen:credential/billing-staging" },
+          },
+        }),
+      ],
+    });
+    const { call, recorded } = await setup({}, version);
+    await call("billing__list_charges");
+    expect(recorded.emergencyDenies.map((checked) => checked.credential)).toEqual([null]);
+  });
+
+  it("checks the tool a search-mode call names", async () => {
+    const { call, recorded } = await setup(
+      { emergencyDeny: () => Promise.resolve({ id: "emd_1", targetKind: "tool_server", targetId: "mcs_1", reason: INCIDENT }) },
+      searchBilling(),
+    );
+    const result = await call("billing__call", { tool: "create_refund", arguments: REFUND });
+    expect(textOf(result)).toContain("Kill switch emd_1 on tool server mcs_1 stops billing__create_refund");
+    expect(recorded.emergencyDenies.map((checked) => checked.tool)).toEqual(["billing__create_refund"]);
+    expect(recorded.approvals).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund denied"]);
+  });
+
+  it("does not check a call the off switches already refused", async () => {
+    const { call, recorded } = await setup({ off: { servers: ["billing"] } });
+    await call("billing__list_charges");
+    expect(recorded.emergencyDenies).toEqual([]);
+  });
+
+  it("fails a call when the switches cannot be read, and logs only the error's name", async () => {
+    const { call, recorded } = await setup({
+      emergencyDeny: () => Promise.reject(new Error("emergency_denies for org_1 is locked")),
+    });
+    const result = await call("billing__create_refund", REFUND);
+    expect(textOf(result)).toBe(
+      "Oxagen could not check the kill switches for billing__create_refund, so it did not send the call. Call it again in a minute.",
+    );
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not read the kill switches, so the call was not sent.",
+        fields: { tool: "billing__create_refund", error: "Error" },
+      },
+    ]);
+    expect(recorded.approvals).toEqual([]);
+    nothingSent(recorded);
+    expect(outcomes(recorded)).toEqual(["call billing__create_refund failed"]);
   });
 });
 

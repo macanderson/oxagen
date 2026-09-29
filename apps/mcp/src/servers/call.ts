@@ -24,6 +24,7 @@ import {
   ServedRouteError,
   type Admission,
   type ApprovalState,
+  type EmergencyDeny,
   type MeterKind,
   type MeterOutcome,
   type ServedAgent,
@@ -177,6 +178,58 @@ function unservedRefusal(view: ServedView, entry: ServedTool, agent: ServedAgent
   }
 }
 
+/** Text as one sentence that ends in a single period, whether or not it had one. */
+function sentenceOf(text: string): string {
+  let end = text.trimEnd();
+  while (end.endsWith(".")) end = end.slice(0, -1).trimEnd();
+  return `${end}.`;
+}
+
+/** A switch's target kind in words: tool_server reads "tool server". */
+function targetWords(deny: EmergencyDeny): string {
+  return deny.targetKind.replaceAll("_", " ");
+}
+
+/**
+ * The refusal for a call a kill switch stops, or null when none does. A
+ * failed read stops the call too, since Oxagen cannot tell that no switch
+ * is on.
+ */
+async function emergencyRefusal(
+  ports: ServedPorts,
+  entry: ServedTool,
+  environment: { name: string } | null,
+): Promise<Answer | null> {
+  const { server, tool } = entry;
+  // The reference executeCall resolves: the sandbox environment's, when the
+  // server takes a credential at all.
+  const credential =
+    environment === null || server.auth === null ? null : (server.environments[environment.name]?.credential ?? null);
+  let deny: EmergencyDeny | null;
+  try {
+    deny = await ports.emergencyDeny({
+      server: server.name,
+      tool: tool.name,
+      credential,
+      readOnly: tool.classification.side_effect === "read",
+    });
+  } catch (error) {
+    ports.log.warn("Oxagen could not read the kill switches, so the call was not sent.", {
+      tool: tool.name,
+      error: errorName(error),
+    });
+    return refusal(
+      `Oxagen could not check the kill switches for ${tool.name}, so it did not send the call. Call it again in a minute.`,
+      "failed",
+    );
+  }
+  if (deny === null) return null;
+  return refusal(
+    `Kill switch ${deny.id} on ${targetWords(deny)} ${deny.targetId} stops ${tool.name}, so Oxagen did not send it. Reason: ${sentenceOf(deny.reason)} Ask an admin to turn the switch off if the call must run.`,
+    "denied",
+  );
+}
+
 /** Decide one call to an imported tool, park it or run it, and say how it ended. */
 async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, args: Record<string, unknown>): Promise<Answer> {
   const { server, tool } = entry;
@@ -199,6 +252,24 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   const refused = unservedRefusal(view, entry, agent);
   if (refused !== null) return refused;
 
+  // The kill switches come before the policy, so a stopped call opens no
+  // approval, reads no credential, and sends nothing.
+  const environment = sandboxOf(server);
+  const stopped = await emergencyRefusal(ports, entry, environment);
+  if (stopped !== null) return stopped;
+
+  // Five live facts a rule can name have no source on the served path yet,
+  // so both decisions leave them out (#4666):
+  // - rate: the governed action ledger records no outcome, so a count read
+  //   from it would include denied and parked retries.
+  // - taint: nothing on the served path marks a run's data as tainted.
+  // - run: nothing records which served calls a run has made or read.
+  // - budget_remaining_cents: nothing records what a served agent has spent.
+  //   A spend budget caps model spend in micros, which is not this fact.
+  // - mandate_remaining_cents: no mandate reaches a served call.
+  // A rule on one of them reads the policy's default: an untainted run, no
+  // calls in the last hour or minute, no prior calls, the budget the agent
+  // file declares or none, and no mandate.
   const decide = (approval?: { granted: boolean; approvers: number }): ToolCallVerdict =>
     decideToolCall({
       runtime: decider.runtime,
@@ -255,7 +326,6 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   }
   if (verdict.decision !== "allow") return refusal(denial(agent, tool.name, verdict), "denied");
 
-  const environment = sandboxOf(server);
   if (environment === null) {
     return refusal(
       `${server.name} has no sandbox environment, so Oxagen cannot send ${tool.name}. Ask a workspace admin to mark one environment as the sandbox.`,

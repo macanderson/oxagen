@@ -5,11 +5,13 @@
 // fakes to the same interfaces, so nothing here holds logic a test needs to
 // reach: it reads rows, hands them on, and picks the transport the
 // environment's network names.
+import { postgresKillSwitchReads } from "@oxagen/agent/runtime/kill-switch-gate";
 import { assertGauAvailable, BillingSuspendedError, GauExhaustedError, recordGovernedActions } from "@oxagen/billing";
 import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
 import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
+import { TACHO_BUNDLE_SIGNING_KEY_ENV } from "@oxagen/handlers/lib/tacho-bundle-signing";
 import { workspaceCredentialSource } from "@oxagen/handlers/mcp-studio/credentials/connect";
 import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-calls/groups-store";
@@ -20,6 +22,7 @@ import { searchIndexFor } from "@oxagen/handlers/mcp-studio/search-index";
 import { postgresVersionStore } from "@oxagen/handlers/steering-repo/version-store";
 import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-scope";
 import { createCloudTransport, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
+import { parseCredentialRef } from "@oxagen/oxagen/steering-repo/names";
 import type { CedarRuntime } from "@oxagen/policy";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
@@ -28,6 +31,7 @@ import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
+import { servedEmergencyDenies, type SwitchTargets } from "./kill-switch";
 import { METER_LABEL, meterEntry } from "./meter";
 import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
@@ -87,6 +91,54 @@ export function readOffSwitches(run: ServedRun): Promise<OffSwitches> {
   );
 }
 
+/**
+ * The registry rows a kill switch names for one call: the steering server's
+ * mcp.mcp_servers row, and the mcp.mcp_credentials row its credential
+ * reference names. A deleted server matches nothing. A credential is found
+ * whatever its status, so a switch on a revoked connection still reads as on.
+ */
+export function readSwitchTargets(
+  run: ServedRun,
+  call: { server: string; credential: string | null },
+): Promise<SwitchTargets> {
+  const scope = scopeOf(run);
+  const name = call.credential === null ? null : parseCredentialRef(call.credential);
+  return runInTenantScope(scope, () =>
+    withTenantDb(async (tx): Promise<SwitchTargets> => {
+      const servers = schema.mcpServers;
+      const [server] = await tx
+        .select({ id: servers.id })
+        .from(servers)
+        .where(
+          and(
+            eq(servers.orgId, scope.orgId),
+            eq(servers.workspaceId, scope.workspaceId),
+            eq(servers.steeringName, call.server),
+            isNull(servers.deletedAt),
+          ),
+        )
+        .limit(1);
+      let connectionId: string | null = null;
+      if (name !== null) {
+        const credentials = schema.mcpCredentials;
+        const [credential] = await tx
+          .select({ id: credentials.id })
+          .from(credentials)
+          .where(
+            and(
+              eq(credentials.orgId, scope.orgId),
+              eq(credentials.workspaceId, scope.workspaceId),
+              eq(credentials.name, name),
+            ),
+          )
+          .limit(1);
+        connectionId = credential?.id ?? null;
+      }
+      return { serverId: server?.id ?? null, connectionId };
+    }),
+  );
+}
+
 /** The slugs of the run's organization and workspace, which a connect link names. */
 async function scopeSlugs(scope: Scope): Promise<{ orgSlug: string; workspaceSlug: string }> {
   const [row] = await runInTenantScope(scope, () =>
@@ -128,7 +180,7 @@ function localTransport(route: ServedRoute): Transport {
   if (signer === undefined) {
     throw new ServedRouteError(
       "local_unavailable",
-      "This deployment holds no key to sign local calls, so Oxagen sent nothing. Ask an Oxagen operator to set TACHO_BUNDLE_SIGNING_KEY.",
+      `This deployment holds no key to sign local calls, so Oxagen sent nothing. Ask an Oxagen operator to set ${TACHO_BUNDLE_SIGNING_KEY_ENV}.`,
     );
   }
   if (run.machine === null) {
@@ -216,6 +268,7 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     // (mcp-studio-spec, Discovery). Until it stores a withheld list, none is.
     withheld: async () => new Set<string>(),
     admit: admitServed,
+    emergencyDeny: servedEmergencyDenies(run, { gate: postgresKillSwitchReads, targets: readSwitchTargets }),
     approvals: postgresApprovals(),
     credentials: servedCredentials(run),
     transport: transportFor,

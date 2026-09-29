@@ -113,6 +113,33 @@ export interface ServedApprovals {
   settle(request: ApprovalRequest): Promise<ApprovalState>;
 }
 
+/** The facts about one call that a kill switch can name. */
+export interface EmergencyCall {
+  /** The server's name in the manifest: billing. */
+  server: string;
+  /** The full tool name: billing__create_refund. */
+  tool: string;
+  /**
+   * The credential reference the call's environment names
+   * (oxagen:credential/<name>). Null when the server takes no credential.
+   */
+  credential: string | null;
+  /** True when the tool only reads. A read is checked against the switches the request last read. */
+  readOnly: boolean;
+}
+
+/** The kill switch that stops a call. */
+export interface EmergencyDeny {
+  /** The switch's public id. */
+  id: string;
+  /** What the switch names: tool_version, tool_server, connection, operator, workspace, org, or class. */
+  targetKind: string;
+  /** The id the switch was set on. */
+  targetId: string;
+  /** The reason the person who set the switch gave. */
+  reason: string;
+}
+
 export type MeterKind = "call" | "search" | "describe";
 export type MeterOutcome = "allowed" | "denied" | "parked" | "failed";
 
@@ -164,6 +191,11 @@ export interface ServedPorts {
   withheld(run: ServedRun): Promise<ReadonlySet<string>>;
   /** Billing's admission for one governed action. Throws when billing cannot be read. */
   admit(run: ServedRun): Promise<Admission>;
+  /**
+   * The kill switch that stops this call, or null when none does. Throws
+   * when the switches cannot be read.
+   */
+  emergencyDeny(call: EmergencyCall): Promise<EmergencyDeny | null>;
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */

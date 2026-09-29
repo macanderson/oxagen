@@ -29,6 +29,8 @@ import type {
   Admission,
   ApprovalRequest,
   ApprovalState,
+  EmergencyCall,
+  EmergencyDeny,
   MeterEvent,
   PublishedTools,
   ServedAgent,
@@ -132,7 +134,9 @@ export interface ServerSpec {
   tools: ToolSpec[];
   network?: string;
   /** The environments by name. Defaults to one sandbox on the network. */
-  environments?: Record<string, { sandbox: boolean; network: string }>;
+  environments?: Record<string, { sandbox: boolean; network: string; credential?: string }>;
+  /** The credential reference the default sandbox names: oxagen:credential/<name>. */
+  credential?: string;
   mode?: "direct" | "search";
   auth?: boolean;
 }
@@ -171,7 +175,13 @@ export function searchDefinitions(server: string): EffectiveDefinition[] {
 
 export function server(spec: ServerSpec): ManifestServer {
   const network = spec.network ?? (spec.source === "local" ? "local" : "cloud");
-  const environments = spec.environments ?? { [spec.source === "local" ? "default" : "sandbox"]: { sandbox: true, network } };
+  const environments = spec.environments ?? {
+    [spec.source === "local" ? "default" : "sandbox"]: {
+      sandbox: true,
+      network,
+      ...(spec.credential === undefined ? {} : { credential: spec.credential }),
+    },
+  };
   const tools: Record<string, ManifestTool> = {};
   for (const entry of spec.tools) tools[entry.key] = tool(spec.name, spec.source, entry);
   const mode = spec.mode ?? "direct";
@@ -197,6 +207,7 @@ export const SOURCES: readonly ServerSpec[] = [
     name: "billing",
     source: "openapi",
     auth: true,
+    credential: "oxagen:credential/billing-sandbox",
     tools: [
       {
         key: "list_charges",
@@ -329,6 +340,8 @@ export interface Recorded {
   meter: MeterEvent[];
   logs: LogLine[];
   approvals: ApprovalRequest[];
+  /** The calls checked against the kill switches. */
+  emergencyDenies: EmergencyCall[];
   credentials: CredentialRequest[];
   routes: ServedRoute[];
   local: LocalCall[];
@@ -340,6 +353,8 @@ export interface PortOptions {
   withheld?: string[];
   admit?: (run: ServedRun) => Promise<Admission>;
   approval?: (request: ApprovalRequest) => Promise<ApprovalState>;
+  /** The kill switch that stops a call. Defaults to none. */
+  emergencyDeny?: (call: EmergencyCall) => Promise<EmergencyDeny | null>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
   /** Replaces the Transport lookup, such as to throw for a route. */
   transport?: (route: ServedRoute) => Transport;
@@ -359,7 +374,17 @@ function unreached(): Promise<never> {
 }
 
 export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; recorded: Recorded } {
-  const recorded: Recorded = { admitted: [], meter: [], logs: [], approvals: [], credentials: [], routes: [], local: [], sent: [] };
+  const recorded: Recorded = {
+    admitted: [],
+    meter: [],
+    logs: [],
+    approvals: [],
+    emergencyDenies: [],
+    credentials: [],
+    routes: [],
+    local: [],
+    sent: [],
+  };
   let actions = 0;
   function sender<K extends RequestKind>(kind: K): Sender<K> {
     return {
@@ -386,6 +411,10 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     admit: (served) => {
       recorded.admitted.push(served);
       return options.admit?.(served) ?? Promise.resolve({ admitted: true });
+    },
+    emergencyDeny: (call) => {
+      recorded.emergencyDenies.push(call);
+      return options.emergencyDeny?.(call) ?? Promise.resolve(null);
     },
     approvals: {
       settle: (request) => {
