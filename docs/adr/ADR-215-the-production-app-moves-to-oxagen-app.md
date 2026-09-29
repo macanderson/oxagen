@@ -69,8 +69,8 @@ does not survive a redirect.
    so a browser that saw one before the switch cannot replay it afterwards and
    loop.
 6. **The cutover is one PR and Mac's Parameter Store and OAuth changes.** It
-   sets `APP_PROD_URL` to `https://oxagen.app` and deletes the listener rule.
-   From its deploy, `app.oxagen.sh` answers page visits with a 308 to
+   sets `APP_PROD_URL` to `https://oxagen.app`. The listener rule is deleted
+   before it, in a PR of its own (amendment of 2026-09-29). From its deploy, `app.oxagen.sh` answers page visits with a 308 to
    `oxagen.app`. Better Auth trusts both origins, so sign-in holds while the
    build and Parameter Store disagree.
 
@@ -80,8 +80,9 @@ does not survive a redirect.
 |---|---|---|
 | 1 | CI | The PR that adds this record merges. `infra.yml` moves `oxagen.app` out of the vanity set, adds its certificate to the ALB, and points both names at the ALB. `oxagen.app` keeps redirecting to `app.oxagen.sh`, now from the ALB. |
 | 2 | Mac | Run `infra/tools/install-node-scripts.sh`, so Caddy routes `oxagen.app` and `www.oxagen.app` to the app. |
-| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, Linear, and each preregistered MCP client. The GitHub App's Setup URL stays blank, because GitHub turns it off while OAuth during installation is on (ADR-228). The API serves the GitHub App's callback and webhook, so they follow the API (step A3). |
-| 4 | Agent | Open the cutover PR: `APP_PROD_URL` and the `app.oxagen.sh` fallbacks in code become `https://oxagen.app`, the listener rule goes, and links and deploy probes move to `oxagen.app`. |
+| 3 | Mac | Add `https://oxagen.app` redirect URIs to the Google sign-in client, Linear, the Slack app (`/api/slack/oauth/callback`), and each preregistered MCP client. The GitHub App's Setup URL stays blank, because GitHub turns it off while OAuth during installation is on (ADR-228). The API serves the GitHub App's callback and webhook, so they follow the API (step A3). |
+| 3a | Agent | Delete the listener rule in its own PR, and confirm `infra.yml` applied it before step 4 merges. A page visit on `oxagen.app` then gets a 307 to `app.oxagen.sh` from the app instead of a 302 from the ALB. |
+| 4 | Agent | Open the cutover PR: `APP_PROD_URL` and the `app.oxagen.sh` fallbacks in code become `https://oxagen.app`, and links and deploy probes move to `oxagen.app`. |
 | 5 | Mac | After the cutover PR merges and before its `deploy app.oxagen.sh` job starts, set `BETTER_AUTH_URL`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, and `OAUTH_PROXY_PRODUCTION_URL` under `/oxagen/production` to `https://oxagen.app` where they exist. Add it to `BETTER_AUTH_TRUSTED_ORIGINS` if that exists. Move the GitHub sign-in OAuth app's one callback URL to `https://oxagen.app/api/auth/callback/github`. |
 
 This command lists the Parameter Store values step 5 changes:
@@ -192,3 +193,29 @@ on the terms of the API amendment above.
 | B1 | CI | The PR that adds this amendment merges. `infra.yml` issues both certificates, adds them to the ALB, and points both names at the ALB. |
 | B2 | Mac | Run `infra/tools/install-node-scripts.sh` after B1. One run after B1 also covers A2. Then `curl -sI https://docs.oxagen.app/` returns 200, and a `POST` to `https://mcp.oxagen.app/mcp` returns the status the same request gets from `mcp.oxagen.sh`. `/healthz` proves nothing, because Caddy answers it for every name. |
 | B3 | Agent | Open the MCP and docs cutover PR: `MCP_PROD_URL`, the docs sitemap and `llms.txt`, the `oxagen.dev` redirect target, the install instructions, the docs pages, and the deploy probes in `pipeline.yml` name the `.app` origins. |
+
+## Amendment 2026-09-29: the listener rule goes before the cutover
+
+The Rollout first had the cutover PR delete the listener rule. That PR also
+changes the build, and the two reach production by different routes.
+`infra.yml` applies a change under `infra/stacks-new/` on its own trigger, and
+`pipeline.yml` deploys the app. Neither waits for the other. If the new build
+went live while the rule still stood, `app.oxagen.sh` would answer a page
+visit with a 308 to `oxagen.app`, and the rule would answer that with a 302
+back. A browser caches the 308 for an hour, so it would loop for that hour.
+
+So the rule is deleted first, in a PR of its own (step 3a). Nothing a visitor
+sees changes: the build still in production treats `app.oxagen.sh` as
+canonical, so it answers a page visit on `oxagen.app` or `www.oxagen.app` with
+a 307 to the same path on `app.oxagen.sh`, uncached. Paths under `/api/` and
+`/.well-known/` start answering on `oxagen.app` instead of redirecting, and
+Better Auth already trusts that origin. The cutover PR merges only after
+`infra.yml` has applied the deletion.
+
+Two registrations the Rollout first left out also follow the app origin. The
+Slack app's redirect URL is built from `APP_URL`, so step 3 adds
+`https://oxagen.app/api/slack/oauth/callback` to the live Slack app.
+`infra/slack/manifest.json` already lists it. An organization's OIDC sign-in
+sends a `redirect_uri` built from `BETTER_AUTH_URL`, so after step 5 each
+customer's identity provider needs `https://oxagen.app/api/auth/sso/callback/<providerId>`
+beside the old one. The SSO settings page shows the new URL from then on.
