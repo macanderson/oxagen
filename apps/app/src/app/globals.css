@@ -115,10 +115,11 @@
        least 25 degrees of OKLCH hue from every state colour and from gold
        (identity), and each fill holds 3:1 against the panel and the raised
        surface. Violet and lime lead, so a two-series chart keeps its pair
-       apart under protanopia, deuteranopia and tritanopia simulations. The
-       frame-kind hues above are a separate family. The kit's chart tokens
-       use ember, gold and the state colours, so the app sets its own here.
-       Issue #4700 records the measurements. */
+       apart under protanopia, deuteranopia and tritanopia simulations.
+       Chart-1 shares its violet with --fk-ctx above. The other four appear
+       nowhere in the frame-kind hues. The kit's chart tokens use ember, gold
+       and the state colours, so the app sets its own here. Issue #4700
+       records the measurements. */
     --chart-1: #4a3aa7;
     --chart-2: #6c9600;
     --chart-3: #6e2b58;
