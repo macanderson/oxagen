@@ -64,6 +64,16 @@ export const STELLA_ARCHIVE_AFTER_DAYS_MAX = 365;
  */
 export const STELLA_ARCHIVE_AFTER_DAYS_SETTING = "stellaArchiveAfterDays";
 
+/** workspace.toml's `[embeddings]`, as workspace/v1 reads it. */
+export type EmbeddingsSetting = z.output<typeof embeddingsSchema>;
+
+/**
+ * The key in `workspaces.settings` that holds `[embeddings]`. The steering
+ * sync writes it from workspace.toml, and search mode reads it to choose the
+ * provider that ranks a server's tools (ADR-217).
+ */
+export const EMBEDDINGS_SETTING = "embeddings";
+
 export const workspaceSchema = z
   .object({
     schema: z.literal("workspace/v1"),
