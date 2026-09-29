@@ -152,15 +152,6 @@ export const baseEnvSchema = z.object({
   OXAGEN_TACHO_GITHUB_BROKER: z.enum(["0", "1"]).optional(),
   GITHUB_APP_ID: z.string().optional(),
   GITHUB_APP_PRIVATE_KEY: z.string().optional(),
-  // The Oxagen Steering app, a second GitHub App used only on steering repos
-  // (docs/specs/github-app/github-app-setup.md). The steering connect in api
-  // answers 503 naming the first of these that is unset.
-  OXAGEN_STEERING_APP_ID: z.string().optional(),
-  OXAGEN_STEERING_APP_PRIVATE_KEY: z.string().optional(),
-  OXAGEN_STEERING_APP_SLUG: z.string().optional(),
-  OXAGEN_STEERING_APP_CLIENT_ID: z.string().optional(),
-  OXAGEN_STEERING_APP_CLIENT_SECRET: z.string().optional(),
-  OXAGEN_STEERING_APP_WEBHOOK_SECRET: z.string().optional(),
   // LOCAL/DEMO-ONLY fallback PAT for GitHub write capabilities; must never be
   // set in production (bypasses per-workspace scoping — see resolveGitHubToken).
   GITHUB_PERSONAL_ACCESS_TOKEN: z.string().optional(),

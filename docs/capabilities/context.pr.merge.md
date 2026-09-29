@@ -13,7 +13,7 @@
 
 ## Intent
 
-Merge is the publication ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md); MC spec §10.3 steps 3–4). Refused until every check passed. Refused unless the caller is a reviewer the governance mode allows, read from `.oxagen/rules/governance.toml` on the production branch at merge time:
+Merge is the publication ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md); MC spec §10.3 steps 3–4). Refused until every check passed. Refused unless the caller is a reviewer the governance mode allows, read on the production branch at merge time from `steering/governance.toml` in a steering repository, or from `.oxagen/rules/governance.toml` in a legacy one:
 
 | mode | who merges |
 | --- | --- |
@@ -31,7 +31,9 @@ The merge is pinned to the commit the checks ran on: the PR's head is read from 
 
 Before it lands the PR, the call claims the proposal for ten minutes (`merge_claimed_at`). The merge writes a stamp commit to the PR, and that commit is the PR's head until the host merges it. While the claim stands, a second merge, a check rerun (`open_context_pr`), and a dismissal are refused `merge_in_progress`, and the repository sync leaves the proposal alone. The publication clears the claim. A landing that fails before the host merged releases it. A landing that fails after the host merged keeps it, and the next call resumes the merge. A claim that a crash left behind lapses after ten minutes.
 
-The workspace's steering version is the ledger length; a merge bumps it by one. A merged `must` or `should` record reaches agents through the signed policy bundle: it is compiled into `context.system`, which changes the bundle etag, so every enrolled host in the workspace fetches it on its next poll (ADR-091). Delivery into context frames (spec §10.4) is not built yet.
+In a steering repository the merge publishes a steering version (#4732). Its number is the one publish() assigns next from the repository's version store, and the merge commit's `Oxagen-Version` trailer carries it. Provisioning publishes the repository's first commit as version 1, so the first merged steering PR publishes version 2, whether or not a repository sync ran first. `publishedVersion` answers that number. It is null when publish() failed, refused, or found the production branch moved, and the repository sync then publishes the production branch. A legacy repository has no version store: its trailer carries the ledger length plus one, and `publishedVersion` is null. `bundleVersion` counts promotion ledger entries, one per merged record. It is not the steering version: the first commit, and each commit the repository sync publishes, adds a version and no ledger entry.
+
+A merged `must` or `should` record reaches agents through the signed policy bundle: it is compiled into `context.system`, which changes the bundle etag, so every enrolled host in the workspace fetches it on its next poll (ADR-091). Delivery into context frames (spec §10.4) is not built yet.
 
 ## Input
 
@@ -46,7 +48,8 @@ The workspace's steering version is the ledger length; a merge bumps it by one. 
 | `record` | `{ id (ctr_…), lineageId, version, path }` | The published record and the version this merge created |
 | `mergedCommit` | `string` | GitHub's merge commit |
 | `promotionEvent` | `{ id (ctp_…), seq, chainDigest }` | The ledger entry |
-| `bundleVersion` | `{ before, after }` | The ledger length before and after |
+| `bundleVersion` | `{ before, after }` | The number of promotion ledger entries before and after. It counts merged records, not steering versions |
+| `publishedVersion` | `number` or `null` | The steering version this merge published, the number in its `Oxagen-Version` trailer. Null in a legacy repository, and null when publish() did not make the version live |
 
 ## Errors
 

@@ -543,7 +543,7 @@
       "onMerge": {
         "title": "What merge will do",
         "publishes": "Publish {path} as a record in force",
-        "version": "Move this workspace from steering version {current} to {next}",
+        "version": "Take the workspace's promotion ledger from {current} entries to {next}",
         "promotion": "Write the promotion event to the ledger and a steering_published audit event",
         "review": "Who merges, under governance mode {review}"
       },

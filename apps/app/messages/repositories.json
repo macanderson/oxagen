@@ -636,7 +636,7 @@
       "healthNote": {
         "healthy": "Every prescribed setting matches, and main holds only merged steering PRs.",
         "drifted": "A prescribed setting differs, so Oxagen merges and publishes nothing until an owner or admin repairs it.",
-        "disconnected": "Oxagen Steering lost its grant, so Oxagen merges and publishes nothing until an owner or admin authorizes it again.",
+        "disconnected": "Oxagen lost its grant on the host, so it merges and publishes nothing until an owner or admin authorizes it again.",
         "diverged": "Main has a commit no steering PR merged, so Oxagen opened a steering PR that reverts it.",
         "unknown": "Oxagen has not read the repository's health yet."
       },
@@ -665,7 +665,7 @@
       },
       "reauthorize": {
         "heading": "Authorization needed",
-        "body": "Oxagen Steering lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
+        "body": "Oxagen lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
         "action": "Re-authorize"
       },
       "banner": {

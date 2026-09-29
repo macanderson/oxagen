@@ -36,9 +36,11 @@ import {
 
 /**
  * The version provisioning records as a deployment in its `publish_version`
- * step (`FIRST_VERSION` in ./steering_repo.provision). Provisioning writes no
- * steering publication, so until the first publish writes one, this is the
- * version the repository serves.
+ * step (`FIRST_VERSION` in ./steering_repo.provision). In a workspace,
+ * `bind_repository` then publishes the first commit through the version store
+ * as the same version 1 (#4732). Until a publication exists (an
+ * organization's repository, which has no bind step, or the steps between
+ * the two), this is the version the repository serves.
  */
 export const PROVISIONED_VERSION = 1;
 

@@ -274,7 +274,6 @@ describe("the steering repo health banner", () => {
     const href = reauthorizeHref(link);
     expect(href.pathname).toBe("/api/v1/acme/connections/steering/github");
     expect(Object.fromEntries(href.searchParams)).toEqual({
-      app: "steering",
       mode: "authorize",
       return_to: RETURN_TO,
     });
