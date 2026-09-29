@@ -6,7 +6,7 @@
 // mode, the provider's status light and sign-in, the sync schedule, and the
 // tab a server shows before discovery records it. A server the local gateway
 // runs shows its machine groups in place of environments and auth. An editor
-// sees Replace credential, drawn as not available until set_mcp_credential
+// sees the credential form, drawn as not available until set_mcp_credential
 // (#4742) merges, and Reconnect for an OAuth provider. A reader sees neither. A credential
 // shows only as its vault reference: every fixture is checked for any other
 // credential text and for a secret-shaped value in any text or attribute. Each
@@ -85,6 +85,14 @@ const actions = vi.hoisted(() => ({
   setToolState: vi.fn(),
 }));
 vi.mock("../tools/actions", () => actions);
+// The Tools barrel's Add server loads Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("./actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 const { startProviderAuthorization } = vi.hoisted(() => ({
   startProviderAuthorization: vi.fn(),
 }));
@@ -820,13 +828,20 @@ describe("Connection tab › authentication", () => {
     }
   });
 
-  it("offers an editor Replace credential, disabled until set_mcp_credential merges and described by the vault note", () => {
+  it("offers an editor the credential form, disabled until set_mcp_credential merges", () => {
     renderTab(studioView(STRIPE));
     const replace = screen.getByRole("button", { name: auth("replace") });
     expect(replace).toBeDisabled();
     expect(replace).toHaveAttribute("data-testid", "studio-credential-replace");
-    expect(replace).toHaveAttribute("data-gap", CREDENTIALS_GAP);
-    expect(replace).toHaveAccessibleDescription(auth("note"));
+    expect(replace).toHaveAccessibleDescription(auth("pending"));
+    const note = screen.getByTestId("studio-credential-pending");
+    expect(note).toHaveAttribute("data-gap", CREDENTIALS_GAP);
+    expect(note).toHaveAttribute("data-capability", "set_mcp_credential");
+    // The form opens on the name the record references, as a secret.
+    const name = screen.getByLabelText(auth("name"));
+    expect(name).toHaveValue("stripe-restricted");
+    expect(name).toBeDisabled();
+    expect(screen.getByTestId("studio-credential-kind-secret")).toBeChecked();
     // Stripe signs in with a static credential, so there is nothing to reconnect.
     expect(screen.queryByTestId(`provider-reconnect-${STRIPE}`)).toBeNull();
   });

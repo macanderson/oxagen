@@ -51,6 +51,14 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The discovery section loads Add server, which loads Studio's server
+// actions (review-calls.ts). No test here calls them.
+vi.mock("./actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 
 afterEach(async () => {
   try {
@@ -684,6 +692,25 @@ describe("ToolsTab empty and missing states", () => {
     expect(screen.getByTestId("studio-budget-missing")).toBeInTheDocument();
     expect(screen.queryByTestId("studio-tools-empty")).toBeNull();
     expect(screen.queryByTestId("studio-tools")).toBeNull();
+  });
+});
+
+describe("ToolsTab discovery", () => {
+  it("says discovery progress is not available while get_studio_discovery is a stub", () => {
+    renderTab(propsOf(studioView(STRIPE)));
+    const section = screen.getByTestId("studio-discovery");
+    const note = within(section).getByTestId("studio-discovery-pending");
+    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
+    expect(note).toHaveAttribute("data-gap", "#4682");
+    expect(within(section).getByTestId("studio-discovery-start")).toBeDisabled();
+    // Tool counts wait on list_studio_tools, which the page reads.
+    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
+  });
+
+  it("offers a reader no way to start a discovery", () => {
+    renderTab(propsOf(studioView(STRIPE), { canEdit: false }));
+    expect(screen.getByTestId("studio-discovery-pending")).toBeInTheDocument();
+    expect(screen.queryByTestId("studio-discovery-start")).toBeNull();
   });
 });
 

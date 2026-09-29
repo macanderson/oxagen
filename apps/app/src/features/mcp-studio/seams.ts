@@ -43,7 +43,7 @@ export type RecordReader = (
   serverId: string,
 ) => Promise<StudioRecord | null>;
 
-/** The Studio record. Null until PR2 of this lane binds M10's discovery. */
+/** The Studio record. Null until part 3 of this lane binds M10's discovery. */
 export const readStudioRecord: RecordReader = () => Promise.resolve(null);
 
 /**

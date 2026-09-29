@@ -28,8 +28,12 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { getStudioDraftAction, openStudioReviewAction, saveStudioDraftAction } =
-  await import("./actions");
+const {
+  getStudioDraftAction,
+  openStudioReviewAction,
+  saveNewStudioServerAction,
+  saveStudioDraftAction,
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -187,6 +191,73 @@ describe("saveStudioDraftAction", () => {
       field: "server",
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+/** A new OpenAPI server as Add server's From a definition saves it. */
+const NEW_SERVER = {
+  server: "ledger",
+  serverToml: 'schema = "mcp-server/v1"\nname = "ledger"\n',
+  source: {
+    type: "openapi" as const,
+    files: [{ path: "openapi.yaml", text: "openapi: 3.1.0\n" }],
+    entry: "openapi.yaml",
+  },
+};
+
+describe("saveNewStudioServerAction", () => {
+  it("saves the first draft at revision 0 with server.toml, the definition, and no edits", async () => {
+    invoke.mockResolvedValue({
+      ...DRAFT,
+      server: "ledger",
+      serverId: null,
+      ops: [],
+      revision: 1,
+    });
+    const result = await saveNewStudioServerAction("acme", "core-platform", {
+      ...NEW_SERVER,
+      revision: 0,
+    });
+    expect(result.ok && result.value.revision).toBe(1);
+    expect(invoke).toHaveBeenCalledWith(
+      "save_studio_draft",
+      expect.anything(),
+      expect.objectContaining(TENANT),
+    );
+    expect(invoke.mock.calls[0]?.[1]).toStrictEqual({
+      server: "ledger",
+      ops: [],
+      serverToml: NEW_SERVER.serverToml,
+      source: NEW_SERVER.source,
+      revision: 0,
+    });
+  });
+
+  it("saves a retry at the revision and server id the first save returned", async () => {
+    invoke.mockResolvedValue({ ...DRAFT, server: "ledger", ops: [], revision: 2 });
+    await saveNewStudioServerAction("acme", "core-platform", {
+      ...NEW_SERVER,
+      serverId: "mcs_01k5s9",
+      revision: 1,
+    });
+    expect(invoke.mock.calls[0]?.[1]).toStrictEqual({
+      server: "ledger",
+      serverId: "mcs_01k5s9",
+      ops: [],
+      serverToml: NEW_SERVER.serverToml,
+      source: NEW_SERVER.source,
+      revision: 1,
+    });
+  });
+
+  it("answers a draft already stored under the name as a stale revision", async () => {
+    invoke.mockRejectedValue(refused("conflict", "draft_revision_stale"));
+    expect(
+      await saveNewStudioServerAction("acme", "core-platform", {
+        ...NEW_SERVER,
+        revision: 0,
+      }),
+    ).toEqual({ ok: false, reason: "conflict", code: "draft_revision_stale" });
   });
 });
 

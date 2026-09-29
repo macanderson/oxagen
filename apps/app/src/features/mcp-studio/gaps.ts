@@ -7,7 +7,7 @@ const STUDIO_GAPS = {
   /**
    * The Studio record: the server's steering folder (tools.toml, the lock and
    * the tests) and the tools discovery found. Discovery is lane M10 (#4682,
-   * PR #4711). PR2 of this lane joins its tools to the folder, so the lane
+   * PR #4711). Part 3 of this lane joins its tools to the folder, so the lane
    * issue carries the record.
    */
   record: 4678,
@@ -18,12 +18,22 @@ const STUDIO_GAPS = {
   discovery: 4682,
   /** Try it and Draft: try_studio_tool and draft_studio_description. */
   capability: 4742,
-  /** Saving the draft and opening a steering PR from it: lane M11 (PR #4688). */
-  steeringPr: 4686,
   /** Findings on the draft: list_studio_findings, which runs lane M5's lint. */
   findings: 4742,
   /** Writing a named credential: set_mcp_credential. */
   credentials: 4742,
+  /**
+   * A registry entry's packages: search_mcp_registry drops `packages[]` today
+   * (toRegistryServer), so the package path cannot list what to ask for.
+   */
+  packages: 4742,
+  /**
+   * Adding a server by local command. Review refuses a new local server with
+   * `source_required`, because its draft carries no source and its folder has
+   * no tools.lock.json yet, and only discovery, which needs the folder, can
+   * list its tools (packages/handlers/src/mcp-studio/import/build.ts).
+   */
+  localCommand: 4756,
 } as const;
 
 export type StudioGap = keyof typeof STUDIO_GAPS;

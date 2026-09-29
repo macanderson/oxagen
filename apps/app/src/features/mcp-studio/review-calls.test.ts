@@ -5,11 +5,12 @@
 // refusal as one code the tab can name.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DraftOp } from "./draft";
-import { reviewCalls } from "./review-calls";
+import { newServerCalls, reviewCalls } from "./review-calls";
 import { savedDraft, STUDIO_AT, studioReview } from "./studio.builders";
 
 const actions = vi.hoisted(() => ({
   saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
 }));
@@ -34,6 +35,7 @@ const calls = () => reviewCalls(STUDIO_AT);
 
 beforeEach(() => {
   actions.saveStudioDraftAction.mockReset();
+  actions.saveNewStudioServerAction.mockReset();
   actions.getStudioDraftAction.mockReset();
   actions.openStudioReviewAction.mockReset();
 });
@@ -233,5 +235,105 @@ describe("reviewCalls open", () => {
       reason: "failed",
       code: "tools_unclassified",
     });
+  });
+});
+
+/** A new OpenAPI server as Add server's From a definition saves it. */
+const LEDGER = {
+  server: "ledger",
+  serverToml: 'schema = "mcp-server/v1"\nname = "ledger"\n',
+  source: {
+    type: "openapi" as const,
+    files: [{ path: "openapi.yaml", text: "openapi: 3.1.0\n" }],
+    entry: "openapi.yaml",
+  },
+};
+
+describe("newServerCalls create", () => {
+  const create = () => newServerCalls(STUDIO_AT).create;
+
+  it("saves the first draft at revision 0 and answers where Review opens", async () => {
+    actions.saveNewStudioServerAction.mockResolvedValue({
+      ok: true,
+      value: savedDraft({ server: "ledger", serverId: null, revision: 1 }),
+    });
+    expect(await create()(LEDGER, null)).toEqual({
+      ok: true,
+      serverId: null,
+      revision: 1,
+    });
+    expect(actions.saveNewStudioServerAction.mock.calls[0]).toStrictEqual([
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      { ...LEDGER, revision: 0 },
+    ]);
+  });
+
+  it("saves a retry at the saved revision and server id, never at 0", async () => {
+    actions.saveNewStudioServerAction.mockResolvedValue({
+      ok: true,
+      value: savedDraft({ server: "ledger", serverId: "mcs_01k5s9", revision: 3 }),
+    });
+    expect(
+      await create()(LEDGER, { serverId: "mcs_01k5s9", revision: 2 }),
+    ).toEqual({ ok: true, serverId: "mcs_01k5s9", revision: 3 });
+    expect(actions.saveNewStudioServerAction.mock.calls[0]?.[2]).toStrictEqual({
+      ...LEDGER,
+      serverId: "mcs_01k5s9",
+      revision: 2,
+    });
+  });
+
+  it("reads a stale first save as a draft that already exists", async () => {
+    actions.saveNewStudioServerAction.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "draft_revision_stale",
+    });
+    expect(await create()(LEDGER, null)).toEqual({
+      ok: false,
+      reason: "exists",
+    });
+  });
+
+  it("reads a stale retry as a draft someone else saved since", async () => {
+    actions.saveNewStudioServerAction.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "draft_revision_stale",
+    });
+    expect(await create()(LEDGER, { serverId: null, revision: 1 })).toEqual({
+      ok: false,
+      reason: "moved",
+    });
+  });
+
+  it("reads any other refusal as a failure with its code", async () => {
+    actions.saveNewStudioServerAction.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    expect(await create()(LEDGER, null)).toEqual({
+      ok: false,
+      reason: "failed",
+      code: "denied",
+    });
+  });
+
+  it("refuses a definition too large for one request before it is sent", async () => {
+    const big = {
+      ...LEDGER,
+      source: {
+        ...LEDGER.source,
+        files: [{ path: "openapi.yaml", text: "x".repeat(1024 * 1024) }],
+      },
+    };
+    expect(await create()(big, null)).toEqual({
+      ok: false,
+      reason: "failed",
+      code: "too_large",
+    });
+    expect(actions.saveNewStudioServerAction).not.toHaveBeenCalled();
   });
 });

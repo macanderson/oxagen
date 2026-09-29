@@ -50,6 +50,7 @@ import type { StudioRecord, StudioSourceType, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
 import type { StudioAt } from "./route";
 import { reviewCalls } from "./review-calls";
+import { isReviewCode } from "./review-codes";
 import type {
   GetStudioDraft,
   OpenStudioReview,
@@ -261,47 +262,6 @@ function Findings({
       )}
     </Section>
   );
-}
-
-/**
- * The refusals the tab explains in its own words. Any other code shows as
- * itself, so a refusal this list has not caught up with still names its
- * reason.
- */
-const REVIEW_CODES = [
-  "denied",
-  "invalid",
-  "unavailable",
-  "pending_approval",
-  "exhausted",
-  "too_large",
-  "draft_not_found",
-  "draft_unchanged",
-  "draft_unreadable",
-  "server_not_found",
-  "server_toml_missing",
-  "server_toml_invalid",
-  "server_name_mismatch",
-  "workspace_repository_missing",
-  "production_branch_missing",
-  "folder_invalid",
-  "source_required",
-  "source_invalid",
-  "source_commit_missing",
-  "definition_path_invalid",
-  "importer_not_built",
-  "tools_unclassified",
-  "tool_not_found",
-  "tool_not_offered",
-  "tool_key_collision",
-  "test_invalid",
-  "test_holds_credential",
-] as const;
-
-type ReviewCode = (typeof REVIEW_CODES)[number];
-
-function isReviewCode(code: string): code is ReviewCode {
-  return REVIEW_CODES.some((known) => known === code);
 }
 
 /** How the last Review went, shown under the button. */

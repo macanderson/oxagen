@@ -29,7 +29,6 @@ import {
   BILLING,
   fakeDraft,
   graphqlTool,
-  SCRATCH,
   STRIPE,
   studioTool,
   studioView,
@@ -696,7 +695,7 @@ describe("ToolPanel Draft", () => {
 
   it.each([
     { gap: "capability", ref: "#4742" },
-    { gap: "steeringPr", ref: "#4686" },
+    { gap: "discovery", ref: "#4682" },
   ] as const)(
     "says Draft is not built yet and points the note at $ref for the $gap gap",
     async ({ gap, ref }) => {

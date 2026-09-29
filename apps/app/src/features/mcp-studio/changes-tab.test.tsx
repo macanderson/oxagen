@@ -54,6 +54,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 // With no seam passed, the tab calls these server actions (review-calls.ts).
 const actions = vi.hoisted(() => ({
   saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
 }));

@@ -26,7 +26,11 @@ import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { StudioRecord } from "./model";
-import type { ListStudioFindings } from "./pending-capabilities";
+import type {
+  ListStudioFindings,
+  listStudioTools,
+  StudioToolsList,
+} from "./pending-capabilities";
 import type { StudioTab } from "./route";
 import type { RecordReader } from "./seams";
 
@@ -78,6 +82,7 @@ vi.mock("../tools/actions", () => actions);
 // The Changes tab's Review calls go through Studio's own server actions.
 vi.mock("./actions", () => ({
   saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
 }));
@@ -124,6 +129,7 @@ const {
 
 type Reads = NonNullable<Parameters<typeof studioSource>[0]>;
 type FindingsCall = ListStudioFindings["call"];
+type ToolsListCall = (typeof listStudioTools)["call"];
 
 const AT = { org: "acme", ws: "core-platform" };
 
@@ -170,6 +176,8 @@ async function renderStudio({
   record = recordOf,
   findings = () => Promise.resolve(findingsAnswer()),
   findingsAvailable = true,
+  toolsList = () => Promise.resolve({ ok: true, ...toolsListOf() }),
+  toolsAvailable = false,
 }: {
   serverId?: string;
   tab?: StudioTab;
@@ -178,6 +186,8 @@ async function renderStudio({
   record?: (serverId: string) => StudioRecord | null;
   findings?: FindingsCall;
   findingsAvailable?: boolean;
+  toolsList?: ToolsListCall;
+  toolsAvailable?: boolean;
 } = {}) {
   const ctx = viewer(orgRole);
   const { source, calls } = studioSource(reads);
@@ -185,6 +195,7 @@ async function renderStudio({
     Promise.resolve(record(id)),
   );
   const readFindings = vi.fn<FindingsCall>(findings);
+  const readTools = vi.fn<ToolsListCall>(toolsList);
   withIntl(
     await StudioServer({
       ctx,
@@ -197,9 +208,36 @@ async function renderStudio({
         gap: "findings",
         call: readFindings,
       },
+      toolsList: {
+        name: "list_studio_tools",
+        available: toolsAvailable,
+        gap: "discovery",
+        call: readTools,
+      },
     }),
   );
-  return { ctx, calls, readRecord, readFindings };
+  return { ctx, calls, readRecord, readFindings, readTools };
+}
+
+/** The handler's words for a tools.toml that did not compile. The page never shows them. */
+const COMPILE_ERROR = "tools.toml line 3: expected '=' after key";
+
+/** list_studio_tools' answer for Stripe as lane M10 will return it. */
+function toolsListOf(over: Partial<StudioToolsList> = {}): StudioToolsList {
+  return {
+    server: "stripe",
+    mcpServerId: null,
+    snapshotId: null,
+    capturedAt: null,
+    exposure: { mode: "direct", budget: 8000 },
+    tokens: { definitions: 1150, budget: 8000 },
+    imported: 2,
+    offered: 5,
+    searchRecommended: true,
+    compileError: COMPILE_ERROR,
+    tools: [],
+    ...over,
+  };
 }
 
 /** The page's own header, not a section header inside a tab or a dialog. */
@@ -289,6 +327,71 @@ describe("StudioServer reads", () => {
       expect(screen.queryByTestId("studio-finding")).toBeNull();
     },
   );
+});
+
+describe("StudioServer tool counts", () => {
+  it("asks list_studio_tools for this server on the Tools tab and shows its counts", async () => {
+    const { readTools } = await renderStudio({ toolsAvailable: true });
+    expect(readTools).toHaveBeenCalledTimes(1);
+    expect(readTools).toHaveBeenCalledWith({ server: "stripe" });
+    const listed = screen.getByTestId("studio-tools-listed");
+    expect(listed).toHaveTextContent(
+      "2 imported of 5 the last discovery listed",
+    );
+    expect(within(listed).getByTestId("studio-tools-search")).toHaveTextContent(
+      "These definitions would fit the budget better behind tool search.",
+    );
+    // The tab names the failure in its own words and never the handler's.
+    expect(
+      within(listed).getByTestId("studio-tools-compile-error"),
+    ).toHaveTextContent("The server's tools.toml did not compile.");
+    expect(listed).not.toHaveTextContent(COMPILE_ERROR);
+  });
+
+  it("leaves out the search note and the compile alert when neither applies", async () => {
+    await renderStudio({
+      toolsAvailable: true,
+      toolsList: () =>
+        Promise.resolve({
+          ok: true,
+          ...toolsListOf({ searchRecommended: false, compileError: null }),
+        }),
+    });
+    const listed = screen.getByTestId("studio-tools-listed");
+    expect(within(listed).queryByTestId("studio-tools-search")).toBeNull();
+    expect(
+      within(listed).queryByTestId("studio-tools-compile-error"),
+    ).toBeNull();
+  });
+
+  it("asks nothing and shows no counts while list_studio_tools has not merged", async () => {
+    const { readTools } = await renderStudio();
+    expect(readTools).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
+    // Discovery progress waits on the same lane, and says so.
+    expect(screen.getByTestId("studio-discovery-pending")).toHaveAttribute(
+      "data-capability",
+      "get_studio_discovery",
+    );
+  });
+
+  it("asks nothing off the Tools tab", async () => {
+    const { readTools } = await renderStudio({
+      tab: "changes",
+      toolsAvailable: true,
+    });
+    expect(readTools).not.toHaveBeenCalled();
+  });
+
+  it("shows no counts when the read is refused", async () => {
+    const { readTools } = await renderStudio({
+      toolsAvailable: true,
+      toolsList: () =>
+        Promise.resolve({ ok: false, reason: "failed", code: "denied" }),
+    });
+    expect(readTools).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
+  });
 });
 
 describe("StudioServer failed reads", () => {

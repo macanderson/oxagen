@@ -7,10 +7,19 @@
 // or on a Review, so it alone reads as `conflict`. Every other refusal reads
 // as `failed` with the handler's reason, or with the kind of refusal when the
 // handler named none.
+//
+// newServerCalls are Add server's: the save of a server that has no folder
+// yet, then Review. The first save is at revision 0, so there a stale
+// revision means a draft of that name is already stored, which the dialog
+// names rather than reloads. When Review refuses, a retry saves again at the
+// revision the first save returned. A stale revision then means someone else
+// saved that draft since, which the dialog names too.
+import type { StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import type { ActionResult } from "@/server/kernel";
 import {
   getStudioDraftAction,
   openStudioReviewAction,
+  saveNewStudioServerAction,
   saveStudioDraftAction,
 } from "./actions";
 import type { StudioAt } from "./route";
@@ -97,5 +106,67 @@ export function reviewCalls(at: StudioAt): {
       const result = await openStudioReviewAction(at.org, at.ws, input);
       return result.ok ? { ok: true, review: result.value } : refusal(result);
     },
+  };
+}
+
+/** A new server as Add server saves it: its server.toml and its definition. */
+export type NewStudioServer = {
+  server: string;
+  serverToml: string;
+  source: StudioSource;
+};
+
+/** A new server's stored draft: where Review opens and a retry saves again. */
+export type SavedStudioServer = { serverId: string | null; revision: number };
+
+/**
+ * Save a new server's draft. With `saved` null it is the first save, at
+ * revision 0. With `saved` set it is a retry after a refused Review, at the
+ * revision that save returned.
+ */
+export type CreateStudioServer = (
+  input: NewStudioServer,
+  saved: SavedStudioServer | null,
+) => Promise<
+  | ({ ok: true } & SavedStudioServer)
+  /** The first save found a draft of that name already stored. */
+  | { ok: false; reason: "exists" }
+  /** A retry found the stored draft saved again by someone else. */
+  | { ok: false; reason: "moved" }
+  | ReviewFailed
+>;
+
+/** Add server's calls for one workspace: the save, then Review. */
+export function newServerCalls(at: StudioAt): {
+  create: CreateStudioServer;
+  review: OpenStudioReview;
+} {
+  return {
+    create: async (input, saved) => {
+      const draft = {
+        ...input,
+        ...(saved === null || saved.serverId === null
+          ? {}
+          : { serverId: saved.serverId }),
+        revision: saved === null ? 0 : saved.revision,
+      };
+      if (UTF8.encode(JSON.stringify(draft)).length > SAVE_BODY_MAX) {
+        return failed("too_large");
+      }
+      const result = await saveNewStudioServerAction(at.org, at.ws, draft);
+      if (result.ok) {
+        return {
+          ok: true,
+          serverId: result.value.serverId,
+          revision: result.value.revision,
+        };
+      }
+      const code = codeOf(result);
+      if (code !== STALE) return failed(code);
+      return saved === null
+        ? { ok: false, reason: "exists" }
+        : { ok: false, reason: "moved" };
+    },
+    review: reviewCalls(at).open,
   };
 }

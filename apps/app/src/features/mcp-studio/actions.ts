@@ -10,16 +10,25 @@
 // refusal comes back with the handler's reason as its code, and the tab
 // names it where the person acted.
 //
-// The save sends neither `serverToml` nor `source`. The definition comes from
-// the server's discovery record, which the app cannot read until lane M10's
-// discovery capabilities land (pending-capabilities.ts). Until then a draft
-// that imports a tool reads as "definition not recorded" (sourceRequired).
+// The Changes tab's save sends neither `serverToml` nor `source`. The
+// definition comes from the server's discovery record, which the app cannot
+// read until lane M10's discovery capabilities land (pending-capabilities.ts).
+// Until then a draft that imports a tool reads as "definition not recorded"
+// (sourceRequired).
+//
+// Add server's From a definition sends both (saveNewStudioServerAction): the
+// server.toml Studio wrote and the definition the person uploaded, with no
+// edits. The first save is at revision 0. Review then opens the steering PR
+// that creates the server's folder (ADR-224). When Review refuses, the
+// dialog saves again at the revision the first save returned, so a retry
+// replaces that draft instead of starting a new one.
 import {
   type ToolStudioDraftGetOutput,
   toolStudioDraftGet,
 } from "@oxagen/oxagen/contracts/tool.studio.draft.get";
 import {
   type StudioDraftOp,
+  type StudioSource,
   type ToolStudioDraftSaveOutput,
   toolStudioDraftSave,
 } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
@@ -51,6 +60,35 @@ export async function saveStudioDraftAction(
     server: draft.server,
     ...(draft.serverId === undefined ? {} : { serverId: draft.serverId }),
     ops: [...draft.ops],
+    revision: draft.revision,
+  });
+}
+
+/**
+ * Save the draft of a server that has no folder yet: its server.toml and its
+ * definition, with no edits. The first save sends revision 0, which refuses
+ * with `draft_revision_stale` when a draft of that name is already stored,
+ * so a new server never overwrites someone's draft. A retry after a refused
+ * Review sends the revision and server id that save returned.
+ */
+export async function saveNewStudioServerAction(
+  org: string,
+  ws: string,
+  draft: {
+    server: string;
+    serverId?: string;
+    serverToml: string;
+    source: StudioSource;
+    revision: number;
+  },
+): Promise<ActionResult<ToolStudioDraftSaveOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioDraftSave, {
+    server: draft.server,
+    ...(draft.serverId === undefined ? {} : { serverId: draft.serverId }),
+    ops: [],
+    serverToml: draft.serverToml,
+    source: draft.source,
     revision: draft.revision,
   });
 }
