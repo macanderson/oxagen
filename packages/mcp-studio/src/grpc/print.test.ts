@@ -436,6 +436,22 @@ message M {
     expect(printed.text).toContain(line);
     expect(printed.notes).toStrictEqual([]);
   });
+
+  const floatDefaults: [string, string][] = [
+    ["-0", "  optional float x = 1 [default = -0.0];"],
+    ["1e+10", "  optional float x = 1 [default = 1e+10];"],
+    ["0.333333343", "  optional float x = 1 [default = 0.333333343];"],
+    ["3.40282347e+38", "  optional float x = 1 [default = 3.40282347e+38];"],
+  ];
+
+  it.each(floatDefaults)("writes the float default %s so it reads back unchanged", (value, line) => {
+    const files = mutated(filesOf('syntax = "proto2"; package p; message M { optional float x = 1; }'), (file) => {
+      fieldAt(file).defaultValue = value;
+    });
+    const printed = expectRoundTrip(files);
+    expect(printed.text).toContain(line);
+    expect(printed.notes).toStrictEqual([]);
+  });
 });
 
 describe("printProto type names", () => {
@@ -1108,6 +1124,18 @@ extend google.protobuf.MessageOptions { int32 x_y = 50000; }
     const printed = expectReadsBackAs(changed, expected);
     expect(printed.notes).toStrictEqual([
       "The .proto text import writes for a.proto changes the default value of the field p.M.x from 1e+10 to 10000000000. Both are the same number, and the second is how protoc writes it.",
+    ]);
+  });
+
+  it("notes a float default that reads back as protoc writes the 32-bit float", () => {
+    const source = 'syntax = "proto2"; package p; message M { optional float x = 1; }';
+    const changed = mutated(filesOf(source), (file) => {
+      fieldAt(file).defaultValue = "0.3333333333333333";
+    });
+    const expected = fileNamed(filesOf('syntax = "proto2"; package p; message M { optional float x = 1 [default = 0.333333343]; }'));
+    const printed = expectReadsBackAs(changed, expected);
+    expect(printed.notes).toStrictEqual([
+      "The .proto text import writes for a.proto changes the default value of the field p.M.x from 0.3333333333333333 to 0.333333343. Both read as the same 32-bit float, and the second is how protoc writes it.",
     ]);
   });
 
