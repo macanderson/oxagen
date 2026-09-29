@@ -10,6 +10,10 @@ import {
   type OrgDataPlaneGetOutput,
   orgDataPlaneGet,
 } from "@oxagen/oxagen/contracts/org.data_plane.get";
+import {
+  type OrgSlackConnectionGetOutput,
+  orgSlackConnectionGet,
+} from "@oxagen/oxagen/contracts/org.slack_connection.get";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import { describe, expect, it } from "vitest";
@@ -18,6 +22,7 @@ import {
   DataPlane,
   MemberList,
   RoleCatalog,
+  SlackConnection,
   WorkspaceList,
 } from "@/data/contracts/org";
 import {
@@ -25,6 +30,7 @@ import {
   toDataPlane,
   toMemberList,
   toRoleCatalog,
+  toSlackConnection,
   toWorkspaceList,
 } from "./org";
 
@@ -510,5 +516,94 @@ describe("toDataPlane", () => {
       lastVerifiedAt: "last Tuesday",
     });
     expect(DataPlane.safeParse(toDataPlane(out)).success).toBe(false);
+  });
+});
+
+describe("toSlackConnection", () => {
+  const connected: OrgSlackConnectionGetOutput = {
+    configured: true,
+    connected: true,
+    teamName: "Acme Robotics",
+    channel: { id: "C07ABCDEF12", name: "steering-health", isPrivate: true },
+    lastFailure: { code: "not_in_channel", at: "2026-09-27T09:30:00.000Z" },
+    connectedAt: "2026-09-20T08:00:00.000Z",
+  };
+
+  it("carries the connection the Notifications tab prints, with Slack's channel id as a ref", () => {
+    const view = SlackConnection.parse(
+      toSlackConnection(orgSlackConnectionGet.output.parse(connected)),
+    );
+    expect(view).toEqual({
+      configured: true,
+      connected: true,
+      teamName: "Acme Robotics",
+      channel: {
+        channelRef: "C07ABCDEF12",
+        name: "steering-health",
+        isPrivate: true,
+      },
+      lastFailure: { code: "not_in_channel", at: "2026-09-27T09:30:00.000Z" },
+      connectedAt: "2026-09-20T08:00:00.000Z",
+    });
+  });
+
+  it("reads a deployment with no Slack app as not configured and not connected", () => {
+    const view = SlackConnection.parse(
+      toSlackConnection(
+        orgSlackConnectionGet.output.parse({
+          configured: false,
+          connected: false,
+          teamName: null,
+          channel: null,
+          lastFailure: null,
+          connectedAt: null,
+        }),
+      ),
+    );
+    expect(view).toEqual({
+      configured: false,
+      connected: false,
+      teamName: null,
+      channel: null,
+      lastFailure: null,
+      connectedAt: null,
+    });
+  });
+
+  it("copies no field it does not name, so a token beside the connection does not reach the page (negative)", () => {
+    // The contract strips unknown keys when it parses; the mapper is the second
+    // fence, so hand it the unparsed answer a future contract could produce.
+    // Built without a type annotation, so the extra keys reach the mapper the
+    // way an unparsed answer would, with no cast to hide them.
+    const leaky = {
+      ...connected,
+      botToken: "xoxb-the-customer-bot-token",
+      channel: {
+        id: "C07ABCDEF12",
+        name: "steering-health",
+        isPrivate: true,
+        webhook: "xoxb-in-the-channel-too",
+      },
+    };
+    const view = SlackConnection.parse(toSlackConnection(leaky));
+    expect(Object.keys(view)).toEqual([
+      "configured",
+      "connected",
+      "teamName",
+      "channel",
+      "lastFailure",
+      "connectedAt",
+    ]);
+    expect(JSON.stringify(view)).not.toContain("xoxb");
+  });
+
+  it("refuses a failure time recorded as free text (negative)", () => {
+    const out = orgSlackConnectionGet.output.parse({
+      ...connected,
+      lastFailure: { code: "not_in_channel", at: "last Tuesday" },
+    });
+    expect(SlackConnection.safeParse(toSlackConnection(out)).success).toBe(
+      false,
+    );
   });
 });

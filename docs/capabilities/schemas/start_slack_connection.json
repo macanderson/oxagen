@@ -1,0 +1,36 @@
+{
+  "name": "start_slack_connection",
+  "domain": "org",
+  "description": "Start connecting the organization's Slack workspace, so steering repo health changes post to a Slack channel. Returns the Slack URL where an Owner or Admin approves the Oxagen app.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "authorizeUrl": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 2048
+      }
+    },
+    "required": [
+      "authorizeUrl"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -28,7 +28,6 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { relayTransport } from "../relay";
 import { postgresApprovals } from "./approvals";
-import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
@@ -45,6 +44,7 @@ import {
   type ServedPorts,
   type ServedRoute,
   type ServedRun,
+  type ServedTransport,
 } from "./types";
 
 type Scope = { orgId: string; workspaceId: string };
@@ -211,12 +211,11 @@ function localTransport(route: ServedRoute): Transport {
 }
 
 /** The transport for the network the environment names. */
-export function transportFor(route: ServedRoute): Transport {
-  const unbuilt = unbuiltRoute(route.network);
-  if (unbuilt !== null) throw unbuilt;
+export function transportFor(route: ServedRoute): ServedTransport {
   if (route.network === "local") return localTransport(route);
   // A relay:<name> network goes through this process's relay broker (lane M12).
-  if (route.network.startsWith("relay:")) return relayTransport(route.run);
+  // Its transport can refuse a call before runTool claims an approval.
+  if (route.network.startsWith("relay:")) return relayTransport(route);
   cloud ??= createCloudTransport();
   return cloud;
 }

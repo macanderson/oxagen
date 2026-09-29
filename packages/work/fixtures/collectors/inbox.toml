@@ -1,0 +1,10 @@
+# The email collector in agent-work-spec.html (Email), copied verbatim.
+schema = "collector/v1"
+name = "inbox"
+label = "Engineering inbox"
+type = "email"
+# Oxagen assigns core-platform.aintel@in.oxagen.sh
+
+[scope]
+allow = ["@aintel.com", "ops@northwind.example"]
+forwarders = ["support@aintel.com"]

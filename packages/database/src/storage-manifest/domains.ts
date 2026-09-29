@@ -54,6 +54,8 @@ export const PG_DOMAINS: readonly string[] = [
   "tacho",
   // Mandates and their ledger (ADR-059).
   "tools",
+  // Work items, collectors, triage, done records, and autonomy.
+  "work",
   "workspace",
 ];
 
