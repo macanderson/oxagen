@@ -53,10 +53,10 @@ export function FilterSelect({
 }) {
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
-  const picked = useRef(false);
+  const pickedRef = useRef(false);
   useEffect(() => {
-    if (!picked.current) return;
-    picked.current = false;
+    if (!pickedRef.current) return;
+    pickedRef.current = false;
     inputRef.current?.form?.requestSubmit();
   }, [value]);
   return (
@@ -69,7 +69,7 @@ export function FilterSelect({
       onValueChange={(next, details) => {
         if (next === null || next === value) return;
         if (details.reason !== "item-press") return;
-        picked.current = true;
+        pickedRef.current = true;
         setValue(next);
       }}
     >
