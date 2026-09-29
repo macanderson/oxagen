@@ -141,7 +141,7 @@ type SaveStudioDraftInput = {
 };
 
 /** The draft as stored (`studioDraftSchema`). */
-export type SavedStudioDraft = {
+type SavedStudioDraft = {
   server: string;
   serverId: string | null;
   /**

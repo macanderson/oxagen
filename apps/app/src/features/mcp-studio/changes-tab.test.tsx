@@ -835,7 +835,7 @@ describe("ChangesTab conflict", () => {
         serverId: STRIPE,
         ops: Array.from({ length: 2_001 }, (_, n) => ({
           kind: "import",
-          tool: `tool_${n}`,
+          tool: `tool_${String(n)}`,
         })),
         revision: 3,
       }),

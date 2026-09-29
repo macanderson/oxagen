@@ -402,7 +402,7 @@ describe("readDraftOps", () => {
   });
 
   it("refuses more edits than a draft holds", () => {
-    const ops = Array.from({ length: 2_000 }, (_, n) => importOf(`tool_${n}`));
+    const ops = Array.from({ length: 2_000 }, (_, n) => importOf(`tool_${String(n)}`));
     expect(readDraftOps(ops)).toHaveLength(2_000);
     expect(readDraftOps([...ops, importOf("tool_2000")])).toBeNull();
   });

@@ -300,7 +300,7 @@ const REVIEW_CODES = [
 type ReviewCode = (typeof REVIEW_CODES)[number];
 
 function isReviewCode(code: string): code is ReviewCode {
-  return (REVIEW_CODES as readonly string[]).includes(code);
+  return REVIEW_CODES.some((known) => known === code);
 }
 
 /** How the last Review went, shown under the button. */
@@ -510,14 +510,9 @@ export function ChangesTab({
     }
     // The save echoes the edits it stored. Should they not read back, the
     // tab keeps the ones it sent, which are the same edits.
-    draft.replace({
-      revision: saved.draft.revision,
-      ops: readDraftOps(saved.draft.ops) ?? draft.ops,
-    });
-    if (
-      sourceRequired(saved.draft.ops, sourceType) &&
-      saved.draft.source === null
-    ) {
+    const stored = readDraftOps(saved.draft.ops) ?? draft.ops;
+    draft.replace({ revision: saved.draft.revision, ops: stored });
+    if (sourceRequired(stored, sourceType) && saved.draft.source === null) {
       return { kind: "sourceMissing" };
     }
     const opened = await open({ server, revision: saved.draft.revision });
