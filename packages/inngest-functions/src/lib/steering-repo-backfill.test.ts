@@ -35,6 +35,7 @@ vi.mock("@oxagen/database", async (original) => {
 
 import {
   headlessWorkspaceFilter,
+  isWorkspaceArchived,
   listHeadlessWorkspaces,
 } from "./steering-repo-backfill";
 
@@ -137,5 +138,51 @@ describe("listHeadlessWorkspaces", () => {
       "orgId",
       "workspaceId",
     ]);
+  });
+});
+
+describe("isWorkspaceArchived", () => {
+  const ORG_ID = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
+  const WORKSPACE_ID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+  const scope = { orgId: ORG_ID, workspaceId: WORKSPACE_ID };
+
+  beforeEach(() => {
+    mocks.calls.length = 0;
+    mocks.rows = [];
+  });
+
+  it("reads one workspace by its id and its organization", async () => {
+    await isWorkspaceArchived(scope);
+
+    expect(mocks.calls.map((c) => c.method)).toEqual([
+      "select",
+      "from",
+      "where",
+      "limit",
+    ]);
+    expect(mocks.calls.at(-1)!.args).toEqual([1]);
+    const selected = mocks.calls[0]!.args[0] as Record<string, unknown>;
+    expect(Object.keys(selected)).toEqual(["archivedAt"]);
+    const where = mocks.calls[2]!.args[0] as Parameters<
+      typeof dialect.sqlToQuery
+    >[0];
+    const { sql, params } = dialect.sqlToQuery(where);
+    expect(sql).toContain('"workspaces"."id" = $');
+    expect(sql).toContain('"workspaces"."org_id" = $');
+    expect(params).toEqual(expect.arrayContaining([WORKSPACE_ID, ORG_ID]));
+  });
+
+  it("reads true for an archived workspace", async () => {
+    mocks.rows = [{ archivedAt: new Date("2026-09-29T12:00:00.000Z") }];
+    await expect(isWorkspaceArchived(scope)).resolves.toBe(true);
+  });
+
+  it("reads false for a workspace that is not archived", async () => {
+    mocks.rows = [{ archivedAt: null }];
+    await expect(isWorkspaceArchived(scope)).resolves.toBe(false);
+  });
+
+  it("reads false when no row matches, so the provision steps report it", async () => {
+    await expect(isWorkspaceArchived(scope)).resolves.toBe(false);
   });
 });

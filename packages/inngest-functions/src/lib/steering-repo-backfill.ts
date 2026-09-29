@@ -94,3 +94,29 @@ export async function listHeadlessWorkspaces(options: {
       .limit(options.limit),
   );
 }
+
+/**
+ * Whether the workspace is archived. The provision job reads this before its
+ * first step, because a person can archive a workspace between the backfill's
+ * read and the job's run. An archived workspace gets no steering repo.
+ *
+ * A missing row reads false. The provision steps then refuse it with their
+ * own `workspace_not_found`, so this read decides only the archived case.
+ */
+export async function isWorkspaceArchived(scope: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<boolean> {
+  const w = schema.workspaces;
+  // tenancy: the provision job runs outside a tenant scope, as its steps'
+  // own workspace read does. The read is filtered by both orgId and
+  // workspaceId, and it returns one timestamp.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ archivedAt: w.archivedAt })
+      .from(w)
+      .where(and(eq(w.id, scope.workspaceId), eq(w.orgId, scope.orgId)))
+      .limit(1),
+  );
+  return rows[0]?.archivedAt != null;
+}
