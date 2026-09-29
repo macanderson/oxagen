@@ -36,6 +36,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/done-record": "workspace:*",
     "@oxagen/functions": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/ontology": "workspace:*",
