@@ -27,6 +27,7 @@ import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import type { WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { pickOption } from "@/test/select";
 import enMessages from "../../../messages/en.json";
 import spendMessages from "../../../messages/spend.json";
 import uiMessages from "../../../messages/ui.json";
@@ -654,14 +655,30 @@ describe("Spend › Findings", () => {
     loaded();
     await renderSpend();
     const user = userEvent.setup();
-    await user.selectOptions(screen.getByLabelText("Level"), "agent");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Level" }),
+      "agent",
+    );
     let cards = screen
       .getAllByRole("listitem")
       .filter((li) => li.dataset.finding);
     expect(cards.map((c) => c.dataset.finding)).toEqual(["fnd_01k5rteg"]);
-    await user.selectOptions(screen.getByLabelText("Level"), "all");
-    await user.selectOptions(screen.getByLabelText("Confidence"), "high");
-    await user.selectOptions(screen.getByLabelText("Sort"), "savingAsc");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Level" }),
+      "All",
+    );
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Confidence" }),
+      "high confidence",
+    );
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Savings low first",
+    );
     cards = screen.getAllByRole("listitem").filter((li) => li.dataset.finding);
     expect(cards.map((c) => c.dataset.finding)).toEqual([
       "fnd_01k5rtop",

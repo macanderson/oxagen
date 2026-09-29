@@ -10,14 +10,8 @@
 // carries no catalogue of its own for a control whose words differ per list
 // ("Search records", "Search this list").
 import { useId, useMemo, useState } from "react";
+import { ListSelect } from "@/ui/list-select";
 import { RowsPager } from "@/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/ui/select";
 
 /** The rows-per-page choices, as shadcn's pagination example offers them. */
 const PER_PAGE = [10, 25, 50, 100] as const;
@@ -129,42 +123,6 @@ export function useList<T>(
 const searchBox =
   "min-h-9 min-w-40 flex-1 rounded-md border border-input-border bg-input-bg px-2.5 text-base text-input-fg focus-visible:outline-2 focus-visible:outline-input-ring sm:text-[13px]";
 
-/** One select in the bar: a trigger showing the chosen label, and its list. */
-function BarSelect({
-  items,
-  value,
-  onValue,
-  ...trigger
-}: {
-  items: readonly { value: string; label: string }[];
-  value: string;
-  onValue: (next: string) => void;
-  id?: string;
-  "aria-label"?: string;
-  "aria-labelledby"?: string;
-}) {
-  return (
-    <Select
-      items={items}
-      value={value}
-      onValueChange={(next) => {
-        if (next !== null && next !== value) onValue(next);
-      }}
-    >
-      <SelectTrigger {...trigger}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 /** `.lt-bar`: search, then the filters or the sort. */
 export function ListBar<T>({
   list,
@@ -202,7 +160,7 @@ export function ListBar<T>({
       {(filters ?? []).map((filter) => {
         const all = allLabel?.(filter.label) ?? filter.label;
         return (
-          <BarSelect
+          <ListSelect
             key={filter.key}
             aria-label={all}
             items={[{ value: "", label: all }, ...filter.options]}
@@ -216,7 +174,7 @@ export function ListBar<T>({
       {sortLabel !== undefined && sorts !== undefined && sorts.length > 0 ? (
         <span className="flex items-center gap-2">
           <span id={`${id}-sort`}>{sortLabel}</span>
-          <BarSelect
+          <ListSelect
             aria-labelledby={`${id}-sort`}
             items={sorts.map((sort) => ({
               value: sort.value,

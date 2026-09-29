@@ -15,13 +15,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { buttonSecondary, inputBase } from "@/ui/control-styles";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/ui/select";
+import { ListSelect, type ListSelectItem } from "@/ui/list-select";
 import {
   type FleetListQuery,
   REPLAY_FACET,
@@ -41,49 +35,6 @@ export const SEARCH_PAUSE_MS = 400;
 const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
 
 const triggerSize = "text-xs max-md:min-h-11 max-md:text-base";
-
-type Choice = { value: string; label: string };
-
-/** A small select over `items`, handing on the value picked. */
-function BarSelect({
-  items,
-  value,
-  onValue,
-  label,
-  testId,
-}: {
-  items: readonly Choice[];
-  value: string;
-  onValue: (next: string) => void;
-  label: string;
-  testId: string;
-}) {
-  return (
-    <Select
-      items={items}
-      value={value}
-      onValueChange={(next) => {
-        if (next !== null && next !== value) onValue(next);
-      }}
-    >
-      <SelectTrigger
-        size="sm"
-        aria-label={label}
-        data-testid={testId}
-        className={triggerSize}
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 type Facet = "status" | "tier" | "replay";
 
@@ -109,7 +60,7 @@ function FacetSelect<T extends string>({
 }) {
   const t = useTranslations("fleet.runs");
   const combined = chosen.length > 1 ? chosen.join(",") : null;
-  const items: Choice[] = [
+  const items: ListSelectItem[] = [
     { value: "", label: t("facetAll", { facet: label }) },
     ...(combined === null
       ? []
@@ -117,11 +68,13 @@ function FacetSelect<T extends string>({
     ...options.map((value) => ({ value, label: wordOf(value) })),
   ];
   return (
-    <BarSelect
+    <ListSelect
       items={items}
       value={combined ?? chosen[0] ?? ""}
-      label={t("facetLabel", { facet: label })}
-      testId={`facet-${facet}`}
+      size="sm"
+      aria-label={t("facetLabel", { facet: label })}
+      data-testid={`facet-${facet}`}
+      className={triggerSize}
       onValue={(value) => {
         const picked = options.find((option) => option === value);
         onChange(picked === undefined ? [] : [picked]);
@@ -258,14 +211,16 @@ export function RunsListBar({
           onList(withList(list, { status: next }));
         }}
       />
-      <BarSelect
+      <ListSelect
         items={PR_FILTERS.map((filter) => ({
           value: filter,
           label: t(`prFilter.${filter}`),
         }))}
         value={pullRequests}
-        label={t("prFilter.label")}
-        testId="pr-filter"
+        size="sm"
+        aria-label={t("prFilter.label")}
+        data-testid="pr-filter"
+        className={triggerSize}
         onValue={(value) => {
           const next = PR_FILTERS.find((f) => f === value);
           if (next !== undefined) onPullRequests(next);
