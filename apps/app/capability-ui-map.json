@@ -1335,6 +1335,15 @@
         }
       ]
     },
+    "retry_steering_repo_provision": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "The steering repo health banner in the workspace layout › “Retry setup”, shown when the steering repo failed or was blocked while it provisioned (features/steering-repo/provisioning.tsx, features/steering-repo/actions.ts)",
+      "testid": "steering-repo-retry",
+      "proof": "apps/app/src/features/steering-repo/provisioning.test.tsx",
+      "verifiedAt": "2026-09-29",
+      "verifiedBy": "retry-4750"
+    },
     "revise_context_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
       "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",

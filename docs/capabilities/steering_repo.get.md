@@ -50,6 +50,10 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 
 A workspace with no `steering_repo` state answers `status: "provisioning"` with every other field null and no differences. The read does not fail, because the banner that calls it sits on every page of the workspace.
 
+## Retry
+
+While `status` reads `failed` or `blocked`, [retry_steering_repo_provision](steering_repo.provision.retry.md) resumes the same setup from the step that stopped it, instead of starting over (#4750).
+
 ## Refusals
 
 The handler refuses no input. The kernel's IAM check refuses a caller without one of the roles above.
