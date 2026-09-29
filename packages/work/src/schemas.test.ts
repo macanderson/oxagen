@@ -279,7 +279,8 @@ describe("collector/v1", () => {
     expectInvalid(validate, { ...email, connection: "conn_01K5ZD7Q4R" });
     expectInvalid(validate, { ...email, write_back: { certify_note: false } });
     expectInvalid(validate, { ...slack, write_back: { close: true } });
-    const { connection: _connection, ...noConnection } = zendesk as Record<string, unknown>;
+    const { connection: _connection, ...noConnection } =
+      zendesk as unknown as Record<string, unknown>;
     expectInvalid(validate, noConnection);
   });
 

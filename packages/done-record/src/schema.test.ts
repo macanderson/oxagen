@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AnySchemaObject } from "ajv";
+import type { SchemaObject } from "ajv";
 import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { describe, expect, it } from "vitest";
@@ -51,7 +51,7 @@ const raw = readFileSync(doneRecordSchemaPath(), "utf8");
 const doc = JSON.parse(raw) as SchemaDoc;
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
-const validate = ajv.compile(JSON.parse(raw) as AnySchemaObject);
+const validate = ajv.compile(JSON.parse(raw) as SchemaObject);
 
 function valid(value: unknown): boolean {
   return validate(value);
