@@ -195,7 +195,6 @@ export function RepositoriesTab({
           searchLabel={t("search")}
           filters={filters}
           allLabel={(column) => t("all", { column })}
-          rowsLabel={t("rows")}
         />
         <div className="min-w-0 overflow-x-auto">
           <table
@@ -252,6 +251,8 @@ export function RepositoriesTab({
         </div>
         <ListPager
           list={list}
+          label={t("pager")}
+          rowsLabel={t("rows")}
           range={(from, to, total) => t("range", { from, to, total })}
           previousLabel={t("previous")}
           nextLabel={t("next")}

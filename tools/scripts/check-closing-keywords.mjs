@@ -19,18 +19,64 @@
 // messages into the commit that lands on main, and GitHub closes the issue from
 // there. The edited description changes nothing.
 //
-// The keyword pattern, the negation window, and the spans GitHub ignores all
-// come from `scr-dod-check.mjs`, so the two checks agree on what counts as a
-// close and a negated close.
+// The keyword pattern, the negation words, and the spans GitHub ignores come
+// from `scr-dod-check.mjs`, so the two checks agree on what counts as a close.
+// The negation window does not. The DoD gate reads the few words before the
+// keyword, and this check reads the whole sentence (see `isNegatedInSentence`).
 
 import { pathToFileURL } from "node:url";
 import {
   CLOSING_PATTERN,
-  isNegated,
   linkedIssues,
+  NEGATION_WORDS,
   referencedIssues,
   withoutNonProse,
 } from "./scr-dod-check.mjs";
+
+// The DoD gate's window stops at a comma, so "This does not, by itself, close
+// #12" reads to it as a plain close, and GitHub closes #12 on merge. This check
+// reads every word from the start of the sentence instead (#3680). The price is
+// a real close that shares a sentence with an unrelated negation, such as "Not
+// a refactor, closes #7". That fails too, and the message tells the author to
+// give the close its own sentence. A missed negated close costs an issue closed
+// with its work unfinished, and nothing reports it.
+const SENTENCE_NEGATIONS = new Set([...NEGATION_WORDS, "without"]);
+
+/** Whether a negation word sits before `index` in the same sentence. */
+export function isNegatedInSentence(text, index) {
+  const before = text.slice(0, index);
+  const sentenceStart = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf("!"),
+    before.lastIndexOf("?"),
+    before.lastIndexOf("\n"),
+  );
+  return before
+    .slice(sentenceStart + 1)
+    .split(/\s+/)
+    .some((word) =>
+      SENTENCE_NEGATIONS.has(word.toLowerCase().replace(/[^\w']/g, "")),
+    );
+}
+
+// `Refs #1, #2` names both issues, but `REFS_PATTERN` in `scr-dod-check.mjs`
+// stops at the first number. This reads the rest of the list, so a commit that
+// closes #2 is caught too. The DoD gate's reading of `Refs` stays as it is.
+const REFS_LIST =
+  /\brefs?\b\s*:?\s+((?:[\w.-]+\/[\w.-]+)?#\d+(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s*&\s*)(?:[\w.-]+\/[\w.-]+)?#\d+)*)/gi;
+const REFS_LIST_ITEM = /(?:([\w.-]+)\/([\w.-]+))?#(\d+)/g;
+
+/** Every issue a `Refs` list in `text` names, as `{ owner, repo, number }`. */
+function refsListIssues(text) {
+  if (!text) return [];
+  const found = [];
+  for (const list of withoutNonProse(text).matchAll(REFS_LIST)) {
+    for (const item of list[1].matchAll(REFS_LIST_ITEM)) {
+      found.push({ owner: item[1], repo: item[2], number: Number(item[3]) });
+    }
+  }
+  return found;
+}
 
 /** The trimmed line of `text` that holds `index`. */
 function lineAt(text, index) {
@@ -65,7 +111,7 @@ export function findNegatedClosings(text) {
   const clean = withoutNonProse(text);
   const findings = [];
   for (const match of clean.matchAll(CLOSING_PATTERN)) {
-    if (!isNegated(clean, match.index)) continue;
+    if (!isNegatedInSentence(clean, match.index)) continue;
     findings.push({ match: match[0], line: lineAt(clean, match.index) });
   }
   return findings;
@@ -88,7 +134,7 @@ export function findRefsCommitConflicts(prBody, commits, repository = {}) {
   const key = (r) => issueKey(r.owner, r.repo, r.number, repository);
   const closed = new Set(linkedIssues(prBody).map(key));
   const refsOnly = new Set(
-    referencedIssues(prBody)
+    [...referencedIssues(prBody), ...refsListIssues(prBody)]
       .map(key)
       .filter((key) => !closed.has(key)),
   );
@@ -99,7 +145,7 @@ export function findRefsCommitConflicts(prBody, commits, repository = {}) {
     if (!text) continue;
     const clean = withoutNonProse(text);
     for (const match of clean.matchAll(CLOSING_PATTERN)) {
-      if (isNegated(clean, match.index)) continue;
+      if (isNegatedInSentence(clean, match.index)) continue;
       // `CLOSING_PATTERN` fills slots 1 to 3 for `#N` and 4 to 6 for a URL.
       const matchKey = key({
         owner: match[1] ?? match[4],
@@ -170,7 +216,9 @@ export function formatClosingKeywords(result) {
         "Rewrite each line so GitHub reads no close. Put the reference in",
         "backticks (`` `#N` ``), or say the PR advances the issue with `Refs #N`.",
         "Fix a commit message by rewording the commit, or by squash-merging with",
-        "an edited message.",
+        "an edited message. The check reads the whole sentence before the",
+        "keyword, so if a line does mean to close the issue, give the close its",
+        "own sentence.",
       ].join("\n"),
     );
   }

@@ -97,6 +97,7 @@ export default defineConfig({
         "src/tools/plugin.settings.set_auth_alerts.ts",
         // served tools (lane M15)
         "src/servers/call.ts",
+        "src/servers/embeddings.ts",
         "src/servers/list.ts",
         "src/servers/names.ts",
         "src/servers/search.ts",

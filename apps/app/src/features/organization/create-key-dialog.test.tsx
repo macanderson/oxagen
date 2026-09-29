@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { renderToaster } from "@/test/toaster";
 
 const { router, createApiKey, revokeApiKey, rotateApiKey } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
@@ -35,7 +36,6 @@ vi.mock("./api-key-actions", () => ({
 const { CreateKeyDialog, KeyRowActions, expiryDayOf } = await import(
   "./create-key-dialog"
 );
-const { Receipts } = await import("./receipt");
 
 /**
  * The view the row was read on: the third page of the revoked-keys-included
@@ -450,6 +450,8 @@ describe("a key that may not be rotated", () => {
 
 describe("revoke", () => {
   it("ends the key and reloads the page, showing no secret", async () => {
+    // The root layout's toaster, where the receipt lands (ADR-221).
+    renderToaster();
     revokeApiKey.mockResolvedValue({ ok: true, value: { keyId: KEY } });
     renderRow();
     // The row's Revoke is the design's `btn sm danger`.
@@ -479,14 +481,11 @@ describe("revoke", () => {
     expect(router.refresh).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("api-key-secret")).toBeNull();
     // The revoke leaves its receipt for the page it reloads.
-    render(
-      <IntlProvider>
-        <Receipts />
-      </IntlProvider>,
-    );
-    expect(screen.getByTestId("organization-receipts")).toHaveTextContent(
-      "CI runner was revoked. Its access ends at the next call. Recorded in the audit record.",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("toasts")).toHaveTextContent(
+        "CI runner was revoked. Its access ends at the next call. Recorded in the audit record.",
+      );
+    });
   });
 
   it("names a key that was already revoked and reloads nothing (negative)", async () => {

@@ -13,7 +13,10 @@
  *     auth headers. Ciphertext, KMS keys, and (for oauth) the refresh token are
  *     never included in the response.
  *   - The capability is deny-by-default, `sensitivity: "high"`, and gated to
- *     workspace members already entitled to use these servers.
+ *     workspace members already entitled to use these servers. The handler
+ *     asserts the contract's roles itself before any read (INV-29, #3490):
+ *     the kernel's IAM check allows every call below the enterprise tier, so
+ *     without this gate a workspace Viewer could read every server's token.
  *   - Auto-refresh of an EXPIRED oauth access token is NOT performed here (the
  *     runtime does it lazily via the transport's auth provider). An oauth server
  *     whose stored token is absent/stale is returned with `needsReauth: true`.
@@ -21,12 +24,14 @@
  *     to a full server-side call-proxy) so expired-token servers self-heal.
  */
 import { withTenantDb, schema } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
 import { getWorkspaceSecret } from "@oxagen/plugins";
 import type { CapabilityContext } from "../types";
-import type {
-  AgentMcpResolveInput,
-  AgentMcpResolveOutput,
+import {
+  agentMcpResolve,
+  type AgentMcpResolveInput,
+  type AgentMcpResolveOutput,
 } from "@oxagen/oxagen/contracts/agent.mcp.resolve";
 import { decryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
 
@@ -34,10 +39,27 @@ export type { AgentMcpResolveInput, AgentMcpResolveOutput };
 
 type ResolvedServer = AgentMcpResolveOutput["servers"][number];
 
+/** The roles the contract's `defaultRoles` allow, checked for every tier. */
+const RESOLVE_ROLES = {
+  org: allowedRoles(agentMcpResolve.defaultRoles.org),
+  workspace: allowedRoles(agentMcpResolve.defaultRoles.workspace),
+};
+
+function allowedRoles(grants: Record<string, string | undefined>): string[] {
+  return Object.entries(grants)
+    .filter(([, effect]) => effect === "allow")
+    .map(([role]) => role);
+}
+
 export async function agentMcpResolveHandler(
   _input: AgentMcpResolveInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpResolveOutput> {
+  // The contract's defaultRoles, asserted for the user an API key acts for.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    RESOLVE_ROLES,
+  );
   if (!ctx.workspaceId) return { servers: [] };
   const workspaceId = ctx.workspaceId;
 

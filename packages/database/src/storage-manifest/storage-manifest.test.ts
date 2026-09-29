@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { buildManifest, renderManifest, MANIFEST_VERSION } from "./generate";
+import {
+  buildManifest,
+  manifestSummary,
+  renderManifest,
+  MANIFEST_VERSION,
+} from "./generate";
 import { canonicalJson, canonicalize, contentHashOf } from "./canonical-json";
 import { collectPostgresTables } from "./sources/postgres";
 import { parseClickhouseSchema } from "./sources/clickhouse";
@@ -70,13 +75,23 @@ describe("storage manifest — determinism", () => {
     expect(renderManifest()).toBe(renderManifest());
   });
 
-  it("the content hash matches a fresh hash of the canonical body", () => {
+  it("commits no value derived from the whole set (ADR-216)", () => {
+    // A committed hash or count is a line every table- or capability-adding
+    // branch rewrites, so two such branches always conflicted on it (#3691).
     const m = buildManifest();
-    const { contentHash, ...body } = m;
-    expect(contentHash).toBe(contentHashOf({ contentHash, ...body }));
-    // And re-hashing the emitted body reproduces it exactly.
-    expect(contentHash).toBe(
-      createHash("sha256").update(canonicalJson(body)).digest("hex"),
+    expect(m).not.toHaveProperty("contentHash");
+    for (const store of m.stores) expect(store).not.toHaveProperty("tableCount");
+    const rendered = renderManifest();
+    expect(rendered).not.toContain('"contentHash"');
+    expect(rendered).not.toContain('"tableCount"');
+  });
+
+  it("the content hash, computed at read time, is the sha256 of the committed bytes", () => {
+    // The archdocs site and `pnpm schema:manifest` both show this value, one
+    // from the file bytes and one from the parsed manifest. They must agree.
+    const m = buildManifest();
+    expect(contentHashOf(m)).toBe(
+      createHash("sha256").update(renderManifest()).digest("hex"),
     );
   });
 
@@ -109,9 +124,14 @@ describe("storage manifest — coverage snapshot", () => {
   it("includes all four stores, each with tables", () => {
     const kinds = manifest.stores.map((s) => s.kind).sort();
     expect(kinds).toEqual(["blob", "clickhouse", "neo4j", "postgres"]);
+    const { tablesByStore } = manifestSummary(manifest);
     for (const store of manifest.stores) {
-      expect(store.tableCount).toBeGreaterThan(0);
+      expect(tablesByStore[store.kind]).toBeGreaterThan(0);
     }
+    // The summary counts every table exactly once.
+    expect(
+      Object.values(tablesByStore).reduce((sum, n) => sum + n, 0),
+    ).toBe(manifest.tables.length);
   });
 
   it("every table has a store-qualified id and a domain", () => {

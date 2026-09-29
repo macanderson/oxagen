@@ -11,6 +11,8 @@
 > and typed run evidence are separate follow-ups.
 >
 > **Amended 2026-09-28 by [ADR-214](./ADR-214-server-built-code-graph-copies-hold-symbols-chunks-and-embeddings.md).** A server-side exact code graph returns for copies Oxagen builds itself from the provider. This ADR's cloud-sync and local-daemon paths stay retired.
+>
+> **Amended 2026-09-28 by [ADR-220](./ADR-220-the-code-graph-builds-on-the-operators-machine-and-a-workspace-may-name-its-embedding-endpoint.md) (proposed).** A local code graph returns, built by the `codegraph` binary under tachod and written only to local tables on the operator's machine. This ADR's cloud sync stays retired.
 
 ## Context
 

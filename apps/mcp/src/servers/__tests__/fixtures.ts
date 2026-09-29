@@ -294,6 +294,9 @@ export function published(options: PublishedOptions = {}): PublishedTools {
   };
 }
 
+/** The auth.users id of the person who enrolled the run's host. */
+export const OPERATOR = "5a8e2c41-9b7d-4f16-8c3e-0d2f6a1b7e94";
+
 export function run(overrides: Partial<ServedRun> = {}): ServedRun {
   return {
     orgId: "org_1",
@@ -302,6 +305,7 @@ export function run(overrides: Partial<ServedRun> = {}): ServedRun {
     sessionId: "ses_1",
     runtime: "ci-linux-01",
     harness: "claude-code",
+    operator: OPERATOR,
     machine: "hst_1",
     runPublicId: "tse_1",
     ...overrides,

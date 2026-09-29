@@ -207,7 +207,6 @@ function ChangeTable({
         searchLabel={t("search")}
         filters={filters}
         allLabel={(column) => repos("all", { column })}
-        rowsLabel={repos("rows")}
       />
       <div className="min-w-0 overflow-x-auto">
         <table
@@ -259,6 +258,8 @@ function ChangeTable({
       </div>
       <ListPager
         list={list}
+        label={repos("pager")}
+        rowsLabel={repos("rows")}
         range={(from, to, total) => repos("range", { from, to, total })}
         previousLabel={repos("previous")}
         nextLabel={repos("next")}

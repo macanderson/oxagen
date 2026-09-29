@@ -590,6 +590,10 @@ describe("deprovisioning", () => {
   });
 
   it("applies a group's role through the mapped-role transaction as a SCIM group change", async () => {
+    lifecycle.applyMappedOrgRoleInTx.mockResolvedValueOnce({
+      kind: "granted",
+      role: "admin",
+    });
     await store().applyRole(USER, "admin");
     expect(lifecycle.applyMappedOrgRoleInTx.mock.calls[0]![1]).toEqual({
       orgId: ORG,
@@ -599,6 +603,51 @@ describe("deprovisioning", () => {
       trigger: "scim_group_change",
       requestId: REQUEST_ID,
     });
+  });
+});
+
+describe("reporting a removal", () => {
+  const recording = () => {
+    const removed: string[] = [];
+    const port = createPgScimStore(renderingTx(), ORG, REQUEST_ID, (userId) =>
+      removed.push(userId),
+    );
+    return { port, removed };
+  };
+
+  it("reports a deprovisioned person once the removal ran", async () => {
+    const { port, removed } = recording();
+    await port.deprovision(USER, "scim_active_false", { endSessions: true });
+    expect(removed).toEqual([USER]);
+  });
+
+  it("reports no one when the removal refuses", async () => {
+    lifecycle.removeOrgMemberInTx.mockRejectedValueOnce(new Error("owner"));
+    const { port, removed } = recording();
+    await expect(
+      port.deprovision(USER, "scim_delete", { endSessions: true }),
+    ).rejects.toThrow("owner");
+    expect(removed).toEqual([]);
+  });
+
+  it("reports a group change that removed the person", async () => {
+    lifecycle.applyMappedOrgRoleInTx.mockResolvedValueOnce({
+      kind: "removed",
+      removal: { userId: USER },
+    });
+    const { port, removed } = recording();
+    await port.applyRole(USER, null);
+    expect(removed).toEqual([USER]);
+  });
+
+  it("reports no one for a group change that granted a role", async () => {
+    lifecycle.applyMappedOrgRoleInTx.mockResolvedValueOnce({
+      kind: "granted",
+      role: "member",
+    });
+    const { port, removed } = recording();
+    await port.applyRole(USER, "member");
+    expect(removed).toEqual([]);
   });
 });
 

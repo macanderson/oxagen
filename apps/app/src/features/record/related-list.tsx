@@ -59,7 +59,6 @@ export function RelatedList({ items }: { items: RelatedItem[] }) {
         searchLabel={t("search")}
         sortLabel={t("sort")}
         sorts={sorts}
-        rowsLabel={t("rows")}
       />
       {list.shown.length === 0 ? (
         <p className="px-4 py-3.5 text-[13px] text-dim">{t("nothing")}</p>
@@ -74,6 +73,8 @@ export function RelatedList({ items }: { items: RelatedItem[] }) {
       )}
       <ListPager
         list={list}
+        label={t("pager")}
+        rowsLabel={t("rows")}
         range={(from, to, total) => t("range", { from, to, total })}
         previousLabel={t("previous")}
         nextLabel={t("next")}

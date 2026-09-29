@@ -11,7 +11,7 @@ import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
-import { ToastStack, useToasts } from "@/ui/toast";
+import { toast } from "@/ui/toast";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 
 /** The refusal the alert names: another account, a closed invitation, or any other failure. */
@@ -26,7 +26,6 @@ export function InviteDecision({ token }: { token: string }) {
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [declined, setDeclined] = useState(false);
-  const { toasts, toast } = useToasts();
   // Pressing either button does nothing while one is running or once declined.
   const inert = pending !== null || declined;
 
@@ -94,7 +93,6 @@ export function InviteDecision({ token }: { token: string }) {
           {pending === "decline" ? t("declining") : t("decline")}
         </button>
       </div>
-      <ToastStack toasts={toasts} testId="invite-toasts" />
     </div>
   );
 }
