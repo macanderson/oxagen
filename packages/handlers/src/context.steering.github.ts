@@ -979,8 +979,8 @@ export function createSteeringGitHub(
             "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
         });
       }
-      // A provisioned steering repository answers only to the the Oxagen GitHub App
-      // app. Every other head uses the workspace's own token.
+      // A provisioned steering repository answers only to the Oxagen GitHub
+      // App. Every other head uses the workspace's own token.
       const token =
         connection.source === "binding" &&
         connection.steeringInstallationId !== undefined

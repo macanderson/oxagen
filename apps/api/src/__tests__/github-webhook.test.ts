@@ -156,6 +156,7 @@ import { app } from "../app";
 import { makeRequest } from "./_helpers";
 // The same mocked logger instance the route imports — assert ack-and-drop logs.
 import { logger } from "../middleware/logger";
+import { upsertGithubInstallation } from "../routes/v1/github-installations";
 
 const SECRET = "test-webhook-secret";
 const SECOND_SECRET = "second-app-webhook-secret-for-tests";
@@ -1040,6 +1041,49 @@ describe("github app webhook – steering repo health read (S2, #4560, ADR-228)"
       }),
     );
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("still records and pauses an uninstall when the health read fails", async () => {
+    mocks.findHealthScopes.mockRejectedValue(new Error("pg down"));
+    const tx = makeTx([]);
+    mocks.withSystemDb.mockImplementation(
+      (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    );
+    const res = await fromPrimaryApp("installation", {
+      action: "deleted",
+      installation: {
+        id: 61200044,
+        account: { login: "acme", id: 9, type: "Organization" },
+        updated_at: "2026-09-26T21:02:48Z",
+      },
+      repositories: [{ id: STEERING_REPO_ID }],
+      sender: { login: "dana-ops" },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      received: true,
+      lifecycle: "installation",
+      action: "deleted",
+    });
+    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        installationId: "61200044",
+        deletedAt: expect.any(Date),
+      }),
+    );
+    expect(tx._updateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "paused" }),
+    );
+    expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "installation.deleted" }),
+      expect.stringContaining("could not request a steering repo health check"),
+    );
+    // The read runs first. Paused connections could hide the scopes it needs.
+    const read = mocks.findHealthScopes.mock.invocationCallOrder[0];
+    const recorded =
+      vi.mocked(upsertGithubInstallation).mock.invocationCallOrder[0];
+    expect(read).toBeLessThan(recorded as number);
   });
 
   it("keeps the delivery on its path after the health read", async () => {

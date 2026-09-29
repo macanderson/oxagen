@@ -1057,7 +1057,27 @@ describe("GET /oauth/github/callback", () => {
       setup_action: "install",
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get("location") ?? "").toContain("github_installed=1");
+    expect(res.headers.get("location")).toBe(`${APP_URL}/?github_installed=1`);
+    // The registry is platform-scoped, so the install is recorded without a
+    // tenant. Asserting the redirect alone would pass with the write deleted.
+    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith({
+      installationId: "142003699",
+      reactivate: true,
+    });
+  });
+
+  it("still redirects a no-state install when the registry write fails (negative)", async () => {
+    vi.mocked(upsertGithubInstallation).mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
+    const res = await makeCallbackReq({
+      installation_id: "142003699",
+      setup_action: "install",
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`${APP_URL}/?github_installed=1`);
+    expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledTimes(1);
   });
 
   it("returns 503 when GitHub App env vars are missing", async () => {

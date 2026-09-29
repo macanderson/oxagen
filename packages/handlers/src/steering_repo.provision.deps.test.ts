@@ -420,6 +420,16 @@ describe("steeringAppFromEnv", () => {
     ).toBeNull();
   });
 
+  it("ignores the retired OXAGEN_STEERING_APP_* keys (ADR-228) (negative)", () => {
+    expect(
+      steeringAppFromEnv({
+        OXAGEN_STEERING_APP_ID: "5121606",
+        OXAGEN_STEERING_APP_PRIVATE_KEY: "pem",
+        OXAGEN_STEERING_APP_SLUG: "oxagen-steering",
+      }),
+    ).toBeNull();
+  });
+
   it("reads a complete set", () => {
     expect(steeringAppFromEnv(ENV)).toEqual({
       app: { symbol: OXAGEN_STEERING_APP, id: 123, slug: "oxagen-steering" },
