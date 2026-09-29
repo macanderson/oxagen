@@ -5,7 +5,9 @@
 // back to Oxagen like any other response. One deadline, the envelope's
 // deadline_ms, covers the connection, the request, and the whole body. MCP
 // streamable HTTP is plain HTTP here, and its event stream flows back in parts
-// as it arrives.
+// as it arrives. A mutual_tls credential gets its own keep-alive agent, so a
+// connection opened with one client certificate never carries a call made
+// with another.
 import {
   Agent as HttpAgent,
   request as httpRequest,
@@ -14,8 +16,9 @@ import {
   type OutgoingHttpHeaders,
 } from "node:http";
 import { Agent as HttpsAgent, request as httpsRequest, type RequestOptions } from "node:https";
+import { createSecureContext } from "node:tls";
 import { DATA_CHUNK_BYTES } from "@oxagen/relay-broker/protocol";
-import type { HeaderEntry } from "../credentials";
+import type { ClientCertificate, HeaderEntry } from "../credentials";
 import type { ResponseSink } from "../sink";
 import { messageOf, type RelayHttpTarget, type UpstreamCall } from "./types";
 
@@ -24,25 +27,54 @@ export interface HttpUpstream {
   close(): void;
 }
 
-interface Agents {
+export interface Agents {
   http: HttpAgent;
   https: HttpsAgent;
+  /** One agent per mutual_tls credential, keyed by the credential's name. */
+  mutual: Map<string, HttpsAgent>;
+}
+
+// An idle connection closes after 5 seconds, as Node's own agents do, before
+// a server's keep-alive timeout closes it under a new request.
+const AGENT_OPTIONS = { keepAlive: true, timeout: 5_000 } as const;
+
+/** The agents one HTTP sender shares across its calls. */
+export function createHttpAgents(): Agents {
+  return { http: new HttpAgent(AGENT_OPTIONS), https: new HttpsAgent(AGENT_OPTIONS), mutual: new Map() };
+}
+
+/**
+ * The agent for one call. A call with a client certificate gets the agent for
+ * its credential, made on first use. Throws when the certificate or key does
+ * not load, before any connection opens.
+ */
+export function agentFor(agents: Agents, tls: boolean, clientCert?: ClientCertificate): HttpAgent {
+  if (!tls) return agents.http;
+  if (clientCert === undefined) return agents.https;
+  const existing = agents.mutual.get(clientCert.name);
+  if (existing !== undefined) return existing;
+  // The agent loads the pair only when it opens a connection. Loading it here
+  // turns a bad pair into a refusal before anything is sent.
+  createSecureContext({ cert: clientCert.cert, key: clientCert.key });
+  const agent = new HttpsAgent({ ...AGENT_OPTIONS, cert: clientCert.cert, key: clientCert.key });
+  agents.mutual.set(clientCert.name, agent);
+  return agent;
+}
+
+/** Close every agent's connections and forget the per-credential agents. */
+export function destroyAgents(agents: Agents): void {
+  agents.http.destroy();
+  agents.https.destroy();
+  for (const agent of agents.mutual.values()) agent.destroy();
+  agents.mutual.clear();
 }
 
 /** An HTTP sender that keeps connections open between calls. */
 export function createHttpUpstream(): HttpUpstream {
-  const agents: Agents = {
-    // An idle connection closes after 5 seconds, as Node's own agents do,
-    // before a server's keep-alive timeout closes it under a new request.
-    http: new HttpAgent({ keepAlive: true, timeout: 5_000 }),
-    https: new HttpsAgent({ keepAlive: true, timeout: 5_000 }),
-  };
+  const agents = createHttpAgents();
   return {
     send: (call) => sendHttp(call, agents),
-    close: () => {
-      agents.http.destroy();
-      agents.https.destroy();
-    },
+    close: () => destroyAgents(agents),
   };
 }
 
@@ -80,9 +112,25 @@ async function pump(response: IncomingMessage, sink: ResponseSink): Promise<bool
 }
 
 function sendHttp(call: UpstreamCall<RelayHttpTarget>, agents: Agents): void {
-  const { target, sink, signal, deadlineMs } = call;
+  const { target, sink, signal, deadlineMs, clientCert } = call;
   if (signal.aborted) return;
   const tls = target.scheme === "https";
+
+  // The envelope schema already refuses a mutual_tls credential on an http
+  // target. This check keeps a certificate from being dropped in silence if
+  // that ever changes.
+  if (clientCert !== undefined && !tls) {
+    sink.fail("upstream", `Credential ${clientCert.name} presents a client certificate, which needs an https target.`, false);
+    return;
+  }
+  let agent: HttpAgent;
+  try {
+    agent = agentFor(agents, tls, clientCert);
+  } catch {
+    // OpenSSL's message can quote the input, so the relay names the credential only.
+    sink.fail("upstream", `The relay could not load the client certificate for credential ${clientCert?.name ?? ""}.`, false);
+    return;
+  }
 
   // The request counts as sent once its bytes can reach the upstream: when
   // the connection opens, or when TLS finishes its handshake.
@@ -114,7 +162,7 @@ function sendHttp(call: UpstreamCall<RelayHttpTarget>, agents: Agents): void {
     method: target.method,
     path: target.path,
     headers: headerRecord(call.headers),
-    agent: tls ? agents.https : agents.http,
+    agent,
   };
   try {
     outgoing = tls ? httpsRequest(options) : httpRequest(options);

@@ -65,6 +65,14 @@ describe("mcp middleware startup wiring", () => {
     }
   });
 
+  it("installs the relay's upgrade mount at module scope", () => {
+    // Without it, no relay can connect, and every call on a relay:<name>
+    // network is refused as disconnected. Nothing else in apps/mcp imports it.
+    const install = source.indexOf('import "./relay/install"');
+    expect(install).toBeGreaterThan(-1);
+    expect(install).toBeLessThan(source.indexOf("export default ["));
+  });
+
   it("runs the served tools after the auth gate", () => {
     // xmcp runs the array in order. The served tools read the request's key,
     // so a request without one must be turned away before they run.

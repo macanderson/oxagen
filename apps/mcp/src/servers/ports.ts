@@ -26,6 +26,7 @@ import { parseCredentialRef } from "@oxagen/oxagen/steering-repo/names";
 import type { CedarRuntime } from "@oxagen/policy";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { relayTransport } from "../relay";
 import { postgresApprovals } from "./approvals";
 import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
@@ -214,6 +215,8 @@ export function transportFor(route: ServedRoute): Transport {
   const unbuilt = unbuiltRoute(route.network);
   if (unbuilt !== null) throw unbuilt;
   if (route.network === "local") return localTransport(route);
+  // A relay:<name> network goes through this process's relay broker (lane M12).
+  if (route.network.startsWith("relay:")) return relayTransport(route.run);
   cloud ??= createCloudTransport();
   return cloud;
 }

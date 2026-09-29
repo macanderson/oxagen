@@ -13,9 +13,16 @@
 // with no frame, closes it, and fails its open calls. The broker never
 // replays a call on another connection.
 //
+// While a connection is open, the broker checks its relay token again every
+// DEFAULT_REVOCATION_CHECK_MS. When no live record holds the token any more,
+// or the record names another organization, workspace, or relay, the broker
+// stops routing to the connection at once, fails its open calls, and closes it
+// with CLOSE_TOKEN_REVOKED. When the check itself fails, the connection stays
+// and the next interval checks again.
+//
 // A host app mounts the broker by passing its HTTP server's upgrade events
-// for the connect path to handleUpgrade, and gives each call path the
-// Transport from transport(scope).
+// to handleUpgrade, which answers 404 for any path but RELAY_CONNECT_PATH,
+// and gives each call path the Transport from transport(scope).
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
@@ -41,12 +48,15 @@ import { relayCredentialEntitled, type CredentialEntitlement } from "./entitleme
 import {
   CLOSE_HELLO_MISMATCH,
   CLOSE_NO_HELLO,
+  CLOSE_TOKEN_REVOKED,
   decodeRelayFrame,
   DEFAULT_HEARTBEAT_MS,
   DEFAULT_MISSED_HEARTBEATS,
+  DEFAULT_REVOCATION_CHECK_MS,
   encodeFrame,
   MAX_FRAME_BYTES,
   MAX_REQUEST_BODY_BYTES,
+  RELAY_CONNECT_PATH,
   RELAY_PROTOCOL_VERSION,
   toBase64,
   type BrokerFrame,
@@ -91,13 +101,19 @@ export interface RelayBrokerOptions {
   missedHeartbeats?: number;
   envelopeTtlMs?: number;
   responseGraceMs?: number;
+  /** How often to check each live connection's relay token again. Defaults to DEFAULT_REVOCATION_CHECK_MS. */
+  revocationCheckMs?: number;
   now?: () => number;
   /** Called when a relay gains its first connection or loses its last. */
   onStatus?: (event: RelayStatusEvent) => void;
 }
 
 export interface RelayBroker {
-  /** Take an HTTP upgrade for the connect path. It answers 401 before the upgrade when the token does not check. */
+  /**
+   * Take an HTTP upgrade. It answers 404 for any path but RELAY_CONNECT_PATH,
+   * before it reads the token. It answers 401 before the upgrade when the
+   * token does not check, and 503 when the check itself fails.
+   */
   handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void>;
   /** The Transport for calls on relay:<name> networks, acting for one caller. */
   transport(scope: RelayScope): Transport;
@@ -135,7 +151,23 @@ function rawText(data: RawData): string {
   return Buffer.from(data).toString("utf8");
 }
 
-function refuseUpgrade(socket: Duplex, status: 401 | 503, reason: string): void {
+/** The request's path without its query string. */
+function requestPath(url: string | undefined): string {
+  const path = url ?? "";
+  const query = path.indexOf("?");
+  return query === -1 ? path : path.slice(0, query);
+}
+
+function sameIdentity(a: RelayIdentity, b: RelayIdentity): boolean {
+  return (
+    a.orgId === b.orgId &&
+    a.workspaceId === b.workspaceId &&
+    a.workspacePublicId === b.workspacePublicId &&
+    a.relay === b.relay
+  );
+}
+
+function refuseUpgrade(socket: Duplex, status: 401 | 404 | 503, reason: string): void {
   // Destroy the socket only once the response has flushed, as ws does, so the
   // relay reads the status instead of a reset connection.
   socket.once("finish", () => socket.destroy());
@@ -148,6 +180,10 @@ class RelayConnection {
   lastSeen: number;
   /** Why the relay went down, for the status event. */
   downReason = "the connection closed";
+  /** The broker revoked this connection. Its route and its calls are already gone. */
+  revoked = false;
+  /** The timer that checks the relay token again while the connection is open. */
+  recheck: NodeJS.Timeout | undefined;
 
   constructor(
     readonly socket: WebSocket,
@@ -179,6 +215,7 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
   const missed = options.missedHeartbeats ?? DEFAULT_MISSED_HEARTBEATS;
   const ttlMs = options.envelopeTtlMs ?? DEFAULT_ENVELOPE_TTL_MS;
   const graceMs = options.responseGraceMs ?? DEFAULT_RESPONSE_GRACE_MS;
+  const revocationMs = options.revocationCheckMs ?? DEFAULT_REVOCATION_CHECK_MS;
   const now = options.now ?? Date.now;
   const entitled = options.credentialEntitled ?? relayCredentialEntitled;
   const routes = new Map<string, RelayConnection[]>();
@@ -225,10 +262,51 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
     return list[turn % list.length];
   }
 
-  function attach(socket: WebSocket, identity: RelayIdentity): void {
+  /**
+   * Stop routing to a connection whose relay token no longer checks, fail its
+   * open calls, and close it with CLOSE_TOKEN_REVOKED. The relay reads that
+   * code from the close frame, so this closes the socket rather than
+   * terminating it.
+   */
+  function revoke(connection: RelayConnection): void {
+    if (connection.revoked) return;
+    connection.revoked = true;
+    clearInterval(connection.recheck);
+    removeRoute(connection, "the relay token was revoked");
+    for (const call of [...connection.calls.values()]) call.disconnected();
+    connection.socket.close(CLOSE_TOKEN_REVOKED, "relay token revoked");
+  }
+
+  function attach(socket: WebSocket, identity: RelayIdentity, token: string): void {
+    // The token lives only in this closure, for the revocation check. It is
+    // never a field of RelayConnection, so nothing that logs or serializes a
+    // connection can reach it.
     const connection = new RelayConnection(socket, identity, now());
     sockets.add(connection);
     const helloTimer = setTimeout(() => socket.close(CLOSE_NO_HELLO, "no hello"), heartbeatMs);
+    let checking = false;
+
+    function recheckToken(): void {
+      if (checking || connection.revoked || !sockets.has(connection)) return;
+      checking = true;
+      void options.verifier
+        .verify(token)
+        .then(
+          (current) => {
+            if (!sockets.has(connection)) return;
+            if (!current || !sameIdentity(current, identity)) revoke(connection);
+          },
+          () => {
+            // The check failed, most often because the database did not
+            // answer. Keep the connection and check again at the next
+            // interval. A database outage must not drop every relay at once.
+            // The 30-second bound starts again once the database answers.
+          },
+        )
+        .finally(() => {
+          checking = false;
+        });
+    }
 
     socket.on("message", (data, isBinary) => {
       connection.lastSeen = now();
@@ -250,6 +328,8 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
         connection.ready = true;
         connection.send({ type: "welcome", protocol: RELAY_PROTOCOL_VERSION, heartbeat_ms: heartbeatMs });
         addRoute(connection);
+        connection.recheck = setInterval(recheckToken, revocationMs);
+        connection.recheck.unref();
         return;
       }
       switch (frame.type) {
@@ -266,8 +346,10 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
 
     socket.on("close", () => {
       clearTimeout(helloTimer);
+      clearInterval(connection.recheck);
       sockets.delete(connection);
-      if (connection.ready) removeRoute(connection, connection.downReason);
+      // revoke() already removed the route and reported the relay down.
+      if (connection.ready && !connection.revoked) removeRoute(connection, connection.downReason);
       for (const call of [...connection.calls.values()]) call.disconnected();
     });
     socket.on("error", () => undefined);
@@ -330,7 +412,11 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
     }
     const connection = pick(routeKey(scope.orgId, scope.workspaceId, relay));
     if (!connection) {
-      throw new TransportError("disconnected", `Relay ${relay} is not connected.`, false);
+      throw new TransportError(
+        "disconnected",
+        `Relay ${relay} is not connected to Oxagen. Start the relay in your network, or read its logs for why it cannot connect.`,
+        false,
+      );
     }
 
     const issued = now();
@@ -424,6 +510,12 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
 
   return {
     async handleUpgrade(request, socket, head) {
+      // Answer another path before the token check, so a stray request never
+      // reaches the verifier.
+      if (requestPath(request.url) !== RELAY_CONNECT_PATH) {
+        refuseUpgrade(socket, 404, "Not Found");
+        return;
+      }
       const token = bearerToken(request.headers.authorization);
       let identity: RelayIdentity | null = null;
       if (token) {
@@ -434,13 +526,13 @@ export function createRelayBroker(options: RelayBrokerOptions): RelayBroker {
           return;
         }
       }
-      if (!identity) {
+      if (!token || !identity) {
         refuseUpgrade(socket, 401, "Unauthorized");
         return;
       }
       if (socket.destroyed) return;
       const known = identity;
-      wss.handleUpgrade(request, socket, head, (ws) => attach(ws, known));
+      wss.handleUpgrade(request, socket, head, (ws) => attach(ws, known, token));
     },
 
     transport,

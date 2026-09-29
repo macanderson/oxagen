@@ -294,6 +294,8 @@ import { toolImport } from "./tool.import";
 import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
+import { toolRelayCreate } from "./tool.relay.create";
+import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
 import { killSwitchSet } from "./kill_switch.set";
 import { killSwitchList } from "./kill_switch.list";
@@ -964,6 +966,8 @@ export {
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolRelayCreate,
+  toolRelayRevoke,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
@@ -1394,6 +1398,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolRelayCreate,
+  toolRelayRevoke,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,

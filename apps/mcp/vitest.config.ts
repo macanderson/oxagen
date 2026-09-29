@@ -103,6 +103,12 @@ export default defineConfig({
         "src/servers/names.ts",
         "src/servers/search.ts",
         "src/servers/snapshot.ts",
+        // the relay broker's mount (lane M12, ADR-225). index.ts and
+        // install.ts are absent: they only wire the Postgres verifier and
+        // the process environment into these three.
+        "src/relay/broker.ts",
+        "src/relay/mount.ts",
+        "src/relay/transport.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {
