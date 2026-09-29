@@ -24,8 +24,16 @@ export type CredentialPart = "TOKEN" | "USERNAME" | "PASSWORD" | "VALUE";
 
 export type CredentialOutcome = { ok: true; headers: HeaderEntry[] } | { ok: false; message: string };
 
-// CR and LF would end a header early, and NUL ends it in some servers.
-const UNSAFE = /[\r\n\0]/;
+// The characters each kind of request can carry in a value. An HTTP header
+// takes what Node takes (its checkInvalidHeaderChar): tab, printable ASCII,
+// and U+0080 to U+00FF. gRPC metadata takes printable ASCII only, as grpc-js
+// does. The relay checks first, so the sender never refuses a secret in an
+// error message that could quote it.
+const UNSAFE: Record<"http" | "grpc", RegExp> = {
+  http: /[^\t\x20-\x7e\x80-\xff]/,
+  grpc: /[^\x20-\x7e]/,
+};
+const CARRIER: Record<"http" | "grpc", string> = { http: "an HTTP header", grpc: "gRPC metadata" };
 
 /** The variable that holds one part of a credential. */
 export function credentialEnvName(name: string, part: CredentialPart): string {
@@ -45,6 +53,9 @@ export function addCredential(
   if (credential === undefined) return { ok: true, headers: [...headers] };
 
   const problems: string[] = [];
+  // A token or a header value goes out as written, so it must fit the
+  // request. A basic user name and password go out as base64, which carries
+  // any character.
   const read = (part: CredentialPart): string => {
     const envName = credentialEnvName(credential.name, part);
     const value = store.get(envName);
@@ -52,8 +63,8 @@ export function addCredential(
       problems.push(`Set ${envName} in the relay's environment.`);
       return "";
     }
-    if (UNSAFE.test(value)) {
-      problems.push(`${envName} holds a line break or a NUL, so no request can carry it.`);
+    if ((part === "TOKEN" || part === "VALUE") && UNSAFE[kind].test(value)) {
+      problems.push(`${envName} holds a character ${CARRIER[kind]} cannot carry.`);
       return "";
     }
     return value;

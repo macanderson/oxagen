@@ -8,10 +8,14 @@ export type RelayLogFields = Record<string, string | number | boolean | undefine
 
 export type RelayLog = (event: string, fields?: RelayLogFields) => void;
 
-/** Write each event as one JSON line, with the time first. */
+/** Write each event as one JSON line, with the time and the event first. A field cannot replace either. */
 export function jsonLog(write: (line: string) => void = (line) => process.stdout.write(line)): RelayLog {
   return (event, fields = {}) => {
-    write(`${JSON.stringify({ at: new Date().toISOString(), event, ...fields })}\n`);
+    const record: Record<string, string | number | boolean | undefined> = { at: new Date().toISOString(), event };
+    for (const [key, value] of Object.entries(fields)) {
+      if (key !== "at" && key !== "event") record[key] = value;
+    }
+    write(`${JSON.stringify(record)}\n`);
   };
 }
 

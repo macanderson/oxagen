@@ -58,9 +58,10 @@ function brokerUrl(value: string | undefined, problems: string[]): string {
     problems.push("Set RELAY_BROKER_URL to the broker address Oxagen gave you, such as wss://relay.oxagen.sh.");
     return "";
   }
+  const text = value.trim();
   let url: URL;
   try {
-    url = new URL(value.trim());
+    url = new URL(text);
   } catch {
     problems.push("RELAY_BROKER_URL is not a URL. Use the wss:// address Oxagen gave you.");
     return "";
@@ -70,11 +71,13 @@ function brokerUrl(value: string | undefined, problems: string[]): string {
     problems.push("RELAY_BROKER_URL must start with wss://. Plain ws:// works only for a broker on this machine.");
     return "";
   }
-  if (url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "") {
+  // A bare ? or # parses to an empty search or hash, so the text itself is checked.
+  if (url.username !== "" || url.password !== "" || /[?#]/.test(text)) {
     problems.push("RELAY_BROKER_URL must not hold a user name, a password, a query, or a fragment.");
     return "";
   }
-  if (url.pathname === "" || url.pathname === "/") url.pathname = RELAY_CONNECT_PATH;
+  // A ws: or wss: URL always has a path of at least /.
+  if (url.pathname === "/") url.pathname = RELAY_CONNECT_PATH;
   if (url.pathname !== RELAY_CONNECT_PATH) {
     problems.push(`RELAY_BROKER_URL must end in ${RELAY_CONNECT_PATH}, or have no path at all.`);
     return "";
@@ -174,8 +177,10 @@ function boundedInteger(
   max: number,
   problems: string[],
 ): number {
-  if (value === undefined || value.trim() === "") return fallback;
-  const parsed = Number(value.trim());
+  const text = value?.trim() ?? "";
+  if (text === "") return fallback;
+  // Digits only: Number() would also read 0x10, 1e3, and 0b11.
+  const parsed = /^\d{1,12}$/.test(text) ? Number(text) : Number.NaN;
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
     problems.push(`${name} must be a whole number from ${min} to ${max}.`);
     return fallback;

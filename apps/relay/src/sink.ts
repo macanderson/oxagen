@@ -59,9 +59,13 @@ export interface FrameSinkOptions {
   onDone(): void;
 }
 
-/** A message cut to the length the broker accepts. */
+/** A message cut to the length the broker accepts, never through the middle of a surrogate pair. */
 export function clip(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max - 3)}...`;
+  if (text.length <= max) return text;
+  let end = max - 3;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}...`;
 }
 
 function headersFit(headers: readonly HeaderEntry[]): boolean {

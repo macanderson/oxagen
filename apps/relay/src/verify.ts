@@ -77,7 +77,9 @@ function signatureValid(raw: Record<string, unknown>, envelope: RelayEnvelope, c
 
 // An RFC 9110 token: the characters a header name may hold.
 const HTTP_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-const UNSAFE_VALUE = /[\r\n\0]/;
+// The characters Node refuses in a header value (its checkInvalidHeaderChar):
+// every control character but tab, DEL, and anything past U+00FF.
+const UNSAFE_VALUE = /[^\t\x20-\x7e\x80-\xff]/;
 
 /**
  * Headers that describe the connection rather than the request. The relay
@@ -98,7 +100,7 @@ const CONNECTION_HEADERS = new Set([
 function httpHeaderProblem(headers: readonly HeaderEntry[], bodyBytes: number): string | undefined {
   for (const [name, value] of headers) {
     if (!HTTP_TOKEN.test(name)) return `The header name ${JSON.stringify(name)} is not an HTTP token.`;
-    if (UNSAFE_VALUE.test(value)) return `The ${name} header holds a line break or a NUL.`;
+    if (UNSAFE_VALUE.test(value)) return `The ${name} header holds a character an HTTP header cannot carry.`;
     const lower = name.toLowerCase();
     if (CONNECTION_HEADERS.has(lower)) return `The request carries a ${lower} header, which the relay sets itself.`;
     if (lower === "content-length" && value.trim() !== String(bodyBytes)) {
@@ -179,10 +181,13 @@ export function verifyRequest(frame: Pick<RequestFrame, "envelope" | "headers" |
   }
   if (now >= expires + skew) return refuse("expired", `The envelope expired at ${envelope.expires_at}.`);
   // An earlier process may have accepted this envelope, and its nonces died
-  // with it. Only an envelope issued after this process started is provably
-  // new to it.
+  // with it. Only an envelope issued more than the clock skew after this
+  // process started is provably new to it.
   if (issued < context.startedAt + skew) {
-    return refuse("expired", "The envelope was issued before this relay process started, so the relay cannot tell it is new.");
+    return refuse(
+      "expired",
+      "The envelope was issued before this relay process started, or within the clock skew after it, so the relay cannot tell it is new.",
+    );
   }
 
   const claim = context.nonces.claim(envelope.nonce, expires + skew, now);

@@ -12,7 +12,7 @@
 import { Client, credentials, Metadata, type StatusObject } from "@grpc/grpc-js";
 import type { HeaderEntry } from "../credentials";
 import { MAX_GRPC_MESSAGE_BYTES } from "../sink";
-import { messageOf, type RelayGrpcTarget, type UpstreamCall } from "./types";
+import type { RelayGrpcTarget, UpstreamCall } from "./types";
 
 export interface GrpcUpstreamOptions {
   /** The relay's response cap. No single message may be larger. */
@@ -78,10 +78,11 @@ function sendGrpc(call: UpstreamCall<RelayGrpcTarget>, options: GrpcUpstreamOpti
   let metadata: Metadata;
   try {
     metadata = grpcMetadata(call.headers);
-  } catch (error) {
-    // grpc-js refuses a metadata name or value it cannot send. Its message
-    // names the key, never the value.
-    sink.fail("upstream", `The call metadata is not valid: ${messageOf(error)}`, false);
+  } catch {
+    // verify.ts and credentials.ts refuse what grpc-js would, so this is a
+    // backstop. grpc-js's own message can quote the refused value, which may
+    // be a customer credential, so the relay does not pass it on.
+    sink.fail("upstream", "The call metadata holds a name or value gRPC cannot send.", false);
     return;
   }
 
@@ -128,10 +129,15 @@ function sendGrpc(call: UpstreamCall<RelayGrpcTarget>, options: GrpcUpstreamOpti
     // Read no further message until the broker's connection has room for
     // this one. The sink sends the frame before it waits.
     stream.pause();
-    void sink.data(message).then((more) => {
-      if (more) stream.resume();
-      else cancel();
-    });
+    sink.data(message).then(
+      (more) => {
+        // An aborted call stays paused, so no message follows the cancel.
+        if (more && !signal.aborted) stream.resume();
+        else cancel();
+      },
+      // A sink that cannot send ends the call rather than leave it paused.
+      () => cancel(),
+    );
   });
   stream.on("end", () => {
     ended = true;

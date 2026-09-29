@@ -28,15 +28,28 @@ export class NonceCache {
       this.seen.delete(nonce);
     }
     this.purge(now);
+    if (this.seen.size >= this.capacity) this.sweep(now);
     if (this.seen.size >= this.capacity) return "full";
     this.seen.set(nonce, forgetAt);
     return "accepted";
   }
 
+  /** Drop expired entries from the front, stopping at the first live one. */
   private purge(now: number): void {
     for (const [nonce, forgetAt] of this.seen) {
       if (forgetAt > now) return;
       this.seen.delete(nonce);
+    }
+  }
+
+  /**
+   * Drop every expired entry. An envelope with a longer life can sit in
+   * front of ones that expire sooner, so before answering full the cache
+   * looks past the first live entry.
+   */
+  private sweep(now: number): void {
+    for (const [nonce, forgetAt] of this.seen) {
+      if (forgetAt <= now) this.seen.delete(nonce);
     }
   }
 }
