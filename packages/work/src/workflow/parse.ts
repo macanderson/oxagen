@@ -69,6 +69,7 @@ export interface ResolvedWorkflow {
 
 /** Why a workflow file does not read. */
 export const WORKFLOW_PROBLEM_CODES = [
+  "not_toml",
   "not_a_table",
   "unknown_key",
   "missing_key",
