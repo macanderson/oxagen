@@ -3,10 +3,14 @@
 //
 // search takes a query and a limit of up to 10, and returns one line per
 // served tool: the name after the prefix, the first sentence of the
-// description, and the side effect and risk. This ranks by keyword. The
-// embedding index goes in front of it through rank.
-import type { ManifestServer } from "@oxagen/mcp-studio";
+// description, and the side effect and risk. This file ranks by keyword.
+// embeddings.ts ranks by the workspace's embeddings in front of it, and
+// search falls back to this file's ranking when that fails (ADR-217).
+import { firstSentence, shortName, type ManifestServer } from "@oxagen/mcp-studio";
 import type { ServedTool } from "./snapshot";
+
+// Publish embeds the same line, so both sides take it from @oxagen/mcp-studio.
+export { firstSentence };
 
 /** The most lines one search returns. */
 export const SEARCH_LIMIT = 10;
@@ -26,16 +30,9 @@ export interface SearchEntry {
 /** Rank the entries for a query and return at most limit of them. */
 export type Ranker = (query: string, entries: readonly SearchEntry[], limit: number) => Promise<readonly SearchEntry[]>;
 
-/** The first sentence of a description, on one line. */
-export function firstSentence(description: string | undefined): string {
-  const text = (description ?? "").trim().replace(/\s+/g, " ");
-  const match = /^(.*?[.!?])(?:\s|$)/.exec(text);
-  return match?.[1] ?? text;
-}
-
 export function searchEntry(server: ManifestServer, { tool }: ServedTool): SearchEntry {
   return {
-    short: tool.name.slice(server.name.length + 2),
+    short: shortName(server, tool),
     name: tool.name,
     summary: firstSentence(tool.definition.description),
     side_effect: tool.classification.side_effect,

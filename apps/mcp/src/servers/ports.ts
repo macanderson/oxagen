@@ -16,6 +16,7 @@ import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-ca
 import { launchSpecFor, machineGroupsOf } from "@oxagen/handlers/mcp-studio/local-calls/launch";
 import { localCallSignerFromEnv } from "@oxagen/handlers/mcp-studio/local-calls/signer";
 import { createLocalTransport } from "@oxagen/handlers/mcp-studio/local-calls/transport";
+import { searchIndexFor } from "@oxagen/handlers/mcp-studio/search-index";
 import { postgresVersionStore } from "@oxagen/handlers/steering-repo/version-store";
 import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-scope";
 import { createCloudTransport, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
@@ -26,6 +27,7 @@ import { postgresApprovals } from "./approvals";
 import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
+import { servedRanker } from "./embeddings";
 import { METER_LABEL, meterEntry } from "./meter";
 import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
@@ -220,6 +222,8 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     meter: meterServed,
     cedar: loadCedar,
     log: servedLog,
+    // The workspace's [embeddings] setting picks the index on each search.
+    rank: servedRanker(scopeOf(run), searchIndexFor),
   };
 }
 
