@@ -25,6 +25,7 @@ A workspace owner runs this once for each workspace that still reads `.oxagen/`.
 |---|---|---|
 | `ruleKinds` | object, optional | the kind of each v0.1 rule, `business-rule` or `code-rule`, keyed by the old lineage a `needs_choices` answer listed |
 | `constraintEffects` | object, optional | the effect of each v0.1 constraint, `require` or `forbid`, keyed by its old lineage |
+| `startFresh` | boolean, optional | for a workspace on a legacy sources connection: create an empty steering repo and import nothing |
 
 Send `{}` on the first call. The choices count only until the run changes something. After that, a call runs with the choices it started with.
 
@@ -45,7 +46,7 @@ Send `{}` on the first call. The choices count only until the run changes someth
 | Outcome | When |
 |---|---|
 | `imported` | the import steering PRs and the cleanup PR are open |
-| `provisioned` | the workspace bound no repository, so the run only created the steering repo |
+| `provisioned` | the workspace bound no repository, or it started fresh from a legacy sources connection, so the run only created the steering repo |
 | `nothing_to_import` | the workspace already has a steering repo |
 | `needs_choices` | some v0.1 rules need a kind or some constraints need an effect. Nothing changed. Call again with `ruleKinds` and `constraintEffects` |
 
@@ -60,6 +61,10 @@ Send `{}` on the first call. The choices count only until the run changes someth
 Merge the PRs in the order `pullRequests` lists them, then merge the cleanup PR last.
 
 The run records each step in the workspace's `steering_import` setting. A call after a finished run answers what that run did. A call after a stopped run resumes at the step that stopped, and it opens no PR and commits no file twice. The API may time out on a large tree while the run goes on. Call again after 10 minutes to read the answer.
+
+## Legacy sources connections
+
+Legacy sources connections retire (ADR-219, decision 10). A workspace that reads its repository through one gets `steering_import_legacy_connection` on its first call. Call again with `{ "startFresh": true }`. The run creates an empty steering repo and answers `provisioned`. It imports nothing, and the `.oxagen/` files stay in the legacy repository. From then on the steering repo steers the workspace. Move any record you still want with a steering PR.
 
 ## What the import leaves for a person
 
@@ -81,7 +86,7 @@ The first import steering PR lists what the import left and each dropped field. 
 | `conflict` | `steering_import_running` | another run of this workspace saved within the last 10 minutes |
 | `conflict` | `steering_import_provider_unsupported` | the workspace binds a repository on a host other than GitHub, such as GitLab |
 | `conflict` | `steering_import_source_unreachable` | Oxagen can no longer reach the old repository, or its production branch is gone |
-| `conflict` | `steering_import_legacy_connection` | the workspace reads a repository through a sources connection with no binding. Bind the repository with `bind_main_repository`, then run the import |
+| `conflict` | `steering_import_legacy_connection` | the workspace reads a repository through a legacy sources connection, and Oxagen does not import from one. Call again with `startFresh: true` to create an empty steering repo. The `.oxagen/` files stay in the legacy repository |
 | `conflict` | `steering_import_source_gone` | the old repository's binding was removed while the run was going. Call again, and the next run reads the workspace afresh |
 | `conflict` | `steering_import_branch_taken` | a branch the import writes, such as `oxagen/import-cleanup`, already exists, and Oxagen cannot confirm it holds only this import's commit. A branch that changes 300 or more files always refuses, and the message says so, because the host cannot list that many changes. Delete the branch, then call again |
 | `conflict` | `workspace_mismatch`, `governance_unreadable`, `workspace_toml_unreadable`, `too_many_files`, `branch_scope` | the converter cannot read the tree. Nothing changed |

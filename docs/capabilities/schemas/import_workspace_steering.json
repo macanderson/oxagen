@@ -38,6 +38,9 @@
             "forbid"
           ]
         }
+      },
+      "startFresh": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
