@@ -119,6 +119,10 @@ HTTP server. And how fast a revoked relay stops.
 - The MCP service holds a WebSocket per connected relay. Calls to one relay
   from another MCP process fail as `disconnected` until the broker is
   shared.
+- `mcp.relays` stores no heartbeat. The broker judges a relay live by its
+  open connection and the heartbeats on it, which it holds in memory. No
+  spec page, screen, or capability reads a stored heartbeat, so the table
+  has no column for one.
 - A relay's first dial after an MCP deploy can be answered with a plain
   status, and it succeeds one second later.
 - CI does not yet build the relay image or render the chart (#4712).
