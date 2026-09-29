@@ -38,6 +38,9 @@ vi.mock("@oxagen/database", () => ({
     },
   },
   withTenantDb: mocks.withTenantDb,
+  // One identity for both seams, so a role gate that reads through withOrgDb
+  // stays inside the mock (check:db-mock-seams, ADR-086).
+  withOrgDb: mocks.withTenantDb,
 }));
 vi.mock("drizzle-orm", async (importOriginal) => ({
   ...(await importOriginal<typeof import("drizzle-orm")>()),
