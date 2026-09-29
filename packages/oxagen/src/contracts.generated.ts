@@ -411,6 +411,8 @@ import "./contracts/tool.classification.set";
 import "./contracts/tool.declaration.list";
 import "./contracts/tool.declaration.publish";
 import "./contracts/tool.import";
+import "./contracts/tool.relay.create";
+import "./contracts/tool.relay.revoke";
 import "./contracts/tool.state.set";
 import "./contracts/tool.studio.credential.set";
 import "./contracts/tool.studio.draft.get";

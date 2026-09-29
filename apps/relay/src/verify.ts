@@ -20,7 +20,7 @@ import {
 } from "@oxagen/mcp-studio";
 import { fromBase64, type BrokerFrame, type RelayRefusalCode } from "@oxagen/relay-broker/protocol";
 import type { RelayConfig } from "./config";
-import { addCredential, type HeaderEntry } from "./credentials";
+import { addCredential, type ClientCertificate, type HeaderEntry } from "./credentials";
 import type { NonceCache } from "./nonces";
 
 /** How long the relay waits for a response when the envelope names no deadline. */
@@ -48,6 +48,8 @@ export interface Accepted {
   headers: HeaderEntry[];
   body: Uint8Array;
   deadlineMs: number;
+  /** The client certificate a mutual_tls credential presents to the upstream. */
+  clientCert?: ClientCertificate;
 }
 
 export interface Refused {
@@ -249,5 +251,6 @@ export function verifyRequest(frame: Pick<RequestFrame, "envelope" | "headers" |
     headers: credential.headers,
     body,
     deadlineMs: envelope.deadline_ms ?? DEFAULT_DEADLINE_MS,
+    ...(credential.clientCert === undefined ? {} : { clientCert: credential.clientCert }),
   };
 }

@@ -529,6 +529,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## tool
 
+- create_relay
 - get_studio_draft
 - import_tools
 - list_studio_findings
@@ -536,6 +537,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_tool_versions
 - open_studio_review
 - publish_tool_declaration
+- revoke_relay
 - save_studio_draft
 - set_mcp_credential
 - set_tool_classification
