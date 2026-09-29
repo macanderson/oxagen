@@ -21,25 +21,25 @@
         "label": "Agents summary",
         "agentsHere": {
           "title": "Agents here",
-          "basis": "organization count not recorded · {listed} listed below"
+          "basis": "{listed} listed below. The organization count is not recorded yet."
         },
         "enrolled": {
           "title": "Enrolled",
           "notYet": "{count} not yet enrolled",
-          "observe": "{count} listed here on the observe tier, the rest on harness",
-          "mixed": "{observe} listed here on the observe tier, {harness} on harness, {other} on another tier or none recorded"
+          "observe": "{count} on the observe tier. The rest are on harness.",
+          "mixed": "{observe} on the observe tier, {harness} on harness, and {other} on another tier or none."
         },
         "mandate": {
           "title": "Holding a mandate",
-          "holder": "{key} · in {workspace}",
+          "holder": "{key}",
           "none": "no agent in {workspace} holds one",
           "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet.",
-          "holders": "{holders} · counted in {workspace} only"
+          "holders": "{holders} in {workspace}"
         },
         "tamper": {
           "title": "Tamper incidents",
-          "open": "{key} · {kind}, {date} · {count} open · counted in {workspace} only",
-          "resolved": "{key} · {kind}, {date} · all resolved · counted in {workspace} only",
+          "open": "{count} open in {workspace}. The latest is {kind} on {key} from {date}.",
+          "resolved": "All resolved in {workspace}. The latest was {kind} on {key} from {date}.",
           "none": "none in the retention window in {workspace}",
           "scope": "Summed over the agents in {workspace}. No organization-wide rollup is recorded yet."
         }
@@ -221,13 +221,13 @@
           "principal": "Principal",
           "principalSub": "minted at registration and never reused. A retired agent’s runs keep their identity.",
           "kind": "Kind",
-          "kindValue": "agent · workspace {workspace} required",
+          "kindValue": "agent scoped to workspace {workspace}",
           "harness": "Harness",
           "runtime": "Runtime",
           "runtimeNone": "none named",
           "runtimeSub": "the laptop, VM or cloud workspace it runs on. Moving it keeps its principal.",
           "operator": "Operator",
-          "operatorSub": "accountable for every run · IAM field initiating_principal",
+          "operatorSub": "recorded as initiating_principal and accountable for every run",
           "lifecycle": "Lifecycle state",
           "lifecycleSub": "registered → enrolled → active → retired. Deregistering retires the principal and never deletes it, so old runs keep their identity.",
           "firstFrame": "First frame",
@@ -253,7 +253,7 @@
           "lead": "Long-lived, purpose-locked, hashed at rest, shown to the operator once.",
           "empty": "The agent holds no long-lived credential.",
           "key": "Key",
-          "keySub": "shown once at issue; stored as a hash",
+          "keySub": "shown once at issue and stored as a hash",
           "state": {
             "live": "active",
             "expired": "expired",
@@ -294,7 +294,7 @@
           "runtimeSub": "its device key signs this agent’s checkpoints",
           "runtimeNoneSub": "nothing signs its checkpoints yet",
           "delegation": "Delegation",
-          "delegationValue": "subagents narrow, never widen",
+          "delegationValue": "subagents inherit this scope or a narrower one",
           "delegationSub": "a subagent’s effective permission is this agent’s grants ∩ the invoking human’s grants",
           "replay": "Replay",
           "replaySub": "what a reader can do with this agent’s frames after the fact, as its newest run recorded",
@@ -322,12 +322,12 @@
           "noteNoOperator": "Effective permission stays <mono>roles ∩ the operator's grants</mono>. A role cannot lift an agent above its operator.",
           "cancel": "Cancel",
           "option": "{name}: {description}",
-          "held": "{name} · held",
+          "held": "{name} (held)",
           "repository": "Repository",
           "repositoryGap": "No role can be bound to one repository yet (#3865). A role applies at its own scope: the organization or this workspace.",
-          "done": "{role} assigned to {key}{why}. Recorded with your name; effective at its next call.",
+          "done": "{role} assigned to {key}{why}. Recorded with your name. It takes effect at the next call.",
           "doneNotEnforced": "{role} assigned to {key}{why}. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
-          "doneWhy": " · “{reason}”",
+          "doneWhy": " for “{reason}”",
           "already": "{key} already holds {role}.",
           "close": "Close"
         },
@@ -578,7 +578,7 @@
           },
           "inputSplit": "Input is recorded as one figure, {input} tokens, and not split by class yet. The six input classes wait on that split.",
           "cacheRate": "Cache hit rate",
-          "cacheRateValue": "{rate} · {read} of {input} input tokens served from cache",
+          "cacheRateValue": "{rate} with {read} of {input} input tokens served from cache",
           "perRun": "Per run",
           "tok": "{tokens} tok",
           "perCall": "Per model call",
@@ -625,20 +625,20 @@
           "steeringItems": "{items} items · {tokens} tok",
           "steeringSub": "assembled from the workspace library on this agent’s newest run",
           "steeringNone": "no steering manifest is recorded",
-          "steeringNoneSub": "steering is a workspace library; this agent holds a reference, never a copy",
+          "steeringNoneSub": "this agent reads the workspace steering library by reference",
           "toolbelt": "Toolbelt",
           "toolbeltSub": "{count, plural, one {# tool} other {# tools}} in all, sent as a {mode} belt",
           "toolbeltUnread": "the belt could not be read",
           "runtime": "Runtime",
           "runtimeNone": "no host is enrolled",
-          "runtimeSub": "{platform} · bundle mode {mode}",
+          "runtimeSub": "{platform} in bundle mode {mode}",
           "owner": "Owner",
           "ownerSub": "accountable for every run this agent makes",
           "permissions": "Permissions",
           "roles": "{count, plural, one {# role} other {# roles}}",
           "mandates": "{count, plural, =0 {no mandate} one {# mandate} other {# mandates}}",
           "mandatesUnread": "mandates not readable",
-          "permissionsSub": "a toolbelt says what it can see; its roles and the policy say what it may call"
+          "permissionsSub": "its roles and the policy decide which toolbelt tools it may call"
         },
         "last30": {
           "title": "Last 30 days",
@@ -735,9 +735,9 @@
             "body": "Oxagen would open this host on the Runtimes page. That page is not built yet, so nothing opens."
           },
           "runtime": "Runtime",
-          "runtimeSub": "{platform} · bundle mode {mode}",
+          "runtimeSub": "{platform} in bundle mode {mode}",
           "harness": "Harness",
-          "harnessSub": "the runtime is shared; every agent on it is seen through the same hooks",
+          "harnessSub": "every agent on this shared runtime is seen through the same hooks",
           "deviceKey": "Device key",
           "deviceKeySub": "sha256 of the host’s Ed25519 key, which signs its checkpoints",
           "collector": "Collector",
@@ -752,7 +752,7 @@
           },
           "proxy": "Model proxy",
           "proxyRouted": "loopback proxy on the host",
-          "proxyRoutedSub": "every model call leaves through it; tokens are counted from the bytes that pass",
+          "proxyRoutedSub": "tokens are counted from every model call that passes through it",
           "proxyNot": "not routed",
           "proxyNotSub": "model traffic goes from the harness to its provider. Routing it is the gateway tier.",
           "mcp": "Oxagen MCP endpoint",
@@ -808,8 +808,8 @@
             },
             "budgets": {
               "label": "Budgets",
-              "observe": "a recorded number and a notice in steering, never a stop",
-              "harness": "a recorded number and a notice in steering, never a stop",
+              "observe": "a recorded number and a notice in steering. The call still runs.",
+              "harness": "a recorded number and a notice in steering. The call still runs.",
               "gateway": "enforced before the call: a run budget by the proxy",
               "contained": "enforced before the call: a run budget by the proxy"
             },
@@ -1177,7 +1177,7 @@
         "lookupValue": "none for {agent}",
         "thisAgent": "this agent",
         "decision": "Decision",
-        "decisionValue": "· mandate ledger unchanged · no credential minted",
+        "decisionValue": "with the mandate ledger unchanged and no credential minted",
         "denied": "denied",
         "noMandate": "no_mandate"
       }

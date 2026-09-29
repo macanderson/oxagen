@@ -196,7 +196,7 @@
         "effect": "Effect",
         "bundle": "Bundle",
         "bundleNotRecorded": "not recorded. The record's share of the compiled bundle is not read on this page yet.",
-        "bundleVersion": "<code>v{version}</code> · this record's tokens are not recorded yet",
+        "bundleVersion": "<code>v{version}</code>. This record's tokens are not recorded yet.",
         "third": "Runs that went against it"
       },
       "constraint": {

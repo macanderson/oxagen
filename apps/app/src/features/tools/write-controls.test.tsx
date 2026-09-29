@@ -244,7 +244,7 @@ describe("ImportProvider", () => {
     expect(router.refresh).toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
     expect(await screen.findByTestId("tools-import-done")).toHaveTextContent(
-      "2 new versions · 1 already registered.",
+      "2 new versions and 1 already registered.",
     );
   });
 

@@ -147,7 +147,7 @@ describe("AssignRole", () => {
     expect(
       await within(dialog).findByTestId("assign-role-receipt"),
     ).toHaveTextContent(
-      "Release deputy assigned to release-bot. Recorded with your name; effective at its next call.",
+      "Release deputy assigned to release-bot. Recorded with your name. It takes effect at the next call.",
     );
     expect(router.replace).not.toHaveBeenCalled();
     await userEvent.click(
@@ -283,12 +283,12 @@ describe("AssignRole", () => {
     renderAssign();
     const dialog = await openAssign();
     await within(dialog).findByText(
-      "Agent Observer · held — Reads runs and records",
+      "Agent Observer (held): Reads runs and records",
     );
     const picker = within(dialog).getByLabelText("Role");
     const options = within(picker).getAllByRole<HTMLOptionElement>("option");
     expect(options.map((option) => option.textContent)).toEqual([
-      "Agent Observer · held — Reads runs and records",
+      "Agent Observer (held): Reads runs and records",
       "Release deputy",
     ]);
     expect(options.map((option) => option.disabled)).toEqual([true, false]);
@@ -310,7 +310,7 @@ describe("AssignRole", () => {
         .getAllByRole<HTMLOptionElement>("option")
         .map((option) => [option.textContent, option.disabled]),
     ).toEqual([
-      ["Agent Observer — Reads runs and records", false],
+      ["Agent Observer: Reads runs and records", false],
       ["Release deputy", false],
     ]);
   });

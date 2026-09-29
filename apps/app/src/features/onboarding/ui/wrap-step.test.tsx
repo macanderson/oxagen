@@ -146,7 +146,7 @@ describe("WrapStep", () => {
       await screen.findByTestId("enrollment-token-value"),
     ).toHaveTextContent(TOKEN);
     expect(screen.getByTestId("enrollment-token")).toHaveTextContent(
-      "expires in 30 min · single use",
+      "expires in 30 min and works once",
     );
     expect(screen.getByTestId("wrap-enroll-command")).toHaveTextContent(
       `oxagen agent enroll --token ${TOKEN} --harness claude-code`,
@@ -215,7 +215,7 @@ describe("WrapStep", () => {
     const panel = screen.getByRole("tabpanel");
     expect(panel).toHaveAttribute("data-tab", "sdk");
     expect(screen.getByTestId("wrap-credential")).toHaveTextContent(
-      "issued once to the operatoroxa_live_3f7a••••hashed at rest · purpose-locked · revocable",
+      "issued once to the operatoroxa_live_3f7a••••Oxagen stores it hashed, locks it to one purpose, and can revoke it.",
     );
     expect(within(panel).queryByTestId("wrap-download")).toBeNull();
     expect(

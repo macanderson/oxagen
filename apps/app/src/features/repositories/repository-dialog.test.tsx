@@ -135,7 +135,7 @@ describe("the repository dialog", () => {
     });
     expect(
       within(root).getByTestId("repository-dialog-branch"),
-    ).toHaveTextContent("trunk · missing on GitHub");
+    ).toHaveTextContent("trunk is missing on GitHub");
   });
 
   it("scopes a governed linked repository's records to runs bound to it, and links to its changes", async () => {

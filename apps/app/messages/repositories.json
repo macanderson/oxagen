@@ -180,10 +180,10 @@
       "facts": {
         "productionBranch": "Production branch",
         "at": "<code>{branch}</code> at <code>{sha}</code>",
-        "branchMissing": "<code>{branch}</code> · missing on GitHub",
+        "branchMissing": "<code>{branch}</code> is missing on GitHub",
         "visibility": "Visibility",
         "oxagen": ".oxagen/",
-        "filesAt": "· {count, plural, one {# file} other {# files}} at <code>{sha}</code>",
+        "filesAt": "with {count, plural, one {# file} other {# files}} at <code>{sha}</code>",
         "issues": "Issues",
         "events": "Events",
         "codeGraph": "Code graph",
@@ -444,7 +444,7 @@
     },
     "config": {
       "on": "On <code>{repository}</code> at <code>{sha}</code>",
-      "notIndexed": "On <code>{repository}</code> · not indexed yet",
+      "notIndexed": "On <code>{repository}</code> and not indexed yet",
       "noMain": "This workspace binds no main repository, so there is no .oxagen/ to show.",
       "loading": "Reading .oxagen/ from {repository}",
       "workspaceMissing": "Not on the production branch yet. Add Oxagen to this repository to put it there.",
@@ -587,7 +587,7 @@
           },
           "governanceToml": "mode = {mode}",
           "rules": "published records land here",
-          "proposals": "candidates; steer nothing",
+          "proposals": "candidates that steer nothing until merged",
           "gitignore": "ignore .stella/private/ and the local .oxagen/workspace.json"
         },
         "checksLabel": "Pull request checks",
@@ -600,7 +600,7 @@
         }
       },
       "opened": {
-        "opened": "Opened {repository}#{number} · Add Oxagen",
+        "opened": "Opened pull request {repository}#{number} to add Oxagen",
         "reused": "{repository}#{number} already adds .oxagen/. Nothing new was pushed.",
         "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
         "link": "Open #{number} on GitHub"

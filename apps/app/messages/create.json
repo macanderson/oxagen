@@ -163,7 +163,7 @@
           },
           "digest": {
             "name": "Digest",
-            "detail": "computed over the submitted canonical bytes; later pushes need a new review"
+            "detail": "computed over the submitted canonical bytes, so a later push needs a new review"
           },
           "grants": {
             "name": "Grants",

@@ -925,7 +925,7 @@ describe("the Runs panel", () => {
     expect(dialog).toHaveTextContent("Takes effect at the next boundary");
     expect(dialog).toHaveTextContent("turn 34 · step 271 · frame 1204");
     expect(dialog).toHaveTextContent(
-      "control.pause frame · operator authority",
+      "control.pause frame under operator authority",
     );
     expect(dialog).toHaveTextContent(
       "The agent reads this reason when the run resumes where it stopped.",
@@ -1025,7 +1025,7 @@ describe("the Runs panel", () => {
     expect(dialog).toHaveTextContent(
       "Pause refuses new evidence batches at the next ingest boundary.",
     );
-    expect(dialog).toHaveTextContent("command receipt · operator authority");
+    expect(dialog).toHaveTextContent("command receipt under operator authority");
     expect(dialog).toHaveTextContent(
       "The reason is recorded with the command. Oxagen does not send it to the external process.",
     );

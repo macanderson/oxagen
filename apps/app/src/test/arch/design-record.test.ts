@@ -461,7 +461,13 @@ describe("design record: no page draws around the recipes", () => {
       `${RULE} ${raw}:14 raw-font`,
       `${RULE} ${raw}:15 raw-font`,
     ]);
+    expect(hits([raw], SPACE_GROTESK, "space-grotesk", scan)).toEqual([
+      `${RULE} ${raw}:16 space-grotesk`,
+      `${RULE} ${raw}:17 space-grotesk`,
+      `${RULE} ${raw}:18 space-grotesk`,
+    ]);
     expect(hits([clean], RAW_COLOUR, "raw-colour", scan)).toEqual([]);
     expect(hits([clean], RAW_FONT, "raw-font", scan)).toEqual([]);
+    expect(hits([clean], SPACE_GROTESK, "space-grotesk", scan)).toEqual([]);
   });
 });

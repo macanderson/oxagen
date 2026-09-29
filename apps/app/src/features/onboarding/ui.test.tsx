@@ -537,7 +537,7 @@ describe("the wrap step", () => {
       "oxe_1time_7QK4M2NV9XR3T8ZP",
     );
     expect(screen.getByTestId("enrollment-token")).toHaveTextContent(
-      /expires .* · single use/,
+      /expires .* and works once/,
     );
     expect(screen.getByTestId("enroll-command")).toHaveTextContent(
       "oxagen agent enroll --token oxe_1time_7QK4M2NV9XR3T8ZP --harness claude-code",
@@ -574,7 +574,7 @@ describe("the wrap step", () => {
       "oxa_ag_7f••••••••••••",
     );
     expect(screen.getByTestId("agent-credential")).toHaveTextContent(
-      "hashed at rest · purpose-locked · revocable",
+      "Oxagen stores it hashed, locks it to one purpose, and can revoke it.",
     );
     expect(
       screen.getByText(

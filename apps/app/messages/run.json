@@ -313,7 +313,7 @@
         "scrubValue": "frame {index} of {shown}",
         "position": "<b>{index}</b> / {shown} · seq {seq} · {time}",
         "positionUntimed": "<b>{index}</b> / {shown} · seq {seq}",
-        "positionOff": "seq {seq} · outside the {shown} frames shown",
+        "positionOff": "seq {seq} is outside the {shown} frames shown",
         "spent": "<spent></spent> of <total></total> by here · {basis}",
         "spentOnly": "<spent></spent> by here · {basis}",
         "spentNotRecorded": "spend by here not recorded",
@@ -377,7 +377,7 @@
         "effortUnderSay": "This run was redone at effort {effort}, {source}: the operator prompted again or a tool call failed. The reading argues for effort {suggest}, one level up, where the model reasons before it acts.",
         "setEffort": "Set effort to {suggest}",
         "effortStub": "No contract changes an agent's effort setting from this page yet.",
-        "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. The reading changes nothing on its own. Every run the agent has sealed keeps the model it ran on.",
+        "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}}, {turns, plural, one {# turn} other {# turns}}, {steps, plural, one {# step} other {# steps}}, and {failed, plural, =0 {no failed tool calls} one {# failed tool call} other {# failed tool calls}}. The reading changes nothing on its own. Every run the agent has sealed keeps the model it ran on.",
         "readNone": "There is no reading for this run."
       },
       "inst": {

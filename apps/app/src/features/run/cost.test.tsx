@@ -384,7 +384,7 @@ describe("CostTab", () => {
     expect(screen.queryByTestId("fit-move-model")).toBeNull();
     const read = screen.getByTestId("fit-read");
     expect(read).toHaveTextContent(
-      "2 prompts · 7 turns · 24 steps · 1 tool call failed",
+      "2 prompts, 7 turns, 24 steps, and 1 failed tool call",
     );
     // An agent carries no definition file (ADR-198), so the reading names none.
     expect(read).not.toHaveTextContent(".oxagen/agents/");

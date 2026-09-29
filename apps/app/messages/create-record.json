@@ -7,7 +7,7 @@
       "hint": "Say the thing itself, not the reason for it. The reason belongs in the rationale on the pull request, where a reviewer reads it once. In the bundle, every agent pays for it on every turn.",
       "suggestions": {
         "changelog": "Do not re-read CHANGELOG.md more than once in a run",
-        "release": "The release manager opens the release pull request; a person merges it",
+        "release": "The release manager opens the release pull request, and a person merges it",
         "order": "Cut a release in this order: freeze, dry-run migrations, tag, publish",
         "flake": "The checkout e2e suite flaked on Safari through August"
       },

@@ -218,7 +218,7 @@ describe("Tone", () => {
     const { user, dialog, preview } = await openEditor("organization");
     await user.click(within(dialog).getByTestId("avatar-tone-gold-deep"));
     expect(tiles(preview)[0]?.dataset.tone).toBe("gold-deep");
-    expect(dialog).toHaveTextContent("initials · sans · gold-deep tone");
+    expect(dialog).toHaveTextContent("initials in sans with gold-deep tone");
     await user.click(screen.getByTestId("avatar-save"));
     expect(save).toHaveBeenCalledWith(
       'avatar:v1:{"kind":"initials","text":"PW","font":"sans","tone":"gold-deep"}',

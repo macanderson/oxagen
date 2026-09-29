@@ -538,7 +538,7 @@ describe("Identity", () => {
       within(run).getByRole("button", { name: "Revoke credential" }),
     ).toHaveAttribute("data-stub", "agent_credential_revoke");
     const trust = region("Trust relationships");
-    expect(trust).toHaveTextContent("subagents narrow, never widen");
+    expect(trust).toHaveTextContent("subagents inherit this scope or a narrower one");
     expect(trust).toHaveTextContent("1 · hooks_removed");
     expect(
       within(trust).getByRole("link", { name: "Open the incidents" }),

@@ -37,6 +37,19 @@ function violations(
     );
 }
 
+/** Each allowlisted key that is missing from the catalogues or no longer breaks the rule. */
+function staleAllowed(
+  messages: Record<string, unknown>,
+  allowed: Readonly<Record<string, string>>,
+): string[] {
+  const flagged = new Set(
+    labelFindings(leaves(messages)).map((finding) => finding.key),
+  );
+  return Object.keys(allowed)
+    .filter((key) => !flagged.has(key))
+    .map((key) => `${RULE} stale-allowlist ${key}`);
+}
+
 /** One label of each banned shape, the slogans that started the rule among them, and plain labels beside them. */
 const PROBE = {
   steering: {
@@ -45,6 +58,8 @@ const PROBE = {
     summary: { title: "Summary · what this run changed" },
     retrieval: { heading: "Retrieval, in numbers" },
     frames: { note: "ordered by the frames, not by kind" },
+    delegation: { value: "subagents narrow, never widen" },
+    credential: { keyValue: "shown once at issue; stored as a hash" },
     trust: { readThem: "Read them" },
     unlink: { keep: "Keep it linked" },
     tabs: { list: "Records", try: "Try it" },
@@ -55,6 +70,8 @@ const PROBE = {
       note: "{count, plural, one {# record} other {# records}}",
       lead: "Who receives a record is set by its scope.",
       empty: "—",
+      badge: "—",
+      hint: "Records reach a run, then expire.",
     },
     intro: "Records — rules, memories, and skills — reach a run.",
   },
@@ -68,14 +85,20 @@ describe("label voice (INV-35)", () => {
   });
 
   it("every allowlisted key exists and still breaks the rule", () => {
-    const flagged = new Set(
-      labelFindings(leaves(catalogs)).map((finding) => finding.key),
-    );
+    expect(staleAllowed(catalogs, ALLOWED)).toEqual([]);
+  });
+
+  it("names an allowlisted key that is missing or now plain", () => {
     expect(
-      Object.keys(ALLOWED)
-        .filter((key) => !flagged.has(key))
-        .map((key) => `${RULE} stale-allowlist ${key}`),
-    ).toEqual([]);
+      staleAllowed(PROBE, {
+        "steering.assignments.open": "Still a question, so the entry holds.",
+        "steering.records.title": "Plain now, so the entry is stale.",
+        "steering.gone": "Missing from the catalogue.",
+      }),
+    ).toEqual([
+      `${RULE} stale-allowlist steering.records.title`,
+      `${RULE} stale-allowlist steering.gone`,
+    ]);
   });
 
   it("flags every banned shape on the probe catalogue and passes the plain labels", () => {
@@ -85,6 +108,8 @@ describe("label voice (INV-35)", () => {
       `${RULE} heading-punctuation steering.summary.title "Summary · what this run changed"`,
       `${RULE} heading-punctuation steering.retrieval.heading "Retrieval, in numbers"`,
       `${RULE} caption-punctuation steering.frames.note "ordered by the frames, not by kind"`,
+      `${RULE} contrast-label steering.delegation.value "subagents narrow, never widen"`,
+      `${RULE} semicolon-label steering.credential.keyValue "shown once at issue; stored as a hash"`,
       `${RULE} pronoun-label steering.trust.readThem "Read them"`,
       `${RULE} pronoun-label steering.unlink.keep "Keep it linked"`,
       `${RULE} pronoun-label steering.tabs.try "Try it"`,

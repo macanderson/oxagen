@@ -258,10 +258,10 @@
         "gold-deep": "Dark gold"
       },
       "toneHint": "Each tone sets its own glyph colour.",
-      "describeIcon": "icon · {icon} · {tone} tone",
-      "describeInitials": "initials · {font} · {tone} tone",
-      "describePhoto": "photo · by link",
-      "describePhotoNone": "photo · none chosen yet",
+      "describeIcon": "icon {icon} in {tone} tone",
+      "describeInitials": "initials in {font} with {tone} tone",
+      "describePhoto": "photo by link",
+      "describePhotoNone": "no photo chosen yet",
       "notes": {
         "user": "Saved with <code>update_profile</code>.",
         "agent": "Saved in the agent's definition through a pull request.",

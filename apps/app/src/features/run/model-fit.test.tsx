@@ -92,7 +92,7 @@ describe("ModelFitPanel", () => {
     expectStub("Move this agent to haiku", MODEL_STUB);
     expectStub("Set effort to medium", EFFORT_STUB);
     expect(screen.getByTestId("fit-read")).toHaveTextContent(
-      "1 prompt · 2 turns · 5 steps · no tool call failed",
+      "1 prompt, 2 turns, 5 steps, and no failed tool calls",
     );
     expect(screen.getByTestId("model-fit")).toHaveTextContent(
       "generated from the record",

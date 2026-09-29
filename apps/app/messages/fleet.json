@@ -293,8 +293,8 @@
       "positionValue": "turn {turn} · step {steps} · frame {frames}",
       "positionNoTurn": "step {steps} · frame {frames}",
       "recordedAs": "Recorded as",
-      "recordedValue": "<mono>control.pause</mono> frame · operator authority",
-      "ledgerRecordedValue": "command receipt · operator authority",
+      "recordedValue": "<mono>control.pause</mono> frame under operator authority",
+      "ledgerRecordedValue": "command receipt under operator authority",
       "reason": "Reason",
       "note": "The agent reads this reason when the run resumes where it stopped.",
       "footer": "Recorded as a <mono>control.pause</mono> frame under <mono>run.pause</mono>.",
@@ -348,7 +348,7 @@
       "note": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
       "send": "Send the request",
       "cancel": "Cancel",
-      "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}; the grant lands in the audit record."
+      "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}. The grant lands in the audit record."
     },
     "incident": {
       "title": "Open an incident",

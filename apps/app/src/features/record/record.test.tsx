@@ -628,7 +628,7 @@ describe("Record › the six kinds", () => {
   it("names the bundle version on a rule and its share as not recorded", async () => {
     await renderRecord({ record: readOk(ofKind("rule")) });
     expect(screen.getByTestId("record-kind-panel").textContent).toContain(
-      "v12 · this record's tokens are not recorded yet",
+      "v12. This record's tokens are not recorded yet.",
     );
   });
 
@@ -1000,7 +1000,9 @@ describe("Record › the not-loaded states", () => {
     ).toBe("/acme/core-platform");
     expect(denied.textContent).toContain("Signed in as");
     expect(denied.textContent).toContain("Marcus Bell · workspace.member");
-    expect(denied.textContent).toContain("the organization's policy");
+    expect(
+      within(denied).getByText("the organization's policy").tagName,
+    ).toBe("DD");
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 

@@ -13,6 +13,8 @@ export type Shape =
   | "caption-punctuation"
   | "question-label"
   | "pronoun-label"
+  | "contrast-label"
+  | "semicolon-label"
   | "em-dash";
 
 export type Finding = Leaf & { readonly shape: Shape };
@@ -38,11 +40,14 @@ const PHRASE_START = /^(?:who|what|where|why|how|everything)\b/i;
  */
 const PRONOUN_LABEL = /^\p{Lu}\p{Ll}+ (?:it|them)\b/u;
 
-/**
- * An em dash anywhere in a string, a sentence included (clear-prose, rule 1).
- * A lone "—" is the glyph a table draws in an empty cell, not a dash in prose.
- */
+/** A "not" or "never" contrast after a comma: "ordered by the frames, not by kind", "subagents narrow, never widen". */
+const CONTRAST = /,\s*(?:not|never)\b/i;
+
+/** An em dash anywhere in a string, a sentence included (clear-prose, rule 1). */
 const EM_DASH = /—/;
+
+/** The glyph a table draws in an empty cell. It is not a dash in prose. */
+const EMPTY_CELL = "—";
 
 /** The longest short label, in words, that the question and pronoun checks read. */
 const SHORT_LABEL_WORDS = 6;
@@ -72,20 +77,28 @@ export function visibleText(value: string): string {
 
 /**
  * The parts of the rule one leaf breaks. A value that ends in a period is a
- * sentence, not a label, so only the em-dash check reads it.
+ * sentence, not a label, so only the em-dash check reads it. The contrast and
+ * semicolon checks read every other value, whatever its key, because a table
+ * cell or a field value is read as a label too.
  */
 export function shapesOf({ key, value }: Leaf): Shape[] {
+  if (value.trim() === EMPTY_CELL) return [];
   const shapes: Shape[] = [];
-  if (value.trim() !== "—" && EM_DASH.test(value)) shapes.push("em-dash");
+  if (EM_DASH.test(value)) shapes.push("em-dash");
   const text = visibleText(value);
   if (text.endsWith(".")) return shapes;
   const heading = HEADING_KEY.test(key);
+  const caption = CAPTION_KEY.test(key);
   if (heading && HEADING_PUNCTUATION.test(text)) {
     shapes.push("heading-punctuation");
   }
   if (heading && PHRASE_START.test(text)) shapes.push("heading-phrase");
-  if (CAPTION_KEY.test(key) && CAPTION_PUNCTUATION.test(text)) {
+  if (caption && CAPTION_PUNCTUATION.test(text)) {
     shapes.push("caption-punctuation");
+  }
+  if (!heading && !caption) {
+    if (CONTRAST.test(text)) shapes.push("contrast-label");
+    if (text.includes(";")) shapes.push("semicolon-label");
   }
   if (text.split(/\s+/).length <= SHORT_LABEL_WORDS) {
     if (!heading && PHRASE_START.test(text)) shapes.push("question-label");

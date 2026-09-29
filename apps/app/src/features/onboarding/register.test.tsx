@@ -212,7 +212,7 @@ describe("the denied state", () => {
     );
     expect(denied).toHaveTextContent("Neededagent.register on core-platform");
     expect(denied).toHaveTextContent(
-      "Decided byregister_agent · organization owner or admin",
+      "Decided byan organization owner or admin through register_agent",
     );
     expect(calls.agent).toEqual([]);
     expect(calls.state).toEqual([]);
@@ -385,9 +385,9 @@ describe("the run step", () => {
         .map((chip) => chip.textContent),
     ).toEqual(["acme.core.release-bot", "Claude Code", "host build-01"]);
     const log = screen.getByTestId("first-frame-log");
-    expect(log).toHaveTextContent("host enrolled · device key sha256:ab12cd34");
+    expect(log).toHaveTextContent("host enrolled with device key sha256:ab12cd34");
     expect(log).toHaveTextContent("collector reported");
-    expect(log).toHaveTextContent("hooks written · ~/.claude/settings.json");
+    expect(log).toHaveTextContent("hooks written to ~/.claude/settings.json");
     expect(log).toHaveTextContent("waiting…");
     expect(card).toHaveTextContent(
       "Start Claude Code in any repository on build-01. This card flips on its own when the first frame lands.",
