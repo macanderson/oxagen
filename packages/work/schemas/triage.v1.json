@@ -112,7 +112,7 @@
           "type": "null"
         }
       ],
-      "description": "The workflow's slug, or null when none fits."
+      "description": "The workflow's slug. Null only when the state is not triaged."
     },
     "done_record": {
       "anyOf": [
@@ -137,7 +137,7 @@
           "type": "null"
         }
       ],
-      "description": "The criteria of the drafted done record, or null when triage drafts none."
+      "description": "The criteria of the drafted done record. Null only when the state is not triaged."
     },
     "questions": {
       "type": "array",
@@ -157,6 +157,28 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "triaged"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "workflow": {
+            "$ref": "#/$defs/slug"
+          },
+          "done_record": {
+            "type": "object"
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

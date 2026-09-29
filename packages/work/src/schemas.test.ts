@@ -428,6 +428,15 @@ describe("triage/v1", () => {
   });
 
   it("ties each state to the fields it needs", () => {
+    expectInvalid(validate, { ...triage, workflow: null });
+    expectInvalid(validate, { ...triage, done_record: null });
+    expectValid(validate, {
+      ...triage,
+      state: "needs_info",
+      questions: ["Which workflow fits?"],
+      workflow: null,
+      done_record: null,
+    });
     expectInvalid(validate, { ...triage, state: "needs_info" });
     expectValid(validate, { ...triage, state: "needs_info", questions: ["Which export format fails?"] });
     expectInvalid(validate, { ...triage, state: "duplicate" });

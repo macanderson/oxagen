@@ -398,6 +398,15 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "create_relay",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "create_role",
       "reads": [],
@@ -3343,6 +3352,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "revoke_relay",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],
@@ -26469,6 +26488,18 @@
         },
         {
           "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "deleted_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"

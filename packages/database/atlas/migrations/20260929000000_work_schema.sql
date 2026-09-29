@@ -6,7 +6,8 @@
 -- tenant_isolation for the current org and workspace, and
 -- tenant_org_wide_read for an org-wide read. work.done_verdicts and
 -- work.autonomy_events are append only, so oxagen_app may read and insert
--- them and nothing else.
+-- them and nothing else. work.items is soft deleted: oxagen_app sets
+-- deleted_at and deleted_by_id, and has no DELETE on it.
 --
 -- work.triage_decisions.item_id carries a foreign key to work.items.
 -- work.items.triage_id points back and carries only an index, so neither
@@ -51,7 +52,7 @@ CREATE TABLE IF NOT EXISTS work.inbound_events (
   org_id uuid NOT NULL,
   workspace_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  collector_id uuid NOT NULL REFERENCES work.collectors (id),
+  collector_id uuid NOT NULL CONSTRAINT "inbound_events_collector_id_collectors_id_fk" REFERENCES work.collectors (id),
   delivery_id text NOT NULL,
   cloudevent jsonb NOT NULL,
   raw_ref text,
@@ -80,6 +81,8 @@ CREATE TABLE IF NOT EXISTS work.items (
   updated_at timestamptz NOT NULL DEFAULT now(),
   created_by_id uuid,
   updated_by_id uuid,
+  deleted_at timestamptz,
+  deleted_by_id uuid,
   number text NOT NULL,
   subject text NOT NULL,
   description text,
@@ -99,7 +102,7 @@ CREATE TABLE IF NOT EXISTS work.items (
   priority_raw text,
   estimate_minutes integer,
   planning_priority jsonb,
-  collector_id uuid REFERENCES work.collectors (id),
+  collector_id uuid CONSTRAINT "items_collector_id_collectors_id_fk" REFERENCES work.collectors (id),
   origin text NOT NULL,
   requester text,
   tainted text[] NOT NULL DEFAULT '{}',
@@ -115,6 +118,8 @@ CREATE TABLE IF NOT EXISTS work.items (
   CONSTRAINT "items_state_check" CHECK (state IN ('new', 'held', 'triaged', 'needs_info', 'changed', 'ready', 'sent', 'done', 'closed')),
   CONSTRAINT "items_status_category_check" CHECK (status_category IN ('open', 'blocked', 'closed')),
   CONSTRAINT "items_estimate_check" CHECK (estimate_minutes IS NULL OR estimate_minutes >= 0),
+  CONSTRAINT "items_priority_check" CHECK (priority IS NULL OR priority IN ('P0', 'P1', 'P2', 'P3')),
+  CONSTRAINT "items_planning_priority_check" CHECK (planning_priority IS NULL OR COALESCE(planning_priority->>'label', '') IN ('P0', 'P1', 'P2', 'P3')),
   CONSTRAINT "items_level_at_send_check" CHECK (level_at_send IS NULL OR level_at_send BETWEEN 0 AND 3),
   CONSTRAINT "items_done_record_digest_check" CHECK (done_record_digest IS NULL OR done_record_digest ~ '^sha256:[0-9a-f]{64}$')
 );
@@ -138,8 +143,8 @@ CREATE TABLE IF NOT EXISTS work.item_links (
   org_id uuid NOT NULL,
   workspace_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  from_id uuid NOT NULL REFERENCES work.items (id),
-  to_id uuid NOT NULL REFERENCES work.items (id),
+  from_id uuid NOT NULL CONSTRAINT "item_links_from_id_items_id_fk" REFERENCES work.items (id),
+  to_id uuid NOT NULL CONSTRAINT "item_links_to_id_items_id_fk" REFERENCES work.items (id),
   kind text NOT NULL,
   "by" text NOT NULL,
   CONSTRAINT "item_links_kind_check" CHECK (kind IN ('blocks', 'duplicates', 'related', 'caused_by')),
@@ -164,7 +169,7 @@ CREATE TABLE IF NOT EXISTS work.triage_decisions (
   org_id uuid NOT NULL,
   workspace_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  item_id uuid NOT NULL REFERENCES work.items (id),
+  item_id uuid NOT NULL CONSTRAINT "triage_decisions_item_id_items_id_fk" REFERENCES work.items (id),
   output jsonb NOT NULL,
   model text NOT NULL,
   prompt_digest text NOT NULL,
@@ -190,7 +195,7 @@ CREATE TABLE IF NOT EXISTS work.triage_corrections (
   id uuid PRIMARY KEY DEFAULT COALESCE(CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL THEN uuid_generate_v7() ELSE uuid_generate_v4() END, uuid_generate_v4()) NOT NULL,
   org_id uuid NOT NULL,
   workspace_id uuid NOT NULL,
-  decision_id uuid NOT NULL REFERENCES work.triage_decisions (id),
+  decision_id uuid NOT NULL CONSTRAINT "triage_corrections_decision_id_triage_decisions_id_fk" REFERENCES work.triage_decisions (id),
   field text NOT NULL,
   before jsonb,
   after jsonb,
@@ -215,7 +220,7 @@ CREATE TABLE IF NOT EXISTS work.done_records (
   workspace_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   digest text NOT NULL,
-  item_id uuid NOT NULL REFERENCES work.items (id),
+  item_id uuid NOT NULL CONSTRAINT "done_records_item_id_items_id_fk" REFERENCES work.items (id),
   body jsonb NOT NULL,
   drafted_by_model text,
   locked_by text NOT NULL,
@@ -328,7 +333,8 @@ BEGIN
     GRANT USAGE ON SCHEMA work TO oxagen_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON work.collectors TO oxagen_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON work.inbound_events TO oxagen_app;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON work.items TO oxagen_app;
+    GRANT SELECT, INSERT, UPDATE ON work.items TO oxagen_app;
+    REVOKE DELETE, TRUNCATE ON work.items FROM oxagen_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON work.item_links TO oxagen_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON work.triage_decisions TO oxagen_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON work.triage_corrections TO oxagen_app;

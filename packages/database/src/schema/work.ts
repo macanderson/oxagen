@@ -5,7 +5,10 @@
 // columns. Every table carries the org mixin and the same row-level security
 // as the rest of the database (migration 20260929000000_work_schema.sql).
 // work.done_verdicts and work.autonomy_events are append only: the migration
-// revokes UPDATE and DELETE from oxagen_app on both.
+// revokes UPDATE and DELETE from oxagen_app on both. work.items is soft
+// deleted: it carries deleted_at and deleted_by_id, and oxagen_app has no
+// DELETE on it. A soft-deleted item keeps its number and its provider key, so
+// a collector that hears from the same provider item finds the deleted row.
 //
 // A column named `by` holds who acted: a user id, or the name of the Oxagen
 // step that acted (`triage`, `oxagen`).
@@ -36,6 +39,7 @@ import {
   auditMixin,
   idMixin,
   orgScopeMixin,
+  softDeleteMixin,
   uuidv7Default,
 } from "./_mixins";
 import { workSchema } from "./_schemas";
@@ -45,9 +49,10 @@ const ts = (name: string) =>
 
 // The value lists below back this file's check constraints. @oxagen/work and
 // @oxagen/done-record declare the same lists (COLLECTOR_TYPES,
-// COLLECTOR_HEALTH, DONE_VERDICTS, AUTONOMY_CAUSES, and the rest), and
-// @oxagen/ingestion repeats the collector types as CollectorType. This package
-// depends on none of them, so a change to one list changes every copy.
+// COLLECTOR_HEALTH, PRIORITY_LABELS, DONE_VERDICTS, AUTONOMY_CAUSES, and the
+// rest), and @oxagen/ingestion repeats the collector types as CollectorType.
+// This package depends on none of them, so a change to one list changes every
+// copy.
 
 /** The collector types (agent-work-spec.html, Collectors). */
 export const WORK_COLLECTOR_TYPES = [
@@ -90,6 +95,9 @@ export const WORK_ITEM_STATES = [
   "done",
   "closed",
 ] as const;
+
+/** The Priority labels (tasks-spec.md §6.4). */
+export const WORK_PRIORITY_LABELS = ["P0", "P1", "P2", "P3"] as const;
 
 /** A status's category (tasks-spec.md §6.2). */
 export const WORK_STATUS_CATEGORIES = ["open", "blocked", "closed"] as const;
@@ -208,6 +216,7 @@ export const workItems = workSchema.table(
     ...idMixin("wi"),
     ...orgScopeMixin(),
     ...auditMixin(),
+    ...softDeleteMixin(),
     /** The per-workspace number people say out loud, such as `OPS-88`. */
     number: text("number").notNull(),
     subject: text("subject").notNull(),
@@ -232,7 +241,7 @@ export const workItems = workSchema.table(
     estimateMinutes: integer("estimate_minutes"),
     /** A person's override from set_task_priority: the label, who, and why. */
     planningPriority: jsonb("planning_priority").$type<{
-      label: string;
+      label: (typeof WORK_PRIORITY_LABELS)[number];
       by: string;
       why: string;
       at: string;
@@ -283,6 +292,14 @@ export const workItems = workSchema.table(
     estimateCheck: check(
       "items_estimate_check",
       sql`${t.estimateMinutes} IS NULL OR ${t.estimateMinutes} >= 0`,
+    ),
+    priorityCheck: check(
+      "items_priority_check",
+      sql`${t.priority} IS NULL OR ${t.priority} IN ('P0', 'P1', 'P2', 'P3')`,
+    ),
+    planningPriorityCheck: check(
+      "items_planning_priority_check",
+      sql`${t.planningPriority} IS NULL OR COALESCE(${t.planningPriority}->>'label', '') IN ('P0', 'P1', 'P2', 'P3')`,
     ),
     levelCheck: check(
       "items_level_at_send_check",

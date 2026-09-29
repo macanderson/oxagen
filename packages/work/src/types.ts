@@ -316,7 +316,11 @@ export const TRIAGE_SCHEMA = "triage/v1" as const;
 export const TRIAGE_STATES = ["triaged", "needs_info", "duplicate", "out_of_scope"] as const;
 export type TriageState = (typeof TRIAGE_STATES)[number];
 
-/** The Priority labels. */
+/**
+ * The Priority labels (tasks-spec.md §6.4). WORK_PRIORITY_LABELS in
+ * @oxagen/database repeats this list for the check constraints on
+ * work.items. Change both together.
+ */
 export const PRIORITY_LABELS = ["P0", "P1", "P2", "P3"] as const;
 export type PriorityLabel = (typeof PRIORITY_LABELS)[number];
 
@@ -341,9 +345,9 @@ export interface TriageDecision {
   claims: string[];
   duplicates: WorkItemId[];
   related: WorkItemId[];
-  /** A workflow slug, or null when none fits. */
+  /** A workflow slug. Null only when the state is not `triaged`. */
   workflow: string | null;
-  /** The drafted criteria, or null when triage drafts none. */
+  /** The drafted criteria. Null only when the state is not `triaged`. */
   done_record: { criteria: string[] } | null;
   /** Questions for the people in the workspace. Never for the requester. */
   questions: string[];
