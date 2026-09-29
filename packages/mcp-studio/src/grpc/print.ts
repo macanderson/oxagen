@@ -38,7 +38,7 @@ import {
   type ServiceDescriptorProto,
 } from "@bufbuild/protobuf/wkt";
 import type { Notes } from "../graphql/notes";
-import { jsonNameOf, mapEntryNameOf } from "./descriptors";
+import { doubleText, jsonNameOf, mapEntryNameOf } from "./descriptors";
 import { GrpcImportError } from "./errors";
 import type { Symbols } from "./symbols";
 
@@ -46,6 +46,9 @@ const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** A number protobufjs reads back to the same text: no leading zeros, no hex or octal. */
 const NUMBER = /^-?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/** The float and double defaults protoc writes as words. */
+const FLOAT_WORDS = new Set(["inf", "-inf", "nan"]);
 
 /** protoc's upper bound for a field number. */
 const FIELD_NUMBER_MAX = 536_870_911;
@@ -308,6 +311,7 @@ class Printer {
       }
       const where = `the field ${full}.${field.name}`;
       const map = this.mapOf(field, message, full, where);
+      if (typeof map === "string") this.refuse(`${where} names the map entry ${field.typeName.slice(1)}, but ${map}`);
       if (map !== undefined) {
         consumed.add(map.entry);
         this.comment([...path, 2, index]);
@@ -385,29 +389,39 @@ class Printer {
   }
 
   /**
-   * The map field's `map<K, V>` type and the index of its entry message, or
-   * undefined when the field is not a map field protoc would write as one.
-   * The entry must be the one a map field declares: named for the field,
-   * with only a key and a value and nothing else.
+   * The map field's `map<K, V>` type and the index of its entry message.
+   * It is undefined when the field names no map entry nested in the same
+   * message, and a reason when the field names one but protoc would not
+   * write the pair as a map field. A map field and its entry are the ones a
+   * map field declares: the entry named for the field, with only a key and a
+   * value and nothing else.
    */
   private mapOf(
     field: FieldDescriptorProto,
     message: DescriptorProto,
     full: string,
     where: string,
-  ): { text: string; entry: number } | undefined {
-    if (field.label !== FieldDescriptorProto_Label.REPEATED || field.type !== T.MESSAGE) return undefined;
-    if (!isFieldSet(field, FieldDescriptorProtoSchema.field.type)) return undefined;
-    const entryName = mapEntryNameOf(field.name);
-    if (field.typeName !== `.${full}.${entryName}`) return undefined;
-    if (isFieldSet(field, FieldDescriptorProtoSchema.field.oneofIndex)) return undefined;
-    if (isFieldSet(field, FieldDescriptorProtoSchema.field.defaultValue) || field.proto3Optional) return undefined;
-    const index = message.nestedType.findIndex((nested) => nested.name === entryName);
+  ): { text: string; entry: number } | string | undefined {
+    const index = message.nestedType.findIndex((nested) => field.typeName === `.${full}.${nested.name}`);
     const entry = message.nestedType[index];
-    if (entry === undefined || !isPlainMapEntry(entry)) return undefined;
+    if (entry?.options?.mapEntry !== true) return undefined;
+    const entryName = mapEntryNameOf(field.name);
+    if (field.label !== FieldDescriptorProto_Label.REPEATED) return "it is not repeated";
+    if (isFieldSet(field, FieldDescriptorProtoSchema.field.type) && field.type !== T.MESSAGE) {
+      return "its type is not a message";
+    }
+    if (entry.name !== entryName) return `the entry is not named ${entryName}`;
+    if (isFieldSet(field, FieldDescriptorProtoSchema.field.oneofIndex)) return "it is in a oneof";
+    if (isFieldSet(field, FieldDescriptorProtoSchema.field.defaultValue)) return "it has a default value";
+    if (field.proto3Optional) return "it is proto3 optional";
     const [key, value] = entry.field;
-    if (key === undefined || value === undefined) return undefined;
-    if (!MAP_KEY_TYPES.has(key.type) || value.type === T.GROUP) return undefined;
+    if (!isPlainMapEntry(entry) || key === undefined || value === undefined) {
+      return "the entry holds more than a key = 1, a value = 2, and map_entry";
+    }
+    if (!MAP_KEY_TYPES.has(key.type)) {
+      return `the key has the type ${SCALAR_NAMES.get(key.type) ?? `number ${key.type}`}, and a map key is an integer, a bool, or a string`;
+    }
+    if (value.type === T.GROUP) return "the value is a group";
     const keyName = SCALAR_NAMES.get(key.type) ?? "";
     const valueType = this.typeOf(value, full, `the value of ${where}`);
     return { text: `map<${keyName}, ${valueType.text}>`, entry: index };
@@ -482,10 +496,9 @@ class Printer {
       if (this.proto3) this.refuse(`${where} is required, which proto3 does not allow`);
       return "required ";
     }
-    if (!this.proto3) return "optional ";
-    if (place === "extension") {
-      if (field.proto3Optional) this.refuse(`${where} is a proto3 optional extension, which import does not read`);
-      return "";
+    if (!this.proto3) {
+      if (place === "extension" && field.proto3Optional) this.refuse(`${where} is proto3 optional in a proto2 file`);
+      return "optional ";
     }
     return field.proto3Optional ? "optional " : "";
   }
@@ -536,10 +549,19 @@ class Printer {
         return plainText(value) ? [`default = ${quotePieces(value)}`] : drop("it holds a backslash or a control character");
       case T.BYTES:
         return printableBytes(value) ? [`default = "${value}"`] : drop("it holds escaped bytes");
-      default:
-        return NUMBER.test(value) || value === "inf" || value === "-inf" || value === "nan"
-          ? [`default = ${value}`]
-          : drop(`protobufjs does not read ${value} as a number`);
+      default: {
+        if (!NUMBER.test(value) && !FLOAT_WORDS.has(value)) return drop(`protobufjs does not read ${value} as a number`);
+        const float = type === T.FLOAT || type === T.DOUBLE;
+        const back = numberReadBack(value, float);
+        if (back !== undefined && back !== value) {
+          this.notes.add(
+            undefined,
+            `The .proto text import writes for ${this.file.name} changes the default value of ${where} from ${value} to ${back}. Both are the same number, and the second is how protoc writes it.`,
+          );
+        }
+        // protobufjs reads -0 as 0 and -0.0 as -0.
+        return [`default = ${float && value === "-0" ? "-0.0" : value}`];
+      }
     }
   }
 
@@ -768,6 +790,19 @@ function isPlainEntryField(field: FieldDescriptorProto, name: string, number: nu
   if (isFieldSet(field, FieldDescriptorProtoSchema.field.oneofIndex)) return false;
   if (isFieldSet(field, FieldDescriptorProtoSchema.field.defaultValue)) return false;
   return field.options === undefined && !field.proto3Optional && field.extendee === "";
+}
+
+/**
+ * The default_value import gives a number default after reading `value` back
+ * from the text, or undefined when descriptors.ts leaves it out with a note
+ * of its own. A float or double comes back in protoc's form: 1e+10 is
+ * 10000000000.
+ */
+function numberReadBack(value: string, float: boolean): string | undefined {
+  if (FLOAT_WORDS.has(value)) return value;
+  const number = Number(value);
+  if (float) return doubleText(number);
+  return Number.isSafeInteger(number) ? String(number) : undefined;
 }
 
 /** Whether the text holds no backslash and no control character, so it can be written with no escape. */
