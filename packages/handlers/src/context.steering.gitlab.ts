@@ -304,8 +304,8 @@ export function gitlabCredentialRejected(fullName: string): HandlerError {
 /**
  * The same refusal for a steering project the provisioner bound. Its calls
  * use the group access token the organization stored, not a project token,
- * so the repair is to connect the group again (#4666). The steering repair
- * capability allows an organization owner or admin to do that.
+ * so the repair is to connect the group again (#4666). Only an organization
+ * owner or admin can store a group token (apps/api/src/routes/v1/gitlab-oauth.ts).
  */
 export function gitlabGroupCredentialRejected(fullName: string): HandlerError {
   return new HandlerError({
