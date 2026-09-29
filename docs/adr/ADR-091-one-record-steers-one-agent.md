@@ -172,12 +172,14 @@ envelope, outside the tenant transaction, so the envelope names the etag
 **A replayed start names the text the client delivered (§6).** When the
 daemon is down, `tacho-hook` answers `SessionStart` from its cached bundle and
 spools the event. The spool now records the digest and the length of the text
-the client handed the agent. A replay seals that digest, not the daemon's
-current one, because the bundle may have changed in between. A spool written
-before this change carries no digest, and its replay seals neither attribute.
-The manifest frame is sealed on a replay only when its `text_digest` equals
-the delivered digest. A missing digest means the text cannot be checked. It
-does not mean the text differed.
+the client handed the agent, and the etag of the bundle it answered from. A
+replay seals that digest, not the daemon's current one, because the bundle may
+have changed in between. A spool written before this change carries no
+digest, and its replay seals neither attribute. The manifest frame is sealed
+on a replay only when the daemon still holds the bundle the client answered
+from. Equal text is not enough, because a newer bundle can keep the text and
+change a permission, a skill or a cut record. A missing digest means the text
+cannot be checked. It does not mean the text differed.
 
 **A refused start names no text (§6).** A start the collector refuses, such
 as one on a suspended host, hands the agent nothing. It seals

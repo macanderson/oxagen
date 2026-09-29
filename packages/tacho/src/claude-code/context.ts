@@ -64,13 +64,26 @@ export interface DeliveredContext {
   digest?: Sha256Digest;
   /** Its length in UTF-16 code units, which `oxagen.delivered_chars` counts. */
   chars: number;
+  /**
+   * The etag of the bundle the answer came from. Equal text does not make
+   * equal bundles: a permission, a skill or a cut record can change while
+   * the text stays the same. So a replay seals the bundle's manifest only
+   * when the daemon still holds this bundle.
+   */
+  bundle_etag?: string;
 }
 
-/** What an answer that hands the agent `text` delivered. Null means no text. */
-export function deliveredContext(text: string | null): DeliveredContext {
+/**
+ * What an answer from the bundle with `bundleEtag` delivered when it handed
+ * the agent `text`. Null means no text.
+ */
+export function deliveredContext(
+  text: string | null,
+  bundleEtag: string,
+): DeliveredContext {
   return text === null
-    ? { chars: 0 }
-    : { digest: digestText(text), chars: text.length };
+    ? { chars: 0, bundle_etag: bundleEtag }
+    : { digest: digestText(text), chars: text.length, bundle_etag: bundleEtag };
 }
 
 /**
@@ -83,11 +96,24 @@ export function readDeliveredContext(
   value: unknown,
 ): DeliveredContext | undefined {
   if (typeof value !== "object" || value === null) return undefined;
-  const { digest, chars } = value as Record<string, unknown>;
+  const { digest, chars, bundle_etag } = value as Record<string, unknown>;
   if (typeof chars !== "number" || !Number.isSafeInteger(chars) || chars < 0)
     return undefined;
-  if (digest === undefined) return { chars };
-  return isSha256Digest(digest) ? { digest, chars } : undefined;
+  if (digest !== undefined && !isSha256Digest(digest)) return undefined;
+  // A spool written before the etag was recorded carries none. Its digest
+  // still stands, and its replay seals no manifest frame.
+  if (
+    bundle_etag !== undefined &&
+    (typeof bundle_etag !== "string" ||
+      bundle_etag.length === 0 ||
+      bundle_etag.length > 128)
+  )
+    return undefined;
+  return {
+    ...(digest !== undefined ? { digest } : {}),
+    chars,
+    ...(bundle_etag !== undefined ? { bundle_etag } : {}),
+  };
 }
 
 /** Keep only the harness-relevant, non-secret environment members. */

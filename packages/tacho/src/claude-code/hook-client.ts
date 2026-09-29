@@ -682,7 +682,7 @@ export function decideLocally(
       if (block !== undefined)
         return {
           response: { continue: false, stopReason: block },
-          delivered: deliveredContext(null),
+          delivered: deliveredContext(null, host.bundle.etag),
           note: "blocked by host status",
         };
       return {
@@ -695,7 +695,10 @@ export function decideLocally(
                 },
               }
             : {},
-        delivered: deliveredContext(host.bundle.context.system),
+        delivered: deliveredContext(
+          host.bundle.context.system,
+          host.bundle.etag,
+        ),
         note: "daemon down; recorded for replay",
       };
     case "UserPromptSubmit":

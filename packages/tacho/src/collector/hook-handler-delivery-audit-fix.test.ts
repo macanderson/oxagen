@@ -291,7 +291,10 @@ describe("a replayed hook", () => {
     // spool, which is what the replay seals.
     const replayed = await handleHookEvent(start, {}, h.deps, {
       ...spooled,
-      deliveredContext: deliveredContext("You are governed by Oxagen."),
+      deliveredContext: deliveredContext(
+        "You are governed by Oxagen.",
+        "etag-3",
+      ),
     });
     expect(
       replayed.events.some((e) => e.kind === "oxagen:command_applied"),

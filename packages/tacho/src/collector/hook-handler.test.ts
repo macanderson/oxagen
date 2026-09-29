@@ -1216,7 +1216,7 @@ describe("handleHookEvent over the recorded session", () => {
   it("seals on a replayed start the text the client delivered, not the daemon's current bundle", async () => {
     // The daemon was down at the start, so `tacho-hook` answered from its
     // cached bundle with the old text. The daemon's bundle has changed since.
-    const { deps } = harness({
+    const { deps, view } = harness({
       context: { system: "New text", manifest: manifestNaming("New text") },
     });
     const receivedAt = toProtocolTimestamp(
@@ -1226,7 +1226,10 @@ describe("handleHookEvent over the recorded session", () => {
       { session_id: "sess-replay-old", hook_event_name: "SessionStart" },
       {},
       deps,
-      { receivedAt, deliveredContext: deliveredContext("Old text") },
+      {
+        receivedAt,
+        deliveredContext: deliveredContext("Old text", "etag-old"),
+      },
     );
     expect(
       stale.events.find((e) => e.kind === "agent_start")?.attrs,
@@ -1240,12 +1243,16 @@ describe("handleHookEvent over the recorded session", () => {
       false,
     );
 
-    // A replay that delivered the text the manifest names seals its frame.
+    // A replay answered from the bundle the daemon still holds seals its
+    // frame.
     const current = await handleHookEvent(
       { session_id: "sess-replay-new", hook_event_name: "SessionStart" },
       {},
       deps,
-      { receivedAt, deliveredContext: deliveredContext("New text") },
+      {
+        receivedAt,
+        deliveredContext: deliveredContext("New text", view.bundle.etag),
+      },
     );
     expect(
       current.events.find((e) => e.kind === "agent_start")?.attrs?.[
@@ -1255,6 +1262,33 @@ describe("handleHookEvent over the recorded session", () => {
     expect(current.events.some((e) => e.kind === "steering.manifest")).toBe(
       true,
     );
+
+    // The same text from another bundle, whose permissions, skills or cut
+    // records may differ, seals the digest and no frame. So does a spool
+    // written before the client recorded the bundle.
+    const others: [string, DeliveredContext][] = [
+      ["sess-replay-same-text", deliveredContext("New text", "etag-older")],
+      [
+        "sess-replay-no-etag",
+        { digest: digestText("New text"), chars: "New text".length },
+      ],
+    ];
+    for (const [session, delivered] of others) {
+      const outcome = await handleHookEvent(
+        { session_id: session, hook_event_name: "SessionStart" },
+        {},
+        deps,
+        { receivedAt, deliveredContext: delivered },
+      );
+      expect(
+        outcome.events.find((e) => e.kind === "agent_start")?.attrs?.[
+          "oxagen.context_digest"
+        ],
+      ).toBe(digestText("New text"));
+      expect(outcome.events.some((e) => e.kind === "steering.manifest")).toBe(
+        false,
+      );
+    }
   });
 
   it("seals no context digest on a replayed start whose spool recorded no delivered text", async () => {
@@ -1280,6 +1314,17 @@ describe("handleHookEvent over the recorded session", () => {
             digest: "sha256:not-hex",
             chars: 4,
           } as unknown as DeliveredContext,
+        },
+      ],
+      [
+        "sess-replay-malformed-etag",
+        {
+          receivedAt,
+          deliveredContext: {
+            digest: digestText(system),
+            chars: system.length,
+            bundle_etag: "",
+          },
         },
       ],
     ];

@@ -292,6 +292,7 @@ describe("runTachoHook", () => {
     expect(spooled.delivered_context).toEqual({
       digest: digestText("You are governed by Oxagen."),
       chars: "You are governed by Oxagen.".length,
+      bundle_etag: host.bundle.etag,
     });
   });
 

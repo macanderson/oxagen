@@ -1172,17 +1172,17 @@ async function routeHook(
       // no manifest seals no frame, and the start event's context digest is
       // still the record of the text.
       //
-      // A replay seals the current bundle's manifest only when it names the
-      // text the client delivered. A manifest for other text would account
-      // for records the agent never saw. A replay with no delivered digest
-      // has nothing to match, so it seals no frame, even beside a manifest
-      // whose `text_digest` is null.
+      // A replay seals the current bundle's manifest only when the client
+      // answered from this same bundle. Equal text is not enough: a newer
+      // bundle can keep the text and change a permission, a skill or a cut
+      // record, and its frame would credit that mandate to the earlier run.
+      // A replay whose spool names no bundle seals no frame.
       const manifest = view.bundle.context.manifest;
       if (
         manifest !== undefined &&
         (replay === undefined ||
-          (delivered?.digest !== undefined &&
-            manifest.text_digest === delivered.digest))
+          (delivered?.bundle_etag === view.bundle.etag &&
+            manifest.text_digest === (delivered.digest ?? null)))
       ) {
         events.push(
           record.recorder.sealCollectorEvent(
