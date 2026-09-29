@@ -1,6 +1,6 @@
 # import_workspace_steering
 
-Move the workspace's steering from `.oxagen/` in the repository it binds to a steering repo, and open the steering PRs a person merges (steering spec, Workspace migration; lane S10, #4620; ADR-219).
+Move the workspace's steering from `.oxagen/` in the repository it binds to a steering repo, and open the steering PRs a person merges (steering spec, Workspace migration; lane S10, #4620; ADR-219). A workspace on a legacy sources connection calls it with `startFresh` instead, which creates an empty steering repo and imports nothing (#4684).
 
 A workspace owner runs this once for each workspace that still reads `.oxagen/`. The run changes no file on a default branch. Every change is a PR on the host, and a person merges each one.
 

@@ -55,7 +55,7 @@ export const steeringRepoImport = registerCapability({
   name: "import_workspace_steering",
   domain: "repository",
   description:
-    "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges.",
+    "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges. A workspace on a legacy sources connection sets startFresh instead: the run creates an empty steering repo and imports nothing.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -76,11 +76,12 @@ export const steeringRepoImport = registerCapability({
         .optional(),
       /** The effect of each v0.1 constraint, keyed by its old lineage. */
       constraintEffects: z.record(z.string(), recordEffectSchema).optional(),
-      /**
-       * Give a workspace on a legacy sources connection an empty steering
-       * repo. Nothing from the legacy repository is imported.
-       */
-      startFresh: z.boolean().optional(),
+      startFresh: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository.",
+        ),
     })
     .strict(),
   output: z.object({
