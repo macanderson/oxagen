@@ -79,6 +79,27 @@ function Code({ children }: { children: ReactNode }) {
   return <span className={mono}>{children}</span>;
 }
 
+/**
+ * `oxagen:credential/<name>`, as CREDENTIAL_REF_PATTERN in
+ * packages/oxagen/src/steering-repo/names.ts spells it. The app may not import
+ * that module (test/arch/layers.ts), so the pattern is copied here.
+ */
+const CREDENTIAL_REF = /^oxagen:credential\/[a-z0-9][a-z0-9-]{0,62}$/;
+
+/**
+ * A credential as the record names it. Only a vault reference is shown. Any
+ * other text could be a secret someone pasted into server.toml, so the tab
+ * withholds it and says why.
+ */
+function Credential({ value }: { value: string }) {
+  const t = useTranslations("mcpStudio.connection");
+  return CREDENTIAL_REF.test(value) ? (
+    <Code>{value}</Code>
+  ) : (
+    <span data-testid="studio-credential-withheld">{t("withheld")}</span>
+  );
+}
+
 function Section({
   id,
   title,
@@ -274,13 +295,13 @@ function Environments({
   const id = useId();
   /** An environment with no credential of its own uses the server's. */
   const credentialOf = (env: StudioEnvironment): ReactNode => {
-    if (env.credential !== null) return <Code>{env.credential}</Code>;
+    if (env.credential !== null) return <Credential value={env.credential} />;
     if (record === null) return <StudioNotRecordedValue gap="record" />;
     if (record.auth.mode === "none") return t("noCredential");
     return record.auth.credential === null ? (
       "—"
     ) : (
-      <Code>{record.auth.credential}</Code>
+      <Credential value={record.auth.credential} />
     );
   };
   return (
@@ -376,7 +397,7 @@ function Auth({
           ) : record.auth.credential === null ? (
             "—"
           ) : (
-            <Code>{record.auth.credential}</Code>
+            <Credential value={record.auth.credential} />
           )}
         </Fact>
       </dl>

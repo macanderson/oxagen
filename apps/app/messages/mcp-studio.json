@@ -130,6 +130,7 @@
       "cloud": "Oxagen cloud",
       "none": "None",
       "noMachines": "No machine groups",
+      "withheld": "Hidden because it is not a vault reference",
       "facts": {
         "url": "URL",
         "transport": "Transport",

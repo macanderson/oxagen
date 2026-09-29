@@ -194,6 +194,14 @@ export function ToolsTab({
     setRefused(!ok);
     return ok;
   };
+  /**
+   * The panel shows its own refusal, so an edit from the panel clears the
+   * tab's alert instead of raising it. One refusal is announced once.
+   */
+  const stageFromPanel = (op: DraftOp): boolean => {
+    setRefused(false);
+    return studioDraft.stage(op);
+  };
   const filters: readonly ListFilter<StudioTool>[] = [
     {
       key: "state",
@@ -431,7 +439,7 @@ export function ToolsTab({
           tool={opened}
           ops={ops}
           canEdit={canEdit}
-          onStage={stage}
+          onStage={stageFromPanel}
           off={off[opened.name] ?? null}
           offFacts={offFacts[opened.name] ?? null}
           open
