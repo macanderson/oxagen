@@ -76,6 +76,46 @@ function credentialHeader(text: string, refused: readonly string[]): string | nu
   return null;
 }
 
+/**
+ * A header or query parameter name that reads like a credential. The three
+ * fixed headers above are refused because a recorded call may never carry
+ * them at all; this is the wider net, because a server may place its key in
+ * `X-Api-Key` or in `?api_key=` and nothing about the draft says which. It
+ * reads the name, not the value, so it cannot see a key under a harmless one:
+ * that is why the published page states what this enforces rather than
+ * promising a draft holds no credential whatever its shape.
+ *
+ * Deliberately not `key` anywhere in a name, which would refuse an ordinary
+ * `Idempotency-Key`. Refusing a harmless name costs a person one edit, and a
+ * key in the steering repo's history costs a rotation.
+ */
+const CREDENTIAL_NAME =
+  /token|secret|passw|pwd|credential|session|signature|(?:^|[^a-z])(?:api|access|private|secret)[-_]?key(?:$|[^a-z])|^key$|^sig$|auth/i;
+
+/**
+ * The credential-shaped name in a recorded request's headers or query, or
+ * null. The header names the three fixed ones already cover are left to them,
+ * so each refusal says the more precise thing.
+ */
+function credentialShapedName(text: string, fixed: readonly string[]): string | null {
+  const value = parsed(text);
+  if (!value.ok || !isRecord(value.value)) return null;
+  const skip = new Set(fixed);
+  for (const field of ["headers", "query"] as const) {
+    const part = value.value[field];
+    if (!isRecord(part)) continue;
+    for (const name of Object.keys(part)) {
+      if (skip.has(name.toLowerCase())) continue;
+      if (CREDENTIAL_NAME.test(name)) {
+        return field === "headers"
+          ? `the header ${name}`
+          : `the query parameter ${name}`;
+      }
+    }
+  }
+  return null;
+}
+
 function testInvalid(op: TestOp, message: string): HandlerError {
   return new HandlerError({
     code: "conflict",
@@ -99,6 +139,16 @@ export function checkTests(ops: readonly StudioDraftOp[]): void {
         code: "conflict",
         reason: "test_holds_credential",
         message: `The saved test of ${op.tool} carries a ${header} header. A saved test holds no credential. Remove the header and save the test again.`,
+      });
+    }
+    // A server's key may sit in any header or query parameter, so the name is
+    // read too. The recorded request is what reaches tests/calls.jsonl.
+    const shaped = credentialShapedName(op.request, CREDENTIAL_REQUEST_HEADERS);
+    if (shaped !== null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "test_holds_credential",
+        message: `The saved test of ${op.tool} carries ${shaped}, whose name reads like a credential. A saved test records the request as Studio built it, before the credential was added. Remove it and save the test again.`,
       });
     }
   }
