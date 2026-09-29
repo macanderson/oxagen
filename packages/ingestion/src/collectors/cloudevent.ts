@@ -1,8 +1,8 @@
 // collectors/cloudevent.ts: the CloudEvents 1.0 envelope a work.inbound_events
 // row stores, and the request it rebuilds for doorbell.
 //
-// The envelope carries the delivery as the provider sent it: a JSON body as
-// `data`, anything else as `data_base64`. Two extension attributes keep what
+// The envelope carries the delivery as the provider sent it: a compact JSON
+// body as `data`, anything else as `data_base64`. Two extension attributes keep what
 // doorbell needs later: `oxagenheaders`, the request headers as a JSON string
 // with the credential headers removed, and `oxagensha256`, the body's digest,
 // which is also the raw body's object storage key.
@@ -85,9 +85,15 @@ export function deliveryCloudEvent(args: {
   const text = Buffer.from(request.body).toString("utf8");
   if (isJsonContentType(contentType) || contentType === undefined) {
     try {
-      event.data = JSON.parse(text) as unknown;
-      event.datacontenttype = "application/json";
-      return event;
+      const parsed = JSON.parse(text) as unknown;
+      // Keep the value as data only when it writes back to the same bytes.
+      // Spacing, key escapes, or an integer above 2^53 would change on the
+      // way back, so such a body is kept byte for byte below.
+      if (JSON.stringify(parsed) === text) {
+        event.data = parsed;
+        event.datacontenttype = "application/json";
+        return event;
+      }
     } catch {
       // Not JSON after all. It is kept byte for byte below.
     }
@@ -117,16 +123,15 @@ export function resultCloudEvent(args: {
 }
 
 /**
- * The request doorbell reads, rebuilt from a stored delivery. A JSON body
- * comes back as its JSON text, which parses to the same value but may not
- * match the provider's bytes, so nothing may check a signature against it.
- * The signature was checked once, when the delivery arrived.
+ * The request doorbell reads, rebuilt from a stored delivery. The body comes
+ * back byte for byte: a JSON body is kept as data only when it writes back to
+ * the same text. The signature was checked once, when the delivery arrived.
  */
 export function requestFromCloudEvent(event: CollectorCloudEvent): InboundRequest {
   let headers: Record<string, string> = {};
   if (event.oxagenheaders !== undefined) {
     const parsed = JSON.parse(event.oxagenheaders) as unknown;
-    if (parsed !== null && typeof parsed === "object")
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed))
       headers = parsed as Record<string, string>;
   }
   const body =

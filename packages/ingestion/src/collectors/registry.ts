@@ -46,8 +46,9 @@ export function isCollectorDefinition(
   if (value === null || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.type !== "string") return false;
-  const config = candidate.config as { safeParse?: unknown } | undefined;
-  if (config === undefined || typeof config.safeParse !== "function")
+  const config = candidate.config;
+  if (config === null || typeof config !== "object") return false;
+  if (typeof (config as { safeParse?: unknown }).safeParse !== "function")
     return false;
   return REQUIRED_METHODS.every(
     (name) => typeof candidate[name] === "function",
