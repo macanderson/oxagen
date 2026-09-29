@@ -180,6 +180,7 @@ import {
   GITLAB_STEERING_PROVIDER,
   initialSteeringRepoState,
   keepSteeringConnection,
+  moveSteeringInstallation,
   readSteeringConnection,
   readSteeringRepoState,
   requestSteeringRepoProvision,
@@ -547,6 +548,115 @@ describe("keepSteeringConnection", () => {
     expect(where.params).toEqual([ORG, "steering_connection"]);
     const column = render(sql`${schema.organizations.settings}`).sql;
     expect(where.sql).toContain(`(${column} -> $2::text) IS NULL`);
+  });
+});
+
+describe("moveSteeringInstallation", () => {
+  const MOVED = GITHUB as Extract<SteeringConnection, { provider: "github" }>;
+
+  /** The organization row the move reads first. */
+  function storedGithub(installationId: number, accountLogin: string) {
+    return [
+      {
+        settings: {
+          steering_connection: {
+            provider: "github",
+            installation_id: installationId,
+            account_login: accountLogin,
+          },
+        },
+      },
+    ];
+  }
+
+  it("moves the setting and the steering source connections to the new installation on the same account", async () => {
+    mocks.results.push(storedGithub(44, "ACME"));
+    mocks.updateResults.push([{ id: ORG }]);
+
+    await expect(moveSteeringInstallation(ORG, MOVED, ACTOR)).resolves.toBe(
+      44,
+    );
+
+    // One transaction: read, move the setting, move the source connections.
+    expect(mocks.dbCalls).toEqual(["system"]);
+    expect(mocks.chains.map((c) => c.op)).toEqual([
+      "select",
+      "update",
+      "update",
+    ]);
+    expect(render(argOf(chain(0), "where")).params).toEqual([ORG]);
+
+    const setting = chain(1);
+    expect(argOf(setting, "update")).toBe(schema.organizations);
+    expect(savedPatch(setting)).toEqual({ steering_connection: GITHUB });
+    // The write repeats the id it read, so a racing connect is left alone.
+    const settingWhere = render(argOf(setting, "where"));
+    expect(settingWhere.params).toEqual([ORG, "steering_connection", "44"]);
+    const settingsColumn = render(sql`${schema.organizations.settings}`).sql;
+    expect(settingWhere.sql).toContain(
+      `(${settingsColumn} -> $2::text ->> 'installation_id') = $3`,
+    );
+
+    const sources = chain(2);
+    expect(argOf(sources, "update")).toBe(schema.sourceConnections);
+    const set = argOf(sources, "set") as {
+      deliveryConfig: unknown;
+      updatedAt: unknown;
+      updatedById: unknown;
+    };
+    const configColumn = render(
+      sql`${schema.sourceConnections.deliveryConfig}`,
+    ).sql;
+    const config = render(set.deliveryConfig);
+    expect(config.sql).toBe(
+      `jsonb_set(${configColumn}, '{installationId}', $1::jsonb)`,
+    );
+    expect(config.params).toEqual(["55"]);
+    expect(set.updatedAt).toBeInstanceOf(Date);
+    expect(set.updatedById).toBe(ACTOR);
+    const sourcesWhere = render(argOf(sources, "where"));
+    expect(sourcesWhere.params).toEqual([ORG, GITHUB_STEERING_PROVIDER, "44"]);
+    expect(sourcesWhere.sql).toContain("is null");
+    expect(sourcesWhere.sql).toContain(
+      `(${configColumn} ->> 'installationId') = $3`,
+    );
+  });
+
+  it.each([
+    {
+      name: "a stored installation on another account",
+      stored: () => storedGithub(44, "globex"),
+    },
+    {
+      name: "the same installation id",
+      stored: () => storedGithub(55, "acme"),
+    },
+    {
+      name: "a GitLab connection",
+      stored: () => [{ settings: { steering_connection: GITLAB } }],
+    },
+    { name: "no stored connection", stored: () => [{ settings: {} }] },
+    { name: "no organization row", stored: () => [] },
+  ])("changes nothing for $name (negative)", async ({ stored }) => {
+    mocks.results.push(stored());
+
+    await expect(
+      moveSteeringInstallation(ORG, MOVED, ACTOR),
+    ).resolves.toBeNull();
+
+    expect(mocks.chains.map((c) => c.op)).toEqual(["select"]);
+  });
+
+  it("leaves the source connections alone when a racing connect already moved the setting (negative)", async () => {
+    mocks.results.push(storedGithub(44, "acme"));
+    // The guarded update matches no row.
+
+    await expect(
+      moveSteeringInstallation(ORG, MOVED, ACTOR),
+    ).resolves.toBeNull();
+
+    expect(mocks.chains.map((c) => c.op)).toEqual(["select", "update"]);
+    expect(argOf(chain(1), "update")).toBe(schema.organizations);
   });
 });
 

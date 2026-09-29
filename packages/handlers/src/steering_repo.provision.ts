@@ -1005,6 +1005,77 @@ export async function keepSteeringConnection(
   return rows.length > 0;
 }
 
+/**
+ * Point the organization's GitHub steering connection, and every steering
+ * source connection bound from it, at `connection` when the stored connection
+ * names a different installation on the same GitHub account.
+ *
+ * A GitHub App has one installation per account, and the caller checked that
+ * the owner's own token reaches `connection`. So a different stored id on the
+ * same account belongs to the retired Oxagen Steering app or to an
+ * installation the owner removed, and no token the deployment mints can use it
+ * (ADR-228). The connection never moves to another account or host, as
+ * `keepSteeringConnection` says. Returns the installation id it replaced, or
+ * null when it changed nothing.
+ */
+export async function moveSteeringInstallation(
+  orgId: string,
+  connection: Extract<SteeringConnection, { provider: "github" }>,
+  actorUserId: string,
+): Promise<number | null> {
+  // tenancy: filtered by orgId, which the caller took from a signed state. The
+  // caller checked that the owner's own token reaches the connection.
+  return withSystemDb(async (tx) => {
+    const [org] = await tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1);
+    const stored = readSteeringConnection(org?.settings);
+    if (
+      stored?.provider !== "github" ||
+      stored.installation_id === connection.installation_id ||
+      stored.account_login.toLowerCase() !==
+        connection.account_login.toLowerCase()
+    )
+      return null;
+    const from = stored.installation_id;
+    // The where clause repeats the id it read, so a connect that races this
+    // one and already moved the setting leaves it alone.
+    const moved = await tx
+      .update(schema.organizations)
+      .set({
+        settings: mergeSettings(schema.organizations.settings, {
+          [STEERING_CONNECTION_SETTING]: connection,
+        }),
+      })
+      .where(
+        and(
+          eq(schema.organizations.id, orgId),
+          sql`(${schema.organizations.settings} -> ${STEERING_CONNECTION_SETTING}::text ->> 'installation_id') = ${String(from)}`,
+        ),
+      )
+      .returning({ id: schema.organizations.id });
+    if (moved.length === 0) return null;
+    await tx
+      .update(schema.sourceConnections)
+      .set({
+        deliveryConfig: sql`jsonb_set(${schema.sourceConnections.deliveryConfig}, '{installationId}', ${JSON.stringify(connection.installation_id)}::jsonb)`,
+        updatedAt: new Date(),
+        updatedById: actorUserId,
+      })
+      .where(
+        and(
+          eq(schema.sourceConnections.orgId, orgId),
+          eq(schema.sourceConnections.connectorId, GITHUB_STEERING_PROVIDER),
+          isNull(schema.sourceConnections.deletedAt),
+          sql`(${schema.sourceConnections.deliveryConfig} ->> 'installationId') = ${String(from)}`,
+        ),
+      );
+    return from;
+  });
+}
+
 /** The email body. The in-app notification carries the link. */
 function reauthorizeEmail(title: string, body: string): string {
   const escape = (s: string) =>

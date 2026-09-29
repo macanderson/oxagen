@@ -55,6 +55,7 @@ import {
   REAUTHORIZE,
   initialSteeringRepoState,
   keepSteeringConnection,
+  moveSteeringInstallation,
   readSteeringRepoState,
   startSteeringRepoProvision,
   type SteeringConnection,
@@ -2501,7 +2502,10 @@ async function completeSteeringConnect(
   }
 
   // Keep the installation the owner just picked before provisioning runs
-  // again, so pick_connection finds it stored and never stops to ask.
+  // again, so pick_connection finds it stored and never stops to ask. An
+  // organization whose stored installation belongs to the retired Oxagen
+  // Steering app moves to this one when both sit on the same GitHub account
+  // (ADR-228).
   if (installationId !== undefined) {
     const connection = await steeringInstallationConnection(
       orgId,
@@ -2510,7 +2514,19 @@ async function completeSteeringConnect(
     );
     if (connection !== null) {
       try {
-        await keepSteeringConnection(orgId, connection);
+        const kept = await keepSteeringConnection(orgId, connection);
+        if (!kept && connection.provider === "github") {
+          const from = await moveSteeringInstallation(
+            orgId,
+            connection,
+            userId,
+          );
+          if (from !== null)
+            logger.info(
+              { orgId, from, to: connection.installation_id },
+              "The steering connect moved the organization's steering connection to the installation the owner just authorized.",
+            );
+        }
       } catch (err) {
         logger.error(
           { err: String(err), orgId },

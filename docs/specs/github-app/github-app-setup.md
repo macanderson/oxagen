@@ -516,9 +516,18 @@ On each copy of the app, from its settings page on GitHub:
 
 A steering connection made through the retired app holds a token that app issued. The Oxagen app's
 installations are invisible to that token, so provisioning stops with `steering_reauthorize`, and an
-owner connects again from onboarding. A steering repo the retired app set up names that app in its
-rulesets, so its health read reports drift until an organization admin repairs it
-(`repair_steering_repo`). Uninstall the retired app from the organization after the repair.
+owner connects again from onboarding.
+
+1. Install the Oxagen app on the same GitHub account the retired app was on. Select the steering
+   repos the retired app created, or choose **All repositories**. An installation that cannot see a
+   steering repo cannot mint a token for it.
+2. Finish the connect. The callback replaces the retired installation id in the organization's
+   steering connection and in each steering source connection. It moves an id only on the same
+   account, because a GitHub App has one installation per account.
+3. Repair each steering repo (`repair_steering_repo`). A steering repo the retired app set up names
+   that app in its rulesets, so its health read reports drift until an organization admin repairs
+   it.
+4. Uninstall the retired app from the organization after the repair.
 
 ### GitLab
 

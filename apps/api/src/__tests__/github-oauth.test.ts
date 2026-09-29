@@ -80,6 +80,7 @@ const mocks = vi.hoisted(() => ({
   startSteeringRepoProvision: vi.fn(),
   // The write that keeps the installation the install leg named
   keepSteeringConnection: vi.fn(),
+  moveSteeringInstallation: vi.fn(),
   // Fetch
   fetch: vi.fn(),
 }));
@@ -207,6 +208,7 @@ vi.mock("@oxagen/handlers/steering_repo.provision", async (importOriginal) => {
     ...real,
     startSteeringRepoProvision: mocks.startSteeringRepoProvision,
     keepSteeringConnection: mocks.keepSteeringConnection,
+    moveSteeringInstallation: mocks.moveSteeringInstallation,
   };
 });
 
@@ -430,6 +432,7 @@ beforeEach(() => {
   // Provision: the send succeeds and the scope keeps provisioning.
   mocks.startSteeringRepoProvision.mockResolvedValue("provisioning");
   mocks.keepSteeringConnection.mockResolvedValue(true);
+  mocks.moveSteeringInstallation.mockResolvedValue(null);
 
   // Crypto: simple pass-through stubs
   mocks.createIngestionCryptoAdapter.mockReturnValue({
@@ -3696,6 +3699,87 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
     const kept = mocks.keepSteeringConnection.mock.invocationCallOrder[0];
     const sent = mocks.startSteeringRepoProvision.mock.invocationCallOrder[0];
     expect(kept).toBeLessThan(sent as number);
+  });
+
+  it("does not move a connection it just stored", async () => {
+    mockGithubExchange();
+    mockInstallations([
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx, makeRowsTx([{ settings: {} }]), makeRowsTx([]));
+
+    await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(mocks.keepSteeringConnection).toHaveBeenCalledTimes(1);
+    expect(mocks.moveSteeringInstallation).not.toHaveBeenCalled();
+  });
+
+  it("moves a stored connection to the installation the owner just authorized (ADR-228)", async () => {
+    mocks.keepSteeringConnection.mockResolvedValueOnce(false);
+    mocks.moveSteeringInstallation.mockResolvedValueOnce(101);
+    mockGithubExchange();
+    mockInstallations([
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx, makeRowsTx([{ settings: {} }]), makeRowsTx([]));
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+    );
+    const connection = {
+      provider: "github",
+      installation_id: 202,
+      account_login: "globex",
+    };
+    expect(mocks.moveSteeringInstallation).toHaveBeenCalledTimes(1);
+    expect(mocks.moveSteeringInstallation).toHaveBeenCalledWith(
+      TEST_ORG_ID,
+      connection,
+      STEERING_USER_ID,
+    );
+    // Moved before the resend, so provisioning mints for the live installation.
+    const moved = mocks.moveSteeringInstallation.mock.invocationCallOrder[0];
+    const sent = mocks.startSteeringRepoProvision.mock.invocationCallOrder[0];
+    expect(moved).toBeLessThan(sent as number);
+  });
+
+  it("sends the person back with store_failed when moving the connection throws (negative)", async () => {
+    mocks.keepSteeringConnection.mockResolvedValueOnce(false);
+    mocks.moveSteeringInstallation.mockRejectedValueOnce(
+      new Error("connection reset"),
+    );
+    mockGithubExchange();
+    mockInstallations([
+      { id: 202, account: { login: "globex", type: "Organization" } },
+    ]);
+    const insert = makeInsertTx([{ id: "oauth-account-uuid" }]);
+    queueSystemDb(insert.tx);
+
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState(),
+      installation_id: "202",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(errorRedirect("store_failed"));
+    expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
   });
 
   it("still connects when the registry write fails", async () => {
