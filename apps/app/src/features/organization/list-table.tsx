@@ -9,6 +9,7 @@
 // (features/shell/card-tables.ts), which is why every shown column has a label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
+import { ListSelect } from "@/ui/list-select";
 import {
   type ListColumn,
   ListTable as SharedListTable,
@@ -77,11 +78,16 @@ export function ListTable({
       }))}
       filters={filters.map((filter) => (
         <span key={filter.key} className="contents">
-          <label htmlFor={`${id}-${filter.key}`} className="sr-only">
-            {filter.label}
-          </label>
-          <select
-            id={`${id}-${filter.key}`}
+          <ListSelect
+            aria-label={filter.label}
+            items={[
+              { value: "", label: t("all", { filter: filter.label }) },
+              ...filter.options,
+            ]}
+            value={chosen[filter.key] ?? ""}
+            onValue={(value) => {
+              setChosen({ ...chosen, [filter.key]: value });
+            }}
             disabled={filter.unrecorded !== undefined}
             title={filter.unrecorded}
             aria-describedby={
@@ -90,20 +96,10 @@ export function ListTable({
                 : `${id}-${filter.key}-why`
             }
             data-not-recorded={filter.unrecorded === undefined ? undefined : ""}
+            size="sm"
             data-touch-target=""
-            value={chosen[filter.key] ?? ""}
-            onChange={(event) => {
-              setChosen({ ...chosen, [filter.key]: event.target.value });
-            }}
             className={`${listSelect} disabled:opacity-60`}
-          >
-            <option value="">{t("all", { filter: filter.label })}</option>
-            {filter.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
           {filter.unrecorded === undefined ? null : (
             <span id={`${id}-${filter.key}-why`} className="sr-only">
               {filter.unrecorded}

@@ -28,7 +28,7 @@ import {
   ShieldSlashIcon,
 } from "@phosphor-icons/react";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   RECORD_KINDS,
   type RecordKind,
@@ -38,11 +38,11 @@ import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
-  inputBase,
   panel,
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
+import { ListSelect } from "@/ui/list-select";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { RowsPager } from "@/ui/pagination";
@@ -170,7 +170,6 @@ function KindIcon({
 }
 
 const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
-const select = `${inputBase} w-auto min-h-8 max-md:min-h-11 max-md:text-base py-1.5 pr-8`;
 const meta =
   "flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground";
 
@@ -405,6 +404,7 @@ export function RecordsList({
   const t = useTranslations("steering.records");
   const list = useTranslations("ui.list");
   const locale = useLocale();
+  const sortLabel = useId();
   const [sort, setSort] = useState<Sort>("shown");
   const [per, setPer] = useState<number>(10);
   const [page, setPage] = useState(1);
@@ -456,25 +456,23 @@ export function RecordsList({
         data-list-tools=""
         className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-4 py-2.5"
       >
-        <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          {t("sort")}
-          <select
-            className={select}
-            data-sort=""
+        {/* The word names the Select's trigger by id, as the list bar's Sort
+            does (ui/list-controls.tsx). */}
+        <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+          <span id={sortLabel}>{t("sort")}</span>
+          <ListSelect
+            size="sm"
+            className="max-md:min-h-11 max-md:text-base"
+            aria-labelledby={sortLabel}
+            items={SORTS.map((s) => ({ value: s, label: t(`sorts.${s}`) }))}
             value={sort}
-            onChange={(event) => {
-              const next = SORTS.find((s) => s === event.target.value);
+            onValue={(value) => {
+              const next = SORTS.find((s) => s === value);
               setSort(next ?? "shown");
               setPage(1);
             }}
-          >
-            {SORTS.map((s) => (
-              <option key={s} value={s}>
-                {t(`sorts.${s}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </span>
       </div>
       {slice.length === 0 ? (
         <p

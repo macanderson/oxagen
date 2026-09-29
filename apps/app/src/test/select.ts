@@ -33,7 +33,7 @@ export async function optionNames(
 ): Promise<string[]> {
   await user.click(trigger);
   const names = (await screen.findAllByRole("option")).map(
-    (option) => option.textContent ?? "",
+    (option) => option.textContent,
   );
   await user.keyboard("{Escape}");
   await listClosed();

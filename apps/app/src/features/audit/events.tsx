@@ -182,7 +182,8 @@ const ACTOR_KIND_NOTE = "audit-actor-kind-note";
  * the page when the field takes focus.
  */
 const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
-const select = `${control} w-auto`;
+/** A filter's trigger at the same phone size. It wears the input's colours. */
+const select = "max-md:min-h-11 max-md:text-base";
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit.events");
@@ -207,39 +208,32 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
             className={control}
           />
         </label>
-        <label>
-          <span className={label}>{t("result")}</span>
-          <FilterSelect
-            name="outcome"
-            defaultValue={query.outcome ?? ""}
-            className={select}
-          >
-            <option value="">{t("anyResult")}</option>
-            {AUDIT_OUTCOMES.filter(
+        <FilterSelect
+          name="outcome"
+          aria-label={t("result")}
+          defaultValue={query.outcome ?? ""}
+          items={[
+            { value: "", label: t("anyResult") },
+            ...AUDIT_OUTCOMES.filter(
               (outcome) => outcome === "allow" || outcome === "deny",
-            ).map((outcome) => (
-              <option key={outcome} value={outcome}>
-                {outcomes(outcome)}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label>
-          <span className={label}>{t("severity")}</span>
-          <select
-            disabled
-            defaultValue=""
-            aria-describedby="audit-severity-note"
-            className={select}
-          >
-            <option value="">{t("anySeverity")}</option>
-            {AUDIT_SEVERITIES.map((severity) => (
-              <option key={severity} value={severity}>
-                {t(`severities.${severity}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+            ).map((outcome) => ({ value: outcome, label: outcomes(outcome) })),
+          ]}
+          className={select}
+        />
+        <FilterSelect
+          disabled
+          aria-label={t("severity")}
+          aria-describedby="audit-severity-note"
+          defaultValue=""
+          items={[
+            { value: "", label: t("anySeverity") },
+            ...AUDIT_SEVERITIES.map((severity) => ({
+              value: severity,
+              label: t(`severities.${severity}`),
+            })),
+          ]}
+          className={select}
+        />
         <noscript>
           <button type="submit" className={buttonSecondary}>
             {t("apply")}
@@ -298,39 +292,34 @@ function HeaderFilters({
       aria-label={t("filters")}
       className="flex flex-wrap items-center gap-2"
     >
-      <label>
-        <span className={label}>{t("actor")}</span>
-        <FilterSelect
-          name="actor"
-          defaultValue={query.actor ?? ""}
-          aria-describedby={ACTOR_KIND_NOTE}
-          className={select}
-        >
-          <option value="">{t("anyActor")}</option>
-          {ACTOR_KINDS.map((kind) => (
-            <option key={kind} value={`kind:${kind}`} disabled>
-              {t(`actorKinds.${kind}`)}
-            </option>
-          ))}
-          {picked === null ? null : (
-            <option value={picked.id}>{picked.name}</option>
-          )}
-        </FilterSelect>
-      </label>
-      <label>
-        <span className={label}>{t("range")}</span>
-        <FilterSelect
-          name="range"
-          defaultValue={query.range}
-          className={select}
-        >
-          {AUDIT_RANGES.map((range) => (
-            <option key={range} value={range}>
-              {t(`ranges.${range}`)}
-            </option>
-          ))}
-        </FilterSelect>
-      </label>
+      <FilterSelect
+        name="actor"
+        aria-label={t("actor")}
+        aria-describedby={ACTOR_KIND_NOTE}
+        defaultValue={query.actor ?? ""}
+        items={[
+          { value: "", label: t("anyActor") },
+          ...ACTOR_KINDS.map((kind) => ({
+            value: `kind:${kind}`,
+            label: t(`actorKinds.${kind}`),
+            disabled: true,
+          })),
+          ...(picked === null
+            ? []
+            : [{ value: picked.id, label: picked.name }]),
+        ]}
+        className={select}
+      />
+      <FilterSelect
+        name="range"
+        aria-label={t("range")}
+        defaultValue={query.range}
+        items={AUDIT_RANGES.map((range) => ({
+          value: range,
+          label: t(`ranges.${range}`),
+        }))}
+        className={select}
+      />
       {query.outcome === null ? null : (
         <input type="hidden" name="outcome" value={query.outcome} />
       )}

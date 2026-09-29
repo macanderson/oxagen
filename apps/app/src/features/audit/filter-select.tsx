@@ -1,57 +1,87 @@
 "use client";
 // A filter select that applies itself (rev1 audit.md, Events): the design has
-// no Apply button beside Actor, Range and Result, so picking a value
-// submits the GET form the select sits in and the page reads the record again
-// with the new value in its URL. The form keeps an Apply button for a browser
-// running no script (events.tsx), so the filters work either way.
+// no Apply button beside Actor, Range and Result, so picking a value submits
+// the GET form the select sits in and the page reads the record again with the
+// new value in its URL. It is the app's Select (ADR-221), so the list opens on
+// the translucent menu surface, where a native <select> opens the operating
+// system's opaque menu.
 //
-// A pick from the open list (a click, a tap, or Enter in the list) applies at
-// once. A keyboard step on the closed select does not: Chromium fires `change`
-// on each ArrowDown, and submitting then would reload the page and drop focus
-// on every key (WCAG 3.2.2, audit.audit-prompt.md check 12). A value stepped
-// to by keyboard applies on Enter, or when focus leaves the select.
-import { type ComponentProps, useRef } from "react";
+// Only a pick from the open list applies: a click, a tap, or Enter on an
+// option. Typing a letter on the closed trigger picks a matching option
+// without opening the list, and applying that would reload the page and drop
+// focus on each key (WCAG 3.2.2, audit.audit-prompt.md check 12). Such a match
+// is ignored, so the trigger keeps its value. A keyboard user opens the list
+// with Enter, Space or an arrow key, and picks with Enter.
+//
+// Base UI keeps the value in a hidden input named `name`, and the form sends
+// that input. React writes the new value into it only when it renders again,
+// so the pick renders at once through flushSync and the form is submitted
+// after it, with the new value.
+//
+// Without script the list cannot open, so the filter cannot change. The
+// form's Apply button, shown only then (events.tsx), still sends the values
+// the page was drawn with.
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/ui/select";
 
-/** Keys that commit a choice from the select's open list. */
-const COMMIT = new Set(["Enter", " "]);
+/** One choice in a filter. A disabled choice is listed but cannot be picked. */
+type FilterOption = { value: string; label: string; disabled?: boolean };
 
-export function FilterSelect(
-  props: Omit<
-    ComponentProps<"select">,
-    "onChange" | "onKeyDown" | "onPointerDown" | "onBlur"
-  >,
-) {
-  // The last key pressed on the select, or null after a pointer press.
-  const lastKeyRef = useRef<string | null>(null);
-  // A value stepped to by keyboard that has not been applied yet.
-  const steppedRef = useRef(false);
-  const apply = (select: HTMLSelectElement) => {
-    steppedRef.current = false;
-    select.form?.requestSubmit();
-  };
+export function FilterSelect({
+  items,
+  defaultValue,
+  name,
+  disabled,
+  ...trigger
+}: {
+  items: readonly FilterOption[];
+  /** The value the page was drawn with, from its URL. */
+  defaultValue: string;
+  /** The query parameter the value travels as. A select with no name sends nothing. */
+  name?: string;
+  disabled?: boolean;
+  className?: string;
+  "aria-label": string;
+  "aria-describedby"?: string;
+  "data-testid"?: string;
+}) {
+  const [value, setValue] = useState(defaultValue);
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <select
-      {...props}
-      onPointerDown={() => {
-        lastKeyRef.current = null;
+    <Select
+      items={items}
+      value={value}
+      name={name}
+      disabled={disabled}
+      inputRef={inputRef}
+      onValueChange={(next, details) => {
+        if (next === null || next === value) return;
+        if (details.reason !== "item-press") return;
+        flushSync(() => setValue(next));
+        inputRef.current?.form?.requestSubmit();
       }}
-      onKeyDown={(event) => {
-        lastKeyRef.current = event.key;
-        if (event.key === "Enter" && steppedRef.current) {
-          event.preventDefault();
-          apply(event.currentTarget);
-        }
-      }}
-      onChange={(event) => {
-        if (lastKeyRef.current === null || COMMIT.has(lastKeyRef.current)) {
-          apply(event.currentTarget);
-          return;
-        }
-        steppedRef.current = true;
-      }}
-      onBlur={(event) => {
-        if (steppedRef.current) apply(event.currentTarget);
-      }}
-    />
+    >
+      <SelectTrigger {...trigger}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="w-max max-w-(--available-width) min-w-(--anchor-width)">
+        {items.map((item) => (
+          <SelectItem
+            key={item.value}
+            value={item.value}
+            disabled={item.disabled}
+          >
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
