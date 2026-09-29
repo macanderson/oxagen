@@ -2855,6 +2855,17 @@
       "consumes": []
     },
     {
+      "name": "list_studio_findings",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_tacho_hosts",
       "domain": "tacho",
       "surfaces": [

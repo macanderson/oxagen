@@ -94,6 +94,7 @@ import {
 import { toolStudioDraftGet } from "@oxagen/oxagen/contracts/tool.studio.draft.get";
 import { toolStudioReviewOpen } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import { toolStudioCredentialSet } from "@oxagen/oxagen/contracts/tool.studio.credential.set";
+import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.findings.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
@@ -230,6 +231,7 @@ import { toolStudioDraftSaveRoute } from "./tool.studio.draft.save";
 import { toolStudioDraftGetRoute } from "./tool.studio.draft.get";
 import { toolStudioReviewOpenRoute } from "./tool.studio.review.open";
 import { toolStudioCredentialSetRoute } from "./tool.studio.credential.set";
+import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
 import { killSwitchListRoute } from "./kill_switch.list";
@@ -1104,6 +1106,16 @@ const ROUTES: ThinRoute[] = [
     capability: toolStudioCredentialSet.name,
     body: { name: "stripe-live", kind: "secret", secret: "sk_test_fake_1" },
     invalidBody: { name: "stripe-live", kind: "secret" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.findings.list",
+    route: toolStudioFindingsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioFindingsList.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
     jsonGuard: true,
     status: 200,
   },

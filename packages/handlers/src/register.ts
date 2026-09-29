@@ -1541,6 +1541,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .setMcpCredentialHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_studio_findings",
+    async () =>
+      (await import("./mcp-studio/import/findings.list"))
+        .listStudioFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))

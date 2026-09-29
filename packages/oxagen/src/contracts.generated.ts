@@ -415,6 +415,7 @@ import "./contracts/tool.state.set";
 import "./contracts/tool.studio.credential.set";
 import "./contracts/tool.studio.draft.get";
 import "./contracts/tool.studio.draft.save";
+import "./contracts/tool.studio.findings.list";
 import "./contracts/tool.studio.review.open";
 import "./contracts/tool.version.list";
 import "./contracts/toolbelt.clone";

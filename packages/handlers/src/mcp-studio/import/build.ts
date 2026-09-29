@@ -86,6 +86,15 @@ export interface BuildInput {
   production: ReadonlyMap<string, string>;
   /** The workspace's credential references, `oxagen:credential/<name>`. */
   credentials: ReadonlySet<string>;
+  /**
+   * What an imported tool with no classification does to the build. Review
+   * refuses it (the default), because a steering PR must not carry a tool
+   * Oxagen cannot decide. list_studio_findings reports it as an error finding
+   * and builds the tool with its suggested classification, so the draft's
+   * other findings and its definition tokens still come back. A reported
+   * build's files are for reading only, never for a commit.
+   */
+  unclassified?: "refuse" | "report";
 }
 
 /** The folder a Review writes, and what it changed. */
@@ -121,6 +130,17 @@ const SELECTORS = {
 
 function refuse(reason: string, message: string): HandlerError {
   return new HandlerError({ code: "conflict", reason, message });
+}
+
+const LEVEL_ORDER: Record<Finding["level"], number> = { error: 0, warning: 1, info: 2 };
+
+/** A suggested classification in the contract's words. */
+function suggestedClassification(
+  upstream: UpstreamTool,
+  context: Parameters<typeof suggest>[1],
+): StudioClassification {
+  const s = suggest(upstream, context);
+  return { risk: s.risk, sideEffect: s.side_effect, egress: s.egress, impacts: [...s.impacts] };
 }
 
 /** Up to three zod issues as one sentence each. */
@@ -460,8 +480,8 @@ function parsedOrRefuse<T>(
 /**
  * The server folder the draft makes, from production's folder and the
  * draft's ops. Refuses with a `conflict` HandlerError when the folder would
- * not pass the steering checks, and before any imported tool lacks a
- * classification.
+ * not pass the steering checks, and when an imported tool lacks a
+ * classification unless `input.unclassified` is "report".
  */
 export function buildFolder(input: BuildInput): BuiltFolder {
   const { draft, imported, production } = input;
@@ -549,6 +569,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
   for (const [key, entry] of Object.entries(before)) {
     if (!staged.removed.has(key)) after[key] = entry;
   }
+  const context = { source: server.source.type, network: suggestNetwork(server) };
   const newKeys = new Map<string, string>();
   const unclassified: string[] = [];
   for (const identity of staged.imports.values()) {
@@ -563,7 +584,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     newKeys.set(identity.id, key);
     if (!staged.classify.has(identity.id)) unclassified.push(key);
   }
-  if (unclassified.length > 0) {
+  if (unclassified.length > 0 && input.unclassified !== "report") {
     throw refuse(
       "tools_unclassified",
       `Every imported tool needs a risk, a side effect, and an egress before Review opens a steering PR. Classify ${unclassified.join(", ")}.`,
@@ -578,7 +599,6 @@ export function buildFolder(input: BuildInput): BuiltFolder {
 
   const reclassified: BuiltFolder["reclassified"] = [];
   const accepted = new Set<string>();
-  const context = { source: server.source.type, network: suggestNetwork(server) };
   const described: string[] = [];
 
   // Existing entries first, in tools.toml's order, then the new ones.
@@ -602,8 +622,10 @@ export function buildFolder(input: BuildInput): BuiltFolder {
   for (const identity of staged.imports.values()) {
     if (identity.kind !== "new") continue;
     const key = newKeys.get(identity.id) as string;
-    const change = staged.classify.get(identity.id) as { op: ClassifyOp };
-    const c = classificationOfOp(change.op);
+    // Only a reported build reaches here without a classify op.
+    const change = staged.classify.get(identity.id);
+    const c =
+      change === undefined ? suggestedClassification(identity.upstream, context) : classificationOfOp(change.op);
     const entry: Record<string, unknown> = {};
     if (kind === "mcp") {
       if (identity.upstream.request.kind === "mcp" && identity.upstream.request.tool !== key) {
@@ -627,18 +649,15 @@ export function buildFolder(input: BuildInput): BuiltFolder {
 
   // A new tool's classification left as suggested, for lint's irreversible
   // check. A change to a tool already in tools.toml is a deliberate edit.
+  // An unclassified tool in a reported build is not counted: nobody accepted
+  // its suggestion, and its missing_classification error already stands.
   for (const identity of staged.imports.values()) {
     if (identity.kind !== "new") continue;
     const key = newKeys.get(identity.id) as string;
-    const op = (staged.classify.get(identity.id) as { op: ClassifyOp }).op;
-    const s = suggest(identity.upstream, context);
-    const suggestion: StudioClassification = {
-      risk: s.risk,
-      sideEffect: s.side_effect,
-      egress: s.egress,
-      impacts: [...s.impacts],
-    };
-    if (sameClassification(suggestion, classificationOfOp(op))) accepted.add(key);
+    const change = staged.classify.get(identity.id);
+    if (change === undefined) continue;
+    const suggestion = suggestedClassification(identity.upstream, context);
+    if (sameClassification(suggestion, classificationOfOp(change.op))) accepted.add(key);
   }
 
   const toolsValue: Record<string, unknown> = { schema: "mcp-tools/v1" };
@@ -685,10 +704,30 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     throw refuse("folder_invalid", `${server.name} does not lock. ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const findings = lint(
+  const linted: BuiltFolder["findings"] = lint(
     { name: server.name, server, tools, lock: nextLock, offered, notes: source?.notes ?? [] },
     { credentials: input.credentials, accepted_unchanged: accepted },
-  );
+  ).map((finding) => ({
+    rule: finding.rule,
+    level: finding.level,
+    tool: finding.tool ?? null,
+    field: finding.field ?? null,
+    message: finding.message,
+    fix: finding.fix,
+  }));
+  // A reported build's unclassified tools, first among the errors, then
+  // lint's findings. The sort is stable, so each level keeps lint's order.
+  const findings = [
+    ...unclassified.map((key) => ({
+      rule: "missing_classification",
+      level: "error" as const,
+      tool: key,
+      field: null,
+      message: `${key} has no risk, side effect, or egress yet. Oxagen decides each call from them, so Review refuses the draft until the tool is classified.`,
+      fix: `Classify ${key}: set its risk, side effect, and egress.`,
+    })),
+    ...linted,
+  ].sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 
   // The files.
   const files = new Map<string, string>();
@@ -739,13 +778,6 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     described,
     tested,
     tokens: { definitions: compiled.tokens.definitions, budget: compiled.exposure.definition_budget },
-    findings: findings.map((finding) => ({
-      rule: finding.rule,
-      level: finding.level,
-      tool: finding.tool ?? null,
-      field: finding.field ?? null,
-      message: finding.message,
-      fix: finding.fix,
-    })),
+    findings,
   };
 }

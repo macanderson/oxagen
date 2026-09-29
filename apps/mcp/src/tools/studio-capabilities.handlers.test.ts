@@ -24,6 +24,10 @@ import setMcpCredential, {
   metadata as setMcpCredentialMeta,
   schema as setMcpCredentialSchema,
 } from "./tool.studio.credential.set";
+import listStudioFindings, {
+  metadata as listStudioFindingsMeta,
+  schema as listStudioFindingsSchema,
+} from "./tool.studio.findings.list";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -88,5 +92,50 @@ describe("set_mcp_credential", () => {
         clientSecret: undefined,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("list_studio_findings", () => {
+  it("carries the contract's name and reads only", () => {
+    expect(listStudioFindingsMeta.name).toBe("list_studio_findings");
+    expect(listStudioFindingsMeta.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+    expect(Object.keys(listStudioFindingsSchema)).toEqual(["server"]);
+  });
+
+  it("invokes with the contract name and returns the findings", async () => {
+    const output = {
+      server: "billing",
+      basis: "published",
+      revision: null,
+      tokens: { definitions: 612, budget: 8000 },
+      findings: [
+        {
+          rule: "unknown_credential",
+          level: "error",
+          tool: null,
+          field: "auth.credential",
+          message: "auth.credential names oxagen:credential/billing-oauth-client, and the organization has no credential by that name, so every call would fail.",
+          fix: "Add oxagen:credential/billing-oauth-client in Oxagen, or set auth.credential to a credential the organization has.",
+        },
+      ],
+    };
+    mocks.invoke.mockResolvedValue(output);
+
+    const result = await listStudioFindings({ server: "billing" });
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith("list_studio_findings", { server: "billing" }, fakeCtx, {
+      surface: "mcp",
+    });
+    expect(result).toEqual(output);
+  });
+
+  it("refuses an output outside the contract", async () => {
+    mocks.invoke.mockResolvedValue({ server: "billing", basis: "branch" });
+    await expect(listStudioFindings({ server: "billing" })).rejects.toThrow();
   });
 });

@@ -2599,6 +2599,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "list_studio_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "list_tacho_hosts",
       "reads": [],

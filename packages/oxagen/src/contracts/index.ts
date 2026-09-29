@@ -295,6 +295,7 @@ import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
 import { toolStudioCredentialSet } from "./tool.studio.credential.set";
+import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { credentialGrantList } from "./credential.grant.list";
 import { killSwitchSet } from "./kill_switch.set";
 import { killSwitchList } from "./kill_switch.list";
@@ -966,6 +967,7 @@ export {
   toolStudioDraftGet,
   toolStudioReviewOpen,
   toolStudioCredentialSet,
+  toolStudioFindingsList,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
@@ -1397,6 +1399,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioDraftGet,
   toolStudioReviewOpen,
   toolStudioCredentialSet,
+  toolStudioFindingsList,
   credentialGrantList,
   killSwitchSet,
   killSwitchList,
