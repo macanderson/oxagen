@@ -19,8 +19,8 @@
 //
 // Sundays at 04:30 UTC, after the monthly snapshot retention's slot and clear
 // of the audit-partition rollover. Cross-tenant DML over every org's grants,
-// so it runs through withSystemDb — the explicit, audited RLS-bypass seam for
-// trusted cron jobs.
+// so it runs through withSystemDb, the explicit RLS-bypass seam for trusted
+// cron jobs.
 
 import { sql } from "drizzle-orm";
 import { createFunction } from "../create-function";
