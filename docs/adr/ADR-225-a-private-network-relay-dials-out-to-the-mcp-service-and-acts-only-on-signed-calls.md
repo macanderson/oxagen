@@ -102,8 +102,9 @@ HTTP server. And how fast a revoked relay stops.
     bearer token, basic auth, a named header, or a client certificate. A
     client certificate adds no header. The relay presents it in the TLS
     handshake with the upstream, and the envelope schema allows it only on an
-    `https` target. The secret never leaves the customer's network. The broker refuses to name a credential for an
-    organization below the Enterprise plan.
+    `https` target. The secret never leaves the customer's network. The
+    broker refuses to name a credential for an organization below the
+    Enterprise plan.
 
 ## Consequences
 
