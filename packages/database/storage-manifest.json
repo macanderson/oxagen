@@ -772,6 +772,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "draft_studio_description",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "enroll_host",
       "reads": [],

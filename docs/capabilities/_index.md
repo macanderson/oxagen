@@ -618,6 +618,7 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [create_relay](tool.relay.create.md) | [tool.relay.create.ts](../../packages/oxagen/src/contracts/tool.relay.create.ts) | api |
+| [draft_studio_description](tool.studio.description.draft.md) | [tool.studio.description.draft.ts](../../packages/oxagen/src/contracts/tool.studio.description.draft.ts) | api, mcp |
 | [get_studio_draft](tool.studio.draft.get.md) | [tool.studio.draft.get.ts](../../packages/oxagen/src/contracts/tool.studio.draft.get.ts) | api, mcp |
 | [import_tools](tool.import.md) | [tool.import.ts](../../packages/oxagen/src/contracts/tool.import.ts) | api, mcp |
 | [list_studio_findings](tool.studio.findings.list.md) | [tool.studio.findings.list.ts](../../packages/oxagen/src/contracts/tool.studio.findings.list.ts) | api, mcp |

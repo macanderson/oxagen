@@ -530,6 +530,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 ## tool
 
 - create_relay
+- draft_studio_description
 - get_studio_draft
 - import_tools
 - list_studio_findings

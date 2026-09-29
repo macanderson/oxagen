@@ -847,6 +847,17 @@
       "consumes": []
     },
     {
+      "name": "draft_studio_description",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "enroll_host",
       "domain": "tacho",
       "surfaces": [

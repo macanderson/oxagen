@@ -15,6 +15,8 @@ function folder(fields: Partial<BuiltFolder> = {}): BuiltFolder {
     tested: [],
     tokens: { definitions: 1200, budget: 8000 },
     findings: [],
+    tools: {},
+    offered: [],
     ...fields,
   };
 }

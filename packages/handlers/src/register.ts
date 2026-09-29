@@ -1560,6 +1560,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .listStudioFindingsHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "draft_studio_description",
+    async () =>
+      (await import("./mcp-studio/import/description.draft"))
+        .draftStudioDescriptionHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))

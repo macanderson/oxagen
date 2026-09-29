@@ -28,6 +28,10 @@ import listStudioFindings, {
   metadata as listStudioFindingsMeta,
   schema as listStudioFindingsSchema,
 } from "./tool.studio.findings.list";
+import draftStudioDescription, {
+  metadata as draftStudioDescriptionMeta,
+  schema as draftStudioDescriptionSchema,
+} from "./tool.studio.description.draft";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -137,5 +141,42 @@ describe("list_studio_findings", () => {
   it("refuses an output outside the contract", async () => {
     mocks.invoke.mockResolvedValue({ server: "billing", basis: "branch" });
     await expect(listStudioFindings({ server: "billing" })).rejects.toThrow();
+  });
+});
+
+describe("draft_studio_description", () => {
+  it("carries the contract's name, saves nothing, and is not idempotent", () => {
+    expect(draftStudioDescriptionMeta.name).toBe("draft_studio_description");
+    expect(draftStudioDescriptionMeta.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+    });
+    expect(Object.keys(draftStudioDescriptionSchema)).toEqual(["server", "tool"]);
+  });
+
+  it("invokes with the contract name and returns the suggestion", async () => {
+    const output = {
+      server: "billing",
+      tool: "list_charges",
+      description: "List a customer's charges, newest first. Amounts are in cents.",
+    };
+    mocks.invoke.mockResolvedValue(output);
+
+    const result = await draftStudioDescription({ server: "billing", tool: "list_charges" });
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "draft_studio_description",
+      { server: "billing", tool: "list_charges" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual(output);
+  });
+
+  it("refuses an empty suggestion", async () => {
+    mocks.invoke.mockResolvedValue({ server: "billing", tool: "list_charges", description: "" });
+    await expect(draftStudioDescription({ server: "billing", tool: "list_charges" })).rejects.toThrow();
   });
 });

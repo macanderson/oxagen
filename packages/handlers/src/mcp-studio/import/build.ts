@@ -118,6 +118,10 @@ export interface BuiltFolder {
     message: string;
     fix: string;
   }[];
+  /** The compiled tools, by tools.toml key. */
+  tools: CompiledServer["tools"];
+  /** Every tool the source offers, imported or not. */
+  offered: UpstreamTool[];
 }
 
 /** tools.toml's selector for each request kind. */
@@ -779,5 +783,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     tested,
     tokens: { definitions: compiled.tokens.definitions, budget: compiled.exposure.definition_budget },
     findings,
+    tools: compiled.tools,
+    offered,
   };
 }

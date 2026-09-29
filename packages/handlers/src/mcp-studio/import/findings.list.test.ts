@@ -142,7 +142,7 @@ async function refusal(promise: Promise<unknown>): Promise<HandlerError> {
   throw new Error("list_studio_findings did not refuse.");
 }
 
-const ORDER: Record<string, number> = { error: 0, warning: 1, info: 2 };
+const ORDER: Record<"error" | "warning" | "info", number> = { error: 0, warning: 1, info: 2 };
 
 /** Each finding's rule, level, tool, and field. */
 function found(findings: { rule: string; level: string; tool: string | null; field: string | null }[]) {
@@ -246,7 +246,6 @@ describe("list_studio_findings on a saved draft", () => {
   });
 });
 
-
 // ── Refusals ─────────────────────────────────────────────────────────────────
 
 describe("list_studio_findings refuses", () => {
@@ -256,7 +255,7 @@ describe("list_studio_findings refuses", () => {
     expect(err.code).toBe("not_found");
     expect(err.reason).toBe("folder_not_found");
     expect(err.message).toBe(
-      "billing has no draft, and acme/steering has no tools/servers/billing/server.toml on main. Set up the server's connection in Studio, then check it.",
+      "billing has no draft, and acme/steering has no tools/servers/billing/server.toml on main. Set up the server's connection in Studio first.",
     );
   });
 

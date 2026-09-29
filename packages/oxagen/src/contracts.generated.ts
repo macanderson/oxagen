@@ -415,6 +415,7 @@ import "./contracts/tool.relay.create";
 import "./contracts/tool.relay.revoke";
 import "./contracts/tool.state.set";
 import "./contracts/tool.studio.credential.set";
+import "./contracts/tool.studio.description.draft";
 import "./contracts/tool.studio.draft.get";
 import "./contracts/tool.studio.draft.save";
 import "./contracts/tool.studio.findings.list";

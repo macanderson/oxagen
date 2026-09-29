@@ -25,11 +25,11 @@ import {
 import type { StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { SERVER_TOML_NAME, serverFolderPath } from "@oxagen/oxagen/steering-repo/paths";
 import { toolsSteeringHost, type ToolsPullRequestScope } from "../../tools.pr.open";
-import { buildFolder } from "./build";
+import { buildFolder, type BuiltFolder } from "./build";
 import { authorizeStudio } from "./checks";
 import { readFolder, workspaceCredentials, type StudioReviewHost } from "./review.open";
 import { importSource, type ImportedSource } from "./source";
-import { postgresStudioDraftStore, type StudioDraftStore } from "./store";
+import { postgresStudioDraftStore, type StoredStudioDraft, type StudioDraftStore } from "./store";
 
 export interface ListStudioFindingsDeps {
   store: Pick<StudioDraftStore, "get">;
@@ -40,46 +40,67 @@ export interface ListStudioFindingsDeps {
   importSource: (source: StudioSource) => Promise<ImportedSource>;
 }
 
+/** A server folder as Studio sees it now, and the draft it was built from. */
+export interface StudioFolderView {
+  folder: BuiltFolder;
+  /** The saved draft, or null when the folder is production's. */
+  draft: StoredStudioDraft | null;
+}
+
+/**
+ * Build one server folder the way Review does, in report mode, without writing
+ * anything: the saved draft, or production's folder when there is no draft.
+ * Draft reads a tool's definition from the same build, so the findings panel
+ * and the Draft button see one folder.
+ */
+export async function buildStudioFolderView(
+  deps: Omit<ListStudioFindingsDeps, "authorize">,
+  scope: ToolsPullRequestScope,
+  server: string,
+): Promise<StudioFolderView> {
+  const draft = await deps.store.get(scope, server);
+  const host = deps.host();
+  const repo = await host.resolveRepository(scope);
+  const productionSha = await host.branchHead(repo, repo.defaultBranch);
+  if (productionSha === null) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "production_branch_missing",
+      message: `${repo.fullName} has no ${repo.defaultBranch} branch.`,
+    });
+  }
+  const [production, credentials, imported] = await Promise.all([
+    readFolder(host, repo, productionSha, server),
+    deps.credentials(scope),
+    draft === null || draft.source === null ? Promise.resolve(null) : deps.importSource(draft.source),
+  ]);
+  if (draft === null && !production.has(SERVER_TOML_NAME)) {
+    throw new HandlerError({
+      code: "not_found",
+      reason: "folder_not_found",
+      message: `${server} has no draft, and ${repo.fullName} has no ${serverFolderPath(server)}/${SERVER_TOML_NAME} on ${repo.defaultBranch}. Set up the server's connection in Studio first.`,
+    });
+  }
+
+  // With no draft, an empty one: no ops, production's server.toml, and no
+  // source, so the build reads the production lock's tools.
+  const folder = buildFolder({
+    draft: draft ?? { server, ops: [], serverToml: null, source: null },
+    imported,
+    production,
+    credentials,
+    unclassified: "report",
+  });
+  return { folder, draft };
+}
+
 export function createListStudioFindingsHandler(
   deps: ListStudioFindingsDeps,
 ): CapabilityHandler<typeof toolStudioFindingsList> {
   return async (input, ctx): Promise<ToolStudioFindingsListOutput> => {
     await deps.authorize(toolStudioFindingsList, ctx);
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-
-    const draft = await deps.store.get(scope, input.server);
-    const host = deps.host();
-    const repo = await host.resolveRepository(scope);
-    const productionSha = await host.branchHead(repo, repo.defaultBranch);
-    if (productionSha === null) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "production_branch_missing",
-        message: `${repo.fullName} has no ${repo.defaultBranch} branch.`,
-      });
-    }
-    const [production, credentials, imported] = await Promise.all([
-      readFolder(host, repo, productionSha, input.server),
-      deps.credentials(scope),
-      draft === null || draft.source === null ? Promise.resolve(null) : deps.importSource(draft.source),
-    ]);
-    if (draft === null && !production.has(SERVER_TOML_NAME)) {
-      throw new HandlerError({
-        code: "not_found",
-        reason: "folder_not_found",
-        message: `${input.server} has no draft, and ${repo.fullName} has no ${serverFolderPath(input.server)}/${SERVER_TOML_NAME} on ${repo.defaultBranch}. Set up the server's connection in Studio, then check it.`,
-      });
-    }
-
-    // With no draft, an empty one: no ops, production's server.toml, and no
-    // source, so the build reads the production lock's tools.
-    const folder = buildFolder({
-      draft: draft ?? { server: input.server, ops: [], serverToml: null, source: null },
-      imported,
-      production,
-      credentials,
-      unclassified: "report",
-    });
+    const { folder, draft } = await buildStudioFolderView(deps, scope, input.server);
     return {
       server: folder.server,
       basis: draft === null ? "published" : "draft",
