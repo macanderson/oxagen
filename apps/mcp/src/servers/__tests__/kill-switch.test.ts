@@ -8,7 +8,8 @@ import type { KillSwitchGateReads, KillSwitchSnapshot } from "@oxagen/agent/runt
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const tenancy = vi.hoisted(() => ({ scopes: [] as Array<{ orgId: string; workspaceId: string }> }));
-vi.mock("@oxagen/tenancy", () => ({
+vi.mock("@oxagen/tenancy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/tenancy")>()),
   runInTenantScope: async <T>(scope: { orgId: string; workspaceId: string }, fn: () => Promise<T> | T): Promise<T> => {
     tenancy.scopes.push(scope);
     return fn();
