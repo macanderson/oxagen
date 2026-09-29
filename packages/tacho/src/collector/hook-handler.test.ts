@@ -9,7 +9,12 @@ import { describe, expect, it } from "vitest";
 import { digestBytes, digestJcs, type JsonValue } from "../digest";
 import { translateCursorPayload } from "../claude-code/cursor-adapter";
 import { verifyChain } from "../chain";
-import type { ClaudeCodeContext } from "../claude-code/context";
+import {
+  type ClaudeCodeContext,
+  deliveredContext,
+  type DeliveredContext,
+  digestText,
+} from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
 import {
   stellaToolUseId,
@@ -27,6 +32,7 @@ import {
   CONTAINMENT_REQUIRED_REASON,
   containmentUnmet,
   handleHookEvent,
+  type HookReplay,
   type PolicyView,
 } from "./hook-handler";
 import { pushCredentialBasis } from "./push-basis";
@@ -111,6 +117,20 @@ function toolUseIdOf(events: TachoEvent[]): string | undefined {
   return undefined;
 }
 
+/** A steering manifest whose `text_digest` names `text`. */
+function manifestNaming(text: string) {
+  return {
+    schema: "oxagen.steering.manifest/1" as const,
+    delivers: ["must" as const],
+    budget_tokens: 4096,
+    spent_tokens: 4,
+    included: 0,
+    cut: 0,
+    text_digest: digestText(text),
+    items: [],
+  };
+}
+
 function chainsOf(events: TachoEvent[]): Map<string, TachoEvent[]> {
   const out = new Map<string, TachoEvent[]>();
   for (const event of events) {
@@ -149,7 +169,7 @@ describe("handleHookEvent over the recorded session", () => {
       all.find((e) => e.kind === "agent_start")?.attrs?.[
         "oxagen.context_digest"
       ],
-    ).toMatch(/^sha256:/);
+    ).toBe(digestText("You are governed by Oxagen."));
     // Read is allowed by rule: an explicit allow answer.
     expect(decisions["04-PreToolUse.json"]).toMatchObject({
       hookSpecificOutput: { permissionDecision: "allow" },
@@ -435,6 +455,10 @@ describe("handleHookEvent over the recorded session", () => {
       policy_reason_code: "host_suspended",
       policy_source: "human",
     });
+    // The bundle carries text, but a refused start hands the agent none, so
+    // the start names no digest and no characters delivered.
+    expect(outcome.events[0]?.attrs?.["oxagen.context_digest"]).toBeUndefined();
+    expect(outcome.events[0]?.attrs?.["oxagen.delivered_chars"]).toBe("0");
   });
 
   describe("a mandate that requires the contained tier (ADR-152)", () => {
@@ -1187,6 +1211,93 @@ describe("handleHookEvent over the recorded session", () => {
     expect(first.events.some((e) => e.kind === "steering.manifest")).toBe(
       false,
     );
+  });
+
+  it("seals on a replayed start the text the client delivered, not the daemon's current bundle", async () => {
+    // The daemon was down at the start, so `tacho-hook` answered from its
+    // cached bundle with the old text. The daemon's bundle has changed since.
+    const { deps } = harness({
+      context: { system: "New text", manifest: manifestNaming("New text") },
+    });
+    const receivedAt = toProtocolTimestamp(
+      Date.parse("2026-09-10T09:00:00.000Z"),
+    );
+    const stale = await handleHookEvent(
+      { session_id: "sess-replay-old", hook_event_name: "SessionStart" },
+      {},
+      deps,
+      { receivedAt, deliveredContext: deliveredContext("Old text") },
+    );
+    expect(
+      stale.events.find((e) => e.kind === "agent_start")?.attrs,
+    ).toMatchObject({
+      "hook.replayed": "1",
+      "oxagen.context_digest": digestText("Old text"),
+      "oxagen.delivered_chars": String("Old text".length),
+    });
+    // The current manifest names other text, so it is not sealed.
+    expect(stale.events.some((e) => e.kind === "steering.manifest")).toBe(
+      false,
+    );
+
+    // A replay that delivered the text the manifest names seals its frame.
+    const current = await handleHookEvent(
+      { session_id: "sess-replay-new", hook_event_name: "SessionStart" },
+      {},
+      deps,
+      { receivedAt, deliveredContext: deliveredContext("New text") },
+    );
+    expect(
+      current.events.find((e) => e.kind === "agent_start")?.attrs?.[
+        "oxagen.context_digest"
+      ],
+    ).toBe(digestText("New text"));
+    expect(current.events.some((e) => e.kind === "steering.manifest")).toBe(
+      true,
+    );
+  });
+
+  it("seals no context digest on a replayed start whose spool recorded no delivered text", async () => {
+    // A spool written by a client from before `delivered_context`. The
+    // daemon's bundle says nothing about what that client handed the agent,
+    // so the start seals no digest, no count, and no manifest frame, even
+    // though the manifest names the text the daemon holds.
+    const system = "You are governed by Oxagen.";
+    const { deps } = harness({
+      context: { system, manifest: manifestNaming(system) },
+    });
+    const receivedAt = toProtocolTimestamp(
+      Date.parse("2026-09-10T09:00:00.000Z"),
+    );
+    const replays: [string, HookReplay][] = [
+      ["sess-replay-legacy", { receivedAt }],
+      // A value that is not a delivery is read as no delivery.
+      [
+        "sess-replay-malformed",
+        {
+          receivedAt,
+          deliveredContext: {
+            digest: "sha256:not-hex",
+            chars: 4,
+          } as unknown as DeliveredContext,
+        },
+      ],
+    ];
+    for (const [session, replay] of replays) {
+      const outcome = await handleHookEvent(
+        { session_id: session, hook_event_name: "SessionStart" },
+        {},
+        deps,
+        replay,
+      );
+      const started = outcome.events.find((e) => e.kind === "agent_start");
+      expect(started?.attrs?.["hook.replayed"]).toBe("1");
+      expect(started?.attrs?.["oxagen.context_digest"]).toBeUndefined();
+      expect(started?.attrs?.["oxagen.delivered_chars"]).toBeUndefined();
+      expect(outcome.events.some((e) => e.kind === "steering.manifest")).toBe(
+        false,
+      );
+    }
   });
 
   it("pairs each body with the event it belongs to, across the parent and its subagent", async () => {

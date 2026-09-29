@@ -9,6 +9,7 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import { RESERVED_AGENT_NAMES } from "../wire";
+import { digestText } from "./context";
 import {
   agentFromArgv,
   decideLocally,
@@ -242,9 +243,15 @@ describe("runTachoHook", () => {
         join(paths.spool, readdirSync(paths.spool)[0] as string),
         "utf8",
       ),
-    ) as { schema: string; evaluation: { decision: string } };
+    ) as {
+      schema: string;
+      evaluation: { decision: string };
+      delivered_context?: unknown;
+    };
     expect(spooled.schema).toBe("tacho.spool.v1");
     expect(spooled.evaluation.decision).toBe("deny");
+    // Only a session start hands the agent steering text to record.
+    expect(spooled.delivered_context).toBeUndefined();
     // The real socket client against a missing socket reports a connect error quickly.
     const started = Date.now();
     const noSocket = await runTachoHook({
@@ -255,6 +262,37 @@ describe("runTachoHook", () => {
     });
     expect(noSocket.path).toBe("local");
     expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it("records in the spool what a session start from the cached bundle handed the agent", async () => {
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const host = testHostFile(signer, signer.sign(unsignedBundle()));
+    writeHostFile(paths.hostFile, host);
+    const down = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "s",
+        hook_event_name: "SessionStart",
+      }),
+      post: async () => ({ status: 500, body: "x" }),
+    });
+    expect(down.path).toBe("local");
+    expect(JSON.parse(down.stdout)).toMatchObject({
+      hookSpecificOutput: { additionalContext: "You are governed by Oxagen." },
+    });
+    const files = readdirSync(paths.spool);
+    expect(files).toHaveLength(1);
+    const spooled = JSON.parse(
+      readFileSync(join(paths.spool, files[0] as string), "utf8"),
+    ) as { delivered_context?: unknown };
+    // The replay seals this, the text the agent was handed, whatever bundle
+    // the daemon holds by the time it replays.
+    expect(spooled.delivered_context).toEqual({
+      digest: digestText("You are governed by Oxagen."),
+      chars: "You are governed by Oxagen.".length,
+    });
   });
 
   it("reads --harness off argv and defaults to Claude Code for anything else", () => {
@@ -358,6 +396,27 @@ describe("runTachoHook", () => {
     expect(
       decideLocally(paused, parse("SessionStart"), now).response,
     ).toMatchObject({ continue: false });
+    // A start records what it handed the agent, for the spool: the text's
+    // digest and length, or a count of zero when it handed nothing.
+    expect(
+      decideLocally(active, parse("SessionStart"), now).delivered,
+    ).toEqual({
+      digest: digestText("You are governed by Oxagen."),
+      chars: "You are governed by Oxagen.".length,
+    });
+    expect(
+      decideLocally(
+        { ...active, bundle: { ...active.bundle, context: { system: null } } },
+        parse("SessionStart"),
+        now,
+      ).delivered,
+    ).toEqual({ chars: 0 });
+    expect(
+      decideLocally(paused, parse("SessionStart"), now).delivered,
+    ).toEqual({ chars: 0 });
+    expect(
+      decideLocally(active, parse("UserPromptSubmit"), now).delivered,
+    ).toBeUndefined();
     expect(
       decideLocally(active, parse("UserPromptSubmit"), now).response,
     ).toEqual({});

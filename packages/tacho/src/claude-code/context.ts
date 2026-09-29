@@ -4,6 +4,7 @@
  */
 import { createHash } from "node:crypto";
 import type { ChainCursor } from "../chain";
+import { isSha256Digest, type Sha256Digest } from "../digest";
 import type { TachoEvent } from "../envelope";
 
 export type AgentIdentity = TachoEvent["agent"];
@@ -46,6 +47,47 @@ export const DEFAULT_SECRET_ENV_PATTERN =
 
 export function digestText(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
+
+/**
+ * The steering text a `SessionStart` answer handed the agent. `tacho-hook`
+ * writes it into the spool file when it answers from the cached bundle, so
+ * the daemon's replay can seal what the agent saw. The bundle the daemon
+ * holds by then may be a newer one.
+ */
+export interface DeliveredContext {
+  /**
+   * `digestText` of the bundle's `context.system`, which is what the control
+   * plane's manifest names as `text_digest`. Absent when the answer carried
+   * no text.
+   */
+  digest?: Sha256Digest;
+  /** Its length in UTF-16 code units, which `oxagen.delivered_chars` counts. */
+  chars: number;
+}
+
+/** What an answer that hands the agent `text` delivered. Null means no text. */
+export function deliveredContext(text: string | null): DeliveredContext {
+  return text === null
+    ? { chars: 0 }
+    : { digest: digestText(text), chars: text.length };
+}
+
+/**
+ * The delivery a replay carries, or undefined when it carries none that can
+ * be read. A replay comes from a spool file or a local post, and neither is
+ * parsed on the way in. A malformed value is treated as absent, because
+ * sealing it would claim a digest nothing proves.
+ */
+export function readDeliveredContext(
+  value: unknown,
+): DeliveredContext | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { digest, chars } = value as Record<string, unknown>;
+  if (typeof chars !== "number" || !Number.isSafeInteger(chars) || chars < 0)
+    return undefined;
+  if (digest === undefined) return { chars };
+  return isSha256Digest(digest) ? { digest, chars } : undefined;
 }
 
 /** Keep only the harness-relevant, non-secret environment members. */

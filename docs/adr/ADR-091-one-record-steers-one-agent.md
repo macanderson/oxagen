@@ -4,7 +4,7 @@
 - **Date:** 2026-09-18
 - **Owners:** platform
 - **Related:** issue #2592 (records stored and never applied), ADR-051
-  (superseded delivery), ADR-061 §8 (the steering version is the ledger
+  (superseded delivery), ADR-093 and ADR-144 (the assembler), ADR-061 §8 (the steering version is the ledger
   length), ADR-043 (runtime excision), `docs/specs/tacho/spec.md` §7.5,
   `oxagen-roadmap:docs/oxagen/specs/mission-control/spec.md` §10.4,
   `packages/handlers/src/lib/tacho-steering.ts`
@@ -112,6 +112,77 @@ This is an owner's override, made by Mac on 2026-09-21 with the proof still
 outstanding, and recorded here and on #2592 rather than taken quietly. It
 exempts one column. The next change that touches governance ceremony gets the
 freeze as written, and the freeze still lifts only on the #2592 proof.
+
+## Amendment 2026-09-29: the delivery path as built
+
+This amendment brings §1, §2, §4 and the Consequences in line with the code at
+`main` on 2026-09-29. The decision stands. Active `must` and `should` records
+reach every enrolled host through `context.system`. What changed is how the
+text is built. §6 and its 2026-09-21 amendment are unchanged.
+
+**The assembler replaced the compiler (§1).** `compileSteering` no longer
+exists. `readWorkspaceSteering` (`packages/handlers/src/lib/tacho-steering.ts`)
+reads the rows through `packages/agent/src/runtime/published-steering.ts` and
+hands them to the assembler in `packages/steering-assembler/src/assemble.ts`
+(ADR-093, ADR-144). The row filter is the one §1 names, with one change: every
+force is read. The assembler delivers only `must` and `should`. A `may` or
+`info` record appears in the signed manifest as cut for its tier, so the
+record shows it reached no agent. §3 still holds.
+
+**Records are ordered by recency (§2).** ADR-144 replaced slug order. The
+assembler puts `must` before `should`, then the most recently activated record
+first, then by slug. The text is still deterministic in the set of
+records, so the etag still moves only when a record changes.
+
+**The budget is 8,000 characters (§4).** The host still rejects a `context.system` longer than 16,384
+characters. Claude Code reads less: it replaces any `additionalContext` past
+10,000 characters with a file path and a preview. So the budget is
+`CONTEXT_SYSTEM_BUDGET_TOKENS`, 2,000 budget tokens (`ceil(utf8_bytes / 4)`),
+which is at most 8,000 characters (PR #4065). The assembler no longer stops at
+the first record that does not fit. It skips that record, tries the next, and
+ends the text with a line that says how many records it left out. A short
+`should` record can therefore be delivered while a longer `must` record is
+cut. The manifest marks each skipped record with the reason `budget`.
+
+**The manifest and the start event carry the proof (§6).** A host that
+advertises the `steering_manifest` feature receives `context.manifest` on the
+bundle. Its `text_digest` is `sha256:` followed by the hex SHA-256 of the UTF-8
+text. The collector seals `oxagen.context_digest` on the `SessionStart` event
+with the same formula over the same string. The proof §6 asks for is those two
+values being equal on one real run, for a bundle whose text includes a merged
+record.
+
+**The cache key covers each record's content (Consequences).** The compiled
+text is cached per plane and workspace. The key is the promotions ledger
+length, the count of active pinned records of any force, and an MD5 over each
+such record's id, pinned version and classification. A record edited in place
+therefore moves the key even when the ledger length and the count do not.
+
+**The control envelope announces the etag the host is served (§2).** A host
+with skills is served a bundle whose etag is a digest of the policy and the
+skills together. Until 2026-09-29 the control envelope announced the policy
+etag alone. The daemon compared the two, found them different, refetched, got
+`not_modified`, and asked again on its next poll, so a new text for a skills
+host waited behind that loop. `servedBundleEtag` in
+`packages/handlers/src/lib/tacho-host.ts` now builds both. `get_tacho_bundle`,
+the command fetch and the event ingest read the skills before they build the
+envelope, outside the tenant transaction, so the envelope names the etag
+`get_tacho_bundle` would serve.
+
+**A replayed start names the text the client delivered (§6).** When the
+daemon is down, `tacho-hook` answers `SessionStart` from its cached bundle and
+spools the event. The spool now records the digest and the length of the text
+the client handed the agent. A replay seals that digest, not the daemon's
+current one, because the bundle may have changed in between. A spool written
+before this change carries no digest, and its replay seals neither attribute.
+The manifest frame is sealed on a replay only when its `text_digest` equals
+the delivered digest. A missing digest means the text cannot be checked. It
+does not mean the text differed.
+
+**A refused start names no text (§6).** A start the collector refuses, such
+as one on a suspended host, hands the agent nothing. It seals
+`oxagen.delivered_chars` as `0` and no `oxagen.context_digest`, so a refused
+run cannot stand as the proof.
 
 ## Consequences
 

@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
-import type { ClaudeCodeContext } from "../claude-code/context";
+import {
+  type ClaudeCodeContext,
+  deliveredContext,
+} from "../claude-code/context";
 import {
   bundleSigner,
   TEST_ENROLLMENT,
@@ -284,7 +287,12 @@ describe("a replayed hook", () => {
     const h = harness();
     const record = await opened(h);
     record.control.messages.push(message("cmd_1", "Wrap up and stop."));
-    const replayed = await handleHookEvent(start, {}, h.deps, spooled);
+    // The client answered with the prefix alone and recorded that in the
+    // spool, which is what the replay seals.
+    const replayed = await handleHookEvent(start, {}, h.deps, {
+      ...spooled,
+      deliveredContext: deliveredContext("You are governed by Oxagen."),
+    });
     expect(
       replayed.events.some((e) => e.kind === "oxagen:command_applied"),
     ).toBe(false);
