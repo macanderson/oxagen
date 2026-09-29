@@ -15,6 +15,7 @@ export interface Answer {
 export class FakeResponse extends EventEmitter implements LocalServersResponse {
   statusCode = 200;
   writableEnded = false;
+  destroyed = false;
   readonly headers: Record<string, unknown> = {};
   readonly answered: Promise<Answer>;
   private settle: (answer: Answer) => void = () => undefined;
@@ -56,6 +57,7 @@ export class FakeResponse extends EventEmitter implements LocalServersResponse {
 
   /** The client hangs up before the route answers. */
   hangUp(): void {
+    this.destroyed = true;
     this.emit("close");
   }
 }

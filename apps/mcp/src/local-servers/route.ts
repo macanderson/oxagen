@@ -10,7 +10,7 @@
 import {
   LOCAL_SERVERS_NEXT_PATH,
   LOCAL_SERVERS_REPLY_PATH,
-  type LocalGatewayBroker,
+  type LongPollBroker,
 } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import type { ServedHeaders, ServedNext, ServedResponse } from "../servers/middleware";
 import type { MachineAuthResult } from "./auth";
@@ -28,13 +28,15 @@ export interface LocalServersRequest {
 export interface LocalServersResponse extends ServedResponse {
   on(event: "close", listener: () => void): unknown;
   readonly writableEnded?: boolean;
+  /** True once the connection is gone, even when its close event fired before the route listened. */
+  readonly destroyed?: boolean;
 }
 
 export type LocalServersMiddleware = (req: LocalServersRequest, res: LocalServersResponse, next: ServedNext) => void;
 
 export interface LocalServersRouteDeps {
   authenticate(headers: ServedHeaders): Promise<MachineAuthResult>;
-  broker(): LocalGatewayBroker;
+  broker(): LongPollBroker;
   /** How long a poll waits for a call. The broker's own wait when unset. */
   waitMs?: number;
   log?(event: string, fields: Record<string, unknown>): void;
@@ -57,19 +59,39 @@ function send(res: LocalServersResponse, status: number, body?: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/**
+ * Aborts when the machine hangs up. The route listens before it checks the
+ * key, so a hangup during the check counts too.
+ */
+function hangupOf(res: LocalServersResponse): AbortSignal {
+  const hangup = new AbortController();
+  if (res.destroyed === true) hangup.abort();
+  else res.on("close", () => hangup.abort());
+  return hangup.signal;
+}
+
 async function servePoll(
   machine: string,
+  hangup: AbortSignal,
   res: LocalServersResponse,
   deps: LocalServersRouteDeps,
 ): Promise<void> {
   // A machine that hangs up stops waiting in the broker, so a call that
   // arrives next is not handed to a request nobody reads.
-  const hangup = new AbortController();
-  res.on("close", () => hangup.abort());
-  const delivery = await deps.broker().next(machine, hangup.signal, deps.waitMs);
-  if (hangup.signal.aborted) return;
-  if (delivery === undefined) send(res, 204);
-  else send(res, 200, delivery);
+  const broker = deps.broker();
+  const delivery = await broker.next(machine, hangup, deps.waitMs);
+  if (delivery === undefined) {
+    if (!hangup.aborted) send(res, 204);
+    return;
+  }
+  if (hangup.aborted || res.writableEnded === true || res.destroyed === true) {
+    // The machine hung up after the broker handed the delivery over. Nobody
+    // reads this response, so the delivery goes back for the next poll.
+    broker.release(machine, delivery);
+    deps.log?.("local_servers.delivery_released", { machine });
+    return;
+  }
+  send(res, 200, delivery);
 }
 
 function serveReply(machine: string, body: unknown, res: LocalServersResponse, deps: LocalServersRouteDeps): void {
@@ -107,13 +129,14 @@ export function createLocalServersRoute(deps: LocalServersRouteDeps): LocalServe
       send(res, 405, { error: { code: "method_not_allowed", message: `Use ${poll ? "GET" : "POST"} on ${path}.` } });
       return;
     }
+    const hangup = poll ? hangupOf(res) : undefined;
     void (async () => {
       const auth = await deps.authenticate(req.headers);
       if (!auth.ok) {
         send(res, auth.status, auth.body);
         return;
       }
-      if (poll) await servePoll(auth.machine, res, deps);
+      if (hangup !== undefined) await servePoll(auth.machine, hangup, res, deps);
       else serveReply(auth.machine, req.body, res, deps);
     })().catch((error: unknown) => {
       deps.log?.("local_servers.route_failed", { path, error: error instanceof Error ? error.message : String(error) });

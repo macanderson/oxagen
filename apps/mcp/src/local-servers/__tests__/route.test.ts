@@ -1,9 +1,10 @@
 // route.test.ts: the two routes a machine polls for local tool calls, with a
 // fake broker and a fake response (#4773).
 import {
+  createInProcessBroker,
   LOCAL_SERVERS_NEXT_PATH,
   LOCAL_SERVERS_REPLY_PATH,
-  type LocalGatewayBroker,
+  type LongPollBroker,
 } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import { describe, expect, it, vi } from "vitest";
 import type { MachineAuthResult } from "../auth";
@@ -11,21 +12,36 @@ import { createLocalServersRoute, type LocalServersRequest, type LocalServersRou
 import { FakeResponse, serve } from "./http";
 
 // apps/mcp does not depend on tacho, so the delivery type comes through the broker.
-type Delivery = NonNullable<Awaited<ReturnType<LocalGatewayBroker["next"]>>>;
+type Delivery = NonNullable<Awaited<ReturnType<LongPollBroker["next"]>>>;
 
 const MACHINE = "tch_laptop01";
 const HEADERS = { authorization: "Bearer ox_gateway_key", "x-tacho-host": MACHINE };
 const ALLOWED: MachineAuthResult = { ok: true, machine: MACHINE };
 const DELIVERY = { kind: "discover", id: "n".repeat(22), deadline_ms: 1_000 } as unknown as Delivery;
 
-function brokerWith(parts: Partial<LocalGatewayBroker> = {}): LocalGatewayBroker {
+function brokerWith(parts: Partial<LongPollBroker> = {}): LongPollBroker {
   return {
     connected: () => false,
     dispatch: () => Promise.reject(new Error("dispatch is not part of the route")),
     next: () => Promise.resolve(undefined),
     reply: () => ({ accepted: true }),
+    release: () => false,
     ...parts,
   };
+}
+
+/** A broker with one delivery queued for MACHINE, as a call that came between two polls leaves it. */
+async function brokerHolding(delivery: Delivery): Promise<LongPollBroker> {
+  const broker = createInProcessBroker();
+  await broker.next(MACHINE, AbortSignal.abort());
+  void broker
+    .dispatch(MACHINE, delivery, {
+      signal: new AbortController().signal,
+      pickupBy: Date.now() + 60_000,
+      replyWithinMs: 60_000,
+    })
+    .catch(() => undefined);
+  return broker;
 }
 
 function routeWith(overrides: Partial<LocalServersRouteDeps> = {}) {
@@ -119,9 +135,10 @@ describe("createLocalServersRoute", () => {
     const next = (_machine: string, signal: AbortSignal) =>
       new Promise<Delivery | undefined>((resolve) => {
         seen = signal;
-        signal.addEventListener("abort", () => resolve(DELIVERY));
+        signal.addEventListener("abort", () => resolve(undefined));
       });
-    const { route } = routeWith({ broker: () => brokerWith({ next }) });
+    const release = vi.fn(() => true);
+    const { route } = routeWith({ broker: () => brokerWith({ next, release }) });
     const res = new FakeResponse();
     route(poll(), res, () => undefined);
     await vi.waitFor(() => expect(seen).toBeDefined());
@@ -129,6 +146,60 @@ describe("createLocalServersRoute", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(seen?.aborted).toBe(true);
     expect(res.writableEnded).toBe(false);
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it("gives the delivery back when the machine hangs up after the broker handed it over", async () => {
+    const next = (_machine: string, signal: AbortSignal) =>
+      new Promise<Delivery | undefined>((resolve) => {
+        signal.addEventListener("abort", () => resolve(DELIVERY));
+      });
+    const release = vi.fn((_machine: string, _delivery: Delivery) => true);
+    const log = vi.fn();
+    const { route } = routeWith({ broker: () => brokerWith({ next, release }), log });
+    const res = new FakeResponse();
+    const writeHead = vi.spyOn(res, "writeHead");
+    route(poll(), res, () => undefined);
+    await new Promise((resolve) => setImmediate(resolve));
+    res.hangUp();
+    await vi.waitFor(() => expect(release).toHaveBeenCalledWith(MACHINE, DELIVERY));
+    expect(writeHead).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith("local_servers.delivery_released", { machine: MACHINE });
+  });
+
+  it("takes nothing from the broker when the machine hangs up during the key check", async () => {
+    const broker = await brokerHolding(DELIVERY);
+    let allow: (result: MachineAuthResult) => void = () => undefined;
+    const authenticate = () =>
+      new Promise<MachineAuthResult>((resolve) => {
+        allow = resolve;
+      });
+    const { route } = routeWith({ authenticate, broker: () => broker });
+    const res = new FakeResponse();
+    const writeHead = vi.spyOn(res, "writeHead");
+    route(poll(), res, () => undefined);
+    res.hangUp();
+    allow(ALLOWED);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(writeHead).not.toHaveBeenCalled();
+
+    // The machine's next poll takes the delivery the first poll never wrote.
+    const again = await serve(routeWith({ broker: () => broker }).route, poll());
+    expect(again).toMatchObject({ status: 200 });
+    if (again === "passed") throw new Error("the route passed a request on its own path");
+    expect(JSON.parse(again.body)).toEqual(DELIVERY);
+  });
+
+  it("treats a connection already gone when the route starts as a hangup", async () => {
+    const broker = await brokerHolding(DELIVERY);
+    const { route } = routeWith({ broker: () => broker });
+    const res = new FakeResponse();
+    res.destroyed = true;
+    const writeHead = vi.spyOn(res, "writeHead");
+    route(poll(), res, () => undefined);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(writeHead).not.toHaveBeenCalled();
+    await expect(serve(route, poll())).resolves.toMatchObject({ status: 200 });
   });
 
   it("answers 204 to a reply the broker accepts, for the key's machine", async () => {
@@ -185,14 +256,31 @@ describe("createLocalServersRoute", () => {
     });
   });
 
-  it("writes nothing to a response that has already ended", async () => {
-    const { route } = routeWith({ broker: () => brokerWith({ next: () => Promise.resolve(DELIVERY) }) });
+  it("writes nothing to a response that has already ended, and gives its delivery back", async () => {
+    const release = vi.fn((_machine: string, _delivery: Delivery) => true);
+    const { route } = routeWith({ broker: () => brokerWith({ next: () => Promise.resolve(DELIVERY), release }) });
     const res = new FakeResponse();
     res.writableEnded = true;
     const writeHead = vi.spyOn(res, "writeHead");
     route(poll(), res, () => undefined);
     await new Promise((resolve) => setImmediate(resolve));
     expect(writeHead).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledWith(MACHINE, DELIVERY);
+  });
+
+  it("gives the delivery back when the connection is gone but its close event has not fired", async () => {
+    const release = vi.fn((_machine: string, _delivery: Delivery) => true);
+    const res = new FakeResponse();
+    const next = () => {
+      res.destroyed = true;
+      return Promise.resolve(DELIVERY);
+    };
+    const { route } = routeWith({ broker: () => brokerWith({ next, release }) });
+    const writeHead = vi.spyOn(res, "writeHead");
+    route(poll(), res, () => undefined);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(writeHead).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledWith(MACHINE, DELIVERY);
   });
 
   it("runs without a log", async () => {

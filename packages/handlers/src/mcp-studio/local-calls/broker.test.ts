@@ -4,7 +4,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TransportError } from "@oxagen/mcp-studio";
 import { digestMismatch, type Delivery } from "@oxagen/tacho/local-servers";
-import { createInProcessBroker, LONG_POLL_WAIT_MS, PRESENCE_MS, type LocalGatewayBroker } from "./broker";
+import {
+  createInProcessBroker,
+  LONG_POLL_WAIT_MS,
+  PRESENCE_MS,
+  type LocalGatewayBroker,
+  type LongPollBroker,
+} from "./broker";
 import { newNonce, signLocalCall } from "./envelope";
 import { DEFINITION_HASH, FILES_DIGEST, FILES_LAUNCH, MACHINE, testSigner } from "./test-support";
 
@@ -70,7 +76,14 @@ async function markPresent(broker: LocalGatewayBroker, machine = MACHINE): Promi
   await broker.next(machine, AbortSignal.abort());
 }
 
-let broker: LocalGatewayBroker;
+let broker: LongPollBroker;
+
+/** Nothing waits in the machine's queue: a poll that has not hung up gets nothing before its short wait ends. */
+async function expectEmptyQueue(machine = MACHINE): Promise<void> {
+  const poll = broker.next(machine, live(), 1);
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(poll).resolves.toBeUndefined();
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -157,7 +170,7 @@ describe("dispatch", () => {
     });
     await vi.advanceTimersByTimeAsync(10_000);
     await settled;
-    await expect(broker.next(MACHINE, AbortSignal.abort())).resolves.toBeUndefined();
+    await expectEmptyQueue();
   });
 
   it("fails as a timeout, sent, when the machine takes the call and does not answer", async () => {
@@ -190,7 +203,7 @@ describe("dispatch", () => {
       code: "not_sent",
       sent: false,
     });
-    await expect(broker.next(MACHINE, AbortSignal.abort())).resolves.toBeUndefined();
+    await expectEmptyQueue();
   });
 
   it("reports an abort before pickup as not sent, and drops the delivery from the queue", async () => {
@@ -199,7 +212,7 @@ describe("dispatch", () => {
     const call = broker.dispatch(MACHINE, callDelivery(), options(controller.signal));
     controller.abort();
     await expect(call).rejects.toMatchObject({ code: "not_sent", sent: false });
-    await expect(broker.next(MACHINE, AbortSignal.abort())).resolves.toBeUndefined();
+    await expectEmptyQueue();
   });
 
   it("reports an abort after pickup as a timeout that was sent", async () => {
@@ -318,6 +331,15 @@ describe("next", () => {
     expect(broker.connected(MACHINE)).toBe(false);
   });
 
+  it("takes nothing from the queue for a poll whose machine already hung up", async () => {
+    await markPresent(broker);
+    const delivery = callDelivery();
+    void broker.dispatch(MACHINE, delivery, options()).catch(() => undefined);
+    await expect(broker.next(MACHINE, AbortSignal.abort())).resolves.toBeUndefined();
+    expect(broker.connected(MACHINE)).toBe(true);
+    await expect(broker.next(MACHINE, live())).resolves.toBe(delivery);
+  });
+
   it("hands one delivery to one poll when two machines poll", async () => {
     const mine = broker.next(MACHINE, live(), 1_000);
     const theirs = broker.next(OTHER, live(), 1_000);
@@ -326,5 +348,89 @@ describe("next", () => {
     await expect(mine).resolves.toBe(delivery);
     await vi.advanceTimersByTimeAsync(1_000);
     await expect(theirs).resolves.toBeUndefined();
+  });
+});
+
+describe("release", () => {
+  it("puts a taken delivery back at the front of the queue, and the next poll takes it", async () => {
+    await markPresent(broker);
+    const first = callDelivery();
+    const second = callDelivery();
+    const call = broker.dispatch(MACHINE, first, options());
+    void broker.dispatch(MACHINE, second, options()).catch(() => undefined);
+    await expect(broker.next(MACHINE, live())).resolves.toBe(first);
+    expect(broker.release(MACHINE, first)).toBe(true);
+    await expect(broker.next(MACHINE, live())).resolves.toBe(first);
+    await expect(broker.next(MACHINE, live())).resolves.toBe(second);
+    expect(broker.reply(MACHINE, resultReply(idOf(first)))).toEqual({ accepted: true });
+    await expect(call).resolves.toMatchObject({ kind: "result" });
+  });
+
+  it("hands a released delivery straight to a poll that waits", async () => {
+    await markPresent(broker);
+    const delivery = callDelivery();
+    void broker.dispatch(MACHINE, delivery, options()).catch(() => undefined);
+    await broker.next(MACHINE, live());
+    const waiting = broker.next(MACHINE, live());
+    expect(broker.release(MACHINE, delivery)).toBe(true);
+    await expect(waiting).resolves.toBe(delivery);
+  });
+
+  it("refuses a reply to a released delivery until a poll takes it again", async () => {
+    await markPresent(broker);
+    const delivery = callDelivery();
+    void broker.dispatch(MACHINE, delivery, options()).catch(() => undefined);
+    await broker.next(MACHINE, live());
+    broker.release(MACHINE, delivery);
+    expect(broker.reply(MACHINE, resultReply(idOf(delivery)))).toEqual({ accepted: false, reason: "unknown_id" });
+  });
+
+  it("runs the pickup clock again, so a released delivery no poll takes fails as disconnected", async () => {
+    await markPresent(broker);
+    const delivery = callDelivery();
+    const call = broker.dispatch(MACHINE, delivery, { ...options(), replyWithinMs: 60_000 });
+    await broker.next(MACHINE, live());
+    broker.release(MACHINE, delivery);
+    const settled = expect(call).rejects.toMatchObject({ code: "disconnected", sent: false });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settled;
+    await expectEmptyQueue();
+  });
+
+  it("fails a released delivery at once when its envelope expired while the machine held it", async () => {
+    await markPresent(broker);
+    const delivery = callDelivery();
+    const call = broker.dispatch(MACHINE, delivery, { ...options(), replyWithinMs: 60_000 });
+    await broker.next(MACHINE, live());
+    await vi.advanceTimersByTimeAsync(12_000);
+    broker.release(MACHINE, delivery);
+    const settled = expect(call).rejects.toMatchObject({ code: "disconnected", sent: false });
+    await vi.advanceTimersByTimeAsync(0);
+    await settled;
+  });
+
+  it("reports a caller's abort after a release as not sent", async () => {
+    await markPresent(broker);
+    const controller = new AbortController();
+    const delivery = callDelivery();
+    const call = broker.dispatch(MACHINE, delivery, options(controller.signal));
+    await broker.next(MACHINE, live());
+    broker.release(MACHINE, delivery);
+    controller.abort();
+    await expect(call).rejects.toMatchObject({ code: "not_sent", sent: false });
+    await expectEmptyQueue();
+  });
+
+  it("takes back only a delivery this machine took and has not answered", async () => {
+    await markPresent(broker);
+    await markPresent(broker, OTHER);
+    const delivery = callDelivery();
+    void broker.dispatch(MACHINE, delivery, options()).catch(() => undefined);
+    expect(broker.release(MACHINE, delivery)).toBe(false);
+    await expect(broker.next(MACHINE, live())).resolves.toBe(delivery);
+    expect(broker.release(OTHER, delivery)).toBe(false);
+    expect(broker.release(MACHINE, callDelivery())).toBe(false);
+    expect(broker.reply(MACHINE, resultReply(idOf(delivery)))).toEqual({ accepted: true });
+    expect(broker.release(MACHINE, delivery)).toBe(false);
   });
 });

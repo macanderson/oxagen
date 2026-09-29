@@ -8,12 +8,12 @@
 // second instance would need a shared queue before it could carry local
 // calls: until then a call on one instance reads "disconnected" while the
 // machine polls the other.
-import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
+import { createInProcessBroker, type LongPollBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 
-let broker: LocalGatewayBroker | undefined;
+let broker: LongPollBroker | undefined;
 
 /** The process's broker, built on first use. */
-export function localGatewayBroker(): LocalGatewayBroker {
+export function localGatewayBroker(): LongPollBroker {
   broker ??= createInProcessBroker();
   return broker;
 }
