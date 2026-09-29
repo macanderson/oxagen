@@ -1,5 +1,6 @@
 "use client";
-// Text that ends in an ellipsis shows its whole value in a hover card when a
+// Text that shows less than its whole value, because it ends in an ellipsis or
+// because the code shortened it, shows the whole value in a hover card when a
 // pointer rests on it or focus lands on it. It covers every body cell of every
 // table, where src/app/globals.css keeps text on one line, and any element
 // marked `data-truncate` elsewhere. One card serves the page, as the mockup's
@@ -21,8 +22,10 @@ const SCAN_INTERVAL_MS = 200;
 const BODY_CELL = "tbody :is(td, th):not([colspan])";
 
 /**
- * Marks truncated text outside a table. An empty value shows the element's own
- * text; a value shows that instead, for text the element shortens itself.
+ * Marks truncated text, in a table or not. An empty value shows the element's
+ * own text. A value shows that instead, for text the element shortens itself,
+ * such as a digest cut to its first characters. Text that leaves out part of
+ * its value counts as cut even when it fits its box (#4692).
  */
 const TRUNCATE = "[data-truncate]";
 
@@ -41,11 +44,28 @@ const FOCUSABLE = `a[href], button, input, select, textarea, summary, [tabindex]
  */
 const CONTROL = `a[href], button, input, select, textarea, summary, [role="button"], [role="link"], [role="checkbox"], [role="menuitem"], [role="option"], [role="radio"], [role="switch"], [role="tab"]`;
 
-/** Whether `cell`, or anything in it, has text that runs past its own box. */
+/**
+ * Whether `node` shows less than its whole value: its text runs past its own
+ * box, or its text leaves out part of the value it carries in `data-truncate`.
+ * Both are read with each run of whitespace as one space, because a row prints
+ * a value on one line that its mark carries with newlines.
+ */
+function showsLess(node: HTMLElement): boolean {
+  const text = oneLine(node.textContent);
+  if (text === "") return false;
+  if (node.scrollWidth > node.clientWidth) return true;
+  const given = oneLine(node.getAttribute("data-truncate") ?? "");
+  return given !== "" && !text.includes(given);
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/** Whether `cell`, or anything in it, shows less than its whole value. */
 function isCut(cell: HTMLElement): boolean {
   for (const node of [cell, ...cell.querySelectorAll<HTMLElement>("*")])
-    if (node.scrollWidth > node.clientWidth && node.textContent.trim() !== "")
-      return true;
+    if (showsLess(node)) return true;
   return false;
 }
 
@@ -99,10 +119,10 @@ function touchesMeasured(record: MutationRecord): boolean {
 }
 
 /**
- * The element nearest `target`, up to and including its body cell, whose text
- * runs past its own box. Focus on a cut cell itself reads the whole cell. An
- * element marked `data-truncate` counts when its own text is cut, in a table
- * or not. Null when the target is in neither, sits in a value with its own
+ * The element nearest `target`, up to and including its body cell, that shows
+ * less than its whole value. Focus on a cut cell itself reads the whole cell.
+ * An element marked `data-truncate` counts when its own text is cut, in a
+ * table or not. Null when the target is in neither, sits in a value with its own
  * hover card, or every value in its path fits. A value with a title shows
  * nothing to a pointer, which the browser serves, but shows the card to focus,
  * which the browser gives nothing (#4674).
@@ -127,12 +147,7 @@ export function clippedElement(
     node !== null;
     node = node.parentElement
   ) {
-    if (
-      node instanceof HTMLElement &&
-      node.scrollWidth > node.clientWidth &&
-      node.textContent.trim() !== ""
-    )
-      return node;
+    if (node instanceof HTMLElement && showsLess(node)) return node;
     if (node === cell) break;
   }
   // A cut cell with nothing focusable in it takes a keyboard stop of its own.

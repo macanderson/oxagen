@@ -1,4 +1,4 @@
-h1:K4nqR+7EQIopbJYJNLprcPHkWYl+woB94FhlRHoAtGg=
+h1:I7VZAODjL4k8OMDL7HiW3hOngPwOAGIFv3MRrnHzkdA=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -239,3 +239,4 @@ h1:K4nqR+7EQIopbJYJNLprcPHkWYl+woB94FhlRHoAtGg=
 20260928170000_mcp_server_discoveries.sql h1:Aiotv5Pnn3C68kq4ro2mfl8HXvU7+Ynp7fPP2BesgDg=
 20260928180000_mcp_relays.sql h1:8F3xz3HgEajxkwndm3eBWBqaq/lIn2q0hC8fvbokfaE=
 20260929000000_work_schema.sql h1:a6+Gbld/htTm0rjZbXntWoJQdf5wPt08nnbRb7BY5lI=
+20260929124500_agent_versions_rls.sql h1:3visZstj0mTWLAU8uuK4/INuoRPyqZqjxR7yQ3D9Cew=

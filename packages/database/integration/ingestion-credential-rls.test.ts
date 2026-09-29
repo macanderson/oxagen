@@ -15,8 +15,10 @@
  * it there — drop the policies and every assertion below fails.
  *
  * Superuser and RLS: a superuser bypasses RLS even under FORCE, so the
- * isolation assertions run as a purpose-built non-superuser role via SET LOCAL
- * ROLE, exactly like rls.test.ts. The superuser session seeds and cleans up.
+ * isolation assertions run as the real `oxagen_app` role via SET LOCAL ROLE,
+ * exactly like rls.test.ts. They see the grants the migrations install,
+ * including the SELECT on the parent that the child policies need. Missing
+ * role provisioning fails. The superuser session seeds and cleans up.
  *
  * CI: rls-integration job. Local:
  *   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
@@ -34,7 +36,11 @@ const WS_B = "00000000-0000-0000-0012-000000000002";
 const CONN_A = "00000000-0000-0000-0013-000000000001";
 const CONN_B = "00000000-0000-0000-0013-000000000002";
 
-const APP_ROLE = "ingestion_rls_test_role";
+/**
+ * The real application role. Non-superuser and no BYPASSRLS, so the policies
+ * apply. The migrations create it, and beforeAll fails when it is missing.
+ */
+const APP_ROLE = "oxagen_app";
 
 /** The three tables under test, and the child column each policy joins on. */
 const CREDENTIAL_TABLES = [
@@ -44,23 +50,15 @@ const CREDENTIAL_TABLES = [
 ] as const;
 
 beforeAll(async () => {
-  await sql.unsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
-        CREATE ROLE "${APP_ROLE}" NOLOGIN NOSUPERUSER;
-      END IF;
-    END$$
-  `);
-  await sql.unsafe(`GRANT USAGE ON SCHEMA ingestion TO "${APP_ROLE}"`);
-  // SELECT on the parent is what the child policies' subquery needs; without it
-  // the policy errors rather than filtering.
-  await sql.unsafe(
-    `GRANT SELECT ON ingestion.source_connections TO "${APP_ROLE}"`,
-  );
-  for (const t of CREDENTIAL_TABLES) {
-    await sql.unsafe(
-      `GRANT SELECT, INSERT, DELETE ON ingestion.${t} TO "${APP_ROLE}"`,
+  // Require the migrated role. A role this suite granted for itself would
+  // prove only its own grants, and the child policies error rather than filter
+  // when the role lacks SELECT on source_connections.
+  const [role] = await sql<{ exists: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${APP_ROLE}) AS exists
+  `;
+  if (!role?.exists) {
+    throw new Error(
+      "Ingestion credential RLS proof requires the migrated oxagen_app role",
     );
   }
 
@@ -124,19 +122,6 @@ afterAll(async () => {
     await tx`DELETE FROM workspace.workspaces WHERE id IN (${WS_A}, ${WS_B})`;
     await tx`DELETE FROM org.organizations WHERE id IN (${ORG_A}, ${ORG_B})`;
   });
-
-  for (const t of CREDENTIAL_TABLES) {
-    await sql
-      .unsafe(`REVOKE ALL ON ingestion.${t} FROM "${APP_ROLE}"`)
-      .catch(() => undefined);
-  }
-  await sql
-    .unsafe(`REVOKE ALL ON ingestion.source_connections FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql
-    .unsafe(`REVOKE USAGE ON SCHEMA ingestion FROM "${APP_ROLE}"`)
-    .catch(() => undefined);
-  await sql.unsafe(`DROP ROLE IF EXISTS "${APP_ROLE}"`).catch(() => undefined);
 
   await sql.end({ timeout: 5 });
 });

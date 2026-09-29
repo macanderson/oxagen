@@ -92,6 +92,33 @@ ClickHouse.
 - This package must not import `@oxagen/database`, which depends on it. The
   migration lock opens its own Postgres connection for that reason.
 
+## Execution attribution
+
+`tool_invocations.execution_step_id` names the run a tool call belonged to.
+The caller sets it to the same key it hands the metered AI port, so a
+`tool_invocations` row joins to its `token_usage` rows on that column. The
+rule of record is the comment on `CapabilityContext.executionStepId` in
+`packages/oxagen/src/types.ts`.
+
+Every row goes through `insertToolInvocation` (`src/clickhouse.ts`). Two files
+call it:
+
+- `buildInvocationPayload` in `packages/agent/src/runtime/materialize-tools.ts`
+  builds the row for every capability call and external MCP tool call that
+  goes through `materializeTools`.
+- `emitGraphDeletionTelemetry` in `packages/handlers/src/graph.telemetry.ts`
+  builds the row for a graph delete. Nothing calls it today (#1380).
+
+Both write `ctx.executionStepId ?? null`. A call with no run behind it, from
+the API, from MCP, or by a person, writes NULL. Do not fill the column with a
+request id, a message id, or a fresh UUID. A made-up key joins to nothing, and
+a reader cannot tell it from a real one.
+
+Two tests hold this. `tools/scripts/tool-invocation-execution-identity.test.ts`
+finds every file that calls `insertToolInvocation` and fails on a bare
+`execution_step_id: null`. `src/tool-invocation-execution-join.integration.test.ts`
+runs the join against a live ClickHouse.
+
 ## Tests
 
 ```bash
