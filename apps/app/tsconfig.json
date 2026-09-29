@@ -24,6 +24,7 @@
     ".next/types/**/*.ts",
     "*.ts",
     "e2e/**/*.ts",
+    "live/**/*.ts",
     "scripts/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", "src/test/arch/probes"]
