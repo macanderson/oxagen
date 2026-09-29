@@ -1740,6 +1740,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "get_studio_draft",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_subscription",
       "reads": [],
@@ -2740,6 +2750,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "open_studio_review",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "parse_memory_import",
       "reads": [],
@@ -3373,6 +3393,16 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "save_studio_draft",
+      "reads": [],
+      "surfaces": [
         "api",
         "mcp"
       ],

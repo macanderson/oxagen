@@ -87,6 +87,9 @@ import { billingStatementExport } from "@oxagen/oxagen/contracts/billing.stateme
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { toolStudioDraftSave } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+import { toolStudioDraftGet } from "@oxagen/oxagen/contracts/tool.studio.draft.get";
+import { toolStudioReviewOpen } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
@@ -219,6 +222,9 @@ import { billingStatementExportRoute } from "./billing.statement.export";
 import { toolVersionListRoute } from "./tool.version.list";
 import { toolClassificationSetRoute } from "./tool.classification.set";
 import { toolImportRoute } from "./tool.import";
+import { toolStudioDraftSaveRoute } from "./tool.studio.draft.save";
+import { toolStudioDraftGetRoute } from "./tool.studio.draft.get";
+import { toolStudioReviewOpenRoute } from "./tool.studio.review.open";
 import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
 import { killSwitchListRoute } from "./kill_switch.list";
@@ -1048,6 +1054,40 @@ const ROUTES: ThinRoute[] = [
     capability: toolImport.name,
     body: { serverId: "mcs_1", tools: ["search"] },
     invalidBody: { serverId: "mcs_1", tools: [] },
+    status: 200,
+  },
+  {
+    file: "tool.studio.draft.save",
+    route: toolStudioDraftSaveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDraftSave.name,
+    body: {
+      server: "ledger",
+      ops: [{ kind: "import", tool: "search" }],
+      revision: 0,
+    },
+    invalidBody: { server: "builtin", ops: [] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.draft.get",
+    route: toolStudioDraftGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDraftGet.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.review.open",
+    route: toolStudioReviewOpenRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioReviewOpen.name,
+    body: { server: "ledger", revision: 1 },
+    invalidBody: { server: "ledger", revision: 0 },
+    jsonGuard: true,
     status: 200,
   },
   {
