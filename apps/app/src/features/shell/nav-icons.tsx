@@ -1,4 +1,4 @@
-// Lucide icons for the nav keys. Identity is an icon, never an emoji.
+// Phosphor icons for the nav keys. Identity is an icon, never an emoji.
 import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import {
   BuildingsIcon,

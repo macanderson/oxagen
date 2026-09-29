@@ -16,7 +16,7 @@
 // conditional contents, the way the flyout's log does, because a region
 // inserted in the same commit as its own text is announced unreliably. A
 // failure is an alert, like the flyout's refusals.
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { ThumbsDownIcon, ThumbsUpIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
@@ -154,7 +154,7 @@ export function AssistantReplyFeedback({
           }}
           className={VERDICT_BUTTON}
         >
-          <ThumbsUp aria-hidden="true" className="size-3.5" />
+          <ThumbsUpIcon aria-hidden="true" className="size-3.5" />
           {t("useful")}
         </button>
         <button
@@ -169,7 +169,7 @@ export function AssistantReplyFeedback({
           }}
           className={VERDICT_BUTTON}
         >
-          <ThumbsDown aria-hidden="true" className="size-3.5" />
+          <ThumbsDownIcon aria-hidden="true" className="size-3.5" />
           {t("wrong")}
         </button>
       </div>

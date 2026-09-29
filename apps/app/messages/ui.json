@@ -239,7 +239,7 @@
         "photo": "Photo"
       },
       "icon": "Icon",
-      "iconHint": "Lucide glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
+      "iconHint": "Phosphor glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
       "letters": "Letters",
       "lettersHint": "Up to {max}.",
       "typeface": "Typeface",
