@@ -13,7 +13,7 @@ Three capabilities hold the draft and open the PR. You can call each one over th
 | `get_studio_draft` | `POST /v1/{org}/{ws}/tools/studio/draft/get` | Reads the stored draft |
 | `open_studio_review` | `POST /v1/{org}/{ws}/tools/studio/review` | Opens the steering PR, or adds a commit to the open one |
 
-An org Owner or Admin, or a workspace Owner, can call all three. An API key acts as the person who created it. When an agent calls `open_studio_review`, a person approves the call first.
+An org Owner or Admin, or a workspace Owner, can call all three. An API key acts as the person who created it. That role check is what each call enforces, on the API and through the MCP tool alike.
 
 ## Save a draft
 
@@ -35,12 +35,15 @@ A draft holds at most 2,000 edits in 8 MiB, a 256 KiB `server.toml`, and a 25 Mi
 
 ## Keep credentials out
 
-A draft holds no credential, and neither does the steering PR or its body.
+A saved test becomes a line of `tests/calls.jsonl` in the steering repo, and a credential in git history costs a rotation. So Oxagen refuses a credential it can recognize by name.
 
 - `server.toml` names a credential by reference only, as `oxagen:credential/<name>`.
 - A saved test keeps the request as Studio built it, before the gateway added the credential.
 - The save refuses a test whose request carries an `authorization`, `proxy-authorization`, or `cookie` header, with `test_holds_credential`. Remove the header and save the test again.
-- Review checks the saved tests again before it writes anything. A draft stored before the save checked tests still opens no PR while a test in it carries one of those headers.
+- It refuses the same way when any other header or query parameter has a name that reads like a credential, such as `X-Api-Key` or `?access_token=`. A server may place its key anywhere, and the draft does not say where.
+- Review checks the saved tests again before it writes anything. A draft stored before the save checked tests still opens no PR while a test in it carries one.
+
+What this does not catch is a credential under a name that reads like nothing, such as `?v=`. Read a saved test before you open the review.
 
 ## Open the review
 

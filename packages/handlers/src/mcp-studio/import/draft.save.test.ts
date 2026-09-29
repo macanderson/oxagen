@@ -158,6 +158,52 @@ describe("save_studio_draft", () => {
     expect(store.save).not.toHaveBeenCalled();
   });
 
+  it("refuses a saved test whose custom header name reads like a credential", async () => {
+    const { store, run } = saveRig();
+    const err = await refusal(
+      run({
+        server: "billing",
+        ops: [testOp({ method: "GET", path: "/charges", headers: { "X-Api-Key": "sk_live_9" } })],
+      }),
+    );
+    expect(err.reason).toBe("test_holds_credential");
+    expect(err.message).toContain("carries the header X-Api-Key, whose name reads like a credential");
+    expect(err.message).not.toContain("sk_live_9");
+    expect(store.save).not.toHaveBeenCalled();
+  });
+
+  it("refuses a saved test whose query parameter name reads like a credential", async () => {
+    const { store, run } = saveRig();
+    const err = await refusal(
+      run({
+        server: "billing",
+        ops: [testOp({ method: "GET", path: "/charges", query: { access_token: "tok_7" } })],
+      }),
+    );
+    expect(err.reason).toBe("test_holds_credential");
+    expect(err.message).toContain("carries the query parameter access_token");
+    expect(err.message).not.toContain("tok_7");
+    expect(store.save).not.toHaveBeenCalled();
+  });
+
+  it("saves a test whose header and query names read like nothing", async () => {
+    const { store, run } = saveRig();
+    // Idempotency-Key is the case the name test must not refuse: it ends in
+    // key and carries no credential.
+    await run({
+      server: "billing",
+      ops: [
+        testOp({
+          method: "GET",
+          path: "/charges",
+          headers: { "Idempotency-Key": "b3f1", "X-Request-Id": "r-9" },
+          query: { limit: "10", page: "2" },
+        }),
+      ],
+    });
+    expect(store.save).toHaveBeenCalledOnce();
+  });
+
   it("refuses a server.toml that does not validate", async () => {
     const { store, run } = saveRig();
     const err = await refusal(run({ server: "billing", ops: [], serverToml: 'name = "billing"\n' }));
