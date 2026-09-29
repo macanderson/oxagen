@@ -1511,6 +1511,9 @@ importers:
 
   packages/handlers:
     dependencies:
+      '@cedar-policy/cedar-wasm':
+        specifier: 4.13.0
+        version: 4.13.0
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
@@ -1565,6 +1568,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@oxagen/relay-broker':
         specifier: workspace:*
         version: link:../relay-broker

@@ -17,6 +17,9 @@ function folder(fields: Partial<BuiltFolder> = {}): BuiltFolder {
     findings: [],
     tools: {},
     offered: [],
+    // The body reads neither; these tests never touch them.
+    compiled: {} as BuiltFolder["compiled"],
+    lock: {} as BuiltFolder["lock"],
     ...fields,
   };
 }

@@ -24,6 +24,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.studio.findings.list";
 import type { StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { SERVER_TOML_NAME, serverFolderPath } from "@oxagen/oxagen/steering-repo/paths";
+import type { SteeringRepository } from "../../context.steering.github";
 import { toolsSteeringHost, type ToolsPullRequestScope } from "../../tools.pr.open";
 import { buildFolder, type BuiltFolder } from "./build";
 import { authorizeStudio } from "./checks";
@@ -45,6 +46,8 @@ export interface StudioFolderView {
   folder: BuiltFolder;
   /** The saved draft, or null when the folder is production's. */
   draft: StoredStudioDraft | null;
+  /** The steering repository the folder was read from. */
+  repo: SteeringRepository;
 }
 
 /**
@@ -91,7 +94,7 @@ export async function buildStudioFolderView(
     credentials,
     unclassified: "report",
   });
-  return { folder, draft };
+  return { folder, draft, repo };
 }
 
 export function createListStudioFindingsHandler(

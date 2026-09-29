@@ -122,6 +122,10 @@ export interface BuiltFolder {
   tools: CompiledServer["tools"];
   /** Every tool the source offers, imported or not. */
   offered: UpstreamTool[];
+  /** The whole compiled server: environments, auth, and exposure. */
+  compiled: CompiledServer;
+  /** The lock the folder carries after the Review. */
+  lock: McpToolsLock;
 }
 
 /** tools.toml's selector for each request kind. */
@@ -785,5 +789,7 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     findings,
     tools: compiled.tools,
     offered,
+    compiled,
+    lock: nextLock,
   };
 }
