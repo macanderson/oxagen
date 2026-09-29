@@ -1,4 +1,5 @@
-## Self-Evaluation — served-call gates coverage audit (PR #4728, #4666) — 2026-09-28
+## Served-call gates coverage audit
+PR #4728, issue #4666, 2026-09-28.
 ### What I set out to do
 Audit the tests on fix/served-call-gates for unreached branches in apps/mcp/src/servers/call.ts, for asserts that pass without checking their behavior, for mock shapes that break in CI, and for the GitLab 401 paths. Add tests only where they pin a stated invariant or a money path. Nothing could run.
 ### What I actually did (measurable deltas)
@@ -15,6 +16,6 @@ Audit the tests on fix/served-call-gates for unreached branches in apps/mcp/src/
 ### What surprised me about this codebase/product
 The served path claims the approval inside call.ts, but the credential resolves inside the studio library. The file's own comment on claim order does not hold across that seam.
 ### Risks I am leaving behind (untouched on purpose, and why)
-- Credential failure after the claim uses the approval. Production code is out of scope for this lane.
+- Credential failure after the claim used the approval. Production code was out of scope for this lane. The lead fixed it in fc21f1ca5: runTool now reads the credential before the claim.
 - readSwitchTargets and the localTransport env name have no test.
 ### Confidence in the result: medium (the tests follow existing patterns, but none has run in CI)
