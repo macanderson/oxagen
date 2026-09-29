@@ -67,9 +67,17 @@ type Reads = {
   connections?: Read<ReturnType<typeof connectionList>>;
   grants?: Read<ReturnType<typeof credentialGrantPage>>;
   orgRole?: OrgRole;
+  cursor?: string | null;
+  rows?: number;
 };
 
-function renderTab({ connections, grants, orgRole = "owner" }: Reads = {}) {
+function renderTab({
+  connections,
+  grants,
+  orgRole = "owner",
+  cursor = null,
+  rows = 50,
+}: Reads = {}) {
   // The two panels as the Providers tab stacks them, below the roster.
   return withIntl(
     <>
@@ -81,7 +89,8 @@ function renderTab({ connections, grants, orgRole = "owner" }: Reads = {}) {
       <GrantsLog
         at={at}
         orgRole={orgRole}
-        cursor={null}
+        cursor={cursor}
+        rows={rows}
         read={grants ?? readOk(credentialGrantPage())}
       />
     </>,
@@ -234,6 +243,7 @@ describe("Credential grants log", () => {
         at={at}
         orgRole="owner"
         cursor="cur_2"
+        rows={50}
         read={readOk(credentialGrantPage({ items: [] }))}
       />,
     );
@@ -249,9 +259,35 @@ describe("Credential grants log", () => {
     renderTab({
       grants: readOk(credentialGrantPage({ nextCursor: "cur_2" })),
     });
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+    const pages = within(
+      screen.getByRole("navigation", { name: "Credential grant pages" }),
+    );
+    expect(pages.getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
       `${CONNECTIONS}?cursor=cur_2`,
+    );
+    expect(pages.getByRole("button", { name: "First page" })).toBeDisabled();
+  });
+
+  it("keeps a picked size on both steps of the log, and steps back to the newest page (#4693)", () => {
+    renderTab({
+      cursor: "cur_1",
+      rows: 10,
+      grants: readOk(credentialGrantPage({ nextCursor: "cur_2" })),
+    });
+    const pages = within(
+      screen.getByRole("navigation", { name: "Credential grant pages" }),
+    );
+    expect(pages.getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      `${CONNECTIONS}?rows=10`,
+    );
+    expect(pages.getByRole("link", { name: "Next page" })).toHaveAttribute(
+      "href",
+      `${CONNECTIONS}?rows=10&cursor=cur_2`,
+    );
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "10",
     );
   });
 

@@ -17,18 +17,7 @@ import { RowsPager } from "@/ui/pagination";
 /** A size Rows offers, and the first page of the list at that size. */
 type LinkPagerSize = { size: number; first: SafePath };
 
-export function LinkPager({
-  label,
-  rowsLabel,
-  previousLabel,
-  nextLabel,
-  perPage,
-  sizes,
-  range,
-  previous,
-  next,
-  className,
-}: {
+export type LinkPagerProps = {
   /** The pager's name as a landmark. */
   label: string;
   rowsLabel: string;
@@ -44,7 +33,20 @@ export function LinkPager({
   next: SafePath | null;
   /** Classes on the pager's row, such as the inset of the panel it sits in. */
   className?: string;
-}) {
+};
+
+export function LinkPager({
+  label,
+  rowsLabel,
+  previousLabel,
+  nextLabel,
+  perPage,
+  sizes,
+  range,
+  previous,
+  next,
+  className,
+}: LinkPagerProps) {
   const navigate = useNavigate();
   return (
     <RowsPager

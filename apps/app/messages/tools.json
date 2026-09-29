@@ -4,7 +4,12 @@
     "lede": "The registry is the only source of tools an agent can see.",
     "loading": "Loading tools",
     "notCarried": "not recorded",
-    "nextPage": "Next page",
+    "pager": {
+      "registry": "Tool version pages",
+      "grants": "Credential grant pages",
+      "first": "First page",
+      "next": "Next page"
+    },
     "roles": {
       "owner": "Owner",
       "admin": "Admin",

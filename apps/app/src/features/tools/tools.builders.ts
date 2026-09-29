@@ -310,6 +310,7 @@ type ToolsReads = {
         category: string | null;
         cursor: string | null;
         serverId: string | null;
+        limit?: number;
       }) => Read<ToolVersionPage>);
   grants?: Read<CredentialGrantPage>;
   killSwitches?: Read<KillSwitchBoard>;

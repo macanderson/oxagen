@@ -10075,7 +10075,12 @@ type Messages = {
     lede: string;
     loading: string;
     notCarried: string;
-    nextPage: string;
+    pager: {
+      registry: string;
+      grants: string;
+      first: string;
+      next: string;
+    };
     roles: {
       owner: string;
       admin: string;

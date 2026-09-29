@@ -5,8 +5,10 @@
 // sorts its column ascending, then descending, then back to the caller's
 // order, as a number when the column is numeric; the pager under the table
 // holds Rows, which sets the page size, the range, and Previous and Next,
-// which walk the pages. A hidden column names itself through aria-label and
-// carries no text. Every test ends in an axe check.
+// which walk the pages. A list that pages by address hands in its own pager
+// (#4693), which the table draws in place of its own. A hidden column names
+// itself through aria-label and carries no text. Every test ends in an axe
+// check.
 import {
   cleanup,
   render,
@@ -15,10 +17,28 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
+
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
+// The address pager visits the first page at a new size through the router.
+vi.mock("@/ui/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui/navigation")>()),
+  useNavigate: () => ({
+    push,
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    advance: vi.fn(),
+  }),
+}));
+
+beforeEach(() => {
+  push.mockReset();
+});
 
 const COLUMNS = [
   { label: "Invoice" },
@@ -494,6 +514,88 @@ describe("ListTable: a caller's filters and empty line", () => {
     );
     expect(screen.getByText("No invoice has been issued.")).toBeVisible();
     expect(screen.queryByText("No rows match.")).toBeNull();
+  });
+});
+
+describe("ListTable with a pager that pages by address", () => {
+  /** The invoices' pager on a middle page at 25 rows, as the server builds it. */
+  const PAGER = {
+    label: "Invoice pages",
+    rowsLabel: "Rows",
+    previousLabel: "Newest invoices",
+    nextLabel: "Older invoices",
+    perPage: 25,
+    sizes: [10, 25, 50, 100].map((size) => ({
+      size,
+      first: routes.billing(
+        "acme",
+        size === 50 ? {} : { rows: String(size) },
+      ),
+    })),
+    previous: routes.billing("acme", { rows: "25" }),
+    next: routes.billing("acme", { rows: "25", cursor: "c3" }),
+  };
+
+  function renderPaged(rows: ListRow[]) {
+    render(
+      <IntlProvider>
+        <ListTable
+          label="Invoices"
+          columns={COLUMNS}
+          rows={rows}
+          pager={PAGER}
+        />
+      </IntlProvider>,
+    );
+  }
+
+  const pages = () =>
+    screen.getByRole("navigation", { name: "Invoice pages" });
+
+  it("draws the caller's pager in place of its own, under the table, and shows every row it was handed", () => {
+    renderPaged(rowsOf(12));
+    expect(
+      screen.queryByRole("navigation", { name: "Invoices pages" }),
+    ).toBeNull();
+    expect(visible()).toHaveLength(12);
+    expect(range()).toBe("1–12 of 12");
+    expect(rowsSelect()).toHaveTextContent("25");
+    expect(
+      screen.getByRole("table").compareDocumentPosition(rowsPager()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(pages()).getByRole("link", { name: "Newest invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25");
+    expect(
+      within(pages()).getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25&cursor=c3");
+  });
+
+  it("offers the caller's sizes and visits the first page at the size picked", async () => {
+    renderPaged(rowsOf(3));
+    await userEvent.click(rowsSelect());
+    const options = await screen.findAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual([
+      "10",
+      "25",
+      "50",
+      "100",
+    ]);
+    await userEvent.click(screen.getByRole("option", { name: "50" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/billing");
+    });
+  });
+
+  it("counts in its range the rows the search keeps", async () => {
+    renderPaged(rowsOf(12));
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: "Search this list" }),
+      "oxa-01",
+    );
+    expect(visible()).toEqual(["OXA-010", "OXA-011", "OXA-012"]);
+    expect(range()).toBe("1–3 of 3");
   });
 });
 

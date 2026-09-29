@@ -30,10 +30,21 @@ import { ToolsTabs } from "./tabs";
 import { Toolbelts } from "./toolbelts";
 import {
   parseToolsView,
+  TOOLS_PAGE,
   type ToolsAt,
   type ToolsTab,
   type ToolsView,
 } from "./view";
+
+/**
+ * The size a list read asks for, left off at the default (#4693). The contract
+ * reads 50 when it is omitted, and the kernel read is memoised by its input,
+ * so the view's read at the default stays the same read as the page shell's
+ * and the registry count's and is sent once.
+ */
+function limitOf(rows: number): { limit?: number } {
+  return rows === TOOLS_PAGE ? {} : { limit: rows };
+}
 
 /**
  * An org Owner or Admin: exactly what `set_tool_classification`,
@@ -186,6 +197,7 @@ async function TabBody({
           category: view.category,
           cursor: view.cursor,
           serverId: view.provider,
+          ...limitOf(view.rows),
         }),
         source.tools.mcpServers(ctx),
       ]);
@@ -202,6 +214,7 @@ async function TabBody({
           category={view.category}
           provider={view.provider}
           cursor={view.cursor}
+          rows={view.rows}
           canImport={admin}
           canClassify={admin}
           read={read}
@@ -232,7 +245,10 @@ async function TabBody({
           serverId: null,
         }),
         source.tools.connections(ctx, { status: null, connectorId: null }),
-        source.tools.grants(ctx, { cursor: view.cursor }),
+        source.tools.grants(ctx, {
+          cursor: view.cursor,
+          ...limitOf(view.rows),
+        }),
       ]);
       return (
         <Providers
@@ -244,6 +260,7 @@ async function TabBody({
           connections={connections}
           grants={grants}
           cursor={view.cursor}
+          rows={view.rows}
         />
       );
     }
@@ -318,7 +335,7 @@ export async function Tools({
   source: DataSource;
   /** The tab the route resolved from its path segment or a legacy `?tab=`. */
   tab: ToolsTab;
-  /** The query the URL carried: `category`, `provider`, `names`, `cursor`, `belt`. */
+  /** The query the URL carried: `category`, `provider`, `names`, `rows`, `cursor`, `belt`. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseToolsView(tab, searchParams);

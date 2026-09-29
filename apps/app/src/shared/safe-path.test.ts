@@ -144,6 +144,22 @@ describe("routes", () => {
     expect(routes.billing("acme", { checkout: "cancel" })).toBe(
       "/acme/billing?checkout=cancel",
     );
+    // #4693: the invoice size rides before the cursor, and either may be absent.
+    expect(routes.billing("acme", { rows: "25", cursor: "c2" })).toBe(
+      "/acme/billing?rows=25&cursor=c2",
+    );
+    expect(routes.billing("acme", { rows: "25" })).toBe(
+      "/acme/billing?rows=25",
+    );
+    expect(routes.billing("acme", {})).toBe("/acme/billing");
+    // #4693: the size a page of the tab's list holds rides before its cursor.
+    expect(
+      routes.tools("acme", "core", {
+        tab: "providers",
+        rows: "25",
+        cursor: "g2",
+      }),
+    ).toBe("/acme/core/tools/providers?rows=25&cursor=g2");
     expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
     expect(
       routes.steering("acme", "core", {
