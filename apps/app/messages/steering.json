@@ -122,24 +122,24 @@
         "retry": "Try again",
         "incident": "Open an incident",
         "incidentNote": "Oxagen records no incidents yet. Report the line below to your operator.",
-        "trace": "{status} {code} \u00b7 {at}"
+        "trace": "{status} {code} · {at}"
       },
       "denied": {
-        "title": "You cannot see this workspace\u2019s steering",
+        "title": "You cannot see this workspace’s steering",
         "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
-        "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization \u203a Roles.",
+        "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization › Roles.",
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
-        "signedInValue": "workspace.{role} \u00b7 {workspace}",
-        "signedInNamed": "<person>{name}</person> \u00b7 <mono>workspace.{role} \u00b7 {workspace}</mono>",
+        "signedInValue": "workspace.{role} · {workspace}",
+        "signedInNamed": "<person>{name}</person> · <mono>workspace.{role} · {workspace}</mono>",
         "needed": "Needed",
         "neededValue": "{permission} on {workspace}",
         "decidedBy": "Decided by",
         "decidedByValue": "policy not recorded (#{issue})"
       },
       "pending": {
-        "title": "Your access to this workspace\u2019s steering is waiting for approval",
+        "title": "Your access to this workspace’s steering is waiting for approval",
         "body": "Access request {request}"
       }
     },
@@ -291,7 +291,7 @@
           "assembler": "Assembler position"
         },
         "open": "Open {ref}",
-        "provenance": "{ref} \u00b7 {source} \u00b7 {who, select, person {a person wrote it} agent {an agent wrote it} other {the system wrote it}}",
+        "provenance": "{ref} · {source} · {who, select, person {a person wrote it} agent {an agent wrote it} other {the system wrote it}}",
         "tokensTitle": "Tokens this memory's line spends in the assembled context",
         "tokens": "{count} tok",
         "compiler": "Open the compiler",
@@ -314,14 +314,14 @@
         "forget": {
           "title": "Forget this memory?",
           "keep": "Keep memory",
-          "pending": "Forgetting\u2026",
+          "pending": "Forgetting…",
           "confirm": "Forget memory",
           "body": "The assembler stops selecting it, and every agent in scope stops being told it. The runs it was folded from are untouched: every frame stays, and every run that carried it keeps naming the hash it carried.",
           "other": "To make a correct memory binding, promote it to a record instead."
         }
       },
       "ontology": {
-        "lead": "An ontology note defines one entity or term for this workspace and enters the volatile selection as <code>info</code>.",
+        "lead": "An ontology note under <code>.oxagen/ontology/</code> on {repository} defines one entity or term and enters the volatile selection as <code>info</code>.",
         "repository": "the main repository",
         "title": "Definitions",
         "columns": {
@@ -408,8 +408,8 @@
       "sort": "Sort",
       "sorts": {
         "shown": "Shown order",
-        "asc": "Label A\u2013Z",
-        "desc": "Label Z\u2013A"
+        "asc": "Label A–Z",
+        "desc": "Label Z–A"
       },
       "forceTitle": "Steering force",
       "effectTitle": "Constraint effect",
@@ -431,7 +431,7 @@
         "failed": "The .oxagen/ tree could not be read: {code}.",
         "unbound": "No main repository is bound to this workspace, so there is no .oxagen/ tree to read.",
         "absent": "{branch} on {repository} has no <code>.oxagen/</code> directory.",
-        "at": "{repository} @ {branch} \u00b7 {head}",
+        "at": "{repository} @ {branch} · {head}",
         "noHead": "no head commit",
         "note": "stella links to this directory, so stella and Oxagen read the same files.",
         "comments": {
