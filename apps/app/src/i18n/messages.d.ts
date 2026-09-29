@@ -3218,6 +3218,7 @@ type Messages = {
       draft: string;
       draftNotBuilt: string;
       draftFailed: string;
+      draftError: string;
       shaping: string;
       shapingMissing: string;
       hidden: string;
@@ -3351,6 +3352,7 @@ type Messages = {
       notBuilt: string;
       denied: string;
       failed: string;
+      error: string;
       empty: {
         title: string;
         body: string;

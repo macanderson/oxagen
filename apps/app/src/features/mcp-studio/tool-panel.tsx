@@ -87,8 +87,17 @@ function Classification({
       ? current
       : null;
   const shown = staged ?? current;
+  /** What the choice is measured against: the staged or confirmed classification. */
+  const settled =
+    staged ?? (current !== null && current.confirmed ? current : null);
   const complete =
     choice.risk !== "" && choice.sideEffect !== "" && choice.egress !== "";
+  /** Staging the classification already in force would change nothing. */
+  const unchanged =
+    settled !== null &&
+    choice.risk === settled.risk &&
+    choice.sideEffect === settled.sideEffect &&
+    choice.egress === settled.egress;
   const stageChoice = () => {
     if (choice.risk === "" || choice.sideEffect === "" || choice.egress === "") {
       return;
@@ -232,7 +241,7 @@ function Classification({
             <button
               type="button"
               className={buttonSecondary}
-              disabled={!complete}
+              disabled={!complete || unchanged}
               data-testid="studio-panel-stage-classification"
               onClick={stageChoice}
             >
@@ -269,23 +278,30 @@ function Description({
     | { kind: "none" }
     | { kind: "not_built"; gap: string }
     | { kind: "failed"; message: string }
+    /** The call threw, so no answer came back. */
+    | { kind: "error" }
   >({ kind: "none" });
   const imported = importedAfter(tool, ops);
   const trimmed = text.trim();
   const runDraft = async () => {
     setPending(true);
     setOutcome({ kind: "none" });
-    const result = await draft({ serverId, tool: tool.name });
-    setPending(false);
-    if (result.ok) {
-      setText(result.description);
-      return;
+    try {
+      const result = await draft({ serverId, tool: tool.name });
+      if (result.ok) {
+        setText(result.description);
+        return;
+      }
+      setOutcome(
+        result.reason === "not_built"
+          ? { kind: "not_built", gap: studioGapRef(result.gap) }
+          : { kind: "failed", message: result.message },
+      );
+    } catch {
+      setOutcome({ kind: "error" });
+    } finally {
+      setPending(false);
     }
-    setOutcome(
-      result.reason === "not_built"
-        ? { kind: "not_built", gap: studioGapRef(result.gap) }
-        : { kind: "failed", message: result.message },
-    );
   };
   return (
     <section aria-labelledby={`${id}-h`} className={section}>
@@ -325,7 +341,9 @@ function Description({
             <button
               type="button"
               className={buttonSecondary}
-              disabled={trimmed === "" || trimmed === (tool.description ?? "")}
+              disabled={
+                trimmed === "" || trimmed === (staged ?? tool.description ?? "")
+              }
               data-testid="studio-panel-stage-description"
               onClick={() => {
                 onStage({ kind: "describe", tool: tool.name, description: trimmed });
@@ -351,6 +369,15 @@ function Description({
           {outcome.kind === "failed" ? (
             <p role="alert" className={note}>
               {t("draftFailed", { message: outcome.message })}
+            </p>
+          ) : null}
+          {outcome.kind === "error" ? (
+            <p
+              role="alert"
+              data-testid="studio-panel-draft-error"
+              className={note}
+            >
+              {t("draftError")}
             </p>
           ) : null}
         </div>

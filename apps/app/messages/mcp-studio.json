@@ -104,6 +104,7 @@
       "draft": "Draft",
       "draftNotBuilt": "Draft is not available yet. You can write the description yourself.",
       "draftFailed": "Draft failed: {message}",
+      "draftError": "Draft did not finish. Try again.",
       "shaping": "Shaping",
       "shapingMissing": "Shaping is set in tools.toml, and Oxagen has not read this server's tools.toml yet.",
       "hidden": "Hidden inputs",
@@ -231,12 +232,13 @@
       "shaped": "Shaped result",
       "save": "Save as test",
       "saved": "Saved to the draft",
-      "tooLarge": "The draft is full, so the test was not saved.",
+      "tooLarge": "The test was not saved. It is larger than a draft allows, or the draft is full.",
       "badRecord": "This call's record is not in the shape a saved test needs, so the test was not saved.",
       "stripped": "Removed the {headers} {count, plural, one {header} other {headers}} before saving, because a saved test never holds a credential.",
       "notBuilt": "Try it is not available yet.",
       "denied": "The call was denied: {message}",
       "failed": "The call failed: {message}",
+      "error": "The call did not finish. Try again.",
       "empty": {
         "title": "No imported tools",
         "body": "Import a tool on the Tools tab to try it here."

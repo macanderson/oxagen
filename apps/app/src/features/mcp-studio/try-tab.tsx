@@ -38,6 +38,8 @@ type Phase =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "badJson" }
+  /** The call threw, so no answer came back. */
+  | { kind: "error" }
   | {
       kind: "done";
       /** What was sent, kept so Save as test records the call that ran. */
@@ -49,7 +51,8 @@ type Saved =
   | { kind: "none" }
   /** Staged, with the credential headers removed on the way, if any. */
   | { kind: "saved"; stripped: readonly string[] }
-  | { kind: "tooLarge" }
+  /** Staging refused the test: it breaks the draft's limits. */
+  | { kind: "refused" }
   /** The record is not the shape a saved test holds, so nothing was staged. */
   | { kind: "badRecord" };
 
@@ -116,7 +119,10 @@ export function TryTab({
   const id = useId();
   const imported = tools.filter((tool) => tool.imported);
   const [environment, setEnvironment] = useState(
-    agentEnvironment ?? environments[0]?.name ?? "",
+    agentEnvironment ??
+      environments.find((env) => env.sandbox)?.name ??
+      environments[0]?.name ??
+      "",
   );
   const [tool, setTool] = useState(imported[0]?.name ?? "");
   const [args, setArgs] = useState("{}");
@@ -136,7 +142,7 @@ export function TryTab({
   }
 
   const chosen = environments.find((env) => env.name === environment);
-  const live = environments.length > 1 && chosen !== undefined && !chosen.sandbox;
+  const live = chosen !== undefined && !chosen.sandbox;
 
   const run = async () => {
     const parsed = argsOf(args);
@@ -147,8 +153,12 @@ export function TryTab({
     setPhase({ kind: "running" });
     setSaved({ kind: "none" });
     const sent = { tool, environment, args };
-    const result = await call({ serverId, tool, environment, args: parsed });
-    setPhase({ kind: "done", sent, result });
+    try {
+      const result = await call({ serverId, tool, environment, args: parsed });
+      setPhase({ kind: "done", sent, result });
+    } catch {
+      setPhase({ kind: "error" });
+    }
   };
 
   const result = phase.kind === "done" ? phase.result : null;
@@ -246,6 +256,9 @@ export function TryTab({
           {phase.kind === "badJson" ? (
             <FormAlert testId="studio-try-bad-json">{t("badJson")}</FormAlert>
           ) : null}
+          {phase.kind === "error" ? (
+            <FormAlert testId="studio-try-error">{t("error")}</FormAlert>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="submit"
@@ -309,7 +322,7 @@ export function TryTab({
                   setSaved(
                     ok
                       ? { kind: "saved", stripped: scrubbed.removed }
-                      : { kind: "tooLarge" },
+                      : { kind: "refused" },
                   );
                 }}
               >
@@ -324,7 +337,7 @@ export function TryTab({
                   {t("saved")}
                 </span>
               ) : null}
-              {saved.kind === "tooLarge" ? (
+              {saved.kind === "refused" ? (
                 <FormAlert testId="studio-try-too-large">
                   {t("tooLarge")}
                 </FormAlert>

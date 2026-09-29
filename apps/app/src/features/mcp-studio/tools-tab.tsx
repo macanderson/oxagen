@@ -426,6 +426,7 @@ export function ToolsTab({
       )}
       {opened === undefined ? null : (
         <ToolPanel
+          key={opened.name}
           serverId={serverId}
           tool={opened}
           ops={ops}
