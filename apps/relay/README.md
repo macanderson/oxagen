@@ -45,7 +45,7 @@ The image holds Node 24 and one bundled file, `/opt/oxagen-relay/relay.cjs`. It 
 
 ```sh
 docker run --rm \
-  -e RELAY_BROKER_URL=wss://relay.oxagen.sh \
+  -e RELAY_BROKER_URL=wss://mcp.oxagen.sh \
   -e RELAY_TOKEN \
   -e RELAY_NAME=billing \
   -e RELAY_WORKSPACE=wrk_0123456789abcdefghijkl \
@@ -81,7 +81,7 @@ helm install billing-relay apps/relay/chart \
   --namespace oxagen-relay --create-namespace \
   --set image.repository=<your-registry>/oxagen-relay \
   --set image.tag=$TAG \
-  --set relay.brokerUrl=wss://relay.oxagen.sh \
+  --set relay.brokerUrl=wss://mcp.oxagen.sh \
   --set relay.name=billing \
   --set relay.workspace=wrk_0123456789abcdefghijkl \
   --set-file relay.trustedKeys=oxagen-relay-signing.pem \

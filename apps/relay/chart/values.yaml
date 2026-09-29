@@ -17,7 +17,7 @@ image:
 imagePullSecrets: []
 
 relay:
-  # Required. The broker's wss:// address, such as wss://relay.oxagen.sh.
+  # Required. The broker's wss:// address, such as wss://mcp.oxagen.sh.
   brokerUrl: ""
   # Required. The relay's name in Oxagen: up to 63 lowercase letters, digits, and hyphens.
   name: ""
