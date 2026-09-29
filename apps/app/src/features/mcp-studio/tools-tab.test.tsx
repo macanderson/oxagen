@@ -208,7 +208,7 @@ describe("ToolsTab table", () => {
     expect(
       screen.getAllByRole("columnheader").map((head) => head.textContent),
     ).toEqual(["Import", ...COLUMNS]);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(10);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(23);
     expect(
       screen.getByRole("checkbox", { name: "Import create_payment" }),
     ).toBeChecked();
@@ -216,7 +216,7 @@ describe("ToolsTab table", () => {
       screen.getByRole("checkbox", { name: "Import create_coupon" }),
     ).not.toBeChecked();
     expect(screen.queryByText(COPY.readOnly)).toBeNull();
-    expect(screen.getByText(range(1, 10, 23))).toBeInTheDocument();
+    expect(screen.getByText(range(1, 23, 23))).toBeInTheDocument();
     const payment = within(row("create_payment"));
     expect(row("create_payment")).toHaveAttribute("data-state", "imported");
     expect(payment.getByText("Imported")).toBeInTheDocument();
@@ -420,7 +420,7 @@ describe("ToolsTab filters and paging", () => {
     ]);
     expect(screen.getByText(range(1, 3, 3))).toBeInTheDocument();
     await user.selectOptions(state, "available");
-    expect(screen.getByText(range(1, 10, 20))).toBeInTheDocument();
+    expect(screen.getByText(range(1, 20, 20))).toBeInTheDocument();
     expect(screen.queryByTestId("studio-tool-create_coupon")).toBeNull();
   });
 
@@ -501,25 +501,25 @@ describe("ToolsTab filters and paging", () => {
     );
   });
 
-  it("pages through Warehouse's 600 tools ten at a time", async () => {
+  it("pages through Warehouse's 600 tools 25 at a time", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(WAREHOUSE)));
-    expect(screen.getByText(range(1, 10, 600))).toBeInTheDocument();
+    expect(screen.getByText(range(1, 25, 600))).toBeInTheDocument();
     expect(shownTools()).toEqual(
-      Array.from({ length: 10 }, (_, index) => warehouseTool(index * 3)),
+      Array.from({ length: 25 }, (_, index) => warehouseTool(index * 3)),
     );
     const previous = screen.getByRole("button", { name: "Previous page" });
     expect(previous).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Next page" }));
-    expect(screen.getByText(range(11, 20, 600))).toBeInTheDocument();
-    expect(shownTools()[0]).toBe("tool_030");
+    expect(screen.getByText(range(26, 50, 600))).toBeInTheDocument();
+    expect(shownTools()[0]).toBe("tool_075");
     expect(screen.queryByTestId("studio-tool-tool_000")).toBeNull();
     await user.click(previous);
-    expect(screen.getByText(range(1, 10, 600))).toBeInTheDocument();
+    expect(screen.getByText(range(1, 25, 600))).toBeInTheDocument();
     await user.click(screen.getByRole("combobox", { name: "Rows per page" }));
-    await user.click(await screen.findByRole("option", { name: "25" }));
+    await user.click(await screen.findByRole("option", { name: "50" }));
     await waitFor(() => {
-      expect(screen.getByText(range(1, 25, 600))).toBeInTheDocument();
+      expect(screen.getByText(range(1, 50, 600))).toBeInTheDocument();
     });
   });
 
@@ -530,7 +530,7 @@ describe("ToolsTab filters and paging", () => {
       screen.getByRole("combobox", { name: "State" }),
       "available",
     );
-    expect(screen.getByText(range(1, 10, 400))).toBeInTheDocument();
+    expect(screen.getByText(range(1, 25, 400))).toBeInTheDocument();
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Side effect" }),
       "read",
