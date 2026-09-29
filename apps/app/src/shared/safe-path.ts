@@ -80,7 +80,23 @@ export type OrganizationQueryTab =
   | "invitations"
   | "workspaces"
   | "dataPlane"
-  | "costCenters";
+  | "costCenters"
+  | "notifications";
+
+/**
+ * How a Slack connection attempt ended, as the OAuth callback reports it back
+ * to Organization › Notifications (#4608). Never the code or the state Slack
+ * sent: the callback names the outcome only.
+ */
+export type SlackConnectOutcome =
+  | "connected"
+  | "cancelled"
+  | "expired"
+  | "refused"
+  | "denied"
+  | "notConfigured"
+  | "pendingApproval"
+  | "unavailable";
 
 /**
  * The path segments each Steering tab or shelf id lands on, old ids included
@@ -166,11 +182,21 @@ export const routes = {
   people: (org: string): SafePath => pathOf(org),
   /**
    * A tab of the Organization page that has no route of its own: People (the
-   * root), Invitations, Workspaces, Data plane and Cost centers. The tab is a
-   * query value on `/{org}`, left off for People.
+   * root), Invitations, Workspaces, Data plane, Cost centers, and
+   * Notifications. The tab is a query value on `/{org}`, left off for People.
    */
   organization: (org: string, tab: OrganizationQueryTab): SafePath =>
     withQuery(pathOf(org), { tab: tab === "people" ? undefined : tab }),
+  /**
+   * Organization › Notifications: the Slack channel steering repo health
+   * notices post to (#4608). `slack` is how a connection attempt ended, set
+   * only by the OAuth callback.
+   */
+  notifications: (
+    org: string,
+    q?: { slack?: SlackConnectOutcome },
+  ): SafePath =>
+    withQuery(pathOf(org), { tab: "notifications", slack: q?.slack }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
   /**

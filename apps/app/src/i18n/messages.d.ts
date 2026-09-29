@@ -3646,6 +3646,7 @@ type Messages = {
       workspaces: string;
       dataPlane: string;
       costCenters: string;
+      notifications: string;
     };
     roles: {
       owner: string;
@@ -4688,9 +4689,81 @@ type Messages = {
       workspaceArchived: string;
       modelKeySaved: string;
       modelKeyRemoved: string;
+      slackChannelSaved: string;
+      slackDisconnected: string;
     };
     avatar: {
       open: string;
+    };
+    notifications: {
+      title: string;
+      about: string;
+      status: {
+        connected: string;
+        notConnected: string;
+        unavailable: string;
+      };
+      unavailable: string;
+      notConnected: string;
+      readOnly: string;
+      connect: string;
+      connecting: string;
+      facts: {
+        workspace: string;
+        channel: string;
+        connectedAt: string;
+      };
+      noChannel: string;
+      channelName: string;
+      channelNamePrivate: string;
+      picker: {
+        open: string;
+        change: string;
+        loading: string;
+        label: string;
+        placeholder: string;
+        invite: string;
+        truncated: string;
+        empty: string;
+        save: string;
+        saving: string;
+        cancel: string;
+      };
+      disconnect: {
+        open: string;
+        confirm: string;
+        yes: string;
+        pending: string;
+        cancel: string;
+      };
+      lastFailure: {
+        label: string;
+        notInChannel: string;
+        channelNotFound: string;
+        isArchived: string;
+        tokenRevoked: string;
+        missingScope: string;
+        tokenUnreadable: string;
+        other: string;
+      };
+      outcome: {
+        connected: string;
+        cancelled: string;
+        expired: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+      failure: {
+        notConnected: string;
+        broken: string;
+        channelGone: string;
+        connectionChanged: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+        refused: string;
+      };
     };
   };
   record: {

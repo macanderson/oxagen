@@ -4,8 +4,10 @@
 // Workspaces reads `org.workspaceFacts` only inside a workspace the viewer may
 // enter, each after `requireViewer(org, ws)` has checked the membership
 // (INV-15), so a workspace the viewer does not belong to and an archived one
-// are never read. Data plane, Roles and Model funding make their one read
-// inside the frame, so a viewer the frame refuses never reaches it.
+// are never read. Data plane, Notifications, Roles and Model funding make
+// their one read inside the frame, so a viewer the frame refuses never
+// reaches it. `?slack=` names how a Slack connection attempt ended, and any
+// value the callback does not write reads as none.
 import { cleanup, render, screen } from "@testing-library/react";
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -77,6 +79,13 @@ vi.mock("./sso-actions", () => ({
   rotateScimToken: vi.fn(),
   revokeScimToken: vi.fn(),
 }));
+vi.mock("./slack-actions", () => ({
+  startSlackConnection: vi.fn(),
+  listSlackChannels: vi.fn(),
+  setSlackChannel: vi.fn(),
+  disconnectSlack: vi.fn(),
+  completeSlackConnection: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
   systemLookups: { mfaPolicy: () => Promise.resolve(null) },
@@ -89,6 +98,7 @@ const {
   orgSource,
   roleCatalog,
   roleRow,
+  slackConnection,
   ssoSettings,
   workspaceRow,
 } = await import("./organization.builders");
@@ -99,6 +109,7 @@ const {
   OrganizationModelFunding,
   OrganizationRoles,
   parseOrganizationTab,
+  parseSlackOutcome,
 } = await import("./organization");
 
 const ORG_FIELDS = {
@@ -203,7 +214,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("parseOrganizationTab", () => {
-  it.each(["people", "invitations", "workspaces", "dataPlane", "costCenters"])(
+  it.each([
+    "people",
+    "invitations",
+    "workspaces",
+    "dataPlane",
+    "costCenters",
+    "notifications",
+  ])(
     "names the %s tab",
     (tab) => {
       expect(parseOrganizationTab(tab)).toBe(tab);
@@ -222,6 +240,38 @@ describe("parseOrganizationTab", () => {
       expect(parseOrganizationTab(value)).toBe("people");
     },
   );
+});
+
+describe("parseSlackOutcome", () => {
+  it.each([
+    "connected",
+    "cancelled",
+    "expired",
+    "refused",
+    "pendingApproval",
+    "unavailable",
+    "denied",
+    "notConfigured",
+  ])("names the %s outcome", (value) => {
+    expect(parseSlackOutcome(value)).toBe(value);
+  });
+
+  it("reads the first value of a repeated outcome", () => {
+    expect(parseSlackOutcome(["cancelled", "connected"])).toBe("cancelled");
+  });
+
+  // A URL cannot put its own words on the tab: a token, a prototype member,
+  // and a near miss all read as no outcome.
+  it.each([
+    undefined,
+    "",
+    "Connected",
+    "xoxb-1111-2222-secret",
+    "toString",
+    "__proto__",
+  ])("reads %j as no outcome (negative)", (value) => {
+    expect(parseSlackOutcome(value)).toBeNull();
+  });
 });
 
 describe("Organization", () => {
@@ -290,7 +340,38 @@ describe("Organization", () => {
     expect(calls.costCenters).toHaveLength(1);
   });
 
-  it.each(["workspaces", "dataPlane", "costCenters"] as const)(
+  it("reads the Slack connection on Notifications with the organization viewer, and says how the connection attempt ended", async () => {
+    const ctx = ctxFor("admin");
+    const { source, calls } = sourceWith({
+      slackConnection: readOk(slackConnection()),
+    });
+    const view = await renderPage(
+      Organization({ ctx, source, tab: "notifications", slack: "connected" }),
+    );
+
+    expect(calls.slackConnection).toEqual([[ctx]]);
+    expect(calls.workspaceFacts).toEqual([]);
+    expect(screen.getByRole("region", { name: "Slack" })).toHaveTextContent(
+      "Acme Robotics",
+    );
+    expect(screen.getByTestId("slack-outcome")).toHaveTextContent(
+      "Slack is connected. Pick the channel notices post to.",
+    );
+    await expectNoAxe(view.container);
+  });
+
+  it("shows no outcome line on Notifications without one", async () => {
+    const { source } = sourceWith({
+      slackConnection: readOk(slackConnection()),
+    });
+    await renderPage(
+      Organization({ ctx: ctxFor("owner"), source, tab: "notifications" }),
+    );
+
+    expect(screen.queryByTestId("slack-outcome")).toBeNull();
+  });
+
+  it.each(["workspaces", "dataPlane", "costCenters", "notifications"] as const)(
     "makes no %s read for a viewer the frame refuses (negative)",
     async (tab) => {
       const { source, calls } = sourceWith();
@@ -300,6 +381,7 @@ describe("Organization", () => {
       expect(calls.workspaceFacts).toEqual([]);
       expect(calls.dataPlane).toEqual([]);
       expect(calls.costCenters).toEqual([]);
+      expect(calls.slackConnection).toEqual([]);
     },
   );
 });
