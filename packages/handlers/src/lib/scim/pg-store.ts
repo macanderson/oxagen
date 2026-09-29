@@ -54,10 +54,16 @@ function hasMarker(metadata: unknown, key: string): boolean {
 /** Not deleted by the identity provider. */
 const notScimDeleted = sql`NOT (${schema.principals.metadata} ? 'scim_deleted_at')`;
 
+/**
+ * `onRemoved` hears each person this request removed from the organization,
+ * by a deprovision or by a group change that leaves them no role. The caller
+ * acts on it only after the transaction commits.
+ */
 export function createPgScimStore(
   tx: Tx,
   orgId: string,
   requestId: string | null,
+  onRemoved: (userId: string) => void = () => {},
 ): ScimStore {
   const principalOf = (userId: string) =>
     and(
@@ -367,6 +373,7 @@ export function createPgScimStore(
         summaryEvent: "scim.user_deprovisioned",
         requestId,
       });
+      onRemoved(userId);
       if (trigger === "scim_delete") {
         await tx
           .delete(schema.scimGroupMembers)
@@ -413,7 +420,7 @@ export function createPgScimStore(
     },
 
     async applyRole(userId, role) {
-      await applyMappedOrgRoleInTx(tx, {
+      const outcome = await applyMappedOrgRoleInTx(tx, {
         orgId,
         userId,
         role,
@@ -421,6 +428,7 @@ export function createPgScimStore(
         trigger: "scim_group_change",
         requestId,
       });
+      if (outcome.kind === "removed") onRemoved(userId);
     },
 
     async groupNamesOf(userId) {

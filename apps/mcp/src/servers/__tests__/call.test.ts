@@ -10,6 +10,7 @@ import {
   DIGEST,
   HASH,
   NOW,
+  OPERATOR,
   RELAY,
   SOURCES,
   fakePorts,
@@ -77,12 +78,19 @@ describe("callServed in direct mode", () => {
     });
   }
 
-  it("resolves the credential for the sandbox and the agent's operator", async () => {
+  it("resolves the credential for the sandbox and the run's operator", async () => {
     const { call, recorded } = await setup();
     await call("billing__list_charges");
     expect(recorded.credentials).toHaveLength(1);
-    expect(recorded.credentials[0]).toMatchObject({ server: "billing", environment: "sandbox", operator: "priya" });
+    expect(recorded.credentials[0]).toMatchObject({ server: "billing", environment: "sandbox", operator: OPERATOR });
     expect(recorded.routes.map((route) => route.network)).toEqual(["cloud"]);
+  });
+
+  it("names no operator when the run's host records no enroller", async () => {
+    const { call, recorded } = await setup({}, published(), run({ operator: undefined }));
+    await call("billing__list_charges");
+    expect(recorded.credentials).toHaveLength(1);
+    expect(recorded.credentials[0]?.operator).toBeUndefined();
   });
 
   it("sends a local server's call to the machine with its locked version", async () => {

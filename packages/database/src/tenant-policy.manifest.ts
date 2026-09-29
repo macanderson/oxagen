@@ -243,6 +243,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.tool_snapshots", policyClass: "standard" },
   // The credential broker's grant log (#2958): orgScopeMixin → standard.
   { table: "mcp.credential_grants", policyClass: "standard" },
+  // Each operator's OAuth token for an operator-oauth server (M8, #4668):
+  // org_id + workspace_id NOT NULL → standard.
+  { table: "mcp.operator_tokens", policyClass: "standard" },
   // MCP Studio drafts (M11, #4686): orgScopeMixin → standard.
   { table: "mcp.studio_drafts", policyClass: "standard" },
 
