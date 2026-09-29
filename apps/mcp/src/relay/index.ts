@@ -23,6 +23,14 @@ export function relayBrokerState(): RelayBrokerState {
   return state;
 }
 
+/**
+ * The run names a workspace with no row. The relay Transport logs only an
+ * error's name, so this name tells that case apart from a failed read.
+ */
+class RelayWorkspaceMissingError extends Error {
+  override readonly name = "RelayWorkspaceMissingError";
+}
+
 /** The workspace's public id, which each envelope names and the relay checks. */
 async function readRelayScope(orgId: string, workspaceId: string): Promise<RelayScope> {
   const scope = { orgId, workspaceId };
@@ -35,7 +43,7 @@ async function readRelayScope(orgId: string, workspaceId: string): Promise<Relay
         .limit(1),
     ),
   );
-  if (row === undefined) throw new Error("The run's workspace does not exist.");
+  if (row === undefined) throw new RelayWorkspaceMissingError("The run's workspace does not exist.");
   return { orgId, workspaceId, workspacePublicId: row.publicId };
 }
 
