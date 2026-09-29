@@ -145,7 +145,7 @@ export function toSpendWaste(
 }
 
 /**
- * The ranking as the operator tab reads it: every figure copied whole. A
+ * The ranking as the Findings tab reads it: every figure copied whole. A
  * pseudonym row carries no key and no facts, and the view keeps it that way.
  */
 export function toOperatorRanking(

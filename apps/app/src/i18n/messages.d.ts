@@ -8726,6 +8726,7 @@ type Messages = {
     };
     tabs: {
       label: string;
+      month: string;
       findings: string;
       tokens: string;
       coaching: string;
@@ -9482,6 +9483,48 @@ type Messages = {
       empty: string;
       footer: string;
       otherCurrency: string;
+    };
+    month: {
+      description: string;
+      span: string;
+      chart: string;
+      noPricedDay: string;
+      empty: string;
+      unnamedOperator: string;
+      other: {
+        label: string;
+        note: string;
+      };
+      moreRuns: string;
+      reported: string;
+      budget: {
+        label: string;
+        used: string;
+        position: string;
+        reached: string;
+        none: string;
+      };
+      by: {
+        label: string;
+        options: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+        titles: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+      };
+      columns: {
+        runs: string;
+        share: string;
+        cost: string;
+        total: string;
+      };
     };
   };
   steering: {

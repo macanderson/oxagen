@@ -1,12 +1,14 @@
-// The Spend page (#2962, #2963; spec `mockups/pages/spend.md`): what the
-// tokens bought, with the basis on every number. The header with Export
-// report and Set a budget, four summary tiles over every tab (hidden on a
-// drill), the tabs with their live counts, and one tab's body or one key's
-// drill. Every read is a noBillingGate kernel read through the spend port. The
-// month's model rollup is the page's spine: when it does not answer, its state
-// replaces the body; when it holds nothing, the empty state does. The other
-// summary reads (findings, waste, budgets) leave their count off, and their
-// tile not recorded, when they do not answer, and their own tab says why.
+// The Spend page (#2962, #2963; spec `mockups/pages/spend.md`, the v3 Month
+// tab in ADR-226): what the tokens bought, with the basis on every number. The
+// header with Export report and Set a budget, four summary tiles over every tab
+// but Month (hidden on a drill too), the tabs with their live counts, and one
+// tab's body or one key's drill. Every read is a noBillingGate kernel read
+// through the spend port. The month's rollup is the page's spine, grouped the
+// way the Month tab asks and by model on every other tab: when it does not
+// answer, its state replaces the body; when it holds nothing, the empty state
+// does. The other summary reads (findings, waste, budgets) leave their count
+// off, and their tile not recorded, when they do not answer, and their own tab
+// says why.
 import "server-only";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -28,6 +30,7 @@ import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { FindingEvidence, FindingsSection } from "./findings";
 import { GatewayPolicySection } from "./gateway-policy";
+import { MonthSection } from "./month";
 import {
   canReadOperatorRanking,
   canSetOperatorPseudonyms,
@@ -69,17 +72,23 @@ function Header({
   ctx,
   at,
   month,
+  tab,
 }: {
   ctx: WsCtx;
   at: SpendAt;
   month: string;
+  tab: SpendView["tab"];
 }) {
   const t = useTranslations();
   return (
     <PageHeader
       eyebrow={ctx.wsName}
       title={t("pages.spend")}
-      description={t("spend.header.description")}
+      description={
+        tab === "month"
+          ? t("spend.month.description")
+          : t("spend.header.description")
+      }
       actions={
         <>
           <ExportDialog at={at} month={month} />
@@ -99,9 +108,11 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
     retry: routes.spend(
       at.org,
       at.ws,
-      view.drill === null
-        ? { tab: view.tab }
-        : { tab: view.tab, drill: view.drill },
+      view.drill !== null
+        ? { tab: view.tab, drill: view.drill }
+        : view.tab === "month" && view.by !== "agent"
+          ? { tab: view.tab, by: view.by }
+          : { tab: view.tab },
     ),
     readAt: now.toISOString(),
   };
@@ -111,7 +122,14 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
     // whose evidence is open.
     <PageRecord route="spend" id={view.finding ?? view.drill} />
   );
-  const header = <Header ctx={ctx} at={at} month={period.from.slice(0, 7)} />;
+  const header = (
+    <Header
+      ctx={ctx}
+      at={at}
+      month={period.from.slice(0, 7)}
+      tab={view.tab}
+    />
+  );
 
   if (view.drill !== null) {
     const [drill, findings, names] = await Promise.all([
@@ -142,7 +160,7 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
   }
 
   const [month, findings, waste, budgets] = await Promise.all([
-    source.spend.byGroup(ctx, "model", period),
+    source.spend.byGroup(ctx, view.tab === "month" ? view.by : "model", period),
     source.spend.findings(ctx),
     source.spend.waste(ctx, period),
     source.spend.budgets(ctx),
@@ -157,7 +175,9 @@ export async function Spend({ ctx, source, view, today }: SpendProps) {
     <>
       {record}
       {header}
-      <SummaryTiles month={month.value} waste={waste} />
+      {view.tab === "month" ? null : (
+        <SummaryTiles month={month.value} waste={waste} />
+      )}
       <SpendTabs
         at={at}
         current={view.tab}
@@ -202,6 +222,7 @@ async function body({
   view: SpendView;
   at: SpendAt;
   period: { from: string; to: string };
+  /** The month's rollup: by the Month tab's grouping there, by model elsewhere. */
   month: SpendReport;
   findings: Read<SpendFindings>;
   waste: Awaited<ReturnType<DataSource["spend"]["waste"]>>;
@@ -209,26 +230,43 @@ async function body({
   failure: Omit<Parameters<typeof SpendReadFailure>[0], "read">;
 }): Promise<ReactNode> {
   switch (view.tab) {
+    case "month":
+      return (
+        <MonthSection report={month} budgets={budgets} by={view.by} at={at} />
+      );
     case "findings": {
       if (!findings.ok)
         return <SpendReadFailure read={findings} {...failure} />;
-      const [operators, evidence] = await Promise.all([
+      // The operator ranking sits under the findings it coaches from. It is
+      // asked only for a viewer who may read it; anyone else sees who can
+      // (D15).
+      const [operators, evidence, ranking] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         view.finding === null
           ? Promise.resolve(null)
           : source.spend.findingEvidence(ctx, view.finding),
+        canReadOperatorRanking(ctx)
+          ? source.spend.operatorRanking(ctx, period)
+          : Promise.resolve(null),
       ]);
       return (
-        <FindingsSection
-          findings={findings.value}
-          operators={operators.ok ? operators.value.rows : []}
-          at={at}
-          evidence={
-            evidence === null ? null : (
-              <FindingEvidence evidence={evidence} at={at} />
-            )
-          }
-        />
+        <>
+          <FindingsSection
+            findings={findings.value}
+            operators={operators.ok ? operators.value.rows : []}
+            at={at}
+            evidence={
+              evidence === null ? null : (
+                <FindingEvidence evidence={evidence} at={at} />
+              )
+            }
+          />
+          <OperatorRankingSection
+            ranking={ranking}
+            at={at}
+            canSetPseudonyms={canSetOperatorPseudonyms(ctx)}
+          />
+        </>
       );
     }
     case "tokens": {
@@ -238,28 +276,14 @@ async function body({
     case "coaching":
       return <CoachingSection at={at} />;
     case "operator": {
-      // The ranking is asked only for a viewer who may read it; anyone else
-      // sees who can (D15).
-      const [report, ranking] = await Promise.all([
-        source.spend.byGroup(ctx, "operator", period),
-        canReadOperatorRanking(ctx)
-          ? source.spend.operatorRanking(ctx, period)
-          : Promise.resolve(null),
-      ]);
+      const report = await source.spend.byGroup(ctx, "operator", period);
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
       return (
-        <>
-          <OperatorRankingSection
-            ranking={ranking}
-            at={at}
-            canSetPseudonyms={canSetOperatorPseudonyms(ctx)}
-          />
-          <OperatorTable
-            report={report.value}
-            findings={listed(findings)}
-            at={at}
-          />
-        </>
+        <OperatorTable
+          report={report.value}
+          findings={listed(findings)}
+          at={at}
+        />
       );
     }
     case "agent":

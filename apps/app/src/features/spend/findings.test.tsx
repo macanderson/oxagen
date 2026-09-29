@@ -318,8 +318,10 @@ describe("Finding evidence", () => {
     const dialog = screen.getByTestId("spend-evidence-dialog");
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
-      // Findings is the default tab, so the list is the bare Spend path.
-      expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
+      // Closing the evidence returns to the list on the Findings tab.
+      expect(nav.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend/findings",
+      );
     });
   });
 
