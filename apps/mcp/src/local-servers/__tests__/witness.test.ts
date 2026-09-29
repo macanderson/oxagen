@@ -23,7 +23,7 @@ import {
 import type { ManifestServer } from "@oxagen/mcp-studio";
 import { describe, expect, it, vi } from "vitest";
 import { callServed } from "../../servers/call";
-import { fakePorts, published, run, server, textOf, view } from "../../servers/__tests__/fixtures";
+import { fakePorts, POLICIES, published, run, server, textOf, view } from "../../servers/__tests__/fixtures";
 import { createMachineAuth, MACHINE_HEADER } from "../auth";
 import { createLocalServersRoute } from "../route";
 import { localTransport } from "../transport";
@@ -64,6 +64,13 @@ function filesServer(): ManifestServer {
   } as unknown as ManifestServer;
 }
 
+/**
+ * The fixture policies that name no billing tool. A policy that names an
+ * action the manifest lacks does not compile, and with no compiled policy the
+ * call path denies every call.
+ */
+const FILES_POLICIES = POLICIES.filter((file) => file.path === "policy/approvals.cedar");
+
 /** The call path, the broker, and the route, wired the way index.ts wires them. */
 async function wire() {
   const broker = createInProcessBroker();
@@ -76,7 +83,11 @@ async function wire() {
         broker: () => broker,
       }),
   });
-  const served = await view(published({ servers: [filesServer()] }), ports, run({ machine: MACHINE }));
+  const served = await view(
+    published({ servers: [filesServer()], policies: FILES_POLICIES }),
+    ports,
+    run({ machine: MACHINE }),
+  );
   const route = createLocalServersRoute({
     authenticate: createMachineAuth({
       gatewayPurpose: GATEWAY_PURPOSE,
