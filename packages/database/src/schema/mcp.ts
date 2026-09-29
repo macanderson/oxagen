@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   text,
   timestamp,
@@ -17,6 +18,7 @@ import {
   idMixin,
   orgScopeMixin,
   softDeleteMixin,
+  uuidv7Default,
 } from "./_mixins";
 
 /**
@@ -504,6 +506,62 @@ export const mcpCredentialGrants = mcpSchema.table(
     ttlCheck: check(
       "credential_grants_ttl_check",
       sql`${t.expiresAt} > ${t.issuedAt} AND ${t.expiresAt} <= ${t.issuedAt} + interval '1 hour'`,
+    ),
+  }),
+);
+
+/**
+ * mcp.search_embeddings (M15, ADR-217): one embedding vector per search entry
+ * of a search-mode MCP server. A row is keyed by the entry's content hash and
+ * by the embedding target, so a changed entry or a new model writes a new row.
+ * ADR-217 makes this table the exception to ADR-194 for search entries.
+ *
+ * - `targetKey` is 32 lowercase hex characters. It hashes the provider, the
+ *   endpoint, and the model together.
+ * - `contentHash` is the entry's sha256 in 64 lowercase hex characters.
+ * - `vector` holds `dimensions` Float32 values in little endian order.
+ *
+ * A row is written once and never changed. The writer inserts with
+ * `ON CONFLICT DO NOTHING`, and the app role holds SELECT, INSERT, and DELETE
+ * only. Scope: orgScopeMixin, a `standard` tenant-owned table in the RLS
+ * manifest. The migration is 20260928120000_mcp_search_embeddings.sql.
+ */
+export const mcpSearchEmbeddings = mcpSchema.table(
+  "search_embeddings",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    targetKey: text("target_key").notNull(),
+    contentHash: text("content_hash").notNull(),
+    dimensions: integer("dimensions").notNull(),
+    vector: bytea("vector").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // The reader looks up a workspace's vectors for one target by content
+    // hash, and the writer's ON CONFLICT DO NOTHING keys on the same columns.
+    wsTargetHashUniq: uniqueIndex("search_embeddings_ws_target_hash_uniq").on(
+      t.workspaceId,
+      t.targetKey,
+      t.contentHash,
+    ),
+    targetKeyCheck: check(
+      "search_embeddings_target_key_check",
+      sql`${t.targetKey} ~ '^[0-9a-f]{32}$'`,
+    ),
+    contentHashCheck: check(
+      "search_embeddings_content_hash_check",
+      sql`${t.contentHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    dimensionsCheck: check(
+      "search_embeddings_dimensions_check",
+      sql`${t.dimensions} > 0 AND ${t.dimensions} <= 4096`,
+    ),
+    vectorLengthCheck: check(
+      "search_embeddings_vector_length_check",
+      sql`octet_length(${t.vector}) = ${t.dimensions} * 4`,
     ),
   }),
 );

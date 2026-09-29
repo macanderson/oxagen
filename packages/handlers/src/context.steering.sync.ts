@@ -298,7 +298,7 @@ async function readWorkspaceSettings(
       // would otherwise unlink every repository it listed. Removal takes a
       // file that still reads and no longer lists the repository.
       return {
-        publish: { stellaArchiveAfterDays: null },
+        publish: { stellaArchiveAfterDays: null, embeddings: null },
         findings: [],
         repositories: null,
       };
@@ -312,6 +312,7 @@ async function readWorkspaceSettings(
       return {
         publish: {
           stellaArchiveAfterDays: file.value.stella?.archive_after_days ?? null,
+          embeddings: file.value.embeddings ?? null,
         },
         findings: [],
         repositories: file.repositories,

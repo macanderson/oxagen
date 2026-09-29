@@ -8,7 +8,14 @@
 // tool it names. Every one of them is a governed action. Billing admits
 // each one before anything else runs, and each is metered whether it was
 // allowed, denied, parked, or failed.
-import { effectiveAnnotations, execute, type CallToolResult, type ManifestServer, type Transport } from "@oxagen/mcp-studio";
+import {
+  SearchIndexError,
+  effectiveAnnotations,
+  execute,
+  type CallToolResult,
+  type ManifestServer,
+  type Transport,
+} from "@oxagen/mcp-studio";
 import { decideToolCall, type ToolCallVerdict } from "@oxagen/policy";
 import { findInServer, resolveName } from "./names";
 import { keywordRank, searchArguments, searchEntry, searchLines, type Ranker, type SearchEntry } from "./search";
@@ -317,9 +324,12 @@ async function search(view: ServedView, ports: ServedPorts, server: ManifestServ
   try {
     found = await rank(parsed.query, entries, parsed.limit);
   } catch (error) {
+    // A SearchIndexError's code says why (no_key, unreachable, timeout), and
+    // carries no key, url, or response body.
     ports.log.warn("The search index failed, so search ranked by keyword.", {
       server: server.name,
       error: errorName(error),
+      ...(error instanceof SearchIndexError ? { code: error.code } : {}),
     });
     found = await keywordRank(parsed.query, entries, parsed.limit);
   }
@@ -357,13 +367,14 @@ async function governed(view: ServedView, ports: ServedPorts, entry: ServedTool,
 /**
  * Answer a tools/call for a published server's tool, or null when the name
  * names no published server, which leaves the call to Oxagen's own tools.
+ * Search ranks with rank, then ports.rank, then by keyword.
  */
 export async function callServed(
   view: ServedView,
   ports: ServedPorts,
   name: string,
   args: Record<string, unknown>,
-  rank: Ranker = keywordRank,
+  rank?: Ranker,
 ): Promise<CallToolResult | null> {
   const resolved = resolveName(view, name);
   if (resolved === null) return null;
@@ -379,7 +390,7 @@ export async function callServed(
 
   const { server } = resolved;
   if (resolved.kind === "search") {
-    const answer = await search(view, ports, server, args, rank);
+    const answer = await search(view, ports, server, args, rank ?? ports.rank ?? keywordRank);
     await meter(view, ports, "search", `${server.name}__search`, server.name, answer.outcome);
     return answer.result;
   }

@@ -78,13 +78,14 @@ export const MCP_STUDIO_SCHEMAS: readonly McpStudioSchemaEntry[] = [
  * app's bundler reads that URL form as an asset import and cannot resolve a
  * directory, so the app build fails once the app imports this package, as the
  * steering publisher does through @oxagen/steering-bundle.
+ *
+ * A function, not a constant. The API bundles this package to CJS, where
+ * `import.meta.url` is undefined, so reading it when the module loads crashed
+ * the API at startup (#4706). Only the generator and the tests call this.
  */
-export const SCHEMAS_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "schemas",
-);
+export function schemasDir(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "schemas");
+}
 
 /** The draft every published schema follows. */
 export const JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema";
@@ -107,7 +108,7 @@ export function schemaFilePath(entry: McpStudioSchemaEntry): string {
 }
 
 /** Write every schema under `dir`. Returns the paths it wrote. */
-export function writeSchemaFiles(dir: string = SCHEMAS_DIR): string[] {
+export function writeSchemaFiles(dir: string = schemasDir()): string[] {
   return MCP_STUDIO_SCHEMAS.map((entry) => {
     const path = join(dir, schemaFilePath(entry));
     mkdirSync(dirname(path), { recursive: true });
