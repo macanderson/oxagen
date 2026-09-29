@@ -1,6 +1,6 @@
-// Spend › By operator › Operator ranking (D15, #2962; spec "Operator
-// ranking"): the workspace's operators by unproductive spend for the period,
-// highest first, from get_operator_ranking. An org Owner or Admin, or the
+// Spend › Findings › Operator ranking (D15, #2962; spec "Operator
+// ranking"), under the findings it coaches from: the workspace's operators by
+// unproductive spend for the period, highest first, from get_operator_ranking. An org Owner or Admin, or the
 // workspace's Owner, reads it, and anyone else sees who can. Only an org
 // Owner or Admin sees the pseudonym switch. Each figure links to its
 // definition under the table, and each operator's runs link to their Cost
@@ -8,7 +8,7 @@
 // operator rows and the row for runs with no operator sum to the total row.
 // With the workspace's pseudonyms on, a stable pseudonym replaces each name,
 // and the share, the run count and the runs are hidden: each could match a
-// pseudonym to a named row on the By operator table below.
+// pseudonym to a named row on the By operator table.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {

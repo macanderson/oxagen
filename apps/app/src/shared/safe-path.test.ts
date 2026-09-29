@@ -327,7 +327,13 @@ describe("routes", () => {
         tab: "findings",
         finding: "fnd_01k5rtgh",
       }),
-    ).toBe("/acme/core-platform/spend?finding=fnd_01k5rtgh");
+    ).toBe("/acme/core-platform/spend/findings?finding=fnd_01k5rtgh");
+    expect(routes.spend("acme", "core-platform", { tab: "month" })).toBe(
+      "/acme/core-platform/spend",
+    );
+    expect(
+      routes.spend("acme", "core-platform", { tab: "month", by: "mcp_server" }),
+    ).toBe("/acme/core-platform/spend?by=mcp_server");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });

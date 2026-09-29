@@ -4,7 +4,7 @@
 // (tool definition, context frame and steering tokens, retries, prompts per
 // session) are not on the rollup either, so the tab names what it will show
 // and what is missing rather than inventing an item. Each operator signal
-// links to the operator ranking on the By operator tab (D15), where a manager
+// links to the operator ranking on the Findings tab (D15), where a manager
 // sees whose unproductive spend it would move. Nothing here changes an agent
 // by itself.
 import { useTranslations } from "next-intl";
@@ -35,7 +35,7 @@ const OPERATOR_SIGNALS = [
 
 export function CoachingSection({ at }: { at: SpendAt }) {
   const t = useTranslations("spend.coaching");
-  const ranking = routes.spend(at.org, at.ws, { tab: "operator" });
+  const ranking = routes.spend(at.org, at.ws, { tab: "findings" });
   return (
     <NotBackedPanel id="spend-coaching" title={t("title")} gap="rollup">
       {t("notBacked")}

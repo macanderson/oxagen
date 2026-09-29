@@ -11,6 +11,7 @@
     },
     "tabs": {
       "label": "Spend views",
+      "month": "Month",
       "findings": "Findings",
       "tokens": "Tokens",
       "coaching": "Coaching",
@@ -651,8 +652,8 @@
     "states": {
       "loading": "Loading spend",
       "empty": {
-        "title": "No spend to report yet",
-        "body": "Rollups are derived indexes rebuilt from frames. With no model call recorded there is nothing to roll up, and nothing billable.",
+        "title": "Nothing spent yet",
+        "body": "Spend fills in from the first run.",
         "back": "Back to Fleet"
       },
       "denied": {
@@ -767,6 +768,48 @@
       "empty": "No tool has a recorded amount.",
       "footer": "The leading {shown} of {total}. The table holds every tool.",
       "otherCurrency": "{count, plural, one {One tool is} other {# tools are}} billed in another currency and shown in the table only."
+    },
+    "month": {
+      "description": "What every run cost, from its own model requests.",
+      "span": "{from} to {to}, {count, plural, one {# run} other {# runs}}",
+      "chart": "Spend by day",
+      "noPricedDay": "No run this month carried a price.",
+      "empty": "No run this month falls in a group here.",
+      "unnamedOperator": "Unnamed operator",
+      "other": {
+        "label": "Everything else",
+        "note": "Model output, prompts, steering, files, and commands"
+      },
+      "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
+      "reported": "The harness reported {amount} of this total. The gateway metered the rest.",
+      "budget": {
+        "label": "Monthly budget",
+        "used": "{ratio} of {limit}",
+        "position": "{ratio} of the monthly budget used",
+        "reached": "Reached",
+        "none": "No budget set"
+      },
+      "by": {
+        "label": "Group by",
+        "options": {
+          "agent": "Agent",
+          "operator": "Operator",
+          "model": "Model",
+          "mcp_server": "MCP server"
+        },
+        "titles": {
+          "agent": "By agent",
+          "operator": "By operator",
+          "model": "By model",
+          "mcp_server": "By MCP server"
+        }
+      },
+      "columns": {
+        "runs": "Runs",
+        "share": "Share",
+        "cost": "Cost",
+        "total": "Total"
+      }
     }
   }
 }
