@@ -45,7 +45,7 @@ type Member = { id: string; name: string | null; email: string };
 type Agent = { id: string; slug: string; name: string };
 
 /** Who took a governance action and when; the record carries an id, never a name. */
-function Actor({
+export function Actor({
   userRef,
   at,
   members,

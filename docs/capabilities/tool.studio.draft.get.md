@@ -10,7 +10,7 @@
 
 ## Intent
 
-Studio reads your draft for one server folder when a page opens, and again after a save is refused as stale. This capability returns the edits `save_studio_draft` stored, or null when the folder has no draft. The source comes back as its type and size, never its text. The decision record is ADR-224.
+Studio reads your draft for one server folder when a page opens, and again after a save is refused as stale. This capability returns the edits `save_studio_draft` stored, or null when the folder has no draft. The source comes back as its type and size, never its text. The decision record is [ADR-224](../adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md).
 
 ## Input
 

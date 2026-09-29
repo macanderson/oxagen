@@ -4,13 +4,16 @@
 // PR on the branch tools/<server>:
 //
 //   1. Read the draft, and refuse a stale revision.
-//   2. Read the folder's managed files on the production branch.
+//   2. Resolve the production branch to a commit, and read the folder's
+//      managed files at that commit.
 //   3. Import the draft's source again, so the PR is built from inputs.
 //   4. Build the folder (build.ts). The build refuses while an imported tool
 //      has no risk, side effect, or egress, and while the folder does not
 //      compile or lock.
 //   5. Open the PR through the tools steering PR path (tools.pr.open.ts). An
 //      open PR on the branch gets a new commit instead of a second PR.
+//      Review passes the commit it read as `at`: a new branch starts there,
+//      and a branch that moved since the read is refused.
 //   6. Record the PR on the draft.
 //
 // The commit holds only the files that differ from the branch it lands on.
@@ -44,7 +47,7 @@ import { postgresStudioDraftStore, staleRevision, type StudioDraftStore } from "
 /** The host reads Review makes. The opener makes the writes. */
 export type StudioReviewHost = Pick<
   ToolsPullRequestHost,
-  "resolveRepository" | "readFile" | "listFiles" | "findOpenPullRequest"
+  "resolveRepository" | "branchHead" | "readFile" | "listFiles" | "findOpenPullRequest"
 >;
 
 export interface OpenStudioReviewDeps {
@@ -113,8 +116,19 @@ export function createOpenStudioReviewHandler(
 
     const host = deps.host();
     const repo = await host.resolveRepository(scope);
+    // Read one commit, not the branch name. A merge that lands during the
+    // import would otherwise sit under files built without it, and the
+    // steering PR would undo it.
+    const productionSha = await host.branchHead(repo, repo.defaultBranch);
+    if (productionSha === null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "production_branch_missing",
+        message: `${repo.fullName} has no ${repo.defaultBranch} branch.`,
+      });
+    }
     const [production, credentials, imported] = await Promise.all([
-      readFolder(host, repo, repo.defaultBranch, draft.server),
+      readFolder(host, repo, productionSha, draft.server),
       deps.credentials(scope),
       draft.source === null ? Promise.resolve(null) : deps.importSource(draft.source),
     ]);
@@ -128,17 +142,24 @@ export function createOpenStudioReviewHandler(
       commitMessage: reviewCommitMessage(folder, draft.revision),
     } satisfies Omit<ToolsPullRequestArgs, "files">;
 
-    // An open PR on the branch gets a commit against the branch's files.
+    // An open PR on the branch gets a commit against the branch's files, read
+    // at one commit so the opener can refuse a branch that moved.
     let result: ToolsPullRequestResult | null = null;
     const open = await host.findOpenPullRequest(repo, { head: branch, base: repo.defaultBranch });
-    if (open !== null) {
-      const onBranch = await readFolder(host, repo, branch, draft.server);
+    const branchSha = open === null ? null : await host.branchHead(repo, branch);
+    if (open !== null && branchSha !== null) {
+      const onBranch = await readFolder(host, repo, branchSha, draft.server);
       const files = folderCommit(draft.server, folder.files, onBranch);
       if (files.length === 0) {
         throw unchanged(`Steering PR #${open.number} already holds every edit in the ${draft.server} draft.`);
       }
       try {
-        result = await deps.opener.open(scope, { ...message, files, existing: { number: open.number } });
+        result = await deps.opener.open(scope, {
+          ...message,
+          files,
+          existing: { number: open.number },
+          at: branchSha,
+        });
       } catch (err) {
         // The PR closed, or its branch went, between the read and the write.
         if (!(isHandlerError(err) && PR_GONE.has(err.reason))) throw err;
@@ -151,7 +172,7 @@ export function createOpenStudioReviewHandler(
           `The ${draft.server} draft matches ${repo.defaultBranch}, so a steering PR would change nothing. Edit the server's tools, then Review.`,
         );
       }
-      result = await deps.opener.open(scope, { ...message, files });
+      result = await deps.opener.open(scope, { ...message, files, at: productionSha });
     }
 
     await deps.store.recordPr(scope, draft.server, {

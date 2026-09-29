@@ -24,13 +24,27 @@ import {
 
 /** The most edits one draft holds. */
 export const STUDIO_DRAFT_OPS_MAX = 2000;
-/** server.toml's largest size in a draft: 256 KiB. */
+/**
+ * The largest list of edits one draft holds, in UTF-8 bytes of its JSON: 8
+ * MiB. The count alone lets 2,000 saved tests reach more than a gigabyte.
+ */
+export const STUDIO_DRAFT_OPS_BYTES_MAX = 8 * 1024 * 1024;
+/**
+ * server.toml's largest size in a draft, in UTF-8 bytes: 256 KiB. The table
+ * checks the same limit with octet_length.
+ */
 export const STUDIO_SERVER_TOML_MAX = 256 * 1024;
 /**
  * The largest source a draft holds, in UTF-8 bytes: DEFINITION_BYTES_MAX in
  * `@oxagen/mcp-studio`, 25 MiB.
  */
 export const STUDIO_SOURCE_BYTES_MAX = 25 * 1024 * 1024;
+/**
+ * The largest save request the API reads, in bytes: 36 MiB. It holds the
+ * source, the edits, and server.toml at their limits, with room for the JSON
+ * around them. The API refuses a larger body before it parses it.
+ */
+export const STUDIO_DRAFT_BODY_BYTES_MAX = 36 * 1024 * 1024;
 /** The most tools one server's tool list carries. */
 export const STUDIO_SOURCE_TOOLS_MAX = 2000;
 /** The most files one definition carries. */
@@ -159,9 +173,16 @@ export const studioSourceSchema = z.union([
 ]);
 export type StudioSource = z.output<typeof studioSourceSchema>;
 
+const UTF8 = new TextEncoder();
+
+/** A string's size in UTF-8 bytes, the unit Postgres's octet_length counts. */
+function utf8Bytes(text: string): number {
+  return UTF8.encode(text).length;
+}
+
 /** The UTF-8 size of a source as the draft stores it. */
 export function studioSourceBytes(source: StudioSource): number {
-  return new TextEncoder().encode(JSON.stringify(source)).length;
+  return utf8Bytes(JSON.stringify(source));
 }
 
 /** A draft as Oxagen holds it. The source is summarized, never echoed. */
@@ -205,7 +226,11 @@ export const toolStudioDraftSaveInputObject = z
     serverId: z.string().min(1).max(64).optional(),
     /** Every staged edit. The list replaces the stored one. */
     ops: z.array(studioDraftOpSchema).max(STUDIO_DRAFT_OPS_MAX),
-    /** server.toml as Studio authored it. Omit to keep the stored one. */
+    /**
+     * server.toml as Studio authored it. Omit to keep the stored one. The
+     * length cap counts UTF-16 units, and the save's size rule counts UTF-8
+     * bytes, the unit the table checks.
+     */
     serverToml: z.string().min(1).max(STUDIO_SERVER_TOML_MAX).optional(),
     /** What the draft imports from. Omit to keep the stored one. */
     source: studioSourceSchema.optional(),
@@ -238,6 +263,24 @@ export const toolStudioDraftSave = registerCapability({
   },
   audit: { targetKind: "tool_server_folder", targetIdField: "server" },
   input: toolStudioDraftSaveInputObject.superRefine((input, ctx) => {
+    const opsBytes = utf8Bytes(JSON.stringify(input.ops));
+    if (opsBytes > STUDIO_DRAFT_OPS_BYTES_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ops"],
+        message: `the edits are ${opsBytes} bytes, and a draft holds at most ${STUDIO_DRAFT_OPS_BYTES_MAX}`,
+      });
+    }
+    if (input.serverToml !== undefined) {
+      const bytes = utf8Bytes(input.serverToml);
+      if (bytes > STUDIO_SERVER_TOML_MAX) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["serverToml"],
+          message: `server.toml is ${bytes} bytes, and a draft holds at most ${STUDIO_SERVER_TOML_MAX}`,
+        });
+      }
+    }
     if (input.source !== undefined) {
       const bytes = studioSourceBytes(input.source);
       if (bytes > STUDIO_SOURCE_BYTES_MAX) {

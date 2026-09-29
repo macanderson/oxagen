@@ -6,6 +6,7 @@ import {
 } from "@oxagen/agent/runtime/steering-pr";
 import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
+import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
@@ -70,6 +71,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // MCP server discovery (lane M10, #4682) runs in ./mcp-studio/discovery,
+  // which @oxagen/inngest-functions cannot import. It is loaded on the first
+  // run, not at boot.
+  setMcpServerDiscoveryRunner({
+    run: async (data) =>
+      (await import("./mcp-studio/discovery/entry")).runDiscoveryEvent(data),
+    sweep: async (now) =>
+      (await import("./mcp-studio/discovery/entry")).planDiscoverySweep(now),
   });
   // Provisioning a steering repo (lane S1, #4450) runs the steps in
   // ./steering_repo.provision, which @oxagen/inngest-functions cannot import.

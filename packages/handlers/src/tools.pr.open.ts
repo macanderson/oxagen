@@ -7,16 +7,20 @@
 // Without `existing`:
 //   1. Refuse a branch outside tools/, a path outside the branch's folder,
 //      more than 299 files, or a repository without steering/governance.toml.
-//   2. Read the production branch's head and create the branch at it. A
+//   2. Create the branch at `at`, the commit the caller built the files
+//      against, or at the production head when the caller names none. A
 //      branch that already exists is refused, so two writers never share one.
-//   3. Write every file in one commit on that head. Null content deletes.
-//   4. Open the PR into the production branch with OXAGEN_PR_LABELS.
+//   3. Write every file in one commit on that commit. Null content deletes.
+//   4. Open the PR into the production branch with OXAGEN_PR_LABELS. When
+//      the PR does not open, delete the branch, so a retry can create it.
 //   5. Run the steering PR checks on the new head and report the result as
-//      the "Oxagen steering" check.
+//      the "Oxagen steering" check. A report that fails is logged. The PR is
+//      open, and the missing required check blocks its merge.
 //
 // With `existing`, step 2 finds that PR open on the branch and targeting the
 // production branch, step 3 adds one commit on the branch's head, and step 4
-// replaces the PR's title and body.
+// replaces the PR's title and body. When the caller names `at` and the
+// branch moved off it, the call is refused before it writes.
 //
 // The host is either GitHub or GitLab: createSteeringHost() routes each call
 // by the repository's provider. A person's role is not checked here, because
@@ -67,6 +71,12 @@ export interface ToolsPullRequestArgs {
   files: ToolsPullRequestFile[];
   /** The open PR on `branch` to add a commit to, instead of opening one. */
   existing?: { number: number };
+  /**
+   * The commit the caller read to build `files`. A new branch starts here
+   * instead of at the production head. With `existing`, the call is refused
+   * when the branch's head is not this commit.
+   */
+  at?: string;
 }
 
 export interface ToolsPullRequestResult {
@@ -92,6 +102,7 @@ export type ToolsPullRequestHost = Pick<
   | "listFiles"
   | "branchHead"
   | "ensureBranch"
+  | "deleteBranch"
   | "commitFiles"
   | "openPullRequest"
   | "updatePullRequest"
@@ -219,15 +230,26 @@ export function createToolsPullRequestOpener(
         summary: `Oxagen could not run the steering checks on ${head}: ${err instanceof Error ? err.message : String(err)}. Push a commit to the branch to run them again.`,
       };
     }
-    await host.reportCheckRun(repo, {
-      name: REQUIRED_CHECK_NAME,
-      headSha: head,
-      conclusion: result.conclusion,
-      title: result.title,
-      summary: result.summary,
-      startedAt,
-      completedAt: deps.now().toISOString(),
-    });
+    try {
+      await host.reportCheckRun(repo, {
+        name: REQUIRED_CHECK_NAME,
+        headSha: head,
+        conclusion: result.conclusion,
+        title: result.title,
+        summary: result.summary,
+        startedAt,
+        completedAt: deps.now().toISOString(),
+      });
+    } catch (err) {
+      // The commit and the PR exist. Throwing here would tell the caller
+      // nothing was written, and a retry would find the branch taken. The
+      // required check stays missing, so the PR cannot merge until a push
+      // reports it.
+      logger.error(
+        { err, orgId: scope.orgId, workspaceId: scope.workspaceId, head },
+        "tools.pr.open: the Oxagen steering check was not reported",
+      );
+    }
   }
 
   return {
@@ -260,24 +282,47 @@ export function createToolsPullRequestOpener(
             `${args.branch} already exists. Add to its open PR, or delete the branch and try again.`,
           );
         }
+        // The files were built against `at`. Starting the branch at a newer
+        // production head would revert whatever merged in between.
+        const base = args.at ?? productionHead;
         await host.ensureBranch(repo, args.branch, production, {
           exclusive: true,
-          at: productionHead,
+          at: base,
         });
         const { sha } = await host.commitFiles(repo, {
           branch: args.branch,
-          parent: productionHead,
+          parent: base,
           message: args.commitMessage,
           files: args.files,
         });
-        const pr = await host.openPullRequest(repo, {
-          title: args.title,
-          head: args.branch,
-          base: production,
-          body: args.body,
-          labels: OXAGEN_PR_LABELS,
-        });
-        await reportChecks(host, repo, scope, sha, productionHead);
+        let pr: { number: number; htmlUrl: string };
+        try {
+          pr = await host.openPullRequest(repo, {
+            title: args.title,
+            head: args.branch,
+            base: production,
+            body: args.body,
+            labels: OXAGEN_PR_LABELS,
+          });
+        } catch (err) {
+          // A branch with no PR would refuse every retry as
+          // tools_branch_exists. Delete it, then report the first failure.
+          try {
+            await host.deleteBranch(repo, args.branch);
+          } catch (cleanupErr) {
+            logger.error(
+              {
+                err: cleanupErr,
+                orgId: scope.orgId,
+                workspaceId: scope.workspaceId,
+                branch: args.branch,
+              },
+              "tools.pr.open: the branch of a PR that did not open was not deleted",
+            );
+          }
+          throw err;
+        }
+        await reportChecks(host, repo, scope, sha, base);
         return {
           number: pr.number,
           url: pr.htmlUrl,
@@ -303,6 +348,14 @@ export function createToolsPullRequestOpener(
         throw refuse(
           "tools_branch_missing",
           `${args.branch} is gone from ${repo.fullName}. Open a new tools steering PR instead.`,
+        );
+      }
+      // The files hold only what differs from the branch at `at`. On any
+      // other head, the commit would drop or undo what the new commits wrote.
+      if (args.at !== undefined && parent !== args.at) {
+        throw refuse(
+          "tools_branch_moved",
+          `${args.branch} moved while the files were built. Read the branch again and retry.`,
         );
       }
       const { sha } = await host.commitFiles(repo, {

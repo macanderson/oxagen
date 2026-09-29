@@ -714,13 +714,17 @@ export function buildFolder(input: BuildInput): BuiltFolder {
     }
   }
 
+  // A recorded call production already holds is not added twice, so a Review
+  // after the steering PR merges finds nothing new to commit.
   const kept = new Set(Object.keys(after));
   const calls = keptCalls(production.get(CALLS_FILE), (tool) => kept.has(tool));
   const tested: string[] = [];
   for (const { identity, op } of staged.tests) {
     const key = keyOf(identity);
     if (key === undefined) continue;
-    calls.push(JSON.stringify(recordedCall(op, key)));
+    const line = JSON.stringify(recordedCall(op, key));
+    if (calls.includes(line)) continue;
+    calls.push(line);
     tested.push(key);
   }
   if (calls.length > 0) files.set(CALLS_FILE, `${calls.join("\n")}\n`);

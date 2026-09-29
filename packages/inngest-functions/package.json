@@ -13,6 +13,7 @@
     "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
     "./client": "./src/inngest.ts",
     "./steering-sync-runner": "./src/lib/steering-sync-runner.ts",
+    "./mcp-server-discovery-runner": "./src/lib/mcp-server-discovery-runner.ts",
     "./steering-repo-provision-runner": "./src/lib/steering-repo-provision-runner.ts",
     "./steering-repo-health-runner": "./src/lib/steering-repo-health-runner.ts",
     "./run-fit-runner": "./src/lib/run-fit-runner.ts",
