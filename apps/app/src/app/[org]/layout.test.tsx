@@ -119,7 +119,7 @@ describe("OrganizationLayout", () => {
     // the shell, then swaps it into the fallback's place, so for a moment
     // both are in the document. The page must not bring a second main#main
     // (#4053): the frame's one landmark holds the fallback, then the page.
-    const reading = Promise.withResolvers<void>();
+    const reading = Promise.withResolvers<"ready">();
     async function StreamedPage() {
       await reading.promise;
       return <div data-testid="page">page</div>;
@@ -132,24 +132,33 @@ describe("OrganizationLayout", () => {
     );
     const reader = stream.getReader();
     const decoder = new TextDecoder();
+    // React types the stream's chunks as any. They are bytes: check, then
+    // decode, or answer null once the stream ends.
+    async function nextChunk(): Promise<string | null> {
+      const chunk = await reader.read();
+      if (chunk.done) return null;
+      const bytes: unknown = chunk.value;
+      if (!ArrayBuffer.isView(bytes)) throw new TypeError("React streamed a chunk that is not bytes");
+      return decoder.decode(bytes, { stream: true });
+    }
     // The shell flushes in one go, with the fallback in the page's place; read
     // its chunks up to the frame's closing tag.
     let html = "";
     while (!html.includes("</main>")) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      html += decoder.decode(chunk.value);
+      const chunk = await nextChunk();
+      if (chunk === null) break;
+      html += chunk;
     }
     expect(html.match(/<main\b/g)).toHaveLength(1);
     expect(html).toMatch(
       /<main id="main"[^>]*>.*data-testid="page-skeleton".*<\/main>/s,
     );
     expect(html).not.toContain('data-testid="page"');
-    reading.resolve();
+    reading.resolve("ready");
     for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      html += decoder.decode(chunk.value);
+      const chunk = await nextChunk();
+      if (chunk === null) break;
+      html += chunk;
     }
     // The page arrived in its hidden segment after the frame's landmark, and
     // the document still holds one main.
