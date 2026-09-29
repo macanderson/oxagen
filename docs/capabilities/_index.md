@@ -617,12 +617,14 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [create_relay](tool.relay.create.md) | [tool.relay.create.ts](../../packages/oxagen/src/contracts/tool.relay.create.ts) | api |
 | [get_studio_draft](tool.studio.draft.get.md) | [tool.studio.draft.get.ts](../../packages/oxagen/src/contracts/tool.studio.draft.get.ts) | api, mcp |
 | [import_tools](tool.import.md) | [tool.import.ts](../../packages/oxagen/src/contracts/tool.import.ts) | api, mcp |
 | [list_tool_declarations](tool.declaration.list.md) | [tool.declaration.list.ts](../../packages/oxagen/src/contracts/tool.declaration.list.ts) | api, agent, mcp |
 | [list_tool_versions](tool.version.list.md) | [tool.version.list.ts](../../packages/oxagen/src/contracts/tool.version.list.ts) | api, mcp |
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
+| [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |
 | [save_studio_draft](tool.studio.draft.save.md) | [tool.studio.draft.save.ts](../../packages/oxagen/src/contracts/tool.studio.draft.save.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp |
 | [set_tool_state](tool.state.set.md) | [tool.state.set.ts](../../packages/oxagen/src/contracts/tool.state.set.ts) | api, mcp |

@@ -11,6 +11,7 @@
 // When the connection closes, every call in flight is stopped, so nothing
 // reaches an upstream while the relay is disconnected.
 import {
+  CLOSE_TOKEN_REVOKED,
   decodeBrokerFrame,
   DEFAULT_MISSED_HEARTBEATS,
   encodeFrame,
@@ -196,6 +197,7 @@ export function startRelay(options: StartRelayOptions): RelayHandle {
         headers: verdict.headers,
         body: verdict.body,
         deadlineMs: verdict.deadlineMs,
+        ...(verdict.clientCert === undefined ? {} : { clientCert: verdict.clientCert }),
         signal: controller.signal,
         sink,
       };
@@ -277,6 +279,13 @@ export function startRelay(options: StartRelayOptions): RelayHandle {
       for (const call of open) call.sink.close();
       if (socket === ws) socket = undefined;
       log("disconnected", { code, reason: clip(reason.toString("utf8"), 200), calls_stopped: open.length });
+      if (code === CLOSE_TOKEN_REVOKED) {
+        // The relay keeps dialing, and the broker answers each dial with 401
+        // until an operator restarts the relay with a new token.
+        log("token_revoked", {
+          message: "Oxagen revoked this relay's token. Mint a new relay token and restart the relay with it.",
+        });
+      }
       if (stopped) return;
       const delay = backoffDelay(attempt, backoff, random);
       attempt += 1;
