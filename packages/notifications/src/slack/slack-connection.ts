@@ -74,16 +74,23 @@ const envelopeSchema = z.object({
   ciphertext: z.string().min(1),
 });
 
-const settings = schema.organizations.settings;
+/**
+ * The `organizations.settings` column, read when a query runs. Reading it when
+ * the module loads would throw in any test that mocks `@oxagen/database` with
+ * a partial schema and imports this module through `@oxagen/notifications`.
+ */
+function settingsColumn() {
+  return schema.organizations.settings;
+}
 
 /** The settings column as an object, whatever it holds today. */
 function settingsObject() {
-  return sql`CASE WHEN jsonb_typeof(${settings}) = 'object' THEN ${settings} ELSE '{}'::jsonb END`;
+  return sql`CASE WHEN jsonb_typeof(${settingsColumn()}) = 'object' THEN ${settingsColumn()} ELSE '{}'::jsonb END`;
 }
 
 /** A condition: the organization's Slack setting belongs to `teamId`. */
 function ownedBy(teamId: string) {
-  return sql`${settings} -> ${SLACK_NOTICES_SETTING}::text ->> 'teamId' = ${teamId}`;
+  return sql`${settingsColumn()} -> ${SLACK_NOTICES_SETTING}::text ->> 'teamId' = ${teamId}`;
 }
 
 async function sealToken(token: string): Promise<{ keyId: string; ciphertext: string }> {
@@ -135,7 +142,7 @@ export async function loadSlackConnection(orgId: string): Promise<SlackConnectio
       .limit(1);
     if (!account) return null;
     const [org] = await tx
-      .select({ settings })
+      .select({ settings: settingsColumn() })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, orgId))
       .limit(1);
@@ -227,7 +234,7 @@ export async function saveSlackConnection(input: {
     await tx
       .update(schema.organizations)
       .set({
-        settings: sql`jsonb_set(${settingsObject()}, ${`{${SLACK_NOTICES_SETTING}}`}::text[], CASE WHEN ${ownedBy(install.team.id)} THEN jsonb_set(${settings} -> ${SLACK_NOTICES_SETTING}::text, '{lastFailure}', 'null'::jsonb, true) ELSE ${fresh}::jsonb END, true)`,
+        settings: sql`jsonb_set(${settingsObject()}, ${`{${SLACK_NOTICES_SETTING}}`}::text[], CASE WHEN ${ownedBy(install.team.id)} THEN jsonb_set(${settingsColumn()} -> ${SLACK_NOTICES_SETTING}::text, '{lastFailure}', 'null'::jsonb, true) ELSE ${fresh}::jsonb END, true)`,
       })
       .where(eq(schema.organizations.id, orgId));
     return { replacedTokenEnvelopes: replaced.map((row) => row.tokenEnvelope) };
@@ -250,7 +257,7 @@ export async function setSlackChannel(input: {
     tx
       .update(schema.organizations)
       .set({
-        settings: sql`jsonb_set(jsonb_set(${settings}, ${`{${SLACK_NOTICES_SETTING},channel}`}::text[], ${channel}::jsonb, true), ${`{${SLACK_NOTICES_SETTING},lastFailure}`}::text[], 'null'::jsonb, true)`,
+        settings: sql`jsonb_set(jsonb_set(${settingsColumn()}, ${`{${SLACK_NOTICES_SETTING},channel}`}::text[], ${channel}::jsonb, true), ${`{${SLACK_NOTICES_SETTING},lastFailure}`}::text[], 'null'::jsonb, true)`,
       })
       .where(and(eq(schema.organizations.id, input.orgId), ownedBy(input.teamId)))
       .returning({ id: schema.organizations.id }),
@@ -271,14 +278,14 @@ export async function recordSlackFailure(input: {
   const path = `{${SLACK_NOTICES_SETTING},lastFailure}`;
   const onlyWhenSet =
     input.failure === null
-      ? sql`jsonb_typeof(${settings} -> ${SLACK_NOTICES_SETTING}::text -> 'lastFailure') = 'object'`
+      ? sql`jsonb_typeof(${settingsColumn()} -> ${SLACK_NOTICES_SETTING}::text -> 'lastFailure') = 'object'`
       : sql`true`;
   // tenancy: filtered by orgId from the health scope Oxagen stored for that
   // org, and guarded by the connection's team id.
   await withSystemDb((tx) =>
     tx
       .update(schema.organizations)
-      .set({ settings: sql`jsonb_set(${settings}, ${path}::text[], ${value}::jsonb, true)` })
+      .set({ settings: sql`jsonb_set(${settingsColumn()}, ${path}::text[], ${value}::jsonb, true)` })
       .where(and(eq(schema.organizations.id, input.orgId), ownedBy(input.teamId), onlyWhenSet)),
   );
 }

@@ -201,6 +201,13 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "authorize_slack_connection",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "bind_agent_environment",
       "reads": [],
@@ -667,6 +674,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "delete_slack_connection",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -1665,6 +1679,13 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "get_slack_connection",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_spend",
       "reads": [],
@@ -2586,6 +2607,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "list_slack_channels",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -3786,6 +3814,13 @@
       "writes": []
     },
     {
+      "domain": "org",
+      "name": "set_slack_channel",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "set_spend_budget",
       "reads": [],
@@ -3866,6 +3901,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "start_slack_connection",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
