@@ -86,7 +86,7 @@ describe("the spec", () => {
     );
   });
 
-  it("ships the mockup's twenty-four Lucide glyphs", () => {
+  it("ships the mockup's twenty-four glyphs", () => {
     expect(AVATAR_ICONS).toHaveLength(24);
     expect(AVATAR_ICONS).toContain("rocket");
     expect(AVATAR_ICONS).toContain("shield-check");

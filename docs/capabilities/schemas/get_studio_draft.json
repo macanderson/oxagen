@@ -1,0 +1,324 @@
+{
+  "name": "get_studio_draft",
+  "domain": "tool",
+  "description": "Read Studio's draft for one server folder: the staged edits, server.toml, a summary of the source, the revision, and the steering PR Review opened from it. Null when the folder has no draft.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "server"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "draft": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              },
+              "serverId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "ops": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "import"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "remove"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "classify"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "risk": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "critical"
+                          ]
+                        },
+                        "sideEffect": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write",
+                            "irreversible"
+                          ]
+                        },
+                        "egress": {
+                          "type": "string",
+                          "enum": [
+                            "local",
+                            "org_tenant",
+                            "third_party"
+                          ]
+                        },
+                        "impacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "maxItems": 32
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool",
+                        "risk",
+                        "sideEffect",
+                        "egress",
+                        "impacts"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "describe"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1024
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool",
+                        "description"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "test"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "environment": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "args": {
+                          "type": "string",
+                          "maxLength": 65536
+                        },
+                        "request": {
+                          "type": "string",
+                          "maxLength": 65536
+                        },
+                        "raw": {
+                          "type": "string",
+                          "maxLength": 262144
+                        },
+                        "shaped": {
+                          "type": "string",
+                          "maxLength": 262144
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool",
+                        "environment",
+                        "args",
+                        "request",
+                        "raw",
+                        "shaped"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "serverToml": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "mcp",
+                          "openapi",
+                          "graphql",
+                          "grpc"
+                        ]
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "bytes"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pr": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "number": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "branch": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "number",
+                      "url",
+                      "branch"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server",
+              "serverId",
+              "ops",
+              "serverToml",
+              "source",
+              "revision",
+              "pr",
+              "updatedAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "draft"
+    ],
+    "additionalProperties": false
+  }
+}

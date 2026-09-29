@@ -3,7 +3,7 @@
 // request never says whether an account exists. Each form takes the page's
 // header and footer, because its full-card states (link sent, link expired)
 // replace the header the way the design does.
-import { Inbox, TriangleAlert } from "lucide-react";
+import { TrayIcon, WarningIcon } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
@@ -73,7 +73,7 @@ export function ForgotPasswordForm({ header = null, footer = null }: Frame) {
           testId="forgot-sent"
           title={t("forgot.sentTitle")}
           announce
-          icon={<Inbox aria-hidden className="size-5" />}
+          icon={<TrayIcon aria-hidden className="size-5" />}
         >
           {t.rich("forgot.sentBody", {
             email: sentTo,
@@ -190,7 +190,7 @@ export function ResetPasswordForm({
         // A link that arrived with no token opens on this card, so focus stays
         // put; a submit the server refused replaced the form, so it moves.
         announce={token !== ""}
-        icon={<TriangleAlert aria-hidden className="size-5" />}
+        icon={<WarningIcon aria-hidden className="size-5" />}
         actions={
           <Link href="/forgot-password" className={buttonSecondary}>
             {t("reset.requestNew")}

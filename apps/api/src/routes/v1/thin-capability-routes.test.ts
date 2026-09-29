@@ -87,6 +87,9 @@ import { billingStatementExport } from "@oxagen/oxagen/contracts/billing.stateme
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { toolStudioDraftSave } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+import { toolStudioDraftGet } from "@oxagen/oxagen/contracts/tool.studio.draft.get";
+import { toolStudioReviewOpen } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
@@ -219,6 +222,9 @@ import { billingStatementExportRoute } from "./billing.statement.export";
 import { toolVersionListRoute } from "./tool.version.list";
 import { toolClassificationSetRoute } from "./tool.classification.set";
 import { toolImportRoute } from "./tool.import";
+import { toolStudioDraftSaveRoute } from "./tool.studio.draft.save";
+import { toolStudioDraftGetRoute } from "./tool.studio.draft.get";
+import { toolStudioReviewOpenRoute } from "./tool.studio.review.open";
 import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
 import { killSwitchListRoute } from "./kill_switch.list";
@@ -274,6 +280,7 @@ import { assistantEngineGet } from "@oxagen/oxagen/contracts/assistant.engine.ge
 import { assistantReplyGet } from "@oxagen/oxagen/contracts/assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "@oxagen/oxagen/contracts/assistant.reply_feedback.record";
 import { assistantTurnCancel } from "@oxagen/oxagen/contracts/assistant.turn.cancel";
+import { assistantAttachmentUpload } from "@oxagen/oxagen/contracts/assistant.attachment.upload";
 import { graphRuleAuthor } from "@oxagen/oxagen/contracts/graph.rule.author";
 import { toolsSearch } from "@oxagen/oxagen/contracts/tools.search";
 import { toolsLoad } from "@oxagen/oxagen/contracts/tools.load";
@@ -285,6 +292,7 @@ import { assistantEngineGetRoute } from "./assistant.engine.get";
 import { assistantReplyGetRoute } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecordRoute } from "./assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./assistant.turn.cancel";
+import { assistantAttachmentUploadRoute } from "./assistant.attachment.upload";
 import { graphRuleAuthorRoute } from "./graph.rule.author";
 import { toolsSearchRoute } from "./tools.search";
 import { toolsLoadRoute } from "./tools.load";
@@ -1051,6 +1059,40 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "tool.studio.draft.save",
+    route: toolStudioDraftSaveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDraftSave.name,
+    body: {
+      server: "ledger",
+      ops: [{ kind: "import", tool: "search" }],
+      revision: 0,
+    },
+    invalidBody: { server: "builtin", ops: [] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.draft.get",
+    route: toolStudioDraftGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDraftGet.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.review.open",
+    route: toolStudioReviewOpenRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioReviewOpen.name,
+    body: { server: "ledger", revision: 1 },
+    invalidBody: { server: "ledger", revision: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
     file: "credential.grant.list",
     route: credentialGrantListRoute as unknown as Hono<never>,
     method: "POST",
@@ -1282,6 +1324,16 @@ const ROUTES: ThinRoute[] = [
     body: { turnId: "0192d4a8-7c1e-7a00-8000-0000000000f1" },
     invalidBody: { turnId: "not-a-uuid" },
     jsonGuard: true,
+    status: 200,
+  },
+  // A file attached to an assistant message (#4690, ADR-222).
+  {
+    file: "assistant.attachment.upload",
+    route: assistantAttachmentUploadRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: assistantAttachmentUpload.name,
+    body: { name: "notes.txt", mediaType: "text/plain", data: "aGk=" },
+    invalidBody: { name: "", mediaType: "text/plain", data: "aGk=" },
     status: 200,
   },
   // A rule authored across two sources as one goal-shaped turn (ADR-186).

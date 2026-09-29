@@ -1,56 +1,64 @@
 ---
 title: Connect GitLab
-description: Keep a workspace's steering in a gitlab.com project. Context records publish as merge requests, checked and merged the way they are on GitHub.
+description: Keep a workspace's steering repo on gitlab.com. Steering PRs open as merge requests, checked and merged the way they are on GitHub.
 ---
 
 ## Overview
 
-A workspace keeps its steering in its main repository, under `.oxagen/`. That repository can be a gitlab.com project instead of a GitHub repository. Each context record then publishes as a merge request on the project. Oxagen reports the six checks as commit statuses, and a reviewer's merge squashes the commit the checks ran on.
+A workspace keeps its steering records in a steering repo. The steering repo can be a gitlab.com project instead of a GitHub repository. Each steering PR then opens as a merge request on the project. Oxagen reports its checks as commit statuses, and a reviewer's merge squashes the commit the checks ran on.
 
-Oxagen connects to the project with a **project access token**. You create the token on the project, so it reaches that one project and nothing else.
+Oxagen creates the steering repo with a **group access token**. An organization Owner or Admin enters a group path and the group's token during onboarding. Oxagen then creates each workspace's steering repo as a project in that group and reads and writes it with the token. A project Oxagen creates has no merge request webhook yet.
+
+You cannot make an existing gitlab.com project a workspace's steering repo yet.
 
 Only gitlab.com is supported. Self-managed GitLab needs its own host setting first.
 
 ## Before you start
 
 - You need Owner or Admin on the Oxagen organization.
-- You need to create project access tokens on the GitLab project, which takes the Maintainer role there.
-- The project needs at least one commit, so it has a default branch.
+- You need GitLab Premium on gitlab.com, because group access tokens need it.
+- You need to create group access tokens on the GitLab group, which takes the Owner role there.
 
-## Create the token
+## Create the group token
 
-1. On gitlab.com, open the project and go to **Settings → Access tokens**.
-2. Add a token with the `api` scope and the **Developer** role.
-3. Choose the **Maintainer** role instead if you want Oxagen to register a webhook for merge request events.
-4. Copy the token. GitLab shows it once.
+1. On gitlab.com, open the group and go to **Settings → Access tokens**.
+2. Add a token with the `api` scope and the **Maintainer** role. Oxagen needs Maintainer to create projects, push the first commit, and apply branch protection.
+3. Copy the token. GitLab shows it once.
 
-Oxagen refuses a personal access token, a group access token, and another project's token, because each reaches more than this project. It also refuses a token with `sudo` or `admin_mode`.
+## Connect the group
 
-## Connect and bind the project
+1. During onboarding, find **GitLab** under the code hosts.
+2. Enter the **Group path**, such as `acme/platform`.
+3. Paste the **Group access token** and select **Connect GitLab**.
 
-1. In Oxagen, open **Repositories**.
-2. Under **Or connect a GitLab project**, enter the project path, such as `acme/platform/rules`.
-3. Paste the token and select **Connect and bind**.
+Oxagen checks the token with GitLab before it stores it. GitLab must accept it, the token must carry the `api` scope, and it must be the group's own token with the Maintainer role or higher. Oxagen refuses a token that is not the group's own with `gitlab_token_not_group`, and a token with too little access with `gitlab_token_insufficient`. It stores the token encrypted and does not show it again.
 
-Oxagen checks the token with GitLab, stores it encrypted, and binds the project as the workspace's main repository. It never shows the token again.
+The API equivalent is `POST /v1/{orgSlug}/connections/steering/gitlab` with `{ "group", "token" }`. Only an Owner or Admin passes.
 
-The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/gitlab/attach` with `{ "projectPath", "token" }`, then `POST /v1/{orgSlug}/{workspaceSlug}/repository/main` with `{ "provider": "gitlab", "projectPath" }`. `create_workspace` no longer takes a project. Create the workspace first, then make the two calls.
+## Connect one project
+
+`POST /v1/{orgSlug}/{workspaceSlug}/repository/gitlab/attach` with `{ "projectPath", "token" }` connects one existing project to a workspace with a **project access token**. The connection stores the token. It registers a merge request webhook when the token's role allows it. It does not make the project the workspace's steering repo.
+
+- Create the token on the project under **Settings → Access tokens**, with the `api` scope and the **Developer** role.
+- Choose the **Maintainer** role instead if you want Oxagen to register the webhook. A token with Developer still connects, and the answer reports the webhook as `refused`.
+- Oxagen refuses a personal access token, a group access token, and another project's token, because each reaches more than this project. It also refuses a token with `sudo` or `admin_mode`.
+- Connecting the same project again replaces the stored token and keeps the webhook.
 
 ## What works on GitLab
 
 | Action | On GitLab |
 | --- | --- |
-| Propose, open, check, merge and dismiss a Context PR | A merge request, with the checks as commit statuses |
-| Publish, revise and retire records, and set the governance mode | Through the same merge request flow |
+| Propose, open, check, merge, and dismiss a steering PR | A merge request, with the checks as commit statuses |
+| Publish, revise, and retire steering records, and set the governance mode | Through the same merge request flow |
 | Propose a skill or a configuration clone | Through the same merge request flow |
 | `oxagen steering` freshness in a checkout | Matches the project's gitlab.com remote, nested groups included |
-| Repository tree, production branch, init pull request, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
+| Repository tree, production branch, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
 
-A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. Records stay stamped with the path you approved when you bound it.
+A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. The path is only a label.
 
 ## Approvals
 
-In `team` and `regulated` mode, a Context PR merges only after a workspace member other than the author approves it. GitLab does not record which commit a reviewer approved. Oxagen compares when each approval was given with when GitLab recorded each version of the merge request's diff. An approval counts for the newest version GitLab recorded before it.
+In `team` and `regulated` mode, a steering PR merges only after a workspace member other than the author approves it. An owner, or a member with `merge_pr_without_review`, may merge without one. GitLab does not record which commit a reviewer approved. Oxagen compares when each approval was given with when GitLab recorded each version of the merge request's diff. An approval counts for the newest version GitLab recorded before it.
 
 GitLab keeps an approval across a rebase, because a rebase leaves the diff unchanged. So when Oxagen rebases the branch onto a newer main before it merges, an approval given before the rebase does not count. The reviewer removes the approval and approves again. The same holds for an approval given in the moment after a push and before GitLab records the push as a new version. When GitLab has not yet recorded the latest push, Oxagen refuses the merge with `gitlab_refused`. Merge again in a minute. When GitLab reports an approval with no `approved_at` time, Oxagen cannot place it on a head, so it refuses the merge with `approvals_not_head_bound`. It refuses an owner's merge too.
 
@@ -64,6 +72,6 @@ When the setting is off, or GitLab answers 403 or 404 when Oxagen reads it, Oxag
 
 ## When the token stops working
 
-Revoking or expiring the token stops steering on the project. Oxagen refuses with `gitlab_credential_rejected` and names the project. It never names the token. To repair it, create a new token and paste it into the form on **Repositories**. The binding stays on the same project.
+Revoking or expiring the group access token stops steering on every steering repo in that group. GitLab refuses the token, and Oxagen refuses with `gitlab_credential_rejected` and names the project. When Oxagen holds no usable token for the group, it refuses with `gitlab_not_connected`. It never names the token. To repair either, create a new group access token and send it to `POST /v1/{orgSlug}/connections/steering/gitlab`. Oxagen replaces the token it stored for that group.
 
-To disconnect, delete the GitLab connection with `delete_connection` through the API or MCP, then revoke the token on GitLab.
+To disconnect a project connection, delete it with `delete_connection` through the API or MCP, then revoke the token on GitLab.

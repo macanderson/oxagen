@@ -1225,6 +1225,39 @@
       }
     },
     {
+      "name": "upload_assistant_attachment",
+      "file": "assistant.attachment.upload.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "render_chart",
+      "file": "assistant.chart.render.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_assistant_engine",
       "file": "assistant.engine.get.ts",
       "domain": "assistant",
@@ -6304,6 +6337,23 @@
       }
     },
     {
+      "name": "import_workspace_steering",
+      "file": "steering_repo.import.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "repair_steering_repo",
       "file": "steering_repo.repair.ts",
       "domain": "repository",
@@ -6839,6 +6889,57 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "get_studio_draft",
+      "file": "tool.studio.draft.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "save_studio_draft",
+      "file": "tool.studio.draft.save.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "open_studio_review",
+      "file": "tool.studio.review.open.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

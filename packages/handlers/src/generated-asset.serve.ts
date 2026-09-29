@@ -80,8 +80,16 @@ async function authorize(
   if (asset.accessPolicy === "public") return true;
 
   if (asset.accessPolicy === "user") {
-    // Creator-only: requires a session user identity that matches.
-    return principal.userId !== undefined && principal.userId === asset.userId;
+    // Creator-only: requires a user identity that matches. A principal that
+    // also names a scope (the api surface, where an API key acts as its
+    // creator) reads only inside that scope, so a key minted in one
+    // organisation cannot read its creator's files from another (ADR-222).
+    if (principal.userId === undefined || principal.userId !== asset.userId)
+      return false;
+    if (principal.orgId && asset.orgId !== principal.orgId) return false;
+    if (principal.workspaceId && asset.workspaceId !== principal.workspaceId)
+      return false;
+    return true;
   }
 
   // org policy.

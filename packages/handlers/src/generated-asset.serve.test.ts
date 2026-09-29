@@ -217,6 +217,30 @@ describe("serveGeneratedAsset", () => {
     ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
   });
 
+  it("user — the creator on the api surface reads only inside the scope it names (negative)", async () => {
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([asset({ accessPolicy: "user" })]),
+    );
+    const ok = await serveGeneratedAsset(
+      "gen_T1",
+      apiPrincipal({ userId: "user-owner" }),
+    );
+    expect(ok.body).toBe(STREAM_BODY);
+
+    for (const scope of [{ orgId: "org-WRONG" }, { workspaceId: "ws-WRONG" }]) {
+      mocks.dbSelect.mockReset();
+      mocks.dbSelect.mockReturnValueOnce(
+        makeSelectBuilder([asset({ accessPolicy: "user" })]),
+      );
+      await expect(
+        serveGeneratedAsset(
+          "gen_T1",
+          apiPrincipal({ userId: "user-owner", ...scope }),
+        ),
+      ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
+    }
+  });
+
   it("user — an api key (no user identity) cannot read a user-private asset", async () => {
     mocks.dbSelect.mockReturnValueOnce(
       makeSelectBuilder([asset({ accessPolicy: "user" })]),

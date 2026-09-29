@@ -8,7 +8,7 @@
 // `role="alert"`, like a refused turn: the line can appear seconds after the
 // panel opens, once the probe of a down engine gives up, and it stops the
 // person from sending, so it interrupts rather than waiting to be found.
-import { CircleAlert } from "lucide-react";
+import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { linkText } from "@/ui/control-styles";
 import type { EngineDown, EngineHealth } from "./use-engine-health";
@@ -53,7 +53,7 @@ export function AssistantEngineNotice({
         data-testid={`assistant-engine-${health.down}`}
         className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
       >
-        <CircleAlert
+        <WarningCircleIcon
           aria-hidden="true"
           className="mt-0.5 size-4 flex-none text-error"
         />

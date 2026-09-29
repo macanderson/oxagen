@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // One key's drill when little is recorded: a window whose days carry no
-// priced run draws a flat line with no peak day, findings that could not be
+// priced run draws no chart and names no peak day, findings that could not be
 // read are said twice (the savings figure and the findings panel) rather
 // than read as "no finding", a key whose runs called no tools says so, and an
 // operator the rollup cannot name is shown by their key.
@@ -67,11 +67,13 @@ describe("the drill", () => {
     // No day was priced, so no peak day is named and no share is printed.
     expect(document.body).not.toHaveTextContent(" on 2026-09-01");
     expect(document.body).not.toHaveTextContent("of the workspace");
-    const line = document
-      .querySelector("#spend-drill-days")
-      ?.closest("section")
-      ?.querySelector("polyline");
-    expect(line?.getAttribute("points")).toBe("0,48");
+    // With no priced day there is nothing to plot, so the panel says so
+    // rather than drawing an empty chart or a line along zero.
+    const days = document.querySelector("#spend-drill-days")?.closest("section");
+    expect(days).toHaveTextContent(
+      "No day in this window carries a priced run.",
+    );
+    expect(days?.querySelector('[data-slot="chart"]')).toBeNull();
   });
 
   it("says no finding names the key when the findings read answered with none", () => {

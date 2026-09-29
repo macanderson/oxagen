@@ -1,0 +1,142 @@
+{
+  "name": "import_workspace_steering",
+  "domain": "repository",
+  "description": "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "ruleKinds": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "enum": [
+            "business-rule",
+            "code-rule"
+          ]
+        }
+      },
+      "constraintEffects": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "enum": [
+            "require",
+            "forbid"
+          ]
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "imported",
+          "provisioned",
+          "nothing_to_import",
+          "needs_choices"
+        ]
+      },
+      "steeringRepository": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pullRequests": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "number": {
+              "type": "integer"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "branch",
+            "number",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "cleanup": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "leftForAPerson": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "rulesNeedingKind": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "constraintsNeedingEffect": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "outcome",
+      "steeringRepository",
+      "pullRequests",
+      "cleanup",
+      "leftForAPerson",
+      "rulesNeedingKind",
+      "constraintsNeedingEffect"
+    ],
+    "additionalProperties": false
+  }
+}

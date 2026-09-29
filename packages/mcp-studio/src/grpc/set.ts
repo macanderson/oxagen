@@ -302,19 +302,38 @@ function resolve(
         file,
       );
     }
+    const miss = symbols.explain(ref.ref, ref.scope, visible);
+    if (miss?.reason === "shadowed") {
+      const fromRoot = symbols.find(ref.ref, visible) === undefined ? "the full name with a leading dot" : `.${ref.ref}`;
+      throw new GrpcImportError(
+        "unresolved",
+        `In ${file}, ${ref.holder} names ${ref.ref}, which protoc reads as ${miss.readAs} because the ${miss.first.kind} ${miss.first.name} is in a nearer scope. Nothing defines ${miss.readAs}. Write ${fromRoot} to start from the outermost scope.`,
+        file,
+      );
+    }
+    if (miss?.reason === "not_type") {
+      throw new GrpcImportError(
+        "unresolved",
+        `In ${file}, ${ref.holder} names ${ref.ref}, which is the ${miss.found.kind} ${miss.found.name}. It must name ${wantedBy(ref)}.`,
+        file,
+      );
+    }
     throw new GrpcImportError(
       "unresolved",
       `In ${file}, ${ref.holder} names ${ref.ref}, which none of its imports defines. Define ${ref.ref}, or import the file that does.`,
       file,
     );
   }
-  const wanted = ref.accepts === "message" ? "a message" : "a message or an enum";
   if (found.kind === "package" || found.kind === "service" || (ref.accepts === "message" && found.kind === "enum")) {
     throw new GrpcImportError(
       "unresolved",
-      `In ${file}, ${ref.holder} names ${ref.ref}, which is the ${found.kind} ${found.name}. It must name ${wanted}.`,
+      `In ${file}, ${ref.holder} names ${ref.ref}, which is the ${found.kind} ${found.name}. It must name ${wantedBy(ref)}.`,
       file,
     );
   }
   ref.resolve(found.name, found.kind);
+}
+
+function wantedBy(ref: PendingRef): string {
+  return ref.accepts === "message" ? "a message" : "a message or an enum";
 }

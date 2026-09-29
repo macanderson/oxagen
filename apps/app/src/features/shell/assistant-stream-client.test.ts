@@ -124,6 +124,44 @@ describe("askAssistantStream", () => {
     });
   });
 
+  it("sends the ids of the files uploaded for the message (ADR-222)", async () => {
+    const fetch = respond(sse([done(TURN)]));
+    await askAssistantStream("acme", "core-platform", {
+      ...QUESTION,
+      attachments: ["gen_a1", "gen_b2"],
+    });
+    expect(posted(fetch)).toMatchObject({ attachments: ["gen_a1", "gen_b2"] });
+  });
+
+  it("leaves attachments out of a message that has none", async () => {
+    const fetch = respond(sse([done(TURN)]));
+    await askAssistantStream("acme", "core-platform", {
+      ...QUESTION,
+      attachments: [],
+    });
+    expect(posted(fetch)).not.toHaveProperty("attachments");
+  });
+
+  it("reads a turn refused over its files as invalid on the attachments field, keeping the rule", async () => {
+    respond(
+      sse([
+        data({
+          type: "error",
+          message: "The model cannot read images.",
+          code: "attachment_refused",
+          reason: "model_cannot_read_images",
+        }),
+      ]),
+    );
+    const result = await askAssistantStream("acme", "core-platform", QUESTION);
+    expect(result).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "model_cannot_read_images",
+      field: "attachments",
+    });
+  });
+
   it("sends a null page context when the caller has no page", async () => {
     const fetch = respond(sse([done(TURN)]));
     await askAssistantStream("acme", "core-platform", {
@@ -403,6 +441,15 @@ describe("the refusal codes, as the kernel seam classifies them", () => {
     expect(refusalOfCode(code)).toEqual({ ok: false, reason, code });
   });
 
+  it("reads an attachment refusal with no rule as invalid on the attachments field", () => {
+    expect(refusalOfCode("attachment_refused")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "attachment_refused",
+      field: "attachments",
+    });
+  });
+
   it("reads a stream error with no code as the seam's unclassified failure", () => {
     expect(refusalOfCode(undefined)).toEqual({
       ok: false,
@@ -451,6 +498,17 @@ describe("the refusal codes, as the kernel seam classifies them", () => {
       503,
       { error: { code: "engine_unavailable" } },
       { reason: "unavailable", code: "engine_unavailable" },
+    ],
+    [
+      400,
+      {
+        error: {
+          code: "attachment_refused",
+          reason: "turn_too_large",
+          message: "These files come to more than 4 MB.",
+        },
+      },
+      { reason: "invalid", code: "turn_too_large", field: "attachments" },
     ],
     [500, null, { reason: "unavailable", code: "kernel_failure" }],
   ])("reads a %i before the stream opened", (status, body, refusal) => {

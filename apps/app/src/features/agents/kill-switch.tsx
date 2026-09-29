@@ -17,7 +17,7 @@ import type { OrgRole } from "@/server/viewer";
 import type { AgentPauseOutcome } from "./actions";
 import { pauseAgent } from "./actions";
 import { UNANSWERED, useActionFailure } from "./action-failure";
-import { buttonSecondary, inputBase } from "@/ui/control-styles";
+import { buttonSecondary, textareaBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -186,7 +186,7 @@ export function AgentKillSwitch({
                 rows={2}
                 required
                 maxLength={500}
-                className={inputBase}
+                className={textareaBase}
               />
             </div>
             {failure === null ? null : (

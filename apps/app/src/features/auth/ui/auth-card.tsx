@@ -1,7 +1,7 @@
 // The pieces every sign-in card is built from (mockups engine.css `.ob-panel`,
 // `.ob-err`, `.ob-or`, `.ob-foot`, `.ob-tags`). The page header sits above the
 // card; the footer and the tags sit below it.
-import { TriangleAlert } from "lucide-react";
+import { WarningIcon } from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
 
 /** `.ob-panel { border-radius:14px; padding:20px 22px; gap:16px }` on the house panel tokens. */
@@ -47,7 +47,7 @@ export function AuthAlert({
       data-testid={testId}
       className="flex items-start gap-2 rounded-[9px] border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-[12.5px] leading-[1.45] text-error-ink"
     >
-      <TriangleAlert aria-hidden className="mt-px size-3.5 flex-none" />
+      <WarningIcon aria-hidden className="mt-px size-3.5 flex-none" />
       <span>
         <b className="font-semibold text-foreground">{lead}</b>
         {rest ? ` ${rest}` : null}

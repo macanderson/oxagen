@@ -33,8 +33,8 @@ import {
   buttonDanger,
   buttonPrimary,
   buttonSecondary,
-  inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -357,7 +357,7 @@ export function SteerFleetDialog({
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className={`${inputBase} resize-y max-md:min-h-11 max-md:text-base`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
             />
           </div>
           <div className="flex flex-col gap-1.5">

@@ -54,8 +54,8 @@ tokens and fonts.
    chart colours are not taken.
 5. **Icons.** Components use `@phosphor-icons/react` with the `*Icon` names.
    A server component imports from `@phosphor-icons/react/ssr`.
-   `lucide-react` stays a dependency until the last file that imports it has
-   moved.
+   `lucide-react` stayed a dependency until the last file that imported it
+   moved. That happened on 2026-09-28, and the app no longer depends on it.
 6. **Class merging.** `src/ui/cn.ts` is shadcn's `cn`: `clsx`, then
    `tailwind-merge`, so a caller's `className` wins over a component's
    default. `components.json` names it as `utils`.

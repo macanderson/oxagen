@@ -48,6 +48,8 @@ import { assistantEngineGetRoute } from "./routes/v1/assistant.engine.get";
 import { assistantReplyGetRoute } from "./routes/v1/assistant.reply.get";
 import { assistantReplyFeedbackRecordRoute } from "./routes/v1/assistant.reply_feedback.record";
 import { assistantTurnCancelRoute } from "./routes/v1/assistant.turn.cancel";
+import { assistantAttachmentUploadRoute } from "./routes/v1/assistant.attachment.upload";
+import { assistantAttachmentGetRoute } from "./routes/v1/assistant.attachment.get";
 import { toolsSearchRoute } from "./routes/v1/tools.search";
 import { toolsLoadRoute } from "./routes/v1/tools.load";
 import { shellNavCountsGetRoute } from "./routes/v1/shell.nav_counts.get";
@@ -202,6 +204,9 @@ import { toolDeclarationListRoute } from "./routes/v1/tool.declaration.list";
 import { toolVersionListRoute } from "./routes/v1/tool.version.list";
 import { toolClassificationSetRoute } from "./routes/v1/tool.classification.set";
 import { toolImportRoute } from "./routes/v1/tool.import";
+import { toolStudioDraftSaveRoute } from "./routes/v1/tool.studio.draft.save";
+import { toolStudioDraftGetRoute } from "./routes/v1/tool.studio.draft.get";
+import { toolStudioReviewOpenRoute } from "./routes/v1/tool.studio.review.open";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
 import { killSwitchSetRoute } from "./routes/v1/kill_switch.set";
 import { killSwitchListRoute } from "./routes/v1/kill_switch.list";
@@ -218,6 +223,7 @@ import { publishedSteeringGetRoute } from "./routes/v1/context.steering.publishe
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
+import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
@@ -728,6 +734,12 @@ const chatRateLimiter = distributedRateLimiter({
   keyPrefix: "chat",
   max: () => rateLimitBudgets().chat,
 });
+// Attaching a file stores bytes, so uploads share the chat budget under their
+// own key: a burst of uploads cannot starve the turns, nor the reverse.
+const assistantAttachmentRateLimiter = distributedRateLimiter({
+  keyPrefix: "assistant-attachments",
+  max: () => rateLimitBudgets().chat,
+});
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
 const orgScoped = new Hono<AppEnv>();
 orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
@@ -737,6 +749,7 @@ orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 // not wrap it. The limiter counts POST only, so cheap co-located GET reads pass
 // through untouched.
 orgScoped.use("/chat/*", chatRateLimiter);
+orgScoped.use("/assistant/attachments/*", assistantAttachmentRateLimiter);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 orgScoped.route("/workspaces/archive", workspaceArchiveRoute);
 // Minting an enrollment is an operator action, so it sits behind the session
@@ -911,6 +924,10 @@ orgScoped.route("/assistant/turn/cancel", assistantTurnCancelRoute);
 orgScoped.route("/assistant/engine", assistantEngineGetRoute);
 orgScoped.route("/assistant/reply", assistantReplyGetRoute);
 orgScoped.route("/assistant/feedback", assistantReplyFeedbackRecordRoute);
+// Files attached to an assistant message (#4690, ADR-222): the upload, then
+// the read a sent message's card opens.
+orgScoped.route("/assistant/attachments/upload", assistantAttachmentUploadRoute);
+orgScoped.route("/assistant/attachments", assistantAttachmentGetRoute);
 orgScoped.route("/tools/search", toolsSearchRoute);
 orgScoped.route("/tools/load", toolsLoadRoute);
 orgScoped.route("/shell/nav-counts", shellNavCountsGetRoute);
@@ -1165,6 +1182,10 @@ orgScoped.route("/tool/declaration/list", toolDeclarationListRoute);
 orgScoped.route("/tools/versions", toolVersionListRoute);
 orgScoped.route("/tools/versions/classification", toolClassificationSetRoute);
 orgScoped.route("/tools/import", toolImportRoute);
+// Studio (lane M11, ADR-224): the draft for one server folder, and Review, which opens its steering PR.
+orgScoped.route("/tools/studio/draft", toolStudioDraftSaveRoute);
+orgScoped.route("/tools/studio/draft/get", toolStudioDraftGetRoute);
+orgScoped.route("/tools/studio/review", toolStudioReviewOpenRoute);
 orgScoped.route("/credential-grants", credentialGrantListRoute);
 orgScoped.route("/kill-switches", killSwitchSetRoute);
 orgScoped.route("/kill-switches/list", killSwitchListRoute);
@@ -1185,6 +1206,8 @@ orgScoped.route("/context/steering/index", steeringIndexGetRoute);
 // The workspace's steering repo and its settings repair (lane S2, #4560).
 orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
+// The move from .oxagen/ to a steering repo, once per workspace (lane S10, #4620).
+orgScoped.route("/context/steering/repo/import", steeringRepoImportRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);
 orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);

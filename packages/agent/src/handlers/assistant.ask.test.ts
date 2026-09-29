@@ -131,6 +131,21 @@ describe("ask_assistant", () => {
     expect(out).toEqual(RESULT);
   });
 
+  it("hands the attached upload ids to the turn, and leaves the key off when none are attached", async () => {
+    await assistantAskHandler(
+      { ...INPUT, attachments: ["gen_abc123", "gen_def456"] },
+      CTX,
+    );
+    expect(mocks.prepareAssistantTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: ["gen_abc123", "gen_def456"] }),
+    );
+    mocks.prepareAssistantTurn.mockClear();
+    await assistantAskHandler({ ...INPUT, attachments: [] }, CTX);
+    expect(mocks.prepareAssistantTurn.mock.calls[0]?.[0]).not.toHaveProperty(
+      "attachments",
+    );
+  });
+
   // The flyout in apps/app invokes through kernelWrite, which carries no
   // stream and sets surface "app". Reading only the stream recorded every
   // in-app turn as api-chat — and `assistant-turn.ts` then wrote its AI

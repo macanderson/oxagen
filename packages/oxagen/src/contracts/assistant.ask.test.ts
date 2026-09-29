@@ -6,6 +6,7 @@ import {
   assistantParkedCardSchema,
   assistantToolCallSchema,
 } from "./assistant.ask";
+import { ASSISTANT_ATTACHMENT_MAX_FILES } from "./assistant.attachment.upload";
 import { CHAT_CONTENT_MAX_CHARS } from "./chat.message.send";
 
 const CONVERSATION = "0192d4a8-7c1e-7a00-8000-0000000000c1";
@@ -124,8 +125,42 @@ describe("ask_assistant contract", () => {
         .success,
     ).toBe(false);
     expect(
-      assistantAsk.input.safeParse({ content: "hi", attachments: [] }).success,
+      assistantAsk.input.safeParse({ content: "hi", contentBlocks: [] })
+        .success,
     ).toBe(false);
+  });
+
+  it("takes attached files by their gen_ ids, up to the per-message cap", () => {
+    const ids = ["gen_0123456789abcdefghjkmn", "gen_1"];
+    const parsed = assistantAsk.input.parse({ content: "hi", attachments: ids });
+    expect(parsed.attachments).toEqual(ids);
+    expect(assistantAsk.input.parse({ content: "hi" }).attachments).toBe(
+      undefined,
+    );
+  });
+
+  it("refuses an attachment id of another shape, and more files than the cap (negative)", () => {
+    expect(
+      assistantAsk.input.safeParse({ content: "hi", attachments: ["cnv_1"] })
+        .success,
+    ).toBe(false);
+    expect(
+      assistantAsk.input.safeParse({
+        content: "hi",
+        attachments: ["gen_../../etc/passwd"],
+      }).success,
+    ).toBe(false);
+    const tooMany = assistantAsk.input.safeParse({
+      content: "hi",
+      attachments: Array.from(
+        { length: ASSISTANT_ATTACHMENT_MAX_FILES + 1 },
+        (_, i) => `gen_${i}`,
+      ),
+    });
+    expect(tooMany.success).toBe(false);
+    expect(tooMany.error?.issues[0]?.message).toBe(
+      `A message carries at most ${ASSISTANT_ATTACHMENT_MAX_FILES} files.`,
+    );
   });
 
   it("answers with the run the turn was recorded as and every parked card", () => {

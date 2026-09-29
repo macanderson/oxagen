@@ -9,7 +9,7 @@
 // lets you do. `org.invitations` carries no workspace, so those rows are not
 // drawn until the invitation records one (#3886; ARCHITECTURE.md §3.6: an unbacked
 // in-page slice renders nothing).
-import { Lock } from "lucide-react";
+import { LockIcon } from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
 import { getFormatter, getTranslations } from "next-intl/server";
 import type { InvitationView } from "@/data/contracts/invitations";
@@ -73,7 +73,7 @@ export async function InvitationWrongAccount({
       tone="deny"
       testId="invite-wrong-account"
       title={t("wrongAccountTitle")}
-      icon={<Lock aria-hidden className="size-5" />}
+      icon={<LockIcon aria-hidden className="size-5" />}
       actions={
         <SafeLink to={routes.login(here)} className={buttonSecondary}>
           {t("logInAsOther")}

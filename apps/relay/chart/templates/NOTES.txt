@@ -1,0 +1,9 @@
+The relay {{ .Values.relay.name }} runs as {{ include "oxagen-relay.fullname" . }}.
+
+It waits {{ mul 2 (.Values.relay.clockSkewMs | int64) }} ms after it starts, then dials {{ .Values.relay.brokerUrl }}.
+Read its log to see it connect:
+
+  kubectl logs --namespace {{ .Release.Namespace }} deployment/{{ include "oxagen-relay.fullname" . }}
+
+A line with "event":"ready" means the broker accepted the relay.
+A pod that exits with code 2 has a setting to fix. Its log lists every one.

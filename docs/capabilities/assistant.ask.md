@@ -28,6 +28,7 @@ All three adapters reach the turn through `kernel.invoke("ask_assistant")`, so t
 | `pageContext` | object or null | no | `{ route, orgSlug, workspaceSlug, entityId, entityLabel }`: where the person was when they asked, and the record on screen. Null for a caller with no page. See [Page context](#page-context) |
 | `turnId` | uuid | no | a name the caller mints for this turn so it can stop it with [`cancel_assistant_turn`](assistant.turn.cancel.md). Omitted, the turn can still end on a budget stop, but nobody can stop it by name. See [Stopping a turn](#stopping-a-turn) |
 | `goal` | object | no | `{ statement, maxRounds }`: `statement` is 1 to 2,000 characters, trimmed; `maxRounds` is 1 to 4, default 3. Omitted runs one ordinary turn. See [Goal-shaped turns](#goal-shaped-turns) |
+| `attachments` | array of `gen_` ids | no | up to 10 files the person uploaded with [`upload_assistant_attachment`](assistant.attachment.upload.md) in this workspace, in the order the message shows them. Omitted, the turn carries text alone. See [Attachments](#attachments) |
 
 ### Page context
 
@@ -84,6 +85,17 @@ The caller sets the goal, never the model: this contract is not on the agent sur
 
 Rule authoring is the first caller: [`author_graph_rule`](graph.rule.author.md) takes the rule as data and asks this turn with the goal `ruleAuthoringGoal` (`@oxagen/agent`) builds from it on the server (ADR-186). The goal is a `query_ontology` traversal over the rule's relationship type, from a node of the first source, that returns a node of the second. The API route, the MCP tool and `POST /chat/stream` all carry a `goal` their caller sends. The app's flyout sends none, because the rev1 app has no rule-authoring control.
 
+## Attachments
+
+A message can carry files the person uploaded first with [`upload_assistant_attachment`](assistant.attachment.upload.md) (#4690, ADR-222). The turn reads each file back before anything is written, and refuses the whole turn with `attachment_refused` when one breaks a rule:
+
+- The file must be the asker's own upload in this workspace (`not_found` otherwise, and for a deleted file).
+- A message carries at most 10 files (`too_many`).
+- Images and PDFs together are at most 4 MiB, and text files together at most 256 KiB (`turn_too_large`).
+- The turn's model must read images for an image and PDFs for a PDF (`model_cannot_read_images`, `model_cannot_read_pdfs`).
+
+Images and PDFs reach the model as parts of the person's message. Text files are added to the message the model reads, each in a block that names the file, so every model reads them. The person's saved message keeps what they typed, and each file is linked to that message. A later turn in the same conversation does not send earlier turns' files again.
+
 ## Steering
 
 The system prompt carries the workspace's steering after the governance baseline. The steering assembler (`@oxagen/steering-assembler`) ranks the workspace's published context records and its configured instructions, fits them to 4,096 budget tokens, and cuts what does not fit (ADR-093 §7). The instructions carry SHOULD, so every published MUST record ranks above them. Before the engine is contacted, the run records a `steering.manifest` frame that names every item as included or cut, with the reason. A turn whose record read fails runs on the instructions alone, and the frame names `record` as unavailable.
@@ -99,6 +111,7 @@ The engine is declared every governed tool plus the two meta-tools. Each complet
 | `not_found` (reason `conversation_not_found`) | 404 | `conversationId` names no conversation of the asker's in this workspace, or one that is deleted or archived |
 | `forbidden` (reason `no_principal`, `org_role_required`) | 403 | the caller carries no person to ask as, or the person holds none of the contract's roles |
 | `forbidden` (reason `kill_switch`) | 403 | an `agent` kill switch is on for the workspace's assistant agent; the turn is refused before anything is written, and the message names the switch and its reason |
+| `attachment_refused` (reason `type_not_allowed`, `too_large`, `too_many`, `turn_too_large`, `bytes_do_not_match_type`, `model_cannot_read_images`, `model_cannot_read_pdfs`, `not_found`) | 400 | an attached file broke a rule in [Attachments](#attachments); the turn is refused before anything is written, and the message says what to change |
 | `engine_unavailable` | 503 | `stella-serve` is not configured or could not be reached; nothing falls back to an in-process loop (ADR-053 §4) |
 | `assistant_run_not_recorded` | 503 | the ledger could not admit the turn, or a receipt could not be written; the assistant does not answer from a path that was not recorded |
 | `engine_aborted` | 409 | the turn was cancelled before it answered by a per-turn budget stop; nothing is saved as a reply. A stop the person asked for is not an error: see [Stopping a turn](#stopping-a-turn) |

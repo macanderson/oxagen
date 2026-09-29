@@ -1,0 +1,113 @@
+import { HandlerError } from "@oxagen/oxagen";
+import { steeringRepoImport } from "@oxagen/oxagen/contracts/steering_repo.import";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  role: vi.fn(async (_contract: unknown, _ctx: unknown) => "Owner"),
+  actor: vi.fn(async (_ctx: unknown): Promise<string | null> => "u_1"),
+  run: vi.fn(
+    async (_scope: unknown, _input: unknown, _deps: unknown): Promise<unknown> => ({
+      outcome: "imported",
+    }),
+  ),
+  deps: vi.fn((options: unknown) => ({ deps: options })),
+}));
+
+vi.mock("./lib/capability-role-guard", () => ({
+  assertContractRole: mocks.role,
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: mocks.actor,
+}));
+vi.mock("./steering-repo/import-run", () => ({
+  runSteeringImport: mocks.run,
+}));
+vi.mock("./steering-repo/import-deps", () => ({
+  steeringImportDeps: mocks.deps,
+}));
+
+import { importWorkspaceSteeringHandler } from "./steering_repo.import";
+import { makeCTX, TEST_CTX } from "./test-utils/fixtures";
+
+const run = (input: unknown = {}, ctx = TEST_CTX) =>
+  importWorkspaceSteeringHandler(steeringRepoImport.input.parse(input), ctx);
+
+beforeEach(() => {
+  mocks.role.mockReset();
+  mocks.role.mockImplementation(async () => "Owner");
+  mocks.actor.mockReset();
+  mocks.actor.mockResolvedValue("u_1");
+  mocks.run.mockReset();
+  mocks.run.mockResolvedValue({ outcome: "imported" });
+});
+
+describe("import_workspace_steering handler", () => {
+  it("checks the contract's roles, then runs the import for the workspace", async () => {
+    await expect(run()).resolves.toEqual({ outcome: "imported" });
+    expect(mocks.role).toHaveBeenCalledWith(steeringRepoImport, TEST_CTX);
+    expect(mocks.deps).toHaveBeenCalledWith({ actorUserId: "u_1" });
+    expect(mocks.run).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      {},
+      { deps: { actorUserId: "u_1" } },
+    );
+    expect(mocks.role.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.run.mock.invocationCallOrder[0] as number,
+    );
+  });
+
+  it("passes the rule kinds and constraint effects the caller chose", async () => {
+    const choices = {
+      ruleKinds: { "ctx.a-intel.refunds-over-100": "business-rule" },
+      constraintEffects: { "ctx.a-intel.no-force-push": "forbid" },
+    };
+    await run(choices);
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.anything(),
+      choices,
+      expect.anything(),
+    );
+  });
+
+  it("refuses a caller without the contract's roles and runs nothing", async () => {
+    mocks.role.mockImplementation(async () => {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "role_required",
+        message: "Only a workspace owner can import steering.",
+      });
+    });
+    await expect(run()).rejects.toMatchObject({ code: "forbidden" });
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call without a workspace", async () => {
+    await expect(run({}, makeCTX({ workspaceId: "" }))).rejects.toThrow(
+      "workspaceId is required",
+    );
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call with no person behind it", async () => {
+    mocks.actor.mockResolvedValue(null);
+    await expect(run()).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "no_principal",
+    });
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("passes the run's refusal through", async () => {
+    mocks.run.mockRejectedValue(
+      new HandlerError({
+        code: "conflict",
+        reason: "steering_import_running",
+        message: "Another import of this workspace is running.",
+      }),
+    );
+    await expect(run()).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_import_running",
+    });
+  });
+});

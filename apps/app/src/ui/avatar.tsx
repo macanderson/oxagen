@@ -24,32 +24,32 @@
 // line) or the brand gold in its bright or deep shade. Each tone fixes its own
 // glyph colour, so there is no combination that fails on ink or on paper.
 import {
-  Bird,
-  Bot,
-  Brain,
-  BrickWall,
-  Bug,
-  Cog,
-  Compass,
-  FlaskConical,
-  FolderTree,
-  KeyRound,
-  type LucideIcon,
-  Microscope,
-  Package,
-  PencilLine,
-  RadioTower,
-  Receipt,
-  Rocket,
-  Satellite,
-  Search,
-  ShieldCheck,
-  Sprout,
-  Stethoscope,
-  Target,
-  WandSparkles,
-  Wrench,
-} from "lucide-react";
+  BirdIcon,
+  BrainIcon,
+  BugIcon,
+  CellTowerIcon,
+  CompassIcon,
+  FlaskIcon,
+  GearIcon,
+  type Icon as PhosphorIcon,
+  KeyIcon,
+  MagicWandIcon,
+  MagnifyingGlassIcon,
+  MicroscopeIcon,
+  PackageIcon,
+  PencilLineIcon,
+  PlanetIcon,
+  PlantIcon,
+  ReceiptIcon,
+  RobotIcon,
+  RocketIcon,
+  ShieldCheckIcon,
+  StethoscopeIcon,
+  TargetIcon,
+  TreeStructureIcon,
+  WallIcon,
+  WrenchIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import {
   type AvatarFont,
@@ -58,31 +58,31 @@ import {
   parseAvatarValue,
 } from "./avatar-spec";
 
-export const AVATAR_GLYPHS: Record<AvatarIcon, LucideIcon> = {
-  rocket: Rocket,
-  compass: Compass,
-  microscope: Microscope,
-  stethoscope: Stethoscope,
-  "pencil-line": PencilLine,
-  receipt: Receipt,
-  wrench: Wrench,
-  "flask-conical": FlaskConical,
-  "key-round": KeyRound,
-  package: Package,
-  satellite: Satellite,
-  bot: Bot,
-  bird: Bird,
-  bug: Bug,
-  sprout: Sprout,
-  cog: Cog,
-  brain: Brain,
-  search: Search,
-  "radio-tower": RadioTower,
-  "wand-sparkles": WandSparkles,
-  "brick-wall": BrickWall,
-  target: Target,
-  "folder-tree": FolderTree,
-  "shield-check": ShieldCheck,
+export const AVATAR_GLYPHS: Record<AvatarIcon, PhosphorIcon> = {
+  rocket: RocketIcon,
+  compass: CompassIcon,
+  microscope: MicroscopeIcon,
+  stethoscope: StethoscopeIcon,
+  "pencil-line": PencilLineIcon,
+  receipt: ReceiptIcon,
+  wrench: WrenchIcon,
+  "flask-conical": FlaskIcon,
+  "key-round": KeyIcon,
+  package: PackageIcon,
+  satellite: PlanetIcon,
+  bot: RobotIcon,
+  bird: BirdIcon,
+  bug: BugIcon,
+  sprout: PlantIcon,
+  cog: GearIcon,
+  brain: BrainIcon,
+  search: MagnifyingGlassIcon,
+  "radio-tower": CellTowerIcon,
+  "wand-sparkles": MagicWandIcon,
+  "brick-wall": WallIcon,
+  target: TargetIcon,
+  "folder-tree": TreeStructureIcon,
+  "shield-check": ShieldCheckIcon,
 };
 
 const TONE_CLASS: Record<AvatarTone, string> = {
@@ -179,11 +179,7 @@ export function Avatar({
         style={side}
         className={`${box} ${TONE_CLASS[spec.tone]}`}
       >
-        <Glyph
-          strokeWidth={1.8}
-          style={{ width: "56%", height: "56%" }}
-          aria-hidden
-        />
+        <Glyph style={{ width: "56%", height: "56%" }} aria-hidden />
       </span>
     );
   }

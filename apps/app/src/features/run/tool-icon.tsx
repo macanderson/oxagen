@@ -5,29 +5,29 @@
 // Three rules, and they are the reason this is a table and not a free choice
 // at each call site:
 //
-//  1. **One line-weight set, no emoji.** Every mark is a Lucide line icon at
-//     the same stroke, so a column of them reads as one alphabet.
+//  1. **One line-weight set, no emoji.** Every mark is a Phosphor line icon at
+//     the same weight, so a column of them reads as one alphabet.
 //  2. **The colour is the cell's, not the icon's.** The mark inherits
 //     `currentColor` from the tile it sits in, so a new tool family can never
 //     introduce a colour.
 //  3. **The name is always beside it.** The mark is `aria-hidden` and the
 //     family's name carries the meaning.
+import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 import {
-  Bot,
-  FileMinus,
-  FilePen,
-  FilePlus,
-  FileText,
-  Globe,
-  ListChecks,
-  type LucideIcon,
-  Notebook,
-  Plug,
-  Search,
-  SquareChevronRight,
-  Wrench,
-  Zap,
-} from "lucide-react";
+  FileMinusIcon,
+  FilePlusIcon,
+  FileTextIcon,
+  GlobeIcon,
+  LightningIcon,
+  ListChecksIcon,
+  MagnifyingGlassIcon,
+  NotebookIcon,
+  NotePencilIcon,
+  PlugIcon,
+  RobotIcon,
+  TerminalWindowIcon,
+  WrenchIcon,
+} from "@phosphor-icons/react/ssr";
 import type { ToolGroup } from "./tool-detail";
 
 /**
@@ -36,20 +36,20 @@ import type { ToolGroup } from "./tool-detail";
  * bolt, because loading a skill is the one step that changes what the agent
  * can do rather than what it has done.
  */
-const TOOL_ICONS: Readonly<Record<ToolGroup, LucideIcon>> = {
-  shell: SquareChevronRight,
-  read: FileText,
-  edit: FilePen,
-  create: FilePlus,
-  delete: FileMinus,
-  search: Search,
-  web: Globe,
-  skill: Zap,
-  agent: Bot,
-  plan: ListChecks,
-  notebook: Notebook,
-  mcp: Plug,
-  tool: Wrench,
+const TOOL_ICONS: Readonly<Record<ToolGroup, PhosphorIcon>> = {
+  shell: TerminalWindowIcon,
+  read: FileTextIcon,
+  edit: NotePencilIcon,
+  create: FilePlusIcon,
+  delete: FileMinusIcon,
+  search: MagnifyingGlassIcon,
+  web: GlobeIcon,
+  skill: LightningIcon,
+  agent: RobotIcon,
+  plan: ListChecksIcon,
+  notebook: NotebookIcon,
+  mcp: PlugIcon,
+  tool: WrenchIcon,
 };
 
 /**
@@ -67,7 +67,6 @@ export function ToolIcon({
   return (
     <Icon
       aria-hidden="true"
-      strokeWidth={1.75}
       className={`${size === "sm" ? "size-[11px]" : "size-[13px]"} shrink-0`}
     />
   );

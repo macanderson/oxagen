@@ -5,9 +5,13 @@
 // `<pre>`. Streamdown is the one place that config lives. A reply still
 // streaming in (`assistant-stream-reply.tsx`) passes `streaming: true`, so an
 // unterminated fence or bold marker never renders as broken HTML mid-reply
-// (`parseIncompleteMarkdown`).
+// (`parseIncompleteMarkdown`). An `oxagen-chart` fence, which `render_chart`
+// hands the assistant, draws as a chart instead of code (`assistant-chart.tsx`).
+import { type ComponentProps, lazy, Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
+import { CHART_FENCE_LANGUAGE } from "@oxagen/oxagen/chart-spec";
 
 /**
  * Shiki highlighting for fenced code. `[light, dark]` emits both themes as
@@ -18,6 +22,40 @@ import { createCodePlugin } from "@streamdown/code";
 const codePlugin = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
+
+/**
+ * The chart renderer and Recharts behind it load the first time a reply holds
+ * an `oxagen-chart` fence. Every signed-in page renders the shell, which
+ * imports this file, and most replies draw no chart, so a static import would
+ * put Recharts in every page's first download.
+ */
+const AssistantChartBlock = lazy(() =>
+  import("./assistant-chart").then((module) => ({
+    default: module.AssistantChartBlock,
+  })),
+);
+
+function ChartLoading() {
+  const t = useTranslations("shell.assistant.chart");
+  return (
+    <p data-testid="assistant-chart-loading" className="text-muted-foreground">
+      {t("drawing")}
+    </p>
+  );
+}
+
+function LazyChartBlock(props: ComponentProps<typeof AssistantChartBlock>) {
+  return (
+    <Suspense fallback={<ChartLoading />}>
+      <AssistantChartBlock {...props} />
+    </Suspense>
+  );
+}
+
+const PLUGINS = {
+  code: codePlugin,
+  renderers: [{ language: CHART_FENCE_LANGUAGE, component: LazyChartBlock }],
+};
 
 /**
  * An image in a reply renders as its alt text and is never fetched. The reply
@@ -68,7 +106,7 @@ export function AssistantMarkdown({
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
       components={COMPONENTS}
-      plugins={{ code: codePlugin }}
+      plugins={PLUGINS}
       controls={{ code: { copy: true, download: false } }}
       className={PROSE_CLASS}
     >

@@ -7,7 +7,7 @@
 // that writes one of them validates the value with `avatarUrlSchema`
 // (packages/oxagen/src/avatar.ts).
 //
-// The draft is one of three kinds (a Lucide glyph, a monogram of up to six
+// The draft is one of three kinds (a Phosphor glyph, a monogram of up to six
 // letters in one of three typefaces, or a photo by https link) and, for the
 // two drawn kinds, one of five tones: solid, soft, and line from the theme,
 // and the brand gold in its bright and deep shades. The preview on the left is
@@ -409,11 +409,7 @@ function AvatarEditor({
                         edit({ icon });
                       }}
                     >
-                      <Glyph
-                        className="size-[18px]"
-                        strokeWidth={1.8}
-                        aria-hidden
-                      />
+                      <Glyph className="size-[18px]" aria-hidden />
                     </button>
                   );
                 })}

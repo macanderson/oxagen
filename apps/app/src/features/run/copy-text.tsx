@@ -4,7 +4,7 @@
 // `<machine>:<path>`. The clipboard can refuse (an insecure origin, a denied
 // permission); the refusal is said beside the button rather than thrown, and
 // the text stays on screen to select by hand.
-import { Copy, FolderTree } from "lucide-react";
+import { CopyIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { linkChip } from "@/ui/control-styles";
@@ -55,7 +55,7 @@ export function CopyRunId({ id }: { id: string }) {
         className="inline-flex min-w-0 items-center gap-1 rounded-sm font-mono text-[11.5px] text-dim hover:text-foreground max-md:min-h-11"
       >
         <span className="min-w-0 break-all">{id}</span>
-        <Copy aria-hidden="true" className="size-3 flex-none opacity-70" />
+        <CopyIcon aria-hidden="true" className="size-3 flex-none opacity-70" />
       </button>
       <CopyStatus state={state} text={id} />
     </span>
@@ -84,7 +84,7 @@ export function CopyPath({
         aria-label={t("copyLabel", { text })}
         className={`${linkChip} font-mono text-[10.5px] font-medium`}
       >
-        <FolderTree
+        <TreeStructureIcon
           aria-hidden="true"
           className="size-3 flex-none opacity-80"
         />

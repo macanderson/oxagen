@@ -369,6 +369,18 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/server/tenancy-lookups.ts": {
     "@oxagen/billing": ["canAccessSSO", "FREE_PLAN_SLUG", "resolveOrgTier"],
   },
+  // The assistant's chart renderer reads the chart limits render_chart enforces,
+  // from a module that imports nothing, so the browser bundle loads no registry.
+  "src/features/shell/assistant-chart.tsx": {
+    "@oxagen/oxagen/chart-spec": [
+      "CHART_FORMAT_KINDS",
+      "CHART_KINDS",
+      "CHART_LIMITS",
+    ],
+  },
+  "src/features/shell/assistant-markdown.tsx": {
+    "@oxagen/oxagen/chart-spec": ["CHART_FENCE_LANGUAGE"],
+  },
   // Browser controls read the shared ceiling without loading the contract registry:
   // Steer the fleet caps its text at the limit dispatch_command enforces.
   "src/features/fleet/steer-fleet.tsx": {

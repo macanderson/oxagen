@@ -1252,6 +1252,15 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-cost-price-book-autoseed"
     },
+    "render_chart": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The shell's assistant flyout draws the oxagen-chart block the assistant pastes into its reply as a chart, a small dashboard of tiles, and a table of every value (features/shell/assistant-markdown.tsx, features/shell/assistant-chart.tsx)",
+      "testid": "assistant-chart",
+      "proof": "apps/app/src/features/shell/assistant-chart.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "session-3c9a5306"
+    },
     "repair_steering_repo": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
@@ -1641,6 +1650,15 @@
       "proof": "apps/app/src/features/organization/workspaces.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "upload_assistant_attachment": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The paperclip on the assistant flyout's composer, and files pasted or dropped on it. Each file uploads over the API's attachment route as soon as it is attached (features/shell/assistant-attachments.tsx, features/shell/assistant-attachment-files.ts)",
+      "testid": "assistant-attach",
+      "proof": "apps/app/src/features/shell/assistant-flyout.attachments.test.tsx",
+      "verifiedAt": "2026-09-28",
+      "verifiedBy": "session_3c9a5306"
     },
     "verify_model_credential": {
       "route": "/[org]/model-funding",

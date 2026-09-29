@@ -123,12 +123,18 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(css).toMatch(/--ink:\s*var\(--background\)/);
   });
 
-  it("`.panel` and `.stat` sit on the panel fill with the hairline and 12px corners", () => {
+  it("`.panel` and `.stat` sit on the panel fill with the hairline and the maia card corner", () => {
+    // The corner is the preset's card (`rounded-2xl`, 13px at 0.45rem), which
+    // replaced the mockup's 12px on 2026-09-28; globals.css sets the scale.
     for (const recipe of [panel, statTile]) {
       expect(recipe).toContain("bg-card");
       expect(recipe).toContain("border-border");
-      expect(recipe).toContain("rounded-xl");
+      expect(recipe).toContain("rounded-2xl");
     }
+    const css = read("src/app/globals.css");
+    expect(lightRoot()).toMatch(/--ui-radius:\s*0\.45rem/);
+    expect(css).toMatch(/--radius-2xl:\s*calc\(var\(--radius\) \* 1\.8\)/);
+    expect(css).toMatch(/--radius-4xl:\s*calc\(var\(--radius\) \* 2\.6\)/);
     expect(statTerm).toContain("uppercase");
     expect(statValue).toContain("tabular-nums");
   });
@@ -150,7 +156,8 @@ const INK_PRIMARY =
   /\b(bg|text|border|ring|shadow-\[inset[^\]]*)-primary\b|var\(--primary\)/;
 
 /** A tile drawn by hand instead of from `statTile`. */
-const HAND_TILE = /rounded-xl border border-border bg-(data-surface|muted)\b/;
+const HAND_TILE =
+  /rounded-(xl|2xl) border border-border bg-(data-surface|muted)\b/;
 
 const SELF = "src/test/arch/design-record.test.ts";
 const RECIPES = new Set(["src/ui/control-styles.ts", "src/app/globals.css"]);

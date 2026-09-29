@@ -21,7 +21,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { OxagenWordmark } from "@oxagen/ui";
-import { Lock } from "lucide-react";
+import { LockIcon } from "@phosphor-icons/react/ssr";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -280,7 +280,7 @@ function Denied({ ctx, viewer }: { ctx: WsCtx; viewer: string }) {
       className="flex flex-col items-center gap-3 py-10 text-center"
     >
       <span className="inline-flex size-11 items-center justify-center rounded-xl border border-error/40 text-error-ink">
-        <Lock aria-hidden className="size-4" />
+        <LockIcon aria-hidden className="size-4" />
       </span>
       <h1 className="text-lg font-semibold text-foreground">{t("title")}</h1>
       <p className="max-w-md text-sm text-muted-foreground">

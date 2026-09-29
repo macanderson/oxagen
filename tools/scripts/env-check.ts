@@ -212,6 +212,17 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // in this tree as copy for the operator's environment and never as a value
   // any Oxagen service loads.
   "OXAGEN_AGENT_TOKEN",
+  // The relay a customer runs inside its own network (apps/relay) reads these
+  // from its container's environment, set by its Helm chart or docker run.
+  // No Oxagen service loads them, so they belong in no service's registry.
+  "RELAY_BROKER_URL",
+  "RELAY_TOKEN",
+  "RELAY_NAME",
+  "RELAY_WORKSPACE",
+  "RELAY_TRUSTED_KEYS",
+  "RELAY_ALLOWED_HOSTS",
+  "RELAY_CLOCK_SKEW_MS",
+  "RELAY_MAX_RESPONSE_BYTES",
 ]);
 
 // ── Schema-exempt keys ────────────────────────────────────────────────────────

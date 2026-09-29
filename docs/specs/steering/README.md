@@ -1,256 +1,303 @@
-# Steering: the `.oxagen/` layout and the Context PR checks
+# The steering repo
 
-The mechanism behind `open_context_pr` and `merge_context_pr` (ADR-061; MC
-spec §10). Records are governed like code: authored in the workspace's
-repository, proposed as a pull request, published on merge. The registry in
-Postgres mirrors what git holds; git decides what is in force.
+Each workspace keeps its steering in a repository of its own, the steering
+repo. Oxagen creates it when you create the workspace, merges every change to
+it, and publishes each merge as a numbered version. Each organization has one
+more, `<org>/oxagen`, for the records every workspace in it shares. Code
+repositories hold no committed steering. A workspace links a code repository
+with a steering PR (ADR-212, `docs/specs/repository-binding/README.md`).
 
-## The repository
+The code is in five places:
 
-The workspace's repository is the one its GitHub source connection names
-(`ingestion.source_connections`, connector `github`, status `connected`,
-`delivery_config.owner` / `.repo`). Its production branch is the repository's
-default branch. Every call runs with the workspace's own token (ADR-020).
+- `packages/oxagen/src/steering-repo/` holds the layout, the names, and the
+  record and ledger formats.
+- `packages/handlers/src/steering_repo.provision.ts` creates the repository.
+- `packages/handlers/src/steering-repo/` holds the stamp, the merge queue, and
+  the publisher.
+- `packages/steering-check` holds the checks.
+- `packages/steering-bundle` builds what a published version sends a model.
 
-## `.oxagen/`
+## Repository layout
 
-```
-.oxagen/
-  rules/
-    governance.toml          # mode = solo | team | regulated
-    ctx.<set>.<slug>.toml    # one published record per lineage id
-```
-
-`governance.toml` is read on the production branch when a Context PR is
-opened and again when it is merged; a missing file means `team`; a file that
-cannot be read refuses both.
-
-A record file is context-record/v0.1 in the layout Stella's loader reads
-(`stella-records/src/ingest/record.rs`), written by
-`packages/handlers/src/context.steering.file.ts`:
-
-```toml
-schema = "context-record/v0.1"
-set_id = "a-intel.platform"
-
-[[record]]
-lineage_id = "ctx.release.no-reread-changelog"
-label = "Read the changelog once"
-record_id = "rec_release_no_reread_changelog_9a41c0e7bd23"
-record_hash = "sha256:…"
-kind = "rule"
-statement = "Do not re-read CHANGELOG.md more than once in a run; cache the first read."
-origin = "user"
-sharing_scope = "workspace"
-status = "active"
-
-[record.provenance]
-source_kind = "proposal"
-source_uri = "oxagen:proposal/prp_…"
-
-[record.steering]
-force = "should"
-```
-
-- The `lineage_id` inside the file is the record's identity, not the file's
-  name (ADR-184). Oxagen writes a new record to `.oxagen/rules/<lineage>.toml`
-  and a revision to the record's current path. A person can rename or move the
-  file anywhere under `.oxagen/rules/`, and the repository sync follows it.
-  The branch is `context/<lineage>`.
-- `set_id` is the repository's full name with `/` as `.`, taken from the
-  **binding** (`repository_bindings.provider_full_name`) and never from live
-  GitHub. A repository rename therefore does not re-stamp later records: the
-  name moves only when a successor binding is written. #4616 removed
-  `bind_main_repository`, so the one writer that re-reads a bound repository
-  is `set_production_branch`, and it writes a successor only when the branch
-  moves. A legacy wizard connection has no binding, so there the live name is
-  the only one available.
-- `origin` is `user` for a proposal a person raised and `inferred` for one an
-  agent raised over an API key (the proposal has no `created_by_id`),
-  whoever opens the PR.
-- `label` is the record's name, at most 36 characters, and every surface shows
-  it first (ADR-178). It need not be unique and it can change. The lineage id
-  is derived from it when the record is created and is unique in the
-  workspace. It changes only when someone edits `lineage_id` in the file, and
-  then the record keeps its id and takes the new lineage (ADR-184). A file
-  written before ADR-178 has no `label`, and readers derive one from the
-  lineage.
-- Apart from `label`, only members Stella's `Record` struct carries enter the
-  file. Stella re-serializes the typed struct before it recomputes the hash,
-  so it drops any other member from its preimage.
-- `record_hash` is SHA-256 over the RFC 8785 canonical bytes of the record
-  with `record_hash` and `label` removed and every null-valued member stripped
-  (`packages/run-evidence/src/record-hash.ts`, pinned to Stella's golden
-  digest). `record_id` is `rec_<slug>_<first 12 hex of the hash with both
-  identity fields absent>`, `slug` being the lineage without `ctx.`, lowercased,
-  with anything but `[a-z0-9]` as `_`.
-
-## The lifecycle
+A workspace's steering repo is `oxagen-<workspace-slug>`, with `-2`, `-3`,
+and so on when the name is taken. Its default branch is `main`. Provisioning
+and each merge through the app record a deployment to the `steering`
+environment.
 
 ```
-proposed → pr_open → checks_running → checks_passed → merged
-                                    ↘ checks_failed ↗
-rejected
+oxagen-<workspace-slug>/
+  README.md
+  AGENTS.md
+  CLAUDE.md
+  .gitattributes
+  workspace.toml                  # workspace repos only
+  agents/<name>.toml              # agent/v1
+  steering/
+    governance.toml               # governance/v1: mode = solo | team | regulated
+    promotions/<period>.jsonl     # the ledger, written by Oxagen
+    skills/<lineage>/SKILL.md     # one folder per skill
+    memory/<lineage>.md
+    <any folder>/<lineage>.md     # a steering record
+  tools/
+    servers/<name>/               # server.toml, tools.toml, tools.lock.json
+    toolbelts/<name>.toml
+  policy/
+    schema.cedarschema
+    <group>.cedar
+    <group>.tests.jsonl
 ```
 
-`open_context_pr` on a `proposed` row branches from the production branch,
-commits the single file, opens the PR (its body: the record, the rationale,
-the supporting records, runs and agents, the evidence links, the check list)
-and runs the checks. On a row whose PR is open it runs the checks again on the
-same PR, against its current head (`head_sha` re-read from GitHub), and is
-refused `base_moved` when the PR no longer targets the production branch. The
-branch is written to the row before GitHub is touched, so a call that failed
-after GitHub opened the PR is retried onto that PR; an open PR on the branch
-whose body does not name the proposal is refused `lineage_pr_open`. At most
-one proposal per lineage is in an open-PR state
-(`context_proposals_open_pr_idx`), every status write applies only from the
-statuses it names, and each check write and the outcome write apply only
-while the row's head is the one the checks read (`head_moved` otherwise).
+- A steering record is any `.md` file under `steering/` outside
+  `promotions/` and a skill's folder. Its name is `<lineage>.md`. Folders
+  carry no meaning, so you can move a record between folders and it stays
+  the same record.
+- A skill is `steering/skills/<lineage>/SKILL.md`. Other files in the folder
+  travel with it.
+- `steering/promotions/` is the ledger. Oxagen writes it when it stamps a
+  steering PR, and it refuses a steering PR that touches it. A new file
+  starts each day, ISO week, month, or year, as `[ledger] rotate` sets. A
+  period holds up to 999 files, from `<period>.jsonl` to
+  `<period>.999.jsonl`.
+- `workspace.toml` lists the code repositories the workspace links, one
+  `[[repositories]]` entry each, with a `url` such as
+  `github.com/a-intel/platform`. The organization repo has no
+  `workspace.toml`.
 
-`merge_context_pr` is refused until `checks_passed`, unless the caller is a
-reviewer the governance mode allows, when the PR's head is no longer the
-commit the checks ran on (`head_moved`), and when the PR no longer targets the
-production branch (`base_moved`). Outside solo mode it is refused
-`approval_required` when no approval stands at the head that merges, unless
-the merger is an owner or holds `merge_pr_without_review`. On GitLab it is
-refused `approvals_not_head_bound` when the project keeps approvals after a
-push, GitLab will not say whether it does, or an approval has no
-`approved_at`. GitHub merges first (squash, pinned to that commit); a PR
-GitHub already holds merged is resumed from its merge
-commit. The head branch is deleted, then a confirmed merge publishes: the
-registry row, a new immutable version holding the file at that commit, the
-promotion event on the ledger (`agent.context_promotions`, `action = promote`,
-`policy_version = governance:<mode>`), the proposal to `merged`, and the
-`steering.published` audit event. The workspace's steering version is the
-ledger length. A published `must` or `should` record is compiled into the
-policy bundle's `context.system` (`packages/handlers/src/lib/tacho-steering.ts`,
-ADR-091), so the merge moves the bundle etag and every enrolled host picks the
-record up on its next poll. `dismiss_proposal` closes an open PR (one found on the branch
-whose body names the proposal, when the row never recorded its number) and
-deletes its branch, and writes `rejected` only to a proposal that is not
-merged.
+The first commit, "Seed the steering repo", writes `README.md`, `AGENTS.md`,
+`CLAUDE.md`, `.gitattributes`, `workspace.toml`, and
+`steering/governance.toml`. The repository-binding spec covers the seven
+provisioning steps.
 
-The repository sync (ADR-184, `packages/handlers/src/context.steering.sync.ts`)
-covers every change that does not go through `merge_context_pr`. A `push` or
-`pull_request` delivery, a merged GitLab merge request, and a sweep every five
-minutes each request `steering/sync.requested`. The sync reads every file under
-`.oxagen/rules/` at the production branch's head and makes the registry match:
-it publishes new and changed records (`policy_version = repository:sync`, no
-approver), follows a renamed file, retires a record whose file is gone, links a
-Context PR merged on the host to its record, rejects one closed without
-merging, and resets the checks of one whose branch moved. For 90 seconds after
-a Context PR merges at its checked commit, the sync leaves it to
-`merge_context_pr`, which records the reviewer. A file that fails validation
-publishes nothing. Its problem is stored in `agent.context_sync_state`, shown
-on the Steering page, and posted as the `Oxagen steering sync` check on the
-commit.
+## Record format
 
-`open_context_pr`, `merge_context_pr` and `dismiss_proposal` gate on the
-caller's role and so need a signed-in user; they declare the `api` surface
-only, since an API key (the MCP and CLI bearer) carries no user.
-`propose_record` and `append_record` check the contract's roles for a
-signed-in caller and leave an API-key call to the kernel.
+A steering record is Markdown with YAML frontmatter, schema
+`steering-record/v1` (`packages/oxagen/src/steering-repo/record.ts`). The body
+is the statement. This is a record as you write it:
 
-## The checks
+```markdown
+---
+schema: steering-record/v1
+lineage: a-intel.platform.no-push-to-main
+label: Protect main
+description: Only pull requests reach main.
+kind: constraint
+effect: forbid
+force: must
+scope: workspace
+status: active
+origin: user
+provenance:
+  source: proposal
+  uri: oxagen:proposal/prp_01K5X4BA
+---
 
-`packages/handlers/src/context.steering.checks.ts`, in order, one at a time,
-each written to the proposal before the next starts and mirrored as a GitHub
-check run `Oxagen · <title>` on the head commit. The file checked is the one
-read back at that commit, and once every check passes the proposal carries
-the `record_id` and `record_hash` stamped in it. Every check runs even after
-a failure.
+Do not push commits straight to `main`.
+```
 
-| # | name | what passes | what fails |
-| --- | --- | --- | --- |
-| 1 | `schema` | the PR changes the record file and no other path (compare from the production branch to the head; a rename counts both paths); TOML; `schema = "context-record/v0.1"`; `set_id`; one or more `[[record]]` each with `lineage_id`, a `kind` from the six, `statement`, `origin` from Stella's five, `sharing_scope` from Stella's four, `status`, `record_id`, `record_hash`, `provenance.source_kind`/`source_uri`, `steering.force` from the four; `label`, when present, 1 to 36 characters | any other changed path, named; anything else, named by field |
-| 2 | `lineage_uniqueness` | exactly one record; its lineage is the proposal's and the file stem; no published record holds the lineage at another path | two records; a foreign lineage; a lineage published elsewhere |
-| 3 | `record_hash` | `record_id` and `record_hash` recompute from the file's canonical bytes, `label` excluded | an edit after stamping, except to `label` |
-| 4 | `secret_pii_scan` | no credential token (vendor prefix, JWT, high-entropy blob), sensitive-key value or PEM block; no email, SSN or Luhn-valid card number — in the statement, rationale, evidence and file | any finding, named by field |
-| 5 | `conflict_against_active` | no active constraint of the opposite effect on the same lineage, or on the same statement under another lineage | a `forbid` against an active `require` |
-| 6 | `constraint_effect` | the file's kind, `steering.force`, `sharing_scope` and statement are the proposal's, and so is its `label` when the proposal sets one; a constraint carries `require` or `forbid`; no other kind carries an effect | a file re-stamped with another statement, force or scope; `allow` is unrepresentable; a constraint without an effect; an effect on a rule |
+The fields:
 
-Truth probes (spec §10.3) are not declared by the files this lane writes and
-are not a check here.
+| Field | Values | Notes |
+|---|---|---|
+| `lineage` | dotted name | The record's identity. It matches the file name. |
+| `label` | text | The name every surface shows first. It can change freely. |
+| `description` | text | Up to 200 characters, or 1,024 for a skill. |
+| `kind` | `business-rule`, `code-rule`, `constraint`, `procedure`, `skill`, `fact`, `preference`, `memory` | |
+| `effect` | `require`, `forbid` | Constraints only, and every constraint needs one. A record grants no authority. |
+| `force` | `must`, `should`, `may`, `info` | |
+| `scope` | `workspace`, `repository`, `organization` | `repository` needs `repos`. |
+| `repos` | list of `<host>/<owner>/<name>` | The code repositories the record applies to. |
+| `load` | `always`, `match`, `relevant`, `mention` | Defaults to `always` for `must` and `should`, and to `relevant` for the rest. |
+| `status` | `active`, `archived` | |
+| `origin` | `user`, `inferred` | |
+| `provenance` | `source`, `uri`, `agent`, `memories` | `source` is `proposal`, `run`, or `import`. |
+| `id`, `hash` | written by the stamp | You do not write these. |
 
-## Freshness: the other half of the lifecycle
+A skill also needs `name`. Four optional fields narrow a record:
 
-Everything above publishes a record. This section is about the checkout that
-has to read it.
+- `tools` lists tool names or `<server>__*` prefixes. The record reaches a
+  request only when the run's toolbelt holds a match.
+- `skills` lists skill lineages. The record reaches a request only when the
+  request's skill is on the list.
+- `applies_to` lists path globs, which `load: match` reads.
+- `toolbelt` names a toolbelt in `tools/toolbelts/`. What it does waits for
+  a later version of the spec.
 
-A Context PR merges onto the production branch. A developer on a feature
-branch keeps whatever `.oxagen/` their branch point had, so the longer the
-branch lives the more likely the agent running in it is steering on records
-nobody uses any more. Nothing in the lifecycle above notices that, because
-from the platform's side the record was published and the story ended.
+## Steering PRs
 
-`@oxagen/steering-freshness` is the answer, and the `oxagen steering`
-commands are its surface.
+Every change to a steering repo is a steering PR, and Oxagen merges it. A person or an agent can open one from any git client. The app opens
+them too, for a proposal, a governance change, or a repository link.
 
-### What "stale" means
+### Branch names
 
-From the merge base of the checkout's HEAD and the remote production branch:
+A steering PR's branch starts with the folder it changes
+(`packages/handlers/src/steering-repo/stamp.ts`, `branchScopeRefusal`):
 
-- changes on the **remote** side are records that merged without this
-  checkout. That is staleness, and it is the only thing that may block a run.
-- changes on the **local** side are records being authored here. That is
-  never staleness.
+| Prefix | Changes | Files per PR |
+|---|---|---|
+| `steering/` | records, skills, and `governance.toml` | one record, one skill folder, or one file |
+| `memory/` | `steering/memory/` | many |
+| `tools/` | `tools/` | many |
+| `agents/` | `agents/` | one file |
+| `policy/` | `policy/` | one policy group |
+| `workspace/` | the root files, including `workspace.toml` | one file |
 
-Both lists are narrowed to the paths whose working copy differs from the
-production branch, so a record already on disk stops counting whether it
-arrived by sync, cherry-pick or hand. Every failure to answer is `unknown`,
-and `unknown` never blocks.
+A branch for one record is `steering/<lineage>`. The check refuses a branch
+for one of four reasons:
 
-### The two gates
+- `branch_prefix`: the branch starts with none of the six prefixes.
+- `ledger_owned`: the PR changes a file under `steering/promotions/`.
+- `branch_scope`: a changed path belongs under another prefix.
+- `one_change`: a branch other than `memory/` or `tools/` changes more than
+  one unit.
 
-`autoSync` takes the merged records into the checkout before the prompt runs.
-`blockStaleRuns` refuses the prompt while records are missing. Both live in
-the `steering` block of the Oxagen settings files, and both are also
-workspace policy in Oxagen (Steering → Steering freshness), stored
-in `workspace.workspaces.settings` and read by `get_steering_freshness`.
+### Checks
 
-The scopes combine with OR: a later scope may switch a gate on, and may never
-switch one off. Otherwise `.oxagen/settings.local.json`, which a developer
-owns and which is not committed, could switch off the gate the organisation
-set. `OXAGEN_STEERING_FRESHNESS=off` suspends both for one shell.
+`@oxagen/steering-check` runs eleven checks: `schema`, `lineage`, `hash`,
+`secrets`, `conflicts`, `authority`, `settings`, `references`, `budget`,
+`compile`, and `owned`. Oxagen posts the result as one required check,
+`Oxagen steering`, on the PR's head. `oxagen check` runs the same checks on a
+local clone and skips `settings`, which needs the host.
 
-`.oxagen/settings.json` is read twice: from the working copy, and from the
-production branch as it was last fetched. The working copy is whatever was
-last typed into it, so on its own an uncommitted edit could switch off a gate
-the team committed. A branch can still switch a gate on before it merges.
+### Approval
 
-### What a sync refuses
+`steering/governance.toml` sets the mode, and a new repository starts in
+`solo`. In `solo` mode the merger is the approver. In `team` and `regulated` mode the PR needs an approval on the host
+at the checked head, from a workspace member other than the author. Without
+one, an owner, or a member who holds `merge_pr_without_review`, can still
+merge, and the ledger records `without_review: true`.
 
-`oxagen steering sync` takes `.oxagen/` from the production branch and leaves
-it staged. It refuses when the verdict is `unknown` (acting on a non-answer
-is how a record gets deleted over a failed fetch), when the branch has its
-own `.oxagen/` changes, and when anything under `.oxagen/` is uncommitted,
-including a file this sync would not have written. `--force` covers the first
-two and never the `unknown` case.
+### Merge
 
-A sync the gate starts shares the hook's deadline. It refuses with
-`out_of_time` rather than starting a write it cannot finish inside the twenty
-seconds the harness gives the hook, and a deadline that arrives between
-batches stops it and reports how many files landed. `applied` stays false in
-both cases, so a blocking policy still refuses the prompt rather than the
-harness killing the gate and letting it through over a part-written
-`.oxagen/`.
+You merge from the app (`merge_context_pr`). Oxagen then works through its
+merge queue (`packages/handlers/src/steering-repo/merge-queue.ts`), one
+steering PR at a time per repository:
 
-### Reaching the agent
+1. Oxagen brings the branch up to date with `main` when it is behind, and runs
+   the checks again.
+2. Oxagen pushes one stamp commit. It writes `id` and `hash` into each record
+   the PR changed and appends one ledger line.
+3. Oxagen reads `main` again. When `main` moved, it drops the stamp and starts
+   over.
+4. Oxagen squash-merges, pinned to the stamped commit. The message ends with
+   the `Oxagen-Approved-By`, `Oxagen-Checks`, and `Oxagen-Version` trailers.
 
-Oxagen wraps whatever agent a team runs, so the gate is one command with a
-contract every harness can call: exit 0 allows, exit 2 refuses with the
-reason on stderr, and `--harness` picks the JSON on stdout. Claude Code and
-Codex CLI both take it as a `UserPromptSubmit` hook, which
-`oxagen steering hooks install` writes for them; the warning goes into the
-turn as `additionalContext`, so it reaches the transcript and not only a
-terminal nobody is watching.
+While the repository fails its health check, Oxagen merges nothing.
 
-`--harness all` covers every harness Oxagen wraps: Claude Code, Codex, Cursor,
-and Stella, each with its own config writer and its own output adapter. A
-harness name Oxagen does not know renders as text and signals by exit code,
-which is the contract any shell already understands.
+### Stamp
 
-For an agent with no pre-prompt hook, the `get_steering_freshness` MCP tool
-is the reach that is guaranteed. It answers later, at the first tool call
-rather than before the prompt, which is why the hook is still the better path
-where a harness supports one.
+The stamp computes each record's identity from its content:
+
+- The preimage is the frontmatter without `id`, `hash`, `label`, and null
+  values, plus `statement`, the trimmed body.
+- The seed is `sha256` over the RFC 8785 canonical JSON of the preimage.
+- `id` is `rec_<slug>_<first 12 hex digits of the seed>`. The slug is the
+  lineage in lowercase, with each character outside `[a-z0-9]` as `_`.
+- `hash` is `sha256` over the canonical JSON of the preimage plus `id`.
+
+`label` stays out of both, so a rename changes neither.
+
+### Ledger
+
+Each merged steering PR adds one line, schema `promotion/v1`
+(`packages/oxagen/src/steering-repo/promotion.ts`). A line holds `seq`, `at`,
+the PR's provider and number, `branch`, `mode`, `approved_by`, `merged_by`,
+and `without_review`. It also holds `changes`, one entry per file. Each entry
+has `path`, an `action` of `added`, `modified`, or `removed`, and for a record
+its `lineage`, `id`, and `hash`. `replaces` names the id a record had before a
+format change, such as the v0.1 conversion. `prev` holds the hash of the line
+before, across files, and `hash` covers the line itself, so the lines form one
+chain.
+
+### Publish
+
+After the merge, `merge_context_pr` publishes the new head
+(`packages/steering-bundle/src/publish.ts`,
+`packages/handlers/src/steering-repo/publisher.ts`). The repository sync
+publishes too, as its last step, so a merge made on the host still publishes.
+A publish takes these steps:
+
+1. It checks the repository's health and takes the repository's lock.
+2. It skips a commit it already published, and a commit that is no longer
+   the head of `main`.
+3. It takes the next version number, one above the highest ever stored.
+4. It builds a `bundle/v1` from the changed blobs, with tools from MCP
+   Studio.
+5. It stores the version, then moves the workspace to it.
+6. It tags the merge commit `steering/<number>`.
+
+The version store is `postgresVersionStore`, keyed by
+`<host>/<owner>/<name>`, where the host is `github.com` or `gitlab.com`.
+
+## Readers
+
+- **The bundle.** For each linked code repository, a published version holds
+  one block of the `must` and `should` records that load `always`, under
+  `## Workspace rules` and `## Organization rules`. It renders the block once
+  at publish, sorted by lineage. Every other record and skill becomes one line
+  under `## More steering`. The frontmatter stays out of what the model reads
+  (`packages/steering-bundle/src/render.ts`).
+- **`steering_search` and `steering_read`.** The handlers exist in
+  `packages/handlers/src/steering.search.ts` and `steering.read.ts`, and
+  `packages/steering-bundle/src/cursor.ts` holds a Cursor dashboard rule that
+  calls them. No contract registers them yet.
+- **Wrapped agents.** `get_tacho_bundle` and `recall_tacho_memories` read
+  through `TachoPublished`, which answers `NOTHING_PUBLISHED` on `main`. PR
+  #4606 binds it to the version store.
+- **Stella.** A reader for this layout is pending in the Stella repository.
+
+## Workspace migration
+
+A workspace set up before the steering repo keeps its steering under
+`.oxagen/` in the repository it used to bind. An organization owner moves it
+with one call per workspace, `import_workspace_steering`, in four steps:
+
+1. Oxagen changes the old repository's head from `steering` to `linked`.
+2. Oxagen provisions the workspace's steering repo.
+3. Oxagen opens the import steering PRs. `steering/import-oxagen` carries the
+   records, the skills, and `governance.toml`. `workspace/import-oxagen`
+   carries `workspace.toml`. Each agent with a stored operator, runtime, and
+   harness gets its own `agents/` PR.
+4. In the same run, Oxagen opens one pull request on the old repository. A
+   person merges it last, after the import steering PRs. It removes the
+   committed steering files under `.oxagen/` that the steering repo now
+   holds. A file that changed after the import read it stays, and the pull
+   request lists it. The machine-local files that the repository-binding spec
+   lists in §4 stay.
+
+Oxagen writes only on a branch it can prove holds nothing but its own commit.
+A branch with the same name and other changes stops the run with
+`steering_import_branch_taken`.
+
+A rerun starts at the first step not yet done.
+
+The import branch is the one `steering/` branch that can change many
+records. Its PR body carries a replaces block that maps each new record to
+its old id. The stamp copies each old id into the ledger's `replaces` field,
+and refuses with `replaces_unmatched` or `replaces_unreadable` when the block
+does not match the records. Each record's id changes once, at this merge.
+
+The conversion writes each v0.1 record to `steering/imported/<lineage>.md`
+(`packages/oxagen/fixtures/steering-repo/v0.1/conversion.json`):
+
+| v0.1 | v1 |
+|---|---|
+| `set_id` | dropped, and the set id becomes the lineage's prefix |
+| `lineage_id` | `lineage`, without `ctx.<org>.` |
+| `record_id`, `record_hash` | `id`, `hash`, computed again |
+| `kind = "rule"` | `business-rule` or `code-rule`, chosen by a person |
+| `statement` | the body |
+| `sharing_scope` | `scope` |
+| `provenance.source_kind`, `.source_uri` | `provenance.source`, `.uri` |
+| `steering.force` | `force` |
+| `constraint_effect` | `effect` |
+
+## Earlier format
+
+Before the steering repo, each record was a `context-record/v0.1` TOML file
+under `.oxagen/rules/` in the workspace's bound repository. Six checks ran on
+each Context PR, and Postgres held the ledger. A repository without
+`steering/governance.toml` still uses that layout. The merge queue still
+merges it, the sync mirrors its files into the Postgres registry, and
+`lib/tacho-steering.ts` builds the policy bundle's `context.system` from that
+registry. `oxagen pull`, `get_published_steering`, and `oxagen steering` read
+only a committed `.oxagen/` tree. The migration above converts those files.

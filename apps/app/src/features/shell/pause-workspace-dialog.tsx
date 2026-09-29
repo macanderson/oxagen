@@ -25,8 +25,8 @@ import {
 import {
   buttonPrimary,
   buttonSecondary,
-  inputBase,
   mono,
+  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -196,7 +196,7 @@ export function PauseWorkspaceDialog({
               onChange={(event) => {
                 setReason(event.target.value);
               }}
-              className={`${inputBase} resize-y max-md:min-h-11 max-md:text-base`}
+              className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
             />
             <p
               id={`${reasonId}-help`}
