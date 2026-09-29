@@ -177,7 +177,9 @@ describe("People", () => {
       "passkey",
       "passkey + TOTP",
     ]);
-    expect(within(panel).getByLabelText("Rows")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("combobox", { name: "Rows" }),
+    ).toBeInTheDocument();
     expect(panel).toHaveTextContent(
       "Changing a role is a governed action. It passes IAM and writes an audit record.",
     );

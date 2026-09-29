@@ -1,11 +1,12 @@
 "use client";
 // The ranked finding cards with the design's filters (spec "Findings"):
-// Level, Confidence, Sort (Rank, Savings high first, Savings low first,
-// Finding A to Z), Rows and a pager. Filtering runs over the open findings the
-// server listed, largest saving first, so a finding's rank is its place in
-// that list and never changes with a filter. Each card names who the finding
-// is about, the finding, what it cites, the amount at stake and its share of
-// the identified total, and opens Evidence and Fix.
+// Level, Confidence and Sort (Rank, Savings high first, Savings low first,
+// Finding A to Z) above the cards, and under them the shared pager with Rows
+// per page, the range, Previous and Next. Filtering runs over the open
+// findings the server listed, largest saving first, so a finding's rank is its
+// place in that list and never changes with a filter. Each card names who the
+// finding is about, the finding, what it cites, the amount at stake and its
+// share of the identified total, and opens Evidence and Fix.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { byMicrosDescending } from "@/data/contracts/money";
@@ -21,6 +22,7 @@ import {
   ratioWidth,
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { RowsPager } from "@/ui/pagination";
 import { FixDialog } from "./fix-dialog";
 import type { SpendAt } from "./view";
 
@@ -286,16 +288,6 @@ export function FindingsList({
           }))}
           onChange={reset(setSort)}
         />
-        <Select<number>
-          id="spend-findings-rows"
-          label={t("filters.rows")}
-          value={size}
-          options={PAGE_SIZES.map((value) => ({
-            value,
-            label: formatCount(value, locale),
-          }))}
-          onChange={reset(setSize)}
-        />
       </div>
       {slice.length === 0 ? (
         <p className={`${panel} p-4 text-[13px] text-muted-foreground`}>
@@ -308,45 +300,41 @@ export function FindingsList({
           ))}
         </ol>
       )}
-      <nav
-        aria-label={t("pager.label")}
-        className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted-foreground"
-      >
-        <span className={mono}>
-          {t("pager.range", {
-            from: formatCount(
-              shown.length === 0 ? 0 : current * size + 1,
-              locale,
-            ),
-            to: formatCount(current * size + slice.length, locale),
-            total: formatCount(shown.length, locale),
-          })}
-        </span>
-        <span className="flex gap-1.5">
-          <button
-            type="button"
-            data-touch-target=""
-            className={buttonSecondary}
-            disabled={current === 0}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            {t("pager.previous")}
-          </button>
-          <button
-            type="button"
-            data-touch-target=""
-            className={buttonSecondary}
-            disabled={current >= pages - 1}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            {t("pager.next")}
-          </button>
-        </span>
-      </nav>
+      {/* The cards sit in no panel, so the pager drops its side padding and
+          lines up with their edges. Changing the rows goes back to page 1. */}
+      <RowsPager
+        label={t("pager.label")}
+        rowsLabel={t("filters.rows")}
+        perPage={size}
+        sizes={PAGE_SIZES}
+        onPerPage={reset(setSize)}
+        sizeLabel={(value) => formatCount(value, locale)}
+        range={t("pager.range", {
+          from: formatCount(
+            shown.length === 0 ? 0 : current * size + 1,
+            locale,
+          ),
+          to: formatCount(current * size + slice.length, locale),
+          total: formatCount(shown.length, locale),
+        })}
+        previousLabel={t("pager.previous")}
+        nextLabel={t("pager.next")}
+        previous={
+          current <= 0
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages - 1
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+        className="px-0"
+      />
     </section>
   );
 }

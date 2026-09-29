@@ -10,7 +10,13 @@
 // sentinel lists no key that exists and mints one into a workspace that does
 // not. With no workspace the viewer may enter, the section says so and reads
 // nothing.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -330,7 +336,12 @@ function manyRevoked(n: number): ApiKey[] {
 }
 
 const filterNav = () => screen.getByRole("navigation", { name: "Which keys" });
-const pagerNav = () => screen.getByRole("navigation", { name: /pages/i });
+// The range the pager under the keys reads, such as "1–10 of 15".
+const range = () => {
+  const nav = screen.getByRole("navigation", { name: /pages/i });
+  const pager = nav.closest("[data-rows-pager]");
+  return pager?.querySelector("[data-range]")?.textContent ?? null;
+};
 const rowIds = () =>
   Array.from(keysTable().querySelectorAll("[data-api-key]")).map((row) =>
     row.getAttribute("data-api-key"),
@@ -489,7 +500,7 @@ describe("the list controls every list carries", () => {
     expect(rowIds()).toEqual([unused.id, live.id]);
   });
 
-  it("shows ten rows by default under a numbered pager, and every row on All", async () => {
+  it("shows ten rows by default under the pager, and every row on All", async () => {
     const user = userEvent.setup();
     await renderApiKeys(readOk(manyKeys(15)));
     const shown = () =>
@@ -497,9 +508,13 @@ describe("the list controls every list carries", () => {
         .filter((row) => row.style.display !== "none")
         .map((row) => row.getAttribute("data-api-key"));
     expect(shown()).toHaveLength(10);
-    expect(pagerNav()).toHaveTextContent("1–10 of 15");
-    await user.selectOptions(screen.getByLabelText("Rows"), "0");
-    expect(shown()).toHaveLength(15);
+    expect(range()).toBe("1–10 of 15");
+    await user.click(screen.getByRole("combobox", { name: "Rows" }));
+    await user.click(await screen.findByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(15);
+    });
+    expect(range()).toBe("1–15 of 15");
   });
 
   it("pages the filtered roster, not the read: hidden keys take up no row", async () => {

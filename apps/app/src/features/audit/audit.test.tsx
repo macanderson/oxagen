@@ -13,8 +13,10 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AuditBundle,
@@ -513,11 +515,6 @@ describe("Events", () => {
       "An audit event records no actor kind yet, so Humans, Agents and Services cannot be picked.",
     );
     expect(
-      within(screen.getByRole("combobox", { name: "Rows" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["5", "10", "25", "50"]);
-    expect(
       within(screen.getByRole("combobox", { name: "Range" }))
         .getAllByRole("option")
         .map((option) => option.textContent),
@@ -529,7 +526,16 @@ describe("Events", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual(["All results", "allowed", "denied"]);
-    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
+    // Rows sits in the pager under the table (#4693). The filters form
+    // carries its size as a hidden field, so picking a result keeps it.
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+    expect(
+      screen
+        .getByTestId("audit-filters")
+        .querySelector("input[type=hidden][name=rows]"),
+    ).toHaveValue("25");
 
     const search = screen.getByRole("searchbox", {
       name: "Search the audit record",
@@ -572,7 +578,7 @@ describe("Events", () => {
     );
   });
 
-  it("draws the design's numbered pager when the window read holds every row", async () => {
+  it("steps the record with Previous and Next, and numbers no pages", async () => {
     const rows = Array.from({ length: 30 }, (_, i) =>
       event({ request: `req_${String(i)}` }),
     );
@@ -586,28 +592,65 @@ describe("Events", () => {
       name: "Pages of the audit record",
     });
     expect(screen.getByTestId("audit-shown")).toHaveTextContent("11–20 of 30");
-    expect(pager).toHaveTextContent("11–20 of 30‹123›");
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny");
-    expect(within(pager).getByRole("link", { name: "2" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(pager).getByRole("link", { name: "3" })).toHaveAttribute(
-      "href",
-      "/acme/audit?outcome=deny&offset=20",
-    );
     expect(
       within(pager).getByRole("link", { name: "Next page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny&offset=20");
+    // Previous and Next are the only steps (#4693).
+    expect(within(pager).getAllByRole("link")).toHaveLength(2);
     // A 44 px tap target on a phone (rev1 audit.md, Mobile).
     expect(
       within(pager).getByRole("link", { name: "Next page" }).className,
     ).toContain("max-md:min-h-11");
   });
 
-  it("folds a long record into 1 2 … 45, as the design draws it", async () => {
+  it("draws Rows in the pager under the table, and a picked size reads its first page", async () => {
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      event({ request: `req_${String(i)}` }),
+    );
+    answer({
+      window: recordOf(rows),
+      page: recordOf(rows.slice(10, 20), { hasMore: true, offset: 10 }),
+    });
+    await renderAudit({ outcome: "deny", offset: "10" });
+
+    const size = screen.getByRole("combobox", { name: "Rows" });
+    const pager = size.closest("[data-rows-pager]");
+    if (!(pager instanceof HTMLElement)) throw new Error("Rows has no pager");
+    // The filters above the table no longer hold it.
+    expect(screen.getByTestId("audit-filters").contains(size)).toBe(false);
+    // The pager comes after the table, with the range and the steps.
+    const table = screen.getByRole("table", { name: "Control-plane events" });
+    expect(
+      table.compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(pager).getByTestId("audit-shown")).toHaveTextContent(
+      "11–20 of 30",
+    );
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny&offset=20");
+
+    expect(size).toHaveTextContent("10");
+    await userEvent.click(size);
+    await screen.findByRole("option", { name: "25" });
+    // The page's native selects carry options too; these are the pager's.
+    expect(
+      screen
+        .getAllByRole("option")
+        .filter((option) => option.closest("select") === null)
+        .map((option) => option.textContent),
+    ).toEqual(["5", "10", "25", "50"]);
+    await userEvent.click(screen.getByRole("option", { name: "25" }));
+    // A new size starts at its own first page and keeps the filters.
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/audit?outcome=deny&rows=25");
+    });
+  });
+
+  it("steps a long record one page at a time at the Rows size", async () => {
     const rows = Array.from({ length: 200 }, (_, i) =>
       event({ request: `req_${String(i)}` }),
     );
@@ -620,14 +663,13 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    expect(pager).toHaveTextContent("1–5 of 200‹12…40›");
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent("1–5 of 200");
     expect(
       within(pager).getByRole("button", { name: "Previous page" }),
     ).toBeDisabled();
-    expect(within(pager).getByRole("link", { name: "40" })).toHaveAttribute(
-      "href",
-      "/acme/audit?rows=5&offset=195",
-    );
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?rows=5&offset=5");
   });
 
   it("claims no last page when the window read did not hold every row (negative)", async () => {
@@ -640,8 +682,9 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    // Pages 1 and 2 are read, page 3 exists, and nothing past it is known.
-    expect(pager).toHaveTextContent("26–26‹123…›");
+    // The range names no total, and Next leads on while the page read
+    // reports an older page.
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent(/^26–26$/);
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny&rows=25");
@@ -839,8 +882,14 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    expect(pager).toHaveTextContent("26–26‹12›");
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent(/^26–26$/);
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", "/acme/audit?rows=25");
     expect(within(pager).queryByRole("link", { name: "Next page" })).toBeNull();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
   });
 });
 
