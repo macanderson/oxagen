@@ -218,12 +218,14 @@ redirect (`dns-vanity-domains.tf`), and `moved` blocks carried its zone,
 records, and certificate out of that set, so the delegation and the issued
 certificate survived the move.
 
-The ALB serves both `oxagen.app` and `www.oxagen.app` with that certificate.
-Until the cutover, a listener rule answers them with a 302 to the same path
-on `app.oxagen.sh`. `tools/caddy/Caddyfile.alb` already routes both names to
-the app. Install it with `tools/install-node-scripts.sh` before the cutover
-deletes the rule, or Caddy answers the names with a 404. ADR-215 lists the
-rest of the cutover, including the Parameter Store values it changes.
+The ALB serves both `oxagen.app` and `www.oxagen.app` with that certificate
+and forwards them to the node, where `tools/caddy/Caddyfile.alb` routes them
+to the app. The app sends a page visit on a production host that is not
+canonical to the canonical one (`apps/app/src/shared/canonical-host.ts`). An
+interim listener rule that redirected both names to `app.oxagen.sh` was
+deleted before the cutover, so its 302 could never meet the cutover build's
+308. ADR-215 lists the rest of the cutover, including the Parameter Store
+values it changes.
 
 ## The certificate ordering trap
 
