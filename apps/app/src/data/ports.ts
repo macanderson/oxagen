@@ -427,7 +427,11 @@ export interface DataSource {
     incidents(
       ctx: WsCtx,
       agent: string,
-      q: { cursor: string | null },
+      q: {
+        cursor: string | null;
+        /** Incidents to a page, 1 to 100. `list_incidents` reads 50 when it is omitted (#4693). */
+        limit?: number;
+      },
     ): Promise<Read<IncidentPage>>;
   };
   /**

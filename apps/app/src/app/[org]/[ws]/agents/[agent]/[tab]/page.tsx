@@ -23,7 +23,7 @@ export default async function AgentPage({
 }) {
   const { org, ws, agent, tab } = await params;
   const ctx = await requireViewer(org, ws);
-  const { cursor } = await searchParams;
+  const { cursor, rows } = await searchParams;
   return (
     <main
       id="main"
@@ -35,6 +35,7 @@ export default async function AgentPage({
         agent={agent}
         tab={firstParam(tab) ?? null}
         cursor={firstParam(cursor) ?? null}
+        rows={firstParam(rows) ?? null}
       />
     </main>
   );

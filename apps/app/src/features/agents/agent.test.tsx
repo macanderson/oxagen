@@ -867,7 +867,54 @@ describe("Agent tab bodies", () => {
       cursor: "cur_2",
     });
     render(<IntlProvider>{element}</IntlProvider>);
-    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2" });
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 50 });
+  });
+
+  // #4693: Rows per page under the incident list names the page size in the
+  // address, and only Activity reads it.
+  it("reads the incidents at the size the URL names on Activity", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 25 });
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+  });
+
+  it("reads a size Rows does not offer as 50 (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "30",
+      cursor: null,
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null, limit: 50 });
+  });
+
+  it("leaves the size off the incident read on another tab (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "overview",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null });
   });
 
   it("counts the mandates in effect on the Permissions tab", async () => {

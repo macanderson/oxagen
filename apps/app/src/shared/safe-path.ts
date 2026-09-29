@@ -253,12 +253,15 @@ export const routes = {
       cursor: q?.cursor,
       view: q?.view,
     }),
-  /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
+  /**
+   * One agent. `tab` picks the section, `rows` how many of its incidents a
+   * page holds, and `cursor` a later page of them (#4693).
+   */
   agent: (
     org: string,
     ws: string,
     agent: string,
-    q?: { tab: string; cursor?: string },
+    q?: { tab: string; rows?: string; cursor?: string },
   ): SafePath =>
     withQuery(
       q?.tab === undefined
@@ -273,6 +276,7 @@ export const routes = {
               : q.tab,
           ),
       {
+        rows: q?.rows,
         cursor: q?.cursor,
       },
     ),

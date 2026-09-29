@@ -280,6 +280,13 @@ describe("routes", () => {
         cursor: "c2",
       }),
     ).toBe("/acme/core-platform/agents/release-bot/activity?cursor=c2");
+    expect(
+      routes.agent("acme", "core-platform", "release-bot", {
+        tab: "activity",
+        rows: "25",
+        cursor: "c2",
+      }),
+    ).toBe("/acme/core-platform/agents/release-bot/activity?rows=25&cursor=c2");
     expect(routes.run("acme", "core-platform", "../../evil")).toBe(
       "/acme/core-platform/runs/..%2F..%2Fevil",
     );
