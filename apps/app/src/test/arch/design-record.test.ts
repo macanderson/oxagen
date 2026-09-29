@@ -1,15 +1,21 @@
-// INV-32 (ARCHITECTURE.md §4, ADR-132): the app's presentation is the roadmap
-// mockup's, rule for rule. The design of record is `mockups/src/engine.css` in
-// the roadmap repository; `src/ui/control-styles.ts`, `src/ui/table.tsx`,
-// `src/ui/route-tabs.tsx`, `src/ui/badge.tsx` and `src/app/globals.css` carry
-// its rules as recipes, each naming the rule it draws. This test holds those
-// recipes to the rules that drifted between 2026-09-17 and 2026-09-20:
-// gold that became ink, flat headers that became grey bands, an eyebrow that
-// lost its colour, tiles and badges that each page drew its own way.
+// INV-32 (ARCHITECTURE.md §4, ADR-226): the app has two sources of record. The
+// v3 mockup at the pin in ADR-226 (`mockups/src/v3.css` in oxagen-roadmap) sets
+// layout and behavior. The brand kit (`macanderson/oxagen-brand`, synced into
+// `packages/ui/src/styles/house-tokens.css`) sets tokens, type, and marks.
+// `src/ui/control-styles.ts`, `src/ui/table.tsx`, `src/ui/route-tabs.tsx`,
+// `src/ui/badge.tsx` and `src/app/globals.css` carry the rules as recipes.
+// This test holds those recipes to the rules that drifted between 2026-09-17
+// and 2026-09-20: gold that became ink, a header band that moved, an eyebrow
+// that lost its colour, tiles and badges that each page drew its own way.
 //
-// Each assertion quotes the rule. A recipe changes with the rule, and this
-// file changes with it; a recipe that changes without this file is the drift
-// this test exists to name.
+// It also fails when a file under src/ writes a colour or a font family the kit
+// does not supply. A component draws with the kit's tokens, or it names its
+// reason in the allowlist below.
+//
+// Each assertion quotes the v3 rule, or names the app's own rule where the app
+// has not ported v3 yet. A recipe changes with the rule, and this file changes
+// with it. A recipe that changes without this file is the drift this test
+// exists to name.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -67,7 +73,9 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(root).toMatch(/--on-gold-deep:\s*var\(--ox-paper\)/);
   });
 
-  it("`.tab[aria-selected] { border-bottom-color: var(--gold) }`", () => {
+  it("the app's route tab underlines in gold (v3 keeps it for dialog tabs; ADR-226)", () => {
+    // v3 draws page tabs as a muted track with a raised tab. Until a slice
+    // ports that, the gold underline stays the app's rule for every tab row.
     expect(lightRoot()).toMatch(/--tab-border-active:\s*var\(--gold\)/);
     expect(tabLink).toContain("aria-[current=page]:border-gold");
     expect(tabLink).not.toContain("border-foreground");
@@ -86,7 +94,7 @@ describe("design record: the recipes carry the mockup's rules", () => {
     for (const recipe of [panelFooter, headCell]) {
       expect(recipe).not.toContain("bg-panel-head");
     }
-    // ADR-170: light grey on paper, and on ink a step between the panel and
+    // ADR-226: light grey on paper, and on ink a step between the panel and
     // the row wash, so the band never matches a hovered row.
     expect(lightRoot()).toMatch(/--panel-head:\s*var\(--ox-paper-hl\)/);
     const css = read("src/app/globals.css");
@@ -102,9 +110,10 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(css).not.toMatch(/\[data-shell-page\] table \{[^}]*background/);
   });
 
-  it("`td { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }`: a body cell ends in an ellipsis", () => {
+  it("a body cell ends in an ellipsis (the app's rule from #4665; ADR-226)", () => {
     // #4665: no table text wraps, in a page or a dialog. The cap is per cell
     // through `--cell-max`, and a cell that spans columns keeps its own layout.
+    // v3 draws no ellipsis on `td`, so this rule is the app's own.
     const css = read("src/app/globals.css");
     const td = css.match(
       /\n\s*table tbody :is\(td, th\):not\(\[colspan\]\) \{[^}]*\}/,
@@ -159,18 +168,104 @@ const INK_PRIMARY =
 const HAND_TILE =
   /rounded-(xl|2xl) border border-border bg-(data-surface|muted)\b/;
 
+/**
+ * A colour the kit does not supply: a hex (one with a letter, or all digits
+ * where a colour goes, so `"#4665"` stays an issue number), a colour function,
+ * or a Tailwind default-palette class. The kit's colours reach a component as
+ * a token (`bg-card`, `text-muted-foreground`, `var(--gold)`), never as a value.
+ */
+const RAW_COLOUR = new RegExp(
+  [
+    /(?<![\w&/#])#(?=[0-9a-fA-F]*[a-fA-F])[0-9a-fA-F]{3,8}(?![\w-])/,
+    /(?:[:=]\s*["'`]?|\[)#(?:\d{8}|\d{6}|\d{3})(?![\w-])/,
+    /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(|\bcolor\(\s*(?:srgb|display-p3)/,
+    /\b(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/,
+    /\b(?:bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(?:white|black)\b/,
+  ]
+    .map((part) => part.source)
+    .join("|"),
+);
+
+/**
+ * A font family the kit does not supply: a `font-family`, `fontFamily`, or
+ * `font` shorthand that names a family instead of a `var(--…)` token, a
+ * `font-serif` or `font-[…]` family class, `next/font`, or `@font-face`. The
+ * kit's faces reach a component as `font-sans`, `font-display`, or `font-mono`.
+ */
+const RAW_FONT = new RegExp(
+  [
+    /font-family\s*:(?!\s*(?:var\(--|inherit\b))/,
+    /fontFamily\s*:(?!\s*["'`]?var\(--)/,
+    /\bfont\s*:\s*[^;{}"]*?(?:serif|monospace|system-ui|-apple-system)/,
+    /\bfont-serif\b|\bfont-\[(?!\d|var\(|family-name:var\()/,
+    /from\s+["']next\/font|@font-face/,
+  ]
+    .map((part) => part.source)
+    .join("|"),
+);
+
+/**
+ * The files that must write a literal colour, each with its reason (ADR-226).
+ * A new entry carries its reason, and a stale entry fails the test below.
+ */
+const COLOUR_ALLOWED: ReadonlyMap<string, string> = new Map([
+  [
+    "src/app/layout.tsx",
+    "`themeColor` metadata takes a value: the kit's ink and paper",
+  ],
+  ["src/app/manifest.ts", "the PWA manifest takes a value: the kit's ink"],
+  [
+    "src/features/auth/ui/oauth-buttons.tsx",
+    "Google's mark, in Google's colours",
+  ],
+  [
+    "src/features/tools/oauth-callback.ts",
+    "a standalone HTML page that loads no stylesheet: the kit's ink and paper",
+  ],
+  [
+    "src/ui/chart.tsx",
+    "`[stroke='#ccc']` matches recharts' default grid and maps it to a token",
+  ],
+  [
+    "src/ui/stella-mark.tsx",
+    "the Stella mark's SVG fills: the kit's gold and its shimmer",
+  ],
+  [
+    "src/ui/transcript-skins.css",
+    "each harness skin copies its terminal's palette",
+  ],
+]);
+
+/** The files that must write a literal font family, each with its reason. */
+const FONT_ALLOWED: ReadonlyMap<string, string> = new Map([
+  [
+    "src/features/tools/oauth-callback.ts",
+    "a standalone HTML page that loads no stylesheet: the kit's body stack",
+  ],
+  [
+    "src/ui/avatar.tsx",
+    "the avatar's serif option, which v3 draws as `.avx.f-serif`. The kit ships no serif",
+  ],
+  ["src/ui/avatar-editor.tsx", "the avatar's serif option, as in avatar.tsx"],
+]);
+
 const SELF = "src/test/arch/design-record.test.ts";
 const RECIPES = new Set(["src/ui/control-styles.ts", "src/app/globals.css"]);
+
+/** A line that is only a comment: `//`, `/*`, or a ` * ` continuation. */
+const COMMENT_LINE = /^\s*(\/\/|\/?\*)/;
 
 function hits(
   files: readonly string[],
   pattern: RegExp,
   name: string,
+  { skipComments = false } = {},
 ): string[] {
   const out: string[] = [];
   for (const file of files) {
     const lines = read(file).split("\n");
     lines.forEach((line, index) => {
+      if (skipComments && COMMENT_LINE.test(line)) return;
       if (pattern.test(line))
         out.push(`${RULE} ${file}:${String(index + 1)} ${name}`);
     });
@@ -206,6 +301,44 @@ describe("design record: no page draws around the recipes", () => {
     },
     WHOLE_TREE_TIMEOUT_MS,
   );
+
+  it(
+    "no file under src/ writes a colour the kit does not supply",
+    () => {
+      const files = scanned().filter((file) => !COLOUR_ALLOWED.has(file));
+      expect(
+        hits(files, RAW_COLOUR, "raw-colour", { skipComments: true }),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+
+  it(
+    "no file under src/ writes a font family the kit does not supply",
+    () => {
+      const files = scanned().filter((file) => !FONT_ALLOWED.has(file));
+      expect(
+        hits(files, RAW_FONT, "raw-font", { skipComments: true }),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+
+  it("every allowlisted file still writes the literal it is allowed", () => {
+    const stale = [
+      ...[...COLOUR_ALLOWED.keys()].filter(
+        (file) =>
+          hits([file], RAW_COLOUR, "raw-colour", { skipComments: true })
+            .length === 0,
+      ),
+      ...[...FONT_ALLOWED.keys()].filter(
+        (file) =>
+          hits([file], RAW_FONT, "raw-font", { skipComments: true }).length ===
+          0,
+      ),
+    ];
+    expect(stale).toEqual([]);
+  });
 
   it(
     "every app page names its scope in an eyebrow over the h1 (`.phead .eyebrow`)",
@@ -247,5 +380,22 @@ describe("design record: no page draws around the recipes", () => {
         "hand-tile",
       ),
     ).toEqual([]);
+  });
+
+  it("the colour and font scans read the probe the way they read a page", () => {
+    const raw = "src/test/arch/probes/design-record/raw.tsx";
+    const clean = "src/test/arch/probes/design-record/clean.tsx";
+    const scan = { skipComments: true };
+    expect(hits([raw], RAW_COLOUR, "raw-colour", scan)).toEqual([
+      `${RULE} ${raw}:4 raw-colour`,
+      `${RULE} ${raw}:5 raw-colour`,
+      `${RULE} ${raw}:6 raw-colour`,
+    ]);
+    expect(hits([raw], RAW_FONT, "raw-font", scan)).toEqual([
+      `${RULE} ${raw}:7 raw-font`,
+      `${RULE} ${raw}:8 raw-font`,
+    ]);
+    expect(hits([clean], RAW_COLOUR, "raw-colour", scan)).toEqual([]);
+    expect(hits([clean], RAW_FONT, "raw-font", scan)).toEqual([]);
   });
 });

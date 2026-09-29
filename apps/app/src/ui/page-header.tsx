@@ -3,7 +3,7 @@
 // with the same catalog key its generateMetadata returns (ARCHITECTURE.md §1.2),
 // so the document title and the h1 cannot drift.
 //
-// The shape is the mockup's `.phead` (engine.css, ADR-132): the eyebrow names
+// The shape is the mockup's `.phead` (engine.css, ADR-226): the eyebrow names
 // the scope in gold-as-ink, the h1 is 24px on the display face, the description
 // is 13px muted at 70ch, and the actions sit to the right with at most one of
 // them gold.

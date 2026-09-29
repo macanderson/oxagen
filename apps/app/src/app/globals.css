@@ -138,7 +138,7 @@
     --ui-radius: 0.45rem;
     --muted-surface: var(--_stone-100);
     --data-surface: var(--ox-paper-hl);
-    /* A panel header is a light grey band over the white panel (ADR-170). */
+    /* A panel header is a light grey band over the white panel (ADR-226). */
     --panel-head: var(--ox-paper-hl);
     --banner-bg: var(--hl);
     --button-disabled-bg: var(--muted-surface);
