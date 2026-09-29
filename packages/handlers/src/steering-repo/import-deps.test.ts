@@ -145,7 +145,7 @@ vi.mock("../steering_repo.provision", () => ({
 import { steeringImportDeps } from "./import-deps";
 
 const SCOPE = { orgId: "org_1", workspaceId: "ws_1" };
-const ENV = { OXAGEN_STEERING_APP_ID: "1" };
+const ENV = { GITHUB_APP_ID: "1" };
 const SOURCE: ImportSourceRepository = {
   head_id: "head-old",
   connection_id: "conn-1",
@@ -264,7 +264,7 @@ describe("steeringImportDeps: the import state", () => {
 });
 
 describe("steeringImportDeps: the steering head", () => {
-  it("reads a head on the Oxagen Steering app as a provisioned steering repo", async () => {
+  it("reads a head on the Oxagen GitHub App as a provisioned steering repo", async () => {
     mocks.results.push([
       headRow({ connectorId: "github_steering", fullName: "a-intel/platform-steering" }),
     ]);
@@ -453,7 +453,7 @@ describe("steeringImportDeps: provisioning", () => {
     const refusal = new HandlerError({
       code: "forbidden",
       reason: "steering_app_not_installed",
-      message: "Install the Oxagen Steering app.",
+      message: "Install the Oxagen GitHub App.",
     });
     mocks.provisionSteeringRepo.mockRejectedValue(refusal);
     await expect(deps().provision(SCOPE)).rejects.toBe(refusal);

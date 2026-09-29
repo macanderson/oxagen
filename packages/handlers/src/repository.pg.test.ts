@@ -318,7 +318,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   /**
    * The steering head the steering repo job's bind step writes (ADR-212). The
    * workspace gets its own `github_steering` connection, created connected
-   * with the Oxagen Steering installation, and a head with role `steering`
+   * with the Oxagen GitHub App installation, and a head with role `steering`
    * written under the workspace lock. The repository comes from the same
    * fixture the link handler reads, so the store's cross-workspace rules see
    * one id for it. A write the store refuses rolls back the connection too.

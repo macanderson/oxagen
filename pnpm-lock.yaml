@@ -2558,6 +2558,12 @@ importers:
       '@oxagen/done-record':
         specifier: workspace:*
         version: link:../done-record
+      '@oxagen/glob':
+        specifier: workspace:*
+        version: link:../glob
+      '@oxagen/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@oxagen/run-evidence':
         specifier: workspace:*
         version: link:../run-evidence

@@ -761,8 +761,9 @@ describe("a bound steering repository", () => {
     await expectNoAxe(dialog);
   });
 
-  // Oxagen reads a provisioned head through the Oxagen Steering app, so the
-  // head is live while the workspace has no GitHub installation of its own.
+  // Oxagen reads a provisioned head through the organization's steering
+  // connection, so the head is live while the workspace has no GitHub
+  // installation of its own.
   // Linking a code repository still needs one (ADR-212), so the doors stay
   // beside the bound panel until an installation is attached.
   it("keeps the doors beside a live head when no installation is attached", async () => {
