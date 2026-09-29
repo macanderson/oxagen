@@ -14,7 +14,7 @@
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { type ComponentProps, type ReactNode, useId } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { Button } from "@/ui/button";
+import { Button, buttonVariants } from "@/ui/button";
 import { cn } from "@/ui/cn";
 import { SafeLink } from "@/ui/navigation";
 import {
@@ -49,50 +49,69 @@ function PaginationItem(props: ComponentProps<"li">) {
   return <li data-slot="pagination-item" {...props} />;
 }
 
-type StepProps = Omit<ComponentProps<typeof Button>, "children"> & {
-  /** The word beside the caret, and the name when the word is hidden. */
-  text: string;
-};
-
-function PaginationPrevious({ className, text, ...props }: StepProps) {
-  return (
-    <Button
-      variant="ghost"
-      aria-label={text}
-      className={cn("pl-2!", className)}
-      {...props}
-    >
-      <CaretLeftIcon data-icon="inline-start" className="rtl:-scale-x-100" />
-      <span className="hidden sm:block">{text}</span>
-    </Button>
-  );
-}
-
-function PaginationNext({ className, text, ...props }: StepProps) {
-  return (
-    <Button
-      variant="ghost"
-      aria-label={text}
-      className={cn("pr-2!", className)}
-      {...props}
-    >
-      <span className="hidden sm:block">{text}</span>
-      <CaretRightIcon data-icon="inline-end" className="rtl:-scale-x-100" />
-    </Button>
-  );
-}
-
 /**
  * A press that turns the page, the address of the next page that way, or null
  * when there is no page that way.
  */
 type PagerStep = (() => void) | SafePath | null;
 
-function stepProps(step: PagerStep) {
-  if (step === null) return { disabled: true };
+type StepProps = {
+  /** The word beside the caret, and the name when the word is hidden. */
+  text: string;
+  step: PagerStep;
+  className?: string;
+};
+
+/**
+ * One step of the pager, drawn as the ghost button. A path draws a link with
+ * the button's classes rather than a link rendered through `Button`, because
+ * Base UI gives any element its button renders `role="button"`, and a screen
+ * reader must hear a link as a link.
+ */
+function StepControl({
+  step,
+  text,
+  className,
+  children,
+}: StepProps & { children: ReactNode }) {
   if (typeof step === "string")
-    return { nativeButton: false, render: <SafeLink to={step} /> };
-  return { onClick: step };
+    return (
+      <SafeLink
+        to={step}
+        aria-label={text}
+        className={cn(buttonVariants({ variant: "ghost" }), className)}
+      >
+        {children}
+      </SafeLink>
+    );
+  return (
+    <Button
+      variant="ghost"
+      aria-label={text}
+      className={className}
+      {...(step === null ? { disabled: true } : { onClick: step })}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function PaginationPrevious({ className, ...props }: StepProps) {
+  return (
+    <StepControl className={cn("pl-2!", className)} {...props}>
+      <CaretLeftIcon data-icon="inline-start" className="rtl:-scale-x-100" />
+      <span className="hidden sm:block">{props.text}</span>
+    </StepControl>
+  );
+}
+
+function PaginationNext({ className, ...props }: StepProps) {
+  return (
+    <StepControl className={cn("pr-2!", className)} {...props}>
+      <span className="hidden sm:block">{props.text}</span>
+      <CaretRightIcon data-icon="inline-end" className="rtl:-scale-x-100" />
+    </StepControl>
+  );
 }
 
 /**
@@ -229,14 +248,14 @@ export function RowsPager({
             <PaginationPrevious
               text={previousLabel}
               className="max-md:min-h-11"
-              {...stepProps(previous)}
+              step={previous}
             />
           </PaginationItem>
           <PaginationItem>
             <PaginationNext
               text={nextLabel}
               className="max-md:min-h-11"
-              {...stepProps(next)}
+              step={next}
             />
           </PaginationItem>
         </PaginationContent>

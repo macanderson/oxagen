@@ -59,10 +59,11 @@ describe("RowsPager", () => {
   it("draws a step given as a path as a link to that path", async () => {
     const older = routes.audit("acme", { offset: "25" });
     const { container } = renderPager({ previous: null, next: older });
-    expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute(
-      "href",
-      "/acme/audit?offset=25",
-    );
+    const link = screen.getByRole("link", { name: "Next" });
+    expect(link).toHaveAttribute("href", "/acme/audit?offset=25");
+    // Base UI's button gives what it renders role="button", so a path step
+    // is drawn as a plain link and a screen reader hears a link.
+    expect(link).not.toHaveAttribute("role");
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
     await expectNoAxe(container);
   });
