@@ -10,6 +10,7 @@ import {
   formatJson,
   lock,
   mcpToolSchema,
+  parseLock,
   parseServerToml,
   parseToolsToml,
   toManifestServer,
@@ -35,6 +36,7 @@ import {
 } from "@oxagen/oxagen/steering-repo";
 import { REDACTED } from "./scrub";
 import {
+  noCredentials,
   noGrpcDiscovery,
   noToolsPullRequestOpener,
   type DiscoveryCredentials,
@@ -47,11 +49,13 @@ import {
   type ToolsPullRequestOpener,
 } from "./seams";
 import type { DiscoveryFinish, DiscoveryRow, DiscoveryStore } from "./store";
-import { runDiscovery } from "./sync";
+import { moveSourceVersion, runDiscovery, scheduleAllows } from "./sync";
 import {
+  DiscoveryRefused,
   RetriableDiscoveryFailure,
   type DiscoveryScope,
   type DiscoveryTrigger,
+  type SyncSchedule,
 } from "./types";
 
 const logs = vi.hoisted(() => ({
@@ -70,6 +74,9 @@ const ORG = "0191d0a0-0000-7000-8000-000000000001";
 const WS = "0191d0a0-0000-7000-8000-000000000002";
 const SCOPE: DiscoveryScope = { orgId: ORG, workspaceId: WS };
 const NOW = new Date("2026-09-28T15:00:12Z");
+const LATER = new Date("2026-09-28T16:30:00Z");
+/** The branch a sync steering PR opened at NOW gets. */
+const BRANCH = "tools/sync-stripe-20260928t150012";
 const PR_URL = "https://github.com/a-intel/steering/pull/41";
 const HEAD_SHA = "3e1f0a9c7b5d2e4f6a8c0b1d3e5f7a9c2b4d6e8f";
 
@@ -131,6 +138,25 @@ const REFUND_NEEDS_CURRENCY: RawTool = {
     },
     required: ["charge", "currency"],
   },
+};
+
+/** list_charges with a new optional input: the input schema changes. */
+const CHARGES_PAGED: RawTool = {
+  ...LIST_CHARGES,
+  inputSchema: {
+    type: "object",
+    properties: {
+      customer: { type: "string" },
+      limit: { type: "integer" },
+      starting_after: { type: "string" },
+    },
+  },
+};
+
+/** list_charges with a new description and the same input schema. */
+const CHARGES_REWORDED: RawTool = {
+  ...LIST_CHARGES,
+  description: "List charges, newest first. A page holds at most 100.",
 };
 
 const STRIPE_UPSTREAM: readonly RawTool[] = [
@@ -197,6 +223,10 @@ const STRIPE_SOURCE: McpLockSource = {
   url: "https://mcp.stripe.com",
   server_version: "2026.09.1",
 };
+
+function withSchedule(text: string, schedule: SyncSchedule): string {
+  return text.replace('schedule = "daily"', `schedule = "${schedule}"`);
+}
 
 function must<T>(result: ReadResult<T>): T {
   if (!result.ok) {
@@ -498,10 +528,10 @@ function fakeTransport(upstream: Upstream) {
 }
 
 function fakeCredentials(
-  answer: ResolvedCredential = { type: "bearer", token: SECRET },
+  resolved: ResolvedCredential = { type: "bearer", token: SECRET },
 ) {
   const resolve = vi.fn<CredentialSource["resolve"]>(() =>
-    Promise.resolve(answer),
+    Promise.resolve(resolved),
   );
   const credentials: DiscoveryCredentials = () => ({ resolve });
   return { resolve, credentials };
@@ -601,6 +631,25 @@ function lastFinish(fns: StoreFns): DiscoveryFinish {
   const call = fns.finish.mock.calls.at(-1);
   if (call === undefined) throw new Error("The run never called finish.");
   return call[2];
+}
+
+/** What the opener got on one call. */
+function opened(
+  open: Mock<ToolsPullRequestOpener["open"]>,
+  index = 0,
+): ToolsPullRequestInput {
+  const call = open.mock.calls[index];
+  if (call === undefined) throw new Error(`The opener has no call ${index}.`);
+  return call[1];
+}
+
+/** The lock a sync steering PR writes, parsed. */
+function proposedLock(input: ToolsPullRequestInput): McpToolsLock {
+  const file = input.files.find((entry) => entry.path === toolsLockPath("stripe"));
+  if (file === undefined || file.content === null) {
+    throw new Error("The steering PR writes no lock.");
+  }
+  return must(parseLock(file.content));
 }
 
 function snapshotNames(fns: StoreFns): string[] {
@@ -841,5 +890,461 @@ describe("runDiscovery when a retry fails the same way", () => {
       "The access token is shorter than 4 characters, so discovery cannot keep it out of what it writes.",
     );
     expect(h.wire.http).not.toHaveBeenCalled();
+  });
+});
+
+// ── The schedule ─────────────────────────────────────────────────────────────
+
+describe("scheduleAllows", () => {
+  it.each<[DiscoveryTrigger, SyncSchedule, boolean, boolean]>([
+    ["manual", "manual", true, true],
+    ["lock_merged", "manual", true, true],
+    ["push", "on-change", true, true],
+    ["push", "daily", true, false],
+    ["push", "manual", false, false],
+    ["list_changed", "daily", true, true],
+    ["list_changed", "on-change", true, true],
+    ["list_changed", "manual", false, false],
+    ["registry_version", "daily", true, true],
+    ["registry_version", "manual", true, false],
+    ["schedule", "daily", true, true],
+    ["schedule", "on-change", false, true],
+    ["schedule", "on-change", true, false],
+    ["schedule", "manual", false, false],
+  ])(
+    "%s on a %s server that finished before (%s) runs: %s",
+    (trigger, schedule, everFinished, runs) => {
+      expect(scheduleAllows(trigger, schedule, everFinished)).toBe(runs);
+    },
+  );
+});
+
+// ── Triggers ─────────────────────────────────────────────────────────────────
+
+/** The sync steering PR the fake opener opens at NOW. */
+const OPENED = { number: 41, url: PR_URL, branch: BRANCH };
+
+describe("runDiscovery on each trigger", () => {
+  it.each<DiscoveryTrigger>([
+    "schedule",
+    "list_changed",
+    "registry_version",
+    "manual",
+  ])(
+    "lists the tools on %s and opens no steering PR when nothing changed",
+    async (trigger) => {
+      const h = harness();
+
+      const result = await h.run(trigger);
+
+      expect(result).toEqual({
+        server: "stripe",
+        status: "succeeded",
+        outcome: "unchanged",
+        toolCount: 3,
+        withheld: [],
+        pr: null,
+        error: null,
+      });
+      expect(h.wire.sent.map((sent) => sent.rpc)).toContain("tools/list");
+      expect(snapshotNames(h.db.fns)).toEqual([
+        "create_refund",
+        "list_charges",
+        "create_customer",
+      ]);
+      expect(lastFinish(h.db.fns)).toMatchObject({
+        status: "succeeded",
+        outcome: "unchanged",
+        withheld: [],
+        withheldUpstream: [],
+        offered: ["create_refund", "list_charges", "create_customer"],
+      });
+      expect(h.pr.open).not.toHaveBeenCalled();
+      expect(leaks(recorded(h.db.fns, h.pr.open))).toEqual([]);
+    },
+  );
+
+  it("skips a push to a daily server before it reads the source", async () => {
+    const h = harness();
+
+    const result = await h.run("push");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "succeeded",
+      outcome: "skipped",
+      toolCount: null,
+      withheld: [],
+      pr: null,
+      error: null,
+    });
+    expect(h.db.fns.recordSource).toHaveBeenCalledWith(
+      SCOPE,
+      "stripe",
+      {
+        kind: "remote",
+        repo: null,
+        path: null,
+        ref: null,
+        schedule: "daily",
+        mcpServerId: "srv-1",
+      },
+      NOW,
+    );
+    expect(h.wire.http).not.toHaveBeenCalled();
+    expect(h.db.fns.captureSnapshots).not.toHaveBeenCalled();
+    expect(h.pr.open).not.toHaveBeenCalled();
+  });
+
+  it.each<DiscoveryTrigger>([
+    "schedule",
+    "list_changed",
+    "registry_version",
+    "push",
+  ])("skips %s on a manual server", async (trigger) => {
+    const h = harness({
+      files: stripeTree({ server: withSchedule(STRIPE_SERVER, "manual") }),
+    });
+
+    const result = await h.run(trigger);
+
+    expect(result).toMatchObject({ status: "succeeded", outcome: "skipped" });
+    expect(h.wire.http).not.toHaveBeenCalled();
+    expect(h.pr.open).not.toHaveBeenCalled();
+  });
+
+  it("skips lock_merged while the sync steering PR is still open", async () => {
+    const h = harness({
+      prior: row({
+        pr: OPENED,
+        withheld: ["stripe__create_refund"],
+        upstreamDigest: "d".repeat(64),
+      }),
+    });
+
+    const result = await h.run("lock_merged");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "succeeded",
+      outcome: "skipped",
+      toolCount: 3,
+      withheld: ["stripe__create_refund"],
+      pr: OPENED,
+      error: null,
+    });
+    expect(h.steering.pullRequest).toHaveBeenCalledWith(41);
+    expect(h.db.fns.recordSource).not.toHaveBeenCalled();
+    expect(h.wire.http).not.toHaveBeenCalled();
+  });
+
+  it("resolves as failed when no credential source is installed", async () => {
+    const h = harness({ credentials: noCredentials });
+
+    const result = await h.run("manual");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "failed",
+      outcome: null,
+      toolCount: null,
+      withheld: [],
+      pr: null,
+      error:
+        "Discovery cannot read a stored credential yet, so a server with auth is not discovered.",
+    });
+    expect(h.wire.http).not.toHaveBeenCalled();
+  });
+});
+
+// ── Changes ──────────────────────────────────────────────────────────────────
+
+describe("runDiscovery when an imported tool changed", () => {
+  it("opens one sync steering PR for a new description and withholds nothing", async () => {
+    const h = harness({
+      tools: [CREATE_REFUND, CHARGES_REWORDED, CREATE_CUSTOMER],
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "succeeded",
+      outcome: "pr_opened",
+      toolCount: 3,
+      withheld: [],
+      pr: OPENED,
+      error: null,
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    expect(h.pr.open).toHaveBeenCalledWith(SCOPE, expect.any(Object));
+    const input = opened(h.pr.open);
+    expect(input.branch).toBe(BRANCH);
+    expect(input.existing).toBeUndefined();
+    expect(input.files.map((file) => file.path)).toEqual([
+      toolsLockPath("stripe"),
+    ]);
+    expect(
+      proposedLock(input).tools.list_charges?.upstream.description,
+    ).toBe(CHARGES_REWORDED.description);
+    expect(input.body).toContain("stripe__list_charges");
+    expect(input.body).toContain("No tool is withheld.");
+    expect(lastFinish(h.db.fns)).toMatchObject({
+      outcome: "pr_opened",
+      pr: OPENED,
+      withheld: [],
+      withheldUpstream: [],
+    });
+    expect(leaks(recorded(h.db.fns, h.pr.open))).toEqual([]);
+  });
+
+  it("withholds a tool whose change is breaking", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
+    });
+
+    const result = await h.run("list_changed");
+
+    expect(result).toEqual({
+      server: "stripe",
+      status: "succeeded",
+      outcome: "pr_opened",
+      toolCount: 3,
+      withheld: ["stripe__create_refund"],
+      pr: OPENED,
+      error: null,
+    });
+    const input = opened(h.pr.open);
+    expect(
+      proposedLock(input).tools.create_refund?.upstream.inputSchema,
+    ).toMatchObject({ required: ["charge", "currency"] });
+    expect(input.body).toContain("- `stripe__create_refund`");
+    expect(input.commitMessage).toContain(
+      "Withheld until merge: stripe__create_refund.",
+    );
+    expect(lastFinish(h.db.fns)).toMatchObject({
+      withheld: ["stripe__create_refund"],
+      withheldUpstream: ["create_refund"],
+    });
+  });
+
+  it("withholds a tool whose input schema changed and breaks nothing", async () => {
+    const h = harness({
+      tools: [CREATE_REFUND, CHARGES_PAGED, CREATE_CUSTOMER],
+    });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({
+      status: "succeeded",
+      outcome: "pr_opened",
+      withheld: ["stripe__list_charges"],
+    });
+    expect(opened(h.pr.open).body).toContain(
+      "input changed, withheld until merge",
+    );
+    expect(lastFinish(h.db.fns)).toMatchObject({
+      withheld: ["stripe__list_charges"],
+      withheldUpstream: ["list_charges"],
+    });
+  });
+
+  it("keeps a secret the upstream echoes out of the lock and the steering PR", async () => {
+    const echoed: RawTool = {
+      ...LIST_CHARGES,
+      description: `List charges for the key ${SECRET}.`,
+    };
+    const h = harness({ tools: [CREATE_REFUND, echoed, CREATE_CUSTOMER] });
+
+    const result = await h.run("schedule");
+
+    expect(result).toMatchObject({ status: "succeeded", outcome: "pr_opened" });
+    expect(
+      proposedLock(opened(h.pr.open)).tools.list_charges?.upstream.description,
+    ).toBe(`List charges for the key ${REDACTED}.`);
+    expect(leaks(recorded(h.db.fns, h.pr.open))).toEqual([]);
+  });
+});
+
+// ── Runs that follow each other ──────────────────────────────────────────────
+
+describe("runDiscovery across runs", () => {
+  it("withholds a breaking tool until its sync steering PR merges", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
+    });
+
+    const first = await h.run("schedule");
+    expect(first).toMatchObject({
+      outcome: "pr_opened",
+      withheld: ["stripe__create_refund"],
+      pr: OPENED,
+    });
+
+    const again = await h.run("schedule");
+    expect(again).toMatchObject({
+      outcome: "skipped",
+      withheld: ["stripe__create_refund"],
+      pr: OPENED,
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+
+    h.steering.land(opened(h.pr.open));
+    const merged = await h.run("lock_merged");
+
+    expect(merged).toEqual({
+      server: "stripe",
+      status: "succeeded",
+      outcome: "unchanged",
+      toolCount: 3,
+      withheld: [],
+      pr: null,
+      error: null,
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+    // One checkout per run, and one more once the PR merged.
+    expect(h.steering.open).toHaveBeenCalledTimes(4);
+    expect(h.db.state.row).toMatchObject({
+      status: "succeeded",
+      outcome: "unchanged",
+      withheld: [],
+      pr: null,
+      upstreamDigest: null,
+    });
+  });
+
+  it("updates the open sync steering PR on its branch when the source changes again", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
+    });
+    await h.run("schedule");
+    h.upstream.tools = [REFUND_NEEDS_CURRENCY, CHARGES_REWORDED, CREATE_CUSTOMER];
+    h.clock.now = LATER;
+
+    const result = await h.run("list_changed");
+
+    expect(result).toMatchObject({
+      status: "succeeded",
+      outcome: "pr_updated",
+      withheld: ["stripe__create_refund"],
+      pr: OPENED,
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(2);
+    const update = opened(h.pr.open, 1);
+    expect(update.branch).toBe(BRANCH);
+    expect(update.existing).toEqual({ number: 41 });
+    expect(
+      proposedLock(update).tools.list_charges?.upstream.description,
+    ).toBe(CHARGES_REWORDED.description);
+  });
+
+  it("proposes a change again only when asked after its steering PR closed", async () => {
+    const h = harness({
+      tools: [REFUND_NEEDS_CURRENCY, LIST_CHARGES, CREATE_CUSTOMER],
+    });
+    await h.run("schedule");
+    h.steering.prs.set(41, { open: false, merged: false });
+
+    const closed = await h.run("schedule");
+
+    expect(closed).toMatchObject({
+      status: "succeeded",
+      outcome: "skipped",
+      withheld: ["stripe__create_refund"],
+      pr: null,
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(1);
+
+    h.clock.now = LATER;
+    const asked = await h.run("manual");
+
+    expect(asked).toMatchObject({
+      status: "succeeded",
+      outcome: "pr_opened",
+      withheld: ["stripe__create_refund"],
+    });
+    expect(h.pr.open).toHaveBeenCalledTimes(2);
+    const reopened = opened(h.pr.open, 1);
+    expect(reopened.branch).toBe("tools/sync-stripe-20260928t163000");
+    expect(reopened.existing).toBeUndefined();
+  });
+});
+
+// ── Moving source.version ────────────────────────────────────────────────────
+
+const GITHUB_HEAD = [
+  "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
+  'schema = "mcp-server/v1"',
+  'name = "github"',
+  'label = "GitHub"',
+  'description = "Issues and pull requests in GitHub."',
+];
+
+const GITHUB_TAIL = [
+  "",
+  "[auth]",
+  'mode = "operator-oauth"',
+  'scheme = "oauth"',
+  'credential = "oxagen:credential/github-app"',
+  "",
+  "[exposure]",
+  'mode = "direct"',
+  "",
+  "[sync]",
+  'schedule = "daily"',
+  "",
+];
+
+/** A registry server whose version line carries a comment. */
+const GITHUB_SERVER = [
+  ...GITHUB_HEAD,
+  "",
+  "[source]",
+  'type = "registry"',
+  'registry = "https://registry.modelcontextprotocol.io"',
+  'server = "io.github.github/github-mcp-server"',
+  'version = "0.18.0" # the version Studio imported',
+  ...GITHUB_TAIL,
+].join("\n");
+
+/** The same server with its source written as an inline table. */
+const GITHUB_INLINE = [
+  ...GITHUB_HEAD,
+  'source = { type = "registry", registry = "https://registry.modelcontextprotocol.io", server = "io.github.github/github-mcp-server", version = "0.18.0" }',
+  ...GITHUB_TAIL,
+].join("\n");
+
+describe("moveSourceVersion", () => {
+  it("moves source.version and keeps the rest of the file as written", () => {
+    const moved = moveSourceVersion(
+      "github",
+      GITHUB_SERVER,
+      must(parseServerToml(GITHUB_SERVER)),
+      "0.19.0",
+    );
+
+    expect(moved).toBe(
+      GITHUB_SERVER.replace(
+        'version = "0.18.0" #',
+        'version = "0.19.0" #',
+      ),
+    );
+    expect(must(parseServerToml(moved)).source).toMatchObject({
+      type: "registry",
+      version: "0.19.0",
+    });
+  });
+
+  it.each<[string, string, string]>([
+    ["a remote source", "stripe", STRIPE_SERVER],
+    ["a source written as an inline table", "github", GITHUB_INLINE],
+  ])("refuses %s", (_label, server, text) => {
+    const move = () =>
+      moveSourceVersion(server, text, must(parseServerToml(text)), "0.19.0");
+
+    expect(move).toThrow(DiscoveryRefused);
+    expect(move).toThrow(
+      `Discovery could not move source.version in ${serverTomlPath(server)} to 0.19.0. Import the new version in Studio.`,
+    );
   });
 });
