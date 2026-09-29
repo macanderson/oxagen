@@ -1,7 +1,9 @@
 # ADR-219: An existing workspace imports its .oxagen/ steering by steering PRs
 
 - **Status:** Accepted
-- **Date:** 2026-09-28
+- **Date:** 2026-09-28. Amended on 2026-09-29: legacy sources connections
+  retire, and such a workspace starts its steering fresh (decision 10,
+  issue #4684).
 - **Owners:** platform, steering
 - **Related:** issue #4620 (lane S10), PR #4621 (the stamp reads
   `replaces`), ADR-212 (a workspace links a code repository by a steering
@@ -82,6 +84,21 @@ unless the ledger says which id it replaces.
    recorded and change nothing but the run's own files, as the run writes
    them. Otherwise it refuses with `steering_import_branch_taken` and opens
    nothing, and the owner deletes the branch and runs the import again.
+10. **Legacy sources connections retire.** Mac decided on 2026-09-29
+    (#4684) that a workspace on a legacy sources connection starts its
+    steering fresh and imports nothing. Such a workspace reads its
+    repository through a sources connection with no binding, so it has
+    nothing to demote, and nothing can bind that connection since #4616
+    removed `bind_main_repository`. The implementing agent chose the
+    mechanism in PR #4747, and Mac has not ruled on it. The import refuses
+    such a workspace with `steering_import_legacy_connection`, and the
+    refusal tells the owner to call again with the `startFresh` input set to
+    true. That call creates an empty steering repo and answers
+    `provisioned`. The `.oxagen/` files stay in the legacy repository. The
+    steering repo steers the workspace from then on, because the steering
+    seam and the sync sweep read a legacy connection only while the
+    workspace has no steering head. The owner moves any record they still
+    want with a steering PR.
 
 ## Consequences
 
@@ -101,10 +118,9 @@ unless the ledger says which id it replaces.
 - The import reads GitHub only. It refuses a workspace steered from GitLab
   (`steering_import_provider_unsupported`) and a repository Oxagen can no
   longer reach (`steering_import_source_unreachable`). It also refuses a
-  repository the workspace reads through a sources connection with no binding
-  (`steering_import_legacy_connection`). #4616 removed the bind that let the
-  owner fix that, so such a workspace cannot import until #4684 gives it a
-  path.
+  repository the workspace reads through a legacy sources connection
+  (`steering_import_legacy_connection`) until the owner calls again with
+  `startFresh`, which imports nothing (decision 10).
 - When a rule needs a kind or a constraint needs an effect, the import answers
   `needs_choices` and changes nothing. The owner runs it again with
   `ruleKinds` and `constraintEffects`.

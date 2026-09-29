@@ -48,13 +48,14 @@ lane S1, #4450) runs seven steps, one at a time:
 
 | # | Step | What it does |
 |---|---|---|
-| 1 | `pick_connection` | Picks the organization's Oxagen Steering installation or GitLab group. It asks only when there is more than one. |
+| 1 | `pick_connection` | Picks the organization's Oxagen GitHub App installation or GitLab group. It asks only when there is more than one. |
 | 2 | `create_repository` | Creates the private repository `oxagen-<slug>`, then tries `-2`, `-3`, and so on, up to 20 attempts. |
 | 3 | `add_to_installation` | GitHub only. Uses the owner's user token to add the new repository to the installation. |
 | 4 | `write_first_commit` | Commits "Seed the steering repo" to `main`. |
 | 5 | `apply_settings` | Applies the prescribed settings, then reads them back and compares. |
-| 6 | `publish_version` | Publishes version 1 and records a deployment to the `steering` environment. |
-| 7 | `bind_repository` | Workspace only. Writes a head with role `steering`. |
+| 6 | `register_webhook` | GitLab only. Adds a project hook that sends push and merge request events to Oxagen. A URL GitLab refuses logs a warning and does not stop the run. |
+| 7 | `publish_version` | Records version 1 as a deployment to the `steering` environment. |
+| 8 | `bind_repository` | Workspace only. Writes a head with role `steering`, then publishes the first commit through the version store as version 1, so the first steering PR publishes version 2 (#4732). |
 
 `create_workspace` (`workspace.create.ts`), the organization create, and the
 GitHub OAuth callback start the job with `steering-repo/provision.requested`.
@@ -70,17 +71,15 @@ PR #4600 adds a GitLab-only `register_webhook` step between steps 5 and 6.
 
 ### 2.2 Credentials
 
-Two GitHub apps split the permissions:
-
-- **Oxagen Steering** creates the steering repos and holds admin only on the
-  repositories Oxagen creates.
-- **Oxagen** reads and checks your code repositories, with the permissions it
-  had before.
+One GitHub App, Oxagen, reads and checks your code repositories and creates
+the steering repos (ADR-228). It holds Administration and Deployments write
+for the steering repos, and that access reaches every repository its
+installation covers.
 
 GitHub does not add a repository an app creates to an installation limited
-to selected repositories. So an organization owner authorizes Oxagen Steering
-once, and step 3 uses that token only to add each new steering repo to the
-installation.
+to selected repositories. So an organization owner authorizes the Oxagen
+GitHub App once, and step 3 uses that token only to add each new steering
+repo to the installation.
 
 On GitLab, an organization Owner or Admin connects a group with a group
 access token that has the `api` scope and the Maintainer role
@@ -88,12 +87,12 @@ access token that has the `api` scope and the Maintainer role
 provider `gitlab_steering`, and step 1 offers the group.
 
 The steering repo's credential stays with Oxagen. Oxagen reads and writes a
-provisioned steering repo server-side through the Oxagen Steering
-installation (`mintSteeringInstallationToken`), and no agent receives that
-token. `create_github_token` for the steering repo hands out the workspace
-installation's token only when that installation covers the repository.
-Otherwise it refuses with `steering_repo_propose_only`, and the agent changes
-the steering repo through a steering PR.
+provisioned steering repo server-side through an installation token of the
+Oxagen GitHub App (`mintSteeringInstallationToken`), and no agent receives
+that token. Every token the app mints carries the merge ruleset's bypass, so
+`create_github_token` refuses the steering repo with
+`steering_repo_propose_only`, and the agent changes the steering repo through
+a steering PR (ADR-228).
 
 ### 2.3 Changes to the steering repo
 

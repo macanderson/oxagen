@@ -707,7 +707,7 @@ async function main(): Promise<void> {
   // organisations for `--email` at all, and `--org --apply` wrote the
   // unprotected organisation row and then failed the billing-settings insert on
   // its RLS check, leaving the org half-provisioned. `withSystemDb` is the
-  // intentional, audited bypass, and an operator script provisioning across
+  // intentional RLS bypass, and an operator script provisioning across
   // tenants is exactly its caller.
   const canRecordAllowance = await withSystemDb((tx) =>
     hasNegotiatedAllowanceColumn(tx),

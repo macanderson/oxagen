@@ -50,6 +50,12 @@ export type ToolDetail = {
   headline: string | null;
   /** A short qualifier after the headline, such as a read's line range. */
   detail: string | null;
+  /**
+   * The headline and its qualifier with each path in full, for the row's
+   * hover card, when either shortened a path (#4692). Null when the line
+   * already reads whole.
+   */
+  whole: string | null;
   /** True when the headline is the first line of something longer. */
   multiline: boolean;
   /** The call as it was made: a command's whole text, or the input as formatted JSON. */
@@ -210,6 +216,17 @@ export function shortPath(path: string): string {
   return `…/${parts.slice(-2).join("/")}`;
 }
 
+/** A headline and its qualifier on one line, or null when neither was recorded. */
+export function lineOf(
+  headline: string | null,
+  detail: string | null,
+): string | null {
+  const parts = [headline, detail].filter(
+    (part): part is string => part !== null,
+  );
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
 // ── Per-tool readings ───────────────────────────────────────────────────────
 
 function firstLine(text: string): { head: string; multiline: boolean } {
@@ -218,8 +235,9 @@ function firstLine(text: string): { head: string; multiline: boolean } {
   return { head: text.slice(0, index), multiline: true };
 }
 
-type Reading = Omit<ToolDetail, "name" | "group" | "raw" | "output"> & {
+type Reading = Omit<ToolDetail, "name" | "group" | "raw" | "output" | "whole"> & {
   raw?: string | null;
+  whole?: string | null;
 };
 
 function shellReading(input: Json | null): Reading {
@@ -259,9 +277,11 @@ function readReading(input: Json | null): Reading {
             : "+"
         }`
       : null;
+  const headline = path === null ? null : shortPath(path);
   return {
-    headline: path === null ? null : shortPath(path),
+    headline,
     detail: range,
+    whole: headline === path ? null : lineOf(path, range),
     multiline: false,
     diffs: [],
   };
@@ -291,9 +311,11 @@ function editReading(input: Json | null): Reading {
       });
     }
   }
+  const headline = shortPath(path);
   return {
-    headline: shortPath(path),
+    headline,
     detail: null,
+    whole: headline === path ? null : path,
     multiline: false,
     diffs,
   };
@@ -303,9 +325,11 @@ function editReading(input: Json | null): Reading {
 function createReading(input: Json | null): Reading {
   const path = pathOf(input);
   const content = firstStr(input, "content", "contents", "text", "new_string");
+  const headline = path === null ? null : shortPath(path);
   return {
-    headline: path === null ? null : shortPath(path),
+    headline,
     detail: null,
+    whole: headline === path ? null : path,
     multiline: false,
     diffs:
       content === null
@@ -323,9 +347,14 @@ function createReading(input: Json | null): Reading {
 function searchReading(input: Json | null): Reading {
   const pattern = firstStr(input, "pattern", "query", "regex", "glob");
   const where = firstStr(input, "path", "directory", "include", "cwd");
+  const short = where === null ? null : shortPath(where);
   return {
     headline: pattern,
-    detail: where === null ? null : `in ${shortPath(where)}`,
+    detail: short === null ? null : `in ${short}`,
+    whole:
+      where === null || short === where
+        ? null
+        : lineOf(pattern, `in ${where}`),
     multiline: false,
     diffs: [],
   };
@@ -500,7 +529,7 @@ function detailOf(call: Call, bodyName: string | null): ToolDetail | null {
   const tool = call.name ?? bodyName;
   if (tool === null) return null;
   const input = isObject(call.input) ? call.input : null;
-  const { raw, ...reading } = readingOf(call.family, input);
+  const { raw, whole, ...reading } = readingOf(call.family, input);
   // A reading that found nothing it knows (a tool whose every argument is an
   // object, a read with no path) still has the arguments the record kept.
   const headline = reading.headline ?? compactArgs(input);
@@ -509,6 +538,7 @@ function detailOf(call: Call, bodyName: string | null): ToolDetail | null {
     group: call.family,
     ...reading,
     headline,
+    whole: whole ?? null,
     multiline: reading.headline === null ? false : reading.multiline,
     raw: raw ?? pretty(input),
     output: outputText(call.output),

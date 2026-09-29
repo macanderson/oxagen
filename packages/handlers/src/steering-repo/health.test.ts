@@ -381,10 +381,10 @@ describe("renderHealthReport", () => {
 
   it("says who must reconnect a disconnected repo", () => {
     const report = renderHealthReport(
-      state({ health: "disconnected", reason: "Oxagen Steering is no longer installed on acme." }),
+      state({ health: "disconnected", reason: "The Oxagen GitHub App is no longer installed on acme." }),
     );
     expect(report.title).toBe("Oxagen lost access to the repository");
-    expect(report.summary).toContain("✗ Oxagen Steering is no longer installed on acme.");
+    expect(report.summary).toContain("✗ The Oxagen GitHub App is no longer installed on acme.");
     expect(report.summary).toContain("an organization admin connects the repository");
   });
 
@@ -505,7 +505,7 @@ const MERGES_DELETED: Observation = {
 };
 const UNINSTALLED: Observation = {
   kind: "disconnected",
-  reason: "Oxagen Steering is no longer installed on acme.",
+  reason: "The Oxagen GitHub App is no longer installed on acme.",
 };
 
 /** What the scripted host answers. Each field can change between reads. */
@@ -756,7 +756,7 @@ describe("checkRepoHealth", () => {
 
     expect(outcome).toMatchObject({
       health: "disconnected",
-      reason: "Oxagen Steering is no longer installed on acme.",
+      reason: "The Oxagen GitHub App is no longer installed on acme.",
       posted: 0,
       notified: true,
     });

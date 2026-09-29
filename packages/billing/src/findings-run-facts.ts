@@ -161,7 +161,7 @@ interface FirstPromptRow {
  * text. A text column takes an alias of its own, since a ClickHouse alias
  * that names a column replaces the column everywhere in the query.
  */
-const FIRST_PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root,
+export const FIRST_PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   prompt_digest, prompt_source, prompt_origin, command_name
   FROM tacho_events FINAL
@@ -225,7 +225,7 @@ interface CompactionRow {
  * records it once. This is the rule the ingest handler counts a session's
  * compactions by (`numCompactions`).
  */
-const COMPACTIONS_QUERY = `SELECT toString(root_session_uuid) AS root,
+export const COMPACTIONS_QUERY = `SELECT toString(root_session_uuid) AS root,
   toString(session_uuid) AS chain, seq,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   compact_trigger, tokens_before, tokens_after

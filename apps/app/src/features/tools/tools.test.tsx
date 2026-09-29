@@ -713,6 +713,24 @@ describe("Tools › providers tab", () => {
     expect(document.body.textContent).not.toMatch(/MCP servers?|Tool server/);
   });
 
+  // The providers table clips a body cell unless the cell holds
+  // `[data-actions]`, so Open, the Studio link and Remove must share that one
+  // marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderTools({}, "providers");
+    const group = screen
+      .getByTestId("provider-open-mcs_01k5s1")
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByTestId("provider-studio-mcs_01k5s1"),
+    );
+    expect(group).toContainElement(
+      screen.getByTestId("provider-remove-open-mcs_01k5s1"),
+    );
+    expect(group?.closest("td")).not.toBeNull();
+  });
+
   it("counts the providers needing attention, and keeps the transport note", async () => {
     await renderTools({}, "providers");
     // GitHub has never been health checked: yellow, not green.

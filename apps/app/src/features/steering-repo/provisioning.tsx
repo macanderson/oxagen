@@ -3,7 +3,7 @@
 // repositories card show it (steering-repo-spec, Provisioning). Each step reads
 // done, running, failed, blocked, or waiting (./steps). A failed or blocked
 // step shows the job's message and, to an owner or admin, Retry. An error that
-// asks for Oxagen Steering's grant again shows Re-authorize above the steps.
+// asks for Oxagen's grant again shows Re-authorize above the steps.
 import {
   CheckIcon,
   CircleDashedIcon,

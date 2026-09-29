@@ -29,6 +29,7 @@ import {
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_UNBOUND_REPO,
+  type BundleSkill,
   digestJcs,
   type JsonValue,
   type SteeringManifest,
@@ -718,6 +719,29 @@ export function unsignedBundle(
   };
 }
 
+/**
+ * The etag a host holds for its bundle: the policy etag `unsignedBundle`
+ * gives, or, when the bundle carries skills, a digest over that etag and the
+ * skills, so a new published version reaches a host that polls with its etag.
+ *
+ * `get_tacho_bundle` serves this etag and `controlEnvelope` publishes it. The
+ * daemon refetches whenever the two differ, and the refetch answers
+ * `not_modified`, so an envelope that published anything else would cost a
+ * host that parses skills one bundle request per ingest batch and command
+ * poll. The digest's shape is what hosts already hold, so changing it makes
+ * every such host refetch once.
+ */
+export function servedBundleEtag(
+  policyEtag: string,
+  skills: BundleSkill[] | undefined,
+): string {
+  if (skills === undefined) return policyEtag;
+  return digestJcs({
+    policy: policyEtag,
+    skills,
+  } as unknown as JsonValue).slice("sha256:".length, "sha256:".length + 32);
+}
+
 export function requireBundleSigner(capability: string): BundleSigner {
   const signer = bundleSignerFromEnv();
   if (!signer) {
@@ -910,12 +934,21 @@ export async function drainCommands(
   return rows.map(toDeliveredCommand);
 }
 
-/** The control envelope every machine response carries (spec section 7.4). */
+/**
+ * The control envelope every machine response carries (spec section 7.4).
+ *
+ * `skills` are the host's skills as `hostSkillsReader` in ./tacho-host-skills
+ * reads them, before the caller opened `tx`. They are required so that no
+ * caller can publish the policy etag to a host that holds the etag over its
+ * skills (`servedBundleEtag`). The read stays outside `tx` because the version
+ * store's port opens tenant transactions of its own.
+ */
 export async function controlEnvelope(
   tx: TachoTx,
   ctx: CapabilityContext,
   host: TachoHostRow,
-  now: Date = new Date(),
+  now: Date,
+  skills: BundleSkill[] | undefined,
 ): Promise<ControlEnvelope> {
   const [denyGeneration, retention, steering, mandate] = await Promise.all([
     readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
@@ -939,7 +972,7 @@ export async function controlEnvelope(
   return controlEnvelopeSchema.parse({
     host_status: bundle.host_status,
     deny_generation: denyGeneration,
-    bundle_etag: bundle.etag,
+    bundle_etag: servedBundleEtag(bundle.etag, skills),
     commands,
     ...(daySpend !== undefined ? { agent_day_spend: daySpend } : {}),
   });

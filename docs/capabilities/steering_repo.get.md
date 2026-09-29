@@ -29,7 +29,7 @@ None. The org and workspace come from the capability context.
 | `status` | `provisioning`, `ready`, `failed`, or `blocked` | the provisioning status |
 | `step` | step or null | the last provisioning step that finished |
 | `failedStep` | step or null | the step that failed or stopped |
-| `error` | `{ code, message }` or null | why the step failed or stopped. `steering_reauthorize` asks an organization owner to authorize Oxagen Steering again |
+| `error` | `{ code, message }` or null | why the step failed or stopped. `steering_reauthorize` asks an organization owner to authorize the Oxagen GitHub App again |
 | `provider` | `github`, `gitlab`, or null | the host the repository is on |
 | `repository` | `{ fullName, url }` or null | the repository, null until `create_repository` finishes. `url` is `https://github.com/<fullName>` or `https://gitlab.com/<fullName>` |
 | `publishedVersion` | positive integer or null | the published steering version |
@@ -43,7 +43,7 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 ## Sources
 
 - **Provisioning** comes from the `steering_repo` key of the workspace's settings, which the provisioning job writes.
-- **The published version** comes from the steering publication of the repository. Provisioning records version 1 as a host deployment and writes no publication, so the read answers 1 once `publish_version` has finished and before the first publish writes one.
+- **The published version** comes from the steering publication of the repository. Provisioning records version 1 as a host deployment in `publish_version`. In a workspace, `bind_repository` then publishes the first commit through the version store as version 1, so the first merged steering PR publishes version 2 (#4732). An organization's repository has no bind step, so its version store holds nothing until the first publish. Until a publication exists, the read answers 1 once `publish_version` has finished.
 - **Health and differences** come from the last health read. With no read yet, `health` is null and `differences` is empty.
 
 ## No provisioning state

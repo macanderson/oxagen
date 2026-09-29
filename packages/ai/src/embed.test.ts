@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   embed: vi.fn(),
   embedMany: vi.fn(),
   createVoyageEmbeddingModel: vi.fn(),
-  insertTokenUsage: vi.fn(),
+  stagedUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerCostUsdMicros: vi.fn(),
   chargeUsageCredits: vi.fn(),
@@ -36,7 +36,7 @@ mocks.createVoyageEmbeddingModel.mockImplementation(
   }),
 );
 // Telemetry stubs.
-mocks.insertTokenUsage.mockResolvedValue(undefined);
+mocks.stagedUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
 // Billing stubs.
 mocks.providerCostUsdMicros.mockReturnValue(42);
@@ -65,7 +65,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     admitUsage: vi.fn(async () => "00000000-0000-4000-8000-000000000099"),
     finalizeUsage: vi.fn(
       async ({ row, charge }: { row: unknown; charge?: unknown }) => {
-        await mocks.insertTokenUsage([row]);
+        await mocks.stagedUsage([row]);
         if (charge) await mocks.chargeUsageCredits(charge);
       },
     ),
@@ -77,7 +77,6 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
     ...real,
-    insertTokenUsage: mocks.insertTokenUsage,
     hashPrompt: mocks.hashPrompt,
     providerFromModelId: (id: string) => {
       const head = id.split(":")[0] ?? "";
@@ -106,7 +105,7 @@ const BASE_TELEMETRY = {
 describe("embedText (@oxagen/ai)", () => {
   beforeEach(() => {
     mocks.embed.mockClear();
-    mocks.insertTokenUsage.mockClear();
+    mocks.stagedUsage.mockClear();
     mocks.hashPrompt.mockClear();
     mocks.providerCostUsdMicros.mockClear();
     mocks.chargeUsageCredits.mockClear();
@@ -135,7 +134,7 @@ describe("embedText (@oxagen/ai)", () => {
 
   it("always writes a token_usage row — telemetry is required for metering", async () => {
     await embedText("meter me", { telemetry: BASE_TELEMETRY });
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
   });
 
   it("writes exactly ONE token_usage row with the correct fields", async () => {
@@ -147,8 +146,8 @@ describe("embedText (@oxagen/ai)", () => {
         executionStepId: "req_abc",
       },
     });
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    const firstCall = mocks.insertTokenUsage.mock.calls[0] as [
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
+    const firstCall = mocks.stagedUsage.mock.calls[0] as [
       unknown[],
       ...unknown[],
     ];
@@ -166,7 +165,7 @@ describe("embedText (@oxagen/ai)", () => {
   });
 
   it("rejects when the settlement seam rejects after the usage is staged; the outbox retries it", async () => {
-    mocks.insertTokenUsage.mockRejectedValueOnce(new Error("clickhouse down"));
+    mocks.stagedUsage.mockRejectedValueOnce(new Error("clickhouse down"));
     await expect(
       embedText("resilient", {
         telemetry: {
@@ -197,7 +196,7 @@ describe("embedText (@oxagen/ai)", () => {
       workspaceId: BASE_TELEMETRY.workspaceId,
       reason: "provider_call_failed",
     });
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
   });
 
@@ -276,7 +275,7 @@ describe("embedText (@oxagen/ai)", () => {
   // Regression: ingestion embeds (embedEntity / dedup resolve / repo-file embed)
   // have no execution step and now pass executionStepId: null instead of a
   // synthesized non-UUID string like `embed:<nodeId>`. The null must flow
-  // verbatim into the token_usage row (insertTokenUsage coalesces it to the nil
+  // verbatim into the token_usage row (stampTokenUsage coalesces it to the nil
   // UUID) and the credit referenceId must become undefined (→ NULL), NEVER a
   // non-UUID string — otherwise the CH row drops and the credit charge throws &
   // is swallowed (unbilled embeddings). Fails on the pre-fix code (executionStepId
@@ -291,7 +290,7 @@ describe("embedText (@oxagen/ai)", () => {
       },
     });
     const rows = (
-      mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]]
+      mocks.stagedUsage.mock.calls[0] as [Record<string, unknown>[]]
     )[0];
     expect(rows[0]!.execution_step_id).toBe(
       "00000000-0000-0000-0000-000000000000",
@@ -334,7 +333,7 @@ describe("embedText (@oxagen/ai)", () => {
     });
     // token_usage row and credit charge still recorded, with zero input tokens.
     const usageRow = (
-      mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]]
+      mocks.stagedUsage.mock.calls[0] as [Record<string, unknown>[]]
     )[0][0]!;
     expect(usageRow.input_tokens).toBe(0);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith(
@@ -377,7 +376,7 @@ describe("embedText on the platform Voyage key (#4148)", () => {
 
   it("charges every embedding, since Oxagen's key serves it", async () => {
     await embedText("platform", { telemetry: BASE_TELEMETRY });
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
   });
 
@@ -389,7 +388,7 @@ describe("embedText on the platform Voyage key (#4148)", () => {
     );
     expect(err).toBeInstanceOf(EmbeddingUnavailableError);
     expect(mocks.embed).not.toHaveBeenCalled();
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
   });
 
   it("throws EmbeddingUnavailableError, not a config error, when VOYAGE_API_KEY is empty", async () => {
@@ -400,7 +399,7 @@ describe("embedText on the platform Voyage key (#4148)", () => {
     expect(err).toBeInstanceOf(EmbeddingUnavailableError);
     expect((err as Error).message).toContain("VOYAGE_API_KEY is not set");
     expect(mocks.embed).not.toHaveBeenCalled();
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
   });
 
@@ -492,7 +491,7 @@ describe("embedMany", () => {
     // One charge and one telemetry row for the batch — the per-item shape was
     // three of each.
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+    expect(mocks.stagedUsage).toHaveBeenCalledTimes(1);
     // Charged for the batch's whole token count, not one item's.
     expect(mocks.chargeUsageCredits.mock.calls[0]![0]).toMatchObject({
       inputTokens: 21,
@@ -506,7 +505,7 @@ describe("embedMany", () => {
     await expect(embedMany([], { telemetry })).resolves.toEqual([]);
     expect(mocks.embedMany).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
-    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+    expect(mocks.stagedUsage).not.toHaveBeenCalled();
   });
 
   it("warns rather than silently billing zero when usage is absent", async () => {

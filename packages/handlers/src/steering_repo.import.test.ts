@@ -69,6 +69,15 @@ describe("import_workspace_steering handler", () => {
     );
   });
 
+  it("passes startFresh when the caller sets it", async () => {
+    await run({ startFresh: true });
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.anything(),
+      { startFresh: true },
+      expect.anything(),
+    );
+  });
+
   it("refuses a caller without the contract's roles and runs nothing", async () => {
     mocks.role.mockImplementation(async () => {
       throw new HandlerError({
