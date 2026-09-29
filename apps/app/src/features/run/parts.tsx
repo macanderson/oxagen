@@ -4,8 +4,8 @@
 // substitutes a zero, a default or a neighbouring column for a value the run
 // does not have (§3.4).
 //
-// Each piece draws one rule of the design of record (`mockups/src/engine.css`
-// in the roadmap repository, ADR-132), named in the comment above it.
+// Each piece draws one rule of the design of record (ADR-226). The comment
+// above it names the rev1 `engine.css` rule it was first built from.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {

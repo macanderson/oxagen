@@ -542,19 +542,17 @@ describe("Invoices", () => {
         name: "Search this list",
       });
       const rows = within(panel).getByRole("combobox", { name: "Rows" });
-      expect(rows).toHaveValue("10");
-      // Both are 44px tap targets on a phone (ui/phone.css).
+      expect(rows).toHaveTextContent("10");
+      // Both are 44px tap targets on a phone: the search through ui/phone.css,
+      // and Rows, in the pager under the table, through its own min height.
       expect(search).toHaveAttribute("data-touch-target");
-      expect(rows).toHaveAttribute("data-touch-target");
+      expect(rows).toHaveClass("max-md:min-h-11");
       expect(
         within(panel).getByRole("navigation", { name: `${name} pages` }),
       ).toBeInTheDocument();
     }
-    expect(
-      within(section("Invoices")).getByRole("navigation", {
-        name: "Invoices pages",
-      }),
-    ).toHaveTextContent("1–2 of 2");
+    const pager = section("Invoices").querySelector("[data-rows-pager]");
+    expect(pager?.querySelector("[data-range]")?.textContent).toBe("1–2 of 2");
   });
 
   it("links no page for an invoice Stripe has not published or a URL off invoice.stripe.com (negative)", async () => {

@@ -50,6 +50,7 @@ const CONVERSATION = {
       parkedCards: [],
       toolCalls: [],
       stopped: false,
+      attachments: [],
     },
   ],
   truncated: false,

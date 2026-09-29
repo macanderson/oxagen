@@ -13,8 +13,10 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProposalStatus } from "@/data/contracts/steering";
@@ -607,8 +609,17 @@ describe("the Library, All shelf", () => {
         .getAllByRole("row")
         .slice(1)
         .map((row) => row.getAttribute("data-lineage"));
+    // The pager under the table: Rows and the range, then Previous and Next.
+    const rowsPager = () => {
+      const pager = screen
+        .getByRole("navigation", { name: "Pages" })
+        .closest<HTMLElement>("[data-rows-pager]");
+      if (pager === null) throw new Error("the Pages steps sit in no pager");
+      return pager;
+    };
 
     it("reads every page and orders the whole list, ten rows to a page", async () => {
+      const user = userEvent.setup();
       const calls = await renderSteering("/library", { records: twelve });
       expect(calls.records).toEqual([
         [ctx, { kind: null, offset: 0, limit: 200 }],
@@ -616,10 +627,16 @@ describe("the Library, All shelf", () => {
       ]);
       expect(lineages()).toHaveLength(10);
       expect(lineages()[0]).toBe("ctx.r11");
-      const pager = screen.getByRole("navigation", { name: "Pages" });
-      expect(pager).toHaveTextContent("1–10 of 12");
-      fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
-      expect(pager).toHaveTextContent("11–12 of 12");
+      const pager = rowsPager();
+      const range = () => pager.querySelector("[data-range]");
+      expect(range()).toHaveTextContent("1–10 of 12");
+      expect(
+        within(pager).getByRole("button", { name: "Previous page" }),
+      ).toBeDisabled();
+      await user.click(
+        within(pager).getByRole("button", { name: "Next page" }),
+      );
+      expect(range()).toHaveTextContent("11–12 of 12");
       expect(lineages()).toHaveLength(2);
       expect(
         within(pager).getByRole("button", { name: "Next page" }),
@@ -644,35 +661,42 @@ describe("the Library, All shelf", () => {
       expect(row("ctx.r01")?.querySelector("[data-scope-target]")).toBeNull();
     });
 
-    it("gives every pager button a phone-sized touch target", async () => {
+    it("gives every pager control a phone-sized touch target", async () => {
       await renderSteering("/library", { records: twelve });
-      const pager = screen.getByRole("navigation", { name: "Pages" });
-      const buttons = within(pager).getAllByRole("button");
-      expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+      const pager = rowsPager();
+      const steps = within(
+        within(pager).getByRole("navigation", { name: "Pages" }),
+      ).getAllByRole("button");
+      expect(steps.map((b) => b.getAttribute("aria-label"))).toEqual([
         "Previous page",
-        "Page 1",
-        "Page 2",
         "Next page",
       ]);
-      for (const button of buttons) {
-        expect(button).toHaveAttribute("data-touch-target", "");
+      // 44px tall below md, as phone.css makes a data-touch-target.
+      for (const control of [
+        ...steps,
+        within(pager).getByRole("combobox", { name: "Rows" }),
+      ]) {
+        expect(control.className).toContain("max-md:min-h-11");
       }
     });
 
     it("searches, filters by Scope, Compiles to and Force, and changes the rows per page", async () => {
+      const user = userEvent.setup();
       await renderSteering("/library", { records: twelve });
       expect(
         screen.getByRole("searchbox", { name: "Search this list" }),
       ).toBeVisible();
+      // The bar holds the search and the filters; Rows is in the pager.
+      const bar = document.querySelector<HTMLElement>("[data-list-tools]");
+      if (bar === null) throw new Error("the Library has no list tools");
       expect(
-        screen
+        within(bar)
           .getAllByRole("combobox")
           .map((select) => select.getAttribute("aria-label")),
       ).toEqual([
         "Filter by Scope",
         "Filter by Compiles to",
         "Filter by Force",
-        "Rows",
       ]);
       fireEvent.change(
         screen.getByRole("combobox", { name: "Filter by Force" }),
@@ -697,10 +721,14 @@ describe("the Library, All shelf", () => {
         screen.getByRole("searchbox", { name: "Search this list" }),
         { target: { value: "" } },
       );
-      fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
-        target: { value: "0" },
+      const rows = within(rowsPager()).getByRole("combobox", { name: "Rows" });
+      expect(rows).toHaveTextContent("10");
+      await user.click(rows);
+      await user.click(await screen.findByRole("option", { name: "All" }));
+      await waitFor(() => {
+        expect(lineages()).toHaveLength(12);
       });
-      expect(lineages()).toHaveLength(12);
+      expect(rows).toHaveTextContent("All");
     });
 
     it("sorts on a header press, reverses on the second and gives the assembler's order back on the third", async () => {
@@ -1044,25 +1072,77 @@ describe("Records", () => {
     ).toBeInTheDocument();
   });
 
+  // Twelve constraints, ctx.r00 to ctx.r11. They share a publication date,
+  // so newest first keeps them in this order.
+  const lineage = (i: number) => `ctx.r${String(i).padStart(2, "0")}`;
+  const twelve = readOk({
+    records: Array.from({ length: 12 }, (_, i) =>
+      publishedRecord({ id: `ctr_r${String(i)}`, lineage: lineage(i) }),
+    ),
+    total: 12,
+  });
+  const lineages = () =>
+    within(section("Published records"))
+      .getAllByRole("article")
+      .map((card) => card.getAttribute("data-lineage"));
+  // The pager under the cards: Rows and the range, then Previous and Next.
+  const recordsPager = () => {
+    const pager = screen
+      .getByRole("navigation", { name: "Pages" })
+      .closest<HTMLElement>("[data-rows-pager]");
+    if (pager === null) throw new Error("the Pages steps sit in no pager");
+    return pager;
+  };
+
+  it("draws Rows, the range and the steps in the pager under the cards", async () => {
+    await renderSteering("/records?kind=constraint", { records: twelve });
+    const panel = section("Published records");
+    const pager = recordsPager();
+    const cards = within(panel).getByTestId("record-cards");
+    expect(
+      cards.compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    // Rows sits in the pager, once, and the tools above keep Sort alone.
+    const rows = within(pager).getByRole("combobox", { name: "Rows" });
+    expect(rows).toHaveTextContent("10");
+    expect(
+      within(panel).getAllByRole("combobox", { name: "Rows" }),
+    ).toHaveLength(1);
+    const tools = panel.querySelector<HTMLElement>("[data-list-tools]");
+    if (tools === null) throw new Error("the shelf has no list tools");
+    expect(within(tools).queryByRole("combobox", { name: "Rows" })).toBeNull();
+    expect(
+      within(tools).getByRole("combobox", { name: "Sort" }),
+    ).toBeInTheDocument();
+    // The range sits beside Rows, outside the Previous and Next steps.
+    const range = pager.querySelector<HTMLElement>("[data-range]");
+    expect(range).toHaveTextContent("1–10 of 12");
+    expect(
+      within(pager).getByRole("navigation", { name: "Pages" }),
+    ).not.toContainElement(range);
+  });
+
   it("pages ten to a page with the range, keeping the kind", async () => {
-    await renderSteering("/records?kind=constraint", {
-      records: readOk({
-        records: Array.from({ length: 12 }, (_, i) =>
-          publishedRecord({ id: `ctr_r${String(i)}` }),
-        ),
-        total: 12,
-      }),
-    });
-    const pager = screen.getByRole("navigation", { name: "Pages" });
-    expect(pager).toHaveTextContent("1–10 of 12");
+    const user = userEvent.setup();
+    await renderSteering("/records?kind=constraint", { records: twelve });
+    const pager = recordsPager();
+    const range = () => pager.querySelector("[data-range]");
+    expect(range()).toHaveTextContent("1–10 of 12");
+    expect(lineages()).toEqual(
+      Array.from({ length: 10 }, (_, i) => lineage(i)),
+    );
     expect(
-      within(section("Published records")).getAllByRole("article"),
-    ).toHaveLength(10);
-    fireEvent.click(within(pager).getByRole("button", { name: "Next page" }));
-    expect(pager).toHaveTextContent("11–12 of 12");
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(range()).toHaveTextContent("11–12 of 12");
+    expect(lineages()).toEqual(["ctx.r10", "ctx.r11"]);
     expect(
-      within(section("Published records")).getAllByRole("article"),
-    ).toHaveLength(2);
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeEnabled();
     expect(
       within(
         screen.getByRole("group", { name: "Filter records by kind" }),
@@ -1070,10 +1150,40 @@ describe("Records", () => {
     ).toHaveAttribute("href", `${BASE}/records?kind=constraint`);
   });
 
+  it("changes the rows per page in the pager and goes back to the first page", async () => {
+    const user = userEvent.setup();
+    await renderSteering("/records?kind=constraint", { records: twelve });
+    const pager = recordsPager();
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(lineages()).toEqual(["ctx.r10", "ctx.r11"]);
+    const rows = within(pager).getByRole("combobox", { name: "Rows" });
+    await user.click(rows);
+    // Read the open list alone: the Sort select holds options too.
+    const sizes = within(await screen.findByRole("listbox"));
+    expect(sizes.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "5",
+      "10",
+      "25",
+      "50",
+      "All",
+    ]);
+    await user.click(sizes.getByRole("option", { name: "5" }));
+    // A new size starts again from the first page, so the second page's
+    // records give way to the first five.
+    await waitFor(() => {
+      expect(lineages()).toEqual([0, 1, 2, 3, 4].map((i) => lineage(i)));
+    });
+    expect(rows).toHaveTextContent("5");
+    expect(pager.querySelector("[data-range]")).toHaveTextContent("1–5 of 12");
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+  });
+
   it("offers no other page when one page holds every record (negative)", async () => {
     await renderSteering("/records");
-    const pager = screen.getByRole("navigation", { name: "Pages" });
-    expect(pager).toHaveTextContent("1–1 of 1");
+    const pager = recordsPager();
+    expect(pager.querySelector("[data-range]")).toHaveTextContent("1–1 of 1");
     expect(
       within(pager).getByRole("button", { name: "Previous page" }),
     ).toBeDisabled();

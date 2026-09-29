@@ -1,4 +1,4 @@
-// The one state badge (mockup `.b`, engine.css, ADR-132): a dot and a word in
+// The one state badge (mockup `.b`, engine.css, ADR-226): a dot and a word in
 // a tinted pill, so the state survives greyscale and reads the same on every
 // page. The hue is a state hue and never the gold: gold is identity.
 //

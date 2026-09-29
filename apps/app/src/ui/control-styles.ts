@@ -1,8 +1,10 @@
 // Class recipes for plain controls (buttons, links, inputs, panels, tiles,
-// eyebrows) that are not their own component. Each recipe is one rule of the
-// design of record, `mockups/src/engine.css` in the roadmap repository, named
-// in the comment above it (ADR-132); the values are house tokens, so a reskin
-// in the kit reaches every screen and the shape stays the mockup's.
+// eyebrows) that are not their own component. Each recipe draws one rule of
+// the design of record that ADR-226 names: the v3 mockup at its pin for the
+// shape, and the brand kit's tokens for colour and type. The comment above a
+// recipe quotes the rev1 `engine.css` rule it was first built from, which is
+// history now. The values are house tokens, so a reskin in the kit reaches
+// every screen.
 //
 // `design-record.test.ts` holds these recipes to the rules they cite. Change a
 // recipe with the rule, never around it.
@@ -12,7 +14,7 @@
 // inputs, 14px control text, rounder cards, and translucent menus and
 // popovers. Colour stays the house's. Where a comment below quotes an
 // engine.css rule and a recipe now differs from it, the recipe names the maia
-// value it took, and engine.css follows.
+// value it took.
 
 /**
  * `.btn { border:1px solid var(--border); background:var(--panel);
@@ -178,7 +180,7 @@ export const linkChip =
 /**
  * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
  * the maia card title's 14px, on the `--panel-head` band: light grey
- * on paper, a step lighter than the panel on ink (ADR-170). The footer keeps
+ * on paper, a step lighter than the panel on ink (ADR-226). The footer keeps
  * the hairline and stays flat on the panel.
  */
 export const panelHeader =

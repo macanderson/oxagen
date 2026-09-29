@@ -2,7 +2,7 @@
 // phone the shell turns it into labelled cards (features/shell/card-tables.ts),
 // so a table must keep a single header row with no grouped header.
 //
-// The shape is the mockup's `table`, `th` and `td` rules (engine.css, ADR-132):
+// The shape is the mockup's `table`, `th` and `td` rules (engine.css, ADR-226):
 // 13px rows on the panel, a header in 10.5px caps and the dim ink with no band
 // behind it, and the wash on a hovered row. globals.css carries the same rule
 // for every table under the shell, so a caller that draws its own <table>
