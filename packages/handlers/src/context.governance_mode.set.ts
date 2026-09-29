@@ -30,6 +30,12 @@
 // parse refuses the call, because the merge queue refuses every steering PR
 // until it parses.
 //
+// The steering review route has no land path yet. Oxagen opens the PR and
+// answers `proposed`, and the mode in force stays as it is. #4795 lands that
+// PR through a proposal row and `merge_context_pr`, with the approver on the
+// record. Apply now is not that land path. In team or regulated it is an
+// override, and it is recorded as one (ADR-229).
+//
 // `applyImmediately` takes the review route back to landing at once. It is
 // not privilege escalation: the contract admits only org Owner/Admin and
 // workspace Owner/Admin, so every caller who can reach this capability can
@@ -188,6 +194,15 @@ export function makeSetGovernanceModeHandler(
         ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
         : { org: ["Owner", "Admin"] },
     );
+    // assertOrgRole refuses a call with no acting user, so this never throws.
+    // It narrows the type: the ledger and the events name a person.
+    if (actingUserId === null) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "no_principal",
+        message: "No signed-in user on the request",
+      });
+    }
 
     const target = await resolveTargetWorkspace(ctx, input.workspaceId);
     const scope = { orgId: ctx.orgId, workspaceId: target.id };
