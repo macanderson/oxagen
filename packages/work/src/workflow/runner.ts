@@ -15,6 +15,10 @@
 //
 // The runner saves the next state before it performs any action. A launch that
 // is retried sends the same launch_id, which ARP treats as the same request.
+// After a launch, the runner records the session it started in a second save.
+// It retries that save against the latest state when another writer saved
+// first, and resume starts any run still waiting to start again, so a crash
+// between the launch and its record leaves no session the runner cannot find.
 //
 // The MCP tools hand_off_work_order, return_work_order, and accept_work_order
 // call handOff, returnWork, and accept. The tool names the session it runs in,
@@ -31,6 +35,7 @@ import {
   type Hold,
   type RefusalCode,
   type StageRecord,
+  type StageRun,
   type WorkflowAction,
   type WorkflowEvent,
   type WorkflowState,
@@ -144,6 +149,11 @@ export class WorkflowRunnerError extends Error {
   }
 }
 
+/** How many times the runner saves a launch's result before it gives up and leaves the run to resume. */
+export const LAUNCH_RECORD_ATTEMPTS = 3;
+
+type LaunchResult = Extract<WorkflowEvent, { type: "stage_started" | "launch_failed" }>;
+
 /** The stage whose run carries a session, or null. */
 export function roleOfSession(state: WorkflowState, sessionId: string): string | null {
   const record = state.stages.find((stage) => stage.runs.some((run) => run.sessionId === sessionId));
@@ -209,6 +219,25 @@ export class WorkflowRunner {
     });
   }
 
+  /**
+   * Launch again every stage run that is waiting to start, under the same
+   * launch_id, and record the session each one reports. ARP treats a repeated
+   * launch_id as the same request, so a run whose harness already started
+   * reports the session it started. Call it after a crash, or after a launch
+   * whose result the runner could not save.
+   */
+  async resume(workOrderId: string): Promise<WorkflowRunnerResult> {
+    const stored = await this.load(workOrderId);
+    const actions: WorkflowAction[] = [];
+    for (const record of stored.state.stages) {
+      if (record.state !== "launching") continue;
+      const run = record.runs.at(-1) as StageRun;
+      actions.push({ type: "launch", role: record.role, run: run.run, launchId: run.launchId, notes: run.notes });
+    }
+    for (const action of actions) await this.launch(stored, stored.state, action);
+    return { state: (await this.load(workOrderId)).state, actions };
+  }
+
   private sessionRole(state: WorkflowState, sessionId: string): string {
     const role = roleOfSession(state, sessionId);
     if (role === null) {
@@ -236,14 +265,19 @@ export class WorkflowRunner {
     return admitVerifyStage({ verifySessionId, verify, builds });
   }
 
-  private async apply(
-    workOrderId: string,
-    toEvent: (stored: StoredWorkOrder) => WorkflowEvent | Promise<WorkflowEvent>,
-  ): Promise<WorkflowRunnerResult> {
+  private async load(workOrderId: string): Promise<StoredWorkOrder> {
     const stored = await this.ports.store.load(workOrderId);
     if (stored === null) {
       throw new WorkflowRunnerError("unknown_work_order", `No work order ${workOrderId} exists.`);
     }
+    return stored;
+  }
+
+  private async apply(
+    workOrderId: string,
+    toEvent: (stored: StoredWorkOrder) => WorkflowEvent | Promise<WorkflowEvent>,
+  ): Promise<WorkflowRunnerResult> {
+    const stored = await this.load(workOrderId);
     const event = await toEvent(stored);
     const result = advanceWorkflow(stored.state, event);
     if (!result.ok) throw new WorkflowRunnerError(result.code, result.message);
@@ -282,15 +316,41 @@ export class WorkflowRunner {
     state: WorkflowState,
     action: Extract<WorkflowAction, { type: "launch" }>,
   ): Promise<void> {
-    const event = await this.startRun(stored, state, action);
-    await this.apply(state.workOrderId, () => event);
+    const result = await this.startRun(stored, state, action);
+    await this.recordLaunch(state.workOrderId, result);
+  }
+
+  /**
+   * Save a launch's result. A run waiting to start moves on only through this
+   * save, so a save another writer beat is tried again against the latest
+   * state. When another call, such as resume, saved the run's result first,
+   * the state machine refuses this one as not_launching or stale_run, and the
+   * run already carries its result.
+   */
+  private async recordLaunch(workOrderId: string, result: LaunchResult): Promise<void> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await this.apply(workOrderId, () => result);
+        return;
+      } catch (error) {
+        if (!(error instanceof WorkflowRunnerError)) throw error;
+        if (error.code === "not_launching" || error.code === "stale_run") return;
+        if (error.code !== "version_conflict") throw error;
+        if (attempt === LAUNCH_RECORD_ATTEMPTS) {
+          throw new WorkflowRunnerError(
+            "version_conflict",
+            `Stage ${result.role} run ${result.run} launched, and work order ${workOrderId} changed ${LAUNCH_RECORD_ATTEMPTS} times while the runner saved the result. Call resume to save it.`,
+          );
+        }
+      }
+    }
   }
 
   private async startRun(
     stored: StoredWorkOrder,
     state: WorkflowState,
     action: Extract<WorkflowAction, { type: "launch" }>,
-  ): Promise<WorkflowEvent> {
+  ): Promise<LaunchResult> {
     const stage = stageOf(state, action.role);
     try {
       const agent = await this.ports.agents.read(stage.agent);

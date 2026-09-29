@@ -200,7 +200,7 @@ describe("advanceWorkflow: send and stage_started", () => {
     expect(record(state, "Fix")).toEqual({
       role: "Fix",
       state: "launching",
-      runs: [{ run: 1, launchId: "wo-1:stage-1:run-1", sessionId: null, outcome: null, note: null }],
+      runs: [{ run: 1, launchId: "wo-1:stage-1:run-1", notes: [], sessionId: null, outcome: null, note: null }],
       returns: 0,
       rerun: false,
       pendingReturns: [],

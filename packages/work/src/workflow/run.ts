@@ -65,6 +65,8 @@ export type HoldReason = (typeof HOLD_REASONS)[number];
 export interface StageRun {
   run: number;
   launchId: string;
+  /** The notes the run was launched with, kept so a resumed launch sends the same request. */
+  notes: QuotedNote[];
   /** The harness session, or null until the harness reports it. */
   sessionId: string | null;
   /** How the run closed, or null while it is open. */
@@ -467,7 +469,7 @@ class Machine {
     }
     notes.push(...record.pendingReturns);
     record.pendingReturns = [];
-    record.runs.push({ run, launchId, sessionId: null, outcome: null, note: null });
+    record.runs.push({ run, launchId, notes, sessionId: null, outcome: null, note: null });
     record.state = "launching";
     this.actions.push({ type: "launch", role: stage.role, run, launchId, notes });
   }

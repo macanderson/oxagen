@@ -309,7 +309,14 @@ describe("WorkflowRunner: the spec's example", () => {
     // A Fix run whose launch failed, as a parked work order will hold once the
     // operator resolves it. Resolving waits on Approvals, so the test writes it.
     const fix = stage(store.current().state, "Fix");
-    fix.runs.unshift({ run: 0, launchId: "wo-1:stage-1:run-0", sessionId: null, outcome: "launch_failed", note: null });
+    fix.runs.unshift({
+      run: 0,
+      launchId: "wo-1:stage-1:run-0",
+      notes: [],
+      sessionId: null,
+      outcome: "launch_failed",
+      note: null,
+    });
 
     const verified = await runner.handOff({ workOrderId: "wo-1", sessionId: "s-verify-1", note: "" });
     expect(ports.gateway.session.mock.calls).toEqual([["s-fix-1"], ["s-verify-1"]]);
