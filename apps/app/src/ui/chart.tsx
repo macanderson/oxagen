@@ -31,7 +31,7 @@ import {
   type CSSProperties,
   createContext,
   type ReactNode,
-  useContext,
+  use,
   useId,
 } from "react";
 import {
@@ -56,7 +56,7 @@ const INITIAL_DIMENSION = { width: 320, height: 200 } as const;
 const ChartContext = createContext<ChartConfig | null>(null);
 
 function useChartConfig(): ChartConfig {
-  const config = useContext(ChartContext);
+  const config = use(ChartContext);
   if (config === null) {
     throw new Error("a chart part must render inside <ChartContainer>");
   }
@@ -92,7 +92,7 @@ export function ChartContainer({
     if (SERIES_KEY.test(key)) style[`--color-${key}`] = series.color;
   }
   return (
-    <ChartContext.Provider value={config}>
+    <ChartContext value={config}>
       <div
         role="img"
         aria-label={label}
@@ -105,7 +105,7 @@ export function ChartContainer({
           {children}
         </ResponsiveContainer>
       </div>
-    </ChartContext.Provider>
+    </ChartContext>
   );
 }
 
