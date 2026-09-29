@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 import { TOOL_KEY_MAX } from "../contract/primitives";
 import { Notes } from "../graphql/notes";
 import type { ImportedFile, ImportNote } from "../model/import-result";
-import { doubleText, jsonNameOf, mapEntryNameOf } from "./descriptors";
+import { doubleText, floatText, jsonNameOf, mapEntryNameOf } from "./descriptors";
 import { GrpcImportError, type GrpcImportErrorCode } from "./errors";
 import { importGrpc } from "./index";
 import { toolKeyFor } from "./names";
@@ -185,10 +185,47 @@ describe("doubleText", () => {
     [-Infinity, "-inf"],
     [Number.NaN, "nan"],
     [Number.MAX_VALUE, "1.7976931348623157e+308"],
+    // 2^-25 is 2.98023223876953125e-08, a tie at 17 digits. C rounds it to
+    // the even digit 2, where JavaScript's toExponential gives 3.
+    [2 ** -25, "2.9802322387695312e-08"],
   ];
 
   it.each(texts)("writes %d as %s", (value, text) => {
     expect(doubleText(value)).toBe(text);
+  });
+});
+
+describe("floatText", () => {
+  // Each expected text is what protoc writes: the double cast to float32 as
+  // SafeDoubleToFloat casts it, then C's %.6g, or %.9g where %.6g does not
+  // read back as the same float.
+  const texts: [number, string][] = [
+    [1 / 3, "0.333333343"],
+    [0.1, "0.1"],
+    [1e-5, "1e-05"],
+    [16_777_217, "16777216"],
+    [1e10, "1e+10"],
+    [-2.5, "-2.5"],
+    [0, "0"],
+    [-0, "-0"],
+    [-1e-50, "-0"],
+    [Infinity, "inf"],
+    [-Infinity, "-inf"],
+    [Number.NaN, "nan"],
+    [1e39, "inf"],
+    [-1e39, "-inf"],
+    [3.4028235e38, "3.40282347e+38"],
+    // Halfway between FLT_MAX and 2^128. Math.fround gives Infinity here, and
+    // protoc gives FLT_MAX.
+    [3.4028235677973366e38, "3.40282347e+38"],
+    [-3.4028235677973366e38, "-3.40282347e+38"],
+    // 2^-13 is 0.0001220703125, a tie at nine digits. C rounds it to the even
+    // digit 2, where JavaScript's toExponential gives 3.
+    [2 ** -13, "0.000122070312"],
+  ];
+
+  it.each(texts)("writes %d as %s", (value, text) => {
+    expect(floatText(value)).toBe(text);
   });
 });
 
@@ -523,6 +560,8 @@ describe("buildFile default values", () => {
         "  optional float tiny = 4 [default = 0.00001];",
         "  optional double tenth = 5 [default = 0.1];",
         "  optional double third = 6 [default = 0.3333333333333333];",
+        "  optional float third_float = 7 [default = 0.3333333333333333];",
+        "  optional float big_float = 8 [default = 1e10];",
         "}",
       ),
     );
@@ -534,6 +573,10 @@ describe("buildFile default values", () => {
       ["tenth", "0.1"],
       // %.15g gives 0.333333333333333, which reads back as another double, so protoc writes 17 digits.
       ["third", "0.33333333333333331"],
+      // protoc casts a float default to 32 bits before it writes it, then
+      // writes %.6g, or %.9g when %.6g reads back as another float.
+      ["third_float", "0.333333343"],
+      ["big_float", "1e+10"],
     ]);
     expect(notes).toStrictEqual([]);
   });
