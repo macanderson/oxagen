@@ -280,17 +280,26 @@ export function sourceFields(
 async function resolvePullRequest(
   run: Run,
   checkout: SteeringCheckout,
-): Promise<{ open: PullRequestRef | null; checkout: SteeringCheckout }> {
+): Promise<{
+  open: PullRequestRef | null;
+  /** The head of the open PR's branch, which a commit onto it is pinned to. */
+  head: string | null;
+  checkout: SteeringCheckout;
+}> {
   const pr = run.kept.pr;
-  if (pr === null) return { open: null, checkout };
+  if (pr === null) return { open: null, head: null, checkout };
   const state = await checkout.pullRequest(pr.number);
-  if (state.open) return { open: pr, checkout };
+  if (state.open) return { open: pr, head: state.headSha, checkout };
   run.kept.pr = null;
-  if (!state.merged) return { open: null, checkout };
+  if (!state.merged) return { open: null, head: null, checkout };
   run.kept.digest = null;
   run.kept.withheld = [];
   run.kept.withheldUpstream = [];
-  return { open: null, checkout: await run.seams.steering.open(run.scope) };
+  return {
+    open: null,
+    head: null,
+    checkout: await run.seams.steering.open(run.scope),
+  };
 }
 
 /** "20260928t150012", for a branch name. */
@@ -530,10 +539,21 @@ async function openPullRequest(
     text: SyncPullRequestText;
     files: ToolsPullRequestFile[];
     open: PullRequestRef | null;
+    /** The production commit every file was built from. */
+    commit: string;
+    /** The head of the open PR's branch, when there is one and the host told us. */
+    head: string | null;
   },
 ): Promise<PullRequestRef> {
   const scrub = (text: string) => run.scrubber.scrub(text);
   const at = run.seams.now();
+  // Each write is pinned to the commit its own guard is about. A new branch
+  // starts at the production commit the files were read from, so a commit that
+  // merged since is not reverted by a whole-file write. A commit onto an open
+  // PR is pinned to that branch's head, so the opener refuses it when the
+  // branch moved. A host that did not tell us the head sends no pin, which is
+  // what every call did before.
+  const pin = input.open === null ? input.commit : input.head;
   try {
     const pr = await run.seams.opener.open(run.scope, {
       branch: input.open?.branch ?? `tools/sync-${run.server}-${branchStamp(at)}`,
@@ -545,6 +565,7 @@ async function openPullRequest(
         content: file.content === null ? null : scrub(file.content),
       })),
       ...(input.open === null ? {} : { existing: { number: input.open.number } }),
+      ...(pin === null ? {} : { at: pin }),
     });
     return { number: pr.number, url: pr.url, branch: pr.branch };
   } catch (error) {
@@ -686,6 +707,8 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     },
     files: writes,
     open: resolved.open,
+    commit: checkout.commit,
+    head: resolved.head,
   });
   kept.digest = digest;
   return finished(kept, resolved.open === null ? "pr_opened" : "pr_updated");
