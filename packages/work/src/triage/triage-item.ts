@@ -13,8 +13,11 @@
 //   gateway recorded, the prompt digest, and the cost. The priorities hash and the
 //   input digest come from the input.
 import type { Sha256Digest } from "@oxagen/run-evidence";
-import { notBuiltAsync } from "../not-built";
 import type { PriorityLabel, TriageDecision } from "../types";
+import { priorityCites } from "./priorities-rules";
+import { checkTriageOutput } from "./triage-output";
+import { triageRequest } from "./triage-prompt";
+import { checkTriageSchema } from "./triage-schema";
 
 /** The work item as triage reads it. Every text field is outside text. */
 export interface TriageWorkItem {
@@ -88,7 +91,54 @@ export interface TriageInput {
   model: TriageModelClient;
 }
 
-/** Triage one work item. Calls the model once, or twice when the first output fails the schema. */
-export function triageItem(input: TriageInput): Promise<TriageDecision> {
-  return notBuiltAsync("triageItem", input);
+/** How many times triage asks the model: once, and once more after a rejected output. */
+export const TRIAGE_ATTEMPTS = 2;
+
+/** Both outputs failed triage/v1 or the checks against the input. */
+export class TriageOutputError extends Error {
+  readonly code = "triage_output_invalid";
+  constructor(
+    readonly item: TriageDecision["item"],
+    /** The problems with each output, in the order the model returned them. */
+    readonly attempts: readonly (readonly string[])[],
+  ) {
+    super(
+      `The triage model returned ${attempts.length} outputs for ${item}, and each failed triage/v1 or the checks against the input. First problems: ${attempts
+        .map((problems) => problems[0] ?? "none")
+        .join("; ")}`,
+    );
+    this.name = "TriageOutputError";
+  }
 }
+
+/**
+ * Triage one work item. Calls the model once, or twice when the first output
+ * fails triage/v1 or the checks against the input. Both calls send the same
+ * request, so the prompt digest the caller stores covers either one.
+ */
+export async function triageItem(input: TriageInput): Promise<TriageDecision> {
+  const request = triageRequest(input);
+  const context = { item: input.item.id, cites: priorityCites(input.priorities), openWork: input.openWork };
+  const attempts: string[][] = [];
+  for (let attempt = 0; attempt < TRIAGE_ATTEMPTS; attempt += 1) {
+    const response = await input.model.complete(request);
+    const checked = checkTriageSchema(response.output);
+    if (checked.ok) {
+      const problems = checkTriageOutput(checked.decision, context);
+      if (problems.length === 0) return checked.decision;
+      attempts.push(problems);
+    } else {
+      attempts.push(checked.problems);
+    }
+  }
+  throw new TriageOutputError(input.item.id, attempts);
+}
+
+export * from "./priorities-rules";
+export * from "./triage-corrections";
+export * from "./triage-output";
+export * from "./triage-prompt";
+export * from "./triage-route";
+export * from "./triage-schema";
+export * from "./triage-state";
+export * from "./triage-workflow";
