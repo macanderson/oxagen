@@ -35,8 +35,16 @@
 // place of the thread there, and the next question continues it. A stand-in
 // that holds an opened session counts as used, so the first read does not
 // replace it when it lands.
+//
+// A restored question shows the files sent with it as the same chips a live
+// question shows, each opening the file through the read route of the
+// workspace on screen (#4690).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
+import {
+  assistantAttachmentHref,
+  type SentAttachment,
+} from "./assistant-attachment-files";
 import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
@@ -52,7 +60,13 @@ export type ThreadState<E> = {
 
 /** A turn read back from the record, in the shape a live turn produces. */
 export type RestoredEntry =
-  | { kind: "asked"; id: string; text: string }
+  | {
+      kind: "asked";
+      id: string;
+      text: string;
+      /** The files sent with it, when there were any (#4690). */
+      files?: readonly SentAttachment[];
+    }
   | {
       kind: "answered";
       id: string;
@@ -68,17 +82,39 @@ export type RestoredEntry =
 type ThreadStatus = "idle" | "loading" | "failed";
 
 /**
- * The recorded thread as entries. A question is `asked`; a reply is
- * `answered` with the run it was recorded as and the tool calls that run
- * made, so a restored reply lists what it listed when it was new (#4161). A
- * reply with no run was not an assistant turn (another chat surface wrote
- * it), and the flyout has nothing to link it to, so it is left out.
+ * The recorded thread as entries. A question is `asked`, with the files sent
+ * with it as the chips a live question shows, each linked through the read
+ * route of the workspace `org/ws` names (#4690). A reply is `answered` with
+ * the run it was recorded as and the tool calls that run made, so a restored
+ * reply lists what it listed when it was new (#4161). A reply with no run was
+ * not an assistant turn (another chat surface wrote it), and the flyout has
+ * nothing to link it to, so it is left out.
  */
-function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
+function restoredEntries(
+  thread: AssistantThread,
+  org: string,
+  ws: string,
+): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
   for (const message of thread.messages) {
     if (message.role === "user") {
-      entries.push({ kind: "asked", id: message.id, text: message.text });
+      // A question sent without files carries no `files`, as a live one does.
+      const files = message.attachments.map(
+        (file): SentAttachment => ({
+          key: file.publicId,
+          name: file.name,
+          mediaType: file.mediaType,
+          size: file.sizeBytes,
+          publicId: file.publicId,
+          href: assistantAttachmentHref(org, ws, file.publicId),
+        }),
+      );
+      entries.push({
+        kind: "asked",
+        id: message.id,
+        text: message.text,
+        ...(files.length === 0 ? {} : { files }),
+      });
     } else if (message.runId !== null) {
       entries.push({
         kind: "answered",
@@ -253,7 +289,7 @@ export function useAssistantThreads<E>({
               entries:
                 thread === null
                   ? []
-                  : restoredEntries(thread).map(restoreRef.current),
+                  : restoredEntries(thread, org, ws).map(restoreRef.current),
               conversationId: thread?.id ?? null,
               draft: standIn?.draft ?? "",
               draftTooLong: standIn?.draftTooLong ?? false,
@@ -314,21 +350,27 @@ export function useAssistantThreads<E>({
    * typed stays. Refused while a turn is in flight: its reply belongs to the
    * conversation it was asked in.
    */
-  const openThread = useCallback((key: string, thread: AssistantThread) => {
-    setStore((prior) => {
-      const target = prior.keys.get(key) ?? key;
-      const current = prior.threads.get(target) ?? emptyThread<E>();
-      if (current.pending) return prior;
-      const threads = new Map(prior.threads).set(target, {
-        ...emptyThread<E>(),
-        entries: restoredEntries(thread).map(restoreRef.current),
-        conversationId: thread.id,
-        draft: current.draft,
-        draftTooLong: current.draftTooLong ?? false,
+  const openThread = useCallback(
+    (key: string, thread: AssistantThread) => {
+      // The flyout has a key only once the URL names a workspace, so both
+      // slugs are set here. The files' links need them.
+      if (org === null || ws === null) return;
+      setStore((prior) => {
+        const target = prior.keys.get(key) ?? key;
+        const current = prior.threads.get(target) ?? emptyThread<E>();
+        if (current.pending) return prior;
+        const threads = new Map(prior.threads).set(target, {
+          ...emptyThread<E>(),
+          entries: restoredEntries(thread, org, ws).map(restoreRef.current),
+          conversationId: thread.id,
+          draft: current.draft,
+          draftTooLong: current.draftTooLong ?? false,
+        });
+        return { ...prior, threads };
       });
-      return { ...prior, threads };
-    });
-  }, []);
+    },
+    [org, ws],
+  );
 
   return { scope, status, threadOf, updateThread, startNewThread, openThread };
 }
