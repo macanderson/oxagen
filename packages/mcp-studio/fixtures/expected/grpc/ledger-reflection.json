@@ -1,0 +1,727 @@
+{
+  "auth": [],
+  "document_hash": "sha256:2c8f8ce55d8fc8fcfa5327de9f8ab0d510f8f663a74858bb896b08656c7e863c",
+  "environments": [],
+  "files": [
+    {
+      "path": "proto/ledger.proto",
+      "text": "syntax = \"proto3\";\n\npackage a_intel.ledger.v1;\n\nimport \"google/protobuf/any.proto\";\nimport \"google/protobuf/timestamp.proto\";\n\noption go_package = \"github.com/a-intel/ledger/gen/ledgerv1\";\n\nservice Ledger {\n  rpc GetEntry(GetEntryRequest) returns (Entry) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n  rpc PostEntry(PostEntryRequest) returns (Entry);\n  rpc ReverseEntry(ReverseEntryRequest) returns (Entry) {\n    option idempotency_level = IDEMPOTENT;\n  }\n  rpc ListEntries(ListEntriesRequest) returns (stream Entry) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n  rpc UploadEntries(stream PostEntryRequest) returns (UploadSummary);\n  rpc SyncEntries(stream PostEntryRequest) returns (stream Entry);\n}\n\nmessage Money {\n  int64 amount = 1;\n  string currency = 2;\n}\n\nmessage Entry {\n  string id = 1;\n  string account_id = 2;\n  EntryKind kind = 3;\n  Money money = 4;\n  google.protobuf.Timestamp posted_at = 5;\n  map<string, string> labels = 6;\n  repeated string related_ids = 7;\n  google.protobuf.Any detail = 8;\n  oneof source {\n    string invoice_id = 9;\n    string transfer_id = 10;\n    string manual_note = 11;\n  }\n  bool reversed = 12;\n}\n\nmessage GetEntryRequest {\n  string id = 1;\n}\n\nmessage PostEntryRequest {\n  string account_id = 1;\n  EntryKind kind = 2;\n  Money money = 3;\n  map<string, string> labels = 4;\n  google.protobuf.Any detail = 5;\n  oneof source {\n    string invoice_id = 6;\n    string transfer_id = 7;\n    string manual_note = 8;\n  }\n}\n\nmessage ReverseEntryRequest {\n  string id = 1;\n  string reason = 2;\n}\n\nmessage ListEntriesRequest {\n  string account_id = 1;\n  google.protobuf.Timestamp since = 2;\n}\n\nmessage UploadSummary {\n  int32 posted = 1;\n  repeated string entry_ids = 2;\n}\n\nenum EntryKind {\n  ENTRY_KIND_UNSPECIFIED = 0;\n  ENTRY_KIND_DEBIT = 1;\n  ENTRY_KIND_CREDIT = 2;\n}\n"
+    }
+  ],
+  "listed": [
+    {
+      "kind": "client_stream",
+      "name": "a_intel.ledger.v1.Ledger/UploadEntries",
+      "reason": "A client-streaming method takes a stream of requests, and one tool call sends one, so it never becomes a tool."
+    },
+    {
+      "kind": "bidi_stream",
+      "name": "a_intel.ledger.v1.Ledger/SyncEntries",
+      "reason": "A bidirectional method streams both ways, and one tool call sends one request, so it never becomes a tool."
+    }
+  ],
+  "notes": [],
+  "tools": [
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "NO_SIDE_EFFECTS",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/GetEntry",
+        "request_type": "a_intel.ledger.v1.GetEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "properties": {
+              "@type": {
+                "description": "The type URL of the packed message, such as type.googleapis.com/acme.v1.Money. It must name a message the service's .proto files define.",
+                "pattern": "^(.*/)?[^/]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "@type"
+            ],
+            "type": "object"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "ENTRY_KIND_UNSPECIFIED",
+              "ENTRY_KIND_DEBIT",
+              "ENTRY_KIND_CREDIT"
+            ],
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "additionalProperties": false,
+            "properties": {
+              "amount": {
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "post_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "IDEMPOTENCY_UNKNOWN",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/PostEntry",
+        "request_type": "a_intel.ledger.v1.PostEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "reverse_entry",
+      "outputSchema": {
+        "oneOf": [
+          {
+            "required": [
+              "invoiceId"
+            ]
+          },
+          {
+            "required": [
+              "transferId"
+            ]
+          },
+          {
+            "required": [
+              "manualNote"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "properties": {
+              "@type": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoiceId": {
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ENTRY_KIND_UNSPECIFIED",
+                  "ENTRY_KIND_DEBIT",
+                  "ENTRY_KIND_CREDIT"
+                ],
+                "type": "string"
+              },
+              {
+                "description": "A value this definition does not name.",
+                "type": "integer"
+              }
+            ]
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "manualNote": {
+            "type": "string"
+          },
+          "money": {
+            "properties": {
+              "amount": {
+                "format": "int64",
+                "pattern": "^-?[0-9]+$",
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "type": "object"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "relatedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reversed": {
+            "type": "boolean"
+          },
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "kind",
+          "labels",
+          "relatedIds",
+          "reversed"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "IDEMPOTENT",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/ReverseEntry",
+        "request_type": "a_intel.ledger.v1.ReverseEntryRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "unary"
+      }
+    },
+    {
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_entries",
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "description": "The messages the stream sent, in order.",
+            "items": {
+              "oneOf": [
+                {
+                  "required": [
+                    "invoiceId"
+                  ]
+                },
+                {
+                  "required": [
+                    "transferId"
+                  ]
+                },
+                {
+                  "required": [
+                    "manualNote"
+                  ]
+                },
+                {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "invoiceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "transferId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "manualNote"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "detail": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "@type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "invoiceId": {
+                  "type": "string"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "ENTRY_KIND_UNSPECIFIED",
+                        "ENTRY_KIND_DEBIT",
+                        "ENTRY_KIND_CREDIT"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "description": "A value this definition does not name.",
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "labels": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "manualNote": {
+                  "type": "string"
+                },
+                "money": {
+                  "properties": {
+                    "amount": {
+                      "format": "int64",
+                      "pattern": "^-?[0-9]+$",
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "type": "object"
+                },
+                "postedAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "relatedIds": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "reversed": {
+                  "type": "boolean"
+                },
+                "transferId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "accountId",
+                "kind",
+                "labels",
+                "relatedIds",
+                "reversed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "description": "True when the call stopped at max_items, the size cap, or the deadline before the stream ended.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "idempotency_level": "NO_SIDE_EFFECTS",
+        "kind": "grpc",
+        "method": "a_intel.ledger.v1.Ledger/ListEntries",
+        "request_type": "a_intel.ledger.v1.ListEntriesRequest",
+        "response_type": "a_intel.ledger.v1.Entry",
+        "streaming": "server"
+      }
+    }
+  ]
+}

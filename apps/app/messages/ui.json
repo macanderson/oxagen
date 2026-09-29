@@ -280,6 +280,10 @@
       },
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
+    },
+    "toast": {
+      "region": "Notifications",
+      "close": "Close"
     }
   }
 }

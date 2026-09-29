@@ -54,9 +54,10 @@ that stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's O
    (`apps/api/src/routes/v1/github-oauth.ts:71`) returns a signed
    `https://github.com/login/oauth/authorize?...` URL with:
    - `client_id = GITHUB_APP_CLIENT_ID`
-   - `scope = repo,read:org` *(see note below — ignored for GitHub Apps)*
-   - `redirect_uri = {NEXT_PUBLIC_API_URL}/oauth/github/callback`
    - `state = base64url(json).hmac` signed with `GITHUB_APP_INSTALL_STATE_SECRET`, 10-minute TTL.
+
+   The URL carries no `scope` (GitHub Apps ignore it) and no `redirect_uri`, so GitHub returns to
+   the first Callback URL in the App's settings (`packages/github/src/install-url.ts`).
 3. **User authorizes** on GitHub.
 4. **Callback.** `GET /oauth/github/callback?code=&state=`
    (`github-oauth.ts:363`, mounted at `apps/api/src/app.ts:283`) verifies the state HMAC
@@ -140,6 +141,11 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 
 - The **Callback URL** must exactly match `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. Localhost
   is valid here because the *browser* performs the redirect (GitHub's servers don't call it).
+- **The first Callback URL is the one GitHub uses.** `buildInstallAuthUrl` and
+  `buildIdentityAuthUrl` (`packages/github/src/install-url.ts`) pass no `redirect_uri`, so GitHub
+  returns every connect to the first URL in the list. A second or wildcard entry never receives a
+  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first until ADR-215 step A3 puts
+  `https://api.oxagen.app/oauth/github/callback` there.
 - **Expire user authorization tokens — leave OFF for now.** The callback stores a `refresh_token`
   when present, but there is **no token-refresh job wired yet**. Non-expiring user tokens avoid
   silent sync failures until refresh is implemented. (Revisit when installation tokens land.)

@@ -1,28 +1,11 @@
-// Every module stub throws NotBuiltError naming its module. When a lane
-// builds a module, it deletes that module's row here.
+// The module stubs are all built, so no row here checks for NotBuiltError.
+// What stays checks the shared pieces M0 fixed: each Sender's kind and
+// CompileError's message.
 import { describe, expect, it } from "vitest";
 import { CompileError } from "./compile";
 import { graphqlSender, grpcSender, httpSender, mcpSender } from "./execute";
-import { importGrpc } from "./grpc";
-import { NotBuiltError } from "./not-built";
-
-// The stubs never read their arguments, so an empty object stands in for each.
-const stub = <T>(): T => ({}) as T;
-
-const asyncStubs: Array<[string, () => Promise<unknown>]> = [
-  ["grpc", () => importGrpc(stub())],
-];
 
 describe("module stubs", () => {
-  it.each(asyncStubs)("%s rejects with NotBuiltError", async (module, call) => {
-    const error = await call().then(
-      () => undefined,
-      (reason: unknown) => reason,
-    );
-    expect(error).toBeInstanceOf(NotBuiltError);
-    expect((error as NotBuiltError).module).toBe(module);
-  });
-
   it("gives each Sender its own kind", () => {
     expect([mcpSender.kind, httpSender.kind, graphqlSender.kind, grpcSender.kind]).toEqual([
       "mcp",
