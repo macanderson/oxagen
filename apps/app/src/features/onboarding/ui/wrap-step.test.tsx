@@ -114,12 +114,12 @@ describe("WrapStep", () => {
       "The installer carries a one-time enrollment token for aintel.core.release-manager, so nothing is copied or pasted.",
     );
     const tabs = within(
-      screen.getByRole("tablist", { name: "How to wrap the agent" }),
+      screen.getByRole("tablist", { name: "Wrap method" }),
     ).getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      "Claude Codeone click · harness",
-      "Codex CLIone click · harness",
-      "SDK agentfive lines · harness",
+      "Claude Codeone click",
+      "Codex CLIone click",
+      "SDK agentfive lines",
     ]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     const panel = screen.getByRole("tabpanel");

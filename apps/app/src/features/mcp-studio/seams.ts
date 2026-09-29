@@ -8,15 +8,15 @@
 //     lane joins them to the folder. Null until then.
 //   - readFindings: the tool checks on the server's folder. Lane M5 (#4672)
 //     owns lint; null, meaning no checks ran, until then.
-//   - tryCall and draftDescription: Try it and Draft, which the second PR of
-//     this lane backs with capabilities. Try it is metered as a governed
+//   - tryCall and draftDescription: Test and Draft, which the second PR of
+//     this lane backs with capabilities. Test is metered as a governed
 //     action and Draft bills as in-app agent spend, both through the kernel.
 //   - saveStudioDraft, getStudioDraft and openStudioReview: Review, lane M11
 //     (#4686), whose capabilities save_studio_draft, get_studio_draft and
 //     open_studio_review these mirror. #4688 shipped them, and the second
 //     PR of this lane wires these seams to them.
 //
-// A credential never crosses any of these. Try it names an environment and
+// A credential never crosses any of these. The Test tab names an environment and
 // the gateway adds the credential after the request is recorded, and a saved
 // test loses any credential header before it is staged (draft.ts, scrubTest).
 import type {
@@ -62,7 +62,7 @@ export const readStudioRecord: RecordReader = () => Promise.resolve(null);
 /** The tool checks on the folder as it stands. Null until lint lands (lane M5). */
 export const readFindings: FindingsReader = () => Promise.resolve(null);
 
-/** One Try it call: an imported tool, an environment and the arguments. */
+/** One Test tab call: an imported tool, an environment and the arguments. */
 type TryInput = {
   serverId: string;
   tool: string;

@@ -327,7 +327,7 @@ describe("ListTable filters", () => {
           rows={statusRows()}
           filters={
             <select aria-label="Status">
-              <option>All · Status</option>
+              <option>All (Status)</option>
             </select>
           }
         />
@@ -353,7 +353,7 @@ describe("ListTable filters", () => {
       within(status)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Status", "open", "paid", "void"]);
+    ).toEqual(["All (Status)", "open", "paid", "void"]);
     await userEvent.selectOptions(status, "paid");
     expect(visible()).toEqual(["OXA-0", "OXA-2", "OXA-4"]);
     expect(range()).toBe("1–3 of 3");
@@ -464,7 +464,7 @@ describe("ListTable: a caller's filters and empty line", () => {
           rows={rowsOf(2)}
           filters={
             <select aria-label="Status">
-              <option>All · Status</option>
+              <option>All (Status)</option>
             </select>
           }
         />

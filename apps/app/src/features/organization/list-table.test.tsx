@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The Organization list (list-table.tsx) over the shared list table: the
-// "All · Status" filters sit in the control row after the search box, a
+// "All (Status)" filters sit in the control row after the search box, a
 // filter narrows the rows before the shared table pages them, the pager under
 // the table holds Rows (5, 10, 25, 50 and All), the range, and Previous and
 // Next, the row actions column has no header text, and a list with no rows
@@ -140,11 +140,11 @@ describe("ListTable", () => {
     expect(range()).toBe("1–12 of 12");
   });
 
-  it("draws the filters after the search box, labelled All · Status, and Rows in the pager under the table", () => {
+  it("draws the filters after the search box, labelled All (Status), and Rows in the pager under the table", () => {
     renderList();
     const status = screen.getByLabelText("Status");
     expect(within(status).getAllByRole("option")[0]).toHaveTextContent(
-      "All · Status",
+      "All (Status)",
     );
     const search = screen.getByRole("searchbox");
     const table = screen.getByRole("table", { name: "People" });

@@ -411,7 +411,7 @@ describe("Pricing › Models the book cannot price", () => {
   });
 });
 
-describe("Pricing › The price book", () => {
+describe("Pricing › Price book", () => {
   it("groups scheduled rates and cancels the selected entry", async () => {
     const id = "9f1b7a2c-0000-4000-8000-000000000001";
     priceBook.mockResolvedValue(
@@ -503,7 +503,7 @@ describe("Pricing › The price book", () => {
     expect(listed).toHaveTextContent("List price");
     expect(
       within(negotiated).getByRole("button", {
-        name: "Remove the negotiated rate for claude-sonnet-5, Input",
+        name: "Remove the negotiated rate for claude-sonnet-5 (Input)",
       }),
     ).toBeInTheDocument();
     expect(within(listed).queryByRole("button")).toBeNull();
@@ -566,7 +566,7 @@ describe("Pricing › The price book", () => {
       "gpt-5/output",
     ]);
     expect(panelOf("spend-price-book")).toHaveTextContent(
-      "Cache write, 1 hour",
+      "Cache write (1 hour)",
     );
   });
 

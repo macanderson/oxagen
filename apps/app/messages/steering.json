@@ -55,7 +55,7 @@
           "hint": "The author of a record cannot approve it."
         }
       },
-      "tomlHeader": "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
+      "tomlHeader": "# .oxagen/rules/governance.toml: read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
       "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
       "cancel": "Cancel",
       "close": "Close",
@@ -126,7 +126,7 @@
       },
       "denied": {
         "title": "You cannot see this workspace\u2019s steering",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
         "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization \u203a Roles.",
         "back": "Back to Fleet",
@@ -136,7 +136,7 @@
         "needed": "Needed",
         "neededValue": "{permission} on {workspace}",
         "decidedBy": "Decided by",
-        "decidedByValue": "policy not recorded (#{issue}) · deny wins over every allow"
+        "decidedByValue": "policy not recorded (#{issue})"
       },
       "pending": {
         "title": "Your access to this workspace\u2019s steering is waiting for approval",

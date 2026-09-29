@@ -792,7 +792,7 @@ describe("Agents list controls", () => {
       within(screen.getByRole("combobox", { name: "Filter by Tier" }))
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Tier", "gateway", "harness", "observe"]);
+    ).toEqual(["All (Tier)", "gateway", "harness", "observe"]);
     // The Owner facet left the view, so it no longer filters.
     expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
   });
@@ -1000,7 +1000,7 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied)
@@ -1014,7 +1014,7 @@ describe("Agents, not loaded", () => {
     ).toEqual([
       "Marcus Bell · workspace.member · core-platform",
       "agent.read on core-platform",
-      "policy not recorded · deny wins over every allow",
+      "policy not recorded",
     ]);
     expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
       "title",

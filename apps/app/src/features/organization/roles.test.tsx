@@ -193,7 +193,7 @@ describe("the Roles panel", () => {
   it("carries the note beneath the table", async () => {
     await renderRoles();
     expect(
-      screen.getByText(/A role is a permission set, nothing more\./),
+      screen.getByText(/A role is a permission set\./),
     ).toBeInTheDocument();
   });
 
@@ -211,7 +211,7 @@ describe("the Roles panel", () => {
     const options = within(origin)
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(options[0]).toBe("All · Origin");
+    expect(options[0]).toBe("All (Origin)");
     expect(options).toContain("Priya Natarajan · Aug 30, 2026");
     expect(options.at(-1)).toBe("built-in");
     expect(options).not.toContain("custom");
@@ -297,7 +297,7 @@ describe("IdP group mappings", () => {
     );
     const section = screen.getByRole("region", { name: "IdP group mappings" });
     expect(
-      within(section).getByRole("textbox", { name: "Group name, row 1" }),
+      within(section).getByRole("textbox", { name: "Group name for row 1" }),
     ).toHaveValue("oxagen-admins");
   });
 

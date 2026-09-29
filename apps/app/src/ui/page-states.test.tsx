@@ -261,7 +261,7 @@ describe("PageDenied", () => {
       }),
     ).toBeInTheDocument();
     expect(state).toHaveTextContent(
-      "Your roles on Anderson Intelligence Corp. do not include workspace.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Anderson Intelligence Corp. do not include workspace.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     const facts = state.querySelector("dl");
     expect(facts).toHaveTextContent(
@@ -269,7 +269,7 @@ describe("PageDenied", () => {
     );
     expect(facts).toHaveTextContent("Neededworkspace.read on core-platform");
     expect(facts).toHaveTextContent(
-      "Decided bypol_v41 · deny wins over every allow",
+      "Decided bypol_v41",
     );
     expect(
       within(state).getByRole("link", { name: "Back to Fleet" }),
@@ -291,7 +291,7 @@ describe("PageDenied", () => {
     const state = renderDenied(null);
     expect(
       within(state).getByTestId("page-denied-decided-by"),
-    ).toHaveTextContent("policy not recorded · deny wins over every allow");
+    ).toHaveTextContent("policy not recorded");
     expect(state).not.toHaveTextContent("pol_");
   });
 

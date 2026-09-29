@@ -124,7 +124,7 @@ describe("the governance dialog", () => {
     );
     // The comment line is the design's, em dash included.
     expect(within(dialog).getByTestId("governance-toml")).toHaveTextContent(
-      "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is",
+      "# .oxagen/rules/governance.toml: read on the production branch when a pull request is",
     );
     expect(within(dialog).getByTestId("governance-note")).toHaveTextContent(
       "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",

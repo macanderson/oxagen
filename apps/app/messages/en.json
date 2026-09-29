@@ -5,7 +5,7 @@
   },
   "pages": {
     "login": "Log in to Oxagen",
-    "signup": "Govern the agents you already run.",
+    "signup": "Sign up for Oxagen",
     "verify": "Check your email",
     "twoFactor": "Two-factor authentication",
     "forgotPassword": "Reset your password",

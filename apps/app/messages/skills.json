@@ -1,6 +1,6 @@
 {
   "skills": {
-    "lede": "Skills are steering, and they are files. Oxagen does not run a skill: the harness does. Review what sessions reported, preview approved descriptions, or propose the configuration in a pull request.",
+    "lede": "Review the skills sessions reported, preview approved descriptions, or propose the configuration in a pull request.",
     "loading": "Loading skills",
     "inventory": {
       "title": "Skills sessions reported",
@@ -44,7 +44,7 @@
       "search": "Preview search",
       "versions": "Versions",
       "searchTitle": "Search approved skills",
-      "searchLead": "Preview descriptions against a published configuration and the current repository commit. This loads nothing into a run.",
+      "searchLead": "Preview descriptions against a published configuration and the current repository commit without loading anything into a run.",
       "unpublished": "No configuration is published for the current repository. Skills start off.",
       "version": "Configuration version",
       "selectVersion": "Select a version",

@@ -90,10 +90,10 @@
         "coveredValue": "{covered} of {calls}",
         "coveredNote": "the rest are cited and add nothing to the saving",
         "tokens": "Tokens",
-        "tokensValue": "{measured} measured · {counterfactual} counterfactual",
-        "measured": "What the cited calls cost",
-        "counterfactual": "What the alternative would have cost",
-        "runs": "The cited runs with the largest saving",
+        "tokensValue": "{measured} measured and {counterfactual} counterfactual",
+        "measured": "Cited call cost",
+        "counterfactual": "Alternative cost",
+        "runs": "Cited runs by saving",
         "runsEmpty": "The evidence lists no run for this finding.",
         "untitled": "Untitled session",
         "columns": {
@@ -144,7 +144,7 @@
       "heroYearEnd": "a year at this run rate.",
       "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
       "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
-      "atStake": "at stake · {share} of identified",
+      "atStake": "at stake ({share} of identified)",
       "atStakeUnknown": "at stake",
       "list": "Findings ranked by savings",
       "filters": {
@@ -194,7 +194,7 @@
       "share": "Share",
       "perCall": "Avg per call",
       "perRunMoney": "Avg per run",
-      "frames": "What the frames say",
+      "frames": "Frame summary",
       "noFinding": "none",
       "findings": "{count, plural, one {# finding} other {# findings}}",
       "shareOfSpend": "Share of spend"
@@ -204,28 +204,28 @@
         "unnamed": "Unnamed operator",
         "title": "By operator",
         "empty": "No run in this period names an operator.",
-        "note": "Every run has exactly one operator. A run that arrived without one is attributed to the agent’s owning operator and flagged, never dropped and never spread.",
+        "note": "Every run has exactly one operator. A run that arrived without one goes to the agent’s owning operator and is flagged.",
         "budgetMissing": "No spend ceiling names an operator yet, so Budget position is not recorded, and the rollup does not count an operator’s agents."
       },
       "agent": {
         "title": "By agent",
         "empty": "No run in this period names an agent.",
-        "note": "Every figure is a rollup of the agent’s runs, rebuilt from frames. An agent on the harness tier is self-reported, and a class its harness does not report is marked absent, never zero.",
+        "note": "Every figure is a rollup of the agent’s runs, rebuilt from frames. An agent on the harness tier is self-reported, and a class its harness does not report is marked absent.",
         "trendMissing": "The rollup does not compare an agent’s month with the one before, so Trend is not recorded."
       },
       "model": {
         "title": "Models and keys",
         "note": "Every model the workspace called this month, and the provider key it was billed to.",
         "routes": "Model routes",
-        "footer": "Consumption reads here. The routes themselves are configured under Organization, in Model funding.",
-        "keyMissing": "The rollup names each model’s provider, not the key it was billed to.",
+        "footer": "Routes are configured in Model funding under Organization.",
+        "keyMissing": "The rollup does not record the key each model was billed to.",
         "total": "Total",
         "totalNote": "the month’s spend"
       },
       "tool": {
         "title": "By tool",
         "empty": "No tool call in this period has been rolled up.",
-        "note": "A tool’s spend is the tokens of the turn that called it plus the turn that read its result, so a cheap tool with a large result body is an expensive tool.",
+        "note": "A tool’s spend is the tokens of the turn that called it plus the turn that read its result.",
         "framesMissing": "The server each tool belongs to and what its frames say are not recorded yet."
       },
       "task": {
@@ -270,7 +270,7 @@
       },
       "causesMissing": "The waste record reads one cause today. The six causes the design meters are not recorded yet.",
       "runs": "Runs with waste",
-      "note": "Wasted is a claim about frames, not about outcomes. Work a human accepted is never counted.",
+      "note": "Wasted spend is read from frames. Work a person accepted is excluded.",
       "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",
       "none": "No run in this period shows waste in its frames.",
       "openRun": "Open the run",
@@ -311,8 +311,8 @@
       "class": {
         "input_uncached": "Input",
         "cache_read": "Cached input read",
-        "cache_write_5m": "Cache write, 5 minutes",
-        "cache_write_1h": "Cache write, 1 hour",
+        "cache_write_5m": "Cache write (5 minutes)",
+        "cache_write_1h": "Cache write (1 hour)",
         "output": "Output",
         "reasoning": "Reasoning",
         "server_tool_request": "Server tool request",
@@ -333,17 +333,17 @@
         "override": "Operator override"
       },
       "unpriced": {
-        "title": "Models the price book cannot price",
-        "note": "Models this workspace has run since {since} that no price covers. This is why those runs come back with no cost.",
+        "title": "Unpriced models",
+        "note": "Models this workspace has run since {since} that no price covers. Their runs have no cost.",
         "none": "Every model this workspace has run since {since} is priced.",
         "columns": {
           "model": "Model",
           "provider": "Vendor",
           "calls": "Calls",
           "tokens": "Tokens",
-          "missing": "Classes with no price",
-          "recordedAs": "What the rollup recorded",
-          "action": "Price it"
+          "missing": "Unpriced classes",
+          "recordedAs": "Recorded cost",
+          "action": "Action"
         },
         "noProvider": "vendor not recorded",
         "noCost": "No cost at all",
@@ -353,7 +353,7 @@
         "windowRequests": "{calls, plural, one {# call} other {# calls}} and {units, plural, one {# request} other {# requests}} from {from} to {to}"
       },
       "book": {
-        "title": "The price book",
+        "title": "Price book",
         "note": "Every provider list price in effect on {at}, and the rates this organization has negotiated, which beat the list price for the same model and class.",
         "empty": "The price book holds nothing yet. Until it does, no run in this organization can be priced.",
         "columns": {
@@ -379,14 +379,14 @@
       "dialog": {
         "open": "Set a negotiated rate",
         "title": "Set a negotiated rate",
-        "body": "Fill in the classes your contract names. Each one is written as its own effective-dated row, in the order below, under the one date you give. A rate you set beats the provider list price for that model and class from that date on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the rate it was priced with.",
+        "body": "Fill in the classes your contract names. Each one is written as its own effective-dated row, in the order below, under the one date you give. A rate you set beats the provider list price for that model and class from that date on; the row it supersedes is closed and kept, so a run priced earlier keeps the rate it was priced with.",
         "provider": "Vendor",
         "model": "Model",
         "aliases": "Other names for this model",
-        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
+        "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored.",
         "effectiveFrom": "In effect from",
         "effectiveFromHint": "A UTC day, tomorrow or later. Leave it empty to start now. A rate cannot start in the past: runs already priced keep the rate they were priced with.",
-        "rates": "Rates, in US dollars per one million units",
+        "rates": "Rates in US dollars per million units",
         "ratesHint": "Type the figure the way your contract reads it: 2.40 is $2.40 per million. Leave a class empty to leave it as it is.",
         "showAllClasses": "Show every token class",
         "submit": "Set these rates",
@@ -402,25 +402,25 @@
           "ratesEmpty": "Fill in at least one class. Nothing was written."
         },
         "partial": {
-          "written": "In effect now: {classes}. Setting a class again is safe — it supersedes its own row.",
+          "written": "In effect now: {classes}. Setting a class again supersedes its own row.",
           "noneWritten": "Nothing was written. The price book is unchanged.",
           "notWritten": "Not written: {classes}. Those classes are still priced as they were."
         }
       },
       "remove": {
         "open": "Remove",
-        "label": "Remove the negotiated rate for {model}, {class}",
+        "label": "Remove the negotiated rate for {model} ({class})",
         "title": "Fall back to the list price",
         "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
         "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
-        "submit": "End this rate, use the list price",
+        "submit": "End the rate and use the list price",
         "pending": "Ending the rate",
-        "unpricedTitle": "Rate ended — now unpriced",
+        "unpricedTitle": "Rate ended with no price",
         "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
         "unpricedClose": "Close",
         "confirmUnpricedTitle": "This class would become unpriced",
         "confirmUnpriced": "No list or override price covers {model}, {class}. Ending your negotiated rate now, rather than setting a new one first, leaves every call from now on UNPRICED, not priced at the list rate, until you set one.",
-        "confirmUnpricedSubmit": "End the rate anyway, leave it unpriced",
+        "confirmUnpricedSubmit": "End the rate and leave it unpriced",
         "confirmUnpricedCancel": "Keep the current rate",
         "cancelScheduled": "Cancel this scheduled rate. The preceding rate continues until the next scheduled rate, if any. Later scheduled rates stay in place.",
         "cancelScheduledSubmit": "Cancel scheduled rate"
@@ -502,7 +502,7 @@
       "limit": "Limit (USD)",
       "limitHint": "Stored as integer micro-USD. Setting a ceiling replaces the one this scope has.",
       "enabled": "Enforce the ceiling: a metered run past it is refused before the model call",
-      "submit": "Set it",
+      "submit": "Set the budget",
       "pending": "Saving the ceiling",
       "errors": {
         "limitInvalid": "Enter an amount above zero, with at most six decimal places.",
@@ -542,7 +542,7 @@
     "fleet": {
       "label": "Spend in this workspace",
       "spendToday": "Spend today",
-      "spendTodayNote": "{from}, UTC",
+      "spendTodayNote": "{from} UTC",
       "cacheHitRate": "Cache hit rate",
       "cacheHitRateNote": "cache_read ÷ (input_uncached + cache_read)"
     },
@@ -585,17 +585,17 @@
     },
     "tokens": {
       "byClass": "By token class",
-      "classTotal": "{tokens} tokens · {from} to {to}",
+      "classTotal": "{tokens} tokens from {from} to {to}",
       "cacheHit": "Cache hit rate",
-      "cacheHitNote": "cache_read ÷ (input_uncached + cache_read), token-weighted",
+      "cacheHitNote": "Token-weighted cache_read ÷ (input_uncached + cache_read)",
       "cacheWritten": "Written to cache",
-      "cacheWrittenNote": "cache_write ÷ (input_uncached + cache_read + cache_write), token-weighted",
+      "cacheWrittenNote": "Token-weighted cache_write ÷ (input_uncached + cache_read + cache_write)",
       "searches": "Web searches",
-      "searchesNote": "{count, plural, one {# request} other {# requests}}, priced per request and kept out of the token total",
+      "searchesNote": "{count, plural, one {# request} other {# requests}} priced per request outside the token total",
       "cacheWriteShare": "Cache write cost share",
       "effectiveInput": "Effective input price",
       "unmapped": "Unmapped classes",
-      "costByClassMissing": "The rollup prices each call as a whole, not each token class.",
+      "costByClassMissing": "The rollup prices each call as a whole.",
       "unmappedMissing": "The rollup does not count the tokens whose class it could not map.",
       "columns": {
         "class": "Class",
@@ -633,7 +633,7 @@
       "lead": "Not recorded yet."
     },
     "header": {
-      "description": "What the tokens bought, with the basis on every number."
+      "description": "Spend and tokens for this workspace with the basis of every figure."
     },
     "summary": {
       "label": "Month to date",
@@ -659,7 +659,7 @@
         "title": "You cannot see this workspace’s spend",
         "needed": "{permission} on {workspace}",
         "body": "Your roles on {organization} do not include",
-        "bodyEnd": ". An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "bodyEnd": ". An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
         "requestTitle": "Request access",
         "requestBody": "Request access would ask an organization owner to grant {needed}, and the grant would land in the audit record with your name on it. Oxagen has no access request record yet, so nothing was sent. Ask an organization owner to grant it.",

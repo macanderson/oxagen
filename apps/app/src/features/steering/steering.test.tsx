@@ -812,7 +812,7 @@ describe("states", () => {
     await renderSteering("", { records: DENIED });
     const denied = section("You cannot see this workspace’s steering");
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -838,7 +838,7 @@ describe("states", () => {
     expect(denied).toHaveTextContent("Neededsteering.read on core-platform");
     // The refusal does not carry the policy that decided it yet (#3846).
     expect(denied).toHaveTextContent(
-      "Decided bypolicy not recorded (#3846) · deny wins over every allow",
+      "Decided bypolicy not recorded (#3846)",
     );
     fireEvent.click(
       within(denied).getByRole("button", { name: "Request access" }),

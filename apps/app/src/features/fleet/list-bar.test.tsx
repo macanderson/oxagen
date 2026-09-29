@@ -76,14 +76,14 @@ describe("RunsListBar", () => {
       </IntlProvider>,
     );
     expect(options("facet-tier")).toEqual([
-      "All · Tier",
+      "All (Tier)",
       "contained",
       "gateway",
       "harness",
       "observe",
     ]);
     expect(options("facet-status")).toEqual([
-      "All · Status",
+      "All (Status)",
       "live",
       "sealed",
       "halted",

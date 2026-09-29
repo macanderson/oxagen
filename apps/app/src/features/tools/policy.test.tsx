@@ -161,15 +161,15 @@ describe("Tools › policy", () => {
     ).toBeVisible();
   });
 
-  it("draws where a version lives, the conditions a rule may test and the sequence rule with its plain sentence", async () => {
+  it("draws the version storage, the conditions a rule may test and the sequence rule with its plain sentence", async () => {
     await renderPolicy({});
-    const where = screen.getByRole("region", { name: "Where a version lives" });
+    const where = screen.getByRole("region", { name: "Version storage" });
     for (const term of [
       "Store",
       "In regulated mode",
       "Compiled from",
-      "Who reads it",
-      "What it writes",
+      "Reader",
+      "Output",
     ]) {
       expect(within(where).getByText(term)).toBeVisible();
     }
@@ -486,7 +486,7 @@ describe("Tools › mandates ledger", () => {
       ]),
     );
     const row = within(ledger()).getByTestId("mandate");
-    expect(row.textContent).toContain("per month · 2026-09");
+    expect(row.textContent).toContain("per month (2026-09)");
     // A mandate may cap calls daily and money monthly; each window sits with
     // the limit it belongs to.
     expect(row.textContent).toContain("per day");

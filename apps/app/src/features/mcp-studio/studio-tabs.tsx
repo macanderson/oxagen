@@ -1,5 +1,5 @@
 "use client";
-// A Studio server's four tabs (#4678): Tools, Connection, Try it and Changes,
+// A Studio server's four tabs (#4678): Tools, Connection, Test and Changes,
 // each a path segment under the server. The strip is the Tools page's own
 // (tabs.tsx): a tablist of links marked with `aria-selected` and
 // `aria-current`, scrolling in its own row on a phone.

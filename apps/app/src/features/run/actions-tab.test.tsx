@@ -223,7 +223,7 @@ describe("timeline", () => {
     ).toHaveTextContent("steer");
     expect(
       within(timeline).getByTestId("timeline-mark-parked"),
-    ).toHaveTextContent("parked · approval");
+    ).toHaveTextContent("parked for approval");
     expect(within(timeline).getByTestId("timeline-axis")).toHaveTextContent(
       "09:14:02+49 s · 09:14:51 · live",
     );

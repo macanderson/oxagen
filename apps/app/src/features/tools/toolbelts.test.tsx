@@ -70,7 +70,7 @@ describe("Toolbelts › list", () => {
         .map((c) => c.textContent),
     ).toEqual(["3", "2", "2", "1"]);
     expect(screen.queryByTestId("tools-belt")).not.toBeInTheDocument();
-    expect(screen.getByText(/A toolbelt grants nothing/)).toBeVisible();
+    expect(screen.getByText(/Every call from a toolbelt still passes/)).toBeVisible();
   });
 
   it("offers an admin New toolbelt, cloning All tools, and a Clone on every row", () => {
@@ -152,7 +152,7 @@ describe("Toolbelts › open belt", () => {
     const failure = screen.getByTestId("tools-belt-failure");
     expect(
       within(failure).getByText(
-        "You cannot see Toolbelts in this workspace. Your roles do not include tools.read; an organization owner can grant it.",
+        "You cannot see Toolbelts in this workspace. Your roles do not include tools.read. An organization owner can grant it.",
       ),
     ).toBeVisible();
     expect(

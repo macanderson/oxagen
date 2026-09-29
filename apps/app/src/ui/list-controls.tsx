@@ -24,7 +24,7 @@ export type ListSort<T> = {
 
 export type ListFilter<T> = {
   key: string;
-  /** The column the filter narrows, printed after "All · ". */
+  /** The column the filter narrows, printed inside "All (…)". */
   label: string;
   options: readonly { value: string; label: string }[];
   get: (item: T) => string;
@@ -136,7 +136,7 @@ export function ListBar<T>({
   sortLabel?: string;
   sorts?: readonly ListSort<T>[];
   filters?: readonly ListFilter<T>[];
-  /** Formats a filter's empty option: "All · Role". */
+  /** Formats a filter's empty option: "All (Role)". */
   allLabel?: (column: string) => string;
 }) {
   const id = useId();

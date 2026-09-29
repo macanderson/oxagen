@@ -6,7 +6,7 @@
       "record": "record",
       "published": "published",
       "archived": "archived",
-      "slugTitle": "The slug: the record's file stem under .oxagen/rules/. It never changes.",
+      "slugTitle": "The slug is the record's file stem under .oxagen/rules/ and stays fixed.",
       "notRecorded": "not recorded",
       "versionValue": "v{version}",
       "props": {
@@ -23,20 +23,20 @@
       "kindLine": {
         "rule": "A directive that steers behaviour",
         "constraint": "A hard boundary: require or forbid",
-        "procedure": "Steps, in order",
+        "procedure": "Ordered steps",
         "fact": "A checkable claim about the world",
         "memory": "A durable recollection",
         "preference": "Soft and often unfalsifiable"
       },
       "unclassifiedLine": "A record with no kind",
-      "inForce": "{kindLine}. It is in force because <code>{commit}</code> merged, and it stops being in force the same way.",
-      "inForceNoCommit": "{kindLine}. It is in force because the commit that published it merged, and it stops being in force the same way.",
+      "inForce": "{kindLine}. It is in force because <code>{commit}</code> merged.",
+      "inForceNoCommit": "{kindLine}. It is in force because the commit that published it merged.",
       "discard": "Discard",
       "archive": "Archive",
       "propose": "Propose a change"
     },
     "editor": {
-      "path": "{path} · statement",
+      "path": "statement in {path}",
       "modified": "modified",
       "unchanged": "unchanged",
       "unsaved": "unsaved changes",
@@ -51,20 +51,20 @@
       "lineEnding": "LF",
       "encoding": "UTF-8",
       "keys": "Tab indent · ⇧Tab outdent · ⌘F find",
-      "note": "This is the statement and nothing else. The lineage, the force, the scope and the effect are the rest of the file, and each one is changed the same way: a pull request against {repository}.",
-      "noteNoRepository": "This is the statement and nothing else. The lineage, the force, the scope and the effect are the rest of the file, and each one is changed the same way: a pull request against the main repo."
+      "note": "This edits the statement only. Change the lineage, force, scope, or effect through a pull request against {repository}.",
+      "noteNoRepository": "This edits the statement only. Change the lineage, force, scope, or effect through a pull request against the main repo."
     },
     "propose": {
       "title": "Propose a change to this record",
-      "lead": "A published record is changed the way it was published: a branch, a pull request, the same six checks, and a merge. Nothing here edits what is in force.",
+      "lead": "Oxagen opens a branch and a pull request, runs the six checks, and changes the record when the pull request merges.",
       "cancel": "Cancel",
       "submit": "Open the pull request",
       "pending": "Opening",
-      "pendingOpen": "Branch <code>{branch}</code> is waiting on its checks. Land or close that one first, so two changes are never proposed over the same file.",
+      "pendingOpen": "Branch <code>{branch}</code> is waiting on its checks. Land or close it before you propose another change to this file.",
       "readOnly": "Your role can read this record and not change it. An org Owner or Admin, or a workspace Owner or Member, can propose a change.",
-      "statLabel": "{added} lines added, {removed} lines removed",
+      "statLabel": "{added} lines added and {removed} lines removed",
       "nothingChanged": "Nothing changed yet.",
-      "checksLabel": "What the checks will assert",
+      "checksLabel": "Checks",
       "checks": {
         "schema": {
           "name": "Schema",
@@ -72,11 +72,11 @@
         },
         "lineage": {
           "name": "Lineage",
-          "what": "<code>{lineage}</code> keeps its lineage. An amended record is the same record, not a new one"
+          "what": "<code>{lineage}</code> keeps its lineage"
         },
         "hash": {
           "name": "record_hash recomputation",
-          "what": "recomputed over the new bytes · the old hash stays on every run that carried it"
+          "what": "recomputed over the new bytes while past runs keep the old hash"
         },
         "secret": {
           "name": "Secret and PII scan",
@@ -84,11 +84,11 @@
         },
         "conflict": {
           "name": "Conflict against active records",
-          "what": "re-run in full, because the words changed"
+          "what": "re-run in full on the new words"
         },
         "effect": {
           "name": "constraint_effect",
-          "what": "unchanged · <code>{effect}</code>",
+          "what": "unchanged (<code>{effect}</code>)",
           "absent": "absent"
         }
       },
@@ -105,22 +105,22 @@
       }
     },
     "archive": {
-      "title": "Archive {lineage}?",
+      "title": "Archive {lineage}",
       "body": "Archiving is a pull request that sets <code>status = \"archived\"</code> on <code>{path}</code>. The file stays, the lineage stays, and the record stops compiling into the bundle when it merges. It is in force until then.",
       "gate": "This record carries <code>{effect}</code>. Any gate compiled from it goes with it, and what it refused today is allowed once this merges.",
       "kept": "Nothing is deleted. Every run this record steered keeps naming its hash, and a later record may supersede it instead.",
-      "keep": "Keep it in force",
+      "keep": "Keep the record in force",
       "submit": "Open the pull request",
       "notRecorded": "Oxagen cannot open this pull request yet: no capability writes an archived status to a record file. Until one does, open it by hand on <code>{repository}</code>.",
       "notRecordedNoRepo": "Oxagen cannot open this pull request yet: no capability writes an archived status to a record file. Until one does, open it by hand on the main repo.",
       "archivedTitle": "{lineage} is already archived",
       "archivedBody": "It is out of force and kept. Every run it steered still names its hash.",
       "pendingTitle": "{lineage} already has a pull request open",
-      "pendingBody": "Branch <code>{branch}</code> is waiting on its checks. Land or close that one first, so two changes are never proposed over the same file."
+      "pendingBody": "Branch <code>{branch}</code> is waiting on its checks. Land or close it before you propose another change to this file."
     },
     "lineage": {
       "title": "Lineage",
-      "badge": "the graph remembers everything; git decides what is in force",
+      "badge": "git decides what is in force",
       "lineage": "Lineage",
       "file": "File",
       "fileOn": "<code>{path}</code> on {repository}",
@@ -155,7 +155,7 @@
     },
     "meters": {
       "label": "Effect over the runs Oxagen indexed",
-      "rendered": "Runs it was rendered into",
+      "rendered": "Runs rendered into",
       "cited": "Runs that cited it",
       "of": "{value} <dim>of {total}</dim>",
       "notRecorded": "not recorded",
@@ -163,30 +163,30 @@
       "thirdNotRecorded": "The third count is not recorded yet. No store counts the runs that went against a record."
     },
     "kindPanel": {
-      "deliverEyebrow": "How it reaches a run",
-      "never": "What it can never do.",
+      "deliverEyebrow": "Delivery",
+      "never": "Limits:",
       "deliver": {
         "rule": "Compiled into the steering block of the policy bundle. <code>must</code> and <code>should</code> sit in the stable prefix every turn; <code>may</code> and <code>info</code> are selected by relevance.",
         "constraint": "Compiled into the stable prefix at whatever force it carries, and asserted by the checks against every other published record on the same subject.",
         "procedure": "Compiled like a rule, and rendered as an ordered list so a model cannot silently reorder it.",
         "fact": "Delivered as a <code>fact</code> context frame with provenance to this record and its commit, <code>valid_from</code> set to the merge time.",
-        "memory": "Delivered as a <code>memory</code> context frame, selected by relevance, never pinned into the prefix.",
+        "memory": "Delivered as a <code>memory</code> context frame outside the prefix and selected by relevance.",
         "preference": "Delivered at <code>may</code> or <code>info</code>, selected by relevance and dropped first when the window is tight."
       },
       "neverDo": {
-        "rule": "It cannot grant authority, and it cannot make a denied call allowed.",
-        "constraint": "It can narrow what is allowed. It can never widen it: a <code>require</code> does not create the permission it requires.",
+        "rule": "It cannot grant authority or allow a denied call.",
+        "constraint": "It can narrow what is allowed and cannot widen it. A <code>require</code> does not create the permission it requires.",
         "procedure": "A step is not an authority. Naming a governed action in a step does not put it on a belt.",
         "fact": "It steers nothing by itself. A fact that needs to change behaviour is a rule that cites it.",
-        "memory": "It never forbids anything, and it is never evidence on its own. It is why a retry is not a regression, not proof that it was not.",
-        "preference": "It never blocks a call, and a run that ignored it is not a failing run."
+        "memory": "It forbids nothing and is not evidence on its own.",
+        "preference": "It blocks no call. A run that ignores it does not fail."
       },
       "unclassified": {
         "title": "Kind",
         "body": "The file records no kind, so Oxagen cannot say how this record is selected or what it does. Republish it through a pull request that states its kind, force and scope."
       },
       "rule": {
-        "whereEyebrow": "Where it sits",
+        "whereEyebrow": "Placement",
         "force": "Force",
         "forceUnknown": "not recorded. The file states no force.",
         "placement": {
@@ -202,19 +202,19 @@
       "constraint": {
         "effectUnknownWord": "effect",
         "boundary": {
-          "require": "A run that has not done this cannot proceed past the point that needs it. The check is on the run, not on the call.",
+          "require": "A run that has not done this cannot proceed past the point that needs it. The check applies to the run as a whole.",
           "forbidNoGrant": "This record carries no enforcement grant, so it compiles to text. The agent reads the boundary in its stable prefix. Nothing refuses a call because of it until a grant compiles a gate.",
           "unknown": "This workspace holds no require or forbid effect for this record, so it compiles to text and nothing refuses a call because of it."
         },
         "conflictsEyebrow": "Conflicts",
-        "conflicts": "Every merge re-runs the conflict check across all {count} published records. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check, so the two can never both be in force.",
-        "conflictsNoCount": "Every merge re-runs the conflict check across every published record. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check, so the two can never both be in force.",
+        "conflicts": "Every merge re-runs the conflict check across all {count} published records. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check.",
+        "conflictsNoCount": "Every merge re-runs the conflict check across every published record. A <code>forbid</code> that contradicts an active <code>require</code> on the same subject fails the check.",
         "third": "Runs that crossed it"
       },
       "procedure": {
         "stepsEyebrow": "Steps in order",
         "noSteps": "The statement records no steps.",
-        "order": "The order is the record. A run that did these in a different order did not follow this procedure, even if every step happened."
+        "order": "A run that did every step in another order did not follow this procedure."
       },
       "fact": {
         "claimEyebrow": "Claim and check",
@@ -231,20 +231,20 @@
         "note": "A fact that needs to change behaviour is a rule that cites it. Keeping the two apart is what lets a fact go stale without silently turning off a rule."
       },
       "memory": {
-        "whenEyebrow": "When it happened",
+        "whenEyebrow": "Lifecycle",
         "recorded": "Recorded",
         "recordedNotRecorded": "not recorded.",
         "explains": "Explains",
         "explainsNotRecorded": "not recorded. The file carries the statement and no separate explanation.",
         "selection": "Selection",
-        "selectionValue": "by relevance, never pinned",
-        "selectionShare": "by relevance, never pinned: {cited} of {rendered} runs that carried it actually used it",
+        "selectionValue": "by relevance",
+        "selectionShare": "by relevance: {cited} of {rendered} runs that carried it used it",
         "decay": "Decay",
-        "decayValue": "none automatic. A memory that stops being true is archived by a pull request, like everything else."
+        "decayValue": "none automatic. A pull request archives a memory that stops being true."
       },
       "preference": {
         "softEyebrow": "Recorded as soft",
-        "soft": "Nothing here blocks a call. \"Violated\" on a preference reads as <strong>not followed</strong>, and a run that did not follow it is not a failing run, which is why the counter below is grey and not red.",
+        "soft": "Nothing here blocks a call. On a preference, \"violated\" means <strong>not followed</strong>. A run that did not follow it does not fail, so the counter below is grey.",
         "third": "Runs that departed from it"
       }
     },
@@ -269,7 +269,7 @@
       "sectionError": "{section} could not be loaded: {code}.",
       "denied": {
         "title": "You cannot see this record",
-        "body": "Your roles on <strong>{org}</strong> do not include <code>{needed}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <strong>{org}</strong> do not include <code>{needed}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "needed": "{permission} on {ws}",
         "request": "Request access",
         "requestNotRecorded": "Requesting access from this page is not recorded yet. Ask an organization owner for {needed}.",
@@ -278,7 +278,7 @@
         "signedIn": "{name} · <code>{role}</code>",
         "neededTerm": "Needed",
         "decidedByTerm": "Decided by",
-        "decidedBy": "the organization's policy · deny wins over every allow"
+        "decidedBy": "the organization's policy"
       },
       "pending": {
         "title": "This record is waiting for approval",

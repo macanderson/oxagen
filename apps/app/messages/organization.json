@@ -124,10 +124,10 @@
         "heading": "Governance mode",
         "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
         "unchanged": "Leave unchanged",
-        "solo": "solo · The author may merge their own.",
-        "team": "team · A code-owner review is required.",
-        "regulated": "regulated · A named approver from a role must approve, and the promotion ledger is hash-chained.",
-        "override": "Apply now, without review",
+        "solo": "solo (the author may merge their own)",
+        "team": "team (a code owner must review)",
+        "regulated": "regulated (a named approver from a role must approve and the promotion ledger is hash-chained)",
+        "override": "Apply now without review",
         "overrideHint": "Under team or regulated the change goes to a pull request for someone else to merge. You may commit it straight to the production branch instead. The skipped review is recorded against your name.",
         "done": {
           "applied": "{mode} is in force now, committed to {branch} on {repo}.",
@@ -153,9 +153,9 @@
         "open": "Change role",
         "title": "Change role",
         "person": "Person",
-        "note": "A grant is a governed action, not a settings change. It writes an audit record. It does not widen what their agents may do: an agent’s effective permission is its own grants intersected with the operator’s.",
+        "note": "A grant is a governed action that writes an audit record. It does not widen what their agents may do, because an agent’s effective permission is its own grants intersected with the operator’s.",
         "label": "Role",
-        "confirm": "Change it",
+        "confirm": "Change role",
         "pending": "Changing"
       },
       "remove": {
@@ -262,7 +262,7 @@
         "create": {
           "open": "Create key",
           "title": "Create an API key",
-          "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so a lost key is rotated, never recovered.",
+          "body": "The key acts as you. Oxagen shows the secret once and stores only its prefix and a hash, so rotate a key you lose.",
           "name": "Name",
           "expires": "Expires",
           "expiresAt": "The key stops working at {at}.",
@@ -291,7 +291,7 @@
         "secret": {
           "title": "Copy the key now",
           "body": "This is the only time Oxagen shows it. Close this and the secret is gone from here for good.",
-          "named": "{name} · begins {prefix}"
+          "named": "{name} (begins {prefix})"
         },
         "failure": {
           "denied": "Your organization role does not allow this. Nothing was changed.",
@@ -332,7 +332,7 @@
         "body": "{status} {code}. Nothing was changed. Reload the page to try again."
       },
       "filter": {
-        "label": "Which keys",
+        "label": "Key status",
         "active": "Active",
         "all": "All",
         "allWithCount": "All ({ended} ended)"
@@ -341,7 +341,7 @@
       "title": "API keys",
       "caption": "each key acts as the person who created it",
       "badge": "postgres iam and vault",
-      "note": "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
+      "note": "Oxagen shows a key once, when it is created. A key acts as the person who created it in its workspace until keys carry their own grants. Revoking a key ends its access at the next call.",
       "masked": "{prefix}…",
       "state": {
         "active": "active",
@@ -351,7 +351,7 @@
         "revoked": "revoked"
       },
       "surfaces": {
-        "title": "Surfaces this reaches",
+        "title": "Surfaces",
         "badge": "one agent tool contract",
         "body": "One agent tool contract drives the API, MCP, the CLI and these screens, so a key that can do something here can do exactly that much everywhere else. Parity is checked by the manifest gate."
       },
@@ -401,7 +401,7 @@
       "delete": "Delete",
       "deleteBuiltIn": "Built-in roles cannot be deleted",
       "deleteHeld": "{count, plural, one {Reassign the # holder first} other {Reassign the # holders first}}",
-      "note": "A role is a permission set, nothing more. An agent’s effective permission is its roles ∩ its operator’s grants ∩ the policy bundle ∩ the kill switches. A role can widen what an agent may ask for, never what its operator may.",
+      "note": "A role is a permission set. An agent’s effective permission is its roles ∩ its operator’s grants ∩ the policy bundle ∩ the kill switches. A role can widen what an agent may ask for, and its operator’s grants still bound it.",
       "filters": {
         "kind": "Kind",
         "scope": "Scope",
@@ -470,7 +470,7 @@
       "namespace": "ns {namespace}",
       "open": "Open",
       "archived": "archived",
-      "note": "Changing which repository is main is an org-owner action with approval, recorded as a security event. A repository may be linked to more than one workspace; it is main for at most one.",
+      "note": "Changing which repository is main is an org-owner action with approval and is recorded as a security event. A repository can link to more than one workspace and be main for at most one.",
       "noMatch": "No workspace matches this search.",
       "factsUnread": "could not be read",
       "factsNoMembership": "not readable without membership",
@@ -512,7 +512,7 @@
       "form": {
         "key": "Your OpenRouter or vendor key",
         "keyPlaceholder": "sk-or-v1-…",
-        "keyHint": "Oxagen calls the model with it once to check it works, then stores it encrypted. It is never returned to a screen and never read from the environment.",
+        "keyHint": "Oxagen checks the key with one model call, then stores it encrypted. No screen shows it again.",
         "show": "Show",
         "hide": "Hide",
         "vendor": "Another vendor",
@@ -539,7 +539,7 @@
         "confirm": "Remove the key? Your organization's next turn runs on Oxagen's key and is billed.",
         "yes": "Remove",
         "pending": "Removing",
-        "cancel": "Keep it"
+        "cancel": "Keep key"
       },
       "failure": {
         "denied": "Only an organization owner or admin can change this.",
@@ -557,20 +557,20 @@
         "sourceUnrecorded": "source not recorded",
         "unknown": "Oxagen pays for this organization’s model calls, on its minted key or on the shared key. No capability reads which one yet (#4005), so no source is chosen here.",
         "preview": "Preview of {source}. The recorded source is {current}, and this page cannot switch it yet (#4005).",
-        "note": "No call reads the environment. Keys and routes come from the model layer’s resolver, and a path that bypasses it is a defect.",
+        "note": "Every model call takes its key and route from the model layer’s resolver.",
         "sources": {
           "platform_minted": {
-            "option": "platform_minted — one key minted for this organization on Oxagen’s OpenRouter account",
+            "option": "platform_minted (one key minted for this organization on Oxagen’s OpenRouter account)",
             "summary": "One key minted for this organization on Oxagen’s OpenRouter account.",
             "about": "Oxagen owns, pays, rotates and revokes it. Its tokens are billed. The provider reports it on its own line, so the bill and the ledger can be compared."
           },
           "platform": {
-            "option": "platform — Oxagen’s shared account",
+            "option": "platform (Oxagen’s shared account)",
             "summary": "Oxagen’s shared account.",
             "about": "One key for every customer. Its tokens are billed. The provider returns one total for every customer, so Oxagen’s meter is the only record of this organization’s share."
           },
           "customer_key": {
-            "option": "customer_key — your own OpenRouter or vendor key",
+            "option": "customer_key (your own OpenRouter or vendor key)",
             "summary": "Your own OpenRouter or vendor key.",
             "about": "You own and pay for it. Oxagen stores it encrypted and never returns it. Your vendor bills these tokens and Oxagen charges nothing for them."
           }
@@ -591,7 +591,7 @@
           "keyHint": "ends in {hint}",
           "keyNone": "none saved yet",
           "billing": "your vendor bills these tokens and Oxagen charges nothing for them",
-          "storage": "encrypted under the organization’s key and never returned to a screen"
+          "storage": "encrypted under the organization’s key"
         },
         "shared": {
           "key": "Oxagen’s shared account",
@@ -600,8 +600,8 @@
         "minted": {
           "unrecorded": "No capability returns this organization’s minted key yet, so its facts are not recorded here (#4005).",
           "mint": {
-            "open": "Mint a key",
-            "title": "Mint a model key for {org}",
+            "open": "Create a key",
+            "title": "Create a model key for {org}",
             "body": "Oxagen would call OpenRouter’s provisioning API, mint a key named for this organization with a spend cap set at the provider, and store it encrypted. Minting would be a governed action with your name on it. No capability mints a key from this page yet, so nothing is sent (#4005)."
           },
           "rotate": {
@@ -629,9 +629,9 @@
         "reconciliation": {
           "title": "Reconciliation",
           "provider": "OpenRouter reports",
-          "ledger": "Our credit ledger",
+          "ledger": "Oxagen credit ledger",
           "difference": "Difference",
-          "note": "Two independent numbers: the first is read off the provider’s usage report for this key, the second is summed from Oxagen’s own ledger. No capability reads either for this organization yet (#4005)."
+          "note": "The first figure comes from the provider’s usage report for this key and the second from Oxagen’s ledger. No capability reads either for this organization yet (#4005)."
         },
         "unknownPreview": "Preview of {source}. No capability reads which source pays for this organization yet (#4005)."
       },
@@ -830,8 +830,8 @@
         "role": "Role",
         "actions": "Actions"
       },
-      "groupLabel": "Group name, row {row}",
-      "roleLabel": "Role, row {row}",
+      "groupLabel": "Group name for row {row}",
+      "roleLabel": "Role for row {row}",
       "add": "Add row",
       "remove": "Remove",
       "removeLabel": "Remove row {row}",
@@ -902,7 +902,7 @@
       "copyFailed": "Copy failed. Select the ID instead."
     },
     "list": {
-      "all": "All · {filter}"
+      "all": "All ({filter})"
     },
     "notRecorded": "not recorded",
     "states": {
@@ -924,12 +924,12 @@
         "bodyBefore": "Your roles on",
         "bodyAfter": "do not include",
         "needed": "org.admin (members, funding, and the data plane are owner-only)",
-        "grant": "An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "grant": "An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
         "neededLabel": "Needed",
         "decidedBy": "Decided by",
-        "decider": "the organization role check on the server · deny wins over every allow"
+        "decider": "the organization role check on the server"
       },
       "stub": {
         "requestAccess": {
@@ -987,7 +987,7 @@
         "degraded": "degraded",
         "disabled": "disabled"
       },
-      "sharedPostgres": "row-level security on org_id, enforced",
+      "sharedPostgres": "row-level security on org_id (enforced)",
       "verified": "verified",
       "rotated": "credentials rotated",
       "neverVerified": "verification not recorded",
@@ -1001,7 +1001,7 @@
         "frameRows": "Frame rows",
         "controlPlaneAudit": "Control-plane audit",
         "digestOnly": "digest_only mode",
-        "note": "Replay without bodies is a timeline, not a replay. The explanation promise depends on bodies, so keeping them is the default."
+        "note": "Without bodies, a replay shows only the timeline. Oxagen keeps bodies by default because explanations depend on them."
       },
       "isolation": {
         "title": "Tenant isolation",
@@ -1011,10 +1011,10 @@
         "crossTenant": "Cross-tenant reads",
         "platformCatalogs": "Platform catalogs",
         "startupGuard": "Startup guard",
-        "rowsValue": "every tenant table carries org_id and row-level security is on with no bypass. The tenant boundary is the policy, and the policy is tested.",
-        "workspaceScopingValue": "every run, frame and record carries its workspace, set by the kernel, the only writer",
-        "crossTenantValue": "refused by the database itself, not by application code",
-        "platformCatalogsValue": "price books, tool schemas and connector definitions are platform tables, never tenant rows",
+        "rowsValue": "every tenant table carries org_id under tested row-level security with no bypass",
+        "workspaceScopingValue": "the kernel sets the workspace on every run, frame, and record",
+        "crossTenantValue": "refused by the database",
+        "platformCatalogsValue": "price books, tool schemas, and connector definitions live in platform tables",
         "startupGuardValue": "the app role may not be a superuser, may not hold BYPASSRLS, and row-level security may not be off, or the plane refuses to boot"
       },
       "stub": {
@@ -1031,7 +1031,7 @@
       "outbound": {
         "title": "Outbound connections in use",
         "destination": "Destination",
-        "why": "Why",
+        "why": "Reason",
         "state": "State"
       }
     },

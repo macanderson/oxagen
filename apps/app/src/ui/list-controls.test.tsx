@@ -62,7 +62,7 @@ function Harness() {
         sortLabel="Sort"
         sorts={SORTS}
         filters={FILTERS}
-        allLabel={(column) => `All · ${column}`}
+        allLabel={(column) => `All (${column})`}
       />
       <ul data-testid="rows">
         {list.shown.map((row) => (
@@ -130,9 +130,9 @@ describe("the list controls", () => {
     await user.type(screen.getByLabelText("Search this list"), "repo-3");
     expect(shown()).toEqual(["repo-30"]);
     await user.clear(screen.getByLabelText("Search this list"));
-    await user.selectOptions(screen.getByLabelText("All · Role"), "main");
+    await user.selectOptions(screen.getByLabelText("All (Role)"), "main");
     expect(shown()).toEqual(["repo-01"]);
-    await user.selectOptions(screen.getByLabelText("All · Role"), "");
+    await user.selectOptions(screen.getByLabelText("All (Role)"), "");
     await user.selectOptions(screen.getByLabelText("Sort"), "za");
     expect(shown()[0]).toBe("repo-30");
   });

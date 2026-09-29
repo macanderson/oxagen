@@ -578,7 +578,7 @@ describe("the Repositories tab", () => {
       "Unlink acme/docs-site from Core platform?",
     );
     await user.click(
-      within(confirm).getByRole("button", { name: "Unlink it" }),
+      within(confirm).getByRole("button", { name: "Unlink the repository" }),
     );
     await waitFor(() => {
       expect(actions.unlinkWorkspaceRepository).toHaveBeenCalledWith(
@@ -606,7 +606,7 @@ describe("the Repositories tab", () => {
     await user.click(within(dialog).getByTestId("repository-dialog-unlink"));
     const confirm = await screen.findByTestId("unlink-dialog");
     await user.click(
-      within(confirm).getByRole("button", { name: "Unlink it" }),
+      within(confirm).getByRole("button", { name: "Unlink the repository" }),
     );
     expect(
       await within(confirm).findByTestId("unlink-failure"),

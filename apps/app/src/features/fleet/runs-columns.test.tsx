@@ -240,7 +240,7 @@ describe("pull requests on a Fleet row", () => {
     ]);
     expect(
       within(rowOf("tse_nolink")).getByTestId("row-prs-nolink"),
-    ).toHaveTextContent("2 opened, links not recorded");
+    ).toHaveTextContent("2 opened with no links recorded");
     expect(
       within(rowOf("tse_none")).getByTestId("row-prs-none"),
     ).toHaveTextContent("none");
@@ -265,7 +265,7 @@ describe("pull requests on a Fleet row", () => {
     );
     expect(
       within(rowOf("tse_unread")).getByTestId("row-prs-unread"),
-    ).toHaveTextContent("1 opened, link not recorded");
+    ).toHaveTextContent("1 opened with no link recorded");
   });
 });
 

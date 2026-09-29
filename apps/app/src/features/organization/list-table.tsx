@@ -2,7 +2,7 @@
 // The list every Organization tab draws (mockup `ltTable` under a `.panel-h`):
 // the shared list table (`@/ui/list-table`: search, sortable headers, and a
 // pager with Rows 5 to All) with this lane's select filters beside the
-// search box, "All · Status" and the like. The rows arrive already rendered
+// search box, "All (Status)" and the like. The rows arrive already rendered
 // from the server section, each with the value it carries for each filter, so
 // this island decides only which rows the filters keep and hands those to the
 // shared table. On a phone the shell turns the table into labelled cards

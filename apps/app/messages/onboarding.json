@@ -25,7 +25,7 @@
       "addressValue": "oxagen.com/{slug}",
       "addressHint": "Derived from the name. You can change it later.",
       "namespace": "Namespace",
-      "namespaceHint": "2–6 characters, <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>",
+      "namespaceHint": "It takes 2 to 6 characters and is <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>.",
       "creates": "Creates <ns>org_{namespace}</ns> and its graph database.",
       "cancel": "Cancel",
       "submit": "Continue",
@@ -53,14 +53,14 @@
       },
       "denied": {
         "title": "You cannot see onboarding",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
-        "bodyNoOrg": "Your account does not hold <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+        "bodyNoOrg": "Your account does not hold <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "requestAccess": "Request access",
         "backToFleet": "Back to Fleet",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "the organization role check · deny wins over every allow",
+        "decidedByValue": "the organization role check",
         "dialogTitle": "Request access",
         "dialogBody": "A request would ask an organization owner to grant {permission}, and the grant would land in the audit record with your name on it.",
         "dialogNotBacked": "Access requests are not recorded yet: no capability lets a person ask for a role, so nothing is sent. Ask an organization owner directly.",
@@ -131,19 +131,19 @@
         "title": "Wrap an agent",
         "lead": "The installer carries a one-time enrollment token for <k>{key}</k>, so nothing is copied or pasted.",
         "leadNoKey": "The installer carries a one-time enrollment token for the agent, so nothing is copied or pasted.",
-        "tabsLabel": "How to wrap the agent",
+        "tabsLabel": "Wrap method",
         "tabs": {
           "cc": {
             "name": "Claude Code",
-            "sub": "one click · harness"
+            "sub": "one click"
           },
           "codex": {
             "name": "Codex CLI",
-            "sub": "one click · harness"
+            "sub": "one click"
           },
           "sdk": {
             "name": "SDK agent",
-            "sub": "five lines · harness"
+            "sub": "five lines"
           }
         },
         "recommended": "recommended",
@@ -350,7 +350,7 @@
       },
       "denied": {
         "title": "You cannot see agent registration",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "permission": "agent.register on {ws}",
         "request": "Request access",
         "back": "Back to Fleet",
@@ -369,7 +369,7 @@
         "nameHint": "What your team calls it, such as Mac's Claude Code.",
         "slug": "Slug",
         "slugHint": "The agent key becomes <mono>{key}</mono>.",
-        "place": "Where it runs",
+        "place": "Harness and runtime",
         "harness": "Harness",
         "harnessHint": "Picks the installer on the next step.",
         "runtime": "Runtime",
@@ -394,23 +394,23 @@
       "wrap": {
         "title": "Wrap the agent",
         "lead": "The enrollment token for <mono>{key}</mono> is single use, so the machine that presents it becomes this agent's host.",
-        "tabsLabel": "How to wrap the agent",
+        "tabsLabel": "Wrap method",
         "tabs": {
           "claude-code": {
             "name": "Claude Code",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "codex": {
             "name": "Codex CLI",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "cursor": {
             "name": "Cursor",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "sdk": {
             "name": "SDK agent",
-            "sub": "your process · harness"
+            "sub": "your process"
           }
         },
         "recommended": "recommended",

@@ -241,7 +241,7 @@ describe("Skills › loaded", () => {
     expect(read).toHaveBeenCalledExactlyOnceWith(ctx, { cursor: null });
     expect(state()).toBe("loaded");
     expect(document.body).toHaveTextContent(
-      "Skills are steering, and they are files. Oxagen does not run a skill: the harness does.",
+      "Review the skills sessions reported, preview approved descriptions, or propose the configuration in a pull request.",
     );
     const section = screen.getByRole("region", {
       name: "Skills sessions reported",

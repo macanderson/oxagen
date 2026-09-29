@@ -1,7 +1,7 @@
 // A Studio server's page (#4678), at `/tools/servers/<mcs_id>[/<tab>]` inside
 // Tools: the server's name and off switch in the header, then four tabs.
 // Tools lists what the server offers and what the workspace imported,
-// Connection says where it runs and how it signs in, Try it calls one tool,
+// Connection says where it runs and how it signs in, Test calls one tool,
 // and Changes shows the draft that becomes a steering PR.
 //
 // The page reads the registry, the switch board and the org's members, as the

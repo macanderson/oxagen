@@ -453,11 +453,11 @@ describe("the drawer", () => {
     );
     const card = within(drawer()).getByTestId("resolved-card");
     expect(card).toHaveTextContent("salesforce__send_email@1");
-    expect(card).toHaveTextContent("Which agentacme.core.support-bot");
+    expect(card).toHaveTextContent("Agentacme.core.support-bot");
     expect(card).toHaveTextContent(
-      "Which rulemandate:mnd_7K2ETQ4:human_above:usd",
+      "Rulemandate:mnd_7K2ETQ4:human_above:usd",
     );
-    expect(card).toHaveTextContent("Who askednot recorded");
+    expect(card).toHaveTextContent("Requesternot recorded");
     expect(card).toHaveTextContent("Resolutionapproved");
     expect(card).toHaveTextContent("Resolved byuser:usr_01K3F8QB7R");
     expect(card.querySelector("time")).toHaveAttribute(
@@ -554,7 +554,7 @@ describe("the drawer", () => {
     await user.click(button());
     expect(drawer()).toHaveTextContent("Nothing is waiting on a human.");
     expect(drawer()).toHaveTextContent(
-      "A call parks here when policy returns approve. Denials never park; they end the call and are free.",
+      "A call parks here when policy returns approve. A denial ends the call at no cost.",
     );
     expect(
       within(drawer()).queryByTestId("approval-row-not-backed"),
@@ -662,7 +662,7 @@ describe("the drawer", () => {
     );
     expect(
       within(row).getByRole("link", {
-        name: "Open run tse_01K5RS9D3K, paused on this question",
+        name: "Open paused run tse_01K5RS9D3K",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/tse_01K5RS9D3K");
   });

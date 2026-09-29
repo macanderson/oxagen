@@ -2,7 +2,7 @@
 // A list table with the controls every list in the design carries (the
 // mockup's `ltTable`, engine.js, and the `.lt`, `.lp` and `th.sortable` rules
 // in engine.css): a "Search this list" box and a filter per small enumeration
-// column ("All · Health") over the table, a header that sorts its column on a
+// column ("All (Health)") over the table, a header that sorts its column on a
 // click (ascending, descending, then the order the caller gave), and under the
 // table the shared pager (ui/pagination): a Rows select (5, 10, 25, 50, All)
 // and the range ("1–10 of 12") on the left, Previous and Next on the right.
@@ -178,7 +178,7 @@ export function ListTable({
   columns: readonly ListColumn[];
   rows: readonly ListRow[];
   /**
-   * The list's own select filters (the mockup's "All · Status"), drawn after
+   * The list's own select filters (the mockup's "All (Status)"), drawn after
    * the search box. The caller owns their state and hands in only the
    * rows they keep, and they replace the filters the design's rule would
    * offer, so a list never shows two filters over one column.

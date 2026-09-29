@@ -3,13 +3,14 @@
 // heading names the thing, a button names what it acts on, and a caption
 // states one fact. The v3 mockup's wording is not the design of record, so a
 // slogan ported from it fails here: "Everything written down", "Who receives
-// it", "Read them", "Summary · what this run changed". label-voice.ts holds
+// it", "Read them", "Summary · what this run changed". An em dash fails in any
+// string, a sentence included (clear-prose, rule 1). label-voice.ts holds
 // the check. This file runs it over the catalogues, proves it on a probe
 // catalogue, and keeps the allowlist honest.
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadCatalogs } from "@/i18n/load-catalogs";
-import { labelFindings, leaves } from "./label-voice";
+import { labelFindings, leaves, visibleText } from "./label-voice";
 import { APP_DIR } from "./parse";
 
 const RULE = "label-voice";
@@ -53,7 +54,9 @@ const PROBE = {
       open: "Open the assignments",
       note: "{count, plural, one {# record} other {# records}}",
       lead: "Who receives a record is set by its scope.",
+      empty: "—",
     },
+    intro: "Records — rules, memories, and skills — reach a run.",
   },
 };
 
@@ -86,6 +89,15 @@ describe("label voice (INV-34)", () => {
       `${RULE} pronoun-label steering.unlink.keep "Keep it linked"`,
       `${RULE} pronoun-label steering.tabs.try "Try it"`,
       `${RULE} heading-phrase steering.columns.why "Why"`,
+      `${RULE} em-dash steering.intro "Records — rules, memories, and skills — reach a run."`,
     ]);
+  });
+
+  it("reads the words a person sees, with tags dropped and each argument one word", () => {
+    expect(
+      visibleText(
+        "<b>{count, plural, one {# record, {kind}} other {# records}}</b> in force",
+      ),
+    ).toBe("X in force");
   });
 });

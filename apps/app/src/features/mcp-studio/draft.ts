@@ -271,7 +271,7 @@ export function draftTokens(
   };
 }
 
-/** A saved test's JSON fields, as Try it recorded them. */
+/** A saved test's JSON fields, as the Test tab recorded them. */
 type TestRecord = Pick<
   Extract<DraftOp, { kind: "test" }>,
   "request" | "raw" | "shaped"
@@ -326,7 +326,7 @@ function withoutCredentials(text: string, removed: Set<string>): string | null {
 }
 
 /**
- * A Try it result made fit to save as a test. The request and the raw
+ * A Test tab result made fit to save as a test. The request and the raw
  * result must each be one recorded exchange, a JSON object, and the shaped
  * result must be JSON. Any credential header is removed and named in
  * `removed`, lowercased, so the page can say what it dropped.

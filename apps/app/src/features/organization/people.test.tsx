@@ -171,7 +171,7 @@ describe("People", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual([
-      "All · Two-factor",
+      "All (Two-factor)",
       "TOTP",
       "hardware key",
       "passkey",
@@ -346,12 +346,12 @@ describe("Invitations", () => {
       within(sent)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Sent", "Sep 1, 2026", "Sep 10, 2026"]);
+    ).toEqual(["All (Sent)", "Sep 1, 2026", "Sep 10, 2026"]);
     expect(
       within(expires)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Expires", "Sep 17, 2026"]);
+    ).toEqual(["All (Expires)", "Sep 17, 2026"]);
     await userEvent.selectOptions(sent, "Sep 10, 2026");
     expect(
       document.querySelector('[data-row="invi_4n5p6q7r8s9t0v1w2x3y4z"]'),

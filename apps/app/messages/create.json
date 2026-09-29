@@ -5,9 +5,9 @@
     "steps": {
       "describe": "Describe",
       "source": "Source",
-      "find": "Find it",
+      "find": "Search",
       "upload": "Upload",
-      "describeIt": "Describe it",
+      "describeIt": "Draft",
       "review": "Review",
       "recommendation": "Recommendation",
       "import": "Import",
@@ -59,7 +59,7 @@
         "add": "added",
         "modify": "changed"
       },
-      "checks": "What the checks will assert"
+      "checks": "Pull request checks"
     },
     "skill": {
       "next": "Next",
@@ -75,7 +75,7 @@
           "closed": "No skill registry is connected to this workspace yet."
         },
         "describe": {
-          "title": "Describe it",
+          "title": "Describe the procedure",
           "body": "Write what the procedure is, in prose. Oxagen drafts the SKILL.md, and you edit it before anybody reads it."
         },
         "upload": {
@@ -131,7 +131,7 @@
         "title": "The file",
         "subtitle": "This is the whole of it. A skill has no code to run and no credential to hold.",
         "drafted": {
-          "title": "A SKILL.md, drafted from what you wrote",
+          "title": "Drafted SKILL.md",
           "body": "Oxagen filled a template in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
         },
         "noName": "no name in the frontmatter",

@@ -124,7 +124,7 @@ export const routes = {
   /** Where requireViewer sends a member whose organization requires SSO and whose session is not one (sso-gate.ts); outside `[org]`, so it cannot loop. */
   ssoRequired: (next?: SafePath): SafePath =>
     withQuery(mint("/login"), { next: nextParam(next), sso: "required" }),
-  /** `email` returns an address to the sign-up form, editable (Verify email's Change it). */
+  /** `email` returns an address to the sign-up form, editable (Verify email's Change email). */
   signup: (next?: SafePath, q?: { email?: string }): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next), email: q?.email }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>

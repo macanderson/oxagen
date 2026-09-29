@@ -530,7 +530,7 @@ describe("Spend › header, tiles and tabs", () => {
     expect(screen.getByText("Core platform")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "What the tokens bought, with the basis on every number.",
+        "Spend and tokens for this workspace with the basis of every figure.",
       ),
     ).toBeInTheDocument();
     const header = screen.getByRole("banner");
@@ -637,7 +637,7 @@ describe("Spend › Findings", () => {
     expect(first).toHaveTextContent("aws_billing__get_cost_and_usage");
     expect(first).toHaveTextContent("evidence 88 runs · 3,106 calls");
     expect(first).toHaveTextContent("$984.60");
-    expect(first).toHaveTextContent("at stake · 58.9% of identified");
+    expect(first).toHaveTextContent("at stake (58.9% of identified)");
     expect(
       within(first).getByRole("link", { name: "Evidence" }),
     ).toHaveAttribute("href", "/acme/core-platform/spend?finding=fnd_01k5rtgh");
@@ -1119,7 +1119,7 @@ describe("Spend › By tool", () => {
       "Avg per call",
       "Avg per run",
       "Potential savings",
-      "What the frames say",
+      "Frame summary",
     ]);
     const github = rowOf("github__get_issue");
     expect(github).toHaveTextContent("50%");

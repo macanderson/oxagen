@@ -11,7 +11,7 @@ const STUDIO_GAPS = {
    * issue carries the record.
    */
   record: 4678,
-  /** Try it and Draft run through capabilities that PR2 of this lane adds. */
+  /** Test and Draft run through capabilities that PR2 of this lane adds. */
   capability: 4678,
   /** Saving the draft and opening a steering PR from it: lane M11 (PR #4688). */
   steeringPr: 4686,

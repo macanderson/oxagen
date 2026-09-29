@@ -258,8 +258,8 @@ describe("AssistantFlyout with enter_to_submit off", () => {
 // One line under the composer names the send key for the setting, and the
 // composer takes it as its description, so a screen reader hears it too.
 describe("AssistantFlyout send hint", () => {
-  const ENTER = "Enter to send, Shift+Enter for a new line";
-  const MOD_ENTER = "Cmd+Enter or Ctrl+Enter to send, Enter for a new line";
+  const ENTER = "Enter sends. Shift+Enter adds a line.";
+  const MOD_ENTER = "Cmd+Enter or Ctrl+Enter sends. Enter adds a line.";
 
   it("names Enter when enter_to_submit is on", async () => {
     const { composer } = await openFlyout(true);

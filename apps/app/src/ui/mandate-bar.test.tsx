@@ -48,7 +48,7 @@ describe("MandateBar", () => {
     expect(bar()).toHaveAttribute("data-measure", "amount");
     // The measure names itself: an approval card draws one bar per measure.
     expect(bar()).toHaveTextContent(
-      "Remaining authority · amount · monthly · 2026-09",
+      "Remaining authority for amount (monthly 2026-09)",
     );
     expect(bar()).toHaveTextContent("of $2,000.00");
     await expectNoAxe(container);

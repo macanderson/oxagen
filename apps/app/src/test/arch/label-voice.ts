@@ -12,7 +12,8 @@ export type Shape =
   | "heading-phrase"
   | "caption-punctuation"
   | "question-label"
-  | "pronoun-label";
+  | "pronoun-label"
+  | "em-dash";
 
 export type Finding = Leaf & { readonly shape: Shape };
 
@@ -36,6 +37,12 @@ const PHRASE_START = /^(?:who|what|where|why|how|everything)\b/i;
  * A button or a tab names what it acts on.
  */
 const PRONOUN_LABEL = /^\p{Lu}\p{Ll}+ (?:it|them)\b/u;
+
+/**
+ * An em dash anywhere in a string, a sentence included (clear-prose, rule 1).
+ * A lone "—" is the glyph a table draws in an empty cell, not a dash in prose.
+ */
+const EM_DASH = /—/;
 
 /** The longest short label, in words, that the question and pronoun checks read. */
 const SHORT_LABEL_WORDS = 6;
@@ -63,11 +70,15 @@ export function visibleText(value: string): string {
   return text.trim();
 }
 
-/** The parts of the rule one leaf breaks. A value that ends in a period is a sentence, not a label. */
+/**
+ * The parts of the rule one leaf breaks. A value that ends in a period is a
+ * sentence, not a label, so only the em-dash check reads it.
+ */
 export function shapesOf({ key, value }: Leaf): Shape[] {
-  const text = visibleText(value);
-  if (text.endsWith(".")) return [];
   const shapes: Shape[] = [];
+  if (value.trim() !== "—" && EM_DASH.test(value)) shapes.push("em-dash");
+  const text = visibleText(value);
+  if (text.endsWith(".")) return shapes;
   const heading = HEADING_KEY.test(key);
   if (heading && HEADING_PUNCTUATION.test(text)) {
     shapes.push("heading-punctuation");

@@ -95,7 +95,7 @@ describe("ModelFitPanel", () => {
       "1 prompt · 2 turns · 5 steps · no tool call failed",
     );
     expect(screen.getByTestId("model-fit")).toHaveTextContent(
-      "generated · not the record",
+      "generated from the record",
     );
     // An agent carries no definition file (ADR-198), so the note names none.
     expect(screen.getByTestId("fit-read")).not.toHaveTextContent(

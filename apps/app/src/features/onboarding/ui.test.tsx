@@ -427,13 +427,13 @@ describe("the wrap step", () => {
   it("draws the four harness tabs with their sub-lines and opens on the recorded harness", () => {
     renderWrap("codex");
     const tabs = within(
-      screen.getByRole("tablist", { name: "How to wrap the agent" }),
+      screen.getByRole("tablist", { name: "Wrap method" }),
     ).getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual([
-      "Claude Codeone command · harness",
-      "Codex CLIone command · harness",
-      "Cursorone command · harness",
-      "SDK agentyour process · harness",
+      "Claude Codeone command",
+      "Codex CLIone command",
+      "Cursorone command",
+      "SDK agentyour process",
     ]);
     expect(screen.getByRole("tab", { name: /Codex CLI/ })).toHaveAttribute(
       "aria-selected",

@@ -291,7 +291,7 @@ describe("Workspaces", () => {
       within(branch)
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Production branch", "main"]);
+    ).toEqual(["All (Production branch)", "main"]);
   });
 
   it("opens a workspace the viewer belongs to, and offers Edit and Archive on a live one", async () => {

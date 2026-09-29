@@ -304,7 +304,7 @@ describe("the Issues panel", () => {
       within(filter)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["All · Status", "open", "closed", "in progress", "blocked"]);
+    ).toEqual(["All (Status)", "open", "closed", "in progress", "blocked"]);
     await userEvent.selectOptions(filter, "closed");
     expect(visible()).toEqual(["a-intel/platform#490"]);
     await userEvent.selectOptions(filter, "open");
@@ -666,7 +666,7 @@ describe("Linked work", () => {
     const [repo] = await screen.findAllByTestId("run-linked-repository");
     if (repo === undefined) throw new Error("a repository");
     expect(
-      within(repo).getByText("named by a pull request, no checkout recorded"),
+      within(repo).getByText("named by a pull request with no checkout recorded"),
     ).toBeTruthy();
     expect(within(repo).getByText("commit match")).toBeTruthy();
     expect(within(repo).queryByText("observed")).toBeNull();
@@ -833,7 +833,7 @@ describe("Linked work", () => {
     expect(files.queryByText(/as the recorder reported them/)).toBeNull();
     const [captured] = files.getAllByTestId("run-linked-captured");
     if (captured === undefined) throw new Error("a captured diff");
-    expect(captured).toHaveTextContent("digest recorded, bytes not retained");
+    expect(captured).toHaveTextContent("digest recorded without bytes");
     expect(captured).toHaveTextContent("binary files skipped, over 1 MB");
     // No digest was recorded, so no digest is printed.
     expect(captured.querySelector("code")).toBeNull();

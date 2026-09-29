@@ -256,7 +256,7 @@ describe("section order", () => {
 describe("summary tiles", () => {
   it("prints the plan and its basis", async () => {
     await renderBilling();
-    expect(tile("plan")).toHaveTextContent("PlanBuildmonthly, cancel any time");
+    expect(tile("plan")).toHaveTextContent("PlanBuildmonthly and cancellable at any time");
   });
 
   it("says yearly for a subscription billed annually", async () => {
@@ -266,7 +266,7 @@ describe("summary tiles", () => {
         subscription: { ...SUBSCRIPTION, billingInterval: "year" },
       }),
     });
-    expect(tile("plan")).toHaveTextContent("yearly, cancel any time");
+    expect(tile("plan")).toHaveTextContent("yearly and cancellable at any time");
   });
 
   it("names the tier the contracted rate resolves to when there is no subscription", async () => {
@@ -281,7 +281,7 @@ describe("summary tiles", () => {
   it("prints the governed actions the first line priced, with the blocks and the allowance as its basis", async () => {
     await renderBilling();
     expect(tile("governed")).toHaveTextContent(
-      "Governed actions this period1,587,838above the included allowance · 159 blocks × $32.10 · 250,000 included",
+      "Governed actions this period1,587,838above the included allowance (159 blocks × $32.10 · 250,000 included)",
     );
   });
 
@@ -299,7 +299,7 @@ describe("summary tiles", () => {
     await renderBilling();
     expect(tile("due").querySelector("[data-recorded=false]")).not.toBeNull();
     expect(tile("due")).toHaveTextContent(
-      "Due 2026-10-01not recordedUSD · after the onboarding discount",
+      "Due 2026-10-01not recordedUSD after the onboarding discount",
     );
   });
 });
@@ -358,7 +358,7 @@ describe("This period", () => {
   it("carries the badge and the columns Line, Basis and Amount", async () => {
     await renderBilling();
     const panel = section("This period");
-    expect(panel).toHaveTextContent("Stripe invoices, Oxagen meter");
+    expect(panel).toHaveTextContent("Metered by Oxagen and invoiced by Stripe");
     expect(headers(within(panel).getByRole("table"))).toEqual([
       "Line",
       "Basis",
@@ -379,14 +379,14 @@ describe("This period", () => {
       "total",
     ]);
     expect(row("data-line", "tokens")).toHaveTextContent(
-      "Tokensreported at zero · the customer’s own model spend is on Spend$0.00",
+      "Tokensreported at zero (your model spend is on Spend)$0.00",
     );
     expect(row("data-line", "retention")).toHaveTextContent("$0.00");
     expect(row("data-line", "discount")).toHaveTextContent(
       "Onboarding discountthe onboarding offer is not recorded yet (spec §20, deferred)not recorded",
     );
     expect(row("data-line", "total")).toHaveTextContent(
-      "Totalrounded to cents once, half-evennot recorded",
+      "Totalrounded once to cents (half-even)not recorded",
     );
   });
 
@@ -436,14 +436,14 @@ describe("Meters", () => {
     expect(
       [...meters.querySelectorAll("tbody tr")].map((tr) => tr.textContent),
     ).toEqual([
-      "Governed actions1,837,838the billable unit · 250,000 included this month",
-      "Sealed runs with at least one model callnot recordedreported, not priced",
+      "Governed actions1,837,838the billable unit (250,000 included this month)",
+      "Sealed runs with at least one model callnot recordedreported without a price",
       "Retained evidencenot recorded12 months included",
       "Runs Oxagen halted before any model callnot recordedfree",
       "Runs of the in-app agentnot recordedfree",
     ]);
     expect(meters).toHaveTextContent(
-      "One priced meter: the governed action, a call Oxagen decided, delivered and recorded. Runs, tokens and retained evidence are reported so the price can move later without rewriting the meter.",
+      "The governed action is the one priced meter: a call Oxagen decided, delivered, and recorded. Oxagen reports the other meters without a price.",
     );
   });
 
@@ -604,15 +604,15 @@ describe("Price list", () => {
       [...list.querySelectorAll("tr")].map((tr) => tr.textContent),
     ).toEqual([
       "Freeevery governance feature, an included monthly allowance, days of evidence not recorded, seats not recorded",
-      "Governed actions, blocks of 5,000$25.00 per block at the published rate",
-      "Negotiated agreementthe same four figures, per organization",
-      "Invoice billingnever capped · overage invoiced at the contracted rate at period end",
-      "Evidence retention12 months included on paid plans, then $0.08 per GB-month",
-      "Tokens Oxagen buys for youat cost, no markup, capped",
-      "Enterprise, annualfrom not recorded per year",
+      "Governed actions in blocks of 5,000$25.00 per block at the published rate",
+      "Negotiated agreementthe same four figures negotiated per organization",
+      "Invoice billinguncapped with overage invoiced at the contracted rate at period end",
+      "Evidence retention12 months included on paid plans and $0.08 per GB-month after that",
+      "Tokens Oxagen buys for youat cost and capped",
+      "Enterprise (annual)from not recorded per year",
     ]);
     expect(list).toHaveTextContent(
-      "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident.",
+      "The free tier includes every feature at any volume. Its limits are evidence retention and seats.",
     );
   });
 });
@@ -626,8 +626,8 @@ describe("Billable units", () => {
       ),
     ).toEqual([
       "PricedA governed action: a call Oxagen decided, delivered and recorded, with its receipt in the chain.",
-      "ReportedSealed runs, tokens by class, retained evidence: secondary meters, never priced.",
-      "FreeDenials, runs Oxagen halted before a model call, runs of the in-app agent. You never pay for Oxagen saying no.",
+      "ReportedOxagen reports sealed runs, tokens by class, and retained evidence as secondary meters without a price.",
+      "FreeDenials, runs Oxagen halted before a model call, and runs of the in-app agent cost nothing.",
     ]);
   });
 });
@@ -965,7 +965,7 @@ describe("access denied", () => {
       within(state).getByRole("heading", { name: "You cannot see billing" }),
     ).toBeInTheDocument();
     expect(state).toHaveTextContent(
-      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(state).toHaveTextContent("Signed in asMarcus Bell · member");
     expect(state.querySelector("[data-fact=needed]")).toHaveTextContent(
@@ -973,7 +973,7 @@ describe("access denied", () => {
     );
     // A refusal carries no policy version yet (#3846).
     expect(state).toHaveTextContent(
-      "Decided bypolicy version not recorded · deny wins over every allow",
+      "Decided bypolicy version not recorded",
     );
     expect(
       state.querySelector("[data-fact=decided-by] [data-recorded=false]"),

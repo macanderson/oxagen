@@ -49,8 +49,8 @@ const TITLE: Record<AvatarSubject, string> = {
 };
 
 const NOTE: Record<AvatarSubject, string> = {
-  user: "Saved with update_profile, like any change to your account.",
-  agent: "Part of the agent's definition, so a change rides a pull request.",
+  user: "Saved with update_profile.",
+  agent: "Saved in the agent's definition through a pull request.",
   workspace:
     "Saved with update_workspace_settings on the workspace's record.",
   organization:

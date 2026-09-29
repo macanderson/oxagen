@@ -174,7 +174,7 @@ describe("AssignRole", () => {
     expect(repository).toHaveTextContent(
       "RepositoryNo role can be bound to one repository yet (#3865).",
     );
-    expect(within(dialog).getByLabelText("Why")).toHaveAttribute(
+    expect(within(dialog).getByLabelText("Reason")).toHaveAttribute(
       "placeholder",
       "Read by the approver and kept in the audit record",
     );
@@ -192,7 +192,7 @@ describe("AssignRole", () => {
     renderAssign();
     const dialog = await openAssign();
     await within(dialog).findByLabelText("Role");
-    await userEvent.type(within(dialog).getByLabelText("Why"), "Audit prep");
+    await userEvent.type(within(dialog).getByLabelText("Reason"), "Audit prep");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Assign" }),
     );
@@ -251,7 +251,7 @@ describe("AssignRole", () => {
       "Effective permission stays roles ∩ Marcus Bell's grants. A role cannot lift an agent above its operator.",
     );
     await userEvent.type(
-      within(dialog).getByLabelText("Why"),
+      within(dialog).getByLabelText("Reason"),
       "Reads the September runs",
     );
     await userEvent.click(

@@ -289,7 +289,7 @@ describe("WaterfallPanel", () => {
     expect(svg).toHaveTextContent(/partial$/);
     expect(svg).not.toHaveTextContent(/total$/);
     expect(screen.getByTestId("waterfall-caption")).toHaveTextContent(
-      "The dashed line is cost accumulating to $1.20 over the first 2 turns, not the whole run.",
+      "The dashed line is cost accumulating to $1.20 over the first 2 turns.",
     );
     const total = screen.getByTestId("waterfall-total");
     expect(total.children[0]).toHaveTextContent(/^first 2 turns$/);

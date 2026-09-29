@@ -25,7 +25,7 @@
       "atLeast": "{count}+",
       "tools": "Tools",
       "connection": "Connection",
-      "try": "Try it",
+      "try": "Test",
       "changes": "Changes"
     },
     "tools": {
@@ -192,7 +192,7 @@
         "scheme": "Scheme",
         "credential": "Credential",
         "replace": "Replace credential",
-        "note": "A credential stays in the Oxagen vault. This page shows only its reference, and a steering PR never carries it.",
+        "note": "A credential stays in the Oxagen vault. This page shows only its reference, and a steering PR does not carry it.",
         "modes": {
           "none": "None",
           "service": "Service credential",
@@ -228,7 +228,7 @@
       "badJson": "The arguments are not a JSON object.",
       "run": "Run",
       "running": "Running",
-      "credentialNote": "The call is recorded and metered like an agent's. The gateway adds the credential after the request is recorded, so the request shown never holds it.",
+      "credentialNote": "The call is recorded and metered like an agent's. The request shown omits the credential because the gateway adds it after recording.",
       "request": "Upstream request",
       "raw": "Raw result",
       "shaped": "Shaped result",
@@ -237,7 +237,7 @@
       "tooLarge": "The test was not saved. It is larger than a draft allows, or the draft is full.",
       "badRecord": "This call's record is not in the shape a saved test needs, so the test was not saved.",
       "stripped": "Removed the {headers} {count, plural, one {header} other {headers}} before saving, because a saved test never holds a credential.",
-      "notBuilt": "Try it is not available yet.",
+      "notBuilt": "Testing is not available yet.",
       "denied": "The call was denied: {message}",
       "failed": "The call failed: {message}",
       "error": "The call did not finish. Try again.",
@@ -249,7 +249,7 @@
     "changes": {
       "empty": {
         "title": "No changes",
-        "body": "Edits you make on the Tools tab and tests you save on Try it collect here."
+        "body": "Edits you make on the Tools tab and tests you save on the Test tab collect here."
       },
       "edits": {
         "title": "Edits",

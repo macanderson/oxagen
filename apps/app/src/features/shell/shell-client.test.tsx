@@ -440,7 +440,7 @@ describe("command menu", () => {
       "Open the assistant",
       "Ask why a run came back tampered",
       "Ask what an agent cost this month",
-      "Mint a model key for this organization",
+      "Create a model key for this organization",
       "Create anything",
       "Add a skill",
       "Write a context record",
@@ -462,7 +462,7 @@ describe("command menu", () => {
     // The group notes, and the search named as the governed read it is.
     expect(menu).toHaveTextContent("Each one is a governed action.");
     expect(menu).toHaveTextContent(
-      "Risk and side effect, the same trailer the model sees.",
+      "Each tool shows the risk and side effect the model sees.",
     );
     // A tool row's chips have no field to read yet, and the menu says so.
     const toolsGap = within(menu).getByTestId("command-tools-not-backed");
@@ -471,7 +471,7 @@ describe("command menu", () => {
       "search_tools returns no version, risk, side effect or decision for a tool yet.",
     );
     expect(within(menu).getByTestId("command-footer-note")).toHaveTextContent(
-      "search_tools · this search is itself a governed call, recorded in the audit record",
+      "search_tools records this search in the audit record.",
     );
     expect(searchCommands).toHaveBeenCalledWith("acme", "core-platform", "");
     await user.type(input, "api keys");

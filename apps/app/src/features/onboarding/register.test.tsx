@@ -199,7 +199,7 @@ describe("the denied state", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include agent.register on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include agent.register on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("button", { name: "Request access" }),

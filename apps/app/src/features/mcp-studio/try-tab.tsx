@@ -1,5 +1,5 @@
 "use client";
-// A Studio server's Try it tab (#4678, "Try it"): pick an environment and an
+// A Studio server's Test tab (#4678, "Try it" in the spec): pick an environment and an
 // imported tool, fill in its arguments, and see the request that went
 // upstream, the raw result and the result after tools.toml's shaping. Save
 // as test stages the call in the draft, and the steering PR adds it to the
