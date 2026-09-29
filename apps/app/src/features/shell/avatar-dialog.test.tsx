@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The person's avatar editor (mockup `avatarBody`, @/ui/avatar-editor) over a
-// fake save: three kinds, the twenty-four Lucide glyphs, a monogram of up to
+// fake save: three kinds, the twenty-four Phosphor glyphs, a monogram of up to
 // six letters in three typefaces, five tones as live swatches (solid, soft,
 // line, and the two golds), a preview at every size the shell draws, and a
 // save that writes the spec string through update_profile and returns to the
@@ -147,7 +147,7 @@ describe("the draft", () => {
 });
 
 describe("Icon", () => {
-  it("offers the twenty-four Lucide glyphs as line icons, never emoji", async () => {
+  it("offers the twenty-four Phosphor glyphs as line icons, never emoji", async () => {
     const { user, dialog, preview } = await openEditor();
     await user.click(within(dialog).getByTestId("avatar-kind-icon"));
     const grid = within(dialog).getByRole("group", { name: "Icon" });

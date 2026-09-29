@@ -5,8 +5,8 @@
 // Three rules, and they are the reason this is a table and not a free choice
 // at each call site:
 //
-//  1. **One line-weight set, no emoji.** Every mark is a Lucide line icon at
-//     the same stroke, so a column of them reads as one alphabet.
+//  1. **One line-weight set, no emoji.** Every mark is a Phosphor line icon at
+//     the same weight, so a column of them reads as one alphabet.
 //  2. **The colour is the cell's, not the icon's.** The mark inherits
 //     `currentColor` from the tile it sits in, so a new tool family can never
 //     introduce a colour.

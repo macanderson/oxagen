@@ -12,7 +12,7 @@
 // time, so a stop sent as an action would wait behind any action still
 // pending, and a stop has to arrive while the turn it names is streaming
 // (`assistant-stream-client.ts`).
-import { Send, Square } from "lucide-react";
+import { PaperPlaneTiltIcon, StopIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
 
@@ -78,7 +78,7 @@ export function AssistantSendOrStop({
           unavailableReasonId === null ? "" : "cursor-not-allowed opacity-60"
         }`}
       >
-        <Send aria-hidden="true" className="size-4" />
+        <PaperPlaneTiltIcon aria-hidden="true" className="size-4" />
       </button>
     );
   }
@@ -93,7 +93,7 @@ export function AssistantSendOrStop({
       }}
       className={`${BUTTON} aria-disabled:opacity-60`}
     >
-      <Square aria-hidden="true" className="size-3.5" fill="currentColor" />
+      <StopIcon aria-hidden="true" className="size-3.5" weight="fill" />
     </button>
   );
 }
