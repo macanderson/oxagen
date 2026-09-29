@@ -169,7 +169,6 @@ type Messages = {
         pager: string;
         previous: string;
         next: string;
-        page: string;
         sortBy: string;
         noMatch: string;
         cursor: string;
@@ -11078,7 +11077,6 @@ type Messages = {
       rangeEmpty: string;
       previous: string;
       next: string;
-      page: string;
     };
     listTable: {
       search: string;

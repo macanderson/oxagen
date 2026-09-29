@@ -329,19 +329,22 @@ describe("the Issues panel", () => {
     );
     await renderIssues({ issues: readOk(runIssues({ issues: many })) });
     expect(visible()).toHaveLength(7);
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Rows" }),
-      "5",
-    );
-    expect(visible()).toEqual([
-      "a-intel/platform#500",
-      "a-intel/platform#501",
-      "a-intel/platform#502",
-      "a-intel/platform#503",
-      "a-intel/platform#504",
-    ]);
+    await userEvent.click(screen.getByRole("combobox", { name: "Rows" }));
+    await userEvent.click(await screen.findByRole("option", { name: "5" }));
+    await waitFor(() => {
+      expect(visible()).toEqual([
+        "a-intel/platform#500",
+        "a-intel/platform#501",
+        "a-intel/platform#502",
+        "a-intel/platform#503",
+        "a-intel/platform#504",
+      ]);
+    });
     const pager = screen.getByRole("navigation", { name: "Issues pages" });
-    expect(pager).toHaveTextContent("1–5 of 7");
+    const rowsPager = pager.closest("[data-rows-pager]");
+    expect(rowsPager?.querySelector("[data-range]")?.textContent).toBe(
+      "1–5 of 7",
+    );
     await userEvent.click(
       within(pager).getByRole("button", { name: "Next page" }),
     );
