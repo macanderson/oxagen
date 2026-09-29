@@ -47,12 +47,15 @@ Already-deleted rows are excluded server-side (idempotent at the row level
 but counted only for rows actually updated).
 
 The files sent in each deleted conversation go with it (#4690). In the same
-transaction, the handler sets `deleted_at` on every `generated_assets` row
-linked to a conversation this call deleted, in the same organization and
-workspace, and not already deleted. From then on the attachment read route,
-`GET /v1/:org/:workspace/assistant/attachments/:publicId`, answers 404 for
-those files. A conversation the call did not delete keeps its files. The
-`deleted` count covers conversations only.
+transaction, the handler sets `deleted_at` on each `generated_assets` row that
+is a file the caller sent in a conversation this call deleted: `source` is
+`user_upload`, `user_id` is the caller, `message_id` is set, the organization
+and workspace match, and the row is not already deleted. From then on the
+attachment read route, `GET /v1/:org/:workspace/assistant/attachments/:publicId`,
+answers 404 for those files. A conversation the call did not delete keeps its
+files. An asset linked to the conversation some other way stays, such as a
+coworker's asset that `add_conversation_attachment` linked. The `deleted` count
+covers conversations only.
 
 ## Audit retention
 

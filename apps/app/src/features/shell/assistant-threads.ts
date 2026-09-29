@@ -37,14 +37,12 @@
 // replace it when it lands.
 //
 // A restored question shows the files sent with it as the same chips a live
-// question shows, each opening the file through the read route of the
-// workspace on screen (#4690).
+// question shows (#4690). An entry holds each file's `gen_` id, not a link:
+// the flyout builds the link from the slugs on screen when it draws the chip,
+// so a thread kept across a rename still opens its files.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
-import {
-  assistantAttachmentHref,
-  type SentAttachment,
-} from "./assistant-attachment-files";
+import type { SentAttachment } from "./assistant-attachment-files";
 import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
 import { loadAssistantThread } from "./assistant-thread-actions";
 
@@ -83,18 +81,14 @@ type ThreadStatus = "idle" | "loading" | "failed";
 
 /**
  * The recorded thread as entries. A question is `asked`, with the files sent
- * with it as the chips a live question shows, each linked through the read
- * route of the workspace `org/ws` names (#4690). A reply is `answered` with
+ * with it in the shape a live question carries them (#4690). A reply is
+ * `answered` with
  * the run it was recorded as and the tool calls that run made, so a restored
  * reply lists what it listed when it was new (#4161). A reply with no run was
  * not an assistant turn (another chat surface wrote it), and the flyout has
  * nothing to link it to, so it is left out.
  */
-function restoredEntries(
-  thread: AssistantThread,
-  org: string,
-  ws: string,
-): readonly RestoredEntry[] {
+function restoredEntries(thread: AssistantThread): readonly RestoredEntry[] {
   const entries: RestoredEntry[] = [];
   for (const message of thread.messages) {
     if (message.role === "user") {
@@ -106,7 +100,6 @@ function restoredEntries(
           mediaType: file.mediaType,
           size: file.sizeBytes,
           publicId: file.publicId,
-          href: assistantAttachmentHref(org, ws, file.publicId),
         }),
       );
       entries.push({
@@ -289,7 +282,7 @@ export function useAssistantThreads<E>({
               entries:
                 thread === null
                   ? []
-                  : restoredEntries(thread, org, ws).map(restoreRef.current),
+                  : restoredEntries(thread).map(restoreRef.current),
               conversationId: thread?.id ?? null,
               draft: standIn?.draft ?? "",
               draftTooLong: standIn?.draftTooLong ?? false,
@@ -352,16 +345,13 @@ export function useAssistantThreads<E>({
    */
   const openThread = useCallback(
     (key: string, thread: AssistantThread) => {
-      // The flyout has a key only once the URL names a workspace, so both
-      // slugs are set here. The files' links need them.
-      if (org === null || ws === null) return;
       setStore((prior) => {
         const target = prior.keys.get(key) ?? key;
         const current = prior.threads.get(target) ?? emptyThread<E>();
         if (current.pending) return prior;
         const threads = new Map(prior.threads).set(target, {
           ...emptyThread<E>(),
-          entries: restoredEntries(thread, org, ws).map(restoreRef.current),
+          entries: restoredEntries(thread).map(restoreRef.current),
           conversationId: thread.id,
           draft: current.draft,
           draftTooLong: current.draftTooLong ?? false,
@@ -369,7 +359,7 @@ export function useAssistantThreads<E>({
         return { ...prior, threads };
       });
     },
-    [org, ws],
+    [],
   );
 
   return { scope, status, threadOf, updateThread, startNewThread, openThread };

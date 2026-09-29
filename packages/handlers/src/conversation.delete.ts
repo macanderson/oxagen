@@ -3,15 +3,19 @@
 // deleted, is left alone and not counted.
 //
 // The files sent in a deleted conversation go with it (#4690). In the same
-// transaction, every `generated_assets` row linked to a conversation this call
-// deleted is soft-deleted too, so the attachment read route
-// (serveGeneratedAsset) refuses it from then on. The match uses the internal
-// ids the conversation update returned, so a conversation the call did not
-// delete keeps its files.
+// transaction, each file the caller sent in a conversation this call deleted
+// is soft-deleted too, so the attachment read route (serveGeneratedAsset)
+// refuses it from then on. The match uses the internal ids the conversation
+// update returned, so a conversation the call did not delete keeps its files.
+//
+// A sent file is a `user_upload` row the caller owns that a message of the
+// conversation carries. Any other asset linked to the conversation stays:
+// `add_conversation_attachment` can link an org-visible asset a coworker
+// owns, and deleting the conversation must not take that asset from them.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { conversationDelete } from "@oxagen/oxagen/contracts/conversation.delete";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 export const conversationDeleteHandler: CapabilityHandler<
@@ -63,6 +67,9 @@ export const conversationDeleteHandler: CapabilityHandler<
           ),
           eq(schema.generatedAssets.orgId, ctx.orgId),
           eq(schema.generatedAssets.workspaceId, ctx.workspaceId),
+          eq(schema.generatedAssets.userId, userId),
+          eq(schema.generatedAssets.source, "user_upload"),
+          isNotNull(schema.generatedAssets.messageId),
           isNull(schema.generatedAssets.deletedAt),
         ),
       )

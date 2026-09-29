@@ -177,6 +177,20 @@ describe("conversationDeleteHandler (@oxagen/handlers)", () => {
     expect(files?.params).not.toContain("cnv_1");
   });
 
+  it("deletes only the files the caller sent, never an asset linked from elsewhere (negative)", async () => {
+    // add_conversation_attachment can link a coworker's org-visible asset to
+    // the caller's conversation. The cascade must leave it: only the
+    // caller's own uploads that a message carries go with the conversation.
+    await conversationDeleteHandler({ conversationIds: ["cnv_1"] }, CTX);
+    const files = updateOf(GENERATED_ASSETS);
+    expect(files?.where).toMatch(/"user_id" = \$/);
+    expect(files?.where).toMatch(/"source" = \$/);
+    expect(files?.where).toMatch(/"message_id" is not null/);
+    expect(files?.params).toEqual(
+      expect.arrayContaining(["u_1", "user_upload"]),
+    );
+  });
+
   it("keeps the files of a conversation the call did not delete (negative)", async () => {
     // cnv_2 was already deleted or is not the caller's: only cnv_1 comes back.
     mocks.returning.set(CONVERSATIONS, [ROW_1]);

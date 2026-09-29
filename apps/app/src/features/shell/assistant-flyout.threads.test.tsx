@@ -440,6 +440,38 @@ describe("the assistant's thread across a workspace rename (#3313)", () => {
     );
   });
 
+  // #4726 review: a thread kept across a rename links its files through the
+  // new slug. The read route knows only the workspace's current slug, so a
+  // link built at restore time would answer 404 after the rename.
+  it("links a kept thread's files through the new slug after a rename", async () => {
+    loadAssistantThread.mockResolvedValue(loaded(withFiles(RECORDED, [CHART])));
+    const { renavigate } = await openFlyout();
+    const before = await screen.findByTestId("assistant-sent-attachments");
+    expect(
+      within(before).getByRole("link", { name: "Open chart.png in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-platform/assistant/attachments/gen_01k9chart",
+    );
+
+    loadAssistantThread.mockResolvedValue(loaded(null));
+    renavigate("/acme/core-renamed");
+
+    await waitFor(() => {
+      expect(loadAssistantThread).toHaveBeenLastCalledWith(
+        "acme",
+        "core-renamed",
+      );
+    });
+    const after = screen.getByTestId("assistant-sent-attachments");
+    expect(
+      within(after).getByRole("link", { name: "Open chart.png in a new tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/v1/acme/core-renamed/assistant/attachments/gen_01k9chart",
+    );
+  });
+
   it("lands a reply asked before a rename under the new slug, and frees the composer", async () => {
     let settle: (value: unknown) => void = () => undefined;
     askAssistant.mockReturnValue(
