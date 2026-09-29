@@ -30,13 +30,8 @@ export default async function RecordPage({
   const { org, ws, lineage } = await params;
   const ctx = await requireViewer(org, ws);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6"
-    >
-      <Suspense fallback={<RecordLoading />}>
-        <Record ctx={ctx} source={dataSource()} lineage={lineage} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<RecordLoading />}>
+      <Record ctx={ctx} source={dataSource()} lineage={lineage} />
+    </Suspense>
   );
 }

@@ -1,6 +1,12 @@
 // The static frame of the organization shell: a two-column grid on desktop
 // (rail | top bar over the page), a single column with a bottom bar on a phone.
 // It streams immediately; the chrome's data swaps in from its <Suspense>.
+//
+// The frame owns the page's one <main id="main">, the skip link's target
+// (ADR-227). It sits above the organization layout's <Suspense>, so it is in
+// the document from the first byte and stays there while a loading fallback,
+// a streaming page, an error or a not-found fills it. No page or page state
+// under the shell renders a `main` of its own (arch/loading-landmarks.test.ts).
 import { getTranslations } from "next-intl/server";
 import { type ReactNode, Suspense } from "react";
 import { ShellRoutePageName } from "./route-page-name";
@@ -58,7 +64,9 @@ export async function ShellFrame({
         data-shell-page=""
         className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
       >
-        <ShellRoutePageName>{children}</ShellRoutePageName>
+        <main id="main" className="mx-auto flex w-full flex-col gap-4">
+          <ShellRoutePageName>{children}</ShellRoutePageName>
+        </main>
       </div>
     </div>
   );

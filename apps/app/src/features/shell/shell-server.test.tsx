@@ -240,18 +240,22 @@ describe("ShellChrome", () => {
 });
 
 describe("ShellFrame", () => {
-  it("renders the page beside the chrome, with the pre-paint theme script", async () => {
+  it("renders the page in its one main landmark beside the chrome, with the pre-paint theme script", async () => {
     const { ShellFrame } = await import("./shell-frame");
     const { THEME_SCRIPT } = await import("./theme");
     const { container } = render(
       await ShellFrame({
         chrome: <p>chrome</p>,
-        children: <main id="main">page</main>,
+        children: <p>page</p>,
       }),
     );
     expect(screen.getByTestId("shell")).toBeInTheDocument();
     expect(screen.getByText("chrome")).toBeInTheDocument();
-    expect(screen.getByRole("main")).toHaveTextContent("page");
+    // The skip link's target (ADR-227): the frame owns it, not the page.
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("id", "main");
+    expect(main).toHaveTextContent("page");
+    expect(main).not.toHaveTextContent("chrome");
     expect(container.querySelector("script")?.innerHTML).toBe(THEME_SCRIPT);
   });
 

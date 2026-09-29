@@ -1,8 +1,10 @@
 // The organization layout resolves the viewer for the organization slug and
 // hands the context to the shell chrome and to the clock around its pages; a
 // stranger is a 404 and neither renders. While the viewer resolves, the page
-// body is the shared skeleton rather than nothing.
-import { type ReactNode, Suspense } from "react";
+// body is the shared skeleton rather than nothing. The real shell frame renders
+// here, because its one <main id="main"> sits above the layout's <Suspense>,
+// and the skip link needs that target while the page streams in (ADR-227).
+import type { ReactNode } from "react";
 import { renderToReadableStream } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -22,20 +24,20 @@ vi.mock("@/data/source", () => ({ dataSource: () => ({}) }));
 vi.mock("@/features/auth", () => ({
   SignedInNotice: () => <div data-testid="signed-in-notice" />,
 }));
-// The frame streams the chrome inside its own <Suspense>, as the real one does.
-vi.mock("@/features/shell", () => ({
-  ShellFrame: ({
-    chrome,
-    children,
-  }: {
-    chrome: ReactNode;
-    children: ReactNode;
-  }) => (
-    <div>
-      <Suspense fallback={null}>{chrome}</Suspense>
-      {children}
-    </div>
-  ),
+// The frame's copy is its loading line; the page-name provider reads the
+// client router, which a server render does not mount.
+vi.mock("next-intl/server", () => ({
+  getTranslations: () => Promise.resolve((key: string) => key),
+}));
+vi.mock("@/features/shell/route-page-name", () => ({
+  ShellRoutePageName: ({ children }: { children: ReactNode }) => children,
+}));
+vi.mock("@/features/shell", async () => ({
+  ShellFrame: (
+    await vi.importActual<typeof import("@/features/shell/shell-frame")>(
+      "@/features/shell/shell-frame",
+    )
+  ).ShellFrame,
   ShellChrome: ({ ctx }: { ctx: { orgSlug: string } }) => (
     <nav data-testid="chrome" data-org={ctx.orgSlug} />
   ),
@@ -62,7 +64,7 @@ async function render(org: string) {
   const errors: unknown[] = [];
   const stream = await renderToReadableStream(
     <OrganizationLayout params={Promise.resolve({ org })}>
-      <main data-testid="page">page</main>
+      <div data-testid="page">page</div>
     </OrganizationLayout>,
     {
       onError(error) {
@@ -101,7 +103,7 @@ describe("OrganizationLayout", () => {
     const reading = new AbortController();
     const stream = await renderToReadableStream(
       <OrganizationLayout params={Promise.resolve({ org: "slow" })}>
-        <main data-testid="page">page</main>
+        <div data-testid="page">page</div>
       </OrganizationLayout>,
       { signal: reading.signal, onError: () => undefined },
     );
@@ -110,6 +112,51 @@ describe("OrganizationLayout", () => {
     const html = await new Response(stream).text();
     expect(html).toContain('data-testid="page-skeleton"');
     expect(html).not.toContain('data-testid="page"');
+  });
+
+  it("keeps one main landmark, around the skeleton, while the page streams in beside it", async () => {
+    // Next streams a page that is still reading into a hidden segment after
+    // the shell, then swaps it into the fallback's place, so for a moment
+    // both are in the document. The page must not bring a second main#main
+    // (#4053): the frame's one landmark holds the fallback, then the page.
+    const reading = Promise.withResolvers<void>();
+    async function StreamedPage() {
+      await reading.promise;
+      return <div data-testid="page">page</div>;
+    }
+    const stream = await renderToReadableStream(
+      <OrganizationLayout params={Promise.resolve({ org: "acme" })}>
+        <StreamedPage />
+      </OrganizationLayout>,
+      { onError: () => undefined },
+    );
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    // The shell flushes in one go, with the fallback in the page's place; read
+    // its chunks up to the frame's closing tag.
+    let html = "";
+    while (!html.includes("</main>")) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      html += decoder.decode(chunk.value);
+    }
+    expect(html.match(/<main\b/g)).toHaveLength(1);
+    expect(html).toMatch(
+      /<main id="main"[^>]*>.*data-testid="page-skeleton".*<\/main>/s,
+    );
+    expect(html).not.toContain('data-testid="page"');
+    reading.resolve();
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      html += decoder.decode(chunk.value);
+    }
+    // The page arrived in its hidden segment after the frame's landmark, and
+    // the document still holds one main.
+    expect(html.match(/<main\b/g)).toHaveLength(1);
+    expect(html.indexOf('data-testid="page"')).toBeGreaterThan(
+      html.indexOf("</main>"),
+    );
   });
 
   it("is not found for an organization the viewer does not belong to, and neither the chrome nor the page renders", async () => {

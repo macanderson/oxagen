@@ -28,13 +28,8 @@ export default async function OrganizationPage({
   const ctx = await requireViewer(org);
   const tab = parseOrganizationTab((await searchParams).tab);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<OrganizationSkeleton />}>
-        <Organization ctx={ctx} source={dataSource()} tab={tab} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<OrganizationSkeleton />}>
+      <Organization ctx={ctx} source={dataSource()} tab={tab} />
+    </Suspense>
   );
 }

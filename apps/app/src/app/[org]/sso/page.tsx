@@ -19,15 +19,12 @@ export default async function SsoPage({ params }: PageProps<"/[org]/sso">) {
   const ctx = await requireViewer(org);
   const t = await getTranslations("pages");
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
-    >
+    <>
       <PageHeader
         eyebrow={t("organizationEyebrow", { organization: ctx.orgName })}
         title={t("sso")}
       />
       <Sso ctx={ctx} source={dataSource()} />
-    </main>
+    </>
   );
 }
