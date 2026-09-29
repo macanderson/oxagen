@@ -22,9 +22,9 @@ import { cell } from "@/ui/table";
 import { NotRecordedValue, Section, usePeriod } from "./section";
 
 /** The sizes Rows offers under the invoices (#4693). */
-export const INVOICE_ROWS = [10, 25, 50, 100] as const;
+const INVOICE_ROWS = [10, 25, 50, 100] as const;
 /** The invoices a page holds when the address names no size, the same 50 `list_invoices` reads by default. */
-export const INVOICE_PAGE = 50;
+const INVOICE_PAGE = 50;
 
 /**
  * The invoices a page holds, from `?rows=`. A size Rows does not offer reads

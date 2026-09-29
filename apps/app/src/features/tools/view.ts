@@ -107,7 +107,7 @@ export const TOOLS_PAGE = 50;
  * The rows a page holds, from `?rows=`. A size Rows does not offer reads as
  * `TOOLS_PAGE`, so a hand-typed URL cannot ask for a size the list never draws.
  */
-export function toolsRowsOf(raw: string | undefined): number {
+function toolsRowsOf(raw: string | undefined): number {
   const rows = Number(raw);
   return TOOLS_ROWS.find((size) => size === rows) ?? TOOLS_PAGE;
 }

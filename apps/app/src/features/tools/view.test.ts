@@ -19,7 +19,6 @@ import {
   TOOLS_ROWS,
   TOOLS_TABS,
   toolsLink,
-  toolsRowsOf,
   toolsTabOf,
   weekdayKey,
 } from "./view";
@@ -98,7 +97,7 @@ describe("parseToolsView", () => {
     for (const raw of ["7", "0", "-25", "1000", "25.5", "abc", ""]) {
       expect(parseToolsView("tools", { rows: raw }).rows).toBe(TOOLS_PAGE);
     }
-    expect(toolsRowsOf(undefined)).toBe(TOOLS_PAGE);
+    expect(parseToolsView("tools", {}).rows).toBe(TOOLS_PAGE);
   });
 
   it("reads a belt only on the Toolbelts tab, and only as a toolbelt's public id", () => {
