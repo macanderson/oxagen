@@ -6,8 +6,9 @@
 const STUDIO_GAPS = {
   /**
    * The Studio record: the server's steering folder (tools.toml, the lock and
-   * the tests) and the tools discovery found. Discovery is lane M10, which has
-   * no issue of its own yet, so the lane issue carries it.
+   * the tests) and the tools discovery found. Discovery is lane M10 (#4682,
+   * PR #4711). PR2 of this lane joins its tools to the folder, so the lane
+   * issue carries the record.
    */
   record: 4678,
   /** Try it and Draft run through capabilities that PR2 of this lane adds. */

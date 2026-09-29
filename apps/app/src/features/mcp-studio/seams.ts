@@ -4,7 +4,8 @@
 // for a real empty answer only when the record says so.
 //
 //   - readStudioRecord: the server's steering folder and its discovery. Lane
-//     M10 (discovery and sync) writes it; null until then.
+//     M10 (#4682, PR #4711) discovers the tools, and the second PR of this
+//     lane joins them to the folder. Null until then.
 //   - readFindings: the tool checks on the server's folder. Lane M5 (#4672)
 //     owns lint; null, meaning no checks ran, until then.
 //   - tryCall and draftDescription: Try it and Draft, which the second PR of
@@ -54,7 +55,7 @@ export type FindingsReader = (
   serverId: string,
 ) => Promise<readonly StudioFinding[] | null>;
 
-/** The Studio record. Null until discovery writes one (lane M10). */
+/** The Studio record. Null until PR2 of this lane binds M10's discovery. */
 export const readStudioRecord: RecordReader = () => Promise.resolve(null);
 
 /** The tool checks on the folder as it stands. Null until lint lands (lane M5). */
