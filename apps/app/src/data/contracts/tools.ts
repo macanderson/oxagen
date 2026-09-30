@@ -431,6 +431,40 @@ export type McpServer = z.infer<typeof McpServer>;
  * One `search_mcp_registry` result: a server a workspace can add, from the
  * verified first-party list or the official MCP Registry. Every URL is https.
  */
+/** An argument a registry package takes (the registry's `packageArguments`). */
+export const RegistryPackageArgument = z.object({
+  type: z.enum(["named", "positional"]),
+  /** A named argument's flag, such as `--port`. source.arguments keys it by this. */
+  name: z.string().nullable(),
+  /** A positional argument's hint. source.arguments keys it by this. */
+  valueHint: z.string().nullable(),
+  isRequired: z.boolean(),
+  /** A secret takes its value from `${NAME}` only. */
+  isSecret: z.boolean(),
+  /** A fixed value the registry says a person does not change. */
+  value: z.string().nullable(),
+  /** The value when source.arguments sets none. */
+  default: z.string().nullable(),
+});
+export type RegistryPackageArgument = z.infer<typeof RegistryPackageArgument>;
+
+/** One package a registry entry offers (the registry's `packages[]`). */
+export const RegistryPackage = z.object({
+  /** npm, pypi, oci, nuget, or another type the local gateway does not run. */
+  registryType: z.string().min(1),
+  identifier: z.string().min(1),
+  version: z.string().nullable(),
+  /** The package's transport. The local gateway runs stdio only. */
+  transport: z.string(),
+  runtimeHint: z.string().nullable(),
+  packageArguments: z.array(RegistryPackageArgument),
+  /** The variables the package reads. source.env lists every required one. */
+  environmentVariables: z.array(
+    z.object({ name: z.string().min(1), isRequired: z.boolean() }),
+  ),
+});
+export type RegistryPackage = z.infer<typeof RegistryPackage>;
+
 export const RegistryServer = z.object({
   /** The registry's name for it (`app.linear/linear`), or `verified/<slug>`. Not an Oxagen id. */
   registryRef: z.string().min(1),
@@ -452,6 +486,8 @@ export const RegistryServer = z.object({
     .enum(["dynamic", "client_required", "unknown"])
     .nullable(),
   connectable: z.boolean(),
+  /** The packages a machine can run, empty for a remote-only entry (#4678). */
+  packages: z.array(RegistryPackage).default([]),
 });
 export type RegistryServer = z.infer<typeof RegistryServer>;
 
