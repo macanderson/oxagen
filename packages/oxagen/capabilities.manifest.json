@@ -7157,6 +7157,40 @@
       }
     },
     {
+      "name": "get_studio_listing",
+      "file": "tool.studio.listing.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "start_studio_listing",
+      "file": "tool.studio.listing.start.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "open_studio_review",
       "file": "tool.studio.review.open.ts",
       "domain": "tool",
