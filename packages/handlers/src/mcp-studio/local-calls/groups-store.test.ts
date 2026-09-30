@@ -216,7 +216,7 @@ describe("postgresMachineGroupReader.groupsOf", () => {
     mocks.withTenantDb.mockReset();
   });
 
-  it("reads the machine's groups inside the scope and skips a revoked host", async () => {
+  it("reads the machine's groups inside the scope and skips a revoked or suspended host", async () => {
     const { tx, calls } = fakeTx([[{ group: "ci-runners" }, { group: "dev-laptops" }]]);
     mocks.withTenantDb.mockImplementation((fn: (tx: Tx) => unknown) => fn(tx));
 
@@ -227,14 +227,40 @@ describe("postgresMachineGroupReader.groupsOf", () => {
     expect(calls[0]?.method).toBe("selectDistinct");
     const { sql, params } = lastWhere(calls);
     expect(params).toEqual(
-      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, MACHINE, "revoked"]),
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, MACHINE, "revoked", "suspended"]),
     );
-    expect(sql).toMatch(/"status" <> \$\d+/);
+    expect(sql).toMatch(/"status" not in \(\$\d+, \$\d+\)/);
   });
 
   it("answers no groups for a machine with no membership", async () => {
     const { tx } = fakeTx([[]]);
     mocks.withTenantDb.mockImplementation((fn: (tx: Tx) => unknown) => fn(tx));
     await expect(postgresMachineGroupReader.groupsOf(SCOPE, MACHINE)).resolves.toEqual([]);
+  });
+});
+
+describe("postgresMachineGroupReader.isSuspended", () => {
+  // A block body, as in the groupsOf suite above.
+  beforeEach(() => {
+    mocks.withTenantDb.mockReset();
+  });
+
+  it.each([
+    ["suspended", true],
+    ["active", false],
+    ["paused", false],
+    ["revoked", false],
+  ])("reads a %s host inside the scope as suspended: %s (#4554)", async (status, suspended) => {
+    const { tx, calls } = fakeTx([[{ status }]]);
+    mocks.withTenantDb.mockImplementation((fn: (tx: Tx) => unknown) => fn(tx));
+    await expect(postgresMachineGroupReader.isSuspended(SCOPE, MACHINE)).resolves.toBe(suspended);
+    const { params } = lastWhere(calls);
+    expect(params).toEqual(expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, MACHINE]));
+  });
+
+  it("reads a machine this workspace never enrolled as not suspended", async () => {
+    const { tx } = fakeTx([[]]);
+    mocks.withTenantDb.mockImplementation((fn: (tx: Tx) => unknown) => fn(tx));
+    await expect(postgresMachineGroupReader.isSuspended(SCOPE, MACHINE)).resolves.toBe(false);
   });
 });

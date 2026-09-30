@@ -121,6 +121,34 @@ describe("createLocalTransport", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it("refuses a suspended machine with machine_suspended before it signs anything (#4554)", async () => {
+    const { broker, dispatch } = fakeBroker(resultFor);
+    const signer = testSigner();
+    const sign = vi.spyOn(signer, "sign");
+    const { transport } = transportWith(broker, {
+      signer,
+      reader: readerOf({ [MACHINE]: ["dev-laptops"] }, [MACHINE]),
+    });
+
+    const result = await transport.local(localCall());
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "This machine is suspended. Ask a workspace admin to lift the suspension, then retry." },
+      ],
+      structuredContent: {
+        error: {
+          code: "machine_suspended",
+          message: "This machine is suspended.",
+          fix: "Ask a workspace admin to lift the suspension, then retry.",
+        },
+      },
+      isError: true,
+    });
+    expect(sign).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("refuses every machine for a server that names no groups", async () => {
     const { broker, dispatch } = fakeBroker(resultFor);
     const { transport } = transportWith(broker, { groups: [] });

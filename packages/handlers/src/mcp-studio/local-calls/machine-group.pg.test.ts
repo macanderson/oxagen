@@ -1,6 +1,7 @@
 // Machine groups against a real Postgres: add, the no-op second add, the
 // refusals for a revoked machine and for one enrolled in another workspace,
-// the gateway reader skipping a revoked host, the list keeping it, removal and
+// the gateway reader skipping a revoked or suspended host (#4554), the list
+// keeping both, removal and
 // the no-op second removal, and one security event per decision. Runs wherever
 // DATABASE_URL points at a migrated database. CI's unit job migrates Postgres
 // with Atlas first, and a local run without one is skipped, not red. Every row
@@ -28,7 +29,7 @@ describe.skipIf(!enabled)("machine groups against Postgres", () => {
   const userId = crypto.randomUUID();
   const scope = { orgId, workspaceId };
 
-  const hostKeys = ["active", "revoked", "elsewhere"] as const;
+  const hostKeys = ["active", "revoked", "elsewhere", "suspended"] as const;
   type HostKey = (typeof hostKeys)[number];
   const hostIds = Object.fromEntries(
     hostKeys.map((k) => [k, crypto.randomUUID()]),
@@ -162,16 +163,28 @@ describe.skipIf(!enabled)("machine groups against Postgres", () => {
         // tacho_hosts_revoked_check ties the revoked status to revoked_at.
         host("revoked", { status: "revoked", revokedAt: new Date("2026-09-26T12:00:00.000Z") }),
         host("elsewhere", { workspaceId: otherWorkspaceId }),
+        host("suspended", { status: "suspended" }),
       ]);
       // A membership the revoked host held before it was revoked. The add
-      // capability refuses a revoked host, so the fixture writes the row.
-      await tx.insert(schema.tachoMachineGroupMembers).values({
-        orgId,
-        workspaceId,
-        groupName: "dev-laptops",
-        hostId: hostIds.revoked,
-        createdById: userId,
-      });
+      // capability refuses a revoked host, so the fixture writes the row. The
+      // suspended host's row is written here too, so the security event count
+      // below stays the adds and removals the test makes.
+      await tx.insert(schema.tachoMachineGroupMembers).values([
+        {
+          orgId,
+          workspaceId,
+          groupName: "dev-laptops",
+          hostId: hostIds.revoked,
+          createdById: userId,
+        },
+        {
+          orgId,
+          workspaceId,
+          groupName: "ci-runners",
+          hostId: hostIds.suspended,
+          createdById: userId,
+        },
+      ]);
     });
   });
 
@@ -230,7 +243,7 @@ describe.skipIf(!enabled)("machine groups against Postgres", () => {
     });
   });
 
-  it("gives the gateway a machine's groups in order and none for a revoked host", async () => {
+  it("gives the gateway a machine's groups in order and none for a revoked or suspended host", async () => {
     await expect(postgresMachineGroupReader.groupsOf(scope, machines.active)).resolves.toEqual([
       "ci-runners",
       "dev-laptops",
@@ -239,6 +252,9 @@ describe.skipIf(!enabled)("machine groups against Postgres", () => {
       [],
     );
     await expect(
+      postgresMachineGroupReader.groupsOf(scope, machines.suspended),
+    ).resolves.toEqual([]);
+    await expect(
       postgresMachineGroupReader.groupsOf(
         { orgId, workspaceId: otherWorkspaceId },
         machines.active,
@@ -246,12 +262,36 @@ describe.skipIf(!enabled)("machine groups against Postgres", () => {
     ).resolves.toEqual([]);
   });
 
-  it("lists every group with the revoked machine still shown", async () => {
+  it("reads only the suspended host as suspended (#4554)", async () => {
+    await expect(postgresMachineGroupReader.isSuspended(scope, machines.suspended)).resolves.toBe(
+      true,
+    );
+    await expect(postgresMachineGroupReader.isSuspended(scope, machines.active)).resolves.toBe(
+      false,
+    );
+    await expect(postgresMachineGroupReader.isSuspended(scope, machines.revoked)).resolves.toBe(
+      false,
+    );
+    await expect(
+      postgresMachineGroupReader.isSuspended(
+        { orgId, workspaceId: otherWorkspaceId },
+        machines.suspended,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("lists every group with the revoked and suspended machines still shown", async () => {
     const listing = await list();
     expect(
       listing.groups.map((g) => [g.group, g.machines.map((m) => [m.machineId, m.status])]),
     ).toEqual([
-      ["ci-runners", [[machines.active, "active"]]],
+      [
+        "ci-runners",
+        [
+          [machines.active, "active"],
+          [machines.suspended, "suspended"],
+        ],
+      ],
       [
         "dev-laptops",
         [
