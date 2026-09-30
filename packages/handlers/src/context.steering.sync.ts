@@ -195,7 +195,7 @@ export interface SyncOutcome {
 }
 
 /** A governance mode that changed on the production branch outside Oxagen. */
-export interface GovernanceChange {
+interface GovernanceChange {
   previousMode: GovernanceMode;
   mode: GovernanceMode;
   /** The commit that last changed steering/governance.toml. */

@@ -181,7 +181,8 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
  * A record's lineage id, with `governance` held back. Every governance
  * proposal holds that lineage, and the open-PR index keys on it, so a record
  * on it would share the one governance PR slot (#4795). The lookahead keeps
- * the rule in the pattern, so the published schema states it.
+ * the rule in the one pattern, so the field keeps a plain string schema and
+ * its description.
  */
 const RECORD_LINEAGE_ID = new RegExp(
   `^(?!${GOVERNANCE_LINEAGE}$)${CONTEXT_RECORD_LINEAGE.source.replace(/^\^/, "")}`,
