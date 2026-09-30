@@ -23,6 +23,7 @@ const WAITING = {
   machine: null,
   toolCount: null,
   error: null,
+  tools: null,
 } as const;
 
 describe("get_studio_listing is registered as declared", () => {
@@ -68,6 +69,23 @@ describe("get_studio_listing", () => {
       toolCount: 4,
     });
     expect(done).toMatchObject({ machine: "tch_laptop01", toolCount: 4, pin: { registryType: "npm" } });
+  });
+
+  it("carries the listed tools with Studio's suggested classification, and refuses a risk it does not know", () => {
+    const tool = {
+      name: "list_notes",
+      description: null,
+      suggested: { risk: "low", sideEffect: "read", egress: "local", impacts: [] },
+    };
+    const listed = studioListingSchema.parse({ ...WAITING, status: "succeeded", tools: [tool] });
+    expect(listed.tools).toStrictEqual([tool]);
+    expect(
+      studioListingSchema.safeParse({
+        ...WAITING,
+        status: "succeeded",
+        tools: [{ ...tool, suggested: { ...tool.suggested, risk: "severe" } }],
+      }).success,
+    ).toBe(false);
   });
 
   it("refuses a status the listing never takes (negative)", () => {

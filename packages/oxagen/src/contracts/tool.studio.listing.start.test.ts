@@ -20,6 +20,7 @@ const WAITING = {
   machine: null,
   toolCount: null,
   error: null,
+  tools: null,
 } as const;
 
 describe("start_studio_listing is registered as declared", () => {
