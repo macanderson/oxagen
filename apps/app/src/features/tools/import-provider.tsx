@@ -3,13 +3,22 @@
 // Connect → Review tools/list → Classify and import.
 //
 //  1. **Connect** finds the provider and authenticates to it, all inside this
-//     dialog (#4132). Three sources:
+//     dialog (#4132). Five sources:
 //       - **Browse** searches verified first-party servers and the official
 //         MCP Registry (`search_mcp_registry`). Picking one fills in its
 //         endpoint and says how it authenticates.
 //       - **Custom** takes any streamable-http endpoint, an internal one
 //         included, with OAuth, a bearer token, a header or no auth.
 //       - **Already added** picks a provider on the roster.
+//       - **From a definition** and **Local command** are Studio's forms
+//         (#4678, item 1), rendered through `@/features/mcp-studio/client`.
+//         From a definition saves the uploaded definition and opens the
+//         steering PR that adds the server's folder, then follows its
+//         discovery. Local command renders disabled until #4756.
+//     A registry entry says whether it offers a remote, a package, or both.
+//     Running it as a package opens Studio's package form, which asks for
+//     machine groups, the package type and the required arguments, and waits
+//     on #4742 to submit.
 //     OAuth runs in a popup (`use-provider-oauth.ts`): the person signs in to
 //     the provider, the popup posts back and closes, and the wizard moves on.
 //     A server that registers no OAuth clients itself (Slack, GitHub) asks for
@@ -29,6 +38,12 @@
 // material: read off the form at submit, sent once, never held in state,
 // never rendered back and never in a failure message.
 import { useTranslations } from "next-intl";
+import {
+  DefinitionFields,
+  DiscoveryProgress,
+  LocalCommandFields,
+  RegistryPackageFields,
+} from "@/features/mcp-studio/client";
 import { chooseServerTools } from "@/features/shell/client";
 import {
   type ReactNode,
@@ -72,7 +87,14 @@ type Step = 1 | 2 | 3;
 
 const STEP_KEYS = { 1: "s1", 2: "s2", 3: "s3" } as const;
 
-type Source = "browse" | "custom" | "existing";
+type Source = "browse" | "custom" | "existing" | "definition" | "local";
+
+/** The sources Studio's forms carry. Their labels live in Studio's catalogue. */
+type StudioSource = Extract<Source, "definition" | "local">;
+
+function isStudioSource(source: Source): source is StudioSource {
+  return source === "definition" || source === "local";
+}
 
 /** Custom auth: OAuth sign-in, or one of the static strategies. */
 type CustomAuth = "oauth" | McpAuthStrategy;
@@ -368,6 +390,7 @@ export function ImportProvider({
 }) {
   const t = useTranslations("tools.import");
   const tOAuth = useTranslations("tools.import.oauth");
+  const tStudio = useTranslations("mcpStudio.addServer");
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -376,6 +399,8 @@ export function ImportProvider({
   const [failure, setFailure] = useState<string | null>(null);
   const [source, setSource] = useState<Source>("browse");
   const [picked, setPicked] = useState<RegistryServer | null>(null);
+  // A registry entry picked to run as a package, which Studio's form takes.
+  const [packagePick, setPackagePick] = useState<RegistryServer | null>(null);
   const [existing, setExisting] = useState<string>("");
   const [customAuth, setCustomAuth] = useState<CustomAuth>("oauth");
   const [connected, setConnected] = useState<Connected | null>(null);
@@ -414,6 +439,7 @@ export function ImportProvider({
     setFailure(null);
     setSource("browse");
     setPicked(null);
+    setPackagePick(null);
     setExisting("");
     setCustomAuth("oauth");
     setConnected(null);
@@ -519,7 +545,8 @@ export function ImportProvider({
       return;
     }
 
-    // Custom.
+    // Studio's sources submit their own forms, so only Custom is left.
+    if (source !== "custom") return;
     const name = textValue(form, "name").trim();
     const endpointUrl = textValue(form, "endpointUrl");
     setSigningInTo(name);
@@ -622,7 +649,12 @@ export function ImportProvider({
           });
 
   const showConnect =
-    source !== "browse" || (picked !== null && picked.connectable);
+    source === "custom" ||
+    source === "existing" ||
+    (source === "browse" &&
+      packagePick === null &&
+      picked !== null &&
+      picked.connectable);
   const footer =
     step === 1 ? (
       showConnect ? (
@@ -688,8 +720,8 @@ export function ImportProvider({
 
   const sources: readonly Source[] =
     servers !== null && servers.length > 0
-      ? ["browse", "custom", "existing"]
-      : ["browse", "custom"];
+      ? ["browse", "custom", "existing", "definition", "local"]
+      : ["browse", "custom", "definition", "local"];
 
   return (
     <>
@@ -739,20 +771,64 @@ export function ImportProvider({
                     }`}
                     onClick={() => {
                       setSource(option);
+                      setPackagePick(null);
                       setFailure(null);
                       oauth.reset();
                     }}
                   >
-                    {t(`source.${option}`)}
+                    {isStudioSource(option)
+                      ? tStudio(`sources.${option}`)
+                      : t(`source.${option}`)}
                   </button>
                 ))}
               </div>
 
-              {source === "browse" && picked === null ? (
+              {source === "definition" ? (
+                <DefinitionFields at={at} />
+              ) : source === "local" ? (
+                <LocalCommandFields />
+              ) : source === "browse" && packagePick !== null ? (
+                <div className="flex flex-col gap-3">
+                  <div
+                    data-testid={`${TESTID}-package-picked`}
+                    className="flex min-w-0 items-start gap-3 rounded-lg border border-border px-3 py-2.5"
+                  >
+                    <ProviderIcon
+                      name={packagePick.name}
+                      iconUrl={packagePick.iconUrl}
+                      size={32}
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="font-semibold text-foreground">
+                        {packagePick.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {packagePick.publisher}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={buttonSecondary}
+                      onClick={() => {
+                        setPackagePick(null);
+                        setFailure(null);
+                      }}
+                    >
+                      {t("browse.change")}
+                    </button>
+                  </div>
+                  <RegistryPackageFields server={packagePick} />
+                </div>
+              ) : source === "browse" && picked === null ? (
                 <RegistryBrowser
                   at={at}
                   onPick={(server) => {
                     setPicked(server);
+                    setFailure(null);
+                    oauth.reset();
+                  }}
+                  onPickPackage={(server) => {
+                    setPackagePick(server);
                     setFailure(null);
                     oauth.reset();
                   }}
@@ -1171,6 +1247,7 @@ export function ImportProvider({
                       unchanged: done.unchanged,
                     })}
                   </p>
+                  <DiscoveryProgress server={null} canStart={false} />
                   {/* Several providers in one sitting: back to Connect, dialog open. */}
                   <button
                     type="button"

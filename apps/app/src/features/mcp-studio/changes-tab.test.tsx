@@ -2,17 +2,19 @@
 // The Changes tab of a Studio server (#4678). It shows the draft's tool
 // surface diff, the staged edits, the files the steering PR would change and
 // the tool checks' findings. It opens the steering PR through lane M11's
-// three seams: save the draft over the revision it was built on, read the
-// stored draft back after a conflict, and open the steering PR from the saved
-// revision. Each test fakes what M11 answers and checks what the tab shows and
-// what it sends. The browser never sends the server's definition or a
-// credential, a conflict reloads and merges without trying again, and the
-// draft stays in the tab after Review.
+// three capabilities: save the draft over the revision it was built on, read
+// the stored draft back after a conflict, and open the steering PR from the
+// saved revision. Each test fakes what M11 answers and checks what the tab
+// shows and what it sends. The browser never sends the server's definition or
+// a credential, a conflict reloads and merges without trying again, a stored
+// draft the page cannot read leaves the tab's edits alone, and the draft
+// stays in the tab after Review.
 import {
   cleanup,
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
@@ -30,6 +32,7 @@ import {
   fakeSave,
   GITHUB,
   idDraftKey,
+  recordOf,
   SCRATCH,
   savedDraft,
   seedDraft,
@@ -48,6 +51,14 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// With no seam passed, the tab calls these server actions (review-calls.ts).
+const actions = vi.hoisted(() => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
+vi.mock("./actions", () => actions);
 
 type TabProps = ComponentProps<typeof ChangesTab>;
 type SaveInput = Parameters<SaveStudioDraft>[0];
@@ -96,7 +107,17 @@ const CLASSIFY_REFUND: DraftOp = {
 
 const CONFLICT =
   "Someone saved this server's draft after you last did. Your edits are now staged on top of theirs. Check the edits, then open the steering PR again.";
-const NOT_BUILT = "Opening a steering PR from Studio is not available yet.";
+const KEPT =
+  "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged, and Oxagen kept theirs. Reload the page to get a version that can read their edits, then open the steering PR again.";
+const THROWN =
+  "The steering PR did not open because the request failed before Oxagen answered. Try again.";
+const UNAVAILABLE =
+  "Oxagen could not open the steering PR just now. Try again in a minute.";
+const STALE = {
+  ok: false,
+  reason: "conflict",
+  code: "draft_revision_stale",
+} as const;
 const SOURCE_MISSING =
   "The steering PR needs the server's definition to go with this draft, and Oxagen has not recorded it yet.";
 const PR_URL = "https://github.com/acme/steering/pull/4721";
@@ -307,6 +328,8 @@ describe("ChangesTab tool surface", () => {
     });
     renderTab(WAREHOUSE);
     expect(tokens()).toBe(tokenLine("10,000", "10,050"));
+    // Warehouse lists its tools through search, so the budget does not apply.
+    expect(screen.queryByTestId("studio-pr-over-budget")).toBeNull();
     const row = screen.getByTestId(`studio-change-${warehouseTool(1)}`);
     expect(row).toHaveAttribute("data-change", "added");
     expect(within(row).getByText("+50 tokens")).toBeInTheDocument();
@@ -318,14 +341,12 @@ describe("ChangesTab tool surface", () => {
 });
 
 describe("ChangesTab findings", () => {
-  it("says the tool checks have not run when there are no findings yet", () => {
+  it("says findings are not available when none could be read", () => {
     renderTab(BILLING, { findings: null });
     const missing = screen.getByTestId("studio-findings-missing");
     expect(missing).toHaveAttribute("role", "note");
-    expect(missing).toHaveAttribute("data-gap", "#4672");
-    expect(missing).toHaveTextContent(
-      "The tool checks have not run on this draft yet.",
-    );
+    expect(missing).toHaveAttribute("data-gap", "#4742");
+    expect(missing).toHaveTextContent("Findings are not available yet.");
   });
 
   it("says the tool checks found nothing when the list is empty", () => {
@@ -409,6 +430,10 @@ describe("ChangesTab steering PR", () => {
     });
     expect(link).toHaveAttribute("href", PR_URL);
     expect(link).toHaveAttribute("target", "_blank");
+    expect(summaryValue("Branch")).toBe("studio/stripe");
+    expect(screen.getByTestId("studio-review-branch")).toHaveTextContent(
+      "studio/stripe",
+    );
     expect(summaryValue("Imported tools")).toBe("1");
     expect(summaryValue("Removed tools")).toBe("0");
     expect(summaryValue("Reclassified tools")).toBe("1");
@@ -517,26 +542,111 @@ describe("ChangesTab steering PR", () => {
     ).toBeDisabled();
     openSteeringPr();
     expect(held.calls).toHaveLength(1);
-    held.release({
-      ok: false,
-      reason: "failed",
-      message: "The draft store is down.",
-    });
+    held.release({ ok: false, reason: "failed", code: "unavailable" });
     expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: The draft store is down.",
+      UNAVAILABLE,
     );
     expect(button).toHaveTextContent("Open steering PR");
     expect(button).not.toHaveAttribute("aria-disabled");
     expect(screen.getByTestId("studio-draft-discard")).toBeEnabled();
   });
 
-  it("answers not built from the default seams until lane M11 lands", async () => {
-    seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
-    renderTab(STRIPE);
+  it("calls lane M11's capabilities through the server actions when no seam is passed", async () => {
+    seedDraft(draftKey("billing"), { revision: 2, ops: [CLASSIFY_REFUND] });
+    actions.saveStudioDraftAction.mockResolvedValueOnce({
+      ok: true,
+      value: savedDraft({ ops: [CLASSIFY_REFUND], revision: 3 }),
+    });
+    actions.openStudioReviewAction.mockResolvedValueOnce({
+      ok: true,
+      value: studioReview(),
+    });
+    renderTab(BILLING);
     openSteeringPr();
-    const note = await screen.findByTestId("studio-pr-not-built");
-    expect(note).toHaveAttribute("data-gap", "#4686");
-    expect(note).toHaveTextContent(NOT_BUILT);
+    expect(await screen.findByTestId("studio-pr-opened")).toHaveTextContent(
+      "Opened steering PR #4721",
+    );
+    expect(actions.saveStudioDraftAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      {
+        server: "billing",
+        serverId: BILLING,
+        ops: [CLASSIFY_REFUND],
+        revision: 2,
+      },
+    );
+    expect(actions.openStudioReviewAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      { server: "billing", revision: 3 },
+    );
+    expect(actions.getStudioDraftAction).not.toHaveBeenCalled();
+  });
+
+  it("keeps the edits it sent when the saved draft's edits do not read back", async () => {
+    seedDraft(draftKey("billing"), { revision: 2, ops: [CLASSIFY_REFUND] });
+    const save = fakeSave({
+      ok: true,
+      draft: savedDraft({ ops: [{ kind: "rename", tool: "x" }], revision: 3 }),
+    });
+    const open = fakeOpen({ ok: true, review: studioReview() });
+    renderTab(BILLING, { save: save.save, open: open.open });
+    openSteeringPr();
+    await screen.findByTestId("studio-pr-opened");
+    expect(stored(draftKey("billing"))).toEqual({
+      revision: 3,
+      ops: [CLASSIFY_REFUND],
+    });
+  });
+});
+
+describe("ChangesTab definition budget", () => {
+  it("warns before opening when the draft's tools pass a direct server's budget", () => {
+    seedDraft(draftKey("billing"), {
+      revision: 2,
+      ops: [IMPORT_VOID, CLASSIFY_REFUND],
+    });
+    const record = recordOf(BILLING);
+    if (record === null) throw new Error("no billing record");
+    renderTab(BILLING, {
+      record: {
+        ...record,
+        exposure: { mode: "direct", definitionBudget: 1_000 },
+      },
+    });
+    expect(tokens()).toBe(tokenLine("800", "1,150"));
+    const warning = screen.getByTestId("studio-pr-over-budget");
+    expect(warning).toHaveTextContent("Over budget");
+    expect(warning).toHaveTextContent(
+      "The imported tools come to 1,150 definition tokens, over this server's budget of 1,000. The steering PR will carry an over-budget warning.",
+    );
+    // The warning never blocks: lint's finding is a warning.
+    expect(screen.getByTestId("studio-pr-open")).toBeEnabled();
+  });
+
+  it("does not warn at the budget, or for a server in search mode", () => {
+    seedDraft(draftKey("billing"), {
+      revision: 2,
+      ops: [IMPORT_VOID, CLASSIFY_REFUND],
+    });
+    const record = recordOf(BILLING);
+    if (record === null) throw new Error("no billing record");
+    const { unmount } = renderTab(BILLING, {
+      record: {
+        ...record,
+        exposure: { mode: "direct", definitionBudget: 1_150 },
+      },
+    });
+    expect(screen.queryByTestId("studio-pr-over-budget")).toBeNull();
+    unmount();
+    renderTab(BILLING, {
+      record: {
+        ...record,
+        exposure: { mode: "search", definitionBudget: 1_000 },
+      },
+    });
+    expect(screen.queryByTestId("studio-pr-over-budget")).toBeNull();
   });
 });
 
@@ -544,11 +654,7 @@ describe("ChangesTab conflict", () => {
   it("reloads the stored draft on a conflict, stages this tab's edits on top, and waits for the person to open again", async () => {
     seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
     const save = fakeSave(
-      {
-        ok: false,
-        reason: "conflict",
-        message: "The stored draft is at revision 3.",
-      },
+      STALE,
       {
         ok: true,
         draft: savedDraft({
@@ -610,11 +716,7 @@ describe("ChangesTab conflict", () => {
       revision: 1,
       ops: [savedTest(0), IMPORT_REFUND],
     });
-    const save = fakeSave({
-      ok: false,
-      reason: "conflict",
-      message: "The stored draft is at revision 5.",
-    });
+    const save = fakeSave(STALE);
     const get = fakeGet({
       ok: true,
       draft: savedDraft({
@@ -646,11 +748,7 @@ describe("ChangesTab conflict", () => {
 
   it("stages this tab's draft as a new one when the stored draft is gone", async () => {
     seedDraft(draftKey("stripe"), { revision: 2, ops: [DESCRIBE_PAYMENT] });
-    const save = fakeSave({
-      ok: false,
-      reason: "conflict",
-      message: "The stored draft was discarded.",
-    });
+    const save = fakeSave(STALE);
     const get = fakeGet({ ok: true, draft: null });
     const open = fakeOpen();
     renderTab(STRIPE, { save: save.save, get: get.get, open: open.open });
@@ -666,20 +764,12 @@ describe("ChangesTab conflict", () => {
 
   it("shows the failure and keeps the draft when the stored draft cannot be read", async () => {
     seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
-    const save = fakeSave({
-      ok: false,
-      reason: "conflict",
-      message: "The stored draft is at revision 3.",
-    });
-    const get = fakeGet({
-      ok: false,
-      reason: "failed",
-      message: "The draft store timed out.",
-    });
+    const save = fakeSave(STALE);
+    const get = fakeGet({ ok: false, reason: "failed", code: "unavailable" });
     renderTab(STRIPE, { save: save.save, get: get.get });
     openSteeringPr();
     expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: The draft store timed out.",
+      UNAVAILABLE,
     );
     expect(stored(draftKey("stripe"))).toEqual({
       revision: 1,
@@ -687,39 +777,90 @@ describe("ChangesTab conflict", () => {
     });
   });
 
-  it("shows not built when reading the stored draft is not built", async () => {
+  it("keeps its own revision when the stored draft does not fit the draft shape, so it cannot save over it", async () => {
     seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
-    const save = fakeSave({
-      ok: false,
-      reason: "conflict",
-      message: "The stored draft is at revision 3.",
+    // The fake repeats its last answer, so every save is stale and every get
+    // returns the same unreadable draft.
+    const save = fakeSave(STALE);
+    // A newer page stored an edit kind this page does not know.
+    const get = fakeGet({
+      ok: true,
+      draft: savedDraft({
+        server: "stripe",
+        serverId: STRIPE,
+        ops: [{ kind: "rename", tool: "list_customers", to: "customers" }],
+        revision: 3,
+      }),
     });
-    const get = fakeGet({ ok: false, reason: "not_built", gap: "steeringPr" });
+    const open = fakeOpen({ ok: true, review: studioReview() });
+    renderTab(STRIPE, { save: save.save, get: get.get, open: open.open });
+    openSteeringPr();
+    const kept = await screen.findByTestId("studio-pr-kept");
+    expect(kept).toHaveAttribute("role", "alert");
+    expect(kept.textContent).toBe(KEPT);
+    expect(screen.queryByTestId("studio-pr-conflict")).toBeNull();
+    // The edits stay at this tab's own revision. Taking revision 3 would let
+    // the next save replace the whole list and delete the edits this page
+    // cannot read.
+    expect(stored(draftKey("stripe"))).toEqual({
+      revision: 1,
+      ops: [IMPORT_REFUND],
+    });
+    expect(open.calls).toHaveLength(0);
+    // A second Open sends the same revision, so it conflicts again and still
+    // opens nothing. A reload is what brings a page able to merge.
+    openSteeringPr();
+    await waitFor(() => {
+      expect(save.calls).toHaveLength(2);
+    });
+    expect(save.calls[1]).toStrictEqual({
+      server: "stripe",
+      serverId: STRIPE,
+      ops: [IMPORT_REFUND],
+      revision: 1,
+    });
+    expect(open.calls).toEqual([]);
+    expect(screen.queryByTestId("studio-pr-opened")).toBeNull();
+  });
+
+  it("keeps its own revision when the stored draft holds more edits than a draft may", async () => {
+    seedDraft(draftKey("stripe"), { revision: 1, ops: [IMPORT_REFUND] });
+    const save = fakeSave(STALE);
+    const get = fakeGet({
+      ok: true,
+      draft: savedDraft({
+        server: "stripe",
+        serverId: STRIPE,
+        ops: Array.from({ length: 2_001 }, (_, n) => ({
+          kind: "import",
+          tool: `tool_${String(n)}`,
+        })),
+        revision: 3,
+      }),
+    });
     renderTab(STRIPE, { save: save.save, get: get.get });
     openSteeringPr();
-    const note = await screen.findByTestId("studio-pr-not-built");
-    expect(note).toHaveAttribute("data-gap", "#4686");
-    expect(note).toHaveTextContent(NOT_BUILT);
+    expect((await screen.findByTestId("studio-pr-kept")).textContent).toBe(
+      KEPT,
+    );
+    expect(stored(draftKey("stripe"))).toEqual({
+      revision: 1,
+      ops: [IMPORT_REFUND],
+    });
   });
 });
 
 describe("ChangesTab save and Review failures", () => {
   it("shows a failed save and leaves the draft unsaved", async () => {
     seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
-    const save = fakeSave({
-      ok: false,
-      reason: "failed",
-      message: "The draft store is down.",
-    });
+    const save = fakeSave({ ok: false, reason: "failed", code: "unavailable" });
     const get = fakeGet();
     const open = fakeOpen();
     renderTab(STRIPE, { save: save.save, get: get.get, open: open.open });
     openSteeringPr();
     const failed = await screen.findByTestId("studio-pr-failed");
     expect(failed).toHaveAttribute("role", "alert");
-    expect(failed).toHaveTextContent(
-      "The steering PR did not open: The draft store is down.",
-    );
+    expect(failed.textContent).toBe(UNAVAILABLE);
     expect(get.calls).toHaveLength(0);
     expect(open.calls).toHaveLength(0);
     expect(stored(draftKey("stripe"))).toEqual({
@@ -728,44 +869,64 @@ describe("ChangesTab save and Review failures", () => {
     });
   });
 
-  it("shows not built when saving the draft is not built", async () => {
+  it("names a refusal the page knows in its own words", async () => {
     seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
-    const save = fakeSave({
-      ok: false,
-      reason: "not_built",
-      gap: "steeringPr",
-    });
+    const save = fakeSave({ ok: false, reason: "failed", code: "denied" });
     const open = fakeOpen();
     renderTab(STRIPE, { save: save.save, open: open.open });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-not-built")).toHaveAttribute(
-      "data-gap",
-      "#4686",
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      "Only an organization owner or admin, or a workspace owner, can open a steering PR.",
     );
     expect(open.calls).toHaveLength(0);
   });
 
-  it("shows the error's message when the save throws", async () => {
+  it("tells the person to discard edits when the draft is too large to send", async () => {
+    seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
+    const save = fakeSave({ ok: false, reason: "failed", code: "too_large" });
+    renderTab(STRIPE, { save: save.save });
+    openSteeringPr();
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      "This draft is over the 960 KiB this page can send in one request. Discard some edits, then open the steering PR again. The Oxagen API and MCP tools save drafts up to 8 MiB.",
+    );
+  });
+
+  it("names a refusal the page does not know by its code", async () => {
+    seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
+    const save = fakeSave({
+      ok: false,
+      reason: "failed",
+      code: "draft_store_paused",
+    });
+    renderTab(STRIPE, { save: save.save });
+    openSteeringPr();
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      "The steering PR did not open. Oxagen answered draft_store_paused.",
+    );
+  });
+
+  it("shows a try-again failure when the save throws", async () => {
     seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
     const save = fakeSave();
     renderTab(STRIPE, { save: save.save });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: the fake seam has no answer",
-    );
+    const failed = await screen.findByTestId("studio-pr-failed");
+    expect(failed.textContent).toBe(THROWN);
+    // The thrown message is the fake's, and the page never shows it.
+    expect(failed).not.toHaveTextContent("the fake seam has no answer");
     expect(screen.getByTestId("studio-pr-open")).toHaveTextContent(
       "Open steering PR",
     );
   });
 
-  it("shows what the save threw when it is not an Error", async () => {
+  it("shows the same try-again failure when the save throws a non-Error", async () => {
     seedDraft(draftKey("stripe"), { revision: 0, ops: [IMPORT_REFUND] });
     const save = vi.fn<SaveStudioDraft>().mockRejectedValue("storage full");
     renderTab(STRIPE, { save });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: storage full",
-    );
+    const failed = await screen.findByTestId("studio-pr-failed");
+    expect(failed.textContent).toBe(THROWN);
+    expect(failed).not.toHaveTextContent("storage full");
   });
 
   it("stops before Review when the draft imports a tool and no definition is attached", async () => {
@@ -848,12 +1009,12 @@ describe("ChangesTab save and Review failures", () => {
     const open = fakeOpen({
       ok: false,
       reason: "failed",
-      message: "The steering repository refused the push.",
+      code: "production_branch_missing",
     });
     renderTab(STRIPE, { save: save.save, open: open.open });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: The steering repository refused the push.",
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      "The steering repository has no production branch. Push one, then open the steering PR again.",
     );
     expect(open.calls).toStrictEqual([{ server: "stripe", revision: 1 }]);
     expect(stored(draftKey("stripe"))).toEqual({
@@ -874,38 +1035,46 @@ describe("ChangesTab save and Review failures", () => {
     const get = fakeGet();
     const open = fakeOpen({
       ok: false,
-      reason: "conflict",
-      message: "tools.toml does not compile.",
+      reason: "failed",
+      code: "tools_unclassified",
     });
     renderTab(BILLING, { save: save.save, get: get.get, open: open.open });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: tools.toml does not compile.",
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      "Every imported tool needs a risk, a side effect, and an egress. Classify each one, then open the steering PR again.",
     );
     expect(screen.queryByTestId("studio-pr-conflict")).toBeNull();
     expect(get.calls).toHaveLength(0);
     expect(save.calls).toHaveLength(1);
   });
 
-  it("shows not built when opening the steering PR is not built", async () => {
+  it("reloads the stored draft when Review finds someone saved after this tab did", async () => {
     seedDraft(draftKey("billing"), { revision: 2, ops: [CLASSIFY_REFUND] });
     const save = fakeSave({
       ok: true,
       draft: savedDraft({ ops: [CLASSIFY_REFUND], revision: 3 }),
     });
-    const open = fakeOpen({
-      ok: false,
-      reason: "not_built",
-      gap: "steeringPr",
+    // Someone else saved between this tab's save and its Review.
+    const get = fakeGet({
+      ok: true,
+      draft: savedDraft({ ops: [IMPORT_VOID], revision: 4 }),
     });
-    renderTab(BILLING, { save: save.save, open: open.open });
+    const open = fakeOpen(STALE);
+    renderTab(BILLING, { save: save.save, get: get.get, open: open.open });
     openSteeringPr();
-    const note = await screen.findByTestId("studio-pr-not-built");
-    expect(note).toHaveAttribute("data-gap", "#4686");
-    expect(note).toHaveTextContent(NOT_BUILT);
+    const alert = await screen.findByTestId("studio-pr-conflict");
+    expect(alert.textContent).toBe(CONFLICT);
+    expect(open.calls).toStrictEqual([{ server: "billing", revision: 3 }]);
+    expect(get.calls).toStrictEqual([{ server: "billing" }]);
+    expect(stored(draftKey("billing"))).toEqual({
+      revision: 4,
+      ops: [IMPORT_VOID, CLASSIFY_REFUND],
+    });
+    expect(save.calls).toHaveLength(1);
+    expect(screen.queryByTestId("studio-pr-failed")).toBeNull();
   });
 
-  it("shows the error's message and keeps the saved revision when opening throws", async () => {
+  it("shows a try-again failure and keeps the saved revision when opening throws", async () => {
     seedDraft(draftKey("billing"), { revision: 2, ops: [CLASSIFY_REFUND] });
     const save = fakeSave({
       ok: true,
@@ -914,8 +1083,8 @@ describe("ChangesTab save and Review failures", () => {
     const open = fakeOpen();
     renderTab(BILLING, { save: save.save, open: open.open });
     openSteeringPr();
-    expect(await screen.findByTestId("studio-pr-failed")).toHaveTextContent(
-      "The steering PR did not open: the fake seam has no answer",
+    expect((await screen.findByTestId("studio-pr-failed")).textContent).toBe(
+      THROWN,
     );
     expect(stored(draftKey("billing"))).toEqual({
       revision: 3,

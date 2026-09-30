@@ -131,7 +131,7 @@ function requestEvent(
 }
 
 /** Refuse a name that cannot be a folder under tools/servers/. */
-function serverName(server: string): string {
+export function serverName(server: string): string {
   if (!serverNameSchema.safeParse(server).success)
     throw new HandlerError({
       code: "not_found",
@@ -210,7 +210,10 @@ export async function startServerDiscovery(
   return store.read(scope, server);
 }
 
-async function assertReader(actor: DiscoveryActor): Promise<DiscoveryScope> {
+/** Refuse a caller who may not read discovery state, and return the scope. */
+export async function assertReader(
+  actor: DiscoveryActor,
+): Promise<DiscoveryScope> {
   const scope = { orgId: actor.orgId, workspaceId: actor.workspaceId };
   await runInTenantScope(scope, async () => {
     const userId = await resolveActingUserId({
@@ -351,7 +354,9 @@ export async function runDiscoveryEvent(
 /**
  * The events the hourly sweep sends:
  *
- * - schedule, for every published server with no discovery yet;
+ * - schedule, for every published server whose tools discovery has not
+ *   snapshotted: one with no discovery yet, or one whose last discovery
+ *   finished before its mcp.servers row existed;
  * - schedule, for every daily server whose last discovery is a day old;
  * - lock_merged, for every server with an open sync steering PR, so a merge
  *   releases the withheld tools and a closed PR is let go;

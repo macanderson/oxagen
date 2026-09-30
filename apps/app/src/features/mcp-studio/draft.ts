@@ -28,38 +28,79 @@ const Tool = z.string().min(1).max(128);
 /** An impact tag: snake_case, the registry's rule. */
 const Impact = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
 
+// Strict, like save_studio_draft's studioDraftOpSchema: a field this page
+// does not know makes the edit unreadable rather than being dropped, so a
+// stored edit a newer page wrote is never saved back without it.
 const DraftOpShape = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("import"), tool: Tool }),
-  z.object({ kind: z.literal("remove"), tool: Tool }),
-  z.object({
-    kind: z.literal("classify"),
-    tool: Tool,
-    risk: ToolRiskGrade,
-    sideEffect: ToolSideEffect,
-    egress: ToolEgress,
-    impacts: z.array(Impact).max(32),
-  }),
-  z.object({
-    kind: z.literal("describe"),
-    tool: Tool,
-    description: z.string().min(1).max(DESCRIPTION_MAX),
-  }),
-  z.object({
-    kind: z.literal("test"),
-    tool: Tool,
-    environment: z.string().min(1).max(64),
-    /** The arguments as the person typed them, JSON text. */
-    args: z.string().max(65_536),
-    /** The request as built before the credential is added. */
-    request: z.string().max(65_536),
-    raw: z.string().max(262_144),
-    shaped: z.string().max(262_144),
-  }),
+  z.object({ kind: z.literal("import"), tool: Tool }).strict(),
+  z.object({ kind: z.literal("remove"), tool: Tool }).strict(),
+  z
+    .object({
+      kind: z.literal("classify"),
+      tool: Tool,
+      risk: ToolRiskGrade,
+      sideEffect: ToolSideEffect,
+      egress: ToolEgress,
+      impacts: z.array(Impact).max(32),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("describe"),
+      tool: Tool,
+      description: z.string().min(1).max(DESCRIPTION_MAX),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("test"),
+      tool: Tool,
+      environment: z.string().min(1).max(64),
+      /** The arguments as the person typed them, JSON text. */
+      args: z.string().max(65_536),
+      /** The request as built before the credential is added. */
+      request: z.string().max(65_536),
+      raw: z.string().max(262_144),
+      shaped: z.string().max(262_144),
+    })
+    .strict(),
 ]);
 
 export type DraftOp = z.infer<typeof DraftOpShape>;
 
-const DraftShape = z.array(DraftOpShape).max(2_000);
+/**
+ * The most a draft's edits may weigh, as UTF-8 JSON: save_studio_draft's
+ * STUDIO_DRAFT_OPS_BYTES_MAX (packages/oxagen/src/contracts/
+ * tool.studio.draft.save.ts), copied so the browser bundle does not carry
+ * the contract. draft.test.ts holds the two together.
+ */
+const OPS_BYTES_MAX = 8 * 1024 * 1024;
+
+const UTF8 = new TextEncoder();
+
+/** The contract counts `JSON.stringify(ops)` in UTF-8 bytes, so this does too. */
+function opsBytes(ops: readonly unknown[]): number {
+  return UTF8.encode(JSON.stringify(ops)).length;
+}
+
+const DraftShape = z
+  .array(DraftOpShape)
+  .max(2_000)
+  .refine((ops) => opsBytes(ops) <= OPS_BYTES_MAX, {
+    message: "The edits pass the size a draft holds.",
+  });
+
+/**
+ * Stored edits the tab can stage on top of, or null when they break the
+ * draft's shape: an edit kind or field this page does not know, or more
+ * edits, or more bytes, than a draft holds. A draft another page saved is
+ * checked here before anything joins it, so a stored draft this page cannot
+ * read never takes the place of the person's own edits.
+ */
+export function readDraftOps(ops: readonly unknown[]): readonly DraftOp[] | null {
+  const parsed = DraftShape.safeParse(ops);
+  return parsed.success ? parsed.data : null;
+}
 
 /**
  * A draft as the tab stores it: its edits, and the stored revision they were
