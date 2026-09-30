@@ -36,6 +36,7 @@ import {
   installDiscoverySeams,
   noCredentials,
   noLocalReporter,
+  waitingLocalReporter,
   noToolsPullRequestOpener,
   resetDiscoverySeams,
   transportRegistryCatalog,
@@ -46,7 +47,11 @@ import {
   type GrpcImporter,
   type ToolsPullRequestOpener,
 } from "./seams";
-import { DiscoveryRefused, type DiscoveryScope } from "./types";
+import {
+  DiscoveryRefused,
+  WaitingForMachine,
+  type DiscoveryScope,
+} from "./types";
 
 const mocks = vi.hoisted(() => {
   const steering = {
@@ -404,6 +409,40 @@ describe("noLocalReporter", () => {
   });
 });
 
+describe("waitingLocalReporter", () => {
+  it("records a server that runs on machines as waiting for a machine in its groups (#4772)", async () => {
+    const error = await waitingLocalReporter
+      .report(localRequest(LOCAL_SOURCE, LOCAL_LOCK))
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).toBeInstanceOf(WaitingForMachine);
+    expect((error as WaitingForMachine).groups).toEqual(["dev-laptops"]);
+  });
+
+  it("refuses a server that names no machine groups, which no machine could claim (negative)", async () => {
+    const nowhere: ServerSource = {
+      type: "local",
+      command: "files-mcp",
+      args: ["--root", "/srv/files"],
+      env: ["WORK_DIR"],
+    };
+    const error = await waitingLocalReporter
+      .report(localRequest(nowhere, LOCAL_LOCK))
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).not.toBeInstanceOf(WaitingForMachine);
+    expect(error).toMatchObject({
+      code: "source",
+      message:
+        "files names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.",
+    });
+  });
+});
+
 describe("gatewayLocalReporter", () => {
   it("asks the first connected machine in the server's groups for its tools", async () => {
     const { reporter, dispatch, machines } = reporterWith({
@@ -465,7 +504,7 @@ describe("gatewayLocalReporter", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("says any group when the server names no machine group", async () => {
+  it("refuses a server that names no machine group, which no machine may run (negative)", async () => {
     const { reporter, machines } = reporterWith({ machines: [] });
     const source: ServerSource = { type: "local", command: "files-mcp" };
     const refusal = await refusalOf(
@@ -474,9 +513,9 @@ describe("gatewayLocalReporter", () => {
     expect(refusal).toMatchObject({
       code: "source",
       message:
-        "No machine in any group is connected, so files was not discovered.",
+        "files names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.",
     });
-    expect(machines).toHaveBeenCalledWith(SCOPE, []);
+    expect(machines).not.toHaveBeenCalled();
   });
 
   it("turns the machine's refusal into its text", async () => {
@@ -835,7 +874,8 @@ describe("noToolsPullRequestOpener", () => {
 describe("discoverySeams", () => {
   it("gives the refusing defaults for the lanes not yet installed", async () => {
     const seams = await discoverySeams();
-    expect(seams.local).toBe(noLocalReporter);
+    // The API reaches no machine, so a local discovery waits for one (#4772).
+    expect(seams.local).toBe(waitingLocalReporter);
     expect(seams.opener).toBe(noToolsPullRequestOpener);
     expect(typeof seams.credentials(SCOPE).resolve).toBe("function");
   });
@@ -902,7 +942,7 @@ describe("discoverySeams", () => {
 
     const seams = await discoverySeams();
     expect(seams.opener).toBe(opener);
-    expect(seams.local).toBe(noLocalReporter);
+    expect(seams.local).toBe(waitingLocalReporter);
     expect(seams.grpc).toBe(importGrpc);
   });
 

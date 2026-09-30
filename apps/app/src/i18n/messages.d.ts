@@ -3599,6 +3599,7 @@ type Messages = {
         statuses: {
           queued: string;
           running: string;
+          waiting_for_machine: string;
           succeeded: string;
           failed: string;
         };

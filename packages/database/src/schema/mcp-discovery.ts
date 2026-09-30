@@ -37,6 +37,9 @@ const ts = (name: string) =>
 export const MCP_DISCOVERY_STATUSES = [
   "queued",
   "running",
+  // A server that runs on machines, asked for in a process that reaches none.
+  // The MCP process a machine in its groups polls claims it (#4772).
+  "waiting_for_machine",
   "succeeded",
   "failed",
 ] as const;
@@ -116,6 +119,20 @@ export const mcpServerDiscoveries = mcpSchema.table(
       .default(sql`'{}'`),
     /** The upstream tool names the source offered on the last read. */
     offered: text("offered").array().notNull().default(sql`'{}'`),
+    /**
+     * The machine groups a waiting discovery can run on: server.toml's
+     * source.machines when the row waits for a machine (#4772).
+     */
+    machineGroups: text("machine_groups")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    /**
+     * The run that owns the row: begin sets it, and finish writes only while
+     * the row still carries it. A run a later begin superseded, such as an
+     * API-side request racing a machine's claim, finishes nothing (#4772).
+     */
+    runId: uuid("run_id"),
   },
   (t) => ({
     serverUniq: uniqueIndex("server_discoveries_server_uniq").on(
@@ -127,9 +144,13 @@ export const mcpServerDiscoveries = mcpSchema.table(
     sourceRepoIdx: index("server_discoveries_source_repo_idx")
       .on(t.sourceRepo)
       .where(sql`${t.schedule} = 'on-change'`),
+    // A polling machine's lookup: the workspace's discoveries waiting for one.
+    waitingIdx: index("server_discoveries_waiting_idx")
+      .on(t.orgId, t.workspaceId, t.requestedAt)
+      .where(sql`${t.status} = 'waiting_for_machine'`),
     statusCheck: check(
       "server_discoveries_status_check",
-      sql`${t.status} IN ('queued', 'running', 'succeeded', 'failed')`,
+      sql`${t.status} IN ('queued', 'running', 'waiting_for_machine', 'succeeded', 'failed')`,
     ),
     triggerCheck: check(
       "server_discoveries_trigger_check",

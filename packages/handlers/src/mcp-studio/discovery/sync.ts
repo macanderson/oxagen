@@ -14,6 +14,7 @@
 // The row in mcp.server_discoveries always ends succeeded or failed. A
 // failure keeps the open PR and the withheld tools, and its message passes
 // through the run's scrubber first.
+import { randomUUID } from "node:crypto";
 import {
   CompileError,
   canonicalDigest,
@@ -81,6 +82,7 @@ import {
   type DiscoveryScope,
   type DiscoveryTrigger,
   type SyncSchedule,
+  WaitingForMachine,
 } from "./types";
 
 /** How long one discovery may read its source before the run stops it. */
@@ -751,6 +753,15 @@ function failure(run: Run, error: unknown): DiscoveryFinish {
   if (error instanceof NeedsDigest) {
     return { ...finished(run.kept, "needs_digest"), latestVersion: error.latestVersion };
   }
+  // No failure: the MCP process a machine in these groups polls runs it.
+  if (error instanceof WaitingForMachine) {
+    return {
+      ...finished(run.kept, "skipped"),
+      status: "waiting_for_machine",
+      outcome: null,
+      machineGroups: error.groups,
+    };
+  }
   return {
     ...finished(run.kept, "skipped"),
     status: "failed",
@@ -761,9 +772,12 @@ function failure(run: Run, error: unknown): DiscoveryFinish {
 
 /**
  * An error that can pass: one discovery did not expect, or a refusal marked
- * retriable, such as an outage at the source or at the code host.
+ * retriable, such as an outage at the source or at the code host. A discovery
+ * that waits for a machine did not fail. Its row says so, and the MCP process
+ * a machine in its groups polls runs it, so a retry here would only wait again.
  */
 function retriable(error: unknown): boolean {
+  if (error instanceof WaitingForMachine) return false;
   return !(error instanceof DiscoveryRefused) || error.retriable;
 }
 
@@ -781,12 +795,16 @@ export async function runDiscovery(
   const seams = deps.seams ?? (await discoverySeams());
   const store = deps.store ?? postgresDiscoveryStore;
   const { scope, server, trigger } = input;
+  // The run owns the row until another run begins. Its finish writes only
+  // while it still does, so a superseded run cannot regress a newer result.
+  const runId = randomUUID();
   const prior = await store.begin(
     scope,
     server,
     trigger,
     input.requestedBy ?? null,
     seams.now(),
+    runId,
   );
   const run: Run = {
     scope,
@@ -822,13 +840,18 @@ export async function runDiscovery(
       trigger,
       error: finish.error,
     };
-    if (error instanceof DiscoveryRefused) {
+    if (error instanceof WaitingForMachine) {
+      logger.info(
+        { ...fields, groups: error.groups },
+        "MCP discovery waits for a machine",
+      );
+    } else if (error instanceof DiscoveryRefused) {
       logger.warn({ ...fields, code: error.code }, "MCP discovery refused");
     } else {
       logger.error(fields, "MCP discovery failed");
     }
   }
-  await store.finish(scope, server, finish, seams.now());
+  await store.finish(scope, server, finish, seams.now(), runId);
   if (retry) {
     throw new RetriableDiscoveryFailure(
       `MCP discovery of ${server} failed: ${finish.error ?? "no reason given"}`,
