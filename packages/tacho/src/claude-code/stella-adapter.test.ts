@@ -7,10 +7,11 @@ import { describe, expect, it } from "vitest";
 import { digestText } from "./context";
 import { hookInputSchema, normalizeHook } from "./hooks";
 import {
+  lstartInstance,
   parseAnswerBody,
   parsePsLine,
+  processStartInstance,
   psLookup,
-  psStartInstance,
   startInstanceToken,
   stellaAnswer,
   stellaHarnessPid,
@@ -77,8 +78,10 @@ describe("stella pid", () => {
       translateStellaPayload({ event: "Stop", cwd: "/" }, 77, token),
     ).toMatchObject({ session_id: `stella-77-${token}` });
     if (process.platform !== "win32") {
-      expect(psStartInstance(process.pid)).toMatch(/^[0-9a-f]{12}$/);
-      expect(psStartInstance(2_147_000_000)).toBeUndefined();
+      expect(processStartInstance(process.pid)).toMatch(/^[0-9a-f]{12}$/);
+      expect(processStartInstance(2_147_000_000)).toBeUndefined();
+      expect(lstartInstance(process.pid)).toMatch(/^[0-9a-f]{12}$/);
+      expect(lstartInstance(2_147_000_000)).toBeUndefined();
     }
   });
 });

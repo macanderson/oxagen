@@ -271,7 +271,7 @@ function applyToSession(
       // hook, and a synchronous hook answer cannot wake an idle session. Only
       // a background `asyncRewake` hook can, which the settings writer does
       // not install. Holding the paused `Stop` open instead would stall the
-      // daemon's serial hook queue, and blocking it would spin the model
+      // session's hook queue, and blocking it would spin the model
       // against denied tools until Claude Code's eight-block cap. So that
       // case is acknowledged `applied` with a detail saying the agent is idle
       // until its next prompt, and the Run page can say so.

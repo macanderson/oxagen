@@ -147,6 +147,16 @@ export class ToolCallLedger {
   }
 
   /**
+   * Whether the family has met a call at all: its `PreToolUse` claimed it, or
+   * a source sealed it. A gateway call naming an id no family knows was served
+   * before its `PreToolUse` was handled, so its frame waits for that hook
+   * rather than sealing a second identity on the daemon's chain (#4355).
+   */
+  knows(toolUseId: string): boolean {
+    return this.entries.has(toolUseId);
+  }
+
+  /**
    * Say what a sighting is without registering it. The caller commits once the
    * row that carries the verdict has landed on the chain: a sighting the
    * envelope then refuses must leave no trace, or the source that reports the

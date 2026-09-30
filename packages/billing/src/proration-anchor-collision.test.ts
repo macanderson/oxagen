@@ -34,7 +34,7 @@
  * refusal on a same-second collision is recoverable — the next attempt gets a
  * fresh anchor — and summing a stranger's credit into an upgrade is not.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const stripeMethods = {
   customers: { retrieve: vi.fn(), update: vi.fn() },
@@ -188,6 +188,17 @@ function stubPreviews(opts: {
   );
 }
 
+/**
+ * The instant every test runs at, with the clock held still.
+ *
+ * The adapter takes its anchor from `Date.now()` before it calls Stripe, and
+ * the stubs stamp an interloping proration from `Date.now()` when each call
+ * runs. On a real clock a second boundary can fall between the two, which
+ * moves the interloper off the anchor, and a test that expects a refusal gets
+ * a quote. Only `Date` is faked, so the adapter's timers still run.
+ */
+const NOW = new Date("2026-09-30T08:00:00.250Z");
+
 /** What this change alone moves: +$120, an unambiguous upgrade. */
 const THIS_CHANGE_NET_CENTS = 12_000;
 
@@ -262,7 +273,12 @@ function stubInterleaved(opts: {
 describe("a change that lands between the baseline and the preview (#3157, PR #3171 review)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
     stubSubscription();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("refuses when a proration appears at the anchor after the baseline was read", async () => {
@@ -312,7 +328,12 @@ describe("a change that lands between the baseline and the preview (#3157, PR #3
 describe("a proration anchor another change already occupies (#3157, PR #3171 review)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
     stubSubscription();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("refuses to price a plan change whose anchor is already taken", async () => {

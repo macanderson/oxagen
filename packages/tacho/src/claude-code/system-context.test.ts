@@ -16,6 +16,7 @@ import { SYSTEM_CONTEXT_PARTS_MAX } from "../envelope";
 import { type DraftContent, jsonContent } from "../evidence/frame-body";
 import {
   REQUEST_FULL_DIGEST_ATTR,
+  type RequestContext,
   resolveRequest,
   STEERING_ASSEMBLY_PART,
   SYSTEM_CONTEXT_PARTS_OMITTED_ATTR,
@@ -347,18 +348,25 @@ describe("a request the proxy stored with its prefix cut", () => {
       [REQUEST_FULL_DIGEST_ATTR]: fold.fullDigest,
     });
 
+  /** Fold a call and remember it at once, as a call that lands before the next is sent. */
+  const folded = (prefix: RequestPrefixMemory, key: string, text: string) => {
+    const fold = prefix.fold(key, text);
+    prefix.remember(key, fold);
+    return fold;
+  };
+
   it("resolves each cut request to the parts of the call it names", () => {
     const prefix = new RequestPrefixMemory();
     const on = tracker();
-    const first = prefix.fold("s", firstText);
+    const first = folded(prefix, "s", firstText);
     expect(first.prior).toBeUndefined();
     const a = proxied(on, first, "turn:1");
 
-    const second = prefix.fold("s", secondText);
+    const second = folded(prefix, "s", secondText);
     expect(second.prior?.fields).toEqual(["system", "tools"]);
     const b = proxied(on, second, "turn:2");
 
-    const third = prefix.fold("s", thirdText);
+    const third = folded(prefix, "s", thirdText);
     expect(third.prior?.unchanged_from).toBe(second.fullDigest);
     const c = proxied(on, third, "turn:3");
 
@@ -378,18 +386,18 @@ describe("a request the proxy stored with its prefix cut", () => {
   it("remembers a request stored whole under the digest of its own text", () => {
     const prefix = new RequestPrefixMemory();
     const on = tracker();
-    const first = prefix.fold("s", firstText);
+    const first = folded(prefix, "s", firstText);
     const a = measured(on, stored(first.text), "turn:1");
     expect(first.fullDigest).toBe(digestBytes(firstText));
 
-    const second = prefix.fold("s", secondText);
+    const second = folded(prefix, "s", secondText);
     const b = proxied(on, second, "turn:2");
     expect(b.facts.system_context_digest).toBe(a.facts.system_context_digest);
   });
 
   it("measures no system context for a cut request whose earlier call it never saw", () => {
     const prefix = new RequestPrefixMemory();
-    prefix.fold("s", firstText);
+    folded(prefix, "s", firstText);
     const second = prefix.fold("s", secondText);
     const { facts, attrs } = proxied(tracker(), second, "turn:1");
     expect(facts).toEqual({});
@@ -431,12 +439,14 @@ describe("a request the proxy stored with its prefix cut", () => {
     const ask = { role: "user", content: "Review this diff, please." };
     const prefix = new RequestPrefixMemory();
     const on = tracker();
-    const first = prefix.fold(
+    const first = folded(
+      prefix,
       "s",
       JSON.stringify({ model: "gpt-5", messages: [lead, ask], tools }),
     );
     const a = proxied(on, first, "turn:1");
-    const second = prefix.fold(
+    const second = folded(
+      prefix,
       "s",
       JSON.stringify({
         model: "gpt-5",
@@ -469,12 +479,14 @@ describe("a request the proxy stored with its prefix cut", () => {
     ];
     const prefix = new RequestPrefixMemory();
     const on = tracker();
-    const first = prefix.fold(
+    const first = folded(
+      prefix,
       "s",
       JSON.stringify({ model: "gpt-5", input: [lead, ask], tools }),
     );
     const a = proxied(on, first, "turn:1");
-    const second = prefix.fold(
+    const second = folded(
+      prefix,
       "s",
       JSON.stringify({
         model: "gpt-5",
@@ -486,6 +498,136 @@ describe("a request the proxy stored with its prefix cut", () => {
     const b = proxied(on, second, "turn:2");
     expect(b.facts.system_context_parts).toEqual(a.facts.system_context_parts);
     expect(b.facts.system_context_parts?.[0]?.name).toBe("input[0]");
+  });
+});
+
+describe("a cut request resolves by the proxy's rule (#4348, #4508)", () => {
+  /** Call `index` of one session: the first message names the session. */
+  function turnOf(session: string, index: number): string {
+    const messages: JsonValue[] = [
+      { role: "user", content: `${session}: ${ASKED.content}` },
+    ];
+    for (let turn = 1; turn <= index; turn += 1) {
+      messages.push({ role: "assistant", content: `answer ${turn}` });
+      messages.push({ role: "user", content: `question ${turn}` });
+    }
+    return JSON.stringify(request({ messages }));
+  }
+
+  /**
+   * The settle half of one proxied call, in the order `model-proxy.ts` runs
+   * it: the context of the call the fold cut against goes back in the
+   * memory, the frame is measured as it seals, and once the frame is on the
+   * WAL the call is remembered with its own context.
+   */
+  function settle(
+    prefix: RequestPrefixMemory<RequestContext>,
+    memory: SystemContextMemory,
+    on: SystemContextTracker,
+    session: string,
+    fold: PrefixFold<RequestContext>,
+  ) {
+    memory.restorePrior(fold);
+    const measure = measured(on, stored(fold.text), "turn:1", {
+      [REQUEST_FULL_DIGEST_ATTR]: fold.fullDigest,
+    });
+    prefix.remember(session, fold, memory.get(fold.fullDigest));
+    return measure.facts;
+  }
+
+  /** The digest every call here resolves to: the request's own system and tools. */
+  const expected = () => {
+    const digest = measured(tracker(), exchange(request())).facts
+      .system_context_digest;
+    expect(digest).toMatch(/^sha256:/);
+    return digest;
+  };
+
+  it("resolves every folded call when more than 256 sessions interleave", () => {
+    const memory = new SystemContextMemory();
+    const prefix = new RequestPrefixMemory<RequestContext>();
+    const sessions = Array.from({ length: 300 }, (_, i) => `session-${i}`);
+    const trackers = new Map(sessions.map((s) => [s, tracker(memory)]));
+    const digest = expected();
+    let cut = 0;
+    for (let round = 0; round < 3; round += 1) {
+      for (const session of sessions) {
+        const fold = prefix.fold(session, turnOf(session, round));
+        if (fold.prior !== undefined) cut += 1;
+        const facts = settle(
+          prefix,
+          memory,
+          trackers.get(session)!,
+          session,
+          fold,
+        );
+        expect(facts.system_context_digest).toBe(digest);
+        expect(facts.tool_definition_tokens).toBeGreaterThan(0);
+      }
+    }
+    // Every call after a session's first was stored with its prefix cut.
+    expect(cut).toBe(sessions.length * 2);
+  });
+
+  it("loses folded calls under the same interleaving when the proxy puts no context back (negative)", () => {
+    const memory = new SystemContextMemory();
+    const prefix = new RequestPrefixMemory();
+    const sessions = Array.from({ length: 300 }, (_, i) => `session-${i}`);
+    const trackers = new Map(sessions.map((s) => [s, tracker(memory)]));
+    let unresolved = 0;
+    for (let round = 0; round < 3; round += 1) {
+      for (const session of sessions) {
+        const fold = prefix.fold(session, turnOf(session, round));
+        const { facts } = measured(
+          trackers.get(session)!,
+          stored(fold.text),
+          "turn:1",
+          { [REQUEST_FULL_DIGEST_ATTR]: fold.fullDigest },
+        );
+        prefix.remember(session, fold);
+        if (facts.system_context_digest === undefined) unresolved += 1;
+      }
+    }
+    // The shared memory alone evicts a session's prior before its next call.
+    expect(unresolved).toBeGreaterThan(0);
+  });
+
+  it("resolves two overlapping calls of one session whichever settles first", () => {
+    const memory = new SystemContextMemory();
+    const prefix = new RequestPrefixMemory<RequestContext>();
+    const on = tracker(memory);
+    const digest = expected();
+    const first = prefix.fold("s", turnOf("s", 0));
+    expect(settle(prefix, memory, on, "s", first).system_context_digest).toBe(
+      digest,
+    );
+    // Both calls are forwarded before either answers.
+    const a = prefix.fold("s", turnOf("s", 1));
+    const b = prefix.fold("s", turnOf("s", 2));
+    // Neither points at the other: both cut against the call that landed.
+    expect(a.prior?.unchanged_from).toBe(first.fullDigest);
+    expect(b.prior?.unchanged_from).toBe(first.fullDigest);
+    // The second settles first.
+    const later = settle(prefix, memory, on, "s", b);
+    const earlier = settle(prefix, memory, on, "s", a);
+    expect(later.system_context_digest).toBe(digest);
+    expect(later.tool_definition_tokens).toBeGreaterThan(0);
+    expect(earlier.system_context_digest).toBe(digest);
+    expect(earlier.tool_definition_tokens).toBeGreaterThan(0);
+  });
+
+  it("loses the second call's context when a call is remembered as it is forwarded (negative)", () => {
+    const memory = new SystemContextMemory();
+    const prefix = new RequestPrefixMemory<RequestContext>();
+    const on = tracker(memory);
+    settle(prefix, memory, on, "s", prefix.fold("s", turnOf("s", 0)));
+    // The order this rule replaced: A becomes the prior before its frame
+    // seals, so B cuts against a call nothing has measured yet.
+    const a = prefix.fold("s", turnOf("s", 1));
+    prefix.remember("s", a);
+    const b = prefix.fold("s", turnOf("s", 2));
+    expect(b.prior?.unchanged_from).toBe(a.fullDigest);
+    expect(settle(prefix, memory, on, "s", b)).toEqual({});
   });
 });
 
@@ -608,7 +750,7 @@ describe("the steering a session was delivered", () => {
     expect(steeringContext({})).toBeUndefined();
   });
 
-  it("counts the assembled text's spent tokens, header and headings included", () => {
+  it("counts the assembled text's spent tokens as one part, header and headings included", () => {
     const on = tracker();
     on.noteSteeringManifest(ASSEMBLED);
     const { facts } = measured(on, exchange(request()));
@@ -617,9 +759,7 @@ describe("the steering a session was delivered", () => {
       (part) => part.kind === "steering",
     );
     expect(steering.map((part) => [part.name, part.tokens])).toEqual([
-      [STEERING_ASSEMBLY_PART, 15],
-      ["no-force-push", 40],
-      ["prefer-rg", 25],
+      [STEERING_ASSEMBLY_PART, 80],
     ]);
     expect(steering[0]?.digest).toBe(ASSEMBLED.text_digest);
   });
@@ -633,11 +773,48 @@ describe("the steering a session was delivered", () => {
       (part) => part.kind === "steering",
     );
     expect(steering.map((part) => [part.name, part.tokens])).toEqual([
-      [STEERING_ASSEMBLY_PART, 15],
-      ["no-force-push", 40],
-      ["prefer-rg", 25],
+      [STEERING_ASSEMBLY_PART, 80],
       [STEER.id, 12],
     ]);
+  });
+
+  // #4508 item 4. The assembler can build the same text again under new
+  // record ids and timestamps. The model reads the same bytes, so the
+  // system context has not changed and its digest must not either.
+  it("keeps the system context digest when the same text is assembled under a new id and time", () => {
+    const again = {
+      ...ASSEMBLED,
+      items: MANIFEST.items.map((item, index) => ({
+        ...item,
+        id: `reissued-${index}`,
+        recorded_at: "2026-09-29T12:00:00.000Z",
+      })),
+    };
+    const first = tracker();
+    first.noteSteeringManifest(ASSEMBLED);
+    const second = tracker();
+    second.noteSteeringManifest(again);
+    const a = measured(first, exchange(request())).facts;
+    const b = measured(second, exchange(request())).facts;
+    expect(b.system_context_digest).toBe(a.system_context_digest);
+    expect(b.system_context_parts).toEqual(a.system_context_parts);
+    expect(b.steering_tokens).toBe(a.steering_tokens);
+  });
+
+  it("changes the digest when a delivered steer changes beside the same assembled text", () => {
+    const base = tracker();
+    base.noteSteeringManifest({
+      ...ASSEMBLED,
+      items: [...MANIFEST.items, STEER],
+    });
+    const other = tracker();
+    other.noteSteeringManifest({
+      ...ASSEMBLED,
+      items: [...MANIFEST.items, { ...STEER, id: "stp_0192d4b9" }],
+    });
+    const a = measured(base, exchange(request())).facts;
+    const b = measured(other, exchange(request())).facts;
+    expect(b.system_context_digest).not.toBe(a.system_context_digest);
   });
 
   it("changes only the assembly part's digest when the header alone changes", () => {
@@ -674,10 +851,9 @@ describe("the steering a session was delivered", () => {
   it("takes the spent count when the items' own counts add up to more", () => {
     const steering = steeringContext({ ...ASSEMBLED, spent_tokens: 50 });
     expect(steering?.tokens).toBe(50);
-    expect(steering?.parts[0]).toMatchObject({
-      name: STEERING_ASSEMBLY_PART,
-      tokens: 0,
-    });
+    expect(steering?.parts).toEqual([
+      expect.objectContaining({ name: STEERING_ASSEMBLY_PART, tokens: 50 }),
+    ]);
   });
 });
 

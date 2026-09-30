@@ -230,10 +230,15 @@ describe("a tool call the MCP gateway served for a hooked session", () => {
   it("is awaited from its PreToolUse until a source seals it", () => {
     const chain = recorder();
     expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
+    // A call the gateway serves before this is known to no session, so its
+    // frame waits for the hook (ADR-189 decision 7).
+    expect(chain.knowsToolCall(TOOL_USE_ID)).toBe(false);
     chain.ingestHook(preToolUse(TOOL_USE_ID), {}, at);
     expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(true);
+    expect(chain.knowsToolCall(TOOL_USE_ID)).toBe(true);
     expect(gatewayCall(chain, TOOL_USE_ID)).toHaveLength(1);
     expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
+    expect(chain.knowsToolCall(TOOL_USE_ID)).toBe(true);
   });
 
   it("seals the gateway's frame, and the PostToolUse for the same call seals nothing", () => {
@@ -324,8 +329,10 @@ describe("a tool call the MCP gateway served for a hooked session", () => {
       restore: chain.state(),
     });
     expect(resumed.awaitsToolCall(TOOL_USE_ID)).toBe(true);
+    expect(resumed.knowsToolCall(TOOL_USE_ID)).toBe(true);
     chain.rollbackChain(mark);
     expect(chain.awaitsToolCall(TOOL_USE_ID)).toBe(false);
+    expect(chain.knowsToolCall(TOOL_USE_ID)).toBe(false);
   });
 });
 

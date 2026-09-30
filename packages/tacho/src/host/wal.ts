@@ -870,6 +870,19 @@ export class Wal {
    * The slices go through `bodiesFor`, which is the one place a body is read
    * and the one place a read failure is reported, so both paths fail the same
    * way and the shipper has a single error to handle.
+   *
+   * It never rebuilds a body index on the synchronous path, except as a last
+   * resort (#4299, amended by #4361 and ADR-231). An index stale on both
+   * awaited attempts is answered by the synchronous read that `bodiesFor`
+   * makes with no `stale` set, which builds the index again from the file on
+   * the event loop and reads the bodies. The shipper ships what that read
+   * returns, and `bodiesOfSession` reports `body_index_unusable` only when
+   * that read also finds its index disagreeing with the file. Reaching this
+   * takes a file rewritten in place, at the same size, while each awaited
+   * build ran, which the daemon never does, since its rewrites go through a
+   * temp file and a rename. Shipping those events without bodies instead
+   * marked them shipped and lost the stored content for good, and a one-off
+   * stall on a path that needs outside tampering costs less than that.
    */
   async bodiesForAsync(events: readonly TachoEvent[]): Promise<TachoBody[]> {
     const found = new Map<string, TachoBody>();
@@ -889,11 +902,11 @@ export class Wal {
         for (const body of bodies) found.set(body.event_id_idem, body);
         slice = slice.filter((event) => stale.has(event.session_uuid));
       }
-      // Stale twice running is the case `bodiesOfSession` reports after its
-      // own second attempt, and the answer is the same: the events ship, and
-      // their frames carry a `body_missing` gap.
-      for (const session of new Set(slice.map((event) => event.session_uuid)))
-        this.bodyFailure(session, "read", { code: "body_index_unusable" });
+      // Stale twice running: the last resort above. A read that fails here
+      // throws, as a failed read does, and the shipper keeps the batch.
+      if (slice.length > 0)
+        for (const body of this.bodiesFor(slice))
+          found.set(body.event_id_idem, body);
     }
     const out: TachoBody[] = [];
     for (const event of events) {

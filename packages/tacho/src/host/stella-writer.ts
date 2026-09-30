@@ -76,7 +76,10 @@ export function stellaHookTimeoutMs(event: StellaHookEventName): number {
 export function stellaHookEntries(
   config: HookInstallConfig,
 ): Record<StellaHookEventName, HookGroup[]> {
-  const command = commandHookEntry(config, 0, "stella").command as string;
+  // Stella reads a non-zero exit as a deny, so a command whose collector is
+  // not installed prints nothing and exits 0 instead (ADR-230). Nothing,
+  // because Stella appends SessionStart's stdout to the system prompt.
+  const command = commandHookEntry(config, 0, "stella", "").command as string;
   const out = {} as Record<StellaHookEventName, HookGroup[]>;
   for (const event of STELLA_HOOK_EVENTS) {
     out[event] = [

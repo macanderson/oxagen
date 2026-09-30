@@ -98,6 +98,27 @@ describe("stella writer", () => {
     }
   });
 
+  it("exits 0 with nothing to say when the collector is not installed", () => {
+    // ADR-230: Stella reads a non-zero exit as a deny, and a removed app
+    // left a command that exits 127 on every tool call. On macOS and Linux
+    // the command looks for the executable first. It prints nothing, since
+    // Stella appends SessionStart's stdout to the system prompt.
+    const posix = {
+      ...CONFIG,
+      hookCommand:
+        "'/Users/dev/Library/Application Support/oxagen/bin/2.1.3/tacho' hook",
+    };
+    const entries = stellaHookEntries(posix);
+    for (const event of STELLA_HOOK_EVENTS)
+      expect(entries[event][0]?.hooks[0]?.command).toBe(
+        `test ! -e '/Users/dev/Library/Application Support/oxagen/bin/2.1.3/tacho' && exit 0; exec ${posix.hookCommand} --enrollment ${TEST_ENROLLMENT} --harness stella`,
+      );
+    // A Windows command is left as it is: see `hook-guard.ts`.
+    expect(stellaHookEntries(CONFIG).PreToolUse[0]?.hooks[0]?.command).toBe(
+      `${CONFIG.hookCommand} --enrollment ${TEST_ENROLLMENT} --harness stella`,
+    );
+  });
+
   it("writes TOML basic strings Stella can parse", () => {
     expect(tomlBasicString('a "b" \\ c')).toBe('"a \\"b\\" \\\\ c"');
     expect(tomlBasicString("tab\tnl\n\u007f")).toBe('"tab\\tnl\\n\\u007F"');
