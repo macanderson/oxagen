@@ -192,6 +192,18 @@ config_prefix=$(field '.config_prefix // empty')
 [[ $port =~ ^[0-9]{2,5}$ ]] || fail "oxagen-run.json: 'port' must be a number, got '${port:-<missing>}'"
 [[ -n $image ]] || fail "oxagen-run.json: 'image' is required"
 
+# An optional request down the service's real path. On 2026-09-30 mcp answered
+# its health route inside the grace window, deployed green, and died on its
+# first POST /mcp (#4829). The health route alone cannot catch that.
+smoke=$(jq -ce '.smoke // empty' "$manifest" 2>/dev/null || true)
+if [[ -n $smoke ]]; then
+  jq -e '(.method | type == "string")
+         and (.path | type == "string" and startswith("/"))
+         and ((.headers // {}) | type == "object" and all(.[]; type == "string"))
+         and ((.body // "") | type == "string")' <<<"$smoke" >/dev/null 2>&1 \
+    || fail "oxagen-run.json: 'smoke' needs a method, a path that starts with /, string headers, and a string body"
+fi
+
 # An empty command runs the image's own entrypoint, which is what an external
 # image such as the engine's wants: its binary is already the entrypoint, and
 # naming it again would hand it its own path as an argument. The tarball
@@ -364,6 +376,35 @@ healthy() {
   return 1
 }
 
+# Send the manifest's smoke request, then ask for the health route again. Any
+# status below 500 counts as served. The second health check catches a process
+# that answers once and then stops, as mcp did: its heap ran out 8 seconds
+# after the request, and the process never exited.
+serves() {
+  [[ -n $smoke ]] || return 0
+  local method path body code header
+  method=$(jq -r '.method' <<<"$smoke")
+  path=$(jq -r '.path' <<<"$smoke")
+  body=$(jq -r '.body // ""' <<<"$smoke")
+  local header_args=()
+  while IFS= read -r header; do
+    [[ -n $header ]] && header_args+=(-H "$header")
+  done < <(jq -r '(.headers // {}) | to_entries[] | "\(.key): \(.value)"' <<<"$smoke")
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X "$method" \
+    ${header_args[@]+"${header_args[@]}"} ${body:+--data-raw "$body"} \
+    "http://127.0.0.1:$port$path" || true)
+  if [[ ! $code =~ ^[1-4][0-9][0-9]$ ]]; then
+    echo "error: $SERVICE answered the smoke request $method $path with '${code:-nothing}'" >&2
+    return 1
+  fi
+  log "$SERVICE answered the smoke request $method $path with $code"
+  sleep 10
+  if ! curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port$health_path"; then
+    echo "error: $SERVICE stopped answering $health_path after the smoke request" >&2
+    return 1
+  fi
+}
+
 log "starting $SERVICE from $release_id (image $image, port $port, memory $memory)"
 ln -sfn "$release" "$CURRENT"
 trap - EXIT
@@ -371,10 +412,15 @@ rm -f "$tarball"
 
 start_container "$release"
 
+deployed=false
 if healthy; then
   log "$SERVICE is healthy on 127.0.0.1:$port$health_path"
+  serves && deployed=true
 else
   echo "error: $SERVICE did not answer on 127.0.0.1:$port$health_path within 60s" >&2
+fi
+
+if [[ $deployed != true ]]; then
   docker logs --tail 40 "$CONTAINER" 2>&1 | sed 's/^/    /' >&2 || true
 
   if [[ -n $previous && -d $previous ]]; then
@@ -386,6 +432,10 @@ else
     else
       echo "error: rollback ALSO failed — $SERVICE is down" >&2
     fi
+    # The failed release is no rollback candidate. Left on disk, it counted
+    # toward the $KEEP_RELEASES kept, and on 2026-09-30 three failed mcp
+    # releases plus one that deployed pruned the last one that served.
+    rm -rf "${release:?}"
   else
     echo "error: no previous release to roll back to — $SERVICE is down" >&2
   fi

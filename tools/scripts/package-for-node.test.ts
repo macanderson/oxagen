@@ -213,6 +213,60 @@ describe("package-for-node.sh runtime env", () => {
   });
 });
 
+// On 2026-09-30 mcp answered /health inside the deploy's grace window and ran
+// its heap out on the first POST /mcp (#4829). The manifest now carries a
+// request down the real path, and deploy-service.sh rolls back a release that
+// does not answer it.
+describe("package-for-node.sh smoke request", () => {
+  interface Smoke {
+    method: string;
+    path: string;
+    headers: Record<string, string>;
+    body: string;
+  }
+  const smokeOf = (env: Record<string, string>): Smoke | undefined =>
+    (nodeManifest(env) as { env: Record<string, string>; smoke?: Smoke }).smoke;
+
+  const mcpSmoke = (): Smoke => {
+    const match = /^readonly MCP_SMOKE_REQUEST='(.*)'$/m.exec(script);
+    expect(match, "package-for-node.sh defines MCP_SMOKE_REQUEST").not.toBeNull();
+    return JSON.parse(match?.[1] ?? "") as Smoke;
+  };
+
+  it("writes no smoke request unless one is named", () => {
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: "" })).toBeUndefined();
+  });
+
+  it("carries the named request into the manifest", () => {
+    const request = { method: "GET", path: "/ready", headers: {}, body: "" };
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: JSON.stringify(request) })).toEqual(request);
+  });
+
+  it("refuses a request without a method or an absolute path", () => {
+    expect(() => smokeOf({ WRITE_MANIFEST_SMOKE: '{"path":"/mcp"}' })).toThrow();
+    expect(() =>
+      smokeOf({ WRITE_MANIFEST_SMOKE: '{"method":"POST","path":"mcp"}' }),
+    ).toThrow();
+    expect(() => smokeOf({ WRITE_MANIFEST_SMOKE: "not json" })).toThrow();
+  });
+
+  it("gives mcp an MCP initialize past the bearer gate", () => {
+    const smoke = mcpSmoke();
+    expect(smoke.method).toBe("POST");
+    expect(smoke.path).toBe("/mcp");
+    expect(smoke.headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(smoke.headers.Accept).toContain("text/event-stream");
+    expect((JSON.parse(smoke.body) as { method: string }).method).toBe("initialize");
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: JSON.stringify(smoke) })).toEqual(smoke);
+  });
+
+  it("passes the mcp request to the mcp manifest", () => {
+    expect(script).toMatch(
+      /WRITE_MANIFEST_SMOKE="\$MCP_SMOKE_REQUEST" \\\n\s+write_manifest "\$\(port_for mcp\)"/,
+    );
+  });
+});
+
 /**
  * Package the engine in a scratch tree that holds the script and, unless
  * `versionSource` is null, that text as the engine client's version.ts.
