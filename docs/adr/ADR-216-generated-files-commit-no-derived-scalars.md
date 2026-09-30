@@ -55,7 +55,10 @@ and adding a check that recomputes them.
    no reader in this repository used the field.
 3. **The schema `README.md` commits no count and no joined list.** It lists
    one capability per line under a `## <domain>` heading. Two branches that
-   add capabilities, even to the same domain, then touch different lines.
+   add capabilities, even to the same domain, then touch different lines,
+   unless their new names sort next to each other. Both then insert between
+   the same neighbours, and git reports a conflict. That conflict sits on
+   real content, and taking both sides resolves it.
 4. **Each drift check names the file and both values.** `pnpm docs:schemas
    --check` prints each stale file with its first differing line, committed
    and regenerated. `pnpm schema:manifest:check` prints the content hash of
@@ -108,5 +111,6 @@ and adding a check that recomputes them.
   resolution that kept `contentHash` or `tableCount`.
 - `atlas.sum`, `pnpm-lock.yaml`, `Cargo.lock`,
   `packages/oxagen/capabilities.manifest.json`,
-  `apps/app/src/i18n/messages.d.ts`, and ADR numbers remain shared cells.
+  `apps/app/src/i18n/messages.d.ts`, ADR numbers, and the ADR index in
+  `docs/adr/README.md` remain shared cells.
   `AGENTS.md` names them so an author meets the hazard before the conflict.
