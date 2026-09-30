@@ -428,7 +428,7 @@ export async function streamLedgerToolCalls(
   if (source.frames.kind !== "ledger") return;
   const runUuid = source.frames.runUuid;
   const payload = events.payloadInline;
-  // tenancy: the scheduled rollup filters events by the run's org and workspace.
+  // tenancy: this scheduled rollup is filtered by the run's orgId, workspaceId, and runUuid.
   await withSystemDb(async (tx) => {
     await tx.execute(sql`select set_config('statement_timeout', '30s', true),
       set_config('idle_in_transaction_session_timeout', '30s', true),
