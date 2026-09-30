@@ -314,11 +314,12 @@ describe("KindPanel › a field the record never stated", () => {
 // A blank is honest where a value was never recorded. An invented author, a
 // zero or an empty commit would read as a fact the repository never stated.
 describe("LineagePanel › what was never recorded", () => {
-  it("falls back to the lineage's own path and says an unread history is not recorded", () => {
+  it("shows a placeholder for a file it cannot name and says an unread history is not recorded", () => {
     render(
       <IntlProvider>
         <LineagePanel
           repository={null}
+          path={null}
           detail={recordDetail({
             record: {
               ...publishedRecord({ path: null, commit: null }),
@@ -332,7 +333,10 @@ describe("LineagePanel › what was never recorded", () => {
     );
     const panel = screen.getByTestId("record-lineage");
     const fact = (name: string) => panel.querySelector(`[data-fact="${name}"]`);
-    expect(fact("file")?.textContent).toBe(`.oxagen/rules/${LINEAGE}.toml`);
+    // The page derives the file from the repository's layout (#4765). With no
+    // path the panel names none, rather than guessing the legacy one.
+    expect(fact("file")?.textContent).toBe("…");
+    expect(fact("schema")?.textContent).toBe("…");
     expect(
       fact("published")?.querySelector('[data-state="not-recorded"]'),
     ).not.toBeNull();

@@ -17,16 +17,29 @@ import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { RECORD_GAPS } from "./gaps";
 
-/** The protocol every `.oxagen/rules/*.toml` file declares. */
-const SCHEMA = "context-record/v0.1";
+/**
+ * The protocol the record's file declares, read off where it lives (#4765):
+ * `memory/v1` under `steering/memory/`, `steering-record/v1` elsewhere under
+ * `steering/`, and `context-record/v0.1` in a legacy `.oxagen/rules/*.toml`
+ * file. Null while the path is unknown.
+ */
+function schemaOf(path: string | null): string | null {
+  if (path === null) return null;
+  if (path.startsWith("steering/memory/")) return "memory/v1";
+  if (path.startsWith("steering/")) return "steering-record/v1";
+  return "context-record/v0.1";
+}
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 export function LineagePanel({
   detail,
+  path,
   repository,
 }: {
   detail: RecordDetail;
+  /** The record's file; null while the repository's layout is unread. */
+  path: string | null;
   /** The workspace's main repository, `owner/name`; null when unread or unbound. */
   repository: string | null;
 }) {
@@ -34,7 +47,7 @@ export function LineagePanel({
   const format = useFormatter();
   const locale = useLocale();
   const { record, provenance, effect } = detail;
-  const path = record.path ?? `.oxagen/rules/${record.lineage}.toml`;
+  const shownPath = path ?? "…";
   const commit = provenance?.commit ?? record.commit;
   const date = provenance?.committedAt ?? record.publishedAt;
   return (
@@ -59,8 +72,8 @@ export function LineagePanel({
         <dt>{t("file")}</dt>
         <dd data-fact="file">
           {repository === null
-            ? t.rich("fileAlone", { path, code })
-            : t.rich("fileOn", { path, repository, code })}
+            ? t.rich("fileAlone", { path: shownPath, code })
+            : t.rich("fileOn", { path: shownPath, repository, code })}
         </dd>
         <dt>{t("publishedBy")}</dt>
         <dd data-fact="published">
@@ -93,7 +106,7 @@ export function LineagePanel({
         </dd>
         <dt>{t("schema")}</dt>
         <dd data-fact="schema" className={mono}>
-          {SCHEMA}
+          {schemaOf(path) ?? "…"}
         </dd>
       </dl>
     </section>

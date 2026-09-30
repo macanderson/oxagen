@@ -22,7 +22,7 @@ import { RegistryPage } from "@/data/contracts/tools";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
-import { getMetadataBase } from "@/shared/app-url";
+import { appOriginOf } from "./app-origin";
 import {
   MCP_OAUTH_CALLBACK_PATH,
   MCP_OAUTH_COOKIE,
@@ -67,25 +67,13 @@ export async function searchRegistry(
     : { ok: false, reason: "unavailable", code: "record_unmappable" };
 }
 
-/**
- * The callback URL on the origin the person is using, so the popup lands where
- * the wizard can hear it. A host other than the app's own or a local one falls
- * back to the configured origin: a forwarded host is the client's to spell.
- */
+/** The callback URL on the origin the person is using (`appOriginOf`). */
 async function callbackUrl(): Promise<string> {
-  const base = getMetadataBase();
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  let origin = base.origin;
-  if (host !== null) {
-    const hostname = host.split(":")[0] ?? "";
-    const local = hostname === "localhost" || hostname === "127.0.0.1";
-    if (local || host === base.host) {
-      const proto = h.get("x-forwarded-proto") ?? (local ? "http" : "https");
-      origin = `${proto}://${host}`;
-    }
-  }
-  return new URL(MCP_OAUTH_CALLBACK_PATH, origin).toString();
+  return new URL(
+    MCP_OAUTH_CALLBACK_PATH,
+    appOriginOf((name) => h.get(name)),
+  ).toString();
 }
 
 /** What the wizard sends to start a sign-in. */

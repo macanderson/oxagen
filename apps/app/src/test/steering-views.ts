@@ -25,6 +25,7 @@ import type {
   SteeringFreshness,
   SteeringDeliveries,
   SteeringHub,
+  SteeringLayout,
 } from "@/data/contracts/steering";
 import { type Read, readOk } from "@/data/read";
 
@@ -113,7 +114,7 @@ export function proposal(overrides: Partial<Proposal> = {}): Proposal {
     pr: {
       number: 519,
       repository: "acme/core-platform",
-      branch: `context/${LINEAGE}`,
+      branch: `steering/${LINEAGE}`,
     },
     checks: { passed: 6, total: 6 },
     updatedAt: "2026-09-15T09:10:00.000Z",
@@ -182,7 +183,7 @@ export function contextPr(
           url: PR_URL,
           repository: "acme/core-platform",
           baseRef: "main",
-          branch: `context/${LINEAGE}`,
+          branch: `steering/${LINEAGE}`,
           headSha: status === "pr_open" ? null : "9f8e7d6c5b4a",
         }
       : null,
@@ -217,6 +218,8 @@ export type SteeringReads = {
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
   freshness: Read<SteeringFreshness>;
+  /** The main repository's layout; legacy unless a test sets it, so a record without a path keeps its `.oxagen/rules/` file. */
+  layout: Read<SteeringLayout>;
   hub: Read<SteeringHub>;
   deliveries: Read<SteeringDeliveries>;
   memories: Read<MemoryPage>;
@@ -319,6 +322,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
     freshness: readOk(steeringFreshness()),
+    layout: readOk({ layout: "legacy" }),
     hub: readOk(steeringHub()),
     deliveries: readOk({
       runs: [],
@@ -346,6 +350,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     proposals: [],
     contextPr: [],
     freshness: [],
+    layout: [],
     hub: [],
     deliveries: [],
     memories: [],
@@ -456,6 +461,10 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       freshness: (...args) => {
         calls.freshness.push(args);
         return Promise.resolve(reads.freshness);
+      },
+      layout: (...args) => {
+        calls.layout.push(args);
+        return Promise.resolve(reads.layout);
       },
       hub: (...args) => {
         calls.hub.push(args);

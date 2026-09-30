@@ -1945,6 +1945,18 @@
       "consumes": []
     },
     {
+      "name": "get_steering_layout",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_repo",
       "domain": "repository",
       "surfaces": [

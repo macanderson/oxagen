@@ -7,19 +7,18 @@
 // never to the steering folder, so a credential never reaches a steering PR.
 // The form reads each value off its field at submit. It never holds one in
 // state, never renders one back, and never puts one in a failure message. It
-// clears the secret fields once the vault stores them. Until the capability
-// merges, the form renders disabled with a note saying so. An operator's own
+// clears the secret fields once the vault stores them. An operator's own
 // OAuth sign-in is replaced through the Reconnect link beside this form.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
-import { PendingNote } from "./pending-note";
+import type { StudioAt } from "./route";
 import {
   type SetMcpCredential,
   type SetMcpCredentialInput,
   setMcpCredential,
-} from "./pending-capabilities";
+} from "./studio-calls";
 
 type CredentialKind = SetMcpCredentialInput["kind"];
 
@@ -87,10 +86,13 @@ function Field({
 }
 
 export function CredentialForm({
+  at,
   defaultName,
   defaultKind,
   credential = setMcpCredential,
 }: {
+  /** The workspace the credential is stored in. */
+  at: StudioAt;
   /** The name the record references now, or "" when it names none. */
   defaultName: string;
   defaultKind: CredentialKind;
@@ -101,16 +103,15 @@ export function CredentialForm({
   const [kind, setKind] = useState<CredentialKind>(defaultKind);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const pendingId = `${id}-pending`;
 
   const submit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (busy || !credential.available) return;
+    if (busy) return;
     const form = event.currentTarget;
     setBusy(true);
     setOutcome(null);
     try {
-      const answer = await credential.call(credentialInput(form, kind));
+      const answer = await credential.call(at, credentialInput(form, kind));
       if (answer.ok) {
         for (const name of SECRET_FIELDS) {
           const field = form.elements.namedItem(name);
@@ -118,10 +119,7 @@ export function CredentialForm({
         }
         setOutcome({ kind: "saved", reference: answer.reference });
       } else {
-        setOutcome({
-          kind: "failed",
-          code: answer.reason === "failed" ? answer.code : answer.reason,
-        });
+        setOutcome({ kind: "failed", code: answer.code });
       }
     } catch {
       setOutcome({ kind: "failed", code: null });
@@ -136,10 +134,7 @@ export function CredentialForm({
       onSubmit={(event) => void submit(event)}
       className="flex w-full flex-col gap-3"
     >
-      <fieldset
-        disabled={!credential.available}
-        className="flex min-w-0 flex-col gap-3"
-      >
+      <fieldset className="flex min-w-0 flex-col gap-3">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-foreground">
             {t("kind")}
@@ -236,24 +231,13 @@ export function CredentialForm({
       )}
       <button
         type="submit"
-        disabled={!credential.available}
         aria-disabled={busy || undefined}
-        aria-describedby={credential.available ? undefined : pendingId}
+        data-capability={credential.name}
         data-testid="studio-credential-replace"
         className={`${buttonSecondary} self-start`}
       >
         {busy ? t("saving") : t("replace")}
       </button>
-      {credential.available ? null : (
-        <PendingNote
-          id={pendingId}
-          capability={credential.name}
-          gap={credential.gap}
-          testId="studio-credential-pending"
-        >
-          {t("pending")}
-        </PendingNote>
-      )}
     </form>
   );
 }

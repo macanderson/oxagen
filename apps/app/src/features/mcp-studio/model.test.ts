@@ -3,7 +3,7 @@
 // target, which environment agents call, and the server's folder name.
 import { describe, expect, it } from "vitest";
 import type { KillSwitch, KillSwitchBoard } from "@/data/contracts/tools";
-import { buildStudioView, sumTokens } from "./model";
+import { buildStudioView, type StudioRecord, sumTokens } from "./model";
 import {
   BILLING,
   billingRecord,
@@ -290,6 +290,25 @@ describe("tool and server names", () => {
     expect(name("tools/servers/builtin")).toBeNull();
     expect(name(`tools/servers/${"a".repeat(25)}`)).toBeNull();
     expect(name("")).toBeNull();
+  });
+
+  it("names the folder the registry row gives when no record is read, and lets the record win", () => {
+    const view = (
+      steeringName: string | null,
+      record: StudioRecord | null = null,
+    ) =>
+      buildStudioView({
+        server: { ...studioServer(GITHUB), steeringName },
+        versions: studioVersions().items,
+        board: null,
+        record,
+      });
+    expect(view("github").serverName).toBe("github");
+    expect(view(null).serverName).toBeNull();
+    // A name no draft can use is none, from the row as from the record.
+    expect(view("GitHub").serverName).toBeNull();
+    expect(view("builtin").serverName).toBeNull();
+    expect(view("github", stripeRecord()).serverName).toBe("stripe");
   });
 
   it("names a tool by its capability, else by its slug", () => {

@@ -149,6 +149,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // them as output roots because the runner deletes both after the job.
   "RUNNER_TEMP",
   "GITHUB_WORKSPACE",
+  // The deploy workflows hand package-for-node.sh the JSON file that
+  // build-env.ts --runtime-out wrote. A CI handoff between two steps, never a
+  // service's variable.
+  "RUNTIME_ENV_FILE",
   // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
   "AWS_REGION",
   // The app node's /opt/oxagen/bin/node.env, written by

@@ -67,7 +67,7 @@ manifest describing how it runs:
 | `command` | yes | Argv, relative to the tarball root, which is mounted at `/app`. |
 | `memory` | no (`512m`) | Hard container limit. Positive integer bytes, or a `k`, `m`, or `g` suffix. |
 | `health_path` | no (`/`) | Path polled for up to 60s after start. |
-| `env` | no | Non-secret environment. This file ships inside a public CI artifact. |
+| `env` | no | Non-secret environment. This file ships inside a public CI artifact. `package-for-node.sh` adds the registry's static values that Parameter Store does not hold (`build-env.ts --runtime-out`). If you later add one of those keys to Parameter Store, redeploy the service, because the container would otherwise start with both. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
 
 The manifest is what makes the deploy path generic. Passing the image, port and

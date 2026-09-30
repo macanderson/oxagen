@@ -130,7 +130,7 @@ function opened(overrides: Record<string, unknown> = {}) {
         number: 527,
         url: "https://github.com/acme/platform/pull/527",
         repository: "acme/platform",
-        branch: `context/${LINEAGE}`,
+        branch: `steering/${LINEAGE}`,
         path: `.oxagen/rules/${LINEAGE}.toml`,
       },
       checks: [
@@ -153,7 +153,7 @@ beforeEach(() => {
   push.mockReset();
   readMainRepository.mockResolvedValue({
     ok: true,
-    value: { fullName: "acme/platform", defaultRef: "main" },
+    value: { fullName: "acme/platform", defaultRef: "main", layout: "legacy" },
   });
   proposeRecord.mockResolvedValue({
     ok: true,
@@ -283,8 +283,9 @@ describe("the context-record wizard: statement", () => {
       t("statement.drafted.body"),
     );
     expect(file.value).toBe(`${DESC}.`);
+    // The path follows the layout the host reads as it opens, so wait for it.
     expect(
-      screen.getByRole("region", {
+      await screen.findByRole("region", {
         name: t("statement.path", { path: `.oxagen/rules/${LINEAGE}.toml` }),
       }),
     ).toBeTruthy();
@@ -400,6 +401,61 @@ describe("the context-record wizard: checks", () => {
     const checks = await screen.findByTestId("record-checks");
     expect(checks.textContent).toContain(t("checks.items.effect.none"));
   });
+
+});
+
+describe("the context-record wizard: record path", () => {
+  it("previews the steering folder and branch in a steering repository", async () => {
+    readMainRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/platform",
+        defaultRef: "main",
+        layout: "steering",
+      },
+    });
+    await toPullRequest("rule");
+    expect(screen.getByTestId("pr-branch").textContent).toBe(
+      `steering/${LINEAGE}`,
+    );
+    expect(
+      screen.getByText(`steering/business-rules/${LINEAGE}.md`),
+    ).toBeTruthy();
+  });
+
+  it("previews the memory shard and a memory branch for a memory", async () => {
+    readMainRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        fullName: "acme/platform",
+        defaultRef: "main",
+        layout: "steering",
+      },
+    });
+    await toPullRequest("memory");
+    expect(screen.getByTestId("pr-branch").textContent).toBe(
+      `memory/${LINEAGE}`,
+    );
+    expect(
+      screen.getByText(`steering/memory/workspace/general/${LINEAGE}.md`),
+    ).toBeTruthy();
+  });
+
+  it("names no path while the layout read failed, and never guesses one (negative)", async () => {
+    readMainRepository.mockResolvedValue({
+      ok: true,
+      value: { fullName: "acme/platform", defaultRef: "main", layout: null },
+    });
+    await toStatement();
+    expect(
+      screen.getByRole("region", { name: t("statement.path", { path: "…" }) }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/\.oxagen\/rules/)).toBeNull();
+    fireEvent.click(primary());
+    await screen.findByTestId("record-checks");
+    fireEvent.click(primary());
+    expect((await screen.findByTestId("pr-branch")).textContent).toBe("…");
+  });
 });
 
 describe("the context-record wizard: pull request", () => {
@@ -407,7 +463,7 @@ describe("the context-record wizard: pull request", () => {
     openRecordPr.mockResolvedValue(opened());
     await toPullRequest();
     expect(screen.getByTestId("pr-branch").textContent).toBe(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
     );
     expect(await screen.findByText("acme/platform:main")).toBeTruthy();
     expect(screen.getByTestId("record-rationale").textContent).toBe(DESC);

@@ -15,6 +15,16 @@ Put an enrolled machine in a machine group. A local server, or a registry packag
 
 A group is not a record of its own. It exists while at least one machine is in it, so adding the first machine creates the group.
 
+## How a call reaches the machine
+
+Being in a group is what lets a machine receive a local call (#4773). The machine pulls every call, and Oxagen opens no connection to it.
+
+1. The cloud gateway reads the machine's groups, signs a call envelope for a machine in a group the server names, and hands it to the broker in the MCP process (`packages/handlers/src/mcp-studio/local-calls/broker.ts`).
+2. The machine's collector holds `GET /v1/local-servers/next` open for up to 25 seconds (`apps/mcp/src/local-servers/route.ts`). The route answers `200` with the envelope, or `204` when none came.
+3. The machine runs the call and posts the result to `POST /v1/local-servers/replies`. The route answers `204`, or `409` when no call waits for that reply.
+
+Both routes accept only the machine's gateway key, with an `X-Tacho-Host` header that names the key's enrollment. They refuse a revoked or suspended machine with `403` (`apps/mcp/src/local-servers/auth.ts`). The loop that polls is `packages/tacho/src/collector/local-servers/machine.ts`. The daemon starts it for an enrolled machine, and stops it when the host is revoked or suspended, when `host.json` loses its gateway key, or when the daemon stops. A call to a machine that is not polling fails at once as disconnected. The published page is `apps/docs/content/docs/mcp/local-servers.mdx`.
+
 ## Reachability
 
 The contract declares no surface. `layers` lists `schema`, `unit` and `docs`, which is everything that exists. The handler is registered in `packages/handlers/src/register.ts` and lives in `packages/handlers/src/mcp-studio/local-calls/machine-group.add.ts`. A surface for it arrives with the Machines screen.

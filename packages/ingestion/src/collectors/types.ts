@@ -12,7 +12,8 @@
 //    versions.
 // 3. Map. toWorkItem turns the fetched record into work item fields. Oxagen
 //    upserts on the collector and the provider id, and emits
-//    work/item.received.
+//    work/item.received. When toWorkItem returns null, the record is outside
+//    the collector's configured scope, and Oxagen skips it.
 // 4. Reconcile. Every RECONCILE_INTERVAL_MINUTES (@oxagen/work),
 //    listChangedSince reads what changed since the collector's cursor.
 //
@@ -169,7 +170,10 @@ export interface WriteBack {
   labels(target: WriteBackTarget, labels: { priority: string; type: string }): Promise<void>;
 }
 
-/** A collector module. The interface is fixed by agent-work-spec.html (Shared contract). */
+/**
+ * A collector module. agent-work-spec.html (Shared contract) fixes the
+ * interface, with one change: toWorkItem may return null.
+ */
 export interface CollectorDefinition<Config> extends ConnectorDefinition {
   type: CollectorType;
   config: z.ZodType<Config>; // the [scope] table
@@ -177,6 +181,19 @@ export interface CollectorDefinition<Config> extends ConnectorDefinition {
   doorbell(req: InboundRequest): ItemRef[]; // ids only, never fields
   fetchById(ref: ItemRef, conn: Connection): Promise<ProviderItem>;
   listChangedSince(cursor: Cursor, conn: Connection): Promise<Page<ProviderItem>>;
-  toWorkItem(item: ProviderItem, config: Config): WorkItemInput; // pure
+  /**
+   * Map one fetched record to work item fields. Pure.
+   *
+   * Returns null when the record is outside the collector's configured scope
+   * (the [scope] table in config), such as a GitHub issue from a repository
+   * the collector does not list. The pipeline skips a null and writes no work
+   * item.
+   *
+   * A doorbell or a reconcile page can name such a record, because the
+   * provider does not filter by scope. fetchById and listChangedSince still
+   * return every record they are asked for, and the scope decision is made
+   * here, in one place.
+   */
+  toWorkItem(item: ProviderItem, config: Config): WorkItemInput | null;
   writeBack?: WriteBack; // none for Slack or email
 }

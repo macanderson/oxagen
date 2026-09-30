@@ -11,8 +11,8 @@
 //     open_studio_review shipped in #4688. review-calls.ts binds these types
 //     to them through this lane's server actions (actions.ts).
 //
-// The Test tab, Draft and the Changes tab's findings call capabilities that have
-// not merged yet. Their stubs live in pending-capabilities.ts.
+// The Test tab, Draft, the Changes tab's findings, discovery and credential
+// writes call their capabilities through studio-calls.ts.
 //
 // A credential never crosses any of these seams.
 import type {
@@ -69,8 +69,8 @@ type Conflict = { ok: false; reason: "conflict"; code: "draft_revision_stale" };
  * a save with no revision overwrites whatever is stored.
  *
  * The browser sends neither server.toml nor the definition. The definition
- * can run to 25 MiB, so the server attaches the recorded one once the app
- * can read the discovery record (pending-capabilities.ts).
+ * can run to 25 MiB, so the server attaches the recorded one once the page
+ * reads the Studio record (#4678).
  */
 type SaveStudioDraftInput = {
   /** The server's folder name under tools/servers/. */

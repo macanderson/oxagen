@@ -11,7 +11,7 @@ import type { McpServer } from "@/data/contracts/tools";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink, useNavigate } from "@/ui/navigation";
-import { useActionFailure } from "./action-failure";
+import { useOAuthFailureText } from "./oauth-failure";
 import { StateDot } from "./parts";
 import { useProviderOAuth } from "./use-provider-oauth";
 import {
@@ -94,7 +94,7 @@ export function ReconnectProvider({
 }) {
   const t = useTranslations("tools.providers.reconnect");
   const tOAuth = useTranslations("tools.import.oauth");
-  const failureText = useActionFailure();
+  const failureText = useOAuthFailureText();
   const navigate = useNavigate();
   const now = useNow({ updateInterval: 60_000 });
   const oauth = useProviderOAuth(at, () => {
@@ -149,14 +149,7 @@ export function ReconnectProvider({
       ) : null}
       {phase.kind === "failed" ? (
         <FormAlert testId={`provider-reconnect-failure-${server.id}`}>
-          {phase.code === "access_denied" ||
-          phase.code === "authorization_failed"
-            ? tOAuth(`failure.${phase.code}`)
-            : failureText({
-                ok: false,
-                reason: "unavailable",
-                code: phase.code,
-              })}
+          {failureText(phase.failure)}
         </FormAlert>
       ) : null}
       {phase.kind === "client_required" ? (

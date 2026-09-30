@@ -9,6 +9,7 @@ import type { contextProposalList } from "@oxagen/oxagen/contracts/context.propo
 import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
+import type { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import type { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { LEGACY_OXAGEN_DIR } from "@oxagen/oxagen/steering-repo/paths";
 import type { z } from "zod";
@@ -20,6 +21,7 @@ import type {
   RecordDetail,
   RecordPage,
   SteeringFreshness,
+  SteeringLayout,
 } from "@/data/contracts/steering";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -215,6 +217,13 @@ export function toSteeringFreshness(
         }
       : null,
   };
+}
+
+/** `get_steering_layout` → the record page's layout. */
+export function toSteeringLayout(
+  out: ContractOutput<typeof contextSteeringLayout>,
+): z.input<typeof SteeringLayout> {
+  return { layout: out.layout };
 }
 
 const WRITTEN_BY = {

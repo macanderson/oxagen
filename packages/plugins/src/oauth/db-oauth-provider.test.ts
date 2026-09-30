@@ -10,6 +10,8 @@ const credStore: Record<
     authKind: string;
     oauthClientId?: string | null;
     oauthClientSecret?: string | null;
+    oauthClientAuthMethod?: string | null;
+    oauthClientRedirectUri?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
     expiresAt?: Date | null;
@@ -25,6 +27,8 @@ vi.mock("../credentials/workspace-credential", () => ({
     authKind: string;
     oauthClientId?: string | null;
     oauthClientSecret?: string | null;
+    oauthClientAuthMethod?: string | null;
+    oauthClientRedirectUri?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
     expiresAt?: Date | null;
@@ -35,6 +39,8 @@ vi.mock("../credentials/workspace-credential", () => ({
       authKind: input.authKind,
       oauthClientId: input.oauthClientId ?? null,
       oauthClientSecret: input.oauthClientSecret ?? null,
+      oauthClientAuthMethod: input.oauthClientAuthMethod ?? null,
+      oauthClientRedirectUri: input.oauthClientRedirectUri ?? null,
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
       expiresAt: input.expiresAt ?? null,
@@ -55,6 +61,7 @@ vi.mock("../credentials/workspace-credential", () => ({
       refreshToken: stored.refreshToken ?? null,
       oauthClientSecret: stored.oauthClientSecret ?? null,
       oauthClientId: stored.oauthClientId ?? null,
+      oauthClientAuthMethod: stored.oauthClientAuthMethod ?? null,
       authKind: stored.authKind,
       status: "active",
     };
@@ -295,5 +302,95 @@ describe("DbOAuthClientProvider", () => {
     expect(meta.client_name).toBe("Oxagen");
     expect(meta.grant_types).toContain("authorization_code");
     expect(meta.grant_types).toContain("refresh_token");
+  });
+
+  it("records the auth method registration granted, and hands it back", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveClientInformation({
+      client_id: "dcr-basic",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+      token_endpoint_auth_method: "client_secret_basic",
+    });
+    expect(credStore["ws-1:ol-1"]?.oauthClientAuthMethod).toBe(
+      "client_secret_basic",
+    );
+    const fresh = new DbOAuthClientProvider(ctx);
+    const info = await fresh.clientInformation();
+    expect(info).toMatchObject({
+      client_id: "dcr-basic",
+      client_secret: "s",
+      token_endpoint_auth_method: "client_secret_basic",
+    });
+  });
+
+  it("records client_secret_post when registration names no method", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveClientInformation({
+      client_id: "dcr-plain",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+    });
+    expect(credStore["ws-1:ol-1"]?.oauthClientAuthMethod).toBe(
+      "client_secret_post",
+    );
+  });
+
+  it("sends client_secret_post for a stored client with no recorded method", async () => {
+    credStore["ws-1:ol-1"] = {
+      authKind: "oauth",
+      oauthClientId: "legacy-client",
+      oauthClientSecret: "legacy-secret",
+      oauthClientAuthMethod: null,
+    };
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const info = await new DbOAuthClientProvider(ctx).clientInformation();
+    expect(info).toMatchObject({
+      client_id: "legacy-client",
+      client_secret: "legacy-secret",
+      token_endpoint_auth_method: "client_secret_post",
+    });
+  });
+
+  it("sends none for a stored public client with no recorded method", async () => {
+    credStore["ws-1:ol-1"] = {
+      authKind: "oauth",
+      oauthClientId: "public-client",
+      oauthClientSecret: null,
+      oauthClientAuthMethod: null,
+    };
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const info = await new DbOAuthClientProvider(ctx).clientInformation();
+    expect(info).toMatchObject({ token_endpoint_auth_method: "none" });
+    expect("client_secret" in (info ?? {})).toBe(false);
+  });
+
+  it("records the callback a registered client is bound to", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    await new DbOAuthClientProvider(ctx).saveClientInformation({
+      client_id: "dcr",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+    });
+    expect(credStore["ws-1:ol-1"]?.oauthClientRedirectUri).toBe(
+      ctx.redirectUrl,
+    );
+  });
+
+  it("forgets a refused client, so the next sign-in obtains a new one", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveClientInformation({
+      client_id: "dead-client",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+    });
+    await provider.saveCodeVerifier("verifier");
+    await provider.invalidateCredentials("all");
+    // The in-session cache is dropped too, not only the stored row.
+    await expect(provider.clientInformation()).resolves.toBeUndefined();
+    await expect(provider.codeVerifier()).rejects.toThrow(/expired or missing/);
   });
 });

@@ -40,12 +40,13 @@ const SAVE_BODY_MAX = 1024 * 1024 - 64 * 1024;
 
 const UTF8 = new TextEncoder();
 
-type Refused = Exclude<ActionResult<unknown>, { ok: true }>;
+/** A refused action: every ActionResult arm but the answer. */
+export type Refused = Exclude<ActionResult<unknown>, { ok: true }>;
 
 const STALE = "draft_revision_stale";
 
 /** A refusal's code: the handler's reason where it names one, else the kind. */
-function codeOf(result: Refused): string {
+export function codeOf(result: Refused): string {
   switch (result.reason) {
     case "not_found":
     case "conflict":

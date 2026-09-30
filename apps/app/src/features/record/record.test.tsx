@@ -316,7 +316,7 @@ describe("Record › the header", () => {
             pr: {
               number: 522,
               repository: "acme/platform",
-              branch: `context/${LINEAGE}`,
+              branch: `steering/${LINEAGE}`,
             },
           }),
         ],
@@ -326,7 +326,7 @@ describe("Record › the header", () => {
     const pending = screen
       .getByTestId("record-chips")
       .querySelector('[data-term="pending"]');
-    expect(pending?.textContent).toBe(`context/${LINEAGE}`);
+    expect(pending?.textContent).toBe(`steering/${LINEAGE}`);
   });
 
   it("ignores a proposal on another lineage and one already merged", async () => {
@@ -694,7 +694,7 @@ describe("Record › Propose a change", () => {
     expect(dialog.textContent).toContain(
       "Oxagen opens a branch and a pull request, runs the six checks, and changes the record when the pull request merges.",
     );
-    expect(dialog.textContent).toContain(`context/${LINEAGE}`);
+    expect(dialog.textContent).toContain(`steering/${LINEAGE}`);
     expect(within(dialog).getByTestId("record-diff-stat").textContent).toBe(
       "+0 −0",
     );
@@ -722,7 +722,12 @@ describe("Record › Propose a change", () => {
   it("shows the line diff and opens the pull request, leaving the record in force", async () => {
     revise.mockResolvedValue({
       ok: true,
-      value: { status: "checks_running", prNumber: 528, prUrl: null },
+      value: {
+        status: "checks_running",
+        prNumber: 528,
+        prUrl: null,
+        branch: `steering/${LINEAGE}`,
+      },
     });
     const user = userEvent.setup();
     await renderRecord();
@@ -754,7 +759,7 @@ describe("Record › Propose a change", () => {
     expect(
       screen.getByTestId("record-chips").querySelector('[data-term="pending"]')
         ?.textContent,
-    ).toBe(`context/${LINEAGE}`);
+    ).toBe(`steering/${LINEAGE}`);
   });
 
   it("names the refusal when the write is refused", async () => {
@@ -831,7 +836,7 @@ describe("Record › Archive", () => {
           path={`.oxagen/rules/${LINEAGE}.toml`}
           repository="acme/platform"
           archived={false}
-          pendingBranch={`context/${LINEAGE}`}
+          pendingBranch={`steering/${LINEAGE}`}
           constraintEffect="forbid"
         />
       </IntlProvider>,
@@ -1065,6 +1070,88 @@ describe("Record › the not-loaded states", () => {
   });
 });
 
+describe("Record › the file and branch in the repository's layout", () => {
+  /** A record of `kind` whose read carried no path, so the layout decides. */
+  function pathless(kind: RecordKind): RecordDetail {
+    const detail = ofKind(kind);
+    return { ...detail, record: { ...detail.record, path: null } };
+  }
+
+  function lineageFact(fact: string) {
+    return screen
+      .getByTestId("record-lineage")
+      .querySelector(`[data-fact="${fact}"]`)?.textContent;
+  }
+
+  it("reads the layout once, beside the record", async () => {
+    const { calls } = await renderRecord();
+    expect(calls.layout).toEqual([[ctx]]);
+  });
+
+  it("names the steering file, its schema, and the steering branch in a steering repository", async () => {
+    await openProposalWith({
+      record: readOk(pathless("constraint")),
+      layout: readOk({ layout: "steering" }),
+    });
+    expect(lineageFact("file")).toContain(
+      `steering/constraints/${LINEAGE}.md`,
+    );
+    expect(lineageFact("schema")).toBe("steering-record/v1");
+    expect(screen.getByTestId("record-diff").textContent).toContain(
+      `steering/${LINEAGE}`,
+    );
+  });
+
+  it("names the memory shard and the memory branch for a memory in a steering repository", async () => {
+    await openProposalWith({
+      record: readOk(pathless("memory")),
+      layout: readOk({ layout: "steering" }),
+    });
+    expect(lineageFact("file")).toContain(
+      `steering/memory/workspace/general/${LINEAGE}.md`,
+    );
+    expect(lineageFact("schema")).toBe("memory/v1");
+    expect(screen.getByTestId("record-diff").textContent).toContain(
+      `memory/${LINEAGE}`,
+    );
+  });
+
+  it("keeps the record's own path over the layout", async () => {
+    await renderRecord({ layout: readOk({ layout: "steering" }) });
+    expect(lineageFact("file")).toContain(`.oxagen/rules/${LINEAGE}.toml`);
+    expect(lineageFact("schema")).toBe("context-record/v0.1");
+  });
+
+  it("shows a placeholder, never a legacy guess, when the layout read failed (negative)", async () => {
+    await openProposalWith({
+      record: readOk(pathless("constraint")),
+      layout: readError("steering_unavailable", 503),
+    });
+    expect(lineageFact("file")).toContain("…");
+    expect(lineageFact("file")).not.toContain(".oxagen/rules");
+    expect(lineageFact("schema")).toBe("…");
+    const diff = screen.getByTestId("record-diff").textContent;
+    expect(diff).toContain("…");
+    expect(diff).not.toContain(`steering/${LINEAGE}`);
+    expect(diff).not.toContain(`context/${LINEAGE}`);
+  });
+
+  it("shows a placeholder while no repository is bound (negative)", async () => {
+    await renderRecord({
+      record: readOk(pathless("fact")),
+      layout: readOk({ layout: null }),
+    });
+    expect(lineageFact("file")).toContain("…");
+    expect(lineageFact("file")).not.toContain(".oxagen/rules");
+  });
+
+  async function openProposalWith(reads: Reads) {
+    const user = userEvent.setup();
+    await renderRecord(reads);
+    await user.click(screen.getByTestId("record-propose-open"));
+  }
+});
+
 describe("Record › reads that did not answer and facts a record lacks", () => {
   it("says the pull request goes to the main repo, and names the file alone, when the freshness read failed", async () => {
     const user = userEvent.setup();
@@ -1102,7 +1189,7 @@ describe("Record › reads that did not answer and facts a record lacks", () => 
     expect(
       screen.getByTestId("record-chips").querySelector('[data-term="pending"]')
         ?.textContent,
-    ).toBe(`context/${LINEAGE}`);
+    ).toBe(`steering/${LINEAGE}`);
   });
 
   it("counts no published records for a constraint when that list read failed", async () => {

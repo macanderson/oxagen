@@ -26,6 +26,7 @@ describe("isPublicPath", () => {
     "/cli/authorize",
     "/cli/complete",
     "/github/setup",
+    "/api/v1/mcp/oauth/client-metadata",
   ])("%s is public", (path) => {
     expect(isPublicPath(path)).toBe(true);
   });
@@ -43,6 +44,8 @@ describe("isPublicPath", () => {
     "/github/setupx",
     "/api/scim/v2x",
     "/api/scim/v1/Users",
+    "/api/v1/mcp/oauth/callback",
+    "/api/v1/mcp/oauth/client-metadatax",
   ])("%s is gated", (path) => {
     expect(isPublicPath(path)).toBe(false);
   });

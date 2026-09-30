@@ -11,6 +11,10 @@ import {
   encryptCredentialSecrets,
   decryptCredentialSecrets,
 } from "./credential-service";
+import {
+  type OAuthClientAuthMethod,
+  oauthClientAuthMethodOf,
+} from "../oauth/client-auth-method";
 
 // Module-level guard: log the missing-key misconfiguration at most once per
 // process so the deployment ops alert is visible without spamming every read.
@@ -26,6 +30,14 @@ export interface SetWorkspaceSecretInput {
   refreshToken?: string | null;
   oauthClientId?: string | null;
   oauthClientSecret?: string | null;
+  /**
+   * How the OAuth client authenticates at the token endpoint, as registration
+   * granted it. `null` clears a recorded method, which a new client of
+   * unknown method (a workspace's own OAuth app) must do.
+   */
+  oauthClientAuthMethod?: OAuthClientAuthMethod | null;
+  /** The callback URL the OAuth client was registered with. `null` clears it. */
+  oauthClientRedirectUri?: string | null;
   scopes?: string[];
   expiresAt?: Date | null;
   lastRefreshedAt?: Date | null;
@@ -59,9 +71,18 @@ export async function setWorkspaceSecret(
   // break the next refresh.
   const set: Record<string, unknown> = {
     authKind: input.authKind,
-    status: "active",
     updatedAt: new Date(),
   };
+  // Only a new token or secret makes a credential usable again. A write of the
+  // OAuth client alone (a workspace's own app, a registration at the start of
+  // sign-in) must leave a needs_reauth row as it is, or its provider reads as
+  // connected while it still holds a dead token.
+  if (
+    (input.accessToken !== undefined && input.accessToken !== null) ||
+    (input.secret !== undefined && input.secret !== null)
+  ) {
+    set["status"] = "active";
+  }
   if (input.secret !== undefined) set["secretEnc"] = enc.secretEnc;
   if (input.accessToken !== undefined)
     set["accessTokenEnc"] = enc.accessTokenEnc;
@@ -82,12 +103,19 @@ export async function setWorkspaceSecret(
   }
   if (input.oauthClientId !== undefined)
     set["oauthClientId"] = input.oauthClientId ?? null;
+  if (input.oauthClientAuthMethod !== undefined)
+    set["oauthClientAuthMethod"] = input.oauthClientAuthMethod ?? null;
+  if (input.oauthClientRedirectUri !== undefined)
+    set["oauthClientRedirectUri"] = input.oauthClientRedirectUri ?? null;
   if (input.scopes !== undefined) set["scopes"] = input.scopes;
   if (input.expiresAt !== undefined) set["expiresAt"] = input.expiresAt ?? null;
   if (input.lastRefreshedAt !== undefined) {
     set["lastRefreshedAt"] = input.lastRefreshedAt ?? null;
   }
 
+  // tenancy: the upsert writes the caller's orgId and workspaceId on insert,
+  // and its conflict target is scoped to that workspaceId and listing, so it
+  // writes only the verified caller's own credential row.
   return withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.mcpCredentials)
@@ -102,6 +130,8 @@ export async function setWorkspaceSecret(
         oauthClientSecretEnc: enc.oauthClientSecretEnc,
         tokenKmsKeyId: enc.tokenKmsKeyId,
         oauthClientId: input.oauthClientId ?? null,
+        oauthClientAuthMethod: input.oauthClientAuthMethod ?? null,
+        oauthClientRedirectUri: input.oauthClientRedirectUri ?? null,
         scopes: input.scopes ?? [],
         expiresAt: input.expiresAt ?? null,
         lastRefreshedAt: input.lastRefreshedAt ?? null,
@@ -229,6 +259,14 @@ export interface WorkspaceSecret {
   oauthClientSecret: string | null;
   /** DCR client_id stored in the credential row (not encrypted). */
   oauthClientId: string | null;
+  /**
+   * How that client authenticates at the token endpoint; null or absent when
+   * not recorded. Optional so a caller that builds a secret for a static
+   * credential need not name it.
+   */
+  oauthClientAuthMethod?: OAuthClientAuthMethod | null;
+  /** The callback URL that client was registered with; null or absent when not recorded. */
+  oauthClientRedirectUri?: string | null;
   authKind: string;
   status: string;
 }
@@ -292,6 +330,8 @@ export async function getWorkspaceSecret(key: {
     refreshToken: dec.refreshToken,
     oauthClientSecret: dec.oauthClientSecret,
     oauthClientId: row.oauthClientId ?? null,
+    oauthClientAuthMethod: oauthClientAuthMethodOf(row.oauthClientAuthMethod),
+    oauthClientRedirectUri: row.oauthClientRedirectUri ?? null,
     authKind: row.authKind,
     status: row.status,
   };

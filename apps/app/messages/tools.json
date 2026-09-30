@@ -175,6 +175,7 @@
     "import": {
       "open": "Import a provider",
       "openAdd": "Add a provider",
+      "openServer": "Add server",
       "title": "Import tools from a provider",
       "subtitle": "Oxagen lists the server’s tools and imports only the ones you pick.",
       "reviewTitle": "Review tools/list",
@@ -223,6 +224,7 @@
       "importing": "Importing…",
       "done": "{published, plural, =0 {No new version} one {# new version} other {# new versions}} and {unchanged, plural, =0 {none already registered} one {# already registered} other {# already registered}}.",
       "addTitle": "Add a provider",
+      "serverTitle": "Add server",
       "theProvider": "the provider",
       "pickProvider": "Choose a provider",
       "source": {
@@ -294,6 +296,7 @@
           "authorization_expired": "This sign-in expired or was already used. Authorize again.",
           "authorization_failed": "The provider refused the sign-in. Check the OAuth app and scopes, then authorize again.",
           "authorization_discovery_failed": "The server's OAuth metadata could not be read. Check the endpoint URL.",
+          "registration_refused": "The provider refused to register Oxagen as an OAuth client, so signing in again will not help. If the provider lets you create your own OAuth app, enter its client ID and authorize again.",
           "authorization_url_invalid": "The provider returned a sign-in address that is not https, so it was not opened.",
           "endpoint_not_public": "The endpoint must be a public https address.",
           "redirect_url_invalid": "The redirect URL was refused. Reload the page and try again.",
@@ -544,7 +547,7 @@
         },
         "target": "Target",
         "why": "Reason",
-        "note": "A switch is stored only when it is flipped on, so creating one that starts allowing is not built yet, and the enrolled-device scope has no deny to write. Flip a kill switch in the header to deny an agent or an operator’s agents now.",
+        "note": "A switch is stored only when it is flipped on, so creating one that starts allowing is not built yet, and the enrolled-device scope has no deny to write. Flip a kill switch beside it to deny an agent or an operator’s agents now.",
         "confirm": "Create switch"
       }
     },
@@ -805,19 +808,12 @@
     },
     "notBacked": "Not recorded yet",
     "header": {
-      "newTool": "New tool",
-      "wizard": {
-        "title": "New tool",
-        "subtitle": "Describe a tool and open a pull request that adds it.",
-        "note": "The tool wizard is not built yet. It would take a description, recommend a manifest or an import, write the code in four languages, and open a pull request that adds the tool under .oxagen/tools/. Until then, import a provider to add its tools.",
-        "confirm": "Start",
-        "steps": {
-          "describe": "Describe what the tool does",
-          "recommend": "Choose to declare the tool or import it from a provider",
-          "manifest": "Review the manifest or the import",
-          "code": "Read the code in four languages",
-          "pr": "Open the pull request"
-        }
+      "import": {
+        "open": "Import",
+        "title": "Import MCP servers",
+        "subtitle": "Import opens one steering PR with a folder per server.",
+        "note": "Oxagen does not read the MCP servers in your harness configs yet. Until it does, add each server with Add server.",
+        "confirm": "Open steering PR"
       }
     },
     "empty": {

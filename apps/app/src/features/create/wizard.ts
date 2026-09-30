@@ -63,7 +63,13 @@ export function clampStep(step: number, count: number): number {
  */
 export type RepoState =
   | { state: "loading" }
-  | { state: "bound"; fullName: string; defaultRef: string }
+  | {
+      state: "bound";
+      fullName: string;
+      defaultRef: string;
+      /** `steering`, `legacy`, or null while the layout read failed (#4765). */
+      layout: "steering" | "legacy" | null;
+    }
   | { state: "unbound" }
   | { state: "denied"; code: string }
   | { state: "unavailable"; code: string };
