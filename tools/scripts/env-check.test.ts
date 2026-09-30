@@ -1,6 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   PLATFORM_ALLOWLIST,
@@ -182,6 +189,27 @@ describe("reconcile — empty referenced map → only dead warnings (no fail)", 
 // ── scanSourceReferences ─────────────────────────────────────────────────────
 
 describe("scanSourceReferences", () => {
+  it("finds every variable run-checks.mjs reads in the platform allowlist", () => {
+    // run-checks.mjs hands RUN_CHECKS_PARENT to each check it starts. It is
+    // the runner's own signal, so it belongs on this list, not in the
+    // registry. Without the entry, env:check failed the checks job on the
+    // batch that added the variable (#4664 item 9).
+    const here = dirname(fileURLToPath(import.meta.url));
+    const dir = mkdtempSync(join(tmpdir(), "env-check-run-checks-"));
+    try {
+      copyFileSync(join(here, "run-checks.mjs"), join(dir, "run-checks.mjs"));
+      const { referenced } = scanSourceReferences([dir]);
+      expect(referenced.has("RUN_CHECKS_PARENT")).toBe(true);
+      for (const key of referenced.keys())
+        expect(
+          PLATFORM_ALLOWLIST.has(key),
+          `${key}, read by run-checks.mjs, should be in PLATFORM_ALLOWLIST`,
+        ).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
   it("does not read awk's own variables as environment references", () => {
     // `$NF` inside an awk program is awk's field count, not a shell parameter,
     // and the expansion pattern cannot see the quotes that make it so. The
