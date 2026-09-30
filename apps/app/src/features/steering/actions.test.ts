@@ -298,6 +298,7 @@ describe("setGovernanceMode", () => {
       reused: false,
     },
     overrodeReview: false,
+    proposalId: null,
   } as const;
 
   it("writes governance.toml for the workspace viewer, never skipping review, and returns what happened", async () => {
@@ -316,6 +317,7 @@ describe("setGovernanceMode", () => {
           number: 42,
           htmlUrl: "https://github.com/acme/platform/pull/42",
         },
+        proposalId: null,
       },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
@@ -344,11 +346,16 @@ describe("setGovernanceMode", () => {
   });
 
   it("names the file the mode lives in for a steering repository (#4821)", async () => {
-    invoke.mockResolvedValue({ ...OUT, path: "steering/governance.toml" });
+    invoke.mockResolvedValue({
+      ...OUT,
+      path: "steering/governance.toml",
+      proposalId: "prp_01k6c0v3",
+    });
     const result = await setGovernanceMode("acme", "core-platform", "regulated");
+    // The proposal is what a reviewer lands from Proposals (ADR-232).
     expect(result).toMatchObject({
       ok: true,
-      value: { path: "steering/governance.toml" },
+      value: { path: "steering/governance.toml", proposalId: "prp_01k6c0v3" },
     });
   });
 

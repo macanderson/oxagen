@@ -196,6 +196,7 @@ describe("the governance dialog", () => {
           number: 42,
           htmlUrl: "https://github.com/acme/platform/pull/42",
         },
+        proposalId: null,
       },
     });
     renderChip();
@@ -225,6 +226,47 @@ describe("the governance dialog", () => {
     expect(
       within(dialog).queryByRole("button", { name: "Open the Context PR" }),
     ).toBeNull();
+    // A legacy pull request has no governance proposal to land in Oxagen.
+    expect(within(dialog).queryByTestId("governance-review")).toBeNull();
+  });
+
+  it("links a steering repository's proposed change to where a reviewer lands it (ADR-232)", async () => {
+    setGovernanceMode.mockResolvedValue({
+      ok: true,
+      value: {
+        outcome: "proposed",
+        mode: "solo",
+        repository: "acme/platform",
+        branch: "main",
+        path: "steering/governance.toml",
+        pullRequest: {
+          number: 43,
+          htmlUrl: "https://github.com/acme/platform/pull/43",
+        },
+        proposalId: "prp_01k6c0v3",
+      },
+    });
+    renderChip({
+      state: "read",
+      repository: "acme/platform",
+      path: "steering/governance.toml",
+      mode: "team",
+    });
+    const dialog = openDialog();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^solo/ }));
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Open the Context PR" }),
+    );
+    const review = await within(dialog).findByRole("link", {
+      name: "Open the change for review",
+    });
+    expect(review).toHaveAttribute(
+      "href",
+      "/acme/core-platform/steering/proposals/prs?proposal=prp_01k6c0v3",
+    );
+    expect(
+      within(dialog).getByRole("link", { name: "Open pull request #43" }),
+    ).toHaveAttribute("href", "https://github.com/acme/platform/pull/43");
   });
 
   it("closes from the header ×", async () => {
@@ -246,6 +288,7 @@ describe("the governance dialog", () => {
         branch: "main",
         path: LEGACY_GOVERNANCE,
         pullRequest: null,
+        proposalId: null,
       },
     });
     renderChip({

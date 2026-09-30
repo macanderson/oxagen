@@ -519,6 +519,7 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
         authorEmail: c.author_email ?? null,
         committedAt: c.authored_date,
         summary: firstLine(c.title ?? c.message ?? ""),
+        message: c.message ?? c.title ?? "",
       }));
     },
 

@@ -423,6 +423,7 @@ function clientOver(api: FakeGitLabApi): GitLabClient {
               authorEmail: null,
               committedAt: c.at,
               summary: c.message.split("\n")[0]!,
+              message: c.message,
             });
           if (out.length >= limit) break;
         }

@@ -50,6 +50,8 @@ export interface GitLabPathCommit {
   authorEmail: string | null;
   committedAt: string;
   summary: string;
+  /** The whole commit message, trailers included. */
+  message: string;
 }
 
 export interface GitLabMergeRequest {
