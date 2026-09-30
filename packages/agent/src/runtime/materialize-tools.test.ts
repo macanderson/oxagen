@@ -3419,8 +3419,11 @@ describe("materializeTools role rule", () => {
 // with the rule named, where it used to fail with the rule's error.
 describe("materializeTools — a call a decision rule sends to a person", () => {
   const RULE_DIGEST = "a".repeat(64);
-  /** What the rules gate throws: `DecisionRuleApprovalRequiredError`. */
-  const ruleRequiresApproval = (digest: string | undefined = RULE_DIGEST) =>
+  /**
+   * What the rules gate throws: `DecisionRuleApprovalRequiredError`. Null
+   * leaves the digest unset, as the gate does for input it cannot encode.
+   */
+  const ruleRequiresApproval = (digest: string | null) =>
     Object.assign(
       new Error(
         'decision rule "approve-medium" requires approval: medium refunds need a person',
@@ -3429,7 +3432,7 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
         name: "DecisionRuleApprovalRequiredError",
         code: "decision_rule_approval_required",
         ruleIds: ["approve-medium"],
-        approvalDigest: digest,
+        approvalDigest: digest ?? undefined,
       },
     );
   const PARK_CTX = { ...CTX, messageId: "msg_rule" };
@@ -3445,7 +3448,7 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
   });
 
   it("parks the call with the rule named on the row and its digest sealed", async () => {
-    vi.mocked(invoke).mockRejectedValueOnce(ruleRequiresApproval());
+    vi.mocked(invoke).mockRejectedValueOnce(ruleRequiresApproval(RULE_DIGEST));
     mocks.createApprovalRequest.mockResolvedValueOnce({
       approvalId: "appr_rule",
       approvalPublicId: "apr_rule",
@@ -3499,14 +3502,14 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
     name: string;
     opts: MaterializeOptions;
     ctx: Parameters<typeof materializeTools>[0];
-    digest: string | undefined;
+    digest: string | null;
   }[] = [
     { name: "outside park mode", opts: {}, ctx: PARK_CTX, digest: RULE_DIGEST },
     {
       name: "with no digest to prove the approval",
       opts: { approvalMode: "park" },
       ctx: PARK_CTX,
-      digest: undefined,
+      digest: null,
     },
     {
       name: "with no message to attach the row to",
