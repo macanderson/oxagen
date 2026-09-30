@@ -383,8 +383,11 @@ export function ImportProvider({
   servers: readonly { id: string; name: string }[] | null;
   /** Gold only where it is the screen's one primary action. */
   primary?: boolean;
-  /** "Import a provider" in the header and the Tools panel; "Add a provider" on Providers. */
-  label?: "import" | "add";
+  /**
+   * "Import a provider" in the Tools panel, "Add a provider" on Providers,
+   * and "Add server" in the Agents page header (roadmap mockups `addserver`).
+   */
+  label?: "import" | "add" | "server";
   /** The Tools panel header's copy of the control: the trigger drops to one line. */
   compact?: boolean;
 }) {
@@ -634,7 +637,9 @@ export function ImportProvider({
     step === 1
       ? label === "add"
         ? t("addTitle")
-        : t("title")
+        : label === "server"
+          ? t("serverTitle")
+          : t("title")
       : step === 2
         ? t("reviewTitle")
         : t("classifyTitle");
@@ -733,7 +738,11 @@ export function ImportProvider({
           setOpen(true);
         }}
       >
-        {label === "add" ? t("openAdd") : t("open")}
+        {label === "add"
+          ? t("openAdd")
+          : label === "server"
+            ? t("openServer")
+            : t("open")}
       </button>
       <SheetDialog
         open={open}
