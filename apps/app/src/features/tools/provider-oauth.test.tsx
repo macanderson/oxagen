@@ -94,6 +94,7 @@ function server(over: Partial<RegistryServer>): RegistryServer {
     authHeader: null,
     oauthRegistration: "dynamic",
     connectable: true,
+    packages: [],
     ...over,
   };
 }

@@ -49,9 +49,18 @@ Each server carries `id`, `name`, `description`, `publisher`,
 `iconUrl`, `websiteUrl`, `docsUrl`, `repositoryUrl` (https only),
 `endpointUrl` (the streamable-http endpoint Oxagen would reach), `transports`,
 `auth` (`oauth`, `bearer`, `header`, `none` or `unknown`), `authHeader`,
-`oauthRegistration` (`dynamic`, `client_required` or `unknown`) and
-`connectable`. A server with only `sse` or `stdio` is listed with
-`connectable: false`.
+`oauthRegistration` (`dynamic`, `client_required` or `unknown`),
+`connectable`, and `packages`. A server with only `sse` or `stdio` is listed
+with `connectable: false`.
+
+`packages` lists what a machine can run, empty for a remote-only entry. Each
+package carries `registryType`, `identifier`, `version`, `transport`,
+`runtimeHint`, `packageArguments`, and `environmentVariables`. Each argument
+is `named` or `positional`, with `name`, `valueHint`, `isRequired`,
+`isSecret`, `value` (a fixed value the registry sets) and `default`. An
+argument of another type is dropped. Each variable carries a name and whether
+it is required or secret, never a value. Studio's Add server dialog asks for
+the required arguments that have no fixed value (#4678).
 
 ## Side effects
 

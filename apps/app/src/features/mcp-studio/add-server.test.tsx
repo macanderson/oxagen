@@ -609,6 +609,7 @@ function registryServer(over: Partial<RegistryServer> = {}): RegistryServer {
     authHeader: null,
     oauthRegistration: null,
     connectable: false,
+    packages: [],
     ...over,
   };
 }
@@ -713,14 +714,11 @@ const FILES_PACKAGES: readonly RegistryPackage[] = [
 ];
 
 describe("RegistryPackageFields", () => {
-  it("renders disabled, says Oxagen does not read the packages yet, and names #4678", () => {
+  it("renders disabled with no arguments for an entry that lists no package, and names #4756", () => {
     render(
       <IntlProvider>
         <RegistryPackageFields server={registryServer()} />
       </IntlProvider>,
-    );
-    expect(screen.getByTestId("studio-add-package-unknown")).toHaveTextContent(
-      tPackage("noPackages"),
     );
     expect(screen.getByLabelText("Machine groups")).toBeDisabled();
     const type = selectOf("Package type");
@@ -736,8 +734,21 @@ describe("RegistryPackageFields", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription(tPackage("pending"));
     const note = screen.getByTestId("studio-add-package-pending");
-    expect(note).toHaveAttribute("data-gap", "#4678");
+    expect(note).toHaveAttribute("data-gap", "#4756");
     expect(note).not.toHaveAttribute("data-capability");
+  });
+
+  it("reads the packages search_mcp_registry lists when the page passes none", () => {
+    render(
+      <IntlProvider>
+        <RegistryPackageFields
+          server={registryServer({ packages: [...FILES_PACKAGES] })}
+        />
+      </IntlProvider>,
+    );
+    expect(selectOf("Package type").value).toBe("pypi");
+    const group = screen.getByRole("group", { name: tPackage("arguments") });
+    expect(within(group).getByLabelText("--root")).toHaveValue("/srv/files");
   });
 
   it("asks for the required arguments of the first package the gateway runs", () => {
@@ -749,9 +760,6 @@ describe("RegistryPackageFields", () => {
         />
       </IntlProvider>,
     );
-    expect(
-      screen.queryByTestId("studio-add-package-unknown"),
-    ).not.toBeInTheDocument();
     // mcpb is not a type the local gateway runs, so pypi is the first.
     expect(selectOf("Package type").value).toBe("pypi");
     const group = screen.getByRole("group", { name: tPackage("arguments") });

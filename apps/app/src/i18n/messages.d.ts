@@ -3588,7 +3588,6 @@ type Messages = {
         arguments: string;
         secretHint: string;
         variables: string;
-        noPackages: string;
         submit: string;
         pending: string;
       };
