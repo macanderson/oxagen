@@ -314,6 +314,8 @@ export const postgresListingClaimStore: ListingClaimStore = {
           source: done.source,
           revision: sql`${drafts.revision} + 1`,
           updatedAt: now,
+          // The machine answered the person who asked, so the save is theirs,
+          // as a save from Studio would be.
           updatedById: claim.requestedBy,
         })
         .where(
