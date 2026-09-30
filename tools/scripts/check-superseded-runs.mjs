@@ -367,8 +367,8 @@ async function main() {
   console.log(`[ci-superseded] Wrote ${actions.length} change(s).`);
 }
 
-// Real paths (lib/is-entrypoint.mjs): a false here would exit 0 having
-// reported nothing.
+// lib/is-entrypoint.mjs compares real paths, so a start through a symlink
+// still runs.
 if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     // Fails open, loudly. This check reports; it must never block a merge.
