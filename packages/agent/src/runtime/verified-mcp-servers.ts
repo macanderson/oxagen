@@ -116,7 +116,9 @@ const VERIFIED: readonly Verified[] = [
     docsUrl: "https://docs.stripe.com/mcp",
     endpointUrl: "https://mcp.stripe.com",
     auth: "oauth",
-    oauthRegistration: "client_required",
+    // Rechecked 2026-09-30: Stripe publishes a registration endpoint and
+    // registers public clients (token auth `none`), so no OAuth app is needed.
+    oauthRegistration: "dynamic",
     keywords: ["payments", "billing", "invoices"],
   },
   {
@@ -142,6 +144,9 @@ const VERIFIED: readonly Verified[] = [
     docsUrl: "https://vercel.com/docs/mcp/vercel-mcp",
     endpointUrl: "https://mcp.vercel.com",
     auth: "oauth",
+    // Vercel publishes a registration endpoint but, as of 2026-09-30, refuses
+    // any redirect URL it has not approved (`invalid_redirect_uri`), which
+    // Oxagen's callback is not yet. The wizard names that refusal.
     oauthRegistration: "dynamic",
     keywords: ["deployments", "hosting"],
   },

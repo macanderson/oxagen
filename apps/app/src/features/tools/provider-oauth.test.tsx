@@ -443,6 +443,7 @@ describe("Add a provider › registry and OAuth", () => {
     ["authorization_expired"],
     ["authorization_failed"],
     ["authorization_discovery_failed"],
+    ["registration_refused"],
     ["authorization_url_invalid"],
     ["endpoint_not_public"],
     ["redirect_url_invalid"],

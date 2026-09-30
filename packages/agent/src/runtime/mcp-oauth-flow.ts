@@ -313,6 +313,8 @@ export async function startMcpAuthorization(
       authKind: "oauth",
       oauthClientId: input.client.clientId,
       oauthClientSecret: input.client.clientSecret ?? null,
+      // The method a registered client held does not carry over to this one.
+      oauthClientAuthMethod: null,
       ...(input.client.scopes
         ? { scopes: input.client.scopes.split(/\s+/).filter(Boolean) }
         : {}),
@@ -357,6 +359,17 @@ export async function startMcpAuthorization(
     const message = String(err);
     if (message.includes("does not support dynamic client registration")) {
       return { status: "client_required", scopesSupported };
+    }
+    // Still no client after the attempt: the server refused the registration
+    // itself. Vercel does this for any redirect URL it has not approved. The
+    // person is told that, not that sign-in failed, since signing in again
+    // cannot help and their own OAuth app might.
+    if ((await provider.clientInformation()) === undefined) {
+      return refuse(
+        "conflict",
+        "registration_refused",
+        "The authorization server refused to register Oxagen as an OAuth client",
+      );
     }
     return refuse(
       "conflict",

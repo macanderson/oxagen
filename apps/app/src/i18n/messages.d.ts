@@ -10593,6 +10593,7 @@ type Messages = {
           authorization_expired: string;
           authorization_failed: string;
           authorization_discovery_failed: string;
+          registration_refused: string;
           authorization_url_invalid: string;
           endpoint_not_public: string;
           redirect_url_invalid: string;

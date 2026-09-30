@@ -19261,6 +19261,12 @@
           "type": "text"
         },
         {
+          "name": "oauth_client_auth_method",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "scopes",
           "nullable": false,
           "primaryKey": false,

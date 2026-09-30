@@ -15,6 +15,8 @@ const m = vi.hoisted(() => ({
   rows: [] as unknown[][],
   inserts: [] as { values: unknown; set: unknown }[],
   pendingRedirect: null as URL | null,
+  /** What the provider holds after `auth()` ran: a client, or none. */
+  clientInfo: { client_id: "x" } as { client_id: string } | undefined,
 }));
 
 vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
@@ -27,6 +29,9 @@ vi.mock("@oxagen/plugins", () => ({
     constructor(readonly ctx: unknown) {}
     get pendingRedirect() {
       return m.pendingRedirect;
+    }
+    clientInformation() {
+      return Promise.resolve(m.clientInfo);
     }
   },
   getWorkspaceSecret: m.getSecret,
@@ -101,6 +106,7 @@ beforeEach(() => {
   m.rows = [];
   m.inserts = [];
   m.pendingRedirect = null;
+  m.clientInfo = { client_id: "x" };
   m.detect.mockResolvedValue("oauth");
   m.getSecret.mockResolvedValue(null);
   m.prereg.mockReturnValue(undefined);
@@ -357,6 +363,29 @@ describe("startMcpAuthorization", () => {
       reason: "authorization_failed",
     });
   });
+  it("refuses with registration_refused when the server will not register a client", async () => {
+    // Vercel answers registration with invalid_redirect_uri for any redirect
+    // URL it has not approved, so no client exists after auth() throws.
+    m.discover.mockResolvedValue({
+      resourceMetadata: { scopes_supported: [] },
+      authorizationServerMetadata: {
+        registration_endpoint: "https://vercel.com/api/login/oauth/register",
+      },
+    });
+    m.clientInfo = undefined;
+    m.auth.mockRejectedValueOnce(
+      new Error(
+        "ServerError: The provided redirect URIs are not approved for use by this authorization server.",
+      ),
+    );
+    await expect(
+      startMcpAuthorization(SCOPE, add, { fetchFn }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "registration_refused",
+    });
+  });
+
   it("refuses with authorization_discovery_failed when the server's metadata cannot be read, and starts no sign-in", async () => {
     m.discover.mockRejectedValue(new Error("ECONNRESET"));
     await expect(

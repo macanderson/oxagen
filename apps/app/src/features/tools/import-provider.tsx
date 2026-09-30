@@ -461,6 +461,8 @@ export function ImportProvider({
         return tOAuth("failure.authorization_failed");
       case "authorization_discovery_failed":
         return tOAuth("failure.authorization_discovery_failed");
+      case "registration_refused":
+        return tOAuth("failure.registration_refused");
       case "authorization_url_invalid":
         return tOAuth("failure.authorization_url_invalid");
       case "endpoint_not_public":

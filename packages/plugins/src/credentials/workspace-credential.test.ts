@@ -146,4 +146,82 @@ describe("workspace-credential", () => {
       errorSpy.mockRestore();
     }
   });
+
+  it("round-trips the OAuth client's token endpoint auth method", async () => {
+    const { setWorkspaceSecret, getWorkspaceSecret } = await import(
+      "./workspace-credential"
+    );
+    await setWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+      authKind: "oauth",
+      oauthClientId: "dcr-client",
+      oauthClientSecret: "dcr-secret",
+      oauthClientAuthMethod: "client_secret_post",
+    });
+    expect(rows[rows.length - 1]?.oauthClientAuthMethod).toBe(
+      "client_secret_post",
+    );
+    expect(conflictSets[conflictSets.length - 1]?.oauthClientAuthMethod).toBe(
+      "client_secret_post",
+    );
+    const got = await getWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+    });
+    expect(got?.oauthClientAuthMethod).toBe("client_secret_post");
+  });
+
+  it("keeps a recorded auth method when a token write omits it", async () => {
+    const { setWorkspaceSecret } = await import("./workspace-credential");
+    await setWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+      authKind: "oauth",
+      accessToken: "at",
+      refreshToken: "rt",
+    });
+    expect(
+      "oauthClientAuthMethod" in conflictSets[conflictSets.length - 1]!,
+    ).toBe(false);
+  });
+
+  it("clears the auth method when a new client names null", async () => {
+    const { setWorkspaceSecret } = await import("./workspace-credential");
+    await setWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+      authKind: "oauth",
+      oauthClientId: "own-app",
+      oauthClientAuthMethod: null,
+    });
+    expect(conflictSets[conflictSets.length - 1]?.oauthClientAuthMethod).toBe(
+      null,
+    );
+  });
+
+  it("reads an unrecognised stored method as not recorded", async () => {
+    const { getWorkspaceSecret } = await import("./workspace-credential");
+    rows.push({
+      authKind: "oauth",
+      status: "active",
+      oauthClientId: "legacy",
+      oauthClientAuthMethod: "private_key_jwt",
+      tokenKmsKeyId: null,
+      secretEnc: null,
+      accessTokenEnc: null,
+      refreshTokenEnc: null,
+      oauthClientSecretEnc: null,
+    });
+    const got = await getWorkspaceSecret({
+      orgId: "o1",
+      workspaceId: "w1",
+      orgListingId: "l1",
+    });
+    expect(got?.oauthClientAuthMethod).toBeNull();
+  });
 });

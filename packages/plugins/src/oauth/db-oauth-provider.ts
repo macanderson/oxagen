@@ -11,7 +11,6 @@
  */
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
-  OAuthClientInformation,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
   OAuthClientMetadata,
@@ -21,6 +20,10 @@ import {
   setWorkspaceSecret,
   getWorkspaceSecret,
 } from "../credentials/workspace-credential";
+import {
+  type OAuthClientAuthMethod,
+  oauthClientAuthMethodOf,
+} from "./client-auth-method";
 import { saveOAuthState, loadOAuthState } from "./state-store";
 import { preregisteredClientForEndpoint } from "./preregistered-clients";
 
@@ -47,6 +50,12 @@ export interface DbProviderCtx {
   serverUrl?: string;
 }
 
+/**
+ * The method Oxagen asks for when it registers a client. A server that grants
+ * it binds the client to it, so the exchange and every refresh must use it too.
+ */
+const REGISTERED_AUTH_METHOD: OAuthClientAuthMethod = "client_secret_post";
+
 export class DbOAuthClientProvider implements OAuthClientProvider {
   /** Set by redirectToAuthorization(); the authorize route reads this to redirect the browser. */
   pendingRedirect: URL | null = null;
@@ -66,7 +75,7 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       redirect_uris: [this.c.redirectUrl],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
-      token_endpoint_auth_method: "client_secret_post",
+      token_endpoint_auth_method: REGISTERED_AUTH_METHOD,
     };
   }
 
@@ -76,7 +85,7 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
 
   // ── Client information (DCR result) ─────────────────────────────────────────
 
-  async clientInformation(): Promise<OAuthClientInformation | undefined> {
+  async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
     if (this.clientInfoCache) return this.clientInfoCache;
     const cred = await getWorkspaceSecret({
       orgId: this.c.orgId,
@@ -94,12 +103,26 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       }
       return undefined;
     }
-    // Return the minimal OAuthClientInformation shape.
-    const info: OAuthClientInformation = {
+    // The stored client with the token endpoint auth method it holds. The SDK
+    // authenticates the exchange and every refresh with this method when the
+    // server lists it; without one it picks client_secret_basic, which a
+    // server that bound the client to client_secret_post at registration
+    // refuses with invalid_client (Linear does). A client whose method was not
+    // recorded (a workspace's own OAuth app, or one registered before the
+    // column) is sent the method Oxagen registers with, and the SDK falls back
+    // to its own choice when the server does not list that one.
+    const secret =
+      cred.oauthClientSecret === null || cred.oauthClientSecret === ""
+        ? undefined
+        : cred.oauthClientSecret;
+    const method: OAuthClientAuthMethod =
+      cred.oauthClientAuthMethod ??
+      (secret === undefined ? "none" : REGISTERED_AUTH_METHOD);
+    const info: OAuthClientInformationFull = {
+      ...this.clientMetadata,
       client_id: cred.oauthClientId,
-      ...(cred.oauthClientSecret
-        ? { client_secret: cred.oauthClientSecret }
-        : {}),
+      ...(secret === undefined ? {} : { client_secret: secret }),
+      token_endpoint_auth_method: method,
     };
     return info;
   }
@@ -117,6 +140,15 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       authKind: "oauth",
       oauthClientId: info.client_id,
       oauthClientSecret: info.client_secret ?? null,
+      // The method the server granted, which may differ from the one asked
+      // for; a response that names none granted the one asked for.
+      oauthClientAuthMethod:
+        oauthClientAuthMethodOf(
+          "token_endpoint_auth_method" in info
+            ? info.token_endpoint_auth_method
+            : undefined,
+        ) ??
+        (info.client_secret === undefined ? "none" : REGISTERED_AUTH_METHOD),
     });
   }
 
