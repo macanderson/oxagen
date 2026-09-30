@@ -59,7 +59,10 @@ describe("bounded response bodies", () => {
       pull(controller) { controller.enqueue("invalid response chunk"); },
       cancel,
     }, { highWaterMark: 0 });
-    await expect(readResponseBody(new Response(body), 100))
+    // A Response takes byte chunks only. This one is handed strings on purpose,
+    // to prove the reader refuses them, so the type is widened by hand.
+    const mislabelled = body as unknown as ReadableStream<Uint8Array>;
+    await expect(readResponseBody(new Response(mislabelled), 100))
       .rejects.toThrow("Response body must contain byte chunks");
     expect(cancel).toHaveBeenCalledOnce();
     expect(body.locked).toBe(false);
