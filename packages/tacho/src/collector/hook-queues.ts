@@ -1,5 +1,5 @@
 /**
- * The daemon's hook queues (#4601, ADR-229): one per harness session, and one
+ * The daemon's hook queues (#4601, ADR-231): one per harness session, and one
  * for the host.
  *
  * `tachod` used to run every hook from every session through one queue, so a

@@ -1,5 +1,5 @@
 "use client";
-// A Studio server's Try it tab (#4678, "Try it"): pick an environment and an
+// A Studio server's Test tab (#4678, "Try it" in the spec): pick an environment and an
 // imported tool, fill in its arguments, and see the request that went
 // upstream, the raw result and the result after tools.toml's shaping. Save
 // as test stages the call in the draft, and the steering PR adds it to the
@@ -9,8 +9,12 @@
 // an agent's. The gateway adds the environment's credential after the
 // request is recorded, so the request shown never holds it. Save as test
 // still drops any credential header the record carries (scrubTest), since
-// lane M11 refuses a saved test that holds one. Until the capability lands
-// (PR2 of this lane) the call answers "not built".
+// lane M11 refuses a saved test that holds one.
+//
+// Run calls try_studio_tool, which #4742 builds. Until it merges the stub in
+// pending-capabilities.ts says so, and Run renders disabled with a one-line
+// note. Run is disabled too while the record does not name the server's
+// folder, because the call names the server by it.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Badge } from "@/ui/badge";
@@ -29,10 +33,16 @@ import {
 import { FormAlert } from "@/ui/form-feedback";
 import { StateWrap } from "@/ui/state-wrap";
 import { scrubTest } from "./draft";
+import type { StudioGap } from "./gaps";
 import type { StudioEnvironment, StudioTool } from "./model";
 import { StudioNotRecorded } from "./not-recorded";
+import {
+  type TryResult,
+  type TryStudioTool,
+  tryStudioTool,
+} from "./pending-capabilities";
+import { PendingNote } from "./pending-note";
 import type { StudioAt } from "./route";
-import { type TryCall, type TryResult, tryCall } from "./seams";
 import { useStudioDraft } from "./use-draft";
 
 type Phase =
@@ -104,7 +114,7 @@ export function TryTab({
   environments,
   agentEnvironment,
   canEdit,
-  call = tryCall,
+  call = tryStudioTool,
 }: {
   /** The workspace the draft belongs to. */
   at: StudioAt;
@@ -116,7 +126,8 @@ export function TryTab({
   agentEnvironment: string | null;
   /** An org Owner or Admin, who can save a call as a test in the draft. */
   canEdit: boolean;
-  call?: TryCall;
+  /** The Test tab's capability: the stub until #4742 merges. */
+  call?: TryStudioTool;
 }) {
   const t = useTranslations("mcpStudio.try");
   const draft = useStudioDraft({ at, serverName, serverId });
@@ -147,8 +158,15 @@ export function TryTab({
 
   const chosen = environments.find((env) => env.name === environment);
   const live = chosen !== undefined && !chosen.sandbox;
+  /** Why Run is off: its capability has not merged, or no folder is named. */
+  const blocked: StudioGap | null = !call.available
+    ? call.gap
+    : serverName === null
+      ? "record"
+      : null;
 
   const run = async () => {
+    if (serverName === null || !call.available) return;
     const parsed = argsOf(args);
     if (parsed === null) {
       setPhase({ kind: "badJson" });
@@ -158,7 +176,12 @@ export function TryTab({
     setSaved({ kind: "none" });
     const sent = { tool, environment, args };
     try {
-      const result = await call({ serverId, tool, environment, args: parsed });
+      const result = await call.call({
+        server: serverName,
+        tool,
+        environment,
+        arguments: parsed,
+      });
       setPhase({ kind: "done", sent, result });
     } catch {
       setPhase({ kind: "error" });
@@ -179,7 +202,7 @@ export function TryTab({
           className={`${panelBody} flex flex-col gap-3`}
           onSubmit={(event) => {
             event.preventDefault();
-            if (phase.kind === "running") return;
+            if (phase.kind === "running" || blocked !== null) return;
             void run();
           }}
         >
@@ -267,12 +290,25 @@ export function TryTab({
             <button
               type="submit"
               data-testid="studio-try-run"
+              disabled={blocked !== null}
               aria-disabled={phase.kind === "running" || undefined}
+              aria-describedby={blocked === null ? undefined : `${id}-pending`}
+              data-capability={call.name}
               className={buttonPrimary}
             >
               {phase.kind === "running" ? t("running") : t("run")}
             </button>
           </div>
+          {blocked === null ? null : (
+            <PendingNote
+              id={`${id}-pending`}
+              capability={call.name}
+              gap={blocked}
+              testId="studio-try-pending"
+            >
+              {t("notBuilt")}
+            </PendingNote>
+          )}
           <p className="text-[12.5px] text-muted-foreground">
             {t("credentialNote")}
           </p>

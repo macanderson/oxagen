@@ -21,6 +21,31 @@ export const mcpRegistryAuth = z.enum([
   "unknown",
 ]);
 
+/**
+ * One package a registry entry publishes: something a machine runs, as
+ * opposed to a remote Oxagen connects to. Studio offers a package-only entry
+ * as a server the local gateway runs (mcp-studio-spec, Sources). The compile
+ * step reads the full entry from the registry, so this carries only what a
+ * person needs to choose a package and name its environment variables.
+ */
+export const mcpRegistryPackage = z.object({
+  /** `npm`, `pypi`, `oci`, `nuget`, or `mcpb`, as the registry names it. */
+  registryType: z.string(),
+  identifier: z.string(),
+  version: z.string().nullable(),
+  transport: mcpRegistryTransport,
+  /** The runner the entry expects, such as `npx` or `docker`, or null. */
+  runtimeHint: z.string().nullable(),
+  /** The variables the package reads. Names only, never values. */
+  environmentVariables: z.array(
+    z.object({
+      name: z.string(),
+      isRequired: z.boolean(),
+      isSecret: z.boolean(),
+    }),
+  ),
+});
+
 export const mcpRegistryServer = z.object({
   /** The registry name (`app.linear/linear`), or `verified/<slug>` for a first-party entry. */
   id: z.string(),
@@ -57,6 +82,8 @@ export const mcpRegistryServer = z.object({
     .nullable(),
   /** False for a server with no streamable-http endpoint Oxagen can reach. */
   connectable: z.boolean(),
+  /** The entry's packages in registry order. Empty for a verified entry. */
+  packages: z.array(mcpRegistryPackage).default([]),
 });
 
 export const agentMcpRegistrySearch = registerCapability({
@@ -98,3 +125,4 @@ export type AgentMcpRegistrySearchOutput = z.output<
   typeof agentMcpRegistrySearch.output
 >;
 export type McpRegistryServer = z.output<typeof mcpRegistryServer>;
+export type McpRegistryPackage = z.output<typeof mcpRegistryPackage>;

@@ -349,7 +349,7 @@ describe("header", () => {
     expect(summary.getByTestId("generated-summary")).toHaveTextContent(
       "Cut release/3.2 from main",
     );
-    expect(summary.getByText("generated · not the record")).toBeTruthy();
+    expect(summary.getByText("generated from the record")).toBeTruthy();
     expect(summary.getByText("z-ai/glm-flash-latest")).toBeTruthy();
   });
 
@@ -968,7 +968,7 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     const operator = within(screen.getByTestId("run-operator"));
-    expect(operator.getByText("An agent, not a person")).toBeTruthy();
+    expect(operator.getByText("An agent")).toBeTruthy();
     expect(operator.queryByText("Marcus Bell")).toBeNull();
   });
 
@@ -983,7 +983,7 @@ describe("header", () => {
     });
     expect(
       within(screen.getByTestId("run-operator")).getByText(
-        "A person, name not recorded",
+        "A person with no recorded name",
       ),
     ).toBeTruthy();
     cleanup();
@@ -1000,7 +1000,7 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator");
-    expect(operator).not.toHaveTextContent("A person, name not recorded");
+    expect(operator).not.toHaveTextContent("A person with no recorded name");
     expect(operator).toHaveTextContent(/^not recorded$/);
   });
 
@@ -1279,6 +1279,43 @@ describe("header", () => {
     expect(screen.queryByTestId("run-witnessed")).toBeNull();
   });
 
+  it("uses the session's harness mark in the header and summary", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            harness: { name: "claude-code", version: "2.1.0", runtime: "node" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      agent: ok(agentDetail({ identity: { harness: "codex" } })),
+    });
+    for (const id of ["run-chips", "run-involved"]) {
+      expect(
+        screen.getByTestId(id).querySelector("[data-harness-mark]"),
+      ).toHaveAttribute("data-harness-mark", "claude-code");
+    }
+  });
+
+  it("keeps a custom harness generic even when its runtime names a vendor", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            harness: { name: "custom-runner", version: null, runtime: "codex" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    for (const id of ["run-chips", "run-involved"]) {
+      const badge = screen.getByTestId(id).querySelector("[data-harness-badge]");
+      expect(badge).toHaveAttribute("data-harness-badge", "custom-runner");
+      expect(badge?.querySelector("img")).toBeNull();
+    }
+  });
+
   it("names the harness the agent registry holds when the session recorded none, and says no version was captured", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ harness: null }) })),
@@ -1288,6 +1325,11 @@ describe("header", () => {
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByText("Codex")).toBeTruthy();
     expect(rig.getByText("version not captured")).toBeTruthy();
+    for (const id of ["run-chips", "run-involved"]) {
+      expect(
+        screen.getByTestId(id).querySelector("[data-harness-mark]"),
+      ).toHaveAttribute("data-harness-mark", "codex");
+    }
     // The summary's card names the agent the registry returned, then its harness.
     expect(screen.getByTestId("run-involved")).toHaveTextContent(
       "Release bot · Codex",
@@ -2088,7 +2130,7 @@ describe("the outputs spine", () => {
       { tab: "actions" },
     );
     expect(calls.outputs).toEqual([[ctx, "tse_7k2m9q"]]);
-    const work = screen.getByRole("complementary", { name: "The work" });
+    const work = screen.getByRole("complementary", { name: "Work" });
     const spine = within(work).getByTestId("run-outputs");
     expect(spine).toHaveTextContent("src/cut.ts");
     const tabs = screen.getByRole("tablist", { name: "Run sections" });
@@ -2106,7 +2148,7 @@ describe("the outputs spine", () => {
       transcript: ok(runTranscript()),
       outputs: ok(runOutputs([runOutputNode({ name: path })])),
     });
-    const work = screen.getByRole("complementary", { name: "The work" });
+    const work = screen.getByRole("complementary", { name: "Work" });
     // jsdom lays nothing out, so the class is the evidence. Without a
     // `minmax(0,1fr)` column the grid's implicit `auto` column grows to the
     // unwrapped path, and the title's `truncate` never cuts it.
@@ -2124,7 +2166,7 @@ describe("the outputs spine", () => {
     expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
     expect(
       screen.getByText(
-        /What this run produced could not be loaded.*frame_store_unreachable/,
+        /Run outputs could not be loaded.*frame_store_unreachable/,
       ),
     ).toBeTruthy();
   });
@@ -3174,7 +3216,7 @@ describe("figures", () => {
     const stat = (id: string) => within(screen.getByTestId(`run-stat-${id}`));
     // 18,204 + 91,022 + 4,102 in, 12,004 + 3,011 out.
     expect(stat("tokens").getByText("128,343")).toBeTruthy();
-    expect(stat("tokens").getByText("113,328 in, 15,015 out")).toBeTruthy();
+    expect(stat("tokens").getByText("113,328 in and 15,015 out")).toBeTruthy();
     expect(stat("prompts").getByText("1")).toBeTruthy();
     expect(stat("prompts").getByText("one-shot session")).toBeTruthy();
     expect(stat("cost").getByText("$4.13")).toBeTruthy();
@@ -3356,7 +3398,7 @@ describe("the work", () => {
       outputs: ok(runOutputs([runOutputNode()])),
     });
     const work = within(
-      screen.getByRole("complementary", { name: "The work" }),
+      screen.getByRole("complementary", { name: "Work" }),
     );
     const changes = within(await work.findByTestId("run-changes"));
     expect(
@@ -3410,7 +3452,7 @@ describe("the work", () => {
     const changes = within(await screen.findByTestId("run-changes"));
     expect(changes.getByText("no file change recorded")).toBeTruthy();
     expect(
-      changes.getByText("none yet, the run is still working"),
+      changes.getByText("none yet (the run is still working)"),
     ).toBeTruthy();
     expect(changes.getByText("none reported")).toBeTruthy();
     expect(changes.queryByText("+0")).toBeNull();

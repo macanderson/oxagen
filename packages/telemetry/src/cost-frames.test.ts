@@ -6,10 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 interface QueryCall {
   query: string;
   query_params: Record<string, unknown>;
+  clickhouse_settings?: unknown;
 }
 
 const queryMock =
-  vi.fn<(args: QueryCall) => Promise<{ json: () => Promise<unknown[]> }>>();
+  vi.fn<(args: QueryCall) => Promise<{ json: () => Promise<unknown[]>; close?: () => void; stream?: () => AsyncIterable<{ json(): unknown }[]> }>>();
 
 vi.mock("./clickhouse", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./clickhouse")>();
@@ -17,6 +18,7 @@ vi.mock("./clickhouse", async (importOriginal) => {
 });
 
 import {
+  COST_FRAME_QUERY_SETTINGS,
   OBSERVED_MODEL_READ_BOUND,
   OBSERVED_TOKEN_CLASSES,
   readModelCallFrames,
@@ -1724,5 +1726,56 @@ describe("readObservedModels", () => {
     await expect(
       readObservedModels({ orgId: ORG, since: SINCE }),
     ).rejects.toThrow();
+  });
+});
+
+describe("streamed cost frames", () => {
+  it("awaits batches and closes the result without buffering JSON", async () => {
+    const json = vi.fn(async () => { throw new Error("unbounded JSON read"); });
+    const close = vi.fn();
+    let consumed = 0;
+    const raw = {
+      at: "2026-09-01T00:00:00Z", model: "model", provider: "provider",
+      input_uncached: "1", cache_read: "0", cache_write_5m: "0", output: "2", cost_micros: "3",
+    };
+    queryMock.mockResolvedValueOnce({
+      json, close,
+      stream: async function* () {
+        yield Array.from({ length: 256 }, () => ({ json: () => raw }));
+        expect(consumed).toBe(256);
+        yield [{ json: () => raw }];
+      },
+    });
+    const sizes: number[] = [];
+    const result = await readModelCallFrames({ orgId: ORG, workspaceId: WS,
+      run: { kind: "ledger", runUuid: RUN } }, async (batch) => {
+      await Promise.resolve();
+      sizes.push(batch.length);
+      consumed += batch.length;
+      expect(batch[0]?.output).toBe(2);
+    });
+    expect(queryMock.mock.calls.at(-1)?.[0].clickhouse_settings).toEqual(COST_FRAME_QUERY_SETTINGS);
+    expect(sizes).toEqual([256, 1]);
+    expect(result).toEqual([]);
+    expect(json).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the stream when its consumer fails", async () => {
+    const close = vi.fn();
+    queryMock.mockResolvedValueOnce({
+      json: async () => [], close,
+      stream: async function* () {
+        yield [{ json: () => ({ name: "Read", status: "ok", input_digest: "in",
+          output_digest: "out", is_mutating: false, result_tokens: "1", repeated: 1 }) }];
+      },
+    });
+    await expect(readTachoToolCallFrames({ orgId: ORG, workspaceId: WS,
+      rootSessionUuid: RUN, sessionUuids: [RUN] }, async (batch) => {
+      expect(batch[0]?.repeated).toBe(true);
+      throw new Error("consumer failed");
+    })).rejects.toThrow("consumer failed");
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(queryMock.mock.calls.at(-1)?.[0].query).toContain("PARTITION BY tool_name, tool_input_digest, tool_output_digest");
   });
 });

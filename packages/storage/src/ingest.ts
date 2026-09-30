@@ -22,6 +22,7 @@ import {
   type AssetKind,
 } from "./assets";
 import { storage } from "./client";
+import { readResponseBody } from "./read-response-body";
 import type { PutObjectInput, PutObjectResult } from "./types";
 
 /**
@@ -94,13 +95,22 @@ export async function ingestImageFromUrl(
   // bypassing the host allowlist. We follow manually, re-validating every hop's
   // target through isIngestibleImageUrl, with a small hop cap.
   const MAX_REDIRECTS = 3;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   let currentUrl = url;
-  let res: Response;
+  let response: Response | undefined;
+  const discard = (res: Response) => {
+    if (res.body && !res.bodyUsed) void res.body.cancel().catch(() => {});
+  };
   try {
     let hops = 0;
     for (;;) {
-      res = await fetchImpl(currentUrl, { redirect: "manual" });
-      const status = res.status;
+      response = await fetchImpl(currentUrl, {
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      controller.signal.throwIfAborted();
+      const status = response.status;
       const isRedirect =
         status === 301 ||
         status === 302 ||
@@ -108,54 +118,37 @@ export async function ingestImageFromUrl(
         status === 307 ||
         status === 308;
       if (!isRedirect) break;
-      if (hops >= MAX_REDIRECTS) return null;
-      const location = res.headers.get("location");
-      if (!location) return null;
-      // Resolve relative redirects against the current URL, then re-check the
-      // host allowlist before following.
-      let next: string;
-      try {
-        next = new URL(location, currentUrl).toString();
-      } catch {
-        return null;
-      }
+      const location = response.headers.get("location");
+      discard(response);
+      response = undefined;
+      if (hops >= MAX_REDIRECTS || !location) return null;
+      const next = new URL(location, currentUrl).toString();
       if (!isIngestibleImageUrl(next)) return null;
       currentUrl = next;
       hops += 1;
     }
-  } catch {
-    return null;
-  }
-  if (!res.ok) return null;
+    if (!response.ok) return null;
 
-  // Map the response content type to an allowed extension for this kind.
-  const contentType = (res.headers.get("content-type") ?? "")
-    .split(";")[0]
-    ?.trim()
-    .toLowerCase();
-  if (!contentType) return null;
-  // `Object.hasOwn` guard, not a bare index: the remote host controls this
-  // header, and inherited Object.prototype keys ("constructor", "toString",
-  // "__proto__") resolve to truthy values that would bypass the allowlist.
-  const allowed = ASSET_ALLOWED_TYPES[kind];
-  const ext = Object.hasOwn(allowed, contentType)
-    ? allowed[contentType]
-    : undefined;
-  if (!ext) return null;
+    const contentType = (response.headers.get("content-type") ?? "")
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase();
+    if (!contentType) return null;
+    const allowed = ASSET_ALLOWED_TYPES[kind];
+    const ext = Object.hasOwn(allowed, contentType)
+      ? allowed[contentType]
+      : undefined;
+    if (!ext) return null;
 
-  let body: ArrayBuffer;
-  try {
-    body = await res.arrayBuffer();
-  } catch {
-    return null;
-  }
-  if (body.byteLength === 0 || body.byteLength > ASSET_LIMITS[kind])
-    return null;
-
-  const key = deriveAssetKey(kind, ownerId, ext);
-  try {
+    const body = await readResponseBody(response, ASSET_LIMITS[kind], controller.signal);
+    if (body.byteLength === 0) return null;
+    clearTimeout(timeout);
+    const key = deriveAssetKey(kind, ownerId, ext);
     return await putImpl({ key, body, contentType, access });
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
+    if (response) discard(response);
   }
 }

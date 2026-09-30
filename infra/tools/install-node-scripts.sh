@@ -4,16 +4,10 @@
 #
 #   tools/install-node-scripts.sh
 #
-# `tools/node/` is the source of truth; the copies under /opt/oxagen/bin are
-# installed from it. Run this after changing anything in that directory —
-# there is deliberately no mechanism that syncs them on its own, because a
-# script that rewrites itself on the box during a deploy is a worse failure
-# than a stale one.
-#
-# The transfer goes through S3 rather than an inline SSM payload for the same
-# reason the artifact does: an SSM command's parameters are capped, and the
-# cap is not generous. Uploading first also means the install is idempotent —
-# re-running it re-copies the same objects.
+# Publish a complete content-addressed toolchain, verify it on the node, and
+# switch the legacy entry points under the deployment lock. Running deploys
+# keep their immutable release paths. The infrastructure workflow also publishes
+# bundles, and the deploy document verifies the requested digest before use.
 
 set -euo pipefail
 
@@ -49,9 +43,10 @@ LOG_DRIVER="${LOG_DRIVER:-awslogs}"
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-echo "==> uploading tools/node -> s3://$BUCKET/_bin/"
-aws s3 sync "$HERE/node" "s3://$BUCKET/_bin/" \
-  --region "$REGION" --exclude '*.md' --delete --only-show-errors
+echo "==> publishing an immutable node toolchain"
+BUCKET="$BUCKET" REGION="$REGION" bash "$HERE/publish-node-tools.sh"
+TOOLCHAIN_DIGEST=$(python3 "$HERE/node/deploy-dispatch.py" digest)
+DISPATCHER_HASH=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$HERE/node/deploy-dispatch.py")
 
 # node.env tells deploy-service.sh which bucket and region this node's own
 # artifacts live in — see that script's header. Generated here rather than
@@ -188,10 +183,27 @@ mkdir -p /opt/oxagen/bin /opt/oxagen/services
 for tool in jq python3 curl docker aws flock; do
   command -v "$tool" >/dev/null || { echo "missing dependency: $tool"; exit 1; }
 done
-aws s3 sync s3://__BUCKET__/_bin/ /opt/oxagen/bin/ --region __REGION__ --delete
-chmod 0755 /opt/oxagen/bin/*.sh
-bash -n /opt/oxagen/bin/deploy-service.sh
-ls -l /opt/oxagen/bin
+# Fetch a digest-pinned dispatcher before touching installed executable files.
+staged_dispatch=$(mktemp /opt/oxagen/.deploy-dispatch-XXXXXX.py)
+aws s3api get-object --bucket __BUCKET__ --key _node-tools/dispatchers/__DISPATCHER_HASH__.py --range bytes=0-1048576 --region __REGION__ "$staged_dispatch" >/dev/null
+printf '%s  %s\n' '__DISPATCHER_HASH__' "$staged_dispatch" | sha256sum -c -
+python3 "$staged_dispatch" verify --service api --digest __TOOLCHAIN_DIGEST__ --bucket __BUCKET__ --region __REGION__
+rm -f "$staged_dispatch"
+# Existing invocations use immutable release paths. Switch legacy entry points atomically.
+(
+  flock -x -w 300 201 || { echo "Node tool installation is busy" >&2; exit 1; }
+  release=/opt/oxagen/node-tools/__TOOLCHAIN_DIGEST__
+  aws s3 cp s3://__BUCKET__/_bin/node.env /opt/oxagen/bin/node.env.incoming --region __REGION__ --only-show-errors
+  chmod 0600 /opt/oxagen/bin/node.env.incoming
+  mv -f /opt/oxagen/bin/node.env.incoming /opt/oxagen/bin/node.env
+  for name in deploy-dispatch.py deploy-service.sh; do
+    source_name=$name
+    [[ $name != deploy-service.sh ]] || source_name=deploy-launcher.sh
+    ln -sfn "$release/$source_name" "/opt/oxagen/bin/$name.incoming"
+    mv -Tf "/opt/oxagen/bin/$name.incoming" "/opt/oxagen/bin/$name"
+  done
+  python3 "$release/ensure-caddy-memory.py"
+) 201>/opt/oxagen/service-deploy.lock
 
 # Caddy is the single point every public request passes through, so the new
 # config is validated before it is installed and the running one is left alone
@@ -351,6 +363,8 @@ REMOTE_EOF
 REMOTE=${REMOTE_TEMPLATE//__BUCKET__/$BUCKET}
 REMOTE=${REMOTE//__REGION__/$REGION}
 REMOTE=${REMOTE//__CANDIDATE_KEY__/$CANDIDATE_KEY}
+REMOTE=${REMOTE//__TOOLCHAIN_DIGEST__/$TOOLCHAIN_DIGEST}
+REMOTE=${REMOTE//__DISPATCHER_HASH__/$DISPATCHER_HASH}
 
 # The script goes to SSM as a JSON file, not as an inline shell-interpolated
 # argument. Interpolating it collapsed every newline into a literal "n" during

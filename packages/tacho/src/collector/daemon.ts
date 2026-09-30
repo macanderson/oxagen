@@ -152,6 +152,7 @@ import {
 } from "./memory-capture/memory-reader";
 import { createMemoryRecall } from "./memory-capture/memory-recall";
 import { createMemoryUpload } from "./memory-capture/memory-upload";
+import { createMachineLoop } from "./local-servers/machine";
 import { pushCredentialBasis } from "./push-basis";
 import { forgetRecallHints } from "./recall-hints";
 import { sessionSkills } from "./session-skills";
@@ -303,6 +304,14 @@ export interface DaemonOptions {
    * drives the API directly makes no recall call unless it asks for one.
    */
   memoryRecall?: boolean;
+  /**
+   * Pull tool calls for the servers a lock pins on this machine, and run
+   * them (`./local-servers/machine`, #4773). Off unless this is true, so a
+   * test's fake control plane sees no pulls; `tachod` turns it on. It pulls
+   * only while host.json holds a gateway key and the host is neither revoked
+   * nor suspended.
+   */
+  localServers?: boolean;
 }
 
 export interface DaemonHandle {
@@ -677,6 +686,17 @@ async function initializeDaemon(
           now,
         })
       : undefined;
+  // Runs the tools a lock pins on this machine. It starts at the end of
+  // start-up, and `syncLocalServers` starts or stops it after each change to
+  // the host's status.
+  const localServers =
+    options.localServers === true
+      ? createMachineLoop({
+          host: () => host,
+          fetch: options.fetch ?? globalThis.fetch,
+          log,
+        })
+      : undefined;
 
   const deviceKey: DeviceKey = loadOrCreateDeviceKey(paths.deviceKey).key;
   const startedAt = now();
@@ -918,6 +938,9 @@ async function initializeDaemon(
   let lastCommandPollAt: number | undefined;
   let stateDirty = journaledHookIds > 0;
   let stopped = false;
+  const syncLocalServers = (): void => {
+    if (!stopped) localServers?.sync();
+  };
   const pendingAcks: CommandAcknowledgement[] = [];
   // The control plane delivers a `sent` command again until its
   // acknowledgement lands. Every delivery goes through this daemon's record
@@ -932,7 +955,7 @@ async function initializeDaemon(
   const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
     applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   /**
-   * The hook queues (ADR-229, #4601). A hook from one session no longer waits
+   * The hook queues (ADR-231, #4601). A hook from one session no longer waits
    * on a hook from another, so one prompt waiting on its recalled memories
    * holds no other agent's `PreToolUse` answer. Each piece of work takes the
    * queue below, and the order between the two kinds is the one
@@ -1827,6 +1850,7 @@ async function initializeDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
+    syncLocalServers();
     // A cached bundle that did not verify is never confirmed by its etag: an
     // edited host.json keeps the etag it was signed with, so a match says
     // nothing about the rest of the file. It is fetched again instead.
@@ -1848,6 +1872,7 @@ async function initializeDaemon(
               host = applyControlFacts(paths.hostFile, host, {
                 host_status: "suspended",
               });
+              syncLocalServers();
               log(`host suspended by operator: ${reason}`);
             },
             now,
@@ -1908,6 +1933,7 @@ async function initializeDaemon(
       host = applyControlFacts(paths.hostFile, host, {
         host_status: "revoked",
       });
+      syncLocalServers();
     },
     // Hosts that lost the control plane together do not retry in step.
     jitter: Math.random,
@@ -3258,7 +3284,7 @@ async function initializeDaemon(
     // met is matched inside the task, to the session that claimed it since,
     // by `claimantOf`, which that sighting does not hide.
     //
-    // A call no session has met goes on the host queue (ADR-229). Nothing
+    // A call no session has met goes on the host queue (ADR-231). Nothing
     // here says which session's `PreToolUse` will claim it, and a host task
     // starts once every task queued before it has settled, so it runs after
     // that hook on whichever session's queue the hook waits. It also drains
@@ -4620,6 +4646,7 @@ async function initializeDaemon(
     memoryTimer = setInterval(scanMemories, MEMORY_SCAN_MS);
     memoryTimer.unref();
   }
+  syncLocalServers();
 
   return {
     api,
@@ -4657,6 +4684,9 @@ async function initializeDaemon(
       stopping.abort();
       if (timer) clearInterval(timer);
       if (memoryTimer) clearInterval(memoryTimer);
+      // Stopped first and waited on last, so its replies post while the
+      // other waits run and it adds nothing to the stop budget.
+      const localServersStopped = localServers?.stop();
       // Persist now, before the waits below. A stop timeout that kills this
       // process mid-wait must not leave `state.json` any further behind the
       // WAL than the last ordinary tick already left it. The finalize below
@@ -4696,6 +4726,10 @@ async function initializeDaemon(
       if (!(await settleWithin(shipper.drain(), timers.stopDrainMs)))
         log(
           `stop: stopped shipping after ${timers.stopDrainMs} ms; the rest of the WAL ships at the next start`,
+        );
+      if (!(await settleWithin(localServersStopped, 0)))
+        log(
+          "stop: a local-server reply was still posting; the cloud gateway refuses that call on its side",
         );
     },
   };

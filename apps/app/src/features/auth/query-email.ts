@@ -1,5 +1,5 @@
 // An address a sign-in page shows back to the person who typed it: Verify
-// email's lead, and the sign-up form it returns to through Change it. It is
+// email's lead, and the sign-up form it returns to through Change email. It is
 // never looked up, so a malformed value is simply not echoed.
 import { firstParam } from "@/shared/safe-path";
 

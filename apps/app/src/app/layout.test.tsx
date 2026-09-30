@@ -2,6 +2,8 @@
 // the tab reads "<title> · Oxagen"; a route with no title of its own reads the
 // product name (ARCHITECTURE.md §1.2). It also owns metadataBase, the origin
 // every relative social-image URL resolves against (#3091).
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
 
@@ -49,5 +51,23 @@ describe("root layout metadata", () => {
   it("does not advertise localhost when the origin is unset (negative)", async () => {
     const { metadataBase } = await generateMetadata();
     expect(String(metadataBase)).toBe("https://app.oxagen.sh/");
+  });
+
+  it("opens from the home screen on the kit's launch screen for each device", async () => {
+    const { appleWebApp } = await generateMetadata();
+    if (!appleWebApp || appleWebApp === true) throw new Error("no appleWebApp");
+    expect(appleWebApp).toMatchObject({ capable: true, title: "Oxagen" });
+    const images = [appleWebApp.startupImage ?? []].flat();
+    // Every iPhone and iPad screen, on ink and on paper.
+    expect(images.length).toBeGreaterThan(40);
+    for (const image of images) {
+      if (typeof image === "string") throw new Error("startup image has no media query");
+      expect(image.url).toMatch(/^\/pwa\/splash\/oxagen-splash-\d+x\d+-(dark|light)\.png$/);
+      expect(image.media).toContain("-webkit-device-pixel-ratio");
+      expect(image.media).toMatch(/prefers-color-scheme: (dark|light)\)$/);
+      // A listed screen whose file is missing launches on a flat colour.
+      const file = fileURLToPath(new URL(`../../public${image.url}`, import.meta.url));
+      expect(existsSync(file), image.url).toBe(true);
+    }
   });
 });

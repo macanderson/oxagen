@@ -1,8 +1,10 @@
+import { APPLE_STARTUP_IMAGES } from "@oxagen/ui/lib/splash-screens";
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { getMetadataBase } from "@/shared/app-url";
+import { InstallPrompt } from "@/ui/install-prompt";
 import { Toaster } from "@/ui/toast";
 import "./globals.css";
 
@@ -36,6 +38,18 @@ export async function generateMetadata(): Promise<Metadata> {
       title: t("name"),
       description: t("description"),
       images: ["/social/og-image-dark-1200x630.png"],
+    },
+    // Saved to an iPhone or iPad home screen, Oxagen opens full screen on the
+    // kit's launch screen for that exact screen size (the wordmark on the
+    // glow). Android draws its own from the manifest.
+    appleWebApp: {
+      capable: true,
+      title: t("name"),
+      statusBarStyle: "default",
+      startupImage: APPLE_STARTUP_IMAGES.map(({ url, media }) => ({
+        url,
+        media,
+      })),
     },
     icons: {
       icon: [
@@ -83,6 +97,7 @@ export default async function RootLayout({
           <Toaster />
           {children}
         </NextIntlClientProvider>
+        <InstallPrompt />
       </body>
     </html>
   );

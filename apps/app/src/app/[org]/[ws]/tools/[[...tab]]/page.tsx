@@ -60,6 +60,7 @@ export default async function ToolsPage({
       category: firstParam(query.category),
       provider: firstParam(query.provider),
       names: firstParam(query.names),
+      rows: firstParam(query.rows),
       cursor: firstParam(query.cursor),
       belt: firstParam(query.belt),
     }),

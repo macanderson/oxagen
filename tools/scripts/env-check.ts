@@ -145,8 +145,17 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // apart from every other trigger, before it ever calls the GitHub API.
   "GITHUB_EVENT_NAME",
   "GITHUB_REF",
+  // GitHub Actions runner directories. tools/scripts/fleet-capacity refuses
+  // them as output roots because the runner deletes both after the job.
+  "RUNNER_TEMP",
+  "GITHUB_WORKSPACE",
   // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
   "AWS_REGION",
+  // The app node's /opt/oxagen/bin/node.env, written by
+  // infra/tools/install-node-scripts.sh and sourced by the node's own deploy
+  // scripts (infra/tools/node/deploy-launcher.sh). No service reads them.
+  "DEPLOY_BUCKET",
+  "REGION",
   // Set by nightly.yml on the step that files the failure ticket, so the marker
   // names the job that actually failed rather than always saying "e2e"
   // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
@@ -232,6 +241,17 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
 // them here silences the "promote to schema" warning without polluting the
 // runtime Zod schema with vars that deployed services never validate.
 export const SCHEMA_EXEMPT = new Set<string>([
+  // Dedicated staging load rig. Deployed services do not read these values.
+  "FLEET_OUTPUT_ROOT",
+  "FLEET_STAGING_ORIGIN",
+  "FLEET_OPERATOR_TOKEN",
+  "FLEET_BUNDLE_PUBLIC_KEY_PEM",
+  "FLEET_CLICKHOUSE_URL",
+  "FLEET_CLICKHOUSE_HOST",
+  "FLEET_CLICKHOUSE_USER",
+  "FLEET_CLICKHOUSE_PASSWORD",
+  "FLEET_DATABASE_URL",
+  "FLEET_DATABASE_HOST",
   // CLI-only — read via process.env in apps/cli; services: []
   "OXAGEN_API_TOKEN",
   "OXAGEN_ORG_ID",

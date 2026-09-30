@@ -1,7 +1,7 @@
 {
   "audit": {
     "eyebrow": "Organization",
-    "description": "What happened, who allowed it, under what authority, and what it cost.",
+    "description": "The governed actions in this organization with their actors, authority, and cost.",
     "retentionLine": "control-plane events retained 7 years · run ledger not recorded · bodies {bodies} · {org}",
     "loading": "Loading the audit record",
     "notRecorded": "not recorded",
@@ -25,12 +25,12 @@
       "denied": "Denied",
       "deniedNote": "denials are recorded and cost nothing",
       "service": "By a service principal",
-      "serviceNote": "Terraform, CI, exports, the archiver",
+      "serviceNote": "automation such as Terraform and CI",
       "agent": "By an agent"
     },
     "events": {
       "title": "Control-plane events",
-      "caption": "admin actions, IAM changes, repo bindings, plane changes, key rotations",
+      "caption": "admin actions and configuration changes",
       "store": "postgres for 7 years",
       "filters": "Filter the audit record",
       "actor": "Actor",
@@ -56,14 +56,14 @@
       "severityNotRecorded": "An audit event records no severity yet.",
       "rows": "Rows",
       "apply": "Apply",
-      "when": "When",
+      "when": "Time",
       "event": "Event",
-      "what": "What",
+      "what": "Capability",
       "reference": "Reference",
       "kindNotRecorded": "kind not recorded",
       "detail": "Recorded facts",
       "none": "No events in this window match these filters.",
-      "note": "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
+      "note": "The kernel writes this record. A client-attested call carries a client-attested label.",
       "shown": "{start}–{end} of {total}",
       "shownOpen": "{start}–{end}",
       "pager": "Pages of the audit record",
@@ -83,7 +83,7 @@
       "success": "succeeded"
     },
     "csv": {
-      "open": "CSV",
+      "open": "Export CSV",
       "title": "Export events",
       "subtitle": "CSV of the same rows the API and MCP return",
       "body": "{count} {n, plural, one {event} other {events}} in {range, select, 48h {the last 48 hours} 7d {the last 7 days} days {the chosen days} other {the last 30 days}}, with the event id, actor, capability, result, workspace, IP address, user agent and request id. It is signed with HMAC-SHA256 and the signature travels in the response headers. Nothing in a control-plane event is a prompt or tool body, so this export carries no redaction step.",
@@ -117,7 +117,7 @@
       "median": "Median time to resolve",
       "money": "Money moved without a receipt",
       "title": "Incidents",
-      "caption": "raised by the policy engine, the gateway and the verifier",
+      "caption": "raised automatically by Oxagen",
       "notRecorded": "Incidents are not listed for the organization yet. The incident read answers one workspace at a time, and no write opens, assigns or resolves an incident."
     },
     "incident": {
@@ -132,7 +132,7 @@
       "attach": "Attach",
       "attachNone": "Nothing attached",
       "notRecorded": "No write opens an incident yet. The collector and the control plane record incidents they detect, and nothing records one a person raises.",
-      "submit": "Raise it"
+      "submit": "Open incident"
     },
     "receipts": {
       "title": "Receipt search",
@@ -149,11 +149,11 @@
         "agentKey": "agent key",
         "effect": "external effect id"
       },
-      "clear": "clear",
+      "clear": "Clear",
       "notRecorded": "Receipts are not recorded yet. No store holds a signed receipt per tool call, so there is nothing to search."
     },
     "exports": {
-      "callout": "An export is a verifiable bundle: archive segments, attestations, key ids, and a verifier script. The segment was written at seal time, so it is never a later copy of the graph. It is the same bytes the graph indexed, written once. A customer’s auditor checks it offline, without trusting Oxagen or the worker’s harness.",
+      "callout": "An export is a verifiable bundle: archive segments, attestations, key ids, and a verifier script. Each segment holds the bytes the graph indexed, written once at seal time. A customer’s auditor checks it offline without trusting Oxagen or the worker’s harness.",
       "notRecorded": "No store lists the organization's evidence bundles yet. Build bundle queues the organization's data export as a ZIP through export_data, and the export it queued shows here. A signed evidence bundle with its verifier is built per run today, not for the organization.",
       "card": "Organization data export (ZIP)",
       "states": {
@@ -168,7 +168,7 @@
       "exportId": "Export id",
       "range": "Range",
       "contents": "Contents",
-      "contentsOrg": "the organization's data, one ZIP",
+      "contentsOrg": "the organization's data as one ZIP",
       "size": "Size",
       "created": "Created",
       "completed": "Completed",
@@ -234,7 +234,7 @@
     },
     "empty": {
       "title": "No audit events yet",
-      "body": "Control-plane audit events are written by the kernel on every governed action. An empty record means nothing has been done in this organization yet, not that recording is off.",
+      "body": "The kernel writes a control-plane audit event on every governed action. An empty record means nobody has acted in this organization yet.",
       "action": "Open Organization"
     },
     "error": {
@@ -245,7 +245,7 @@
     },
     "denied": {
       "title": "You cannot see the audit record",
-      "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
       "request": "Request access",
       "back": "Back to Fleet",
       "open": "Open Organization",
@@ -257,7 +257,7 @@
     "request": {
       "title": "Request access",
       "role": "Role requested",
-      "why": "Why",
+      "why": "Reason",
       "callout": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
       "notRecorded": "No write sends an access request yet. Ask an organization owner to grant the role, and the grant lands in the audit record.",
       "submit": "Send the request"

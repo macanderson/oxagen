@@ -232,6 +232,56 @@ describe("assetUploadHandler — SSRF rejection", () => {
 // ── Oversize ──────────────────────────────────────────────────────────────────
 
 describe("assetUploadHandler — oversize rejection", () => {
+  it.each([undefined, "1"])("stops reading an oversized source with declared length %s", async (length) => {
+    let chunks = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        chunks += 1;
+        if (chunks > 10) controller.close();
+        else controller.enqueue(new Uint8Array(1024 * 1024));
+      },
+      cancel,
+    }, { highWaterMark: 0 });
+    const headers = new Headers({ "content-type": "image/png" });
+    if (length !== undefined) headers.set("content-length", length);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(body, { headers }));
+    await expect(assetUploadHandler({
+      sourceUrl: "https://example.com/big.png", kind: "image",
+    }, validCtx)).rejects.toThrow(/exceeds/i);
+    expect(chunks).toBe(6);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(mockPersistGeneratedAsset).not.toHaveBeenCalled();
+  });
+
+  it("keeps the download deadline active after headers arrive", async () => {
+    vi.useFakeTimers();
+    try {
+      let reading!: () => void;
+      const started = new Promise<void>((resolve) => { reading = resolve; });
+      const cancel = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ pull() { reading(); }, cancel }, { highWaterMark: 0 });
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(body, {
+        headers: { "content-type": "image/png" },
+      }));
+      const result = assetUploadHandler({
+        sourceUrl: "https://example.com/slow.png", kind: "image",
+      }, validCtx);
+      const failed = expect(result).rejects.toMatchObject({ name: "AbortError" });
+      await started;
+      await vi.advanceTimersByTimeAsync(10_000);
+      await failed;
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(body.locked).toBe(false);
+      expect(mockPut).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects an asset that exceeds the kind limit", async () => {
     const oversizeBytes = 6 * 1024 * 1024; // 6 MiB — over the 5 MiB image limit
     const fetchSpy = vi
@@ -255,6 +305,21 @@ describe("assetUploadHandler — oversize rejection", () => {
 // ── Disallowed content type ───────────────────────────────────────────────────
 
 describe("assetUploadHandler — disallowed content-type rejection", () => {
+  it("cancels an unsupported source before consuming its bytes", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ pull, cancel }, { highWaterMark: 0 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(body, {
+      headers: { "content-type": "image/svg+xml" },
+    }));
+    await expect(assetUploadHandler({
+      sourceUrl: "https://example.com/icon.svg", kind: "image",
+    }, validCtx)).rejects.toThrow(/Unsupported/i);
+    expect(pull).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+
   it("rejects when the server returns an unsupported content type", async () => {
     // gif is allowed for "image" (agent screenshots/recordings are commonly
     // gif) — use svg, which isn't in any kind's allowlist, to stay genuinely

@@ -22,6 +22,7 @@ import {
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { Avatar } from "@/ui/avatar";
 import { initialsOf } from "@/ui/avatar-spec";
 import { Badge } from "@/ui/badge";
@@ -247,7 +248,19 @@ function UngroupedLabel({
   );
 }
 
-function GroupLabel({ row, by }: { row: Row; by: SpendMonthBy }) {
+/**
+ * A group's name, linked to its drill. Only an agent and an operator have a
+ * drill: `get_spend_drill` has no model or MCP server kind.
+ */
+function GroupLabel({
+  row,
+  by,
+  at,
+}: {
+  row: Row;
+  by: SpendMonthBy;
+  at: SpendAt;
+}) {
   const t = useTranslations("spend.month");
   if (row.key === OTHER_SPEND_KEY) {
     return (
@@ -267,7 +280,12 @@ function GroupLabel({ row, by }: { row: Row; by: SpendMonthBy }) {
             initials={initialsOf(name)}
             size={22}
           />
-          <span className="truncate font-semibold">{name}</span>
+          <SafeLink
+            to={routes.spend(at.org, at.ws, { tab: "operator", drill: row.key })}
+            className={`${linkText} truncate font-semibold`}
+          >
+            {name}
+          </SafeLink>
         </span>
       );
     }
@@ -283,6 +301,14 @@ function GroupLabel({ row, by }: { row: Row; by: SpendMonthBy }) {
         </span>
       );
     case "agent":
+      return (
+        <SafeLink
+          to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
+          className={`${linkText} ${mono} truncate font-semibold`}
+        >
+          {row.key}
+        </SafeLink>
+      );
     case "mcp_server":
       return <span className={`${mono} truncate font-semibold`}>{row.key}</span>;
   }
@@ -335,10 +361,10 @@ function RunList({ row, at }: { row: Row; at: SpendAt }) {
             to={routes.run(at.org, at.ws, run.runId)}
             className="flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 hover:bg-hl"
           >
-            <Avatar
+            <AgentAvatar
               value={null}
               initials={initialsOf(run.agentKey ?? run.runId)}
-              shape="agent"
+              harness={run.harness}
               size={22}
             />
             <span className="flex min-w-0 flex-col">
@@ -412,6 +438,11 @@ export function MonthSection({
   const t = useTranslations("spend.month");
   const locale = useLocale();
   const total = report.total.cost;
+  // The caret's label names the group: an operator by name, any other by key.
+  const nameOf = (row: Row) =>
+    by === "operator" && row.key !== OTHER_SPEND_KEY
+      ? (row.operator?.name ?? t("unnamedOperator"))
+      : row.key;
   const largest = maxMoney(
     report.rows.flatMap((row) =>
       row.key === OTHER_SPEND_KEY || row.cost === null ? [] : [row.cost],
@@ -421,7 +452,8 @@ export function MonthSection({
   // remainder, draw no bar and count no runs: neither is one group.
   const rows: MonthTableRow[] = report.rows.map((row) => ({
     key: row.key,
-    label: <GroupLabel row={row} by={by} />,
+    label: <GroupLabel row={row} by={by} at={at} />,
+    toggleLabel: t("showRuns", { name: nameOf(row) }),
     runs: row.key === OTHER_SPEND_KEY ? null : formatCount(row.runs, locale),
     share: (
       <Share
@@ -437,12 +469,13 @@ export function MonthSection({
       ),
   }));
   // The priced rows then sum to the Total row beneath them. The MCP server
-  // grouping needs no such row: Everything else holds the rest of each run.
+  // grouping needs no such row: Other spend holds the rest of each run.
   const ungrouped = by === "mcp_server" ? null : ungroupedCost(report);
   if (ungrouped !== null && by !== "mcp_server") {
     rows.push({
       key: UNGROUPED_KEY,
       label: <UngroupedLabel by={by} />,
+      toggleLabel: t("ungrouped.label"),
       runs: null,
       share: <Share cost={ungrouped} total={total} largest={null} />,
       cost: <CostFigure cost={ungrouped} />,

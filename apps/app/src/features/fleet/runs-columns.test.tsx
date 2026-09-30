@@ -140,6 +140,22 @@ afterEach(async () => {
   document.cookie = "fleet_view=; Path=/; Max-Age=0";
 });
 
+describe("agent harness badges on Fleet rows", () => {
+  it("draws the recorded harness beside the agent key", async () => {
+    await renderFleet([
+      runRow({
+        id: "tse_badge",
+        harness: { name: "claude-code", version: null, runtime: "node" },
+      }),
+    ]);
+    const avatar = rowOf("tse_badge").querySelector("[data-agent-avatar]");
+    expect(avatar?.querySelector("[data-harness-mark]")).toHaveAttribute(
+      "data-harness-mark",
+      "claude-code",
+    );
+  });
+});
+
 describe("pull requests on a Fleet row", () => {
   it("links a GitHub pull request and a GitLab merge request to their forge, in a new tab, with status unknown", async () => {
     await renderFleet([
@@ -241,7 +257,7 @@ describe("pull requests on a Fleet row", () => {
     ]);
     expect(
       within(rowOf("tse_nolink")).getByTestId("row-prs-nolink"),
-    ).toHaveTextContent("2 opened, links not recorded");
+    ).toHaveTextContent("2 opened with no links recorded");
     expect(
       within(rowOf("tse_none")).getByTestId("row-prs-none"),
     ).toHaveTextContent("none");
@@ -266,7 +282,7 @@ describe("pull requests on a Fleet row", () => {
     );
     expect(
       within(rowOf("tse_unread")).getByTestId("row-prs-unread"),
-    ).toHaveTextContent("1 opened, link not recorded");
+    ).toHaveTextContent("1 opened with no link recorded");
   });
 });
 

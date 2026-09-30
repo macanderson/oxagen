@@ -98,7 +98,7 @@ describe("sign-in pages", () => {
 });
 
 describe("sign-up title", () => {
-  it("names the page by its eyebrow, because its one h1 is the tagline (ARCHITECTURE.md §1.2)", async () => {
+  it("names the page by its eyebrow (ARCHITECTURE.md §1.2)", async () => {
     await expectPageTitle(
       await import("./signup/page"),
       routeProps({}, {}),
@@ -151,7 +151,7 @@ describe("signup query", () => {
     expect(logIn()).toHaveAttribute("href", "/login");
   });
 
-  it("hands the form an address Verify email's Change it returned", async () => {
+  it("hands the form an address Verify email's Change email returned", async () => {
     await renderAt(load, { email: " marcus@a-intel.com " });
     expect(screen.getByTestId("signup-form")).toHaveAttribute(
       "data-email",
@@ -225,7 +225,7 @@ describe("verify query", () => {
     },
   );
 
-  it("Change it returns to sign-up with the address and the destination", async () => {
+  it("Change email returns to sign-up with the address and the destination", async () => {
     await renderAt(load, {
       email: "marcus@a-intel.com",
       next: "/invite/invi_1",
@@ -238,7 +238,7 @@ describe("verify query", () => {
     );
   });
 
-  it("Change it carries no address it would not echo, and no default destination (negative)", async () => {
+  it("Change email carries no address it would not echo, and no default destination (negative)", async () => {
     await renderAt(load, { email: "not an email" });
     expect(
       screen.getByRole("link", { name: auth("verify.changeIt") }),

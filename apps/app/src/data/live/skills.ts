@@ -7,7 +7,11 @@ import "server-only";
 import { skillConfigGet } from "@oxagen/oxagen/contracts/skill.config.get";
 import { skillList } from "@oxagen/oxagen/contracts/skill.list";
 import { captureError } from "@oxagen/telemetry";
-import { SkillInventory, SkillConfiguration } from "@/data/contracts/skills";
+import {
+  SKILL_PAGE,
+  SkillInventory,
+  SkillConfiguration,
+} from "@/data/contracts/skills";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
@@ -34,7 +38,14 @@ export const skills: DataSource["skills"] = {
   async inventory(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: skillList,
-      input: q.cursor === null ? {} : { cursor: q.cursor },
+      // The default size stays off the input, so a default read is the one
+      // list_skills answered before it took a size (#4693).
+      input: {
+        ...(q.cursor === null ? {} : { cursor: q.cursor }),
+        ...(q.limit === undefined || q.limit === SKILL_PAGE
+          ? {}
+          : { limit: q.limit }),
+      },
       page: "skills",
     });
     if (!read.ok) return read;

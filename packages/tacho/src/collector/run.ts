@@ -204,6 +204,8 @@ export async function startAgents(
       started.push(
         await start({
           paths: agent.paths,
+          // Each enrollment pulls its own local-server calls (#4773).
+          localServers: true,
           ...(agent.watchesTranscripts ? {} : { transcriptRoots: [] }),
           ...(agents.length > 1 ? { log: agentLog(agent.id) } : {}),
         }),

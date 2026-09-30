@@ -75,14 +75,14 @@ describe("RunsListBar", () => {
     );
     const user = userEvent.setup();
     expect(await options(user, "facet-tier")).toEqual([
-      "All · Tier",
+      "All (Tier)",
       "contained",
       "gateway",
       "harness",
       "observe",
     ]);
     expect(await options(user, "facet-status")).toEqual([
-      "All · Status",
+      "All (Status)",
       "live",
       "sealed",
       "halted",
@@ -110,7 +110,7 @@ describe("RunsListBar", () => {
     const { onList } = renderBar({ list: list({ replay: ["fork"] }) });
     expect(screen.getByTestId("facet-replay")).toHaveTextContent("fork");
     const user = userEvent.setup();
-    await pickOption(user, screen.getByTestId("facet-replay"), "All · Replay");
+    await pickOption(user, screen.getByTestId("facet-replay"), "All (Replay)");
     expect(onList).toHaveBeenLastCalledWith(list({ replay: [] }));
   });
 

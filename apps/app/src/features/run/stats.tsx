@@ -85,6 +85,7 @@ function Involved({
       <AgentCard
         layout="compact"
         agentKey={run.agentKey}
+        harness={harness?.key}
         notRecorded={t("notRecorded")}
         sub={sub === "" ? t("header.harnessNotRecorded") : sub}
       />

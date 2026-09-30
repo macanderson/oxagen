@@ -195,7 +195,7 @@ export function createOpenStudioReviewHandler(
 }
 
 /** The workspace's credentials as references. The names come back, never a secret. */
-async function workspaceCredentials(scope: ToolsPullRequestScope): Promise<ReadonlySet<string>> {
+export async function workspaceCredentials(scope: ToolsPullRequestScope): Promise<ReadonlySet<string>> {
   const { readCheckContext } = await import("../../context.steering.index.get");
   const context = await readCheckContext(scope);
   return new Set(context.credentials.map((name) => `${CREDENTIAL_REF_PREFIX}${name}`));

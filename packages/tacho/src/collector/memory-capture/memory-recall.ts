@@ -24,7 +24,7 @@ export const MEMORY_RECALL_PATH = "/v1/tacho/memories/recall";
 /**
  * How long a prompt waits for its memories. The prompt holds its session's
  * hook queue while it waits, so that session's next hooks wait behind a slow
- * answer too. Other sessions' hooks do not (ADR-229).
+ * answer too. Other sessions' hooks do not (ADR-231).
  */
 export const MEMORY_RECALL_TIMEOUT_MS = 500;
 

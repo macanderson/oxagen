@@ -1,5 +1,5 @@
 /**
- * The daemon's hook queues (#4601, ADR-229): a hook from one session does not
+ * The daemon's hook queues (#4601, ADR-231): a hook from one session does not
  * wait on a hook from another, and one session's hooks still run in the order
  * they arrived.
  *

@@ -29,8 +29,8 @@ inputs:
   service:
     description: >-
       Logical service name. Selects <service>-standalone.tgz in the deploy
-      bucket and is the SSM document's only argument, where it is validated
-      against ^[a-z][a-z0-9-]{0,30}$ before the instance sees it.
+      bucket. The document validates it before the instance sees it and
+      verifies the infrastructure-published toolchain digest before deployment.
     required: true
   directory:
     description: Directory to package. Its root must hold oxagen-run.json.
@@ -78,12 +78,10 @@ runs:
         BUCKET: ${{ inputs.deploy-bucket }}
         DOCUMENT_NAME: ${{ inputs.document-name }}
         SOURCE_COMMIT: ${{ inputs.source-commit }}
+        TOOL_SOURCE: ${{ github.action_path }}/../../../infra/tools/node
       run: |
         set -euo pipefail
-        metadata=()
-        if [ -n "$SOURCE_COMMIT" ]; then metadata=(--metadata "source-commit=$SOURCE_COMMIT"); fi
-        aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
-          "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors "${metadata[@]}"
+        toolchain_digest=$(python3 "$TOOL_SOURCE/deploy-dispatch.py" digest --source "$TOOL_SOURCE")
 
         # Resolved by tag, not pinned. This used to be a literal instance id,
         # and the node is replaced whenever its user data changes -- so a
@@ -112,49 +110,42 @@ runs:
         fi
         echo "node: $INSTANCE"
 
-        command_id=$(aws ssm send-command \
-          --instance-ids "$INSTANCE" \
-          --document-name "$DOCUMENT_NAME" \
-          --parameters "service=$SERVICE" \
-          --query 'Command.CommandId' --output text)
-        echo "ssm command $command_id"
+        invoke_node() {
+          local operation=$1 command_id status invocation stderr
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE" --document-name "$DOCUMENT_NAME" \
+            --parameters "service=$SERVICE,toolchainDigest=$toolchain_digest,operation=$operation" \
+            --query 'Command.CommandId' --output text)
+          echo "ssm $operation command $command_id"
+          status=Pending
+          for _ in $(seq 1 100); do
+            status=$(aws ssm get-command-invocation \
+              --command-id "$command_id" --instance-id "$INSTANCE" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in InProgress|Pending|Delayed) sleep 10 ;; *) break ;; esac
+          done
+          invocation=$(aws ssm get-command-invocation \
+            --command-id "$command_id" --instance-id "$INSTANCE" --output json) || {
+            echo "::error::Could not read node toolchain command $command_id. Deployment is unverified."
+            return 1
+          }
+          jq -r '.StandardOutputContent // empty' <<<"$invocation"
+          stderr=$(jq -r '.StandardErrorContent // empty' <<<"$invocation")
+          if [ -n "$stderr" ]; then printf '%s\n' "$stderr" >&2; fi
+          if [ "$status" != Success ]; then
+            echo "::error::Node toolchain $operation failed with status $status."
+            return 1
+          fi
+        }
 
-        # Polled rather than waited on: there is no waiter for a command
-        # invocation, and the invocation is briefly not found at all right
-        # after send-command — which a naive first call reads as failure.
-        status=Pending
-        for _ in $(seq 1 60); do
-          status=$(aws ssm get-command-invocation \
-            --command-id "$command_id" --instance-id "$INSTANCE" \
-            --query Status --output text 2>/dev/null || echo Pending)
-          case "$status" in InProgress|Pending|Delayed) sleep 10 ;; *) break ;; esac
-        done
-
-        # The node's own output is the only place the reason for a failed
-        # deploy exists. A read that fails must say so: a full root disk once
-        # took an account switch to diagnose because the failure printed
-        # nothing and the job went on as if it had.
-        if ! invocation=$(aws ssm get-command-invocation \
-              --command-id "$command_id" --instance-id "$INSTANCE" --output json); then
-          echo "::error::could not read the result of ssm command $command_id on $INSTANCE. Its status is $status and nothing else is known; read the invocation in the SSM console."
-          invocation='{}'
-        fi
-        jq -r '.StandardOutputContent // empty' <<<"$invocation"
-        stderr=$(jq -r '.StandardErrorContent // empty' <<<"$invocation")
-        if [ -n "$stderr" ]; then
-          echo "::group::$SERVICE: stderr from the node"
-          printf '%s\n' "$stderr"
-          echo "::endgroup::"
-        fi
-
-        if [ "$status" != "Success" ]; then
-          # The last stderr line is the node's own reason (deploy-service.sh
-          # writes one `error:` line per failure), so it rides in the
-          # annotation where the run summary shows it.
-          reason=$(printf '%s\n' "$stderr" | sed -e '/^[[:space:]]*$/d' | tail -n 1)
-          echo "::error::$SERVICE deploy finished as $status${reason:+: $reason}. The node rolls back to the previous release when the new one fails its health check, so a service that was already running is still serving its last good build."
-          exit 1
-        fi
+        # The old SSM document rejects these parameters. Missing approved bundles
+        # fail before the artifact is published, including on an uninitialized node.
+        invoke_node verify
+        metadata=()
+        if [ -n "$SOURCE_COMMIT" ]; then metadata=(--metadata "source-commit=$SOURCE_COMMIT"); fi
+        aws s3 cp "/tmp/$SERVICE-standalone.tgz" \
+          "s3://$BUCKET/_deploy/$SERVICE-standalone.tgz" --only-show-errors "${metadata[@]}"
+        invoke_node deploy
 
     - name: Verify through the public hostname
       if: inputs.hostname != ''

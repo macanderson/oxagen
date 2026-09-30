@@ -29,6 +29,12 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 8192
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 100
       }
     },
     "additionalProperties": false

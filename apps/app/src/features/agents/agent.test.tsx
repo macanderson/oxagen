@@ -383,7 +383,7 @@ describe("Overview", () => {
     );
     expect(
       within(coaching).getByRole("link", {
-        name: "All coaching for this workspace →",
+        name: "Open all coaching for this workspace",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
   });
@@ -527,7 +527,7 @@ describe("Identity", () => {
     ]);
     expect(
       within(credentials).getByRole("link", {
-        name: "See the connections that mint them",
+        name: "Open the connections",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
     const run = region("Run credential");
@@ -538,16 +538,16 @@ describe("Identity", () => {
       within(run).getByRole("button", { name: "Revoke credential" }),
     ).toHaveAttribute("data-stub", "agent_credential_revoke");
     const trust = region("Trust relationships");
-    expect(trust).toHaveTextContent("subagents narrow, never widen");
+    expect(trust).toHaveTextContent("subagents inherit this scope or a narrower one");
     expect(trust).toHaveTextContent("1 · hooks_removed");
     expect(
-      within(trust).getByRole("link", { name: "Read them" }),
+      within(trust).getByRole("link", { name: "Open the incidents" }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-bot/activity",
     );
     expect(
-      within(trust).getByRole("link", { name: "Open its permissions" }),
+      within(trust).getByRole("link", { name: "Open the permissions" }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-bot/permissions",
@@ -581,7 +581,7 @@ describe("Steering", () => {
       "2,600 of 4,000 tok",
     );
     expect(screen.queryByTestId("steering-observe")).toBeNull();
-    const reaches = region("What reaches this agent");
+    const reaches = region("Delivered items");
     expect(
       within(reaches)
         .getAllByRole("columnheader")
@@ -593,11 +593,11 @@ describe("Steering", () => {
       "Scope",
       "Body",
       "Source",
-      "Where it lands",
+      "Placement",
       "Token cost",
     ]);
     expect(
-      within(reaches).getByRole("link", { name: "Change what is assigned" }),
+      within(reaches).getByRole("link", { name: "Change the assignments" }),
     ).toHaveAttribute("href", "/acme/core-platform/steering");
     expect(region("Cut for this agent")).toHaveTextContent("3 cut");
   });
@@ -651,13 +651,13 @@ describe("Runtime", () => {
     ).toBeVisible();
   });
 
-  it("is the empty state with Wrap it and Show the CLI path when no host is enrolled (negative)", async () => {
+  it("is the empty state with Wrap the agent and Enroll a host when no host is enrolled (negative)", async () => {
     await renderAgent({ get: readOk(agentDetail({ hosts: [] })) }, "runtime");
     const empty = screen.getByTestId("runtime-empty");
     expect(empty).toHaveTextContent("No runtime is enrolled for this agent");
-    expect(within(empty).getByRole("link", { name: "Wrap it" })).toBeVisible();
+    expect(within(empty).getByRole("link", { name: "Wrap the agent" })).toBeVisible();
     expect(
-      within(empty).getByRole("button", { name: "Show the CLI path" }),
+      within(empty).getByRole("button", { name: "Enroll a host" }),
     ).toBeVisible();
     // Enrolling needs the CLI on the host, and the app is what installs it.
     expect(
@@ -867,7 +867,54 @@ describe("Agent tab bodies", () => {
       cursor: "cur_2",
     });
     render(<IntlProvider>{element}</IntlProvider>);
-    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2" });
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 50 });
+  });
+
+  // #4693: Rows per page under the incident list names the page size in the
+  // address, and only Activity reads it.
+  it("reads the incidents at the size the URL names on Activity", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 25 });
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+  });
+
+  it("reads a size Rows does not offer as 50 (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "30",
+      cursor: null,
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null, limit: 50 });
+  });
+
+  it("leaves the size off the incident read on another tab (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "overview",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null });
   });
 
   it("counts the mandates in effect on the Permissions tab", async () => {

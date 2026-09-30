@@ -583,6 +583,25 @@ describe("createFunction adapter", () => {
       });
     });
 
+    it("preserves global and keyed limits together", () => {
+      const concurrency = [{ limit: 2 }, { limit: 1, key: "event.data.orgId" }];
+      createFunction(
+        { id: "bounded-fn", concurrency },
+        { event: "test/bounded" },
+        async () => undefined,
+      );
+      expect(capturedConfigs[0]).toMatchObject({ concurrency });
+    });
+
+    it("validates every limit in a concurrency array", () => {
+      expect(() => createFunction(
+        { id: "bounded-fn", concurrency: [{ limit: 2 }, { limit: 10 }] },
+        { event: "test/bounded" },
+        async () => undefined,
+      )).toThrow("concurrency.limit 10");
+      expect(capturedConfigs).toHaveLength(0);
+    });
+
     it("refuses a concurrency limit over Inngest's limit, which would fail the whole app's sync", () => {
       const config: DurableFunctionConfig = {
         id: "over-concurrency",

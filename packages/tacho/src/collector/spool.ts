@@ -744,10 +744,24 @@ export class Shipper {
         this.options.health(),
         shipped,
       );
+      // Chain and body rejections describe recorded events. The server still
+      // acknowledges every event ID before this cursor may advance.
+      const accepted = new Set(batch.map((e) => e.event_id_idem));
+      const acknowledged = new Set(response.event_ids);
+      if (
+        response.accepted !== batch.length ||
+        response.event_ids.length !== batch.length ||
+        acknowledged.size !== batch.length ||
+        accepted.size !== batch.length ||
+        response.event_ids.some((id) => !accepted.has(id))
+      ) {
+        throw new Error(
+          "Ingest acknowledgment does not match the sent batch. Keeping the batch for retry.",
+        );
+      }
       this.markShipped(batch);
       this.succeed();
       this.consecutiveQuarantines = 0;
-      const accepted = new Set(batch.map((e) => e.event_id_idem));
       for (const [session, parked] of this.parkedSessions)
         if (parked.eventId !== undefined && accepted.has(parked.eventId))
           this.parkedSessions.delete(session);

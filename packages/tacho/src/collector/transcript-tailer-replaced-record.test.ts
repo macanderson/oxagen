@@ -1,6 +1,6 @@
 /**
  * A tick reads a transcript outside the session's queue and seals what it
- * read inside it (ADR-229). A host task queued ahead of the seal can replace
+ * read inside it (ADR-231). A host task queued ahead of the seal can replace
  * the session's record: `registry.restore` builds a new record and recorder
  * for every session it restores. A seal through the old recorder would write
  * past the chain the new one holds, and the WAL would refuse every later seal

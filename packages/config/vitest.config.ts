@@ -16,6 +16,7 @@ export default defineConfig({
       // gate so a regression is caught.
       include: [
         "src/env.ts",
+        "src/request-work.ts",
         "src/index.ts",
         "src/registry.ts",
         "src/domain.ts",

@@ -63,7 +63,7 @@ function Harness() {
         sortLabel="Sort"
         sorts={SORTS}
         filters={FILTERS}
-        allLabel={(column) => `All · ${column}`}
+        allLabel={(column) => `All (${column})`}
       />
       <ul data-testid="rows">
         {list.shown.map((row) => (
@@ -131,10 +131,10 @@ describe("the list controls", () => {
     await user.type(screen.getByLabelText("Search this list"), "repo-3");
     expect(shown()).toEqual(["repo-30"]);
     await user.clear(screen.getByLabelText("Search this list"));
-    const role = screen.getByRole("combobox", { name: "All · Role" });
+    const role = screen.getByRole("combobox", { name: "All (Role)" });
     await pickOption(user, role, "main");
     expect(shown()).toEqual(["repo-01"]);
-    await pickOption(user, role, "All · Role");
+    await pickOption(user, role, "All (Role)");
     await pickOption(
       user,
       screen.getByRole("combobox", { name: "Sort" }),

@@ -18,7 +18,7 @@
  *
  * The tick reads a transcript's bytes outside the daemon's hook queues and
  * takes the session's queue (`exclusive`) only to seal what it read, the way
- * the git lane splits its reads from applying them (ADR-229). A hook
+ * the git lane splits its reads from applying them (ADR-231). A hook
  * therefore never waits on the tick's reads, and waits on its seals only when
  * they are its own session's. The seals of one read go in slices of at most
  * `SEAL_SLICE_BYTES`, with a turn of the event loop between them, so the

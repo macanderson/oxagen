@@ -284,7 +284,7 @@ describe("access denied", () => {
         "Your roles on Acme Robotics do not include org.admin (members, funding, and the data plane are owner-only).",
       );
       expect(denied).toHaveTextContent(
-        "An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
       );
       expect(
         within(denied).getByRole("link", { name: "Back to Fleet" }),

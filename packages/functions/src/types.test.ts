@@ -149,7 +149,7 @@ describe("@oxagen/functions type contracts", () => {
       expectTypeOf(minimal.id).toBeString();
       expectTypeOf(minimal.retries).toEqualTypeOf<number | undefined>();
       expectTypeOf(minimal.concurrency).toEqualTypeOf<
-        ConcurrencyConfig | undefined
+        ConcurrencyConfig | ConcurrencyConfig[] | undefined
       >();
       expectTypeOf(minimal.cancelOn).toEqualTypeOf<
         CancelOnConfig[] | undefined
@@ -170,7 +170,7 @@ describe("@oxagen/functions type contracts", () => {
       };
       expect(full.id).toBe("agent.workflow.supervisor");
       expect(full.retries).toBe(1);
-      expect(full.concurrency?.limit).toBe(10);
+      expect(full.concurrency).toEqual({ limit: 10, key: "event.data.orgId" });
       expect(full.cancelOn?.[0]?.event).toBe("agent/workflow.cancel");
     });
 

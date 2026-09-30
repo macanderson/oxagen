@@ -103,10 +103,11 @@ export type GovernanceChanged = {
  * Change the workspace's governance mode from the Steering header's chip
  * (roadmap pages/steering.md, `govmode`).
  *
- * The mode lives in `.oxagen/rules/governance.toml` on the main repository,
- * never in a settings row (ADR-061 decision 1), so this is a write to that
- * file: under `team` or `regulated` it opens a pull request against the
- * production branch, and under `solo` it commits. `applyImmediately` is never
+ * The mode lives in the main repository's governance file, never in a
+ * settings row (ADR-061 decision 1): `steering/governance.toml` in a steering
+ * repository, `.oxagen/rules/governance.toml` in a legacy one. So this is a
+ * write to that file: under `team` or `regulated` it opens a pull request
+ * against the production branch, and under `solo` it lands. `applyImmediately` is never
  * sent from here, so no review is skipped from this dialog. The handler gates
  * the role (INV-29): an org Owner or Admin, or a workspace Owner or Admin,
  * writes; anyone else is answered `denied` with nothing changed.

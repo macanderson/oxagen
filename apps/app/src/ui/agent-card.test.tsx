@@ -14,6 +14,7 @@ describe("AgentCard", () => {
     const { container } = render(
       <AgentCard
         agentKey="acme.core.release-bot"
+        harness="claude-code"
         notRecorded="not recorded"
         sub="Claude Code"
       />,
@@ -21,7 +22,7 @@ describe("AgentCard", () => {
     const key = screen.getByText("acme.core.release-bot");
     expect(key).toHaveAttribute("title", "acme.core.release-bot");
     const avatar = container.querySelector("[aria-hidden='true']");
-    expect(avatar).toHaveTextContent(/^re$/);
+    expect(avatar).toHaveTextContent(/^RE$/);
     expect(screen.getByText("Claude Code")).toBeTruthy();
     // The list layout is the default.
     expect(container.firstElementChild).toHaveAttribute("data-layout", "list");
@@ -31,6 +32,7 @@ describe("AgentCard", () => {
     const { container } = render(
       <AgentCard
         agentKey={null}
+        harness="codex"
         notRecorded="not recorded"
         sub="harness not recorded"
         layout="compact"
@@ -42,17 +44,18 @@ describe("AgentCard", () => {
     expect(screen.getByText("harness not recorded")).toBeTruthy();
   });
 
-  it.each<["list" | "compact" | "detail", string, string, boolean]>([
-    ["list", "size-7", "truncate", false],
-    ["compact", "size-[30px]", "truncate", true],
+  it.each<["list" | "compact" | "detail", number, string, boolean]>([
+    ["list", 28, "truncate", false],
+    ["compact", 30, "truncate", true],
     // The agent page's header wraps a long key rather than cutting it.
-    ["detail", "size-14", "break-words", false],
+    ["detail", 56, "break-words", false],
   ])(
     "sizes the %s layout's avatar to %s and its key to its place, as a pill only when compact",
     (layout, avatarSize, keyClass, pill) => {
       const { container } = render(
         <AgentCard
           agentKey="acme.core.release-bot"
+          harness="claude-code"
           notRecorded="not recorded"
           sub="line"
           layout={layout}
@@ -61,8 +64,15 @@ describe("AgentCard", () => {
       const card = container.firstElementChild;
       expect(card).toHaveAttribute("data-layout", layout);
       expect(
-        container.querySelector("[aria-hidden='true']")?.className,
-      ).toContain(avatarSize);
+        container.querySelector("[data-agent-avatar]"),
+      ).toHaveStyle({
+        width: `${String(avatarSize)}px`,
+        height: `${String(avatarSize)}px`,
+      });
+      expect(container.querySelector("[data-harness-mark]")).toHaveAttribute(
+        "data-harness-mark",
+        "claude-code",
+      );
       expect(screen.getByText("acme.core.release-bot").className).toContain(
         keyClass,
       );

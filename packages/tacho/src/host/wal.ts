@@ -872,7 +872,7 @@ export class Wal {
    * way and the shipper has a single error to handle.
    *
    * It never rebuilds a body index on the synchronous path, except as a last
-   * resort (#4299, amended by #4361 and ADR-229). An index stale on both
+   * resort (#4299, amended by #4361 and ADR-231). An index stale on both
    * awaited attempts is answered by the synchronous read that `bodiesFor`
    * makes with no `stale` set, which builds the index again from the file on
    * the event loop and reads the bodies. The shipper ships what that read

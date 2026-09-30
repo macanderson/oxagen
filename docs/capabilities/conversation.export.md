@@ -8,7 +8,7 @@
 
 ## Intent
 
-Export an entire conversation as a portable document. The export follows the
+Export a conversation as a portable document within the limits below. The export follows the
 currently active message branch (walking parent links from the conversation's
 active leaf to the root); when the conversation has edited/regenerated
 branches, a note records how many messages exist across all branches.
@@ -28,6 +28,20 @@ Two formats:
   (`accessPolicy: "user"`) that is deliberately **not** linked to the
   conversation, so it never appears in the Conversation Files panel; the
   response carries its access-controlled serve URL.
+
+## Limits
+
+The export accepts up to 500 messages and 2 MiB of UTF-8 message content,
+serialized content blocks, metadata, and role text across all branches. A large
+inactive branch also counts. The database checks these limits in the same
+snapshot as the active branch pointer and returns no message payload when a
+limit is exceeded. Each title, organization name, and workspace name is limited
+to 8 KiB.
+
+Markdown output is limited to 4 MiB. PDF accepts up to 128 KiB of text and 2,000
+content blocks, and rendering stops before creating page 101. Exceeding a limit
+fails the export without returning a partial document or storing an asset. Use
+a smaller conversation, or try Markdown if only the PDF limit is exceeded.
 
 ## Input
 

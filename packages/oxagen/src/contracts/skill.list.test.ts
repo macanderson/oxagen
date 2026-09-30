@@ -30,11 +30,23 @@ describe("list_skills contract", () => {
   });
 
   it("defaults the window to 30 days and refuses one past 90", () => {
-    expect(skillList.input.parse({})).toEqual({ windowDays: 30 });
+    expect(skillList.input.parse({})).toEqual({ windowDays: 30, limit: 100 });
     expect(skillList.input.safeParse({ windowDays: 90 }).success).toBe(true);
     expect(skillList.input.safeParse({ windowDays: 91 }).success).toBe(false);
     expect(skillList.input.safeParse({ windowDays: 0 }).success).toBe(false);
-    expect(skillList.input.safeParse({ limit: 5 }).success).toBe(false);
+    expect(skillList.input.safeParse({ offset: 5 }).success).toBe(false);
+  });
+
+  it("defaults a page to 100 names and takes any whole size from 1 to 100 (#4693)", () => {
+    expect(skillList.input.parse({ limit: 10 })).toEqual({
+      windowDays: 30,
+      limit: 10,
+    });
+    expect(skillList.input.safeParse({ limit: 1 }).success).toBe(true);
+    expect(skillList.input.safeParse({ limit: 100 }).success).toBe(true);
+    expect(skillList.input.safeParse({ limit: 0 }).success).toBe(false);
+    expect(skillList.input.safeParse({ limit: 101 }).success).toBe(false);
+    expect(skillList.input.safeParse({ limit: 2.5 }).success).toBe(false);
   });
 
   it("admits the longest cursor the handler can write", () => {

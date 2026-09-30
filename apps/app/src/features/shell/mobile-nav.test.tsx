@@ -398,16 +398,16 @@ describe("More sheet", () => {
     const links = within(sheet).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       [
-        "Steeringlibrary, assignments, gates, proposals, compiler",
+        "Steeringlibrary and assignments",
         "/acme/core-platform/steering",
       ],
       [
-        "Repositoriesbindings, working copies, changes",
+        "Repositoriesbindings and changes",
         "/acme/core-platform/repositories",
       ],
-      ["Organizationpeople, workspaces, funding", "/acme"],
-      ["Billingplan, meters, invoices", "/acme/billing"],
-      ["Auditevents, incidents, holds", "/acme/audit"],
+      ["Organizationpeople and workspaces", "/acme"],
+      ["Billingplan and invoices", "/acme/billing"],
+      ["Auditevents and incidents", "/acme/audit"],
     ]);
     for (const link of links) expect(style(link).minHeight).toBe("44px");
 
@@ -449,7 +449,7 @@ describe("More sheet", () => {
         "more-switch-ws",
       ].map((id) => within(sheet).getByTestId(id).textContent),
     ).toEqual([
-      "Ask stella*about runs, agents, and spend",
+      "Ask stella*questions about this workspace",
       "Searchor run an action",
       "Notifications0 unread",
       "AccountMarcus Bell",

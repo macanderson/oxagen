@@ -5,10 +5,11 @@
 // wherever DATABASE_URL points at a migrated database. CI's unit job migrates
 // Postgres with Atlas first, and a run without DATABASE_URL skips the file.
 //
-// mcp.server_discoveries, mcp.tool_snapshots, and mcp.mcp_servers carry no
-// foreign keys, so the file writes no organization or workspace rows. Each
-// case takes fresh workspace ids, and afterAll removes every row the file
-// wrote by its two org ids.
+// mcp.server_discoveries, mcp.tool_snapshots, mcp.mcp_servers, mcp.registries,
+// and mcp.catalog_servers carry no foreign keys, so the file writes no
+// organization or workspace rows. Each case takes fresh workspace ids, and
+// afterAll removes every row the file wrote by its two org ids, and the
+// catalog entries of their registries.
 import { randomUUID } from "node:crypto";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -23,6 +24,7 @@ import {
   postgresDiscoverySweepStore,
   postgresDiscoveryToolsStore,
   readWithheldTools,
+  readWorkspaceWithheldTools,
   type SnapshotDescriptor,
 } from "./store";
 import type { DiscoveryScope } from "./types";
@@ -198,6 +200,21 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       await tx
         .delete(schema.mcpServers)
         .where(inArray(schema.mcpServers.orgId, orgs));
+      const registries = await tx
+        .select({ id: schema.mcpRegistries.id })
+        .from(schema.mcpRegistries)
+        .where(inArray(schema.mcpRegistries.orgId, orgs));
+      if (registries.length > 0) {
+        await tx.delete(schema.mcpCatalogServers).where(
+          inArray(
+            schema.mcpCatalogServers.registryId,
+            registries.map((registry) => registry.id),
+          ),
+        );
+      }
+      await tx
+        .delete(schema.mcpRegistries)
+        .where(inArray(schema.mcpRegistries.orgId, orgs));
     });
     await closeDatabase();
   });
@@ -380,6 +397,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
           ref: "main",
           schedule: "on-change",
           mcpServerId,
+          registryName: null,
+          version: null,
         },
         T1,
       );
@@ -395,6 +414,52 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       expect((await rawRow(scope, "github")).updatedAt).toEqual(T1);
     });
 
+    it("recordSource writes a registry server's name and version, and clears them for another kind", async () => {
+      const scope = newScope();
+      await store.request(scope, "github", "schedule", null, T0);
+      await store.recordSource(
+        scope,
+        "github",
+        {
+          kind: "registry",
+          repo: null,
+          path: null,
+          ref: null,
+          schedule: "daily",
+          mcpServerId: null,
+          registryName: "io.github.github/github-mcp-server",
+          version: "0.18.0",
+        },
+        T1,
+      );
+      expect(await rawRow(scope, "github")).toMatchObject({
+        sourceKind: "registry",
+        sourceRegistryName: "io.github.github/github-mcp-server",
+        sourceVersion: "0.18.0",
+      });
+
+      await store.recordSource(
+        scope,
+        "github",
+        {
+          kind: "remote",
+          repo: null,
+          path: null,
+          ref: null,
+          schedule: "daily",
+          mcpServerId: null,
+          registryName: null,
+          version: null,
+        },
+        T2,
+      );
+      expect(await rawRow(scope, "github")).toMatchObject({
+        sourceKind: "remote",
+        sourceRegistryName: null,
+        sourceVersion: null,
+      });
+    });
+
     it("recordSource and finish write nothing for a server with no row", async () => {
       const scope = newScope();
       await store.recordSource(
@@ -407,6 +472,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
           ref: null,
           schedule: "daily",
           mcpServerId: randomUUID(),
+          registryName: null,
+          version: null,
         },
         T0,
       );
@@ -603,6 +670,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
           ref: null,
           schedule: "daily",
           mcpServerId: randomUUID(),
+          registryName: null,
+          version: null,
         },
         T1,
       );
@@ -625,6 +694,44 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       expect(await readWithheldTools(b, "github")).toEqual([
         "github.create_issue",
       ]);
+    });
+
+    it("readWorkspaceWithheldTools returns every server's withheld names in the scope's workspace only", async () => {
+      const a = newScope();
+      const b = newScope();
+      const sameWorkspaceOtherOrg: DiscoveryScope = {
+        orgId: otherOrgId,
+        workspaceId: a.workspaceId,
+      };
+      const withhold = async (
+        scope: DiscoveryScope,
+        server: string,
+        withheld: string[],
+      ) => {
+        await store.request(scope, server, "manual", USER, T0);
+        await store.finish(scope, server, finished({ pr: PR, withheld }), T1);
+      };
+      await withhold(a, "billing", [
+        "billing__create_refund",
+        "billing__list_disputes",
+      ]);
+      await withhold(a, "github", ["github__create_issue"]);
+      await withhold(a, "slack", []);
+      await store.request(a, "linear", "manual", USER, T0);
+      await withhold(b, "billing", ["billing__void_invoice"]);
+      await withhold(sameWorkspaceOtherOrg, "billing", [
+        "billing__close_account",
+      ]);
+
+      expect([...(await readWorkspaceWithheldTools(a))].sort()).toEqual([
+        "billing__create_refund",
+        "billing__list_disputes",
+        "github__create_issue",
+      ]);
+      expect([...(await readWorkspaceWithheldTools(b))]).toEqual([
+        "billing__void_invoice",
+      ]);
+      expect(await readWorkspaceWithheldTools(newScope())).toEqual(new Set());
     });
   });
 
@@ -865,6 +972,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
             ref: null,
             schedule: "daily",
             mcpServerId,
+            registryName: null,
+            version: null,
           },
           T1,
         );
@@ -1439,6 +1548,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
           ref: null,
           schedule: "on-change",
           mcpServerId: ids.stranded,
+          registryName: null,
+          version: null,
         },
         T0,
       );
@@ -1509,6 +1620,248 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       expect(await sweep.dueDaily(BEFORE, 1)).toHaveLength(1);
       expect(await sweep.openPullRequests(1)).toHaveLength(1);
       expect(await sweep.stalled(STALE, 1)).toHaveLength(1);
+    });
+  });
+
+  describe("registryMoved", () => {
+    // The block's own workspaces, so its daily rows stay out of the sweep
+    // block's exact lists.
+    const A = newScope();
+    const B = newScope();
+    const C = newScope(otherOrgId);
+    // Catalog sync wrote every entry at SYNCED. A registry_version discovery
+    // that finished at or after it already asked about the entry.
+    const SYNCED = new Date("2026-09-28T06:00:00.000Z");
+    const registryIds = {
+      a: randomUUID(),
+      aOff: randomUUID(),
+      b: randomUUID(),
+      c: randomUUID(),
+    };
+
+    const labels = new Map<string, string>([
+      [`${A.orgId}/${A.workspaceId}`, "A"],
+      [`${B.orgId}/${B.workspaceId}`, "B"],
+      [`${C.orgId}/${C.workspaceId}`, "C"],
+    ]);
+    const ours = (targets: readonly DiscoveryTarget[]): string[] =>
+      targets.flatMap((target) => {
+        const label = labels.get(
+          `${target.scope.orgId}/${target.scope.workspaceId}`,
+        );
+        return label === undefined ? [] : [`${label}/${target.server}`];
+      });
+
+    const registryRow = (
+      id: string,
+      scope: DiscoveryScope,
+      slug: string,
+      enabled = true,
+    ): typeof schema.mcpRegistries.$inferInsert => ({
+      id,
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      name: `registry ${slug}`,
+      baseUrl: `https://registry-${tag}.example.test/${slug}`,
+      enabled,
+    });
+
+    const entry = (
+      registryId: string,
+      name: string,
+      version: string,
+      over: Partial<typeof schema.mcpCatalogServers.$inferInsert> = {},
+    ): typeof schema.mcpCatalogServers.$inferInsert => ({
+      registryId,
+      name,
+      version,
+      isLatest: true,
+      description: `${name} ${version}`,
+      syncedAt: SYNCED,
+      ...over,
+    });
+
+    /** A finished daily discovery of a registry server. */
+    const registryServer = (
+      scope: DiscoveryScope,
+      server: string,
+      registryName: string | null,
+      over: Partial<typeof discoveries.$inferInsert> = {},
+    ): typeof discoveries.$inferInsert => ({
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      server,
+      trigger: "schedule",
+      status: "succeeded",
+      schedule: "daily",
+      sourceKind: "registry",
+      sourceRegistryName: registryName,
+      finishedAt: shift(SYNCED, -12),
+      ...over,
+    });
+
+    beforeAll(async () => {
+      await withSystemDb(async (tx) => {
+        await tx
+          .insert(schema.mcpRegistries)
+          .values([
+            registryRow(registryIds.a, A, "a"),
+            registryRow(registryIds.aOff, A, "a-off", false),
+            registryRow(registryIds.b, B, "b"),
+            registryRow(registryIds.c, C, "c"),
+          ]);
+        await tx.insert(schema.mcpCatalogServers).values([
+          entry(registryIds.a, "io.acme/moved", "1.1.0"),
+          entry(registryIds.a, "io.acme/moved", "1.0.0", { isLatest: false }),
+          entry(registryIds.a, "io.acme/same", "1.1.0"),
+          entry(registryIds.a, "io.acme/source-only", "2.1.0"),
+          // Two entries keep is_latest, and the newest published one decides.
+          entry(registryIds.a, "io.acme/stale", "3.0.0", {
+            publishedAt: shift(SYNCED, -48),
+          }),
+          entry(registryIds.a, "io.acme/stale", "3.1.0", {
+            publishedAt: shift(SYNCED, -24),
+          }),
+          // A deleted entry never decides, even when it is the newest.
+          entry(registryIds.a, "io.acme/deleted", "4.0.0", {
+            publishedAt: shift(SYNCED, -48),
+          }),
+          entry(registryIds.a, "io.acme/deleted", "4.1.0", {
+            status: "deleted",
+            publishedAt: shift(SYNCED, -24),
+          }),
+          entry(registryIds.a, "io.acme/asked", "5.1.0"),
+          // An entry without is_latest never decides, even when it is the newest.
+          entry(registryIds.a, "io.acme/not-latest", "6.0.0", {
+            publishedAt: shift(SYNCED, -48),
+          }),
+          entry(registryIds.a, "io.acme/not-latest", "6.1.0", {
+            isLatest: false,
+            publishedAt: shift(SYNCED, -24),
+          }),
+          entry(registryIds.aOff, "io.acme/disabled", "7.1.0"),
+          entry(registryIds.b, "io.acme/elsewhere", "8.1.0"),
+          entry(registryIds.c, "io.acme/elsewhere", "8.1.0"),
+          entry(registryIds.b, "io.acme/other", "9.1.0"),
+          entry(registryIds.c, "io.acme/far", "10.1.0"),
+        ]);
+        const askedBefore = {
+          trigger: "registry_version",
+          status: "failed",
+          sourceVersion: "5.0.0",
+        };
+        await tx.insert(discoveries).values([
+          // The rows the sweep asks about.
+          registryServer(A, "r_moved", "io.acme/moved", {
+            sourceVersion: "1.0.0",
+            latestVersion: "1.0.0",
+            finishedAt: shift(SYNCED, -5),
+          }),
+          // No catalog read yet, so source_version stands in.
+          registryServer(A, "r_source_only", "io.acme/source-only", {
+            schedule: "on-change",
+            status: "failed",
+            sourceVersion: "2.0.0",
+            finishedAt: shift(SYNCED, -3),
+          }),
+          registryServer(A, "r_newest_unseen", "io.acme/stale", {
+            latestVersion: "3.0.0",
+            finishedAt: shift(SYNCED, -2),
+          }),
+          // The last ask finished before the entry synced.
+          registryServer(A, "r_asked_before", "io.acme/asked", {
+            ...askedBefore,
+            finishedAt: shift(SYNCED, -1),
+          }),
+          registryServer(B, "r_other", "io.acme/other", {
+            latestVersion: "9.0.0",
+            finishedAt: shift(SYNCED, -4),
+          }),
+          registryServer(C, "r_far", "io.acme/far", {
+            latestVersion: "10.0.0",
+            finishedAt: shift(SYNCED, -6),
+          }),
+          // The rows it leaves alone.
+          registryServer(A, "r_same", "io.acme/same", {
+            latestVersion: "1.1.0",
+          }),
+          registryServer(A, "r_source_same", "io.acme/source-only", {
+            sourceVersion: "2.1.0",
+          }),
+          // latest_version wins over source_version, so a sync steering PR
+          // that waits for review asks nothing more.
+          registryServer(A, "r_pr_waiting", "io.acme/moved", {
+            sourceVersion: "1.0.0",
+            latestVersion: "1.1.0",
+          }),
+          registryServer(A, "r_manual", "io.acme/moved", {
+            schedule: "manual",
+            latestVersion: "1.0.0",
+          }),
+          registryServer(A, "r_queued", "io.acme/moved", {
+            status: "queued",
+            latestVersion: "1.0.0",
+          }),
+          registryServer(A, "r_running", "io.acme/moved", {
+            status: "running",
+            latestVersion: "1.0.0",
+          }),
+          registryServer(A, "r_remote", "io.acme/moved", {
+            sourceKind: "remote",
+            latestVersion: "1.0.0",
+          }),
+          registryServer(A, "r_unnamed", null, { latestVersion: "1.0.0" }),
+          registryServer(A, "r_newest_seen", "io.acme/stale", {
+            latestVersion: "3.1.0",
+          }),
+          registryServer(A, "r_deleted", "io.acme/deleted", {
+            latestVersion: "4.0.0",
+          }),
+          registryServer(A, "r_not_latest", "io.acme/not-latest", {
+            latestVersion: "6.0.0",
+          }),
+          registryServer(A, "r_disabled", "io.acme/disabled", {
+            latestVersion: "7.0.0",
+          }),
+          // Listed only by registries in workspace B and in the other org.
+          registryServer(A, "r_elsewhere", "io.acme/elsewhere", {
+            latestVersion: "8.0.0",
+          }),
+          // One catalog entry asks once, even when the ask failed.
+          registryServer(A, "r_asked", "io.acme/asked", {
+            ...askedBefore,
+            finishedAt: shift(SYNCED, 1),
+          }),
+          registryServer(A, "r_asked_exact", "io.acme/asked", {
+            ...askedBefore,
+            finishedAt: SYNCED,
+          }),
+        ]);
+      });
+    });
+
+    it("lists registry servers whose catalog names a version discovery has not seen, oldest finish first", async () => {
+      expect(ours(await sweep.registryMoved(10_000))).toEqual([
+        "C/r_far",
+        "A/r_moved",
+        "B/r_other",
+        "A/r_source_only",
+        "A/r_newest_unseen",
+        "A/r_asked_before",
+      ]);
+    });
+
+    it("returns each server with its own org and workspace", async () => {
+      const inC = (await sweep.registryMoved(10_000)).filter(
+        (target) =>
+          target.scope.orgId === C.orgId &&
+          target.scope.workspaceId === C.workspaceId,
+      );
+      expect(inC).toEqual([{ scope: C, server: "r_far" }]);
+    });
+
+    it("returns no more rows than its limit", async () => {
+      expect(await sweep.registryMoved(1)).toHaveLength(1);
     });
   });
 });

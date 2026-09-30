@@ -1,5 +1,5 @@
 /**
- * The ordering rules `HookQueues` promises the daemon (#4601, ADR-229): one
+ * The ordering rules `HookQueues` promises the daemon (#4601, ADR-231): one
  * session's tasks run one at a time in arrival order, two sessions' tasks run
  * concurrently, and a host task runs alone between the tasks queued before it
  * and the tasks queued after it.
