@@ -73,6 +73,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It belongs to the Slack connection flow, which is on no surface.",
   list_sso_providers:
     "Stella never reads or changes how people sign in, and SSO settings decide that.",
+  preview_skill_search:
+    "It shows a person the skill names withheld from agents, and keeping them from an agent is what withholding is for.",
   record_reply_feedback:
     "It records the person's verdict on Stella's reply, so Stella must not write it.",
   register_agent:

@@ -3317,8 +3317,7 @@
       "name": "preview_skill_search",
       "domain": "skill",
       "surfaces": [
-        "api",
-        "agent"
+        "api"
       ],
       "component": null,
       "produces": [],

@@ -16,7 +16,7 @@ export const skillSearchPreview = registerCapability({
   mode: "sync",
   description:
     "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
-  surfaces: ["api", "agent"],
+  surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -27,7 +27,6 @@ export const skillSearchPreview = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  agent: { requiresApproval: false, riskLevel: "low", category: "configuration" },
   input: z
     .object({
       version: z.string().min(1).max(128),

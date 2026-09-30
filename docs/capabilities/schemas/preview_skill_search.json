@@ -4,15 +4,10 @@
   "description": "Preview approved skill resolution at a published configuration version. Shows a person withheld names and reasons without loading skills into a run.",
   "mode": "sync",
   "surfaces": [
-    "api",
-    "agent"
+    "api"
   ],
   "sensitivity": "medium",
-  "agent": {
-    "requiresApproval": false,
-    "riskLevel": "low",
-    "category": "configuration"
-  },
+  "agent": null,
   "chain": {
     "produces": [],
     "consumes": [],

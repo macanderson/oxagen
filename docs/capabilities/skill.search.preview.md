@@ -4,7 +4,7 @@ Provide a published `version` and a `query`. The preview reads the approved repo
 
 **Mode:** sync
 
-**Surfaces:** api, agent
+**Surfaces:** api
 
 - API: `POST /v1/:org_slug/:workspace_slug/skills/search/preview`
 - Roles: Owner, Admin or Member in the organization, or Owner or Member in the workspace. API keys act as their recorded creator.
@@ -13,7 +13,6 @@ Provide a published `version` and a `query`. The preview reads the approved repo
 The handler checks the role on every plan. Configuration comes only from the approved main repository binding. The live GitHub default branch cannot change the configured production branch. Historical snapshots are append-only and remain available after a later publication.
 
 ## Surfaces
-- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 The withheld names are the projection the withholding mechanism exists to keep from an agent, so this capability declares no MCP surface and the kernel refuses that dispatch before a handler runs. [`summarize_skill_search`](skill.search.summarize.md) is the MCP capability over the same resolution, and its output shape holds counts by reason and no withheld identifier. An MCP caller that read `preview_skill_search` before 2026-09-22 calls `summarize_skill_search` instead and reads `withheld.count` and `withheld.reasons` in place of the withheld array.
 
