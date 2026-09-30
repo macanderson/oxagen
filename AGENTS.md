@@ -151,7 +151,7 @@ CI runs the gate, build, lint, typecheck, and test commands in this table. None 
 | `pnpm check:mobile-parity` | Enforces mobile feature parity (ADR-026) — no desktop-only features without registered reflow/hidden justification |
 | `pnpm check:connector-schemas` | Verifies every built-in plugin connector schema is registered |
 | `pnpm check:deregistered` | Asserts every path in `DEREGISTERED.md` §14 still exists — de-registered features must not be deleted without an ADR |
-| `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance |
+| `pnpm check:contracts` | Ensures every contract file is in the barrel index, every `docs/capabilities` `**Surfaces:**` line matches its contract, and naming compliance, among 26 guards. Each guard is its own root script, and `tools/scripts/run-checks.mjs` runs them all and names every one that failed. Add a new guard as a root script and add its name to the list |
 | `pnpm check:vision` | LLM-judges PR diff against `docs/VISION.md` |
 | `pnpm env:check` | Validates `.env.local` against the env registry |
 | `pnpm db:migrate` | Apply pending Postgres migrations + seed platform data |

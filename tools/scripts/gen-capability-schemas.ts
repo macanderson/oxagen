@@ -27,9 +27,9 @@
  * capability, and `list_workspace_members.json` stayed published months after
  * ADR-025 absorbed it into `list_members` (#3173).
  *
- * Where it runs: `pnpm check:contracts` ends with `pnpm docs:schemas --check`,
- * and `check:contracts` runs in the pipeline `checks` job and in `pnpm gate`
- * (#3148). `packages/database/src/storage-manifest/cli.ts` is the precedent
+ * Where it runs: `pnpm check:contracts` ends with `docs:schemas:check`, which
+ * runs `--check`, and `check:contracts` runs in the pipeline `checks` job and
+ * in `pnpm gate` (#3148). `packages/database/src/storage-manifest/cli.ts` is the precedent
  * this follows.
  *
  * No output holds a count of the whole capability set, because two branches

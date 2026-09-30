@@ -65,6 +65,20 @@ describe("reading commands", () => {
     expect(usesTsx("node one.mjs", s)).toBe(false);
   });
 
+  it("follows each script a run-checks list names, after the runner", () => {
+    // check:contracts is such a list. Reading only the runner, the pre-push
+    // preflight would miss every package the guards import (#4664 item 9).
+    const s = { a: "node one.mjs", b: "tsx two.ts", c: "pnpm a" };
+    const list = "node tools/scripts/run-checks.mjs a b c missing";
+    expect(entriesOf(list, s)).toEqual([
+      "tools/scripts/run-checks.mjs",
+      "one.mjs",
+      "two.ts",
+    ]);
+    expect(usesTsx(list, s)).toBe(true);
+    expect(usesTsx("node tools/scripts/run-checks.mjs a", s)).toBe(false);
+  });
+
   it("leaves commands that run inside another package to that package", () => {
     const s = { x: "node x.mjs" };
     expect(
