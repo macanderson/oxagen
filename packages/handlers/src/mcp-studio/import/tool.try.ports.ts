@@ -6,7 +6,6 @@
 // nothing here holds logic a test needs to reach.
 import { createKillSwitchGate, postgresKillSwitchReads } from "@oxagen/agent/runtime/kill-switch-gate";
 import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts";
-import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { schema, withTenantDb } from "@oxagen/database";
 import { createCloudTransport, toolManifestSchema, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
 import { HandlerError } from "@oxagen/oxagen";
@@ -204,11 +203,15 @@ async function scopeSlugs(scope: ToolsPullRequestScope): Promise<{ orgSlug: stri
   return row;
 }
 
-/** The vault's CredentialSource for the workspace. It reads the published servers, as a served call's does. */
+/**
+ * The vault's CredentialSource for the workspace. It reads the published
+ * servers, as a served call's does, and its connect link is on the app's
+ * origin, where the operator's session cookie lives.
+ */
 function credentialSource(scope: ToolsPullRequestScope): CredentialSource {
   return {
     async resolve(request, signal) {
-      const source = await workspaceCredentialSource({ ...scope, ...(await scopeSlugs(scope)), apiBaseUrl: apiPublicOrigin() });
+      const source = await workspaceCredentialSource({ ...scope, ...(await scopeSlugs(scope)) });
       return source.resolve(request, signal);
     },
   };
