@@ -67,7 +67,7 @@ There is deliberately no refusal for `applyImmediately` without the role: the ro
 
 | Event | When |
 |---|---|
-| `steering.governance_changed` | the mode moved — an `applied` outcome, whether or not the review was skipped |
+| `steering.governance_changed` | the mode moved: an `applied` outcome, whether or not the review was skipped |
 | `steering.governance_overridden` | additionally, when `overrodeReview` is true |
 
 Both are emitted for an override, so neither "every governance change" nor "every skipped review" is a filter that quietly misses rows. A `proposed` outcome emits neither: nothing has changed until someone merges the pull request. In a steering repository, `merge_context_pr` emits `steering.governance_changed` when it lands the proposal, with the approvers in `approvedBy`.
