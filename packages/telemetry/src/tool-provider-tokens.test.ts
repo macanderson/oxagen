@@ -7,7 +7,9 @@ const args = {
   fromMs: Date.parse("2026-09-20T00:00:00Z"),
   toMs: Date.parse("2026-09-27T00:00:00Z"),
 };
-beforeEach(() => select.mockReset());
+beforeEach(() => {
+  select.mockReset();
+});
 
 describe("tool provider tokens (#4537)", () => {
   it("reads each provider's newest listed tokens over the window in one tenant query", async () => {

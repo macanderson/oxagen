@@ -711,10 +711,10 @@ describe("reconcileCollector", () => {
     const s = setup({
       definition: (fake) => ({
         ...erased(fake),
-        toWorkItem: (item, config) => ({
-          ...fake.definition.toWorkItem(item, config as FakeConfig),
-          sourceUpdatedAt: null,
-        }),
+        toWorkItem: (item, config) => {
+          const mapped = fake.definition.toWorkItem(item, config as FakeConfig);
+          return mapped === null ? null : { ...mapped, sourceUpdatedAt: null };
+        },
       }),
     });
     putRecord(s.fake, { id: "101", updatedAt: s.ago(30) });

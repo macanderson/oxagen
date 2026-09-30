@@ -19,7 +19,9 @@ import { orgSettingsReadHandler } from "./org.settings.read";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("org.settings.read handler", () => {
-  beforeEach(() => mocks.findFirst.mockReset());
+  beforeEach(() => {
+    mocks.findFirst.mockReset();
+  });
 
   it("maps the organization row to the settings output", async () => {
     mocks.findFirst.mockResolvedValue({

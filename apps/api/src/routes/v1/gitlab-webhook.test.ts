@@ -68,7 +68,9 @@ const post = (body: string, headers: Record<string, string> = {}) =>
   app.request("/webhooks/gitlab/con_gl1", { method: "POST", body, headers });
 
 describe("POST /webhooks/gitlab/:connectionId", () => {
-  beforeEach(() => mocks.handle.mockReset());
+  beforeEach(() => {
+    mocks.handle.mockReset();
+  });
 
   it("forwards the connection, the token header and the parsed body", async () => {
     mocks.handle.mockResolvedValue({
