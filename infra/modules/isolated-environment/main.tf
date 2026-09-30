@@ -73,6 +73,7 @@ module "app" {
   bootstrap_artifact_access = true
   source                    = "../app-node"
   name                      = local.node_name
+  instance_type             = var.app_instance_type
   ami_id                    = var.ami_id
   deploy_bucket             = aws_s3_bucket.deploy.id
   region                    = var.region

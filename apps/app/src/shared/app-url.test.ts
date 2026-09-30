@@ -36,11 +36,11 @@ describe("the origin getMetadataBase resolves", () => {
 
   it("ignores an override that is blank or whitespace (negative)", () => {
     process.env.NEXT_PUBLIC_APP_URL = "   ";
-    expect(origin()).toBe("https://oxagen.app");
+    expect(origin()).toBe("https://app.oxagen.sh");
   });
 
   it("falls back to the production origin, not localhost, when nothing is set", () => {
-    expect(origin()).toBe("https://oxagen.app");
+    expect(origin()).toBe("https://app.oxagen.sh");
   });
 
   it("falls back to the dev server only under NODE_ENV=development", () => {
@@ -64,7 +64,7 @@ describe("getMetadataBase", () => {
 
   it("falls back rather than throwing when the override is not a URL (negative)", () => {
     process.env.NEXT_PUBLIC_APP_URL = "app.oxagen.sh";
-    expect(getMetadataBase().href).toBe("https://oxagen.app/");
+    expect(getMetadataBase().href).toBe("https://app.oxagen.sh/");
   });
 
   it("falls back to the dev server when a malformed override is set in development", () => {

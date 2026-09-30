@@ -112,6 +112,6 @@ export function getAppUrl(): string {
   return (
     process.env["OXAGEN_APP_URL"] ??
     readConfig().appUrl ??
-    "https://oxagen.app"
+    "https://app.oxagen.sh"
   );
 }

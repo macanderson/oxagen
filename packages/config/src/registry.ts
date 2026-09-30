@@ -74,7 +74,7 @@ export interface EnvVarMeta {
 const ALL: EnvName[] = ["development", "preview", "production"];
 const DEPLOYED: EnvName[] = ["preview", "production"];
 
-const APP_PROD_URL = "https://oxagen.app";
+const APP_PROD_URL = "https://app.oxagen.sh";
 const API_PROD_URL = "https://api.oxagen.sh";
 const MCP_PROD_URL = "https://mcp.oxagen.sh";
 const MARKETING_PROD_URL = "https://oxagen.sh";
@@ -1833,7 +1833,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "oxagen.app",
+    placeholder: "app.oxagen.sh",
   },
 
   // ── CLI / tooling ────────────────────────────────────────────────────────────
@@ -1921,7 +1921,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: {
       development: "http://localhost:3000",
-      production: "https://oxagen.app",
+      production: "https://app.oxagen.sh",
     },
   },
   DO_NOT_TRACK: {

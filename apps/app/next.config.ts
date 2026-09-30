@@ -91,7 +91,7 @@ const nextConfig: NextConfig = {
       fallback: [
         { source: "/api/v1/:path*", destination: `${honoApiBase}/v1/:path*` },
         // SCIM 2.0 (#3734): the base URL an identity provider is given is
-        // https://oxagen.app/api/scim/v2, served by the Hono API.
+        // https://app.oxagen.sh/api/scim/v2, served by the Hono API.
         {
           source: "/api/scim/v2/:path*",
           destination: `${honoApiBase}/api/scim/v2/:path*`,
