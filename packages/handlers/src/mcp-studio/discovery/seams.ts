@@ -233,7 +233,6 @@ export function gatewayLocalReporter(
   return {
     async report({ scope, server, source, lockSource, signal }) {
       const groups = machineGroupsOf(source);
-      if (groups.length === 0) throw runsNowhere(server);
       const launch = launchSpecFor(server, lockSource, source);
       if (launch === undefined) {
         throw new DiscoveryRefused(
@@ -241,6 +240,7 @@ export function gatewayLocalReporter(
           `The lock for ${server} names no package for a machine to run.`,
         );
       }
+      if (groups.length === 0) throw runsNowhere(server);
       const machines = await deps.machines(scope, groups);
       const machine = machines.find((id) => deps.broker.connected(id));
       if (machine === undefined) {
