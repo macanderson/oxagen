@@ -180,7 +180,7 @@ describe("ask_assistant", () => {
     });
     await streamAssistantTurn(
       {
-        overrides: { tier: "fast", activeServerIds: ["srv"] },
+        overrides: { tier: "fast" },
         hooks,
         onPrepared,
       },
@@ -191,7 +191,6 @@ describe("ask_assistant", () => {
       expect.objectContaining({
         surface: "chat",
         tier: "fast",
-        activeServerIds: ["srv"],
       }),
     );
     expect(mocks.run).toHaveBeenCalledWith(hooks);

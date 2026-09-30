@@ -194,6 +194,13 @@ vi.mock("./plugin-type", async (importOriginal) => {
   const real = await importOriginal<typeof import("./plugin-type")>();
   return { ...real, getPluginTypeContributors: () => [] };
 });
+// The listing reads the classification index while a scope switch is on
+// (#4218). The real read joins the tool registry, which the fake transaction
+// below does not model. No tool version here carries a class.
+vi.mock("./kill-switch-gate", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./kill-switch-gate")>();
+  return { ...real, readClassificationIndex: async () => new Map() };
+});
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { projectRunContextWindows } from "../dispatch/context-projection";
@@ -689,6 +696,10 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // stella's tools are Oxagen's capability contracts alone (#4310): no
+    // workspace MCP server is loaded, and no request field picks one.
+    expect(materializeOpts.capabilitiesOnly).toBe(true);
+    expect(materializeOpts).not.toHaveProperty("serverAllowlist");
     // The agent the turn runs as, so a switch on it reaches the belt and the
     // call gate. The tools still run as the person.
     expect(materializeOpts.actingAgent).toEqual({

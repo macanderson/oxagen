@@ -1,11 +1,22 @@
 /**
  * The gate's Postgres reads: a snapshot is the generation vector, the active
- * switches and the classification index read on one repeatable-read
- * transaction, generation first. A snapshot assembled from separate
- * transactions could carry a post-flip generation beside pre-flip switches,
- * and the gate would then keep the stale switches for the rest of the turn.
+ * switches, every active deny, and the classification index read on one
+ * repeatable-read transaction, generation first. A snapshot assembled from
+ * separate transactions could carry a post-flip generation beside pre-flip
+ * switches, and the gate would then keep the stale switches for the rest of
+ * the turn.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/** A deny another writer left: it names a principal and no target. */
+const PLAIN_DENY = vi.hoisted(() => ({
+  publicId: "edn_plain",
+  denyKind: "capability" as const,
+  capabilityId: "send_mail",
+  resourceScopeDigest: null,
+  principalId: "prn_agent",
+  reason: "incident",
+}));
 
 const mocks = vi.hoisted(() => ({
   calls: [] as Array<{ read: string; tx: unknown }>,
@@ -40,6 +51,11 @@ vi.mock("@oxagen/iam", async (importOriginal) => {
       mocks.calls.push({ read: "switches", tx });
       return [];
     }),
+    // Every active deny, kill switch or not (#4218): the rows the belt reads.
+    readActiveEmergencyDenies: vi.fn(async (tx: unknown) => {
+      mocks.calls.push({ read: "denies", tx });
+      return [PLAIN_DENY];
+    }),
   };
 });
 
@@ -73,7 +89,7 @@ beforeEach(() => {
 });
 
 describe("postgresKillSwitchReads.readSnapshot", () => {
-  it("reads the generation, the switches and the index on one repeatable-read transaction, generation first", async () => {
+  it("reads the generation, the switches, every deny and the index on one repeatable-read transaction, generation first", async () => {
     const tx = transaction([
       {
         source: "mcp",
@@ -104,11 +120,13 @@ describe("postgresKillSwitchReads.readSnapshot", () => {
     expect(mocks.calls.map((c) => c.read)).toEqual([
       "generation",
       "switches",
+      "denies",
       "classification",
     ]);
     expect(mocks.calls.every((c) => c.tx === tx)).toBe(true);
     expect(snapshot.generation).toEqual({ org: 3, workspace: 1 });
     expect(snapshot.switches).toEqual([]);
+    expect(snapshot.denies).toEqual([PLAIN_DENY]);
     expect([...snapshot.tags]).toEqual([
       [`mcp.${SERVER}.create_payment`, ["moves_money"]],
     ]);

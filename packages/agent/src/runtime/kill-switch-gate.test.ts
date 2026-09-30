@@ -9,7 +9,11 @@
  * inside the turn's scope (the execute closures run outside the route's).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resourceScopeDigestOf, type KillSwitchRow } from "@oxagen/iam";
+import {
+  resourceScopeDigestOf,
+  type ActiveEmergencyDeny,
+  type KillSwitchRow,
+} from "@oxagen/iam";
 import type { CapabilityContext } from "../types";
 
 const tenancy = vi.hoisted(() => ({
@@ -27,6 +31,7 @@ vi.mock("@oxagen/tenancy", () => ({
 
 import {
   createKillSwitchGate,
+  KillSwitchDeniedError,
   type KillSwitchGateReads,
   type KillSwitchSnapshot,
 } from "./kill-switch-gate";
@@ -293,6 +298,113 @@ describe("an agent switch and the agent a person's turn acts as", () => {
     expect(
       await gate.check({ capabilityId: "set_budget", readOnly: false }),
     ).toBeNull();
+  });
+});
+
+// #4218: the gate reads every active emergency deny, as the belt does. A
+// deny another writer leaves with no target, one that names a principal
+// among them, used to be cut from the belt and never refused per call.
+describe("a plain emergency deny", () => {
+  const ASSISTANT = { agentId: "agt_assistant", principalId: "prn_assistant" };
+  const plainDeny = (
+    over: Partial<ActiveEmergencyDeny> = {},
+  ): ActiveEmergencyDeny => ({
+    publicId: "edn_plain",
+    denyKind: "capability",
+    capabilityId: "set_budget",
+    resourceScopeDigest: null,
+    principalId: null,
+    reason: "incident",
+    ...over,
+  });
+
+  it("refuses a call from the principal it names", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        denies: [plainDeny({ principalId: ASSISTANT.principalId })],
+      },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads, ASSISTANT);
+    const hit = await gate.check({
+      capabilityId: "set_budget",
+      readOnly: false,
+    });
+    expect(hit).toEqual({
+      publicId: "edn_plain",
+      targetKind: "emergency_deny",
+      targetId: "edn_plain",
+      reason: "incident",
+    });
+    expect(new KillSwitchDeniedError(hit!).message).toBe(
+      "Tool blocked by emergency deny edn_plain: incident",
+    );
+  });
+
+  it("leaves a call from another principal open (negative)", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        denies: [plainDeny({ principalId: "prn_someone_else" })],
+      },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads, ASSISTANT);
+    expect(
+      await gate.check({ capabilityId: "set_budget", readOnly: false }),
+    ).toBeNull();
+  });
+
+  it("matches a scope deny on the digests the switches match on", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        denies: [
+          plainDeny({
+            denyKind: "resource_scope",
+            capabilityId: null,
+            resourceScopeDigest: resourceScopeDigestOf({
+              kind: "operator",
+              id: USER,
+            }),
+          }),
+        ],
+      },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads);
+    expect(
+      (await gate.check({ capabilityId: "list_runs", readOnly: true }))
+        ?.targetKind,
+    ).toBe("emergency_deny");
+  });
+
+  it("reports the switch, not its deny row, when a row is both", async () => {
+    const row = classSwitch("moves_money");
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        switches: [row],
+        denies: [
+          plainDeny({
+            publicId: row.publicId,
+            denyKind: "resource_scope",
+            capabilityId: null,
+            resourceScopeDigest: row.resourceScopeDigest,
+          }),
+        ],
+        tags: new Map([["create_payment", ["moves_money"]]]),
+      },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads);
+    const hit = await gate.check({
+      capabilityId: "create_payment",
+      readOnly: false,
+    });
+    expect(hit?.targetKind).toBe("class");
+    expect(hit?.publicId).toBe(row.publicId);
   });
 });
 

@@ -165,8 +165,6 @@ export interface AssistantTurnRequest {
   attachments?: readonly string[];
   /** Makes the turn goal-shaped: a verifier judges each round against it. */
   goal?: AssistantGoal;
-  /** Per-turn MCP server allowlist; empty loads every workspace server. */
-  activeServerIds?: readonly string[];
   tier?: "fast" | "balanced" | "precise" | null;
   model?: string | null;
   effort?: "low" | "medium" | "high" | null;
@@ -547,10 +545,10 @@ async function runPreparedTurn(
               },
             }
           : {}),
-        serverAllowlist:
-          request.activeServerIds && request.activeServerIds.length > 0
-            ? new Set(request.activeServerIds)
-            : undefined,
+        // stella's tools are Oxagen's capability contracts and nothing else
+        // (ADR-053 §1, #4310). The workspace's MCP servers serve its own
+        // agents, so none is connected, listed, or given a credential here.
+        capabilitiesOnly: true,
         // `search_tools` and `load_tools` exist twice: as capability contracts
         // for the API and MCP surfaces, and as the belt's meta-tools. Both
         // claim the same model-facing alias. Execution resolves

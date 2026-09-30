@@ -401,6 +401,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    // #4218: a workspace switch covers every call in the workspace, and the
+    // per-call gate refuses each one. The belt matched a `resource_scope`
+    // deny on no digest for an agent, so it listed every tool the gate would
+    // refuse. It now matches on the digests the gate builds.
+    it("a workspace kill switch leaves every capability out of the belt, under kill_switch", async () => {
+      const { flipKillSwitchOn, flipKillSwitchOff, resourceScopeDigestOf } =
+        await import("@oxagen/iam");
+      const target = { kind: "workspace" as const, id: tenant.workspaceId };
+      await withSystemDb((tx) =>
+        flipKillSwitchOn(tx, {
+          orgId: tenant.orgId,
+          workspaceId: null,
+          target,
+          deny: {
+            kind: "resource_scope",
+            digest: resourceScopeDigestOf(target),
+          },
+          reason: "belt test",
+          userId: tenant.userId,
+        }),
+      );
+      try {
+        const out = agentToolbeltGet.output.parse(await belt("granted"));
+        expect(out.basis.killSwitches).toBe(1);
+        expect(out.tools.filter((t) => t.kind === "capability")).toEqual([]);
+        expect(
+          out.cannotSee.find((c) => c.name === "list_agents"),
+        ).toMatchObject({ kind: "capability", rule: "kill_switch" });
+      } finally {
+        await withSystemDb((tx) =>
+          flipKillSwitchOff(tx, {
+            orgId: tenant.orgId,
+            workspaceId: null,
+            target,
+            reason: "belt test done",
+            userId: tenant.userId,
+          }),
+        );
+      }
+    });
+
     it("an agent with no delegated principal is a conflict; an unknown agent is not_found", async () => {
       await expect(belt("bare")).rejects.toSatisfy(
         (err: unknown) =>

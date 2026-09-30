@@ -55,9 +55,10 @@ const BodySchema = z.object({
     .array(assistantAttachmentIdSchema)
     .max(ASSISTANT_ATTACHMENT_MAX_FILES)
     .optional(),
-  // Per-turn MCP server allowlist. When non-empty, only those servers' tools
-  // are loaded for this turn. Omit or pass [] to load all workspace MCPs.
-  activeServerIds: z.array(z.string()).optional().default([]),
+  // Accepted and ignored (#4310). stella's tools are Oxagen's capability
+  // contracts alone (ADR-053 §1), so no workspace MCP server is loaded for a
+  // turn. The field stays so a client that still sends it is not refused.
+  activeServerIds: z.array(z.string()).optional(),
   // Optional model overrides — omit to use workspace/user defaults.
   tier: z.enum(["fast", "balanced", "precise"]).nullable().default(null),
   model: z.string().min(1).nullable().default(null),
@@ -155,7 +156,6 @@ chatStreamRoute.post("/", async (c) => {
   const turn = streamAssistantTurn(
     {
       overrides: {
-        activeServerIds: body.activeServerIds,
         tier: body.tier,
         model: body.model,
         effort: body.effort,
