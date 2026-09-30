@@ -41,6 +41,12 @@ The poll holds for up to 25 seconds, and then the machine polls again. When the 
 
 A deploy of Oxagen's MCP service fails a call in flight at that moment. The machine's next poll reaches the new service, and the agent can call again.
 
+## Tool changes
+
+Oxagen checks a local server's tools the way it checks a cloud server's. A discovery waits until a machine in one of the server's `source.machines` groups polls. That machine lists the server's tools, and a change opens a sync steering PR.
+
+A server can also say its tools changed. When it sends `notifications/tools/list_changed` during a call, the machine's reply to that call says so. Oxagen then discovers the server again through that machine, unless the server's `sync.schedule` is `manual`.
+
 ## Refusals
 
 | Status | Code | When |
