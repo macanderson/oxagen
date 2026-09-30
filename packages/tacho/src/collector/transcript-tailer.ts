@@ -11,9 +11,22 @@
  * Cost tab had nothing to price.
  *
  * The tailer keeps one byte cursor per session transcript and advances it on
- * the daemon's tick. Every read is bounded so a session that writes faster
- * than the tick can drain never holds the serial queue; the rest is picked up
- * next tick.
+ * the daemon's tick. One tick reads at most `budgetBytes` from each file and
+ * starts no further file once it has read `tickBudgetBytes` in all; the rest
+ * is picked up next tick. A new install can find hundreds of transcripts it
+ * has never read, and one tick used to read all of them (#4394).
+ *
+ * The tick reads a transcript's bytes outside the daemon's hook queues and
+ * takes the session's queue (`exclusive`) only to seal what it read, the way
+ * the git lane splits its reads from applying them (ADR-229). A hook
+ * therefore never waits on the tick's reads, and waits on its seals only when
+ * they are its own session's. The seals of one read go in slices of at most
+ * `SEAL_SLICE_BYTES`, with a turn of the event loop between them, so the
+ * synchronous work of sealing never holds the loop for a whole read. A hook
+ * can move the cursor while the tick reads, a `Stop` draining its transcript
+ * for one, so each slice checks, inside the queue, that the cursor still
+ * stands where the read began. When it does not, the tick drops what it read
+ * and the next tick reads from where the cursor is now.
  *
  * A subagent transcript gets a byte cursor of its own and is tailed the same
  * way, fed with the subagent id so the child chain receives it. Claude Code
@@ -48,6 +61,21 @@ import { sessionMapKey } from "./registry";
 
 /** The most bytes one tick reads from one transcript. */
 export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Once one tick has read this many bytes across all transcripts, it starts
+ * no further session. A session the tick starts is read in full budget, so
+ * one session with many subagent transcripts can take the tick past this.
+ * The next tick starts with the first session this one left.
+ */
+export const DEFAULT_TICK_BUDGET_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most transcript bytes sealed in one synchronous stretch. Sealing a line
+ * parses it, hashes the frame, and appends it to the WAL on the event loop,
+ * so a 4 MiB read sealed at once held every hook and `/status` for as long.
+ */
+export const SEAL_SLICE_BYTES = 256 * 1024;
 
 /**
  * Harnesses whose transcript `transcript.ts` can normalize. Only Claude
@@ -126,6 +154,15 @@ export interface TranscriptTailerOptions {
   /** Where cursors persist; omitted in tests that want none. */
   statePath?: string;
   budgetBytes?: number;
+  /** See `DEFAULT_TICK_BUDGET_BYTES`. */
+  tickBudgetBytes?: number;
+  /**
+   * Run `apply` where the session's hooks cannot interleave with it: the
+   * daemon's queue for that session. The tick seals through this. `drain`
+   * and `ingestSubagentTranscript` do not, because a hook calls them from
+   * inside that queue. Omitted, `apply` runs at once.
+   */
+  exclusive?: <T>(session: TailedSession, apply: () => T) => Promise<T>;
   log?: (line: string) => void;
   /** Epoch ms; defaults to `Date.now`. A test supplies a controllable clock. */
   now?: () => number;
@@ -236,12 +273,35 @@ const HEAD_BYTES = 64;
 
 /**
  * What one pass over a transcript did: the lines it fed, refused ones
- * included, and whether a stat or read failed and stopped it short of the
- * end of the file.
+ * included, whether a stat or read failed and stopped it short of the end of
+ * the file, and the bytes it moved the cursor past.
  */
 interface Pass {
   fed: number;
   failed: boolean;
+  bytes: number;
+}
+
+/**
+ * Where a pass seals what it read, and how it knows its cursor still stands.
+ * The tick seals through the session's queue and checks that the cursor it
+ * read with is still the one kept for the file. A drain runs inside that
+ * queue already, so it seals at once and its cursor always stands.
+ */
+interface Sealer {
+  run<T>(apply: () => T): Promise<T>;
+  current(): boolean;
+}
+
+/** The sealer of a pass that already runs inside the session's queue. */
+const IN_QUEUE: Sealer = {
+  run: async (apply) => apply(),
+  current: () => true,
+};
+
+/** One turn of the event loop, so a hook or `/status` waiting on it runs. */
+function yieldTurn(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 /** Read `length` bytes at `offset`, or fewer at end of file. */
@@ -285,11 +345,20 @@ export class TranscriptTailer {
   private readonly cursors = new Map<string, Cursor>();
   private readonly options: TranscriptTailerOptions;
   private readonly budget: number;
+  private readonly tickBudget: number;
   private dirty = false;
+  /** The tick running now, or the last one, settled either way. */
+  private ticking: Promise<void> = Promise.resolve();
+  /** The cursor key of the first session the last tick's budget left unread. */
+  private resumeAt: string | undefined;
 
   constructor(options: TranscriptTailerOptions) {
     this.options = options;
     this.budget = options.budgetBytes ?? DEFAULT_TAIL_BUDGET_BYTES;
+    this.tickBudget = Math.max(
+      options.tickBudgetBytes ?? DEFAULT_TICK_BUDGET_BYTES,
+      this.budget,
+    );
     if (options.statePath !== undefined) {
       const persisted = readJsonStateFile(options.statePath, (movedTo) =>
         options.log?.(
@@ -396,16 +465,67 @@ export class TranscriptTailer {
    * Advance every live cursor by at most the budget, and drop the cursors of
    * sessions that left the registry. A drained cursor is kept until then,
    * and reopened when its session is.
+   *
+   * Ticks run one after another. The daemon's interval and a caller stepping
+   * it by hand can both ask for one, and a tick asked for while another runs
+   * starts once that one ends, so it still reads what was written before it
+   * was asked for.
    */
-  async tick(): Promise<void> {
+  tick(): Promise<void> {
+    const run = this.ticking.then(() => this.tickOnce());
+    this.ticking = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** The sessions in tick order: from the one the last tick left unread. */
+  private inTickOrder(sessions: readonly TailedSession[]): TailedSession[] {
+    const at =
+      this.resumeAt === undefined
+        ? -1
+        : sessions.findIndex(
+            (session) => this.cursorKey(session) === this.resumeAt,
+          );
+    return at <= 0
+      ? [...sessions]
+      : [...sessions.slice(at), ...sessions.slice(0, at)];
+  }
+
+  /**
+   * The sealer for a cursor the tick reads outside the session's queue.
+   * `current` answers whether the cursor is still the one kept for its file,
+   * since a hook in the queue can replace it while the tick reads.
+   */
+  private tickSealer(session: TailedSession, current: () => boolean): Sealer {
+    const exclusive = this.options.exclusive;
+    return {
+      run: (apply) =>
+        exclusive === undefined
+          ? Promise.resolve().then(apply)
+          : exclusive(session, apply),
+      current,
+    };
+  }
+
+  private async tickOnce(): Promise<void> {
     for (const session of this.options.sessions())
       this.reopenIfResumed(session);
     const live = new Set<string>();
-    for (const session of this.options.sessions()) {
+    let left = this.tickBudget;
+    let cutAt: string | undefined;
+    for (const session of this.inTickOrder(this.options.sessions())) {
       const key = this.cursorKey(session);
       live.add(key);
       if (session.transcriptPath === undefined) continue;
       if (!hasTranscriptNormalizer(session)) continue;
+      // A session is read in full budget or not at all this tick. Read short,
+      // a sealed session would count the bytes it did not reach as quiet.
+      if (left < this.budget) {
+        cutAt ??= key;
+        continue;
+      }
       // One session's advance is caught here, not only inside `advance`
       // itself: a throw this loop did not expect — from `cursorFor`, from
       // `this.options.record` (a WAL write), from anything other than the
@@ -429,11 +549,22 @@ export class TranscriptTailer {
           continue;
         }
         const cursor = this.cursorFor(session, session.transcriptPath);
-        const subagentsGrew = await this.tailSubagents(
+        const sealer = this.tickSealer(
+          session,
+          () => this.cursors.get(key) === cursor,
+        );
+        const subagents = await this.tailSubagents(
           session,
           cursor,
           this.budget,
+          (id, agent) =>
+            this.tickSealer(
+              session,
+              () => this.cursors.get(key)?.agents?.[id] === agent,
+            ),
         );
+        left -= subagents.bytes;
+        const subagentsGrew = subagents.grew;
         if (session.sealed) {
           // A sealed chain still gets read at the normal budget, tick after
           // tick, until its transcript has sat unchanged for `sealedIdleMs`:
@@ -444,7 +575,8 @@ export class TranscriptTailer {
           // growth too: a background agent can outlive its parent's last
           // write, and a drained cursor would stop reading it.
           const before = cursor.offset;
-          await this.advance(session, cursor, this.budget);
+          const pass = await this.advance(session, cursor, this.budget, sealer);
+          left -= pass.bytes;
           const now = this.options.now?.() ?? Date.now();
           if (cursor.offset > before || subagentsGrew) {
             delete cursor.sealedQuietSinceMs;
@@ -461,13 +593,20 @@ export class TranscriptTailer {
           }
           continue;
         }
-        await this.advance(session, cursor, this.budget);
+        const pass = await this.advance(session, cursor, this.budget, sealer);
+        left -= pass.bytes;
       } catch (error) {
         this.options.log?.(
           `transcript tail for ${session.harnessSessionId} failed this tick: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
+    this.resumeAt = cutAt;
+    // A hook can open a cursor while this tick awaits a read, for a session
+    // the registry did not list when the tick began. Only a session the
+    // registry lists now is gone.
+    for (const session of this.options.sessions())
+      live.add(this.cursorKey(session));
     for (const id of [...this.cursors.keys()]) {
       if (!live.has(id)) {
         this.cursors.delete(id);
@@ -507,6 +646,9 @@ export class TranscriptTailer {
    * fires once a turn while the harness waits on it: a subagent still
    * running is read at most one budget there, as on the tick, which finishes
    * the rest.
+   *
+   * The hook calls this from inside its session's queue, so it seals at once.
+   * It holds that session's queue while it reads, and no other.
    */
   async drain(
     harnessSessionId: string,
@@ -517,11 +659,12 @@ export class TranscriptTailer {
     if (!hasTranscriptNormalizer(session)) return;
     const cursor = this.cursorFor(session, session.transcriptPath);
     if (cursor.drained) return;
-    await this.advance(session, cursor, Number.POSITIVE_INFINITY);
+    await this.advance(session, cursor, Number.POSITIVE_INFINITY, IN_QUEUE);
     await this.tailSubagents(
       session,
       cursor,
       hook === "SessionEnd" ? Number.POSITIVE_INFINITY : this.budget,
+      () => IN_QUEUE,
     );
     this.persist();
   }
@@ -566,6 +709,7 @@ export class TranscriptTailer {
       session,
       sub,
       Number.POSITIVE_INFINITY,
+      IN_QUEUE,
       subagentId,
     );
     if (failed) {
@@ -594,13 +738,15 @@ export class TranscriptTailer {
    * each open one by at most `budget`. Each subagent gets its own budget, so
    * a tick reads at most one budget per transcript, subagents included.
    * Answers whether any subagent transcript was read further, so a sealed
-   * session is not drained while one of its subagents is still writing.
+   * session is not drained while one of its subagents is still writing, and
+   * how many bytes the reads moved past.
    */
   private async tailSubagents(
     session: TailedSession,
     cursor: Cursor,
     budget: number,
-  ): Promise<boolean> {
+    sealerFor: (id: string, agent: FileCursor) => Sealer,
+  ): Promise<{ grew: boolean; bytes: number }> {
     const dir =
       session.transcriptPath === undefined
         ? undefined
@@ -616,12 +762,15 @@ export class TranscriptTailer {
       }
     }
     let grew = false;
+    let bytes = 0;
     for (const [id, agent] of Object.entries(cursor.agents ?? {})) {
       const before = agent.offset;
       // One subagent's failure is logged and costs no other transcript its
       // pass, the parent's included.
       try {
-        await this.advance(session, agent, budget, id);
+        const sealer = sealerFor(id, agent);
+        const pass = await this.advance(session, agent, budget, sealer, id);
+        bytes += pass.bytes;
       } catch (error) {
         this.options.log?.(
           `subagent transcript ${agent.path} failed this pass: ${describe(error)}`,
@@ -629,7 +778,7 @@ export class TranscriptTailer {
       }
       if (agent.offset !== before) grew = true;
     }
-    return grew;
+    return { grew, bytes };
   }
 
   /**
@@ -750,32 +899,50 @@ export class TranscriptTailer {
     session: TailedSession,
     cursor: FileCursor,
     budget: number,
+    sealer: Sealer,
     subagentId?: string,
   ): Promise<Pass> {
-    const pass = await this.feed(session, cursor, budget, subagentId);
-    const refused = cursor.refused;
-    if (refused === undefined) return pass;
-    // One gap for the pass. A subagent whose chain refused every line sealed
-    // one gap per line, 608 of them in one second on one host (#4094).
-    this.sealGap(
-      session,
-      "transcript_line_refused",
-      refused.detail,
-      subagentId,
-      refused.count,
-    );
-    delete cursor.refused;
-    this.dirty = true;
+    const pass = await this.feed(session, cursor, budget, sealer, subagentId);
+    if (cursor.refused === undefined) return pass;
+    await sealer.run(() => {
+      const refused = cursor.refused;
+      if (refused === undefined || !sealer.current()) return;
+      // One gap for the pass. A subagent whose chain refused every line
+      // sealed one gap per line, 608 of them in one second on one host
+      // (#4094).
+      this.sealGap(
+        session,
+        "transcript_line_refused",
+        refused.detail,
+        subagentId,
+        refused.count,
+      );
+      delete cursor.refused;
+      this.dirty = true;
+    });
     return pass;
   }
 
+  /**
+   * Read the file on from the cursor and seal each complete line. Every read
+   * happens here, outside the session's queue for a tick. Every change to the
+   * cursor and every seal happens inside `sealer.run`, and only while the
+   * cursor still stands where the read began. A pass that finds it moved
+   * stops, and the next one reads from where the cursor is now.
+   *
+   * What the stat found (a replaced file, a new inode) is applied inside the
+   * first `sealer.run` of the pass, with the first lines it seals, so a pass
+   * with lines to seal takes the session's queue once per slice and no more.
+   */
   private async feed(
     session: TailedSession,
     cursor: FileCursor,
     budget: number,
+    sealer: Sealer,
     subagentId?: string,
   ): Promise<Pass> {
     let fed = 0;
+    let bytes = 0;
     let st: FileStat | undefined;
     try {
       st = await statIfExists(cursor.path);
@@ -783,22 +950,24 @@ export class TranscriptTailer {
       this.options.log?.(
         `transcript ${cursor.path} unreadable: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return { fed, failed: true };
+      return { fed, failed: true, bytes };
     }
     // Claude Code creates the file on the first message, after SessionStart
     // has already reported its path; until then there is nothing to read.
-    if (st === undefined) return { fed, failed: false };
-    let replaced =
-      st.size < cursor.offset ||
-      (cursor.ino !== undefined && cursor.ino !== st.ino);
+    if (st === undefined) return { fed, failed: false, bytes };
+    const size = st.size;
+    const ino = st.ino;
+    const at = cursor.offset;
+    const knownIno = cursor.ino;
+    let replaced = size < at || (knownIno !== undefined && knownIno !== ino);
     // A file the cursor has read to its end, on the inode it last saw, has
     // nothing to read, so its head is compared only once it grows. An idle
     // cursor then costs one stat a tick. A subagent whose SubagentStop was
     // lost keeps one for the rest of its session. A file rewritten in place
     // at exactly the cursor's offset is caught by the head compare on the
     // tick it grows.
-    const idle = st.size === cursor.offset && cursor.ino === st.ino;
-    if (!replaced && !idle && cursor.offset > 0 && cursor.head !== undefined) {
+    const idle = size === at && knownIno === ino;
+    if (!replaced && !idle && at > 0 && cursor.head !== undefined) {
       const expected = Buffer.from(cursor.head, "base64");
       try {
         const actual = await readAt(cursor.path, 0, expected.length);
@@ -807,28 +976,50 @@ export class TranscriptTailer {
         // Unreadable now; the read below reports it.
       }
     }
-    if (replaced) {
-      // Truncated or replaced: what the cursor pointed into is gone.
-      cursor.offset = 0;
-      delete cursor.head;
-      this.dirty = true;
-    }
-    cursor.ino = st.ino;
+    let statApplied = !replaced && knownIno === ino;
+    // Inside `sealer.run`: apply what the stat found, once, while the cursor
+    // still stands where the stat saw it.
+    const applyStat = (): boolean => {
+      if (statApplied) return true;
+      if (!sealer.current() || cursor.offset !== at || cursor.ino !== knownIno)
+        return false;
+      if (replaced) {
+        // Truncated or replaced: what the cursor pointed into is gone.
+        cursor.offset = 0;
+        delete cursor.head;
+        this.dirty = true;
+      }
+      cursor.ino = ino;
+      statApplied = true;
+      return true;
+    };
+    // Inside `sealer.run`: whether this pass may move the cursor on from
+    // `from`, the offset its read began at.
+    const standsAt = (from: number): boolean =>
+      applyStat() && sealer.current() && cursor.offset === from;
+    // Every return after the stat goes through here, so a pass that seals
+    // nothing still records a replaced file or a new inode.
+    const done = async (failed: boolean): Promise<Pass> => {
+      if (!statApplied) await sealer.run(applyStat);
+      return { fed, failed, bytes };
+    };
     let remaining = budget;
-    while (cursor.offset < st.size && remaining > 0) {
-      const want = Math.min(remaining, st.size - cursor.offset, this.budget);
+    let offset = replaced ? 0 : at;
+    while (offset < size && remaining > 0) {
+      const from = offset;
+      const want = Math.min(remaining, size - from, this.budget);
       let chunk: Buffer;
       try {
-        chunk = await readAt(cursor.path, cursor.offset, want);
+        chunk = await readAt(cursor.path, from, want);
       } catch (error) {
         this.options.log?.(
-          `transcript ${cursor.path} read failed at ${cursor.offset}: ${error instanceof Error ? error.message : String(error)}`,
+          `transcript ${cursor.path} read failed at ${from}: ${error instanceof Error ? error.message : String(error)}`,
         );
-        return { fed, failed: true };
+        return done(true);
       }
       // The file shrank between the stat and the read. The next pass sees
       // it as replaced.
-      if (chunk.length === 0) return { fed, failed: true };
+      if (chunk.length === 0) return done(true);
       const { lines, consumed } = completeLines(chunk);
       if (consumed === 0) {
         // No newline in what was read. A chunk shorter than the full budget
@@ -836,24 +1027,28 @@ export class TranscriptTailer {
         // either way the line's end is not known yet, and the next tick
         // starts on it fresh. A chunk the full budget long with no newline
         // in it is a line the budget cannot hold.
-        if (chunk.length < this.budget) return { fed, failed: false };
+        if (chunk.length < this.budget) return done(false);
         // Find the end of the line so the cursor can move past it.
-        const skipTo = await this.findLineEnd(
-          cursor.path,
-          cursor.offset,
-          st.size,
-        );
-        if (skipTo === undefined) return { fed, failed: false };
-        // A line past the budget was silent before: only a log line marked
-        // it, and nothing on the chain showed the session had a gap.
-        this.sealGap(
-          session,
-          "transcript_line_too_long",
-          `${skipTo - cursor.offset} bytes at offset ${cursor.offset}`,
-          subagentId,
-        );
-        cursor.offset = skipTo;
-        this.dirty = true;
+        const skipTo = await this.findLineEnd(cursor.path, from, size);
+        if (skipTo === undefined) return done(false);
+        const skipped = await sealer.run(() => {
+          if (!standsAt(from)) return false;
+          // A line past the budget was silent before: only a log line
+          // marked it, and nothing on the chain showed the session had a
+          // gap.
+          this.sealGap(
+            session,
+            "transcript_line_too_long",
+            `${skipTo - from} bytes at offset ${from}`,
+            subagentId,
+          );
+          cursor.offset = skipTo;
+          this.dirty = true;
+          return true;
+        });
+        if (!skipped) return done(false);
+        bytes += skipTo - from;
+        offset = skipTo;
         continue;
       }
       // Fed and advanced one line at a time: a line the recorder refuses
@@ -861,38 +1056,65 @@ export class TranscriptTailer {
       // after it, and is counted toward the pass's one gap. The cursor moves
       // past exactly the bytes that line and its newline held, not the whole
       // chunk, so a later line's failure can never re-open one already
-      // recorded.
-      for (const line of lines) {
-        const lineBytes = Buffer.byteLength(line, "utf8") + 1;
-        if (line.length > 0) {
-          const refusal = this.feedLine(session, line, subagentId);
-          fed += 1;
-          if (refusal !== undefined)
-            cursor.refused = {
-              count: (cursor.refused?.count ?? 0) + 1,
-              detail: cursor.refused?.detail ?? describe(refusal).slice(0, 512),
-            };
+      // recorded. The lines go in slices of at most `SEAL_SLICE_BYTES`, with
+      // a turn of the event loop between two slices.
+      let next = 0;
+      while (next < lines.length) {
+        if (next > 0) await yieldTurn();
+        const slice: Array<{ line: string; bytes: number }> = [];
+        let sliceBytes = 0;
+        while (next < lines.length) {
+          const line = lines[next] as string;
+          const lineBytes = Buffer.byteLength(line, "utf8") + 1;
+          if (slice.length > 0 && sliceBytes + lineBytes > SEAL_SLICE_BYTES)
+            break;
+          slice.push({ line, bytes: lineBytes });
+          sliceBytes += lineBytes;
+          next += 1;
         }
-        cursor.offset += lineBytes;
-        remaining -= lineBytes;
-        this.dirty = true;
+        const sliceFrom = offset;
+        const sealed = await sealer.run(() => {
+          if (!standsAt(sliceFrom)) return false;
+          for (const { line, bytes: lineBytes } of slice) {
+            if (line.length > 0) {
+              const refusal = this.feedLine(session, line, subagentId);
+              fed += 1;
+              if (refusal !== undefined)
+                cursor.refused = {
+                  count: (cursor.refused?.count ?? 0) + 1,
+                  detail:
+                    cursor.refused?.detail ?? describe(refusal).slice(0, 512),
+                };
+            }
+            cursor.offset += lineBytes;
+            this.dirty = true;
+          }
+          return true;
+        });
+        if (!sealed) return done(false);
+        offset = sliceFrom + sliceBytes;
+        remaining -= sliceBytes;
+        bytes += sliceBytes;
       }
     }
     // Fingerprint the head once enough of it has been consumed, so the next
     // tick can tell a replaced file from the one this cursor read.
-    const headLength = Math.min(HEAD_BYTES, cursor.offset);
+    const headLength = Math.min(HEAD_BYTES, offset);
     const known =
       cursor.head === undefined ? 0 : Buffer.from(cursor.head, "base64").length;
-    if (headLength > known) {
+    if (statApplied && headLength > known) {
       try {
         const head = await readAt(cursor.path, 0, headLength);
-        cursor.head = head.toString("base64");
-        this.dirty = true;
+        await sealer.run(() => {
+          if (!sealer.current() || cursor.offset < headLength) return;
+          cursor.head = head.toString("base64");
+          this.dirty = true;
+        });
       } catch {
         // Unreadable now; the next tick fingerprints it.
       }
     }
-    return { fed, failed: false };
+    return done(false);
   }
 
   /**
