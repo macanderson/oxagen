@@ -11,4 +11,4 @@ it("refuses unsafe node budgets and serializes concurrent service replacements",
     encoding: "utf8",
     timeout: 30_000,
   })).not.toThrow();
-});
+}, 35_000);
