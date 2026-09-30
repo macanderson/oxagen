@@ -568,7 +568,7 @@ describe("the other dialogs on a phone", () => {
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's ten links", async () => {
+  it("the drawer opens over a scrim with the sidebar's eight links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -584,7 +584,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(10);
+    ).toHaveLength(8);
   });
 
   it("the drawer closes when the window widens past the breakpoint, so no invisible modal holds focus", async () => {

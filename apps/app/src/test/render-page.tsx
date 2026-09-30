@@ -40,8 +40,52 @@ export async function renderPage(page: ReactNode): Promise<HTMLElement> {
   if (errors.length > 0) throw errors[0];
   const container = document.createElement("div");
   container.innerHTML = html;
+  completeBoundaries(container);
   document.body.replaceChildren(container);
   return container;
+}
+
+/**
+ * Puts each streamed Suspense segment where its boundary stands. A boundary
+ * that suspended during the prerender is written as its fallback after a
+ * `<template id="B:n">`, with the resolved content later in a hidden
+ * `<div id="S:n">` and an inline `$RC` script that swaps them. Mounting the
+ * HTML through `innerHTML` runs no script, so without this the resolved
+ * content stays hidden and role queries cannot see it. This does what `$RC`
+ * does: drops the fallback up to the boundary's closing comment, moves the
+ * segment's children in its place, and marks the boundary complete.
+ */
+function completeBoundaries(root: HTMLElement): void {
+  for (;;) {
+    const segment = root.querySelector<HTMLElement>('div[hidden][id^="S:"]');
+    if (segment === null) return;
+    const template = root.querySelector(
+      `template[id="B:${segment.id.slice(2)}"]`,
+    );
+    segment.remove();
+    if (template === null) continue;
+    const parent = template.parentNode;
+    if (parent === null) continue;
+    let node = template.nextSibling;
+    let depth = 0;
+    while (node !== null) {
+      const next = node.nextSibling;
+      if (node instanceof Comment) {
+        const data = node.data;
+        if (data === "/$") {
+          if (depth === 0) break;
+          depth -= 1;
+        } else if (data.startsWith("$")) depth += 1;
+      }
+      node.remove();
+      node = next;
+    }
+    while (segment.firstChild !== null)
+      parent.insertBefore(segment.firstChild, node);
+    const open = template.previousSibling;
+    if (open instanceof Comment) open.data = "$";
+    template.remove();
+  }
 }
 
 /** Renders `page` at `props`; its one h1 and its generateMetadata title are both `title`. */
