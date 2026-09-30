@@ -3244,6 +3244,7 @@ type Messages = {
       annotations: string;
       feedback: string;
       feedbackMissing: string;
+      countsMissing: string;
       calls: string;
       schemaRejections: string;
       errorResults: string;

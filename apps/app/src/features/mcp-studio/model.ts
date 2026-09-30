@@ -57,12 +57,18 @@ type StudioShaping = {
   selection: string | null;
 };
 
-/** What agents' calls said about a tool over the recorded window. */
-type StudioFeedback = {
+/** The gateway's counts for a tool over the recorded window (ADR-234). */
+type StudioFeedbackCounts = {
   calls: number;
   schemaRejections: number;
   errorResults: number;
   retries: number;
+};
+
+/** What agents' calls said about a tool over the recorded window. */
+type StudioFeedback = {
+  /** Null when the call store did not answer. The notes still show. */
+  counts: StudioFeedbackCounts | null;
   /** What reflections' `tool_feedback` said about the tool, newest first. */
   notes: readonly string[];
 };

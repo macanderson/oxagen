@@ -502,20 +502,33 @@ function Feedback({ tool }: { tool: StudioTool }) {
         </StudioNotRecorded>
       ) : (
         <>
-          <dl className={kvList} data-testid="studio-panel-feedback">
-            <dt className={kvTerm}>{t("calls")}</dt>
-            <dd className={kvValue}>{formatCount(feedback.calls, locale)}</dd>
-            <dt className={kvTerm}>{t("schemaRejections")}</dt>
-            <dd className={kvValue}>
-              {formatCount(feedback.schemaRejections, locale)}
-            </dd>
-            <dt className={kvTerm}>{t("errorResults")}</dt>
-            <dd className={kvValue}>
-              {formatCount(feedback.errorResults, locale)}
-            </dd>
-            <dt className={kvTerm}>{t("retries")}</dt>
-            <dd className={kvValue}>{formatCount(feedback.retries, locale)}</dd>
-          </dl>
+          {feedback.counts === null ? (
+            <StudioNotRecorded
+              gap="record"
+              testId="studio-panel-feedback-counts-missing"
+            >
+              {t("countsMissing")}
+            </StudioNotRecorded>
+          ) : (
+            <dl className={kvList} data-testid="studio-panel-feedback">
+              <dt className={kvTerm}>{t("calls")}</dt>
+              <dd className={kvValue}>
+                {formatCount(feedback.counts.calls, locale)}
+              </dd>
+              <dt className={kvTerm}>{t("schemaRejections")}</dt>
+              <dd className={kvValue}>
+                {formatCount(feedback.counts.schemaRejections, locale)}
+              </dd>
+              <dt className={kvTerm}>{t("errorResults")}</dt>
+              <dd className={kvValue}>
+                {formatCount(feedback.counts.errorResults, locale)}
+              </dd>
+              <dt className={kvTerm}>{t("retries")}</dt>
+              <dd className={kvValue}>
+                {formatCount(feedback.counts.retries, locale)}
+              </dd>
+            </dl>
+          )}
           {feedback.notes.length === 0 ? null : (
             <ul
               aria-label={t("notes")}

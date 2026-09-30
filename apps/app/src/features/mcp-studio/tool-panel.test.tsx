@@ -85,6 +85,7 @@ const COPY = {
   serverMissing:
     "Oxagen has not recorded what the server says about this tool yet.",
   feedbackMissing: "Oxagen has not recorded how agents use this tool yet.",
+  countsMissing: "Oxagen could not read the call counts for this tool.",
   offNone:
     "The registry holds no version of this tool, so it has no switch to turn off.",
 } as const;
@@ -895,10 +896,7 @@ describe("ToolPanel agent feedback", () => {
   it("lists a note agents repeated once, in the order first given", () => {
     const tool = studioTool("create_payment", {
       feedback: {
-        calls: 3,
-        schemaRejections: 0,
-        errorResults: 0,
-        retries: 1,
+        counts: { calls: 3, schemaRejections: 0, errorResults: 0, retries: 1 },
         notes: [
           "Sent dollars, not cents.",
           "Retried after a rate limit.",
@@ -911,6 +909,22 @@ describe("ToolPanel agent feedback", () => {
     expect(items(section.getByRole("list", { name: "Agent notes" }))).toEqual([
       "Sent dollars, not cents.",
       "Retried after a rate limit.",
+    ]);
+  });
+
+  it("keeps agents' notes when the call counts were not read", () => {
+    const tool = studioTool("create_payment", {
+      feedback: { counts: null, notes: ["Sent dollars, not cents."] },
+    });
+    renderPanel(tool, { canEdit: false });
+    const section = within(region("Agent feedback"));
+    expect(
+      section.getByTestId("studio-panel-feedback-counts-missing"),
+    ).toHaveTextContent(COPY.countsMissing);
+    expect(section.queryByTestId("studio-panel-feedback")).toBeNull();
+    expect(section.queryByTestId("studio-panel-feedback-missing")).toBeNull();
+    expect(items(section.getByRole("list", { name: "Agent notes" }))).toEqual([
+      "Sent dollars, not cents.",
     ]);
   });
 });

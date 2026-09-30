@@ -168,10 +168,7 @@ describe("readStudioRecord's mapping", () => {
           selection: null,
         },
         feedback: {
-          calls: 12,
-          schemaRejections: 2,
-          errorResults: 1,
-          retries: 2,
+          counts: { calls: 12, schemaRejections: 2, errorResults: 1, retries: 2 },
           notes: ["Agents sent dollars, not cents."],
         },
       },
@@ -196,7 +193,7 @@ describe("readStudioRecord's mapping", () => {
     ]);
   });
 
-  it("reads no feedback when the call store did not answer (ADR-234)", async () => {
+  it("keeps the notes with null counts when the call store did not answer (ADR-234)", async () => {
     actions.getStudioServerAction.mockResolvedValue({
       ok: true,
       value: {
@@ -209,7 +206,7 @@ describe("readStudioRecord's mapping", () => {
     });
     const record = await readStudioRecord(ctx, { ...studioServer(STRIPE), steeringName: "stripe" });
     expect(record?.tools.map((tool) => [tool.name, tool.feedback])).toEqual([
-      ["create_payment", null],
+      ["create_payment", { counts: null, notes: ["Agents sent dollars, not cents."] }],
       ["list_customers", null],
     ]);
   });
