@@ -23,7 +23,12 @@ const sessionId = "tse_0000000000000000000001";
 const ledgerId = "arun_000000000000000000001";
 
 describe("readRunHarnesses", () => {
-  beforeEach(() => mocks.withTenantDb.mockReset());
+  // A block body, not an expression: mockReset() returns the mock, and a
+  // function a beforeEach returns runs as that test's teardown, with no
+  // arguments and with the test's implementation still installed.
+  beforeEach(() => {
+    mocks.withTenantDb.mockReset();
+  });
 
   it("reads the recorded harness within the caller's org and workspace", async () => {
     const db = drizzle.mock({ schema });
