@@ -14,8 +14,10 @@ export function createTestResponseTransport() {
           streams.add(response);
           return response;
         }
-        // Keep the client body readable after the server has sent its bytes.
-        return new Response(await response.arrayBuffer(), response);
+        // Hono ignores middleware return values once a route finalizes c.res.
+        // Replace that response so outer middleware and the client can read it.
+        c.res = new Response(await response.arrayBuffer(), response);
+        return c.res;
       };
     },
     async cleanup() {

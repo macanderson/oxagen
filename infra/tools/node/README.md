@@ -33,9 +33,9 @@ manifest describing how it runs:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `port` | yes | Loopback port Caddy proxies to. Must match the Caddyfile. |
-| `image` | yes | Container image. **Must have an `arm64` variant** — the node is a `t4g.medium`. |
+| `image` | yes | Container image. Must have an `arm64` variant for the Graviton node. |
 | `command` | yes | Argv, relative to the tarball root, which is mounted at `/app`. |
-| `memory` | no (`512m`) | Hard container limit. |
+| `memory` | no (`512m`) | Hard container limit. Positive integer bytes, or a `k`, `m`, or `g` suffix. |
 | `health_path` | no (`/`) | Path polled for up to 60s after start. |
 | `env` | no | Non-secret environment. This file ships inside a public CI artifact. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
@@ -46,7 +46,26 @@ Terraform apply every time an application changed how it starts, and it would
 widen the document's arguments from one validated identifier to a set of
 strings that reach a command line.
 
-### Why `config_prefix` rather than baking configuration in
+## Memory budget
+
+Before replacing a container, deployment takes `/opt/oxagen/service-deploy.lock`
+and holds it through the health check and rollback. Different services share
+this lock. The proxy helper establishes Caddy's 256 MiB hard limit, refusing to
+shrink it while its measured usage exceeds 192 MiB.
+
+`memory-budget.py` adds the incoming limit to every other running or restarting
+container's limit, plus 1,024 MiB for the kernel, Docker, SSM, CloudWatch, and
+other host processes. The replaced service's current and migration-era names
+are excluded because deployment removes both before starting the replacement.
+Caddy is counted as a container. Swap contributes no capacity.
+
+An unlimited container or a total above physical `MemTotal` refuses deployment
+before changing the service's current release or stopping its container. The
+error names the missing limit or required physical capacity. Keep the guard in
+place and resolve the allocation before retrying. Passing this check establishes
+the declared memory budget, not sustained workload throughput.
+
+### Configuration prefix
 
 Secrets in the artifact would mean rebuilding the application to rotate one,
 and would put them in a tarball produced by a public CI job. Read at start

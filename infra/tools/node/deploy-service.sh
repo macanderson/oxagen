@@ -289,6 +289,18 @@ fi
 # port either way, so this is defence in depth rather than the only control.
 # ---------------------------------------------------------------------------
 
+# Hold the node-wide lock through replacement, health checks, and rollback.
+# A per-service CI lock cannot stop two different services from both spending
+# the same remaining RAM. Refuse before changing the current release or container.
+command -v flock >/dev/null || fail "flock is required for the node memory budget"
+exec 201>/opt/oxagen/service-deploy.lock
+flock -w 300 201 || fail "another deployment holds the node memory budget; retry this deployment"
+python3 "$(dirname "${BASH_SOURCE[0]}")/ensure-caddy-memory.py" \
+  || fail "Caddy memory limit could not be established; the current service is unchanged"
+python3 "$(dirname "${BASH_SOURCE[0]}")/memory-budget.py" \
+  --service "$SERVICE" --memory "$memory" \
+  || fail "node memory preflight refused this deployment; the current service is unchanged"
+
 previous=""
 [[ -L $CURRENT ]] && previous=$(readlink -f "$CURRENT")
 
