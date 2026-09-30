@@ -41,7 +41,9 @@ that refuses 15,000 requests proves neither that rate nor timely processing.
    writes and 64 MiB of admitted plaintext. Coalesce duplicate writes. Verify a
    remembered completed object still exists before skipping its rewrite.
 7. Negotiate blob access once. Bound callers waiting for that result. Reuse the
-   body across the refused private attempt and the public retry.
+   body across the refused private attempt and the public retry. Remote asset
+   and OAuth avatar downloads count streamed bytes against their kind limit.
+   Their ten-second deadline covers redirects, headers, and body transfer.
 8. Read enrichment bodies and scratch objects within explicit byte limits.
    Write transcript chunks as they are produced. Keep the text, body count,
    prompt, and summary-call ceilings. State when an account covers only a prefix.
@@ -50,7 +52,9 @@ that refuses 15,000 requests proves neither that rate nor timely processing.
    more concurrent executions.
 10. Set explicit container and heap limits. API receives 1,536 MiB with a
     1,024 MiB old-space limit. MCP receives 1,024 MiB with a 640 MiB old-space
-    limit. These are initial operating budgets, not a fleet capacity claim.
+    limit. Generic MCP tools reserve 256 MiB because a video asset can download
+    100 MiB before storage. These are initial operating budgets, not a fleet
+    capacity claim.
 11. Emit process memory, reservations, admissions, and rejections every 30 seconds.
     Alarm on the V8 diagnostic itself. V8 aborts do not set Docker's OOMKilled
     flag. Alarm separately on sustained projected memory pressure.

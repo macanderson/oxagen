@@ -3,6 +3,8 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { assetUpload } from "@oxagen/oxagen/contracts/asset.upload";
 import {
   ASSET_LIMITS,
+  readResponseBody,
+  ResponseBodyTooLargeError,
   assertAllowedAssetType,
   deriveAssetKey,
 } from "@oxagen/storage";
@@ -137,6 +139,38 @@ function isPrivateIPv6(ip: string): boolean {
   return false;
 }
 
+/** Bound both the downloaded bytes and the time spent receiving them. */
+async function downloadAsset(sourceUrl: string, kind: keyof typeof ASSET_LIMITS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  let response: Response | undefined;
+  try {
+    response = await fetch(sourceUrl, { signal: controller.signal });
+    if (!response.ok)
+      throw new Error(`asset.upload: source URL responded with HTTP ${response.status}`);
+    const contentType = (response.headers.get("content-type") ?? "")
+      .split(";")[0]?.trim() ?? "";
+    const ext = assertAllowedAssetType(kind, contentType);
+    const limit = ASSET_LIMITS[kind];
+    try {
+      const bytes = await readResponseBody(response, limit, controller.signal);
+      return { bytes, contentType, ext };
+    } catch (error) {
+      if (error instanceof ResponseBodyTooLargeError)
+        throw new Error(
+          `Asset exceeds the ${limit} byte limit (${(limit / (1024 * 1024)).toFixed(0)} MiB) for kind "${kind}"`,
+        );
+      throw error;
+    }
+  } catch (error) {
+    controller.abort();
+    void response?.body?.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
@@ -187,41 +221,7 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
   // SSRF protection: only allow publicly routable http(s) URLs.
   assertPublicHttpUrl(sourceUrl);
 
-  // Fetch the asset with a 10-second timeout.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
-  let response: Response;
-  try {
-    response = await fetch(sourceUrl, { signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `asset.upload: source URL responded with HTTP ${response.status}`,
-    );
-  }
-
-  // Determine content type from the response header (strip ; charset=… params).
-  const rawContentType = response.headers.get("content-type") ?? "";
-  const contentType = rawContentType.split(";")[0]?.trim() ?? "";
-
-  // Validate content type against the asset kind.
-  const ext = assertAllowedAssetType(kind, contentType);
-
-  // Buffer the whole body, then enforce the size limit. Note the ordering: the
-  // full response is already resident in memory by the time the limit is
-  // checked, so an oversized source still costs its bytes once. Enforcing
-  // before the allocation needs a streamed read that aborts at the ceiling.
-  const limit = ASSET_LIMITS[kind];
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength > limit) {
-    const limitMb = (limit / (1024 * 1024)).toFixed(0);
-    throw new Error(
-      `Asset exceeds the ${limit} byte limit (${limitMb} MiB) for kind "${kind}"`,
-    );
-  }
+  const { bytes: buffer, contentType, ext } = await downloadAsset(sourceUrl, kind);
 
   // "user_upload": store as a PRIVATE blob and record a generated_assets row
   // via the single shared persistence chokepoint (no second insert path —
@@ -233,7 +233,7 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
       userId: ctx.userId!,
       kind: kind as GeneratedAssetKind,
       accessPolicy: "org",
-      bytes: new Uint8Array(buffer),
+      bytes: buffer,
       mimeType: contentType,
       prompt: "",
       model: "",
@@ -270,7 +270,7 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
   // Write to object storage.
   const { url, bytes } = await storage().put({
     key,
-    body: new Uint8Array(buffer),
+    body: buffer,
     contentType,
     access: "public",
   });

@@ -87,5 +87,7 @@ export const API_ADMISSION_LANES = {
 
 export const MCP_ADMISSION_LANES = {
   control: { concurrency: 8, reserveBytes: 32 * MiB },
-  tool: { concurrency: 4, reserveBytes: 64 * MiB },
+  // Tool names arrive after admission. Reserve for a 100 MiB asset download
+  // and its growing buffer even when a request eventually calls a small tool.
+  tool: { concurrency: 4, reserveBytes: 256 * MiB },
 } as const;

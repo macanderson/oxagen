@@ -34,11 +34,17 @@ async function main(): Promise<void> {
   // only control — but the control that fails open is the one worth having.
   const hostname = process.env.HOST ?? process.env.HOSTNAME ?? "127.0.0.1";
 
-  const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
-    logger.info({ port: info.port, hostname }, "api listening");
-  });
-  server.requestTimeout = 30_000;
-  server.headersTimeout = 10_000;
+  serve(
+    {
+      fetch: app.fetch,
+      port,
+      hostname,
+      serverOptions: { requestTimeout: 30_000, headersTimeout: 10_000 },
+    },
+    (info) => {
+      logger.info({ port: info.port, hostname }, "api listening");
+    },
+  );
   const metrics = setInterval(() => {
     logger.info({ event: "resource_budget", ...apiAdmission.snapshot() }, "api resource budget");
   }, 30_000);

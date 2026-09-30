@@ -1,10 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { createRequestAdmission, sampleProcessMemory } from "./request-admission";
+import { createRequestAdmission, MCP_ADMISSION_LANES, sampleProcessMemory } from "./request-admission";
 
 const memory = { heapUsed: 100, heapLimit: 1000, rss: 200, memoryLimit: 2000 };
 const lanes = { ingest: { concurrency: 4, reserveBytes: 100 }, control: { concurrency: 2, reserveBytes: 10 } };
 
 describe("request admission", () => {
+  it("reserves asset-download headroom before accepting another MCP tool", () => {
+    const MiB = 1024 * 1024;
+    const gate = createRequestAdmission(MCP_ADMISSION_LANES, () => ({
+      heapUsed: 128 * MiB, heapLimit: 768 * MiB,
+      rss: 256 * MiB, memoryLimit: 1024 * MiB,
+    }));
+    const first = gate.acquire("tool");
+    expect(first).not.toBeNull();
+    // Two 100 MiB downloads can hold both old and grown buffers at once.
+    expect(gate.acquire("tool")).toBeNull();
+    const control = gate.acquire("control");
+    expect(control).not.toBeNull();
+    first?.();
+    const replacement = gate.acquire("tool");
+    expect(replacement).not.toBeNull();
+    replacement?.();
+    control?.();
+    expect(gate.snapshot().reservedBytes).toBe(0);
+  });
+
   it("bounds a 500-machine burst with 30 simultaneous offers per machine", () => {
     const gate = createRequestAdmission(lanes, () => memory);
     const releases = [];

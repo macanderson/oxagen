@@ -167,6 +167,40 @@ describe("evidence storage capacity", () => {
 });
 
 describe("evidence body read limits", () => {
+  it("reads encrypted evidence across one-byte chunks at its exact limit", async () => {
+    const { store, get, objects } = fixture();
+    const input = body("tiny chunks preserve the encrypted evidence");
+    const { ref } = await store.put(input);
+    const encrypted = objects.values().next().value!;
+    let offset = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset === encrypted.byteLength) controller.close();
+        else controller.enqueue(new Uint8Array([encrypted[offset++]!]));
+      },
+    }, { highWaterMark: 0 });
+    get.mockResolvedValueOnce({ body: stream, contentType: null, sizeBytes: null });
+    await expect(store.getBody(scope, ref, { maxBytes: encrypted.byteLength }))
+      .resolves.toMatchObject({ bytes: input.bytes });
+    expect(stream.locked).toBe(false);
+    expect(offset).toBe(encrypted.byteLength);
+  });
+
+  it("cancels one-byte evidence chunks immediately after the byte ceiling", async () => {
+    const { store, get } = fixture();
+    const cancel = vi.fn();
+    const pull = vi.fn((controller: ReadableStreamDefaultController<Uint8Array>) => {
+      controller.enqueue(new Uint8Array([1]));
+    });
+    const stream = new ReadableStream({ pull, cancel }, { highWaterMark: 0 });
+    get.mockResolvedValueOnce({ body: stream, contentType: null, sizeBytes: null });
+    await expect(store.getBody(scope, evidenceBodyRef(crypto.keyId, "0".repeat(64)), { maxBytes: 8 }))
+      .rejects.toBeInstanceOf(EvidenceBodyTooLargeError);
+    expect(pull).toHaveBeenCalledTimes(9);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(stream.locked).toBe(false);
+  });
+
   it.each([null, 2, 100])("cancels an oversized scratch stream with reported size %s", async (sizeBytes) => {
     const { store, get } = fixture();
     const cancel = vi.fn();

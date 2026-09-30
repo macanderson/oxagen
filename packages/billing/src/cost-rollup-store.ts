@@ -1133,8 +1133,8 @@ async function streamRunTotalsForDay(
     SELECT ${selection} FROM ${totals}
     WHERE ${totals.orgId} = ${args.orgId}
       AND ${totals.workspaceId} = ${args.workspaceId}
-      AND ${totals.startedAt} >= ${start}
-      AND ${totals.startedAt} < ${next}
+      AND ${gte(totals.startedAt, start)}
+      AND ${lt(totals.startedAt, next)}
     ORDER BY ${totals.startedAt}`);
   const deadline = Date.now() + 120_000;
   for (;;) {

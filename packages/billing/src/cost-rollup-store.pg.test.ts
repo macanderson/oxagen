@@ -917,19 +917,31 @@ describe.skipIf(!enabled)("running rollups against Postgres", () => {
 
   it("streams a day across read and write batches without dropping totals", async () => {
     await withSystemDb((tx) => tx.insert(totals).values(
-      Array.from({ length: 260 }, (_, index) => ({
+      [...Array.from({ length: 260 }, (_, index) => ({
         ...record(`tse_${tag}batch${index}`, {
-          startedAt: new Date("2001-08-02T00:00:00Z"),
+          startedAt: new Date(index === 259
+            ? "2001-08-02T23:59:59.999Z"
+            : "2001-08-02T00:00:00Z"),
           sealedAt: new Date("2001-08-02T00:05:00Z"),
           taskRef: `task-${index}`,
         }),
         cacheHitRate: null,
         productiveRatio: null,
         rolledUpAt: new Date("2001-08-02T00:10:00Z"),
-      })),
+      })), ...["2001-08-01T23:59:59.999Z", "2001-08-03T00:00:00Z"].map((startedAt, index) => ({
+        ...record(`tse_${tag}outside${index}`, {
+          startedAt: new Date(startedAt),
+          taskRef: `outside-${index}`,
+        }),
+        cacheHitRate: null,
+        productiveRatio: null,
+        rolledUpAt: new Date("2001-08-03T00:10:00Z"),
+      }))],
     ));
     const rows = await rebuildDailyTotals({ ...scope, day: "2001-08-02" });
     expect(rows.filter((row) => row.groupKind === "task")).toHaveLength(260);
+    expect(rows.filter((row) => row.groupKind === "task").map((row) => row.groupKey).sort())
+      .toEqual(Array.from({ length: 260 }, (_, index) => `task-${index}`).sort());
     const center = rows.find((row) => row.groupKind === "cost_center");
     expect(center?.runs).toBe(260);
     expect(center?.costMicros).toBe(26_000n);

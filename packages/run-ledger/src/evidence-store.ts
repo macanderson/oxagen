@@ -40,7 +40,13 @@ import {
   ARCHIVE_SEGMENT_CONTENT_TYPE,
   SHA256_DIGEST_PATTERN,
 } from "@oxagen/tacho";
-import { storage, StorageNotFoundError, type StorageAdapter } from "@oxagen/storage";
+import {
+  storage,
+  StorageNotFoundError,
+  readResponseBody,
+  ResponseBodyTooLargeError,
+  type StorageAdapter,
+} from "@oxagen/storage";
 import { MESSAGE_ASSEMBLY_CONTENT_TYPE } from "./content-blocks";
 import type { RunArchiveStore, RunBodyStore } from "./frame-body";
 
@@ -189,6 +195,18 @@ async function readAll(
   maxBytes = Number.POSITIVE_INFINITY,
   sizeBytes: number | null = null,
 ): Promise<Buffer> {
+  if (Number.isFinite(maxBytes)) {
+    try {
+      const bytes = await readResponseBody(new Response(body, {
+        headers: sizeBytes === null ? {} : { "content-length": String(sizeBytes) },
+      }), maxBytes);
+      return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    } catch (error) {
+      if (error instanceof ResponseBodyTooLargeError)
+        throw new EvidenceBodyTooLargeError(maxBytes);
+      throw error;
+    }
+  }
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
