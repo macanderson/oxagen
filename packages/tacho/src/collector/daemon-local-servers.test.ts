@@ -60,7 +60,8 @@ describe("the daemon's local-server loop", () => {
   });
 
   it("does not pull for a host with no gateway key", async () => {
-    const { pulls } = await start({});
+    // testHostFile carries a gateway key by default, so this host drops it.
+    const { pulls } = await start({ gateway_api_key: undefined, gateway_api_key_public_id: undefined });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(pulls).toEqual([]);
   });
