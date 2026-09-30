@@ -16,7 +16,7 @@ const STUDIO_GAPS = {
    * (start_studio_discovery, get_studio_discovery, list_studio_tools).
    */
   discovery: 4682,
-  /** Try it and Draft: try_studio_tool and draft_studio_description. */
+  /** Test and Draft: try_studio_tool and draft_studio_description. */
   capability: 4742,
   /** Findings on the draft: list_studio_findings, which runs lane M5's lint. */
   findings: 4742,

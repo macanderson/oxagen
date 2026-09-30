@@ -14,7 +14,7 @@
 // Each card prints what the record carries and derives only what the record
 // fully determines. The token cost is the assembler's own count of the line
 // the signed bundle carries for the record, so it is computed, not guessed.
-// "new · bundle vN" marks a record whose commit is the head the last merge
+// "New in vN" marks a record whose commit is the head the last merge
 // published at. Whether a record carries an enforcement grant, and its effect
 // line (rendered, cited, violated), have no store yet: each prints "not
 // recorded" and names the issue that tracks it.

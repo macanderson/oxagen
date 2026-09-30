@@ -64,12 +64,16 @@ resource "aws_ssm_parameter" "postgres_password" {
   tags  = local.tags
 }
 resource "aws_s3_object" "node_script" {
-  for_each = toset(["deploy-service.sh"])
-  bucket   = aws_s3_bucket.deploy.id
-  key      = "_bin/${each.key}"
-  source   = "${path.module}/../../tools/node/${each.key}"
-  etag     = filemd5("${path.module}/../../tools/node/${each.key}")
+  for_each = {
+    "deploy-service.sh"  = "deploy-launcher.sh"
+    "deploy-dispatch.py" = "deploy-dispatch.py"
+  }
+  bucket = aws_s3_bucket.deploy.id
+  key    = "_bin/${each.key}"
+  source = "${path.module}/../../tools/node/${each.value}"
+  etag   = filemd5("${path.module}/../../tools/node/${each.value}")
 }
+
 resource "aws_s3_object" "node_env" {
   bucket  = aws_s3_bucket.deploy.id
   key     = "_bin/node.env"
@@ -115,12 +119,21 @@ resource "aws_ssm_document" "deploy" {
     schemaVersion = "2.2"
     description   = "Deploy one service to the isolated environment."
     parameters = {
-      service = { type = "String", allowedPattern = "^(app|api|mcp|docs|stella-serve)$" }
+      service         = { type = "String", allowedPattern = "^(app|api|mcp|docs|stella-serve)$" }
+      toolchainDigest = { type = "String", default = "current", allowedPattern = "^(current|[0-9a-f]{64})$" }
+      operation       = { type = "String", default = "deploy", allowedValues = ["verify", "deploy"] }
     }
     mainSteps = [{
       action = "aws:runShellScript"
       name   = "deployService"
-      inputs = { runCommand = ["aws s3 sync s3://${local.bucket}/_bin/ /opt/oxagen/bin/ --region ${var.region} --only-show-errors", "chmod +x /opt/oxagen/bin/deploy-service.sh", "/opt/oxagen/bin/deploy-service.sh '{{ service }}'"], timeoutSeconds = "900" }
+      inputs = {
+        runCommand = [join("\n", [
+          "python3 - '{{ operation }}' --service '{{ service }}' --digest '{{ toolchainDigest }}' --bucket '${local.bucket}' --region '${var.region}' <<'PY_NODE_TOOLS'",
+          file("${path.module}/../../tools/node/deploy-dispatch.py"),
+          "PY_NODE_TOOLS"
+        ])]
+        timeoutSeconds = "900"
+      }
     }]
   })
 }
@@ -211,8 +224,6 @@ resource "aws_ssm_association" "email_capture" {
           -e MP_MAX_MESSAGES=500 \
           axllent/mailpit@sha256:e427cc84ef7b68b656a80093f677767d5eafdde67ec871238a670f0bd4d89ad2
       fi
-      aws s3 sync s3://${local.bucket}/_bin/ /opt/oxagen/bin/ --region ${var.region} --only-show-errors
-      chmod +x /opt/oxagen/bin/deploy-service.sh
       docker inspect -f '{{.State.Running}}' oxagen-email-capture
     SCRIPT
   }

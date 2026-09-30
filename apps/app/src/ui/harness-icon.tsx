@@ -23,7 +23,7 @@ export function HarnessIcon({
   className = "",
 }: HarnessIconProps) {
   const key = harness ?? "";
-  const mark = MARKS[key];
+  const mark = Object.hasOwn(MARKS, key) ? MARKS[key] : undefined;
   const style = { width: size, height: size };
   if (!mark) {
     return (

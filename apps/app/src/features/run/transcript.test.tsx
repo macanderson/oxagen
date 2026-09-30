@@ -365,7 +365,7 @@ describe("the rows", () => {
     expect(you).not.toHaveTextContent("first prompt");
     fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
-      "Marcus Bell · operatortask a-intel/platform#482first prompt",
+      "Marcus Bell (operator)task a-intel/platform#482first prompt",
     );
   });
 
@@ -705,7 +705,7 @@ describe("the rows", () => {
     fireEvent.click(screen.getByRole("button", { name: "collapse thinking" }));
     expect(thought()?.tagName).toBe("SPAN");
     // Its own fold opens the one thought.
-    fireEvent.click(screen.getByRole("button", { name: "thinking · 2 lines" }));
+    fireEvent.click(screen.getByRole("button", { name: "2 lines of thinking" }));
     expect(thought()?.tagName).toBe("DIV");
   });
 

@@ -37,7 +37,7 @@ import {
   type PriceBook,
   type PriceTokenClass,
 } from "./price-book";
-import { gradeSteps } from "./step-grade";
+import { RepeatedCalls, repeatKindOf } from "./step-grade";
 
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
@@ -79,6 +79,8 @@ export interface ModelCallFrame {
  */
 export interface ToolCallFrame {
   name: string | null;
+  /** A store-computed repeat flag avoids retaining every prior digest. */
+  repeated?: boolean;
   /** Null for a call that was cancelled, or whose frame recorded no status. */
   status: "ok" | "error" | "rejected" | null;
   inputDigest: string | null;
@@ -432,7 +434,19 @@ interface RollupInput {
 
 /** Rebuild one run's row from its frames. */
 export function rollupRun(input: RollupInput): RunTotalsRecord {
-  const { meta, book } = input;
+  const accumulator = createRunRollup(input);
+  for (const frame of input.modelCalls) accumulator.addModel(frame, input.book);
+  for (const frame of input.toolCalls) accumulator.addTool(frame);
+  return accumulator.finish();
+}
+
+/** Maximum distinct output groups retained by one rollup. */
+export const MAX_ROLLUP_GROUPS = 4_096;
+const MAX_ROLLUP_PRICE_ENTRIES = 65_536;
+
+/** Aggregate streamed frames while retaining only model and tool totals. */
+export function createRunRollup(input: Pick<RollupInput, "meta" | "carried">) {
+  const { meta } = input;
   const tokens: TokenCounts = { ...ZERO_TOKENS };
   const priceEntryIds = new Set<string>();
   const byModel = new Map<
@@ -449,15 +463,37 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       hasUnpriced: boolean;
     }
   >();
-  const priced: { tokens: TokenCounts; scaled: bigint }[] = [];
+  let cacheWeighted = 0;
+  let cacheWeights = 0n;
+  let cacheReads = 0;
+  let cacheInputs = 0;
+  let modelCalls = 0;
+  let toolCalls = 0;
+  let failed = 0;
+  let repeated = 0;
+  const seen = new RepeatedCalls();
   let scaledTotal: bigint | null = null;
   let basis: CostBasis | null = null;
 
-  for (const frame of input.modelCalls) {
+  const addModel = (frame: ModelCallFrame, book: PriceBook) => {
+    modelCalls += 1;
     const p = priceFrame(book, meta.orgId, frame);
-    for (const id of p.priceEntryIds) priceEntryIds.add(id);
+    for (const id of p.priceEntryIds) {
+      if (!priceEntryIds.has(id) && priceEntryIds.size >= MAX_ROLLUP_PRICE_ENTRIES)
+        throw new RangeError("Run rollup exceeds the price entry limit.");
+      priceEntryIds.add(id);
+    }
+    if (!byModel.has(frame.model) && byModel.size >= MAX_ROLLUP_GROUPS)
+      throw new RangeError("Run rollup exceeds the distinct model limit.");
     addTokens(tokens, frame.tokens);
-    priced.push({ tokens: frame.tokens, scaled: p.scaled ?? 0n });
+    const denominator = frame.tokens.input_uncached + frame.tokens.cache_read;
+    if (denominator > 0) {
+      cacheWeighted +=
+        (frame.tokens.cache_read / denominator) * Number(p.scaled ?? 0n);
+      cacheWeights += p.scaled ?? 0n;
+      cacheReads += frame.tokens.cache_read;
+      cacheInputs += denominator;
+    }
     const group = byModel.get(frame.model) ?? {
       provider: frame.provider,
       calls: 0,
@@ -485,21 +521,35 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
     // scan never revisits.
     if (p.scaled === null || p.basis === null) {
       group.hasUnpriced = true;
-      continue;
+      return;
     }
     scaledTotal = (scaledTotal ?? 0n) + p.scaled;
     basis = foldBasis(basis, p.basis);
     group.scaled = (group.scaled ?? 0n) + p.scaled;
     for (const c of TOKEN_CLASSES) group.scaledByClass[c] += p.scaledByClass[c];
     group.basis = foldBasis(group.basis, p.basis);
-  }
+  };
 
   const byTool = new Map<
     string,
     { calls: number; resultTokens: number | null }
   >();
-  for (const call of input.toolCalls) {
-    if (call.name === null) continue;
+  const addTool = (call: ToolCallFrame) => {
+    toolCalls += 1;
+    const repeat = call.repeated ?? (
+      call.name !== null &&
+      call.inputDigest !== null &&
+      seen.repeats("", call.name, call.inputDigest, call.outputDigest)
+    );
+    if (call.status === "error" || call.status === "rejected") failed += 1;
+    else if (
+      repeat &&
+      call.name !== null &&
+      repeatKindOf({ tool: call.name, isMutating: call.isMutating }) !== null
+    ) repeated += 1;
+    if (call.name === null) return;
+    if (!byTool.has(call.name) && byTool.size >= MAX_ROLLUP_GROUPS)
+      throw new RangeError("Run rollup exceeds the distinct tool limit.");
     const tool = byTool.get(call.name) ?? { calls: 0, resultTokens: null };
     tool.calls += 1;
     // A call whose span recorded nothing adds nothing, and a tool none of
@@ -507,75 +557,83 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
     if (call.resultTokens !== null)
       tool.resultTokens = (tool.resultTokens ?? 0) + call.resultTokens;
     byTool.set(call.name, tool);
-  }
-
-  const modelCalls = input.modelCalls.length;
-  const toolCalls = input.toolCalls.length;
-  const steps = modelCalls + toolCalls;
-  const grade = gradeSteps({
-    modelCalls,
-    toolCalls: input.toolCalls,
-    retries: meta.retries,
-  });
-  const costBasis = scaledTotal === null ? null : basis;
-  const models: ModelBreakdown[] = [...byModel.entries()]
-    .map(([model, g]) => ({
-      model,
-      provider: g.provider,
-      calls: g.calls,
-      tokens: g.tokens,
-      costMicros: g.scaled === null ? null : divideHalfEven(g.scaled, MILLION),
-      costByClass: Object.fromEntries(
-        TOKEN_CLASSES.map((c) => [
-          c,
-          divideHalfEven(g.scaledByClass[c], MILLION),
-        ]),
-      ) as Record<TokenClass, bigint>,
-      cacheSavingMicros:
-        g.cacheSaving === null ? null : divideHalfEven(g.cacheSaving, MILLION),
-      basis: g.scaled === null ? null : g.basis,
-      hasUnpriced: g.hasUnpriced,
-    }))
-    .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
-  // Each tool's result tokens at the run's own input price (ADR-199): the
-  // share of the run's input the tool's results were, never money on top of
-  // it. The price reads the rounded per-model input cost, as the findings
-  // job's does, so the two price one token alike.
-  const price = runInputPrice({ costBasis, breakdown: { models } });
-  const tools: ToolBreakdown[] = [...byTool.entries()]
-    .map(([name, tool]) => ({
-      name,
-      calls: tool.calls,
-      resultTokens: tool.resultTokens,
-      costMicros:
-        tool.resultTokens === null || price === null
-          ? null
-          : priceInputTokens(price, tool.resultTokens),
-    }))
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  return {
-    ...meta,
-    steps,
-    modelCalls,
-    toolCalls,
-    tokens,
-    costMicros:
-      scaledTotal === null ? null : divideHalfEven(scaledTotal, MILLION),
-    currency: USD,
-    costBasis,
-    priceEntryIds: [...priceEntryIds].sort(),
-    cacheHitRate: cacheHitRate(priced),
-    breakdown: {
-      models,
-      tools,
-      steps: grade === null ? null : grade.causes,
-    },
-    verdict: input.carried?.verdict ?? null,
-    accepted: input.carried?.accepted ?? null,
-    productiveRatio: grade === null ? null : grade.advanced / steps,
-    advancedSteps: grade === null ? null : grade.advanced,
-    unproductiveSteps: grade === null ? null : grade.unproductive,
   };
+
+  const finish = (): RunTotalsRecord => {
+    const steps = modelCalls + toolCalls;
+    const retried = Math.min(
+      Math.max(0, Math.trunc(meta.retries ?? 0)),
+      modelCalls,
+    );
+    const unproductive = failed + repeated + retried;
+    const grade = steps === 0 ? null : {
+      advanced: steps - unproductive,
+      unproductive,
+      causes: { failed, repeated, retried },
+    };
+    const costBasis = scaledTotal === null ? null : basis;
+    const models: ModelBreakdown[] = [...byModel.entries()]
+      .map(([model, g]) => ({
+        model,
+        provider: g.provider,
+        calls: g.calls,
+        tokens: g.tokens,
+        costMicros: g.scaled === null ? null : divideHalfEven(g.scaled, MILLION),
+        costByClass: Object.fromEntries(
+          TOKEN_CLASSES.map((c) => [
+            c,
+            divideHalfEven(g.scaledByClass[c], MILLION),
+          ]),
+        ) as Record<TokenClass, bigint>,
+        cacheSavingMicros:
+          g.cacheSaving === null ? null : divideHalfEven(g.cacheSaving, MILLION),
+        basis: g.scaled === null ? null : g.basis,
+        hasUnpriced: g.hasUnpriced,
+      }))
+      .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+    // Each tool's result tokens at the run's own input price (ADR-199): the
+    // share of the run's input the tool's results were, never money on top of
+    // it. The price reads the rounded per-model input cost, as the findings
+    // job's does, so the two price one token alike.
+    const price = runInputPrice({ costBasis, breakdown: { models } });
+    const tools: ToolBreakdown[] = [...byTool.entries()]
+      .map(([name, tool]) => ({
+        name,
+        calls: tool.calls,
+        resultTokens: tool.resultTokens,
+        costMicros:
+          tool.resultTokens === null || price === null
+            ? null
+            : priceInputTokens(price, tool.resultTokens),
+      }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    return {
+      ...meta,
+      steps,
+      modelCalls,
+      toolCalls,
+      tokens,
+      costMicros:
+        scaledTotal === null ? null : divideHalfEven(scaledTotal, MILLION),
+      currency: USD,
+      costBasis,
+      priceEntryIds: [...priceEntryIds].sort(),
+      cacheHitRate: cacheInputs === 0 ? null : cacheWeights > 0n
+        ? cacheWeighted / Number(cacheWeights)
+        : cacheReads / cacheInputs,
+      breakdown: {
+        models,
+        tools,
+        steps: grade === null ? null : grade.causes,
+      },
+      verdict: input.carried?.verdict ?? null,
+      accepted: input.carried?.accepted ?? null,
+      productiveRatio: grade === null ? null : grade.advanced / steps,
+      advancedSteps: grade === null ? null : grade.advanced,
+      unproductiveSteps: grade === null ? null : grade.unproductive,
+    };
+  };
+  return { addModel, addTool, finish };
 }
 
 // ── Daily rollup ──────────────────────────────────────────────────────────────
@@ -687,6 +745,13 @@ function addValue(acc: Accumulator, run: RunTotalsRecord, cost: bigint | null) {
 export function dailyTotalsFromRuns(
   runs: readonly RunTotalsRecord[],
 ): DailyTotalsRecord[] {
+  const accumulator = createDailyRollup();
+  for (const run of runs) accumulator.addRun(run);
+  return accumulator.finish();
+}
+
+/** Aggregate daily totals without retaining the day's run rows. */
+export function createDailyRollup() {
   const groups = new Map<string, Accumulator & DailyKey>();
   type DailyKey = {
     orgId: string;
@@ -699,13 +764,15 @@ export function dailyTotalsFromRuns(
     const id = `${key.workspaceId}|${key.day}|${key.groupKind}|${key.groupKey}`;
     let acc = groups.get(id);
     if (!acc) {
+      if (groups.size >= 65_536)
+        throw new RangeError("Daily rollup exceeds the distinct group limit.");
       acc = { ...accumulator(provider), ...key };
       groups.set(id, acc);
     }
     return acc;
   };
 
-  for (const run of runs) {
+  const addRun = (run: RunTotalsRecord) => {
     const day = utcDay(run.startedAt);
     const base = { orgId: run.orgId, workspaceId: run.workspaceId, day };
     const levels: [SpendGroupKind, string | null][] = [
@@ -744,9 +811,9 @@ export function dailyTotalsFromRuns(
       // here, it would count that input a second time beside the model rows.
       addValue(acc, run, null);
     }
-  }
+  };
 
-  return [...groups.values()].map((acc) => ({
+  const finish = (): DailyTotalsRecord[] => [...groups.values()].map((acc) => ({
     orgId: acc.orgId,
     workspaceId: acc.workspaceId,
     day: acc.day,
@@ -767,4 +834,5 @@ export function dailyTotalsFromRuns(
     gradedSteps: acc.graded ? acc.gradedSteps : null,
     tokens: acc.tokens,
   }));
+  return { addRun, finish };
 }

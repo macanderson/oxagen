@@ -872,7 +872,7 @@ export function studioReview(over: Partial<StudioReview> = {}): StudioReview {
 }
 
 /**
- * A Try it result whose request and raw response carry credential headers,
+ * A Test tab result whose request and raw response carry credential headers,
  * so the page's save has something to strip.
  */
 export function tryWithCredentials(): TryResult {
@@ -900,7 +900,7 @@ export function tryWithCredentials(): TryResult {
   };
 }
 
-/** A Try it result with no credential header anywhere. */
+/** A Test tab result with no credential header anywhere. */
 export function tryClean(): TryResult {
   return {
     ok: true,

@@ -56,4 +56,34 @@ describe("search_mcp_registry contract", () => {
       }),
     ).toThrow();
   });
+
+  it("defaults packages to none and refuses a package transport it does not know", () => {
+    const pkg = {
+      registryType: "npm",
+      identifier: "@acme/files-mcp",
+      version: null,
+      transport: "stdio",
+      runtimeHint: "npx",
+      environmentVariables: [
+        { name: "FILES_ROOT", isRequired: true, isSecret: false },
+      ],
+    };
+    const page = { nextCursor: null, registryReachable: true };
+    expect(
+      agentMcpRegistrySearch.output.parse({ ...page, servers: [server] })
+        .servers[0]?.packages,
+    ).toEqual([]);
+    expect(
+      agentMcpRegistrySearch.output.parse({
+        ...page,
+        servers: [{ ...server, packages: [pkg] }],
+      }).servers[0]?.packages,
+    ).toEqual([pkg]);
+    expect(() =>
+      agentMcpRegistrySearch.output.parse({
+        ...page,
+        servers: [{ ...server, packages: [{ ...pkg, transport: "ws" }] }],
+      }),
+    ).toThrow();
+  });
 });

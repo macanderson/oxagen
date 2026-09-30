@@ -118,6 +118,82 @@ export function assertSurfaceMark(relPath) {
   }
 }
 
+/* ── launch screens ──────────────────────────────────────────────────────── */
+
+/**
+ * One `apple-touch-startup-image` per screen and scheme. The kit's
+ * `splash/splash-screens.json` names each screen's file and the media query
+ * Safari matches it on; Safari shows a launch screen only when that query
+ * matches the device exactly, and the scheme picks the ink or the paper one.
+ *
+ * @param {{ file: string, media: string }[]} screens
+ * @param {string} brand
+ * @param {string} base URL directory the images are served from, ending in /
+ * @returns {{ url: string, media: string }[]}
+ */
+export function startupImages(screens, brand, base) {
+  return ["dark", "light"].flatMap((scheme) =>
+    screens.map((s) => ({
+      url: base + s.file.replace("{brand}", brand).replace("{scheme}", scheme),
+      media: `${s.media} and (prefers-color-scheme: ${scheme})`,
+    })),
+  );
+}
+
+/** The files `startupImages` points at, as kit paths. */
+function splashFiles(screens, brand) {
+  return ["dark", "light"].flatMap((scheme) =>
+    screens.map((s) =>
+      s.file.replace("{brand}", brand).replace("{scheme}", scheme),
+    ),
+  );
+}
+
+const PWA_BEGIN = "<!-- pwa: written by tools/scripts/sync-brand-assets.mjs -->";
+const PWA_END = "<!-- /pwa -->";
+
+/**
+ * The block of <head> tags a static page needs to launch like an app: the
+ * iOS home-screen metas, one launch screen per device, and the install prompt.
+ *
+ * @param {{ url: string, media: string }[]} images
+ * @param {{ title: string, script: string, icon: string }} o
+ */
+export function staticPwaHead(images, { title, script, icon }) {
+  const attr = (v) => v.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+  return [
+    PWA_BEGIN,
+    '<meta name="mobile-web-app-capable" content="yes">',
+    '<meta name="apple-mobile-web-app-capable" content="yes">',
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+    `<meta name="apple-mobile-web-app-title" content="${attr(title)}">`,
+    ...images.map(
+      (i) =>
+        `<link rel="apple-touch-startup-image" media="${attr(i.media)}" href="${attr(i.url)}">`,
+    ),
+    `<script src="${attr(script)}" defer data-icon="${attr(icon)}"></script>`,
+    PWA_END,
+  ].join("\n");
+}
+
+/**
+ * `html` with its pwa block set to `block`. A page that has none yet gets it
+ * after its manifest link, which every page of the static site carries. Throws
+ * when there is neither, so a page cannot silently go without.
+ */
+export function withPwaHead(html, block) {
+  const start = html.indexOf(PWA_BEGIN);
+  if (start >= 0) {
+    const end = html.indexOf(PWA_END, start);
+    if (end < 0) throw new Error("pwa block has no end marker");
+    return html.slice(0, start) + block + html.slice(end + PWA_END.length);
+  }
+  const manifest = html.match(/<link rel="manifest"[^>]*>\n/);
+  if (!manifest) throw new Error("page has no manifest link to place the pwa block after");
+  const at = manifest.index + manifest[0].length;
+  return `${html.slice(0, at)}${block}\n${html.slice(at)}`;
+}
+
 /* ── the sizes each surface asks for ─────────────────────────────────────── */
 
 const FAVICON_PNG = [16, 32, 48, 192, 512];
@@ -310,6 +386,9 @@ function emitIco(relPath, parts) {
 }
 
 const svg = (name) => join(BRAND, "logo/svg", name);
+const kitScreens = () =>
+  JSON.parse(readFileSync(join(BRAND, "splash/splash-screens.json"), "utf8"))
+    .screens;
 const copy = (from, to) => emit(to, readFileSync(join(BRAND, from)));
 
 /* ── the plan ────────────────────────────────────────────────────────────── */
@@ -318,7 +397,7 @@ const copy = (from, to) => emit(to, readFileSync(join(BRAND, from)));
  * Everything a Next.js surface (apps/app, apps/docs) needs under public/.
  * `brand` is oxagen or stella — which mark this surface wears.
  */
-function nextSurface(publicDir, brand) {
+function nextSurface(publicDir, brand, { pwa = true } = {}) {
   const tileDark = svg(`${brand}-icon-tile-dark.svg`);
   const tileLight = svg(`${brand}-icon-tile-light.svg`);
 
@@ -396,6 +475,15 @@ function nextSurface(publicDir, brand) {
     emitRaster(`${publicDir}/pwa/maskable-light-${size}.png`, maskLight, size);
   }
 
+  // Launch screens for the installed app, and the install prompt. The root
+  // layout lists the screens from @oxagen/ui/lib/splash-screens.
+  if (pwa) {
+    for (const file of splashFiles(kitScreens(), brand)) {
+      copy(`splash/${file}`, `${publicDir}/pwa/splash/${file}`);
+    }
+    copy("pwa/install-prompt.js", `${publicDir}/pwa/install-prompt.js`);
+  }
+
   // Social cards and the house spinner.
   copy(
     `social/${brand}-og-1200x630-dark.png`,
@@ -422,6 +510,45 @@ function nextSurface(publicDir, brand) {
  */
 function nextAppIcon(appDir, brand) {
   emit(`${appDir}/src/app/icon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
+}
+
+/** The hand-authored pages of apps/web. The blog's pages import PWA_HEAD. */
+const STATIC_PAGES = [
+  "index.html",
+  "story/index.html",
+  "read/index.html",
+  "products/oxagen/index.html",
+];
+
+/**
+ * The launch screens, as data, for the Next.js root layouts: their
+ * `appleWebApp.startupImage`. Every Next surface serves them from /pwa/splash/.
+ */
+function splashModule(brand) {
+  emit(
+    "packages/ui/src/lib/splash-screens.ts",
+    `/**
+ * GENERATED by tools/scripts/sync-brand-assets.mjs from the house kit's
+ * splash/splash-screens.json. Do not edit; run the sync.
+ *
+ * One launch screen per iPhone and iPad screen size and scheme: the kit's
+ * \`word\` phone wallpaper. Safari shows one only when its media query
+ * matches the device exactly. Each Next surface serves the images from
+ * /pwa/splash/ and passes this list as \`appleWebApp.startupImage\`.
+ */
+
+export interface StartupImage {
+  readonly url: string;
+  readonly media: string;
+}
+
+export const APPLE_STARTUP_IMAGES: readonly StartupImage[] = ${JSON.stringify(
+      startupImages(kitScreens(), brand, "/pwa/splash/"),
+      null,
+      2,
+    )};
+`,
+  );
 }
 
 /** apps/web is a flat static site: assets sit beside index.html. */
@@ -486,6 +613,31 @@ function staticSurface(root, brand) {
       null,
       2,
     )}\n`,
+  );
+  // Launch screens, the install prompt, and the <head> block that lists
+  // them: written into each hand-authored page between its pwa markers, and
+  // exported for the blog's generated pages.
+  for (const file of splashFiles(kitScreens(), brand)) {
+    copy(`splash/${file}`, `${root}/splash/${file}`);
+  }
+  copy("pwa/install-prompt.js", `${root}/assets/install-prompt.js`);
+  const block = staticPwaHead(startupImages(kitScreens(), brand, "/splash/"), {
+    title: "Oxagen",
+    script: "/assets/install-prompt.js",
+    icon: "/icon-192.png",
+  });
+  for (const page of STATIC_PAGES) {
+    const rel = `${root}/${page}`;
+    emit(rel, withPwaHead(readFileSync(join(REPO, rel), "utf8"), block));
+  }
+  emit(
+    `${root}/scripts/lib/pwa-head.generated.mjs`,
+    `// GENERATED by tools/scripts/sync-brand-assets.mjs from the house kit's
+// splash/ and pwa/. Do not edit; run the sync.
+
+/** The launch-screen and install-prompt tags every page's <head> carries. */
+export const PWA_HEAD = ${JSON.stringify(block)};
+`,
   );
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
   for (const b of [brand]) {
@@ -824,7 +976,9 @@ if (isEntrypoint(import.meta.url)) {
   // Deprecated app still boots locally and in archive deploys; keep its public
   // marks on the same kit tip as the live surfaces so a stray open does not
   // show the retired Ox lettermark or cream paper.
-  nextSurface("apps/app_deprecated/public", "oxagen");
+  // It is not offered for install, so it takes no launch screens or prompt.
+  nextSurface("apps/app_deprecated/public", "oxagen", { pwa: false });
+  splashModule("oxagen");
   nextAppIcon("apps/docs", "oxagen");
   nextAppIcon("apps/app_deprecated", "oxagen");
   staticSurface("apps/web", "oxagen");

@@ -95,6 +95,7 @@ export interface FakePriceStore {
       | "select_initialization"
       | "insert_initialization";
     sql?: string;
+    limit?: number;
   }[];
   /** Runs when a lock is taken, standing in for the wait on another holder. */
   onLock?: () => void;
@@ -417,6 +418,7 @@ export function fakePriceExecutor(store: FakePriceStore) {
         }
         assertTable(table);
         let rows = store.rows.slice();
+        let rowLimit: number | undefined;
         const chain = {
           where: (cond: PriceCond) => {
             rows = rows.filter((r) => matches(r, cond));
@@ -441,11 +443,15 @@ export function fakePriceExecutor(store: FakePriceStore) {
             });
             return chain;
           },
+          limit: (count: number) => {
+            rowLimit = count;
+            return chain;
+          },
           // A select is thenable at every stage in drizzle — an unlimited read
           // runs the query.
           then: <R>(onFulfilled: (v: PriceRow[]) => R) => {
-            store.log.push({ op: "select" });
-            return Promise.resolve(rows.map((r) => ({ ...r }))).then(
+            store.log.push({ op: "select", ...(rowLimit === undefined ? {} : { limit: rowLimit }) });
+            return Promise.resolve(rows.slice(0, rowLimit).map((r) => ({ ...r }))).then(
               onFulfilled,
             );
           },

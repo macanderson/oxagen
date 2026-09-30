@@ -130,7 +130,7 @@ describe("ContextTab", () => {
     ).toBeTruthy();
     expect(manifest.getByText("2 more cut")).toBeTruthy();
     expect(
-      manifest.getByText(/Recorded once at frame 1 on bundle v41\./),
+      manifest.getByText(/Recorded at frame 1 on bundle v41\./),
     ).toBeTruthy();
     // Steering has no Preview tab: the button says so rather than opening nothing.
     const preview = manifest.getByRole("button", { name: "Open in Preview" });
@@ -144,7 +144,7 @@ describe("ContextTab", () => {
   it("says an observe-tier run's manifest was assembled and not delivered", async () => {
     await renderContext({ run: runRow({ enforcementTier: "observe" }) });
     expect(screen.getByTestId("run-manifest-observe")).toHaveTextContent(
-      "Assembled, not delivered.",
+      "Observe tier",
     );
   });
 
@@ -324,7 +324,7 @@ describe("ContextTab", () => {
 
   it("walks the frames that fed the window, in the order they were recorded, each opening its frame", async () => {
     await renderContext();
-    const walk = region("Walk the window");
+    const walk = region("Window sources");
     expect(walk.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "steering.manifest seq 11,340 tok",
       "context.assembled seq 2fr 2",
@@ -456,7 +456,7 @@ describe("ContextTab", () => {
     // A manifest that names no bundle says only the frame it was recorded at.
     expect(
       region("Steering manifest").getByText(
-        /^Recorded once at frame 1\. A recorded frame never changes/,
+        /^Recorded at frame 1\. A record merged after this run started/,
       ),
     ).toBeTruthy();
   });

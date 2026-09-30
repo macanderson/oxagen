@@ -178,16 +178,17 @@ const PAGE = 500;
  *
  * A chain numbers its frames without holes, so a full window of `PAGE` seqs
  * holds `PAGE` rows. A short window means the chain ended or it has a
- * recorded break. One read past the window, unbounded, tells the two apart.
- * It returns nothing at the end of the chain, and the rows after the break
- * otherwise.
+ * recorded break. One read past the window tells the two apart.
+ * The fallback read is bounded by the recorded head, so frames appended
+ * during the read belong to the next enrichment job.
  */
 async function* tachoRowPages(
   sessionUuid: string,
+  snapshotHead: number,
 ): AsyncGenerator<TachoFrameRow[]> {
   let after = -1;
-  for (;;) {
-    const through = after + PAGE;
+  while (after < snapshotHead) {
+    const through = Math.min(after + PAGE, snapshotHead);
     const page = await selectTachoEvents({
       sessionUuid,
       afterSeq: after,
@@ -202,6 +203,7 @@ async function* tachoRowPages(
     const rest = await selectTachoEvents({
       sessionUuid,
       afterSeq: through,
+      throughSeq: snapshotHead,
       limit: PAGE,
     });
     if (rest.length > 0) yield rest;
@@ -474,7 +476,10 @@ export async function readSealedSegments(
  */
 async function* ownFramePages(record: RunRecord): AsyncGenerator<RunFrame[]> {
   if (record.source === "tacho") {
-    for await (const rows of tachoRowPages(record.sessionUuid))
+    for await (const rows of tachoRowPages(
+      record.sessionUuid,
+      record.seqCount - 1,
+    ))
       yield rows.map(tachoFrame);
     return;
   }

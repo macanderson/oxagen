@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
-    "./usage-events": "./src/usage-events.ts"
+    "./usage-events": "./src/usage-events.ts",
+    "./request-admission": "./src/request-admission.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

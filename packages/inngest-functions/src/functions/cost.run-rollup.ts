@@ -21,7 +21,7 @@ export const [costRunRollup] = createFunction(
   {
     id: "cost.run-rollup",
     retries: 5,
-    concurrency: { limit: 1, key: "event.data.runId" },
+    concurrency: [{ limit: 4 }, { limit: 1, key: "event.data.runId" }],
   },
   { event: "cost/run.sealed" },
   async ({ event, step }) => {

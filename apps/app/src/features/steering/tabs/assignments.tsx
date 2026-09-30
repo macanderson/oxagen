@@ -1,5 +1,5 @@
 // Assignments: which agent receives what (roadmap
-// pages/steering-assignments.md). The lead note, "What each agent receives"
+// pages/steering-assignments.md). The lead note, "Assignments by agent"
 // with one row per agent set up for steering, the Scope panel and the closing
 // note, or "No agent receives steering here" when no agent is enrolled.
 //
@@ -146,6 +146,7 @@ function Receives({
           >
             <AgentCard
               agentKey={agent.agentKey}
+              harness={agent.harness}
               notRecorded={agent.name}
               sub={harness(agent.harness)}
             />

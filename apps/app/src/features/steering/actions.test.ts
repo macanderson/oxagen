@@ -288,6 +288,7 @@ describe("setGovernanceMode", () => {
     effectiveMode: "team",
     fullName: "acme/platform",
     productionBranch: "main",
+    path: ".oxagen/rules/governance.toml",
     commitSha: null,
     pullRequest: {
       number: 42,

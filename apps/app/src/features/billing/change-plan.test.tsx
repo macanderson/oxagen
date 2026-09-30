@@ -96,11 +96,11 @@ describe("an allowed viewer", () => {
           option instanceof HTMLOptionElement && option.disabled,
         ]),
     ).toEqual([
-      ["Build, $199.00 a month", false],
-      ["Build, $1,990.00 a year", false],
-      ["Scale, $999.00 a month", false],
-      ["Scale, $9,990.00 a year", false],
-      ["Enterprise, annual, negotiated per organization", true],
+      ["Build ($199.00 a month)", false],
+      ["Build ($1,990.00 a year)", false],
+      ["Scale ($999.00 a month)", false],
+      ["Scale ($9,990.00 a year)", false],
+      ["Enterprise (negotiated annually per organization)", true],
     ]);
     expect(select).toHaveValue("build-v2:month");
   });

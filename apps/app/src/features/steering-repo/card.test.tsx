@@ -115,7 +115,7 @@ describe("the steering repo card", () => {
     const failure = root.querySelector("[data-reason]");
     expect(failure).toHaveAttribute("data-reason", "denied");
     expect(failure).toHaveTextContent(
-      "You cannot see Steering repo in this workspace. Your roles do not include repository.read; an organization owner can grant it.",
+      "You cannot see Steering repo in this workspace. Your roles do not include repository.read. An organization owner can grant it.",
     );
     expect(screen.queryByTestId("steering-repo-link")).toBeNull();
     expect(screen.queryByTestId("steering-repo-version")).toBeNull();

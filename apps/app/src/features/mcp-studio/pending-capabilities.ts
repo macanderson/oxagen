@@ -10,7 +10,7 @@
 //     lane M10 part 2 (#4682). Discovery progress after Add server, and the
 //     tools discovery found. The shapes are the ones M10 set and the
 //     coordinator accepted, with dates as ISO strings.
-//   - try_studio_tool: Try it, metered as a governed action (#4742).
+//   - try_studio_tool: the Test tab, metered as a governed action (#4742).
 //   - draft_studio_description: Draft on the tool panel, billed as in-app
 //     agent spend (#4742).
 //   - list_studio_findings: the Changes tab's findings (#4742, PR #4743).
@@ -235,9 +235,9 @@ export const listStudioTools = stub<
   Answer<StudioToolsList>
 >("list_studio_tools", "discovery");
 
-// ---- Try it and Draft (#4742) ---------------------------------------------
+// ---- Test and Draft (#4742) -----------------------------------------------
 
-/** One Try it call: an imported tool, an environment and the arguments. */
+/** One Test tab call: an imported tool, an environment and the arguments. */
 type TryInput = {
   server: string;
   tool: string;

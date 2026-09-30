@@ -23,6 +23,7 @@ import {
 import type { ClaudeCodeContext } from "../claude-code/context";
 import {
   ControlError,
+  createControlClient,
   ControlUnreachable,
   type ControlClient,
 } from "../host/control-client";
@@ -678,9 +679,9 @@ describe("shipper", () => {
     return { s, controls, logs };
   }
 
-  const okResponse = (events: unknown[]) => ({
+  const okResponse = (events: readonly TachoEvent[]) => ({
     accepted: events.length,
-    event_ids: [],
+    event_ids: events.map((event) => event.event_id_idem),
     chain_breaks: [],
     control: {
       host_status: "active" as const,
@@ -688,6 +689,147 @@ describe("shipper", () => {
       bundle_etag: "e",
       commands: [],
     },
+  });
+
+  it.each([
+    "partial acknowledgment",
+    "count below batch",
+    "count above batch",
+    "missing ID",
+    "duplicate ID",
+    "unexpected ID",
+    "extra ID",
+  ])("keeps and retries identical bytes after %s", async (fault) => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the retained prompt")]);
+    const markShipped = vi.spyOn(wal, "markShipped");
+    const requests: string[] = [];
+    let clock = 0;
+    const client = createControlClient({
+      endpoints: {
+        ingest: "https://control.test/ingest",
+        bundle: "",
+        commands: "",
+      },
+      apiKey: "test-key",
+      hostEnrollmentId: TEST_ENROLLMENT,
+      fetch: async (_url, init) => {
+        requests.push(init.body ?? "");
+        const response = {
+          ...okResponse(events),
+          chain_breaks: [{
+            session_uuid: prompt.session_uuid,
+            at_seq: prompt.seq,
+            reason: "hash_mismatch",
+          }],
+          body_rejections: [{
+            event_id_idem: prompt.event_id_idem,
+            reason: "digest_mismatch",
+          }],
+        };
+        if (requests.length === 1) {
+          if (fault === "partial acknowledgment") {
+            response.accepted -= 1;
+            response.event_ids.pop();
+          } else if (fault === "count below batch") response.accepted -= 1;
+          else if (fault === "count above batch") response.accepted += 1;
+          else if (fault === "missing ID") response.event_ids.pop();
+          else if (fault === "duplicate ID")
+            response.event_ids[1] = response.event_ids[0] as string;
+          else if (fault === "unexpected ID")
+            response.event_ids[0] = `evt_${"f".repeat(64)}`;
+          else response.event_ids.push(`evt_${"f".repeat(64)}`);
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(response),
+        };
+      },
+    });
+    const onChainBreak = vi.fn();
+    const onBodyRejection = vi.fn();
+    const { s, controls, logs } = shipper(
+      wal,
+      client,
+      paths.quarantine,
+      () => clock,
+      undefined,
+      { onChainBreak, onBodyRejection },
+    );
+
+    expect(await s.drain()).toMatchObject({ shipped: 0, quarantined: 0 });
+    expect(markShipped).not.toHaveBeenCalled();
+    expect(wal.stats().unshipped).toBe(events.length);
+    expect(wal.bodiesFor(events)).toHaveLength(1);
+    expect(readdirSync(paths.quarantine)).toEqual([]);
+    expect(controls).toEqual([]);
+    expect(onChainBreak).not.toHaveBeenCalled();
+    expect(onBodyRejection).not.toHaveBeenCalled();
+    expect(s.lastSuccessAt).toBeUndefined();
+    expect(logs.join("\n")).toContain("acknowledgment does not match");
+    expect(s.ready()).toBe(false);
+    await s.drain();
+    expect(requests).toHaveLength(1);
+
+    clock = 1_000;
+    expect(await s.drain()).toMatchObject({
+      shipped: events.length,
+      quarantined: 0,
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toBe(requests[0]);
+    expect(JSON.parse(requests[0] as string).bodies).toHaveLength(1);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(controls).toHaveLength(1);
+    expect(onChainBreak).toHaveBeenCalledTimes(1);
+    expect(onBodyRejection).toHaveBeenCalledTimes(1);
+    expect(s.lastError).toBeUndefined();
+  });
+
+  it("accepts the complete ID set with chain and body rejection reports", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const head = events[0] as TachoEvent;
+    wal.append(events);
+    const chainBreaks = [{
+      session_uuid: head.session_uuid,
+      at_seq: head.seq,
+      reason: "hash_mismatch",
+    }];
+    const bodyRejections = [{
+      event_id_idem: head.event_id_idem,
+      reason: "digest_mismatch",
+    }];
+    const onChainBreak = vi.fn();
+    const onBodyRejection = vi.fn();
+    const { s, controls } = shipper(
+      wal,
+      {
+        ingest: async (batch) => ({
+          ...okResponse(batch),
+          event_ids: batch.map((event) => event.event_id_idem).reverse(),
+          chain_breaks: chainBreaks,
+          body_rejections: bodyRejections,
+        }),
+      },
+      paths.quarantine,
+      () => 0,
+      undefined,
+      { onChainBreak, onBodyRejection },
+    );
+    expect(await s.drain()).toMatchObject({
+      shipped: events.length,
+      quarantined: 0,
+    });
+    expect(wal.stats().unshipped).toBe(0);
+    expect(onChainBreak).toHaveBeenCalledWith(chainBreaks);
+    expect(onBodyRejection).toHaveBeenCalledWith(bodyRejections);
+    expect(controls).toHaveLength(1);
   });
 
   // The envelope the API's error handler writes for a HandlerError.

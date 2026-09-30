@@ -14,8 +14,12 @@ import {
 import type { RunScope } from "./run-record";
 
 export const ENRICHMENT_CHUNK_CHARS = 24_000;
-/** One step holds the whole text and each chunk costs a summary call, so a run's text stops here (#4202). */
+/** Bound the number of summary calls per job (#4202). */
 export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
+/** Maximum stored body size opened for an account, including its envelope. */
+export const ENRICHMENT_BODY_MAX_BYTES = 4 * 1024 * 1024;
+/** A fallback title needs only the start of the first prompt. */
+export const ENRICHMENT_PROMPT_MAX_CHARS = 4_096;
 
 /**
  * The most frame bodies one read of a run opens (#3784). The read opens
@@ -82,6 +86,10 @@ export function usdMicros(usd: number | undefined): number {
 export const ENRICHMENT_BUDGET_NOTE =
   " The account covers only the start of the run: its enrichment budget ran out before the rest was read.";
 
+/** The account's sentence when its input reached a read limit. */
+export const ENRICHMENT_LIMIT_NOTE =
+  " The account covers only the start of the run because its transcript reached a read limit.";
+
 /** One narrative call's answer, with the tokens it used and their price. */
 export interface NarrativeTurn {
   text: string;
@@ -135,7 +143,13 @@ async function* pagesOf(
 export async function collectRunText(
   scope: RunScope,
   frames: RunFrameSource,
-  getBody: (scope: RunScope, ref: string) => Promise<{ bytes: Uint8Array }>,
+  getBody: (
+    scope: RunScope,
+    ref: string,
+    options: { maxBytes: number },
+  ) => Promise<{ bytes: Uint8Array }>,
+  keepChunk?: (text: string) => Promise<void>,
+  frameSourceComplete = true,
 ) {
   const chunks: string[] = [];
   let buffer = "";
@@ -151,23 +165,27 @@ export async function collectRunText(
   // The run's own first prompt, kept for the fallback title. A subagent's
   // prompt is written by the parent agent, not by the operator, so it is skipped.
   let firstPrompt: string | null = null;
-  function chunk(text: string) {
+  async function emit(text: string) {
+    if (keepChunk) await keepChunk(text);
+    else chunks.push(text);
+  }
+  async function chunk(text: string) {
     while (text.length > 0) {
       const room = ENRICHMENT_CHUNK_CHARS - buffer.length;
       buffer += text.slice(0, room);
       text = text.slice(room);
       if (buffer.length === ENRICHMENT_CHUNK_CHARS) {
-        chunks.push(buffer);
+        await emit(buffer);
         buffer = "";
       }
     }
   }
-  function append(text: string) {
+  async function append(text: string) {
     const room = ENRICHMENT_TEXT_CEILING_CHARS - written;
     if (text.length > room) stopped = true;
     const kept = text.slice(0, Math.max(0, room));
     written += kept.length;
-    chunk(kept);
+    await chunk(kept);
   }
   const full = () => written >= ENRICHMENT_TEXT_CEILING_CHARS;
   const opensBody = (frame: RunFrame) =>
@@ -191,7 +209,7 @@ export async function collectRunText(
           frame.body.bodyRef,
         ]),
       );
-      append(`\nFrame ${frame.seq}: ${frame.summary}\n`);
+      await append(`\nFrame ${frame.seq}: ${frame.summary}\n`);
       const { bodyRef, bodyDigest } = frame.body;
       if (bodyRef === null || bodyDigest === null) {
         if (bodyDigest !== null) missing += 1;
@@ -203,35 +221,51 @@ export async function collectRunText(
         continue;
       }
       bodyReads += 1;
+      let text: string;
       try {
-        const { bytes } = await getBody(scope, bodyRef);
+        const { bytes } = await getBody(scope, bodyRef, {
+          maxBytes: ENRICHMENT_BODY_MAX_BYTES,
+        });
+        if (bytes.byteLength > ENRICHMENT_BODY_MAX_BYTES) {
+          stopped = true;
+          break pages;
+        }
         if (digestBytes(bytes) !== bodyDigest)
           throw new Error("body digest mismatch");
-        const text = decoder.decode(bytes);
-        if (firstPrompt === null && frame.type === "turn_start" && !frame.chain)
-          firstPrompt = text;
-        const firstSeq = firstBodyFrame.get(bodyDigest);
-        if (firstSeq === undefined) {
-          append(text);
-          firstBodyFrame.set(bodyDigest, frame.seq);
-        } else {
-          append(`[Same retained body as frame ${firstSeq}.]\n`);
+        text = decoder.decode(bytes);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.name === "EvidenceBodyTooLargeError"
+        ) {
+          stopped = true;
+          break pages;
         }
-        retained += 1;
-        fingerprint.update("retained");
-      } catch {
         missing += 1;
         unavailable += 1;
         fingerprint.update("unavailable");
-        append("[Body unavailable; do not infer its contents.]\n");
+        await append("[Body unavailable; do not infer its contents.]\n");
+        continue;
       }
+      if (firstPrompt === null && frame.type === "turn_start" && !frame.chain)
+        firstPrompt = text.slice(0, ENRICHMENT_PROMPT_MAX_CHARS);
+      const firstSeq = firstBodyFrame.get(bodyDigest);
+      if (firstSeq === undefined) {
+        await append(text);
+        firstBodyFrame.set(bodyDigest, frame.seq);
+      } else {
+        await append(`[Same retained body as frame ${firstSeq}.]\n`);
+      }
+      retained += 1;
+      fingerprint.update("retained");
     }
   }
+  stopped ||= !frameSourceComplete;
   if (stopped) {
     fingerprint.update("ceiling");
-    chunk(CEILING_NOTE);
+    await chunk(CEILING_NOTE);
   }
-  if (buffer.length) chunks.push(buffer);
+  if (buffer.length) await emit(buffer);
   return {
     chunks,
     retained,

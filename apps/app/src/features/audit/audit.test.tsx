@@ -406,7 +406,7 @@ describe("Events", () => {
       [
         "By a service principal",
         "not recorded",
-        "Terraform, CI, exports, the archiver",
+        "automation such as Terraform and CI",
       ],
       // No receipt store exists, so the agent tile carries no basis line
       // that would claim one.
@@ -457,10 +457,10 @@ describe("Events", () => {
         .getAllByRole("columnheader")
         .map((header) => header.textContent),
     ).toEqual([
-      "When",
+      "Time",
       "Event",
       "Actor",
-      "What",
+      "Capability",
       "Result",
       "Severity",
       "Reference",
@@ -491,11 +491,11 @@ describe("Events", () => {
 
     const panel = sectionOf("Control-plane events");
     expect(panel).toHaveTextContent(
-      "admin actions, IAM changes, repo bindings, plane changes, key rotations",
+      "admin actions and configuration changes",
     );
     expect(panel).toHaveTextContent("postgres for 7 years");
     expect(panel).toHaveTextContent(
-      "The record is written by the kernel, never by an agent. A client-attested call is labeled as such and can never be shown as decided by Oxagen.",
+      "The kernel writes this record. A client-attested call carries a client-attested label.",
     );
     expect(screen.getByTestId("audit-shown")).toHaveTextContent("1–1 of 1");
   });
@@ -779,7 +779,7 @@ describe("Events", () => {
     answer({ window: recordOf([denied]) });
     await renderAudit({ outcome: "deny", range: "7d" });
 
-    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
     const dialog = await screen.findByRole("dialog", { name: "Export events" });
     expect(dialog).toHaveTextContent(
       "CSV of the same rows the API and MCP return",
@@ -809,7 +809,7 @@ describe("Events", () => {
     });
     await renderAudit();
 
-    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
     const dialog = await screen.findByRole("dialog", { name: "Export events" });
     expect(within(dialog).getByTestId("audit-csv-body")).toHaveTextContent(
       /^2\+ events in the last 30 days, with/,
@@ -827,9 +827,9 @@ describe("Events", () => {
     const table = screen.getByRole("table", { name: "Control-plane events" });
     const row = nth(within(table).getAllByRole("row").slice(1), 0, "the row");
     const cells = within(row).getAllByRole("cell");
-    // Actor, What and Result each say not recorded; no outcome badge is drawn.
+    // Actor, Capability and Result each say not recorded; no outcome badge is drawn.
     expect(nth(cells, 2, "Actor")).toHaveTextContent(/^not recorded/);
-    expect(nth(cells, 3, "What")).toHaveTextContent(/^not recorded/);
+    expect(nth(cells, 3, "Capability")).toHaveTextContent(/^not recorded/);
     expect(nth(cells, 4, "Result")).toHaveTextContent("not recorded");
     expect(row.querySelector("[data-outcome]")).toBeNull();
   });
@@ -839,7 +839,7 @@ describe("Events", () => {
     await renderAudit({ from: "2026-09-01", to: "2026-09-10" });
 
     expect(tiles()[0]?.[0]).toBe("Events in chosen days");
-    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
     const dialog = await screen.findByRole("dialog", { name: "Export events" });
     expect(within(dialog).getByTestId("audit-csv-body")).toHaveTextContent(
       /^1 event in the chosen days, with/,
@@ -1012,10 +1012,10 @@ describe("tabs", () => {
       ["deny", true],
       ["agent key", true],
       ["external effect id", true],
-      ["clear", true],
+      ["Clear", true],
     ]);
     // A 44 px tap target on a phone, like every other button (rev1 audit.md, Mobile).
-    expect(screen.getByRole("button", { name: "clear" }).className).toContain(
+    expect(screen.getByRole("button", { name: "Clear" }).className).toContain(
       "max-md:min-h-11",
     );
   });
@@ -1085,7 +1085,7 @@ describe("tabs", () => {
     expect(facts).toEqual([
       ["Export id", EXPORT_ID],
       ["Range", "not recorded"],
-      ["Contents", "the organization's data, one ZIP"],
+      ["Contents", "the organization's data as one ZIP"],
       ["Size", "not recorded"],
       ["Created", "not recorded"],
       ["Completed", expect.stringContaining("2026")],
@@ -1263,7 +1263,7 @@ describe("tabs", () => {
   });
 
   it.each([
-    ["incidents", "Open an incident", "Open an incident", "Raise it"],
+    ["incidents", "Open an incident", "Open an incident", "Open incident"],
     ["keys", "Rotate KEK", "Rotate the key-encryption key", "Rotate"],
     ["retention", "Edit policy", "Retention policy", "Save policy"],
   ] as const)(
@@ -1381,7 +1381,7 @@ describe("states", () => {
     const empty = screen.getByTestId("audit-empty");
     expect(empty).toHaveTextContent("No audit events yet");
     expect(empty).toHaveTextContent(
-      "Control-plane audit events are written by the kernel on every governed action. An empty record means nothing has been done in this organization yet, not that recording is off.",
+      "The kernel writes a control-plane audit event on every governed action. An empty record means nobody has acted in this organization yet.",
     );
     expect(
       within(empty).getByRole("link", { name: "Open Organization" }),
@@ -1466,7 +1466,7 @@ describe("states", () => {
     expect(denied.querySelector("[data-state-icon] svg")).not.toBeNull();
     expect(denied).toHaveTextContent("You cannot see the audit record");
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include org.owner or org.admin. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include org.owner or org.admin. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),

@@ -41,6 +41,7 @@ export function Providers({
   connections,
   grants,
   cursor,
+  rows,
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
@@ -51,7 +52,10 @@ export function Providers({
   versions: Read<ToolVersionPage>;
   connections: Read<ConnectionList>;
   grants: Read<CredentialGrantPage>;
+  /** The grants log page the address names, by its cursor. */
   cursor: string | null;
+  /** The grants a page of the log holds, one of `TOOLS_ROWS` (#4693). */
+  rows: number;
 }) {
   const t = useTranslations("tools.providers");
   const locale = useLocale();
@@ -156,7 +160,13 @@ export function Providers({
     <div className="flex flex-col gap-4">
       {roster}
       <ConnectionsTable at={at} orgRole={orgRole} read={connections} />
-      <GrantsLog at={at} orgRole={orgRole} cursor={cursor} read={grants} />
+      <GrantsLog
+        at={at}
+        orgRole={orgRole}
+        cursor={cursor}
+        rows={rows}
+        read={grants}
+      />
     </div>
   );
 }

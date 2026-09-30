@@ -5,7 +5,8 @@
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
-import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
+import type { RequestHandler } from "express";
+import { apiKeyAuthMiddleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
@@ -20,6 +21,7 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { extractBearerToken } from "./context";
+import { localServersRoute } from "./local-servers";
 import { servedToolsMiddleware } from "./servers/serve";
 // The relay's upgrade mount (lane M12, ADR-225). xmcp gives no handle to its
 // HTTP server, so the mount subscribes at module load and adds its upgrade
@@ -117,12 +119,13 @@ setSecurityEventEmitter((kernelEvent) => {
  * SECURITY: identity is derived solely from this validated credential — never
  * from client-controlled identity headers (`x-oxagen-org-id` & friends).
  */
-// The served tools (lane M15) run after the auth gate. They add a run's
+// The local-server routes run after the auth gate. They answer an enrolled
+// machine's long-poll for local tool calls and its replies (#4773), and pass
+// every other path on. The served tools (lane M15) run next. They add a run's
 // published tools to tools/list and answer a tools/call that names one.
-// Every other request reaches the transport untouched. The gate is built in
-// place: xmcp types it with express's RequestHandler, which this app does not
-// install, so a named binding would hold an unresolved type.
-export default [
+// Every other request reaches the transport untouched. The explicit type keeps
+// exported declarations independent of pnpm's internal dependency paths.
+const middleware: RequestHandler[] = [
   apiKeyAuthMiddleware({
     headerName: "authorization",
     validateApiKey: async (authHeader) => {
@@ -130,5 +133,8 @@ export default [
       return extractBearerToken(authHeader) !== null;
     },
   }),
+  localServersRoute,
   servedToolsMiddleware,
-] satisfies Middleware[];
+];
+
+export default middleware;

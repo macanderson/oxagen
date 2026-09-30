@@ -159,7 +159,7 @@ describe("Icon", () => {
     }
     await user.click(within(dialog).getByTestId("avatar-icon-rocket"));
     expect(tiles(preview)[0]?.dataset.icon).toBe("rocket");
-    expect(dialog).toHaveTextContent("icon · rocket · solid tone");
+    expect(dialog).toHaveTextContent("icon rocket in solid tone");
   });
 });
 
@@ -188,7 +188,7 @@ describe("Initials", () => {
     );
     await user.click(within(dialog).getByTestId("avatar-font-mono"));
     expect(tiles(preview)[0]?.dataset.font).toBe("mono");
-    expect(dialog).toHaveTextContent("initials · mono · solid tone");
+    expect(dialog).toHaveTextContent("initials in mono with solid tone");
   });
 
   it("refuses to save an empty monogram (negative)", async () => {

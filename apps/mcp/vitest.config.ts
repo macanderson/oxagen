@@ -29,6 +29,7 @@ export default defineConfig({
       // guards its required startup calls by source inspection instead.
       include: [
         "src/context.ts",
+        "src/http-app.ts",
         // agent tools
         "src/tools/agent.approval.resolve.ts",
         "src/tools/agent.mcp.list.ts",
@@ -109,6 +110,12 @@ export default defineConfig({
         "src/relay/broker.ts",
         "src/relay/mount.ts",
         "src/relay/transport.ts",
+        // the local-server long-poll (#4773). index.ts is absent: it only
+        // wires Postgres, the key resolver and the env signer into these four.
+        "src/local-servers/auth.ts",
+        "src/local-servers/broker.ts",
+        "src/local-servers/route.ts",
+        "src/local-servers/transport.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {

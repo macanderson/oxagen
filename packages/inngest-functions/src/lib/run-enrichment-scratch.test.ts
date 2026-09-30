@@ -12,6 +12,8 @@ const store = vi.hoisted(() => ({
   deleted: [] as string[],
   /** Set to make every read fail the way a storage outage does. */
   outage: false,
+  oversized: null as string | null,
+  reads: [] as { name: string; maxBytes: number | undefined }[],
 }));
 
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
@@ -28,7 +30,17 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
       });
       store.written.push(input.name);
     },
-    getScratch: async (_scope: unknown, jobRunId: string, name: string) => {
+    getScratch: async (
+      _scope: unknown,
+      jobRunId: string,
+      name: string,
+      options?: { maxBytes: number },
+    ) => {
+      store.reads.push({ name, maxBytes: options?.maxBytes });
+      if (name === store.oversized)
+        throw Object.assign(new Error("Object exceeds its read limit"), {
+          name: "EvidenceBodyTooLargeError",
+        });
       if (store.outage) throw new Error("blob store answered 503");
       const object = store.objects.get(`${jobRunId}/${name}`);
       if (object) return object;
@@ -53,8 +65,11 @@ vi.mock("@oxagen/agent", () => ({ runGovernedTurn: vi.fn() }));
 import { NonRetriableError } from "@oxagen/functions";
 import { digestBytes } from "@oxagen/tacho";
 import {
+  createEnrichmentChunkWriter,
   discardEnrichmentChunks,
   ENRICHMENT_MAX_CHUNKS,
+  ENRICHMENT_MANIFEST_MAX_BYTES,
+  ENRICHMENT_SCRATCH_MAX_BYTES,
   enrichmentScratchCount,
   keepEnrichmentChunks,
   readEnrichmentChunk,
@@ -75,6 +90,8 @@ beforeEach(() => {
   store.written = [];
   store.deleted = [];
   store.outage = false;
+  store.oversized = null;
+  store.reads = [];
 });
 
 describe("the chunks one enrichment job keeps", () => {
@@ -230,5 +247,67 @@ describe("the chunks one enrichment job keeps", () => {
     expect(ENRICHMENT_MAX_CHUNKS).toBe(
       ENRICHMENT_TEXT_CEILING_CHARS / ENRICHMENT_CHUNK_CHARS + 1,
     );
+  });
+});
+
+
+describe("streamed scratch chunks", () => {
+  it("bounds an oversized manifest read and still cleans up every possible chunk", async () => {
+    store.oversized = "manifest";
+    await discardEnrichmentChunks(SCOPE, JOB);
+    expect(store.reads).toEqual([
+      { name: "manifest", maxBytes: ENRICHMENT_MANIFEST_MAX_BYTES },
+    ]);
+    expect(store.deleted).toHaveLength(ENRICHMENT_MAX_CHUNKS + 1);
+    expect(store.deleted.at(-1)).toBe("manifest");
+  });
+
+  it("fails an oversized scratch chunk without retrying the same object", async () => {
+    store.oversized = "chunk-0";
+    await expect(readEnrichmentChunk(SCOPE, JOB, 0, digestBytes("first")))
+      .rejects.toBeInstanceOf(NonRetriableError);
+    expect(store.reads).toEqual([
+      { name: "chunk-0", maxBytes: ENRICHMENT_SCRATCH_MAX_BYTES },
+    ]);
+  });
+
+  it("reserves cleanup names before the first chunk and finalizes exact metadata", async () => {
+    const writer = await createEnrichmentChunkWriter(SCOPE, JOB);
+    await writer.write("first");
+    expect(await enrichmentScratchCount(SCOPE, JOB)).toBe(ENRICHMENT_MAX_CHUNKS);
+    await writer.write("second");
+    const kept = await writer.finish();
+    expect(kept).toEqual({
+      scratch: 2,
+      digests: [digestBytes("first"), digestBytes("second")],
+      chars: [5, 6],
+    });
+    expect(await enrichmentScratchCount(SCOPE, JOB)).toBe(2);
+    await discardEnrichmentChunks(SCOPE, JOB);
+    expect(store.objects.size).toBe(0);
+  });
+
+  it("cleans up an interrupted collection from its reservation", async () => {
+    const writer = await createEnrichmentChunkWriter(SCOPE, JOB);
+    await writer.write("first");
+    await discardEnrichmentChunks(SCOPE, JOB);
+    expect(store.objects.size).toBe(0);
+    expect(store.deleted).toHaveLength(ENRICHMENT_MAX_CHUNKS + 1);
+  });
+
+  it("rejects oversized chunks before writing", async () => {
+    const writer = await createEnrichmentChunkWriter(SCOPE, JOB);
+    await expect(writer.write("x".repeat(ENRICHMENT_CHUNK_CHARS + 1)))
+      .rejects.toThrow("scratch limit");
+    expect(store.written).toEqual([]);
+  });
+
+  it("bounds cleanup when a manifest claims an excessive count", async () => {
+    store.objects.set(`${JOB}/manifest`, {
+      bytes: new TextEncoder().encode(JSON.stringify({ chunks: 1_000_000_000 })),
+      contentType: "application/json",
+    });
+    await discardEnrichmentChunks(SCOPE, JOB);
+    expect(store.deleted).toHaveLength(ENRICHMENT_MAX_CHUNKS + 1);
   });
 });

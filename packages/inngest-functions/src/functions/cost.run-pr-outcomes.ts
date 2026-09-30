@@ -97,7 +97,7 @@ export const [costRunPrOutcomesDelivery] = createFunction(
   {
     id: "cost.run-pr-outcomes-delivery",
     retries: 3,
-    concurrency: { limit: 5, key: "event.data.orgId" },
+    concurrency: [{ limit: 2 }, { limit: 5, key: "event.data.orgId" }],
   },
   { event: "ingestion/entity.received" },
   async ({ event, step }) => {

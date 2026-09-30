@@ -20,25 +20,25 @@
         "label": "Agents summary",
         "agentsHere": {
           "title": "Agents here",
-          "basis": "organization count not recorded · {listed} listed below"
+          "basis": "{listed} listed below. The organization count is not recorded yet."
         },
         "enrolled": {
           "title": "Enrolled",
           "notYet": "{count} not yet enrolled",
-          "observe": "{count} listed here on the observe tier, the rest on harness",
-          "mixed": "{observe} listed here on the observe tier, {harness} on harness, {other} on another tier or none recorded"
+          "observe": "{count} on the observe tier. The rest are on harness.",
+          "mixed": "{observe} on the observe tier, {harness} on harness, and {other} on another tier or none."
         },
         "mandate": {
           "title": "Holding a mandate",
-          "holder": "{key} · in {workspace}",
+          "holder": "{key}",
           "none": "no agent in {workspace} holds one",
           "scope": "Counted over the agents in {workspace}. No organization-wide rollup is recorded yet.",
-          "holders": "{holders} · counted in {workspace} only"
+          "holders": "{holders} in {workspace}"
         },
         "tamper": {
           "title": "Tamper incidents",
-          "open": "{key} · {kind}, {date} · {count} open · counted in {workspace} only",
-          "resolved": "{key} · {kind}, {date} · all resolved · counted in {workspace} only",
+          "open": "{count} open in {workspace}. The latest is {kind} on {key} from {date}.",
+          "resolved": "All resolved in {workspace}. The latest was {kind} on {key} from {date}.",
           "none": "none in the retention window in {workspace}",
           "scope": "Summed over the agents in {workspace}. No organization-wide rollup is recorded yet."
         }
@@ -102,7 +102,7 @@
       },
       "controls": {
         "search": "Search this list",
-        "facetAll": "All · {column}",
+        "facetAll": "All ({column})",
         "facetLabel": "Filter by {column}",
         "rows": "Rows",
         "all": "All",
@@ -143,14 +143,14 @@
         },
         "denied": {
           "title": "You cannot see the agents in this workspace",
-          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+          "body": "Your roles on <strong>{org}</strong> do not include <mono>{permission} on {ws}</mono>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
           "back": "Back to Fleet",
           "signedIn": "Signed in as",
           "signedInValue": "{name} · workspace.{role} · {ws}",
           "needed": "Needed",
           "neededValue": "{permission} on {ws}",
           "decidedBy": "Decided by",
-          "decidedByValue": "<policy></policy> · deny wins over every allow",
+          "decidedByValue": "<policy></policy>",
           "request": "Request access",
           "policyUnrecorded": "policy not recorded"
         },
@@ -220,13 +220,13 @@
           "principal": "Principal",
           "principalSub": "minted at registration and never reused. A retired agent’s runs keep their identity.",
           "kind": "Kind",
-          "kindValue": "agent · workspace {workspace} required",
+          "kindValue": "agent scoped to workspace {workspace}",
           "harness": "Harness",
           "runtime": "Runtime",
           "runtimeNone": "none named",
           "runtimeSub": "the laptop, VM or cloud workspace it runs on. Moving it keeps its principal.",
           "operator": "Operator",
-          "operatorSub": "accountable for every run · IAM field initiating_principal",
+          "operatorSub": "recorded as initiating_principal and accountable for every run",
           "lifecycle": "Lifecycle state",
           "lifecycleSub": "registered → enrolled → active → retired. Deregistering retires the principal and never deletes it, so old runs keep their identity.",
           "firstFrame": "First frame",
@@ -245,14 +245,14 @@
           "runToken": "Run token",
           "runTokenValue": "one, and it reaches Oxagen only",
           "body": "It holds one run token, and that token is good for talking to Oxagen and nothing else. Every secret a call needs is minted by the broker at dispatch, scoped to that one call, and never transmitted to the agent. A leaked run token cannot reach a provider.",
-          "connections": "See the connections that mint them"
+          "connections": "Open the connections"
         },
         "runCredential": {
           "title": "Run credential",
           "lead": "Long-lived, purpose-locked, hashed at rest, shown to the operator once.",
           "empty": "The agent holds no long-lived credential.",
           "key": "Key",
-          "keySub": "shown once at issue; stored as a hash",
+          "keySub": "shown once at issue and stored as a hash",
           "state": {
             "live": "active",
             "expired": "expired",
@@ -293,14 +293,14 @@
           "runtimeSub": "its device key signs this agent’s checkpoints",
           "runtimeNoneSub": "nothing signs its checkpoints yet",
           "delegation": "Delegation",
-          "delegationValue": "subagents narrow, never widen",
+          "delegationValue": "subagents inherit this scope or a narrower one",
           "delegationSub": "a subagent’s effective permission is this agent’s grants ∩ the invoking human’s grants",
           "replay": "Replay",
           "replaySub": "what a reader can do with this agent’s frames after the fact, as its newest run recorded",
           "tamper": "Tamper incidents",
           "tamperValue": "{count} · {kind}",
-          "readThem": "Read them",
-          "permissions": "Open its permissions"
+          "readThem": "Open the incidents",
+          "permissions": "Open the permissions"
         }
       },
       "roles": {
@@ -315,18 +315,18 @@
           "partial": "This organization has more roles than the 200 listed here. Assign one of the rest over the API.",
           "confirm": "Assign",
           "pending": "Assigning",
-          "why": "Why",
+          "why": "Reason",
           "whyPlaceholder": "Read by the approver and kept in the audit record",
           "note": "Effective permission stays <mono>roles ∩ {operator}'s grants</mono>. A role cannot lift an agent above its operator.",
           "noteNoOperator": "Effective permission stays <mono>roles ∩ the operator's grants</mono>. A role cannot lift an agent above its operator.",
           "cancel": "Cancel",
-          "option": "{name} — {description}",
-          "held": "{name} · held",
+          "option": "{name}: {description}",
+          "held": "{name} (held)",
           "repository": "Repository",
           "repositoryGap": "No role can be bound to one repository yet (#3865). A role applies at its own scope: the organization or this workspace.",
-          "done": "{role} assigned to {key}{why}. Recorded with your name; effective at its next call.",
+          "done": "{role} assigned to {key}{why}. Recorded with your name. It takes effect at the next call.",
           "doneNotEnforced": "{role} assigned to {key}{why}. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
-          "doneWhy": " · “{reason}”",
+          "doneWhy": " for “{reason}”",
           "already": "{key} already holds {role}.",
           "close": "Close"
         },
@@ -344,7 +344,7 @@
           "title": "Belt computation",
           "lead": "At run start, recomputed on any deny-generation bump.",
           "denyGen": "deny gen org {org} · workspace {workspace}",
-          "wire": "How the belt is computed",
+          "wire": "Belt computation steps",
           "grants": "grants",
           "grantsValue": "{count} role grants",
           "ceiling": "delegation ceiling",
@@ -422,7 +422,7 @@
           "hazard": "{risk} · {access}",
           "rule": "Rule",
           "categories": {
-            "open": "What the categories mean",
+            "open": "Show the category definitions",
             "title": "Tool categories",
             "body": "A category is a registry attribute the tool version was published with. It says what a tool acts on, and a rule may reference it.",
             "none": "no category",
@@ -458,14 +458,14 @@
       },
       "enrollment": {
         "enroll": {
-          "open": "Show the CLI path",
+          "open": "Enroll a host",
           "title": "Enroll a host under {name}",
-          "body": "Mint a single-use token, then run the command below on the machine. The token is shown once and is consumed the first time it is presented.",
-          "confirm": "Mint a token",
-          "pending": "Minting",
-          "again": "Mint another",
+          "body": "Create a single-use token, then run the command below on the machine. The token is shown once and is consumed the first time it is presented.",
+          "confirm": "Create a token",
+          "pending": "Creating",
+          "again": "Create another token",
           "token": "Enrollment token",
-          "once": "Shown once. Mint another if it is lost or expires unused.",
+          "once": "Shown once. Create another if it is lost or expires unused.",
           "expires": "Expires {at}",
           "command": "Run this on the host",
           "copy": "Copy",
@@ -498,8 +498,8 @@
         },
         "open": "open",
         "resolved": "resolved",
-        "happened": "What happened",
-        "stopped": "What it stopped",
+        "happened": "Summary",
+        "stopped": "Resolution",
         "owner": "Owner",
         "closed": "Closed",
         "incident": "Incident",
@@ -577,7 +577,7 @@
           },
           "inputSplit": "Input is recorded as one figure, {input} tokens, and not split by class yet. The six input classes wait on that split.",
           "cacheRate": "Cache hit rate",
-          "cacheRateValue": "{rate} · {read} of {input} input tokens served from cache",
+          "cacheRateValue": "{rate} with {read} of {input} input tokens served from cache",
           "perRun": "Per run",
           "tok": "{tokens} tok",
           "perCall": "Per model call",
@@ -595,7 +595,7 @@
           "title": "Coaching",
           "badge": "waits on the token classes",
           "notBacked": "Coaching is read off the token classes, and the record does not split input by class yet. Nothing is suggested until it does.",
-          "all": "All coaching for this workspace →",
+          "all": "Open all coaching for this workspace",
           "ttl": {
             "term": "Cache TTL",
             "setOneHour": "Set the cache TTL to 1 hour.",
@@ -624,20 +624,20 @@
           "steeringItems": "{items} items · {tokens} tok",
           "steeringSub": "assembled from the workspace library on this agent’s newest run",
           "steeringNone": "no steering manifest is recorded",
-          "steeringNoneSub": "steering is a workspace library; this agent holds a reference, never a copy",
+          "steeringNoneSub": "this agent reads the workspace steering library by reference",
           "toolbelt": "Toolbelt",
           "toolbeltSub": "{count, plural, one {# tool} other {# tools}} in all, sent as a {mode} belt",
           "toolbeltUnread": "the belt could not be read",
           "runtime": "Runtime",
           "runtimeNone": "no host is enrolled",
-          "runtimeSub": "{platform} · bundle mode {mode}",
+          "runtimeSub": "{platform} in bundle mode {mode}",
           "owner": "Owner",
           "ownerSub": "accountable for every run this agent makes",
           "permissions": "Permissions",
           "roles": "{count, plural, one {# role} other {# roles}}",
           "mandates": "{count, plural, =0 {no mandate} one {# mandate} other {# mandates}}",
           "mandatesUnread": "mandates not readable",
-          "permissionsSub": "a toolbelt says what it can see; its roles and the policy say what it may call"
+          "permissionsSub": "its roles and the policy decide which toolbelt tools it may call"
         },
         "last30": {
           "title": "Last 30 days",
@@ -683,9 +683,9 @@
           "note": "{included} items fit. {cut} items cut in all."
         },
         "reaches": {
-          "title": "What reaches this agent",
+          "title": "Delivered items",
           "lead": "{items} items compiled from the workspace library at {tokens} tok.",
-          "assigned": "Change what is assigned",
+          "assigned": "Change the assignments",
           "compiler": {
             "open": "Open in the compiler",
             "title": "Open in the compiler",
@@ -698,7 +698,7 @@
             "scope": "Scope",
             "body": "Body",
             "source": "Source",
-            "lands": "Where it lands",
+            "lands": "Placement",
             "cost": "Token cost"
           },
           "notBacked": "The manifest records how many items reached this agent and not which ones. The item list waits on a per-agent assembly the assembler does not store yet.",
@@ -713,7 +713,7 @@
             "force": "Force",
             "cost": "Token cost",
             "because": "Cut because",
-            "why": "Why"
+            "why": "Detail"
           },
           "notBacked": "The manifest counts the cut items, {budget} of them for budget, and does not name them yet."
         }
@@ -723,7 +723,7 @@
         "empty": {
           "title": "No runtime is enrolled for this agent",
           "body": "Until a host enrolls, this agent has an identity and a toolbelt but no hook is installed. Its runs would be graded observe, and no report could say more.",
-          "wrap": "Wrap it"
+          "wrap": "Wrap the agent"
         },
         "host": {
           "title": "Host",
@@ -734,9 +734,9 @@
             "body": "Oxagen would open this host on the Runtimes page. That page is not built yet, so nothing opens."
           },
           "runtime": "Runtime",
-          "runtimeSub": "{platform} · bundle mode {mode}",
+          "runtimeSub": "{platform} in bundle mode {mode}",
           "harness": "Harness",
-          "harnessSub": "the runtime is shared; every agent on it is seen through the same hooks",
+          "harnessSub": "every agent on this shared runtime is seen through the same hooks",
           "deviceKey": "Device key",
           "deviceKeySub": "sha256 of the host’s Ed25519 key, which signs its checkpoints",
           "collector": "Collector",
@@ -751,7 +751,7 @@
           },
           "proxy": "Model proxy",
           "proxyRouted": "loopback proxy on the host",
-          "proxyRoutedSub": "every model call leaves through it; tokens are counted from the bytes that pass",
+          "proxyRoutedSub": "tokens are counted from every model call that passes through it",
           "proxyNot": "not routed",
           "proxyNotSub": "model traffic goes from the harness to its provider. Routing it is the gateway tier.",
           "mcp": "Oxagen MCP endpoint",
@@ -767,7 +767,7 @@
           "revoked": "revoked"
         },
         "tier": {
-          "title": "What this tier delivers",
+          "title": "Tier coverage",
           "lead": "The tier is computed per run from what was actually routed.",
           "all": {
             "label": "All runtimes",
@@ -807,8 +807,8 @@
             },
             "budgets": {
               "label": "Budgets",
-              "observe": "a recorded number and a notice in steering, never a stop",
-              "harness": "a recorded number and a notice in steering, never a stop",
+              "observe": "a recorded number and a notice in steering. The call still runs.",
+              "harness": "a recorded number and a notice in steering. The call still runs.",
               "gateway": "enforced before the call: a run budget by the proxy",
               "contained": "enforced before the call: a run budget by the proxy"
             },
@@ -840,7 +840,7 @@
         "roles": {
           "title": "Roles",
           "lead": "Effective permission is its own grants ∩ the invoking human’s grants. Subagents can only narrow.",
-          "wire": "How the effective permission is computed",
+          "wire": "Effective permission steps",
           "operator": "operator",
           "belt": "{count} tools",
           "beltUnread": "belt not read",
@@ -1063,13 +1063,13 @@
         "open": "Kill switch",
         "title": "Stop {name} now",
         "body": "An emergency deny against every tool call this agent makes, and a pause for every run of it still live.",
-        "blastTitle": "This stops the agent, not one run",
+        "blastTitle": "Blast radius",
         "blastBody": "Every tool call this agent makes is denied from its next call boundary. A run of it already open is paused now, not cancelled: an operator can resume it once the switch is off.",
         "reason": "Reason",
         "confirm": "Stop this agent",
         "pending": "Stopping",
         "needsRole": "The kill switch needs an organization Owner or Admin role.",
-        "reread": "Re-read the agent",
+        "reread": "Reload the agent",
         "unchanged": "This agent's kill switch was already on. The pause below still ran.",
         "outcome": {
           "paused": "{count, plural, one {One live run paused.} other {# live runs paused.}} Every new tool call is denied.",
@@ -1104,8 +1104,8 @@
       "title": "Mandates held",
       "noneTitle": "No mandate",
       "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
-      "none": "No mandate is recorded for this agent — none granted, and none requested — so it cannot carry a consequence.",
-      "noneDetail": "A call that carries an impact is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
+      "none": "No mandate is recorded for this agent. None was granted and none was requested, so it cannot carry a consequence.",
+      "noneDetail": "A call that carries an impact is denied before dispatch, whether or not the tool is on this agent's belt. No credential is minted and nothing reaches a tool server.",
       "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
       "columns": {
         "mandate": "Mandate",
@@ -1128,7 +1128,7 @@
         "title": "Request a mandate",
         "body": "The request is recorded as a draft for the role accountable for this consequence to grant or decline. A draft grants nothing.",
         "measure": "Measure",
-        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit. Leave the measure fields blank to limit calls alone — the only limit a tool that declares no measure can carry.",
+        "measureHint": "The name the tool version declares the figure under, which is how it is read from a call. It cannot be “calls”: every call draws one of those, and the field below sets that limit. Leave the measure fields blank to limit calls alone. That is the only limit a tool that declares no measure can carry.",
         "perCall": "Per call",
         "perPeriod": "Per period",
         "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
@@ -1149,10 +1149,10 @@
         "confirm": "Request the mandate",
         "pending": "Requesting",
         "unit": "Unit",
-        "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, GB. It must be the declared unit: the gate reads a call in that unit, so a limit denominated in another is enforced as a figure nobody entered, and the request is refused. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
+        "unitHint": "What the measure counts, in the name the tool version declares, such as rows, recipients, or GB. It must be the declared unit: the gate reads a call in that unit, so a limit denominated in another is enforced as a figure nobody entered, and the request is refused. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
         "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so the limit this request carries is the figure entered.",
         "impacts": "Impacts",
-        "impactsHint": "Name every impact the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
+        "impactsHint": "Name every impact the covered tools declare. A mandate covers a tool only when it names all of them. Name one of a tool’s two and the mandate is granted as asked, and the call is still denied. The six above are the starter set. A workspace defines its own, and those go in the field beneath.",
         "consequenceOther": "Others the tools declare, separated by commas"
       },
       "truncated": "The newest {shown} mandates recorded for this agent. There are at least that many, and older ones are not listed here.",
@@ -1176,7 +1176,7 @@
         "lookupValue": "none for {agent}",
         "thisAgent": "this agent",
         "decision": "Decision",
-        "decisionValue": "· mandate ledger unchanged · no credential minted",
+        "decisionValue": "with the mandate ledger unchanged and no credential minted",
         "denied": "denied",
         "noMandate": "no_mandate"
       }
@@ -1189,13 +1189,13 @@
       },
       "needed": "{permission} on {workspace}",
       "denied": {
-        "body": "Your roles on {org} do not include {permission}. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it."
+        "body": "Your roles on {org} do not include {permission}. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it."
       },
       "signedInAs": "Signed in as",
       "signedInValue": "organization {orgRole} · workspace {wsRole} on {workspace}",
       "neededLabel": "Needed",
       "decidedBy": "Decided by",
-      "decidedByValue": "the workspace’s IAM policy · deny wins over every allow",
+      "decidedByValue": "the workspace’s IAM policy",
       "requestAccess": {
         "open": "Request access",
         "title": "Request access",
