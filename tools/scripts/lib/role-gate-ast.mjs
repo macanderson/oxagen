@@ -42,8 +42,8 @@ export function withoutComments(fileName, text) {
     const pos = node.getFullStart();
     if (!seen.has(pos)) {
       seen.add(pos);
-      // A comment on the line a token ends is trailing trivia; one on a
-      // later line is leading trivia of the next token. Read both.
+      // A comment on the line where a token ends is trailing trivia. One on
+      // a later line is leading trivia of the next token. Read both.
       ranges.push(
         ...(ts.getTrailingCommentRanges(text, pos) ?? []),
         ...(ts.getLeadingCommentRanges(text, pos) ?? []),
