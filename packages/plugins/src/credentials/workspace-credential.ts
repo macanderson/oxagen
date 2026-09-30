@@ -100,6 +100,9 @@ export async function setWorkspaceSecret(
     set["lastRefreshedAt"] = input.lastRefreshedAt ?? null;
   }
 
+  // tenancy: the upsert writes the caller's orgId and workspaceId on insert,
+  // and its conflict target is scoped to that workspaceId and listing, so it
+  // writes only the verified caller's own credential row.
   return withSystemDb(async (tx) => {
     const [row] = await tx
       .insert(schema.mcpCredentials)

@@ -360,7 +360,7 @@ describe("DbOAuthClientProvider", () => {
     };
     const { DbOAuthClientProvider } = await import("./db-oauth-provider");
     const info = await new DbOAuthClientProvider(ctx).clientInformation();
-    expect(info?.token_endpoint_auth_method).toBe("none");
+    expect(info).toMatchObject({ token_endpoint_auth_method: "none" });
     expect("client_secret" in (info ?? {})).toBe(false);
   });
 });
