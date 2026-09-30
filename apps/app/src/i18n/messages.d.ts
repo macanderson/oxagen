@@ -3344,7 +3344,6 @@ type Messages = {
         clientId: string;
         clientSecret: string;
         secretHint: string;
-        pending: string;
         saving: string;
         saved: string;
         failed: string;
@@ -3604,7 +3603,6 @@ type Messages = {
       };
       discovery: {
         title: string;
-        notAvailable: string;
         unnamed: string;
         loading: string;
         none: string;

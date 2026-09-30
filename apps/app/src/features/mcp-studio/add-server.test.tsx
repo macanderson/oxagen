@@ -8,8 +8,9 @@
 //     the revision the save returned. It never starts over at revision 0.
 //   - Local command and the registry package form render disabled, each with
 //     the note naming the work that enables it.
-//   - Discovery progress reads the server's discovery until it finishes, and
-//     says progress is not available while get_studio_discovery is a stub.
+//   - Discovery progress reads the server's discovery until it finishes,
+//     through get_studio_discovery and start_studio_discovery for the page's
+//     workspace.
 //
 // Each test fakes the calls and checks what the dialog shows and sends. axe
 // checks the state each test ends in (INV-26).
@@ -27,16 +28,17 @@ import {
   RegistryPackageFields,
 } from "./add-server";
 import type {
-  getStudioDiscovery,
-  RegistryPackage,
-  StudioDiscovery,
-  startStudioDiscovery,
-} from "./pending-capabilities";
-import type {
   CreateStudioServer,
   NewStudioServer,
   SavedStudioServer,
 } from "./review-calls";
+import type { StudioAt } from "./route";
+import type {
+  getStudioDiscovery,
+  RegistryPackage,
+  StudioDiscovery,
+  startStudioDiscovery,
+} from "./studio-calls";
 import { fakeOpen, STUDIO_AT, studioReview } from "./studio.builders";
 
 const router = vi.hoisted(() => ({
@@ -46,12 +48,18 @@ const router = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 // With no calls passed, From a definition calls these server actions
-// (review-calls.ts). Every test here passes its own.
+// (review-calls.ts), and every test here passes its own. Discovery progress
+// with no calls passed reads the server's discovery through its action, which
+// answers "none yet" unless a test says otherwise.
 const actions = vi.hoisted(() => ({
   saveStudioDraftAction: vi.fn(),
   saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
+  getStudioDiscoveryAction: vi.fn(() =>
+    Promise.resolve({ ok: true as const, value: { discovery: null } }),
+  ),
+  startStudioDiscoveryAction: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -222,11 +230,15 @@ describe("From a definition", () => {
       },
     ]);
     expect(opens).toStrictEqual([{ server: "billing", revision: 1 }]);
-    // get_studio_discovery is a stub until lane M10 merges it.
-    const note = within(opened).getByTestId("studio-discovery-pending");
-    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
-    expect(note).toHaveAttribute("data-gap", "#4682");
-    expect(note).toHaveTextContent(tDiscovery("notAvailable"));
+    // The new server's discovery is read for the page's workspace.
+    expect(
+      await within(opened).findByTestId("studio-discovery-none"),
+    ).toHaveTextContent(tDiscovery("none"));
+    expect(actions.getStudioDiscoveryAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      "billing",
+    );
     expect(
       within(opened).queryByTestId("studio-discovery-start"),
     ).not.toBeInTheDocument();
@@ -270,10 +282,9 @@ describe("From a definition", () => {
         name: tDefinition("opened", { number: "4721" }),
       }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("studio-discovery-pending")).toHaveAttribute(
-      "data-gap",
-      "#4682",
-    );
+    expect(
+      await screen.findByTestId("studio-discovery-none"),
+    ).toBeInTheDocument();
   });
 
   it("keeps a registered server's id for the retry", async () => {
@@ -702,7 +713,7 @@ const FILES_PACKAGES: readonly RegistryPackage[] = [
 ];
 
 describe("RegistryPackageFields", () => {
-  it("renders disabled, says Oxagen does not read the packages yet, and names #4742", () => {
+  it("renders disabled, says Oxagen does not read the packages yet, and names #4678", () => {
     render(
       <IntlProvider>
         <RegistryPackageFields server={registryServer()} />
@@ -725,7 +736,7 @@ describe("RegistryPackageFields", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription(tPackage("pending"));
     const note = screen.getByTestId("studio-add-package-pending");
-    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveAttribute("data-gap", "#4678");
     expect(note).not.toHaveAttribute("data-capability");
   });
 
@@ -771,7 +782,7 @@ type StartAnswer = Awaited<ReturnType<StartDiscovery["call"]>>;
 /** Gives its answers in turn, repeating the last, and records each input. */
 function answering<O>(answers: readonly O[]) {
   const calls: { server: string }[] = [];
-  const call = (input: { server: string }): Promise<O> => {
+  const call = (_at: StudioAt, input: { server: string }): Promise<O> => {
     calls.push(input);
     const answer = answers[Math.min(calls.length, answers.length) - 1];
     return answer === undefined
@@ -781,27 +792,17 @@ function answering<O>(answers: readonly O[]) {
   return { call, calls };
 }
 
-/** get_studio_discovery as it will be once lane M10 merges it. */
+/** get_studio_discovery, giving its answers in turn. */
 function fakeGetDiscovery(...answers: GetAnswer[]) {
   const { call, calls } = answering(answers);
-  const get: GetDiscovery = {
-    name: "get_studio_discovery",
-    available: true,
-    gap: "discovery",
-    call,
-  };
+  const get: GetDiscovery = { name: "get_studio_discovery", call };
   return { get, calls };
 }
 
-/** start_studio_discovery as it will be once lane M10 merges it. */
+/** start_studio_discovery, giving its answers in turn. */
 function fakeStartDiscovery(...answers: StartAnswer[]) {
   const { call, calls } = answering(answers);
-  const start: StartDiscovery = {
-    name: "start_studio_discovery",
-    available: true,
-    gap: "discovery",
-    call,
-  };
+  const start: StartDiscovery = { name: "start_studio_discovery", call };
   return { start, calls };
 }
 
@@ -848,18 +849,23 @@ const QUEUED = discoveryOf({
 });
 
 describe("DiscoveryProgress", () => {
-  it("says progress is not available while get_studio_discovery is a stub", () => {
+  it("reads through get_studio_discovery for the page's workspace when no call is passed", async () => {
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart />
       </IntlProvider>,
     );
-    const note = screen.getByTestId("studio-discovery-pending");
-    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
-    expect(note).toHaveAttribute("data-gap", "#4682");
+    expect(
+      await screen.findByTestId("studio-discovery-none"),
+    ).toHaveTextContent(tDiscovery("none"));
+    expect(actions.getStudioDiscoveryAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      "billing",
+    );
     const start = screen.getByTestId("studio-discovery-start");
-    expect(start).toBeDisabled();
-    expect(start).toHaveAccessibleDescription(tDiscovery("notAvailable"));
+    expect(start).toBeEnabled();
+    expect(start).toHaveAttribute("data-capability", "start_studio_discovery");
   });
 
   it("follows a queued discovery until it finishes", async () => {
@@ -870,6 +876,7 @@ describe("DiscoveryProgress", () => {
     render(
       <IntlProvider>
         <DiscoveryProgress
+          at={STUDIO_AT}
           server="billing"
           canStart={false}
           get={get}
@@ -913,6 +920,7 @@ describe("DiscoveryProgress", () => {
     const { unmount } = render(
       <IntlProvider>
         <DiscoveryProgress
+          at={STUDIO_AT}
           server="billing"
           canStart={false}
           get={get}
@@ -941,7 +949,7 @@ describe("DiscoveryProgress", () => {
     });
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart={false} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart={false} get={get} />
       </IntlProvider>,
     );
     expect(
@@ -966,7 +974,7 @@ describe("DiscoveryProgress", () => {
     const { get } = fakeGetDiscovery({ ok: true, discovery: null });
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart={false} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart={false} get={get} />
       </IntlProvider>,
     );
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -983,16 +991,11 @@ describe("DiscoveryProgress", () => {
       { ok: false, reason: "failed", code: "denied" },
       tDiscovery("failed", { code: "denied" }),
     ],
-    [
-      "not_built",
-      { ok: false, reason: "not_built", gap: "discovery" },
-      tDiscovery("failed", { code: "not_built" }),
-    ],
   ] as const)("names %s when the read is refused", async (_what, answer, text) => {
     const { get } = fakeGetDiscovery(answer);
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart={false} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart={false} get={get} />
       </IntlProvider>,
     );
     expect(
@@ -1004,7 +1007,7 @@ describe("DiscoveryProgress", () => {
     const { get } = fakeGetDiscovery();
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart={false} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart={false} get={get} />
       </IntlProvider>,
     );
     expect(
@@ -1016,7 +1019,7 @@ describe("DiscoveryProgress", () => {
     const { get, calls } = fakeGetDiscovery({ ok: true, discovery: null });
     render(
       <IntlProvider>
-        <DiscoveryProgress server={null} canStart get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server={null} canStart get={get} />
       </IntlProvider>,
     );
     expect(screen.getByTestId("studio-discovery-unnamed")).toHaveTextContent(
@@ -1040,7 +1043,7 @@ describe("DiscoveryProgress", () => {
     const user = userEvent.setup();
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart start={start} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart start={start} get={get} />
       </IntlProvider>,
     );
     await screen.findByTestId("studio-discovery-none");
@@ -1056,9 +1059,6 @@ describe("DiscoveryProgress", () => {
     });
     expect(starts).toStrictEqual([{ server: "billing" }]);
     expect(reads).toHaveLength(2);
-    expect(
-      screen.queryByTestId("studio-discovery-pending"),
-    ).not.toBeInTheDocument();
   });
 
   it.each([
@@ -1067,11 +1067,6 @@ describe("DiscoveryProgress", () => {
       [{ ok: false, reason: "failed", code: "denied" }],
       tDiscovery("failed", { code: "denied" }),
     ],
-    [
-      "not built",
-      [{ ok: false, reason: "not_built", gap: "discovery" }],
-      tDiscovery("failed", { code: "not_built" }),
-    ],
     ["thrown", [], tDiscovery("thrown")],
   ] as const)("names a start that was %s", async (_what, answers, text) => {
     const { get } = fakeGetDiscovery({ ok: true, discovery: null });
@@ -1079,7 +1074,7 @@ describe("DiscoveryProgress", () => {
     const user = userEvent.setup();
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart start={start} get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart start={start} get={get} />
       </IntlProvider>,
     );
     await screen.findByTestId("studio-discovery-none");
@@ -1089,19 +1084,30 @@ describe("DiscoveryProgress", () => {
     ).toHaveTextContent(text);
   });
 
-  it("disables the start alone while only start_studio_discovery is a stub", async () => {
-    const { get } = fakeGetDiscovery({ ok: true, discovery: discoveryOf() });
+  it("starts through start_studio_discovery for the page's workspace when no start is passed", async () => {
+    const { get } = fakeGetDiscovery(
+      { ok: true, discovery: null },
+      { ok: true, discovery: QUEUED },
+    );
+    actions.startStudioDiscoveryAction.mockResolvedValueOnce({
+      ok: true,
+      value: { discovery: QUEUED },
+    });
+    const user = userEvent.setup();
     render(
       <IntlProvider>
-        <DiscoveryProgress server="billing" canStart get={get} />
+        <DiscoveryProgress at={STUDIO_AT} server="billing" canStart get={get} pollMs={60_000} />
       </IntlProvider>,
     );
-    await screen.findByTestId("studio-discovery-status");
-    const start = screen.getByTestId("studio-discovery-start");
-    expect(start).toBeDisabled();
-    expect(start).toHaveAccessibleDescription(tDiscovery("notAvailable"));
-    const note = screen.getByTestId("studio-discovery-pending");
-    expect(note).toHaveAttribute("data-capability", "start_studio_discovery");
-    expect(note).toHaveAttribute("data-gap", "#4682");
+    await screen.findByTestId("studio-discovery-none");
+    await user.click(screen.getByTestId("studio-discovery-start"));
+    expect(
+      await screen.findByTestId("studio-discovery-status"),
+    ).toHaveTextContent(tDiscovery("statuses.queued"));
+    expect(actions.startStudioDiscoveryAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      "billing",
+    );
   });
 });

@@ -30,7 +30,7 @@ import type {
   ListStudioFindings,
   listStudioTools,
   StudioToolsList,
-} from "./pending-capabilities";
+} from "./studio-calls";
 import type { StudioTab } from "./route";
 import type { RecordReader } from "./seams";
 
@@ -79,12 +79,18 @@ const actions = vi.hoisted(() => ({
   setToolState: vi.fn(),
 }));
 vi.mock("../tools/actions", () => actions);
-// The Changes tab's Review calls go through Studio's own server actions.
+// The Changes tab's Review calls go through Studio's own server actions, and
+// the Tools tab's discovery section reads the server's discovery on mount,
+// which answers "none yet" here.
 vi.mock("./actions", () => ({
   saveStudioDraftAction: vi.fn(),
   saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
+  getStudioDiscoveryAction: vi.fn(() =>
+    Promise.resolve({ ok: true, value: { discovery: null } }),
+  ),
+  startStudioDiscoveryAction: vi.fn(),
 }));
 // The Tools barrel also exports the OAuth callback route handler, which
 // imports the completion action and two server-only Next modules.
@@ -164,9 +170,9 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 /**
  * The page on the Studio fakes: each read answers its fixture unless `reads`
  * says otherwise, the record seam answers each server's record fixture unless
- * `record` says otherwise, and list_studio_findings answers the three
- * fixture findings. `findingsAvailable: false` stands in the stub the page
- * uses until #4742 merges.
+ * `record` says otherwise, list_studio_findings answers the three fixture
+ * findings, and list_studio_tools refuses, so a test that wants the Tools
+ * tab's counts passes an answer.
  */
 async function renderStudio({
   serverId = STRIPE,
@@ -175,9 +181,8 @@ async function renderStudio({
   reads = {},
   record = recordOf,
   findings = () => Promise.resolve(findingsAnswer()),
-  findingsAvailable = true,
-  toolsList = () => Promise.resolve({ ok: true, ...toolsListOf() }),
-  toolsAvailable = false,
+  toolsList = () =>
+    Promise.resolve({ ok: false, reason: "failed", code: "denied" }),
 }: {
   serverId?: string;
   tab?: StudioTab;
@@ -185,9 +190,7 @@ async function renderStudio({
   reads?: Reads;
   record?: (serverId: string) => StudioRecord | null;
   findings?: FindingsCall;
-  findingsAvailable?: boolean;
   toolsList?: ToolsListCall;
-  toolsAvailable?: boolean;
 } = {}) {
   const ctx = viewer(orgRole);
   const { source, calls } = studioSource(reads);
@@ -202,18 +205,8 @@ async function renderStudio({
       source,
       route: { serverId, tab },
       readRecord,
-      findings: {
-        name: "list_studio_findings",
-        available: findingsAvailable,
-        gap: "findings",
-        call: readFindings,
-      },
-      toolsList: {
-        name: "list_studio_tools",
-        available: toolsAvailable,
-        gap: "discovery",
-        call: readTools,
-      },
+      findings: { name: "list_studio_findings", call: readFindings },
+      toolsList: { name: "list_studio_tools", call: readTools },
     }),
   );
   return { ctx, calls, readRecord, readFindings, readTools };
@@ -284,23 +277,11 @@ describe("StudioServer reads", () => {
   it("reads the findings for this server on the Changes tab and lists them", async () => {
     const { readFindings } = await renderStudio({ tab: "changes" });
     expect(readFindings).toHaveBeenCalledTimes(1);
-    expect(readFindings).toHaveBeenCalledWith({ server: "stripe" });
+    expect(readFindings).toHaveBeenCalledWith(AT, { server: "stripe" });
     const findings = screen.getByTestId("studio-changes-findings");
     expect(within(findings).getAllByTestId("studio-finding")).toHaveLength(
       studioFindings().length,
     );
-  });
-
-  it("asks nothing and says findings are not available while list_studio_findings has not merged", async () => {
-    const { readFindings } = await renderStudio({
-      tab: "changes",
-      findingsAvailable: false,
-    });
-    expect(readFindings).not.toHaveBeenCalled();
-    const missing = screen.getByTestId("studio-findings-missing");
-    expect(missing).toHaveAttribute("data-gap", "#4742");
-    expect(missing).toHaveTextContent("Findings are not available yet.");
-    expect(screen.queryByTestId("studio-finding")).toBeNull();
   });
 
   it.each([
@@ -309,11 +290,11 @@ describe("StudioServer reads", () => {
       result: { ok: false, reason: "failed", code: "denied" },
     },
     {
-      answer: "not built",
-      result: { ok: false, reason: "not_built", gap: "findings" },
+      answer: "an unknown folder",
+      result: { ok: false, reason: "failed", code: "not_found" },
     },
   ] as const)(
-    "says findings are not available when the call answers $answer",
+    "shows no findings when the call answers $answer",
     async ({ result }) => {
       const { readFindings } = await renderStudio({
         tab: "changes",
@@ -322,7 +303,7 @@ describe("StudioServer reads", () => {
       expect(readFindings).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("studio-findings-missing")).toHaveAttribute(
         "data-gap",
-        "#4742",
+        "#4678",
       );
       expect(screen.queryByTestId("studio-finding")).toBeNull();
     },
@@ -331,9 +312,11 @@ describe("StudioServer reads", () => {
 
 describe("StudioServer tool counts", () => {
   it("asks list_studio_tools for this server on the Tools tab and shows its counts", async () => {
-    const { readTools } = await renderStudio({ toolsAvailable: true });
+    const { readTools } = await renderStudio({
+      toolsList: () => Promise.resolve({ ok: true, ...toolsListOf() }),
+    });
     expect(readTools).toHaveBeenCalledTimes(1);
-    expect(readTools).toHaveBeenCalledWith({ server: "stripe" });
+    expect(readTools).toHaveBeenCalledWith(AT, { server: "stripe" });
     const listed = screen.getByTestId("studio-tools-listed");
     expect(listed).toHaveTextContent(
       "2 imported of 5 the last discovery listed",
@@ -350,7 +333,6 @@ describe("StudioServer tool counts", () => {
 
   it("leaves out the search note and the compile alert when neither applies", async () => {
     await renderStudio({
-      toolsAvailable: true,
       toolsList: () =>
         Promise.resolve({
           ok: true,
@@ -364,31 +346,13 @@ describe("StudioServer tool counts", () => {
     ).toBeNull();
   });
 
-  it("asks nothing and shows no counts while list_studio_tools has not merged", async () => {
-    const { readTools } = await renderStudio();
-    expect(readTools).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
-    // Discovery progress waits on the same lane, and says so.
-    expect(screen.getByTestId("studio-discovery-pending")).toHaveAttribute(
-      "data-capability",
-      "get_studio_discovery",
-    );
-  });
-
   it("asks nothing off the Tools tab", async () => {
-    const { readTools } = await renderStudio({
-      tab: "changes",
-      toolsAvailable: true,
-    });
+    const { readTools } = await renderStudio({ tab: "changes" });
     expect(readTools).not.toHaveBeenCalled();
   });
 
   it("shows no counts when the read is refused", async () => {
-    const { readTools } = await renderStudio({
-      toolsAvailable: true,
-      toolsList: () =>
-        Promise.resolve({ ok: false, reason: "failed", code: "denied" }),
-    });
+    const { readTools } = await renderStudio();
     expect(readTools).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
   });
@@ -864,7 +828,7 @@ describe("StudioServer without a Studio record", () => {
     expect(readFindings).not.toHaveBeenCalled();
     const missing = screen.getByTestId("studio-findings-missing");
     expect(missing).toHaveAttribute("data-state", "not-recorded");
-    expect(missing).toHaveAttribute("data-gap", "#4742");
+    expect(missing).toHaveAttribute("data-gap", "#4678");
     expect(screen.queryByTestId("studio-finding")).toBeNull();
     expect(screen.getByTestId("studio-pr-no-server")).toHaveAttribute(
       "data-gap",

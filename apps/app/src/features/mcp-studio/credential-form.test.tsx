@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 // The Connection tab's credential form (#4678, item 13).
 //
-//   - While set_mcp_credential is a stub, the form renders disabled with the
-//     note naming the capability and #4742.
-//   - With the capability, the form sends the name and the secret it reads
-//     at submit, empties the secret fields once the vault stores them, and
-//     shows only the vault reference.
+//   - The form sends the name and the secret it reads at submit, for the
+//     workspace the page names, empties the secret fields once the vault
+//     stores them, and shows only the vault reference.
 //   - A refusal or a thrown call names the code or the failure, never the
 //     secret.
 //
@@ -17,10 +15,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { CredentialForm } from "./credential-form";
+import type { StudioAt } from "./route";
+import { STUDIO_AT } from "./studio.builders";
 import type {
   SetMcpCredential,
   SetMcpCredentialInput,
-} from "./pending-capabilities";
+} from "./studio-calls";
 
 afterEach(async () => {
   try {
@@ -39,19 +39,19 @@ const REFERENCE = "oxagen:credential/stripe-restricted";
 
 type CredentialAnswer = Awaited<ReturnType<SetMcpCredential["call"]>>;
 
-/** set_mcp_credential as it will be once #4742 merges it. */
+/** set_mcp_credential, answering through `answer`. */
 function fakeCredential(answer: () => Promise<CredentialAnswer>) {
   const calls: SetMcpCredentialInput[] = [];
+  const workspaces: StudioAt[] = [];
   const credential: SetMcpCredential = {
     name: "set_mcp_credential",
-    available: true,
-    gap: "credentials",
-    call: (input) => {
+    call: (at, input) => {
+      workspaces.push(at);
       calls.push(input);
       return answer();
     },
   };
-  return { credential, calls };
+  return { credential, calls, workspaces };
 }
 
 const STORED: CredentialAnswer = {
@@ -75,6 +75,7 @@ function renderForm(
   render(
     <IntlProvider>
       <CredentialForm
+        at={STUDIO_AT}
         defaultName="stripe-restricted"
         defaultKind={defaultKind}
         {...(credential === undefined ? {} : { credential })}
@@ -93,29 +94,22 @@ function expectNoSecret() {
 }
 
 describe("CredentialForm", () => {
-  it("renders disabled with the note while set_mcp_credential is a stub", () => {
+  it("renders the form open, with Replace naming set_mcp_credential", () => {
     renderForm();
     const replace = screen.getByTestId("studio-credential-replace");
-    expect(replace).toBeDisabled();
+    expect(replace).toBeEnabled();
     expect(replace).toHaveTextContent(auth("replace"));
-    expect(replace).toHaveAccessibleDescription(auth("pending"));
-    const note = screen.getByTestId("studio-credential-pending");
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-capability", "set_mcp_credential");
-    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(replace).toHaveAttribute("data-capability", "set_mcp_credential");
     expect(inputOf(auth("name"))).toHaveValue("stripe-restricted");
-    expect(inputOf(auth("name"))).toBeDisabled();
-    expect(inputOf(auth("secret"))).toBeDisabled();
+    expect(inputOf(auth("name"))).toBeEnabled();
+    expect(inputOf(auth("secret"))).toBeEnabled();
   });
 
-  it("stores a service secret and shows only its reference", async () => {
-    const { credential, calls } = fakeCredential(() =>
+  it("stores a service secret for the page's workspace and shows only its reference", async () => {
+    const { credential, calls, workspaces } = fakeCredential(() =>
       Promise.resolve(STORED),
     );
     const user = renderForm(credential);
-    expect(
-      screen.queryByTestId("studio-credential-pending"),
-    ).not.toBeInTheDocument();
     await user.type(inputOf(auth("secret")), SECRET);
     await user.click(screen.getByTestId("studio-credential-replace"));
     expect(
@@ -124,6 +118,7 @@ describe("CredentialForm", () => {
     expect(calls).toStrictEqual([
       { name: "stripe-restricted", kind: "secret", secret: SECRET },
     ]);
+    expect(workspaces).toStrictEqual([STUDIO_AT]);
     expect(inputOf(auth("secret"))).toHaveValue("");
     expectNoSecret();
   });
@@ -159,16 +154,16 @@ describe("CredentialForm", () => {
     expect(
       screen.getByTestId("studio-credential-kind-oauth_client"),
     ).toBeChecked();
-    expect(inputOf(auth("clientId"))).toBeDisabled();
-    expect(inputOf(auth("clientSecret"))).toBeDisabled();
+    expect(inputOf(auth("clientId"))).toBeEnabled();
+    expect(inputOf(auth("clientSecret"))).toBeEnabled();
   });
 
   it.each<[string, CredentialAnswer, string]>([
     ["a refusal", { ok: false, reason: "failed", code: "denied" }, "denied"],
     [
-      "an answer that the capability is not built",
-      { ok: false, reason: "not_built", gap: "credentials" },
-      "not_built",
+      "a name the handler refuses",
+      { ok: false, reason: "failed", code: "invalid" },
+      "invalid",
     ],
   ])("names the code of %s and never the secret", async (_, answer, code) => {
     const { credential } = fakeCredential(() => Promise.resolve(answer));
