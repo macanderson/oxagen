@@ -1,3 +1,4 @@
+import { apiAdmission } from "../middleware/admission";
 import { Hono } from "hono";
 import { isEmailVerificationRequired } from "@oxagen/auth";
 import { isEmailTransportConfigured } from "@oxagen/notifications";
@@ -45,4 +46,9 @@ health.get("/", (c) => {
     return c.json({ status: "ok" as const, checks });
   }
   return c.json({ status: "degraded" as const, checks }, 503);
+});
+
+health.get("/ready", (c) => {
+  const { ready } = apiAdmission.snapshot();
+  return c.json({ status: ready ? "ok" : "busy" }, ready ? 200 : 503);
 });

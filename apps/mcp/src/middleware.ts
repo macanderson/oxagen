@@ -5,7 +5,8 @@
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
-import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
+import type { RequestHandler } from "express";
+import { apiKeyAuthMiddleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
@@ -122,10 +123,9 @@ setSecurityEventEmitter((kernelEvent) => {
 // machine's long-poll for local tool calls and its replies (#4773), and pass
 // every other path on. The served tools (lane M15) run next. They add a run's
 // published tools to tools/list and answer a tools/call that names one.
-// Every other request reaches the transport untouched. The gate is built in
-// place: xmcp types it with express's RequestHandler, which this app does not
-// install, so a named binding would hold an unresolved type.
-export default [
+// Every other request reaches the transport untouched. The explicit type keeps
+// exported declarations independent of pnpm's internal dependency paths.
+const middleware: RequestHandler[] = [
   apiKeyAuthMiddleware({
     headerName: "authorization",
     validateApiKey: async (authHeader) => {
@@ -135,4 +135,6 @@ export default [
   }),
   localServersRoute,
   servedToolsMiddleware,
-] satisfies Middleware[];
+];
+
+export default middleware;

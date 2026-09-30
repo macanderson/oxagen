@@ -80,6 +80,17 @@ describe("operatorNameOf", () => {
 });
 
 describe("AgentHeader", () => {
+  it("overlays the registered harness on the detail avatar", () => {
+    renderHeader({
+      identity: agentDetail({ identity: { harness: "stella" } }).identity,
+    });
+    expect(
+      screen
+        .getByRole("heading", { level: 1 })
+        .querySelector("[data-harness-badge] [data-harness-mark]"),
+    ).toHaveAttribute("data-harness-mark", "stella");
+  });
+
   it("says the operator is not recorded when the newest run names someone else (negative)", () => {
     renderHeader({
       lastRun: runRow({ operatorId: "usr_priya", operatorName: "Priya N" }),

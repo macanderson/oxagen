@@ -63,6 +63,7 @@ export const spendTopRunSchema = z
     name: z.string().max(RUN_LABEL_MAX).nullable(),
     startedAt: z.string().datetime(),
     agentKey: z.string().nullable(),
+    harness: z.string().nullable().optional(),
     /** The operator's principal public id; null for a run with no operator. */
     operatorKey: z.string().nullable(),
     /**

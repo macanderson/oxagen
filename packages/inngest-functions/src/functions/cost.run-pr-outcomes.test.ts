@@ -149,7 +149,7 @@ describe("cost.run-pr-outcomes-delivery", () => {
 
   it("triggers on each ingested record, bounded per org", () => {
     expect(delivery().config).toMatchObject({
-      concurrency: { limit: 5, key: "event.data.orgId" },
+      concurrency: [{ limit: 2 }, { limit: 5, key: "event.data.orgId" }],
     });
     expect(delivery().trigger).toEqual({ event: "ingestion/entity.received" });
   });

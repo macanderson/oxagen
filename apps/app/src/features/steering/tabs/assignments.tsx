@@ -146,6 +146,7 @@ function Receives({
           >
             <AgentCard
               agentKey={agent.agentKey}
+              harness={agent.harness}
               notRecorded={agent.name}
               sub={harness(agent.harness)}
             />

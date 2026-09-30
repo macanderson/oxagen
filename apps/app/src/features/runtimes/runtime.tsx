@@ -258,6 +258,7 @@ function agentRow({
   const card = (
     <AgentCard
       agentKey={agentKey}
+      harness={agent?.harness}
       notRecorded={words.notRecorded}
       // The design's `agentCard` names the harness under the key.
       sub={

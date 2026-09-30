@@ -29,6 +29,7 @@ export default defineConfig({
       // guards its required startup calls by source inspection instead.
       include: [
         "src/context.ts",
+        "src/http-app.ts",
         // agent tools
         "src/tools/agent.approval.resolve.ts",
         "src/tools/agent.mcp.list.ts",

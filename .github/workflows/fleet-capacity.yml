@@ -1,0 +1,73 @@
+name: Fleet capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: Send the reviewed workload to isolated staging
+        type: boolean
+        default: false
+      profile:
+        description: Committed numeric profile path
+        type: string
+        default: tools/scripts/fleet-capacity/profile.example.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-capacity-staging
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @oxagen/scripts test:unit fleet-capacity/
+      - name: Plan without network requests
+        env:
+          FLEET_STAGING_ORIGIN: ${{ vars.FLEET_STAGING_ORIGIN }}
+          PROFILE: ${{ inputs.profile }}
+        run: pnpm exec tsx tools/scripts/fleet-capacity/run.ts plan "$PROFILE"
+
+  load:
+    needs: validate
+    if: ${{ inputs.execute && github.ref == 'refs/heads/main' }}
+    # A dedicated runner supports a 24-hour hold. This workflow provisions nothing.
+    runs-on: [self-hosted, linux, fleet-capacity]
+    environment: fleet-capacity-staging
+    timeout-minutes: 1620
+    env:
+      FLEET_OUTPUT_ROOT: ${{ vars.FLEET_OUTPUT_ROOT }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run staging fleet
+        env:
+          PROFILE: ${{ inputs.profile }}
+          FLEET_STAGING_ORIGIN: ${{ vars.FLEET_STAGING_ORIGIN }}
+          FLEET_OPERATOR_TOKEN: ${{ secrets.FLEET_OPERATOR_TOKEN }}
+          FLEET_BUNDLE_PUBLIC_KEY_PEM: ${{ vars.FLEET_BUNDLE_PUBLIC_KEY_PEM }}
+          NODE_OPTIONS: --max-old-space-size=512
+        run: pnpm exec tsx tools/scripts/fleet-capacity/run.ts run "$PROFILE"
+      - name: Upload numeric report copies
+        if: ${{ always() && env.FLEET_OUTPUT_ROOT != '' }}
+        # The persistent runner copy remains available if upload authorization expires.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleet-capacity-${{ github.run_id }}
+          path: ${{ env.FLEET_OUTPUT_ROOT }}/${{ github.run_id }}-*/report.json
+          if-no-files-found: warn
+          retention-days: 30

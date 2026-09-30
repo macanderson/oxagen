@@ -10,7 +10,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { conversationExport } from "@oxagen/oxagen/contracts/conversation.export";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   branchToExportMessages,
@@ -21,6 +21,17 @@ import {
 } from "./lib/conversation-markdown";
 import { buildConversationPdf } from "./lib/conversation-pdf";
 import { persistGeneratedAsset } from "./generated-asset.persist";
+
+import {
+  exportLimitError,
+  MAX_EXPORT_HEADER_BYTES,
+  MAX_EXPORT_MARKDOWN_BYTES,
+  MAX_EXPORT_MESSAGES,
+} from "./lib/conversation-export-limits";
+import {
+  conversationExportSnapshotQuery,
+  type ConversationExportSnapshot,
+} from "./lib/conversation-export-snapshot";
 
 const UNTITLED = "Untitled conversation";
 
@@ -35,26 +46,14 @@ export const conversationExportHandler: CapabilityHandler<
     throw new Error("conversation.export requires an authenticated user");
   }
 
-  // Resolve the conversation row — must belong to the caller's org + workspace
-  // (same tenant-scoped access pattern as conversation.files.list).
   const convRows = await withTenantDb((tx) =>
-    tx
-      .select({
-        id: schema.conversations.id,
-        title: schema.conversations.title,
-        createdAt: schema.conversations.createdAt,
-        activeLeafMessageId: schema.conversations.activeLeafMessageId,
-      })
-      .from(schema.conversations)
-      .where(
-        and(
-          eq(schema.conversations.publicId, input.conversationId),
-          eq(schema.conversations.orgId, ctx.orgId),
-          eq(schema.conversations.workspaceId, ctx.workspaceId),
-          isNull(schema.conversations.deletedAt),
-        ),
-      )
-      .limit(1),
+    tx.execute<ConversationExportSnapshot>(
+      conversationExportSnapshotQuery(
+        input.conversationId,
+        ctx.orgId,
+        ctx.workspaceId,
+      ),
+    ),
   );
   const conv = convRows[0];
   if (!conv) {
@@ -65,53 +64,55 @@ export const conversationExportHandler: CapabilityHandler<
     throw new Error("conversation.export: conversation not found");
   }
 
-  // Load every message row (all branches) in chronological order; the walk
-  // below reduces them to the currently-active path.
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        id: schema.messages.id,
-        parentMessageId: schema.messages.parentMessageId,
-        role: schema.messages.role,
-        content: schema.messages.content,
-        contentBlocks: schema.messages.contentBlocks,
-        metadata: schema.messages.metadata,
-        createdAt: schema.messages.createdAt,
-      })
-      .from(schema.messages)
-      .where(
-        and(
-          eq(schema.messages.conversationId, conv.id),
-          eq(schema.messages.orgId, ctx.orgId),
-          eq(schema.messages.workspaceId, ctx.workspaceId),
-        ),
-      )
-      .orderBy(asc(schema.messages.createdAt)),
-  );
+  if (conv.messageCount > MAX_EXPORT_MESSAGES) {
+    throw exportLimitError("500 messages across all branches");
+  }
+  if (conv.sourceTooLarge) {
+    throw exportLimitError(
+      "2 MiB of message content and metadata across all branches",
+    );
+  }
+  if (conv.titleTooLarge) throw exportLimitError("8 KiB of title text");
+  if (conv.messages === null) {
+    throw new Error("Conversation export snapshot is incomplete");
+  }
+  const rows = conv.messages.map((row) => ({
+    ...row,
+    createdAt: new Date(row.createdAt),
+  }));
 
   // Resolve org + workspace display names for the export header (best-effort —
   // an export must not fail because a name lookup came back empty).
   const orgRows = await withTenantDb((tx) =>
     tx
-      .select({ name: schema.organizations.name })
+      .select({
+        name: sql<string | null>`case when octet_length(${schema.organizations.name}) <= ${MAX_EXPORT_HEADER_BYTES} then ${schema.organizations.name} else null end`,
+        tooLarge: sql<boolean>`octet_length(${schema.organizations.name}) > ${MAX_EXPORT_HEADER_BYTES}`,
+      })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, ctx.orgId))
       .limit(1),
   );
   const wsRows = await withTenantDb((tx) =>
     tx
-      .select({ name: schema.workspaces.name })
+      .select({
+        name: sql<string | null>`case when octet_length(${schema.workspaces.name}) <= ${MAX_EXPORT_HEADER_BYTES} then ${schema.workspaces.name} else null end`,
+        tooLarge: sql<boolean>`octet_length(${schema.workspaces.name}) > ${MAX_EXPORT_HEADER_BYTES}`,
+      })
       .from(schema.workspaces)
       .where(eq(schema.workspaces.id, ctx.workspaceId))
       .limit(1),
   );
 
+  if (orgRows[0]?.tooLarge || wsRows[0]?.tooLarge) {
+    throw exportLimitError("8 KiB of organization or workspace name text");
+  }
   const branch = walkActiveBranch(rows, conv.activeLeafMessageId);
   const exportedAt = new Date();
   const title = conv.title?.trim() || UNTITLED;
   const model: ConversationExportModel = {
     title,
-    createdAt: conv.createdAt,
+    createdAt: new Date(conv.createdAt),
     exportedAt,
     orgName: orgRows[0]?.name ?? null,
     workspaceName: wsRows[0]?.name ?? null,
@@ -121,6 +122,9 @@ export const conversationExportHandler: CapabilityHandler<
 
   if (input.format === "markdown") {
     const content = conversationToMarkdown(model);
+    if (Buffer.byteLength(content, "utf8") > MAX_EXPORT_MARKDOWN_BYTES) {
+      throw exportLimitError("4 MiB of Markdown");
+    }
     const filename = exportFilename(title, exportedAt, "md");
     logger.info(
       {

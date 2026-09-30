@@ -1279,6 +1279,43 @@ describe("header", () => {
     expect(screen.queryByTestId("run-witnessed")).toBeNull();
   });
 
+  it("uses the session's harness mark in the header and summary", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            harness: { name: "claude-code", version: "2.1.0", runtime: "node" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      agent: ok(agentDetail({ identity: { harness: "codex" } })),
+    });
+    for (const id of ["run-chips", "run-involved"]) {
+      expect(
+        screen.getByTestId(id).querySelector("[data-harness-mark]"),
+      ).toHaveAttribute("data-harness-mark", "claude-code");
+    }
+  });
+
+  it("keeps a custom harness generic even when its runtime names a vendor", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            harness: { name: "custom-runner", version: null, runtime: "codex" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    for (const id of ["run-chips", "run-involved"]) {
+      const badge = screen.getByTestId(id).querySelector("[data-harness-badge]");
+      expect(badge).toHaveAttribute("data-harness-badge", "custom-runner");
+      expect(badge?.querySelector("img")).toBeNull();
+    }
+  });
+
   it("names the harness the agent registry holds when the session recorded none, and says no version was captured", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ harness: null }) })),
@@ -1288,6 +1325,11 @@ describe("header", () => {
     const rig = within(screen.getByTestId("run-rig"));
     expect(rig.getByText("Codex")).toBeTruthy();
     expect(rig.getByText("version not captured")).toBeTruthy();
+    for (const id of ["run-chips", "run-involved"]) {
+      expect(
+        screen.getByTestId(id).querySelector("[data-harness-mark]"),
+      ).toHaveAttribute("data-harness-mark", "codex");
+    }
     // The summary's card names the agent the registry returned, then its harness.
     expect(screen.getByTestId("run-involved")).toHaveTextContent(
       "Release bot · Codex",

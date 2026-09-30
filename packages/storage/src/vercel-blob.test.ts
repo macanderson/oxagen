@@ -194,6 +194,48 @@ describe("createVercelBlobAdapter", () => {
     expect(putMock.mock.calls[0]?.[2]).toMatchObject({ access: "public" });
   });
 
+  it("shares the first access negotiation across concurrent private uploads", async () => {
+    let rejectProbe!: (error: Error) => void;
+    putMock.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectProbe = reject;
+    }));
+    putMock.mockImplementation(async (key: string) => ({ pathname: key, url: key }));
+    const adapter = createVercelBlobAdapter("tok-burst");
+    const writes = Array.from({ length: 30 }, (_, index) => adapter.put({
+      key: `burst/${index}`,
+      body: new Uint8Array([index]),
+      access: "private",
+    }));
+    expect(putMock).toHaveBeenCalledTimes(1);
+    rejectProbe(new Error("Cannot use private access on this store"));
+    const results = await Promise.all(writes);
+    expect(results.every((result) => result.access === "public")).toBe(true);
+    expect(putMock).toHaveBeenCalledTimes(31);
+    expect(putMock.mock.calls.filter((call) => call[2].access === "private")).toHaveLength(1);
+  });
+
+  it("bounds callers waiting for access negotiation and releases them after failure", async () => {
+    let rejectProbe!: (error: Error) => void;
+    putMock.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectProbe = reject;
+    }));
+    putMock.mockImplementation(async (key: string) => ({ pathname: key, url: key }));
+    const adapter = createVercelBlobAdapter("tok-capacity");
+    const write = (index: number) => adapter.put({
+      key: `capacity/${index}`,
+      body: new Uint8Array([index]),
+      access: "private",
+    });
+    const first = write(0);
+    const failed = expect(first).rejects.toThrow("temporary failure");
+    const waiting = Array.from({ length: 64 }, (_, index) => write(index + 1));
+    await expect(write(65)).rejects.toMatchObject({ code: "store_overloaded", retryAfterSeconds: 2 });
+    rejectProbe(new Error("temporary failure"));
+    await failed;
+    await Promise.all(waiting);
+    await expect(write(65)).resolves.toMatchObject({ access: "private" });
+  });
+
   it("does not learn public-only from an unrelated failure", async () => {
     putMock
       .mockRejectedValueOnce(new Error("network down"))

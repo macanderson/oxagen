@@ -749,6 +749,9 @@ describe("One runtime", () => {
         .map((th) => th.textContent),
     ).toEqual(["Agent", "Operator", "Tier", "Principal", "Runs 30d"]);
     const row = within(agents).getByTestId("runtime-agent-row");
+    expect(
+      row.querySelector("[data-harness-badge] [data-harness-mark]"),
+    ).toHaveAttribute("data-harness-mark", "claude-code");
     // The design's agent card names the harness under the key.
     expect(nth(within(row).getAllByRole("cell"), 0, "cell")).toHaveTextContent(
       "acme.core.release-managerClaude Code",

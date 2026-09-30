@@ -14,6 +14,7 @@ import {
   type RunTotalsRecord,
   type ToolCallFrame,
 } from "./cost-rollup";
+import { PriceBookSliceLimitError } from "./price-book";
 import {
   ledgerToolStatus,
   modelCallHidesTurn,
@@ -592,5 +593,50 @@ describe("the breakdown jsonb (#4069)", () => {
     ).toEqual([0n, 0n]);
     // The legacy row reads back whole, as the rollup would write it now.
     expect(revived).toEqual(breakdown);
+  });
+});
+
+describe("streamed rollup reads", () => {
+  it("prices batches separately and writes only after every stream completes", async () => {
+    const { d, written, sourcesWritten } = deps({ runs: { [WORKER]: meta(WORKER, "owner") } });
+    const makeCall = (model: string, at: string): PricedModelCall => ({
+      model, at: new Date(at), provider: null, tokens: { ...ZERO_TOKENS, output: 1 },
+      reportedCostMicros: 2n, basis: "client_attested",
+      sources: { toolDefinitionTokens: 2, contextFrameTokens: null, steeringTokens: 0 },
+    });
+    d.readModelCalls = vi.fn(() => { throw new Error("unbounded read"); });
+    d.readToolCalls = vi.fn(() => { throw new Error("unbounded read"); });
+    d.streamModelCalls = async (_args, consume) => {
+      await consume([makeCall("first", "2026-09-01T00:00:00Z")]);
+      expect(written).toHaveLength(0);
+      await consume([makeCall("second", "2026-09-02T00:00:00Z")]);
+    };
+    d.streamToolCalls = async (_source, consume) => {
+      expect(written).toHaveLength(0);
+      await consume([]);
+    };
+    await rebuildRunTotals(WORKER, d);
+    expect(d.loadPriceBook).toHaveBeenCalledTimes(2);
+    expect(d.loadPriceBook).toHaveBeenNthCalledWith(1, expect.objectContaining({ models: ["first"] }));
+    expect(d.loadPriceBook).toHaveBeenNthCalledWith(2, expect.objectContaining({ models: ["second"] }));
+    expect(written[0]?.costMicros).toBe(4n);
+    expect(sourcesWritten[0]).toEqual({ toolDefinitionTokens: 4, contextFrameTokens: null, steeringTokens: 0 });
+  });
+
+  it("does not write totals when pricing exceeds its row budget", async () => {
+    const { d, written } = deps({ runs: { [WORKER]: meta(WORKER, "owner") } });
+    d.loadPriceBook = async () => { throw new PriceBookSliceLimitError(); };
+    await expect(rebuildRunTotals(WORKER, d)).rejects.toBeInstanceOf(PriceBookSliceLimitError);
+    expect(written).toHaveLength(0);
+  });
+
+  it("leaves the stored totals unchanged when a later batch fails", async () => {
+    const { d, written } = deps({ runs: { [WORKER]: meta(WORKER, "owner") } });
+    d.streamModelCalls = async (_args, consume) => {
+      await consume([]);
+      throw new Error("stream interrupted");
+    };
+    await expect(rebuildRunTotals(WORKER, d)).rejects.toThrow("stream interrupted");
+    expect(written).toHaveLength(0);
   });
 });

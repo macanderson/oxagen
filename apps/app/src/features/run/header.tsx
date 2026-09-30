@@ -87,10 +87,14 @@ export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   const ta = useTranslations("agents");
   const registered = harnessOf(agent);
   if (run.harness) {
-    return { name: run.harness.name, version: run.harness.version };
+    return {
+      key: run.harness.name,
+      name: run.harness.name,
+      version: run.harness.version,
+    };
   }
   if (registered === null) return null;
-  return { name: ta(`harness.${registered}`), version: null };
+  return { key: registered, name: ta(`harness.${registered}`), version: null };
 }
 
 /**
@@ -1023,6 +1027,7 @@ export function RunHeader({
             <AgentCard
               layout="compact"
               agentKey={run.agentKey}
+              harness={run.harness?.name ?? harnessOf(agent)}
               notRecorded={t("notRecorded")}
               sub={<AgentLine run={run} agent={agent} roster={roster} />}
             />

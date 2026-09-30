@@ -27,10 +27,10 @@ name: infra
 
 on:
   pull_request:
-    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
+    paths: ["infra/stacks-new/**", "infra/modules/**", "infra/tools/node/**", "infra/tools/publish-node-tools.sh", "infra/tools/tests/node-*.test.py", ".github/workflows/infra.yml"]
   push:
     branches: [main]
-    paths: ["infra/stacks-new/**", "infra/modules/**", ".github/workflows/infra.yml"]
+    paths: ["infra/stacks-new/**", "infra/modules/**", "infra/tools/node/**", "infra/tools/publish-node-tools.sh", "infra/tools/tests/node-*.test.py", ".github/workflows/infra.yml"]
   workflow_dispatch:
 
 permissions:
@@ -61,6 +61,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify node deployment guards
+        run: |
+          python3 infra/tools/tests/node-toolchain.test.py
+          python3 infra/tools/tests/node-memory-budget.test.py
+
       - id: pick
         run: |
           set -euo pipefail
@@ -86,6 +91,9 @@ jobs:
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
+            if printf '%s\n' "$changed" | rg -q '^infra/tools/(node/|publish-node-tools\.sh$)'; then
+              stacks=$(printf '%s\nci-deploy\nstaging\n' "$stacks" | sed '/^$/d' | sort -u)
+            fi
           fi
 
           if [ -z "$stacks" ]; then
@@ -278,3 +286,16 @@ jobs:
         # Re-plans rather than reusing the pull request's plan file: that plan
         # was computed against a different base and the state may have moved.
         run: tofu apply -input=false -no-color -auto-approve -lock-timeout=5m
+
+      - name: Publish approved node toolchain
+        if: matrix.stack == 'ci-deploy' || matrix.stack == 'staging'
+        env:
+          TOOLCHAIN_STACK: ${{ matrix.stack }}
+        run: |
+          set -euo pipefail
+          case "$TOOLCHAIN_STACK" in
+            ci-deploy) export BUCKET=oxagen-deploy-916294258235 ;;
+            staging) export BUCKET=oxagen-staging-deploy-916294258235 ;;
+            *) exit 1 ;;
+          esac
+          REGION="$AWS_REGION" bash infra/tools/publish-node-tools.sh

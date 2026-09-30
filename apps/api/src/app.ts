@@ -5,6 +5,7 @@ import { revokeMemberInviteRoute } from "./routes/v1/org.member_invite.revoke";
 import { resendMemberInviteRoute } from "./routes/v1/org.member_invite.resend";
 import { Hono } from "hono";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { requestAdmission } from "./middleware/admission";
 import { requestLogger } from "./middleware/logger";
 import { corsMiddleware } from "./middleware/cors";
 import { errorMiddleware } from "./middleware/error";
@@ -404,6 +405,7 @@ app.use("*", requestLogger);
 // CORS must run before auth: a preflight OPTIONS carries no credentials, so
 // it has to short-circuit here or the browser never sends the real request.
 app.use("*", corsMiddleware);
+app.use("*", requestAdmission);
 app.onError(errorMiddleware);
 
 // Public routes — health and Stripe webhook bypass auth. The webhook needs
