@@ -233,6 +233,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
 // runtime Zod schema with vars that deployed services never validate.
 export const SCHEMA_EXEMPT = new Set<string>([
   // Dedicated staging load rig. Deployed services do not read these values.
+  "FLEET_OUTPUT_ROOT",
   "FLEET_STAGING_ORIGIN",
   "FLEET_OPERATOR_TOKEN",
   "FLEET_BUNDLE_PUBLIC_KEY_PEM",

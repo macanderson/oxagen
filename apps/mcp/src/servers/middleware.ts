@@ -133,7 +133,7 @@ function isHeaderValue(value: unknown): value is OutgoingHttpHeader | undefined 
 function outgoingHeaders(value: unknown): OutgoingHttpHeaders | undefined {
   if (Array.isArray(value)) {
     if (value.length % 2 !== 0) return undefined;
-    const headers: OutgoingHttpHeaders = Object.create(null);
+    const headers = Object.create(null) as OutgoingHttpHeaders;
     for (let i = 0; i < value.length; i += 2) {
       const name: unknown = value[i];
       const entry: unknown = value[i + 1];
@@ -143,7 +143,7 @@ function outgoingHeaders(value: unknown): OutgoingHttpHeaders | undefined {
     return headers;
   }
   if (!isRecord(value)) return undefined;
-  const headers: OutgoingHttpHeaders = Object.create(null);
+  const headers = Object.create(null) as OutgoingHttpHeaders;
   for (const [name, entry] of Object.entries(value)) {
     if (!isHeaderValue(entry)) return undefined;
     headers[name] = entry;

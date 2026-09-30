@@ -85,7 +85,7 @@ export async function reconcileStores(reportPath: string, outputPath: string): P
   } finally { void reader.cancel().catch(() => {}); reader.releaseLock(); }
   const durable = buffer.subarray(0, used).toString().trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Durable);
   const pg = postgres(pgUrl.href, { max: 1, connect_timeout: 10, idle_timeout: 10, prepare: false,
-    connection: { statement_timeout: 30000, default_transaction_read_only: "on" } });
+    connection: { statement_timeout: 30000, default_transaction_read_only: true } });
   let derived: Derived[];
   try {
     derived = await pg.begin(async (tx) => {
