@@ -1,4 +1,4 @@
-h1:LSOvLKvy9hqS6ylkVY05swZrwrXV2/iQfUBBM0irs8A=
+h1:rsCP8/Jj6/2wR57XEdXVnobrMW7CYG8fc6Kic+HygoE=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -244,3 +244,4 @@ h1:LSOvLKvy9hqS6ylkVY05swZrwrXV2/iQfUBBM0irs8A=
 20260930120000_mcp_credentials_client_auth_method.sql h1:xnl+qCwguR3x9mlkNtKe3h5z1i308SU+hvRpYSZlioA=
 20260930120700_runtime_containment_reconcile.sql h1:14yvPaSxekhnEEA3xUewpbPaZlPGga6nBky/W1eoHHc=
 20260930130000_context_proposals_governance_kind.sql h1:g1lnhWOizS9X+gmMhrC0k2N8G8HrDPKEn0kmL0GbR/s=
+20260930190000_model_credentials_structured_outputs.sql h1:Dct0z3+iZQCHQDWyqQeZXZD7heBti81bkMBTXM6QaWU=

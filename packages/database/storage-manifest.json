@@ -45,7 +45,6 @@
       "name": "add_plugin_registry",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -56,6 +55,7 @@
       "name": "advance_onboarding",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -130,6 +130,7 @@
       "name": "assign_agent_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -212,7 +213,6 @@
       "name": "bind_agent_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -223,6 +223,7 @@
       "name": "bisect_runs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -233,7 +234,6 @@
       "name": "browse_plugin_catalog",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -284,6 +284,7 @@
       "name": "clone_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -351,6 +352,7 @@
       "name": "create_cost_center",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -371,7 +373,6 @@
       "name": "create_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -438,6 +439,7 @@
       "name": "create_runtime",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -562,6 +564,7 @@
       "name": "delete_cost_center",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -572,7 +575,6 @@
       "name": "delete_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -595,6 +597,7 @@
       "name": "delete_mcp_server",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -707,6 +710,7 @@
       "name": "delete_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -760,6 +764,7 @@
       "name": "dismiss_proposal",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -769,6 +774,7 @@
       "name": "dispatch_command",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -838,6 +844,7 @@
       "name": "export_billing_statement",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -860,6 +867,7 @@
       "name": "export_cost_center_statement",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -881,6 +889,7 @@
       "name": "export_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -911,6 +920,7 @@
       "name": "export_statement",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -930,6 +940,7 @@
       "name": "fork_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -962,6 +973,7 @@
       "name": "get_agent_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -991,7 +1003,6 @@
       "name": "get_auth_alerts",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1002,6 +1013,7 @@
       "name": "get_auto_eligibility",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1045,7 +1057,6 @@
       "name": "get_catalog_plugin",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1078,6 +1089,7 @@
       "name": "get_clone_draft",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1088,7 +1100,6 @@
       "name": "get_connection",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1099,7 +1110,6 @@
       "name": "get_connection_mappings",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1110,6 +1120,7 @@
       "name": "get_context_pr",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1131,6 +1142,7 @@
       "name": "get_conversation",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1141,6 +1153,7 @@
       "name": "get_data_plane",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1151,7 +1164,6 @@
       "name": "get_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1184,6 +1196,7 @@
       "name": "get_export_status",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1194,6 +1207,7 @@
       "name": "get_finding_evidence",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1204,6 +1218,7 @@
       "name": "get_first_frame",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1214,6 +1229,7 @@
       "name": "get_gau_bucket",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1269,6 +1285,7 @@
       "name": "get_main_repository",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1290,7 +1307,6 @@
       "name": "get_memory_policy",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1311,6 +1327,7 @@
       "name": "get_model_credential",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1364,6 +1381,7 @@
       "name": "get_onboarding_state",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1386,6 +1404,7 @@
       "name": "get_operator_ranking",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -1395,7 +1414,6 @@
       "name": "get_org_settings",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1406,7 +1424,6 @@
       "name": "get_plugin_schema",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1439,7 +1456,6 @@
       "name": "get_prompt_settings",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1516,6 +1532,7 @@
       "name": "get_repository_tree",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1550,6 +1567,7 @@
       "name": "get_run_chain",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1561,6 +1579,7 @@
       "name": "get_run_context",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1583,6 +1602,7 @@
       "name": "get_run_export",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1594,6 +1614,7 @@
       "name": "get_run_frame_body",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1604,6 +1625,7 @@
       "name": "get_run_issue_providers",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -1613,6 +1635,7 @@
       "name": "get_run_issues",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1623,6 +1646,7 @@
       "name": "get_run_outcomes_settings",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -1632,6 +1656,7 @@
       "name": "get_run_outputs",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -1650,6 +1675,7 @@
       "name": "get_run_transcript",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1661,6 +1687,7 @@
       "name": "get_run_turns",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -1672,6 +1699,7 @@
       "name": "get_run_work",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -1692,6 +1720,7 @@
       "name": "get_skill_config",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1743,6 +1772,7 @@
       "name": "get_steering_deliveries",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1785,6 +1815,7 @@
       "name": "get_steering_repo",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1865,6 +1896,7 @@
       "name": "get_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -1908,7 +1940,6 @@
       "name": "get_workspace_settings",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1941,7 +1972,6 @@
       "name": "import_env_secrets",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -1952,6 +1982,7 @@
       "name": "import_tools",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2020,7 +2051,6 @@
       "name": "install_plugin",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2031,7 +2061,6 @@
       "name": "install_plugins_bulk",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2042,6 +2071,7 @@
       "name": "link_repository",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -2053,7 +2083,6 @@
       "name": "list_agent_environments",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2097,6 +2126,7 @@
       "name": "list_api_keys",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2107,6 +2137,7 @@
       "name": "list_approval_rules",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2128,7 +2159,6 @@
       "name": "list_branches",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2150,6 +2180,7 @@
       "name": "list_commands",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2204,6 +2235,7 @@
       "name": "list_cost_centers",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2214,6 +2246,7 @@
       "name": "list_credential_grants",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2224,7 +2257,6 @@
       "name": "list_environments",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2257,6 +2289,7 @@
       "name": "list_findings",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -2268,6 +2301,7 @@
       "name": "list_github_installations",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2289,6 +2323,7 @@
       "name": "list_incidents",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2299,6 +2334,7 @@
       "name": "list_installation_repositories",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2332,6 +2368,7 @@
       "name": "list_invoices",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2342,6 +2379,7 @@
       "name": "list_kill_switches",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2392,6 +2430,7 @@
       "name": "list_members",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2479,7 +2518,6 @@
       "name": "list_plugin_registries",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2490,7 +2528,6 @@
       "name": "list_plugin_versions",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2501,7 +2538,6 @@
       "name": "list_plugins",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -2522,6 +2558,7 @@
       "name": "list_price_entries",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -2533,6 +2570,7 @@
       "name": "list_proposals",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2565,6 +2603,7 @@
       "name": "list_repositories",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -2576,6 +2615,7 @@
       "name": "list_resolved_approvals",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -2610,6 +2650,7 @@
       "name": "list_runtimes",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2654,6 +2695,7 @@
       "name": "list_skills",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2701,6 +2743,7 @@
       "name": "list_tacho_hosts",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2731,6 +2774,7 @@
       "name": "list_tool_versions",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2741,6 +2785,7 @@
       "name": "list_toolbelts",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2751,6 +2796,7 @@
       "name": "list_unpriced_models",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2761,6 +2807,7 @@
       "name": "list_waste",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2771,6 +2818,7 @@
       "name": "list_working_copies",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2814,6 +2862,7 @@
       "name": "merge_context_pr",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -2823,6 +2872,7 @@
       "name": "merge_pr_without_review",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -2832,6 +2882,7 @@
       "name": "move_agent",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -2842,6 +2893,7 @@
       "name": "open_context_pr",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -2851,6 +2903,7 @@
       "name": "open_init_pr",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3001,6 +3054,7 @@
       "name": "propose_configuration_clone",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3022,6 +3076,7 @@
       "name": "propose_skill",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3106,7 +3161,6 @@
       "name": "reauth_plugin_credential",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3255,7 +3309,6 @@
       "name": "remove_plugin_registry",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3266,6 +3319,7 @@
       "name": "remove_price_entry",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3297,6 +3351,7 @@
       "name": "repair_steering_repo",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3318,6 +3373,7 @@
       "name": "resend_member_invite",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3369,6 +3425,7 @@
       "name": "retire_agent",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3378,6 +3435,7 @@
       "name": "retry_steering_repo_provision",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3397,6 +3455,7 @@
       "name": "revise_context_record",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3439,6 +3498,7 @@
       "name": "revoke_member_invite",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3449,7 +3509,6 @@
       "name": "revoke_plugin_credential",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3480,6 +3539,7 @@
       "name": "revoke_tacho_enrollment",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3549,6 +3609,7 @@
       "name": "seal_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3581,6 +3642,7 @@
       "name": "search_mcp_registry",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3635,6 +3697,7 @@
       "name": "send_workspace_invite",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3667,7 +3730,6 @@
       "name": "set_auth_alerts",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3678,6 +3740,7 @@
       "name": "set_auto_topup",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3706,6 +3769,7 @@
       "name": "set_cost_center",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3726,7 +3790,6 @@
       "name": "set_default_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3746,6 +3809,7 @@
       "name": "set_governance_mode",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3798,6 +3862,7 @@
       "name": "set_operator_pseudonyms",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -3814,7 +3879,6 @@
       "name": "set_plugin_enabled",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3825,7 +3889,6 @@
       "name": "set_plugin_secret",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3836,6 +3899,7 @@
       "name": "set_preferences",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3846,6 +3910,7 @@
       "name": "set_price_entry",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3857,6 +3922,7 @@
       "name": "set_production_branch",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3956,6 +4022,7 @@
       "name": "set_tool_classification",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -3966,6 +4033,7 @@
       "name": "set_tool_state",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -4067,6 +4135,7 @@
       "name": "summarize_run",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -4085,6 +4154,7 @@
       "name": "suspend_agent",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -4149,7 +4219,6 @@
       "name": "unbind_agent_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4160,7 +4229,6 @@
       "name": "uninstall_plugin",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4171,6 +4239,7 @@
       "name": "unlink_repository",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -4215,7 +4284,6 @@
       "name": "update_environment",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4281,6 +4349,7 @@
       "name": "update_profile",
       "reads": [],
       "surfaces": [
+        "agent",
         "api"
       ],
       "writes": []
@@ -4290,7 +4359,6 @@
       "name": "update_prompt_settings",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4301,6 +4369,7 @@
       "name": "update_runtime",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -4311,6 +4380,7 @@
       "name": "update_skill_config",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -4342,6 +4412,7 @@
       "name": "update_toolbelt",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "mcp"
       ],
@@ -4383,7 +4454,6 @@
       "name": "upload_asset",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -4451,7 +4521,6 @@
       "name": "validate_plugin_schema",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -20870,6 +20939,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "structured_outputs",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
         }
       ],
       "domain": "org",
