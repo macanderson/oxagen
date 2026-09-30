@@ -1481,9 +1481,18 @@ importers:
 
   packages/done-record:
     dependencies:
+      '@oxagen/glob':
+        specifier: workspace:*
+        version: link:../glob
       '@oxagen/run-evidence':
         specifier: workspace:*
         version: link:../run-evidence
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
     devDependencies:
       '@types/node':
         specifier: 25.9.8
@@ -1491,12 +1500,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
-      ajv:
-        specifier: 8.20.0
-        version: 8.20.0
-      ajv-formats:
-        specifier: 3.0.1
-        version: 3.0.1(ajv@8.20.0)
       eslint:
         specifier: 9.39.5
         version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
