@@ -504,7 +504,7 @@ describe("gatewayLocalReporter", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("says any group when the server names no machine group", async () => {
+  it("refuses a server that names no machine group, which no machine may run (negative)", async () => {
     const { reporter, machines } = reporterWith({ machines: [] });
     const source: ServerSource = { type: "local", command: "files-mcp" };
     const refusal = await refusalOf(
@@ -513,9 +513,9 @@ describe("gatewayLocalReporter", () => {
     expect(refusal).toMatchObject({
       code: "source",
       message:
-        "No machine in any group is connected, so files was not discovered.",
+        "files names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.",
     });
-    expect(machines).toHaveBeenCalledWith(SCOPE, []);
+    expect(machines).not.toHaveBeenCalled();
   });
 
   it("turns the machine's refusal into its text", async () => {
