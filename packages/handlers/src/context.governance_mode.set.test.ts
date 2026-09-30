@@ -923,8 +923,9 @@ describe("merge_context_pr on a governance proposal", () => {
   it("answers the version an earlier call published when it resumes a merged PR", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
-    // An earlier call merged and published the PR, then failed before its
-    // record landed.
+    // An earlier call claimed the row, merged and published the PR, then
+    // failed before its record landed.
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
     const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
     const seams = doubles();
     const published: SteeringPublisher = {
@@ -949,6 +950,22 @@ describe("merge_context_pr on a governance proposal", () => {
     });
     // The resume merges nothing twice.
     expect(deps.github.merges).toEqual([]);
+  });
+
+  it("refuses to finish a PR someone merged on the host, and leaves it to the sync (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    deps.requestSync = vi.fn(async () => undefined);
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(doubles()))({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "conflict", reason: "merged_outside_oxagen" });
+    // Nobody is credited with the merge, and no governance event claims a
+    // review. The sync records it as a change made outside Oxagen.
+    expect(deps.store.proposals[0]).toMatchObject({ status: "checks_passed", mergedByUserId: null });
+    expect(deps.events).toEqual([]);
+    expect(deps.requestSync).toHaveBeenCalledOnce();
   });
 
   it("brings a branch that fell behind up to date and runs the steering checks again", async () => {

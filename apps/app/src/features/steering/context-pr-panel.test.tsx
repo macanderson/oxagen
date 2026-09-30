@@ -306,6 +306,22 @@ describe("the review each governance mode asks for", () => {
     expect(merge()).toBeEnabled();
     expect(screen.getByTestId("dismiss-proposal")).toBeInTheDocument();
   });
+
+  it("lists what merging a governance change does, and no record or promotion event (#4795)", () => {
+    const panel = renderPanel(
+      readOk(
+        contextPr("checks_passed", {
+          kind: "governance",
+          onMerge: { path: "steering/governance.toml", bundleVersion: { current: 0, afterMerge: 0 } },
+        }),
+      ),
+    );
+    const onMerge = panel.querySelector("[data-on-merge]");
+    expect(onMerge).toHaveTextContent("Put the mode in steering/governance.toml in force");
+    expect(onMerge).not.toHaveTextContent("as a record in force");
+    expect(onMerge).not.toHaveTextContent("promotion event");
+    expect(onMerge).not.toHaveTextContent("promotion ledger");
+  });
 });
 
 describe("a drifted managed block", () => {

@@ -669,6 +669,18 @@ async function mergeGovernanceProposal(
   let mergedAt: Date;
   let publishedVersion: number | null = null;
   if (pr.merged) {
+    // Only a merge Oxagen started resumes here: an earlier call claimed the
+    // row before it landed the PR, and failed before its record did. A PR
+    // someone merged on the host carries no claim. Finishing it here would
+    // record this caller as its merger and an approval nobody gave, so the
+    // repository sync records it as a change made outside Oxagen instead.
+    if (recorded.mergeClaimedAt === null) {
+      await requestSync(deps, scope, recorded);
+      throw governanceRefusal(
+        "merged_outside_oxagen",
+        `${recorded.prUrl ?? recorded.publicId} was merged outside Oxagen, so no approval in Oxagen stands behind it. The repository sync records the change within a minute.`,
+      );
+    }
     // The host merged it on an earlier call whose record did not land. The
     // repository sync publishes the production branch that holds it.
     if (!pr.mergeCommitSha) {
