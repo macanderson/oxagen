@@ -1440,8 +1440,9 @@ describe("discover a registry package on machines", () => {
         lock: {
           ...ACME_LOCK,
           package: {
-            ...ACME_LOCK.package,
             name: "acme-files",
+            version: "1.3.0",
+            digest: DIGEST,
             registry_type: "pypi",
           },
           command: "uvx",
