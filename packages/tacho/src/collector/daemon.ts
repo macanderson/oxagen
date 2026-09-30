@@ -145,6 +145,7 @@ import {
 } from "./mcp-gateway";
 import { gatewayFrameBody } from "./gateway-frame";
 import { createGithubProxy } from "./github-proxy";
+import { HookQueues } from "./hook-queues";
 import {
   createMemoryReader,
   HARNESS_MEMORY_LOCATIONS,
@@ -213,7 +214,7 @@ export interface DaemonTimers {
   stopDrainMs: number;
   /**
    * The longest a hook waits for a bundle refresh it asked for. A hook holds
-   * the queue every wrapped agent on the host waits on.
+   * its session's queue while it waits.
    */
   hookBundleWaitMs: number;
 }
@@ -328,6 +329,12 @@ export interface DaemonHandle {
   /** Wait for the git reconciliation lane to settle, starting one if due. */
   flushGitReads: () => Promise<void>;
   drainSpool: () => Promise<number>;
+  /**
+   * The hook queues (`./hook-queues`): one per harness session and one for
+   * the host. A test holds a session's queue through this to put work behind
+   * a task it controls.
+   */
+  queues: HookQueues;
   refreshBundle: () => Promise<boolean>;
   stop: () => Promise<void>;
 }
@@ -472,14 +479,31 @@ export function olderBundle(
 const STOPPING =
   "tachod is stopping; tacho-hook spools this hook for the next start";
 
-/** A serial queue: hook handling for one daemon never interleaves. */
-class Serial {
-  private tail: Promise<unknown> = Promise.resolve();
-  run<T>(task: () => Promise<T>): Promise<T> {
-    const next = this.tail.then(task, task);
-    this.tail = next.catch(() => undefined);
-    return next;
-  }
+/**
+ * What a read a hook makes of a repository answers once `stop` has begun: no
+ * status and no output, which every such reader takes as no answer (#4366).
+ */
+const STOPPED_EXEC: ExecResult = {
+  status: null,
+  stdout: "",
+  stderr: "tachod is stopping",
+};
+
+/**
+ * The longest the tick leaves the state file unwritten while hooks keep a
+ * session queue busy. See `persistWhenQuiet`.
+ */
+const STATE_WRITE_DEFER_MS = 5_000;
+
+/**
+ * What a hook's handling answers: the response, and, for a hook that handed
+ * host work back from its session's queue, the promise that settles once
+ * that work has landed. The caller awaits it after the session's task has
+ * settled, since awaiting it inside that task would wait forever.
+ */
+interface HookAnswer {
+  response: Record<string, unknown>;
+  durable?: Promise<void>;
 }
 
 /**
@@ -642,8 +666,8 @@ async function initializeDaemon(
   for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
   // The memories each live prompt recalls, asked of the control plane with
-  // the host key and given at most 500 ms, because the hook queue is serial
-  // and every later hook waits on the ask (`./memory-capture/memory-recall`).
+  // the host key and given at most 500 ms, because the prompt's own session
+  // waits on the ask (`./memory-capture/memory-recall`).
   const recallMemories =
     (options.memoryRecall ?? options.listen ?? true)
       ? createMemoryRecall({
@@ -907,7 +931,70 @@ async function initializeDaemon(
   let handledWritten = handledCommands.generation;
   const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
     applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
-  const serial = new Serial();
+  /**
+   * The hook queues (ADR-229, #4601). A hook from one session no longer waits
+   * on a hook from another, so one prompt waiting on its recalled memories
+   * holds no other agent's `PreToolUse` answer. Each piece of work takes the
+   * queue below, and the order between the two kinds is the one
+   * `HookQueues` states: a host task runs after every task queued before it
+   * and before every task queued after it.
+   *
+   * A session's queue, keyed by its raw harness session id:
+   * - its live hooks, from the listener and from the contained runner;
+   * - the OTLP records that name it, one task per session a post names;
+   * - the tailer's seals of its transcripts, read outside any queue;
+   * - the gateway frame of a call it waits on (ADR-189);
+   * - the git lane's facts and reconciliation for it, read outside any queue.
+   *
+   * The host queue:
+   * - the spool drain, which replays hooks of any session in their order;
+   * - a journaled SessionEnd's seal and flush (`settleEnding`), which may
+   *   rebuild the registry from its snapshot, once the flush's body indexes
+   *   are built outside any queue;
+   * - the state file a deferred SessionEnd writes before it is answered;
+   * - the state file the tick writes when hooks kept it waiting too long;
+   * - `stop`'s seal of the host chain.
+   *
+   * Work that takes neither, and why it may:
+   * - The sweep and the checkpoint seal in one synchronous stretch, pass over
+   *   a session whose queue is running a task (`HookQueues.busy`), and seal
+   *   it on a later tick. They also pass while a host task runs.
+   * - The tick writes the state file itself when no task is running.
+   * - The host chain's writers are synchronous (the gateway, the model proxy,
+   *   run tokens), so no queued task can stand between their seal and their
+   *   write.
+   * - The detector and the operator's commands (`onControl`) mark every chain
+   *   and seal across awaits outside any queue, as they did beside the one
+   *   queue this replaced.
+   */
+  const queues = new HookQueues();
+  /**
+   * Aborted when `stop` begins. A hook that reads a repository (a push's
+   * credential basis, a session's remote) holds its session's queue for the
+   * read, up to ten seconds for each git command, and `stop` seals the host
+   * chain behind every task queued before it. The reads a hook makes answer
+   * `STOPPED_EXEC` from then on, so that seal lands inside `STOP_GRACE_MS`
+   * (#4366). The git lane's reads are not aborted: `stop` does not wait for
+   * them beyond `stopLaneMs`.
+   */
+  const stopping = new AbortController();
+  const hookExecAsync: ExecAsync = (command, args) => {
+    if (stopping.signal.aborted) return Promise.resolve(STOPPED_EXEC);
+    return new Promise<ExecResult>((resolve, reject) => {
+      const abandon = () => resolve(STOPPED_EXEC);
+      stopping.signal.addEventListener("abort", abandon, { once: true });
+      execAsync(command, args).then(
+        (result) => {
+          stopping.signal.removeEventListener("abort", abandon);
+          resolve(result);
+        },
+        (error: unknown) => {
+          stopping.signal.removeEventListener("abort", abandon);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  };
 
   // Exponential backoff for the command poll, the same 2s→60s shape the
   // Shipper already applies to ingest. Without it a control plane that is
@@ -994,6 +1081,37 @@ async function initializeDaemon(
     // which is harmless: remembering a key the ledger holds is a no-op.
     clearHookIdJournal(paths.hookIdJournal);
     stateDirty = false;
+    lastStateWriteAt = Date.now();
+  }
+
+  /** When `persistState` last wrote, by the wall clock (`persistWhenQuiet`). */
+  let lastStateWriteAt = Date.now();
+
+  /**
+   * Write the state file from the tick, at a moment no hook stands between
+   * a seal and its WAL write.
+   *
+   * `daemon.json` holds each chain's cursor, and the next start reads it as
+   * the position the WAL reached. A hook seals some frames before an await
+   * and writes them after it: a prompt seals its operator messages and then
+   * waits up to 500 ms on its recalled memories. Written in that window, the
+   * file names a cursor past the WAL, and a crash before the hook's write
+   * leaves a chain gap at the next start. The one queue kept the tick's write
+   * out of that window. With a queue per session, the tick writes when no
+   * task is running, and otherwise waits for a later tick. Past
+   * `STATE_WRITE_DEFER_MS` it writes on the host queue, after the running
+   * hooks, which holds the hooks queued behind it for as long.
+   */
+  async function persistWhenQuiet(): Promise<void> {
+    if (!stateDirty) return;
+    if (queues.idle()) {
+      persistState();
+      return;
+    }
+    if (Date.now() - lastStateWriteAt < STATE_WRITE_DEFER_MS) return;
+    await queues.host(async () => {
+      if (stateDirty) persistState();
+    });
   }
 
   /**
@@ -1035,31 +1153,49 @@ async function initializeDaemon(
    * touch. Marking and
    * rolling back a chain the call never reaches costs nothing: the mark
    * matches the chain's position exactly and the rollback is a no-op.
+   *
+   * `within` narrows the marks to the sessions a caller's queue owns. A hook
+   * passes it: another session's hook runs beside it, and a rollback that
+   * reached that session would take its chain back behind frames the WAL
+   * already holds.
    */
-  function markEveryChain(): Array<{
+  function markEveryChain(
+    within: (session: SessionRecord) => boolean = () => true,
+  ): Array<{
     session: SessionRecord;
     mark: ChainMark;
   }> {
     return registry
       .list()
+      .filter(within)
       .map((session) => ({ session, mark: session.recorder.markChain() }));
+  }
+
+  /** The sessions a hook for this raw harness session id can touch. */
+  function inQueueOf(
+    harnessSessionId: string,
+  ): (session: SessionRecord) => boolean {
+    return (session) => session.harnessSessionId === harnessSessionId;
   }
 
   function rollbackEveryChain(
     marks: Array<{ session: SessionRecord; mark: ChainMark }>,
+    within: (session: SessionRecord) => boolean = () => true,
   ): void {
     // A session the failed call created has no mark: it did not exist when
     // the marks were taken. Its chain goes back to where it was born, or its
     // unwritten genesis keeps seq 0 and the retry seals a resume after it.
     // A session with a WAL file is left alone: the model proxy runs off the
-    // serial queue, and it may have opened and written that session while
+    // hook queues, and it may have opened and written that session while
     // the failed call was awaiting. The exception is a session born on a
     // WAL file it continues, either opened over it (`continueFromDisk`) or
     // resumed from restored state such as a tombstone: it goes back too, as
     // long as that file still ends where it was born. Left alone, a resumed
     // chain keeps a cursor past the WAL's tail and the retry seals a gap.
     const marked = new Set(marks.map(({ session }) => session));
-    const unmarked = registry.list().filter((session) => !marked.has(session));
+    const unmarked = registry
+      .list()
+      .filter((session) => within(session) && !marked.has(session));
     if (unmarked.length > 0) {
       const onDisk = new Set(wal.sessions());
       for (const session of unmarked) {
@@ -1090,7 +1226,9 @@ async function initializeDaemon(
    * the item is already gone. Without this, a steer lost to a full disk was
    * never delivered and never retried (#3944).
    */
-  function markEveryQueue(): Array<{
+  function markEveryQueue(
+    within: (session: SessionRecord) => boolean = () => true,
+  ): Array<{
     session: SessionRecord;
     messages: SessionRecord["control"]["messages"];
     resumeOwed: string | undefined;
@@ -1098,14 +1236,17 @@ async function initializeDaemon(
     repoChecked: true | undefined;
     interjection: SessionRecord["control"]["interjection"];
   }> {
-    return registry.list().map((session) => ({
-      session,
-      messages: [...session.control.messages],
-      resumeOwed: session.control.resumeOwed,
-      sealed: session.sealed,
-      repoChecked: session.control.repoChecked,
-      interjection: session.control.interjection,
-    }));
+    return registry
+      .list()
+      .filter(within)
+      .map((session) => ({
+        session,
+        messages: [...session.control.messages],
+        resumeOwed: session.control.resumeOwed,
+        sealed: session.sealed,
+        repoChecked: session.control.repoChecked,
+        interjection: session.control.interjection,
+      }));
   }
 
   /**
@@ -1151,11 +1292,12 @@ async function initializeDaemon(
     } of marks) {
       if (session.sealed && !sealed) session.sealed = false;
       // The repository question (#3941). Only a hook checks a repository,
-      // and hooks run one at a time, so the check goes back to where the
-      // hook found it and the next prompt checks again. A question this hook
-      // raised is taken back with its frames. A release is left standing:
-      // an answer the inbox applied during the hook's awaits also releases,
-      // and putting a settled question back would hold the session again.
+      // and one session's hooks run one at a time, so the check goes back to
+      // where the hook found it and the next prompt checks again. A question
+      // this hook raised is taken back with its frames. A release is left
+      // standing: an answer the inbox applied during the hook's awaits also
+      // releases, and putting a settled question back would hold the session
+      // again.
       session.control.repoChecked = repoChecked;
       if (interjection === undefined) session.control.interjection = undefined;
       const held = new Set(messages.map((message) => message.id));
@@ -1827,11 +1969,16 @@ async function initializeDaemon(
   // `subagents/` directory. A SubagentStop feeds what the tick has not read
   // yet and retires that subagent's cursor. See transcript-tailer.ts for why
   // this exists.
+  //
+  // The tick reads outside the hook queues and seals on the session's own
+  // queue (#4394), so a backfill of old transcripts holds no hook.
   const transcriptTailer = new TranscriptTailer({
     sessions: () => registry.list(),
     session: (id) => registry.get(id),
     record,
     statePath: paths.transcriptTailState,
+    exclusive: (session, apply) =>
+      queues.session(session.harnessSessionId, async () => apply()),
     log,
   });
 
@@ -1840,7 +1987,8 @@ async function initializeDaemon(
    * drains the session's transcript so the turn's model calls sit on the
    * chain before the frame that closes it, and `SessionEnd` drains its
    * subagents' too. A `SubagentStop` feeds the rest of the subagent's
-   * transcript to the child chain before that chain is finalized.
+   * transcript to the child chain before that chain is finalized. Each runs
+   * inside the hook's own session queue and holds no other session's.
    */
   async function tailBeforeHook(payload: unknown): Promise<void> {
     if (payload === null || typeof payload !== "object") return;
@@ -1963,7 +2111,13 @@ async function initializeDaemon(
     }
   }
 
-  function checkpoint(): void {
+  /**
+   * Seal a checkpoint on every chain that moved since its last one, and
+   * write them in one call. `busy` names a session to leave for a later
+   * checkpoint, because a task in its queue may stand between a chain mark
+   * and its write.
+   */
+  function checkpoint(busy: (session: SessionRecord) => boolean): void {
     const events: TachoEvent[] = [];
     // One write covers every session's checkpoint, so a write that throws
     // leaves none of them on disk. Each chain then goes back to where its
@@ -1980,7 +2134,8 @@ async function initializeDaemon(
       if (
         headSeq <= session.lastCheckpointSeq ||
         session.sealed ||
-        session.pendingTerminal
+        session.pendingTerminal ||
+        busy(session)
       )
         continue;
       const message = `${session.recorder.sessionUuid}:${headSeq}:${head.prevHash}`;
@@ -2115,13 +2270,22 @@ async function initializeDaemon(
     registry,
     execAsync,
     now,
-    serial,
+    inSession: (harnessSessionId, task) =>
+      queues.session(harnessSessionId, task),
     pendingSessionEnds,
     settleEnding: async (ending, sessionUuid) => {
-      await recordHookOutcome(ending, sessionUuid);
-      persistState();
-      pendingSessionEnds.delete(sessionUuid);
-      persistPendingEnds();
+      await warmTerminalIndexes(sessionUuid);
+      // The host queue, because the seal can put the whole registry back
+      // from its snapshot (`recordHookOutcome`) and writes the state file.
+      await queues.host(async () => {
+        // An earlier pass settled it, or a replayed SessionEnd replaced it,
+        // while this one built the indexes.
+        if (pendingSessionEnds.get(sessionUuid) !== ending) return;
+        await recordHookOutcome(ending, sessionUuid);
+        persistState();
+        pendingSessionEnds.delete(sessionUuid);
+        persistPendingEnds();
+      });
     },
     record,
     preSessionCopies: paths.preSessionCopies,
@@ -2176,9 +2340,17 @@ async function initializeDaemon(
    */
   const RECONCILE_HOOKS = new Set(["Stop", "SessionEnd"]);
 
+  /**
+   * Handle one hook, inside the queue `on` names: the hook's own session
+   * queue for a live hook, or the host queue for a spool replay. The one
+   * difference is where host work goes. On the host queue it runs at once.
+   * On a session queue it is queued on the host queue and handed back as
+   * `durable`, for the caller to await once this hook's task has settled.
+   */
   async function handleHookInner(
     envelope: HookEnvelope,
-  ): Promise<Record<string, unknown>> {
+    on: "session" | "host",
+  ): Promise<HookAnswer> {
     // The hook asks for the read and does not wait for it: the spawns happen
     // in the tick, off this queue. The facts therefore land on the frames
     // after this one rather than on this one, which is what the recorder's
@@ -2241,9 +2413,21 @@ async function initializeDaemon(
         },
       });
       requestGitRead(uuid, { force: true, reconcile: true });
-      persistState();
-      persistPendingEnds();
-      return {};
+      // The state file first and the journal second, as before, and both
+      // before the hook is answered, so a crash in between leaves the client
+      // to spool the hook rather than a journal entry naming a session the
+      // state file does not hold. Written from a session queue, the state
+      // file could hold another session's cursor ahead of its WAL write (see
+      // `persistWhenQuiet`), so it waits for the host queue.
+      const write = (): void => {
+        persistState();
+        persistPendingEnds();
+      };
+      if (on === "host") {
+        write();
+        return { response: {} };
+      }
+      return { response: {}, durable: queues.host(async () => write()) };
     }
     const response = await recordHookOutcome(envelope);
     const session = findSession();
@@ -2252,7 +2436,91 @@ async function initializeDaemon(
         force: TURN_BOUNDARY_HOOKS.has(hookName),
         reconcile: RECONCILE_HOOKS.has(hookName),
       });
-    return response;
+    return { response };
+  }
+
+  /**
+   * Answer one live hook: after the spooled hooks of its session, and inside
+   * its session's queue.
+   *
+   * A hook whose session still has hooks in the spool waits for a drain of
+   * the spool on the host queue first, so the spooled ones reach its chain
+   * ahead of it. The drain used to run before every hook, and so held every
+   * hook on the host behind any one session's backlog. A drain that fails
+   * fails this hook too, as it did when both ran in one task, and the client
+   * spools it.
+   */
+  async function answerHook(
+    envelope: HookEnvelope,
+    harnessSessionId: string,
+    options: { drainSpoolFirst: boolean; refuseWhenStopping: boolean },
+  ): Promise<Record<string, unknown>> {
+    const drained =
+      options.drainSpoolFirst && spoolHoldsHookOf(harnessSessionId)
+        ? queues.host(async () => {
+            if (stopped) throw new Error(STOPPING);
+            await drainSpool();
+          })
+        : undefined;
+    // Handled here so a hook refused before it awaits the drain leaves no
+    // unhandled rejection. The hook's own task rethrows it.
+    void drained?.catch(() => undefined);
+    const answer = await queues.session(harnessSessionId, async () => {
+      if (options.refuseWhenStopping && stopped) throw new Error(STOPPING);
+      if (drained !== undefined) await drained;
+      return handleHookInner(envelope, "session");
+    });
+    if (answer.durable !== undefined) await answer.durable;
+    return answer.response;
+  }
+
+  /**
+   * The session each spool file names, by file name, read once per file.
+   * A spool file never changes once written.
+   */
+  const spooledSessions = new Map<string, string | undefined>();
+
+  /**
+   * The most spool files one hook reads for the session they name. A spool
+   * the daemon has not read that far into is treated as holding a hook for
+   * every session, which drains it first, as every hook did before.
+   */
+  const SPOOL_NAMES_READ_PER_HOOK = 200;
+
+  /** Whether the spool holds a hook for this raw harness session id. */
+  function spoolHoldsHookOf(harnessSessionId: string): boolean {
+    let names: string[];
+    try {
+      names = spoolFileNames();
+    } catch {
+      return false;
+    }
+    const listed = new Set(names);
+    for (const name of [...spooledSessions.keys()])
+      if (!listed.has(name)) spooledSessions.delete(name);
+    let reads = 0;
+    for (const name of names) {
+      if (!spooledSessions.has(name)) {
+        if (reads === SPOOL_NAMES_READ_PER_HOOK) return true;
+        reads += 1;
+        let sessionId: string | undefined;
+        try {
+          const file = JSON.parse(
+            readFileSync(join(paths.spool, name), "utf8"),
+          ) as SpoolFile;
+          const named = (file.payload as { session_id?: unknown } | undefined)
+            ?.session_id;
+          sessionId = typeof named === "string" ? named : undefined;
+        } catch {
+          // A file that does not parse names no session. The drain sets it
+          // aside when it reaches it.
+          sessionId = undefined;
+        }
+        spooledSessions.set(name, sessionId);
+      }
+      if (spooledSessions.get(name) === harnessSessionId) return true;
+    }
+    return false;
   }
 
   async function recordHookOutcome(
@@ -2275,20 +2543,27 @@ async function initializeDaemon(
         setAsideConflictingTerminal(pendingUuid, pending, error);
       }
     }
+    // The whole registry, restored below when the journal write fails. Only
+    // `settleEnding` passes a pending uuid, and it runs on the host queue, so
+    // no other session's hook moves the registry between here and a restore.
     const before = pending === undefined ? undefined : registry.state();
+    // Only the sessions this hook's queue owns. Another session's hook runs
+    // beside this one, and marking its chain here would let this hook's
+    // rollback take that chain back behind frames the WAL already holds.
+    const mine = inQueueOf(hookInputSchema.parse(envelope.payload).session_id);
     // Marked before the seal, not only before the write below: a session
     // whose SessionEnd is pending takes a different path to the WAL
     // (`flushPendingTerminal`, journaled and rolled back through its own
     // `registry.restore`), but `handleHookEvent` itself can throw after
     // sealing on one chain and before finishing another, and that failure
     // has no rollback of its own.
-    const marks = markEveryChain();
+    const marks = markEveryChain(mine);
     // A hook takes a queued message off its session's queue and acknowledges
     // it `applied` as it seals the delivery. Both wait here until the
     // delivery frame is durable: a failed write puts the message back on its
     // queue for the next boundary and sends no acknowledgement, where it used
     // to report a steer applied at a seq the WAL never held (#3944).
-    const queues = markEveryQueue();
+    const queued = markEveryQueue(mine);
     const acks: CommandAcknowledgement[] = [];
     let outcome: Awaited<ReturnType<typeof handleHookEvent>>;
     try {
@@ -2299,8 +2574,9 @@ async function initializeDaemon(
           registry,
           policy,
           // A hook waits a bounded time for a refresh and none during a
-          // backoff. It holds the hook queue, and past the wait it decides
-          // on the bundle it has, which is what a failed refresh left it.
+          // backoff. It holds its session's queue, and past the wait it
+          // decides on the bundle it has, which is what a failed refresh left
+          // it.
           refreshBundle: async () => {
             await settleWithin(refreshBundle(), timers.hookBundleWaitMs);
           },
@@ -2308,13 +2584,15 @@ async function initializeDaemon(
             acks.push(ack);
           },
           now,
+          // Both reads hold this hook's session queue, and both answer no
+          // answer once `stop` begins (`hookExecAsync`).
           pushCredentialBasis: (command, cwd) =>
             pushCredentialBasis(command, cwd, {
               receipts: () =>
                 readHostFile(paths.hostFile)?.github_repositories ?? [],
-              execAsync,
+              execAsync: hookExecAsync,
             }),
-          repositoryRemote: (cwd) => readRepositoryRemote(execAsync, cwd),
+          repositoryRemote: (cwd) => readRepositoryRemote(hookExecAsync, cwd),
           cedar: loadCedarRuntime,
           skills,
           ...(recallMemories !== undefined ? { recallMemories } : {}),
@@ -2325,8 +2603,8 @@ async function initializeDaemon(
         envelope.hook_id,
       );
     } catch (error) {
-      rollbackEveryChain(marks);
-      restoreEveryQueue(queues);
+      rollbackEveryChain(marks, mine);
+      restoreEveryQueue(queued);
       throw error;
     }
     if (pending !== undefined) {
@@ -2364,7 +2642,7 @@ async function initializeDaemon(
         if (before !== undefined) registry.restore(before);
         // The restore puts the queues back, but the `expired` acks the seal
         // queued live outside the state it restores.
-        withdrawExpiredAcks(queues);
+        withdrawExpiredAcks(queued);
         throw error;
       }
       // The journal now holds the delivery frames, and a failed flush below
@@ -2386,8 +2664,8 @@ async function initializeDaemon(
       try {
         record(outcome.events, outcome.bodies);
       } catch (error) {
-        rollbackEveryChain(marks);
-        restoreEveryQueue(queues);
+        rollbackEveryChain(marks, mine);
+        restoreEveryQueue(queued);
         // The chain rollback does not reach the hook-id ledger, which lives
         // on the session record. Left in place, the key would make the
         // client's spool replay of this same hook look like a repeat, and
@@ -2484,6 +2762,45 @@ async function initializeDaemon(
   }
 
   /**
+   * Build the body indexes a journaled SessionEnd's flush will consult,
+   * before `settleEnding` takes the host queue (#4361).
+   *
+   * The flush below builds any index that does not cover its file, with
+   * awaited reads. It runs on the host queue, so for a body file with no
+   * sidecar every hook on the host waited for the whole build, about 0.8
+   * seconds per GB. Built here first, outside any queue, the flush finds
+   * each index covering its file, or covering all but what was appended
+   * since, and reads only that. Every journaled flush goes through
+   * `settleEnding`: the git lane reaches it for a SessionEnd a live hook
+   * deferred, for one a spool replay deferred, and for one journaled before
+   * a restart. A SessionEnd sealed straight from its hook writes through
+   * `Wal.append`, which consults no index.
+   *
+   * The terminal's bodies belong to the ending session and to the subagent
+   * chains its end closes, so those body files are the ones built. A build
+   * that fails is reported by the WAL and left to the flush, which reports
+   * it again and writes a body twice rather than lose it.
+   */
+  async function warmTerminalIndexes(sessionUuid: string): Promise<void> {
+    const sessions = new Set<string>([sessionUuid]);
+    const terminal = pendingSessionEnds.get(sessionUuid)?.terminal;
+    for (const body of terminal?.bodies ?? []) sessions.add(body.session_uuid);
+    const session = registry.byUuid(sessionUuid);
+    if (session !== undefined) {
+      sessions.add(session.recorder.sessionUuid);
+      for (const child of session.recorder.openChildren.values())
+        sessions.add(child.sessionUuid);
+    }
+    try {
+      await wal.withBodiesIndexed(sessions, () => undefined);
+    } catch (error) {
+      log(
+        `body index build before the session end of ${sessionUuid} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Flush a journaled terminal once the body indexes it consults are built
    * off the synchronous path.
    *
@@ -2494,7 +2811,8 @@ async function initializeDaemon(
    * model call was answered (#4299). `Wal.withBodiesIndexed` builds those
    * indexes with awaited reads first. The flush itself stays one
    * synchronous step, run in the same turn as the check that the indexes
-   * cover their files.
+   * cover their files. `warmTerminalIndexes` has usually built them already,
+   * outside the host queue this runs on.
    */
   async function flushJournaledTerminal(
     pending: PendingSessionEnd,
@@ -2635,17 +2953,33 @@ async function initializeDaemon(
     return spoolUnread || spoolHeld.has(session.harnessSessionId);
   }
 
-  /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
-  async function drainSpool(listedAt?: number): Promise<number> {
-    if (listedAt !== undefined) watchLedgerClock(listedAt);
-    const listed = readdirSync(paths.spool)
+  /** The spool files waiting to be replayed, in the order they replay. */
+  function spoolFileNames(): string[] {
+    return readdirSync(paths.spool)
       .filter((name) => name.endsWith(".json"))
       .sort();
+  }
+
+  /**
+   * What an empty spool listing settles: nothing is held for any session,
+   * and every ledger key a replay could still name has been seen.
+   */
+  function noteEmptySpool(listedAt?: number): void {
+    spoolLeft = new Map();
+    spoolHeld = new Set();
+    spoolUnread = false;
+    if (listedAt !== undefined) pruneHookLedgers(listedAt);
+  }
+
+  /**
+   * Replay what `tacho-hook` spooled while the daemon was down, in order.
+   * Runs on the host queue: a replay can name any session.
+   */
+  async function drainSpool(listedAt?: number): Promise<number> {
+    if (listedAt !== undefined) watchLedgerClock(listedAt);
+    const listed = spoolFileNames();
     if (listed.length === 0) {
-      spoolLeft = new Map();
-      spoolHeld = new Set();
-      spoolUnread = false;
-      if (listedAt !== undefined) pruneHookLedgers(listedAt);
+      noteEmptySpool(listedAt);
       return 0;
     }
     const gapped = new Map<string, string>();
@@ -2706,7 +3040,7 @@ async function initializeDaemon(
       if (sessionId !== undefined && spooledWhileDown && !gapped.has(sessionId))
         gapped.set(sessionId, file.received_at);
       try {
-        await handleHookInner(spoolEnvelope(file));
+        await handleHookInner(spoolEnvelope(file), "host");
         succeeded.push(path);
         processed += 1;
       } catch (error) {
@@ -2835,7 +3169,7 @@ async function initializeDaemon(
     string,
     { calls: number; refused: number; lastSeenAt: string }
   >();
-  /** Tool use ids whose gateway frame waits on the serial queue. */
+  /** Tool use ids whose gateway frame waits on its session's queue. */
   const queuedGatewayCalls = new Set<string>();
 
   /**
@@ -2877,26 +3211,26 @@ async function initializeDaemon(
         ? undefined
         : sessionAwaiting(toolUseId);
     if (toolUseId !== undefined && target !== undefined) {
-      // A session chain is written on the serial queue, where that session's
-      // hooks are handled too. Sealed off it, this frame could land while a
-      // queued hook stands between its chain mark and its write, and that
-      // hook's rollback after a failed write would take the chain back behind
-      // a frame the WAL already holds. The client's answer does not wait for
-      // the queue. The frame lands before the call's PostToolUse, because the
-      // queue runs in order and the harness sends that hook only once it has
-      // the answer. A failed write is logged, and the rollback leaves the call
-      // awaited, so the PostToolUse seals it instead.
+      // A session chain is written on its session's queue, where that
+      // session's hooks are handled too. Sealed off it, this frame could land
+      // while a queued hook stands between its chain mark and its write, and
+      // that hook's rollback after a failed write would take the chain back
+      // behind a frame the WAL already holds. The client's answer does not
+      // wait for the queue. The frame lands before the call's PostToolUse,
+      // because the queue runs in order and the harness sends that hook only
+      // once it has the answer. A failed write is logged, and the rollback
+      // leaves the call awaited, so the PostToolUse seals it instead.
       //
-      // The session is chosen here, once. A task already on the queue (a
-      // tick reading the transcript, an OTel record) can seal a sighting of
-      // this call before the frame is written, and the family ledger judges
-      // the frame against it there: a body the chain lacks is sealed stamped
-      // as a duplicate, and a repeat seals nothing. Looked up again inside the
-      // task, the call found no session waiting and sealed a second identity
-      // on the daemon's chain.
+      // The session is chosen here, once. A task already on the session's
+      // queue (the tailer sealing a transcript it read, an OTel record) can
+      // seal a sighting of this call before the frame is written, and the
+      // family ledger judges the frame against it there: a body the chain
+      // lacks is sealed stamped as a duplicate, and a repeat seals nothing.
+      // Looked up again inside the task, the call found no session waiting
+      // and sealed a second identity on the daemon's chain.
       queuedGatewayCalls.add(toolUseId);
-      serial
-        .run(async () => {
+      queues
+        .session(target.harnessSessionId, async () => {
           try {
             if (!target.sealed && !target.pendingTerminal) {
               sealGatewayFrame(call, target);
@@ -3194,7 +3528,17 @@ async function initializeDaemon(
     host: () => host,
     registry,
     genesis: (uuid) => wal.read(uuid)[0]?.hash,
-    hook: (envelope) => serial.run(() => handleHookInner(envelope)),
+    // On the session's own queue, like a hook from the listener. The runner
+    // has no spool, so there is nothing to drain first, and its hooks are
+    // not refused once `stop` begins.
+    hook: (envelope) => {
+      const readable = hookInputSchema.safeParse(envelope.payload);
+      if (!readable.success) return Promise.reject(readable.error);
+      return answerHook(envelope, readable.data.session_id, {
+        drainSpoolFirst: false,
+        refuseWhenStopping: false,
+      });
+    },
     record,
     model: modelProxy,
     modelPort: () => modelProxyListener.port(),
@@ -3286,6 +3630,40 @@ async function initializeDaemon(
     return host.bundle.mode === "enforce" ? "harness" : "observe";
   }
 
+  /**
+   * Seal one session's share of an OTLP post and write it. Runs on that
+   * session's queue. A failed write rolls back this session's chain alone,
+   * so one session's WAL failure does not lose another's OTel signal.
+   */
+  function ingestOtlpFor(sessionId: string, payload: OtlpPayload): void {
+    const { record: session, created } = registry.ensure(sessionId, {
+      ambient: true,
+    });
+    // Its terminal is sealed but not yet in the WAL. A frame sealed now
+    // takes the seq after it and reaches the WAL first, so the records
+    // are dropped; a sealed chain takes them, marked after the stop.
+    if (session.pendingTerminal === true) {
+      log(
+        `OTel records for session ${sessionId} dropped: its end is not yet written`,
+      );
+      return;
+    }
+    if (created)
+      log(`session ${sessionId} first seen through OTel; no hook stream yet`);
+    const mark = session.recorder.markChain();
+    try {
+      record(session.recorder.ingestOtlp(payload));
+    } catch (error) {
+      session.recorder.rollbackChain(mark);
+      log(
+        `OTel ingest not recorded for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    for (const refusal of session.recorder.takeOtelRefusals())
+      log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
+  }
+
   const githubProxy = createGithubProxy({
     host: () => {
       const current = readHostFile(paths.hostFile);
@@ -3310,10 +3688,10 @@ async function initializeDaemon(
     githubProxy: (req, res) => githubProxy.handle(req, res),
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
-    // Deliberately NOT on `serial`. A gateway call is a round trip to the
+    // Deliberately on no hook queue. A gateway call is a round trip to the
     // control plane with a 30-second timeout, and the queue it used to sit in
-    // is the same one `PreToolUse` hooks, OTel ingestion and spool draining
-    // wait on: one connected app's slow tool call held every wrapped agent on
+    // was the one `PreToolUse` hooks, OTel ingestion and spool draining
+    // waited on: one connected app's slow tool call held every wrapped agent on
     // this machine past its 5-10 second decision budget, and held every other
     // MCP client behind it too. Nothing is lost by taking it off. The only
     // shared state the gateway touches is `recordGatewayCall`, which is
@@ -3362,64 +3740,39 @@ async function initializeDaemon(
         });
         return Promise.reject(readable.error);
       }
-      // Once `stop` began, a hook or an OTLP post still waiting for the queue
+      // Once `stop` began, a hook or an OTLP post still waiting for its queue
       // is refused rather than run. `stop` seals the host chain behind them
       // within `stopQueueMs`, and each one queued ahead of that seal was time
       // it did not have. A refused hook is answered locally and spooled by
       // `tacho-hook`, and the next start replays it.
-      return serial.run(async () => {
-        if (stopped) throw new Error(STOPPING);
-        await drainSpool();
-        return handleHookInner(envelope);
+      return answerHook(envelope, readable.data.session_id, {
+        drainSpoolFirst: true,
+        refuseWhenStopping: true,
       });
     },
-    handleOtlp: (signal, payload) =>
-      serial.run(async () => {
-        if (stopped) throw new Error(STOPPING);
-        lastOtlpAt = now();
-        if (signal === "traces") return;
-        const { drafts, metrics } = normalizeOtlp(payload as OtlpPayload);
-        const sessionIds = new Set<string>();
-        for (const draft of drafts)
-          if (draft.standard.session_id !== undefined)
-            sessionIds.add(draft.standard.session_id);
-        for (const metric of metrics)
-          if (metric.standard.session_id !== undefined)
-            sessionIds.add(metric.standard.session_id);
-        for (const sessionId of sessionIds) {
-          const { record: session, created } = registry.ensure(sessionId, {
-            ambient: true,
-          });
-          // Its terminal is sealed but not yet in the WAL. A frame sealed now
-          // takes the seq after it and reaches the WAL first, so the records
-          // are dropped; a sealed chain takes them, marked after the stop.
-          if (session.pendingTerminal === true) {
-            log(
-              `OTel records for session ${sessionId} dropped: its end is not yet written`,
-            );
-            continue;
-          }
-          if (created)
-            log(
-              `session ${sessionId} first seen through OTel; no hook stream yet`,
-            );
-          const mark = session.recorder.markChain();
-          try {
-            record(session.recorder.ingestOtlp(payload as OtlpPayload));
-          } catch (error) {
-            // One session's WAL failure must not lose another's OTel signal:
-            // roll this chain back to where `ingestOtlp` found it and move on
-            // to the rest of the payload.
-            session.recorder.rollbackChain(mark);
-            log(
-              `OTel ingest not recorded for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            continue;
-          }
-          for (const refusal of session.recorder.takeOtelRefusals())
-            log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
-        }
-      }),
+    // Each session the post names takes the post's records on its own queue,
+    // so they land between that session's hooks and never inside one.
+    handleOtlp: async (signal, payload) => {
+      if (stopped) throw new Error(STOPPING);
+      lastOtlpAt = now();
+      if (signal === "traces") return;
+      const { drafts, metrics } = normalizeOtlp(payload as OtlpPayload);
+      const sessionIds = new Set<string>();
+      for (const draft of drafts)
+        if (draft.standard.session_id !== undefined)
+          sessionIds.add(draft.standard.session_id);
+      for (const metric of metrics)
+        if (metric.standard.session_id !== undefined)
+          sessionIds.add(metric.standard.session_id);
+      await Promise.all(
+        [...sessionIds].map((sessionId) =>
+          queues.session(sessionId, async () => {
+            if (stopped) throw new Error(STOPPING);
+            ingestOtlpFor(sessionId, payload as OtlpPayload);
+          }),
+        ),
+      );
+    },
     health: () => ({
       ok: true,
       ...health(),
@@ -3665,9 +4018,10 @@ async function initializeDaemon(
    * poll runs every tick — `Math.min(shipMs, 1_000)` = **1 s** — and the bundle
    * on its own five-minute cadence, whatever git is doing. Reconciliation is
    * unchanged in every other respect: it is still bounded to four sessions a
-   * tick, still spawns off the serial queue, and still applies its results
-   * back THROUGH that queue, which is what makes detaching it safe — the seal
-   * ordering a hook depends on is enforced there, not by the tick's `await`.
+   * tick, still spawns off the hook queues, and still applies its results
+   * back through the session's own queue (a SessionEnd's seal through the
+   * host queue), which is what makes detaching it safe: the seal ordering a
+   * hook depends on is enforced there, not by the tick's `await`.
    *
    * `tick()` still awaits the lane before it resolves, so a caller driving the
    * daemon a tick at a time sees the reconciliation it asked for. The interval
@@ -3797,7 +4151,7 @@ async function initializeDaemon(
         );
       }
     }
-    // The detector runs off the serial queue: its scan is asynchronous file
+    // The detector runs off the hook queues: its scan is asynchronous file
     // I/O over every project directory, and a hook that arrived while it
     // ran would otherwise wait on it. It records each frame in the same
     // synchronous stretch that seals it, the property the gateway relies on
@@ -3815,65 +4169,94 @@ async function initializeDaemon(
         }
       }
     });
-    // Read before the queue is taken: `ps` is a process spawn.
+    // Read before the sweep: `ps` is a process spawn.
     const started =
       now() - lastSweep >= timers.sweepMs ? await sweepStarts() : undefined;
+    const t = now();
+    let drained = false;
     let swept = false;
-    await stage("spool, transcripts, sweep, checkpoint", () =>
-      serial.run(async () => {
-        const t = now();
-        await drainSpool(t);
-        // transcript tailer: bounded per file per tick, asynchronous reads
-        await transcriptTailer.tick();
-        if (t - lastSweep >= timers.sweepMs) {
-          lastSweep = t;
-          // Each session is written and sealed on its own. A write that
-          // fails rolls back only that chain and leaves it open for the next
-          // sweep. Sealing every chain first and writing them together left
-          // a chain whose write failed marked sealed with no `agent_stop` on
-          // disk, and `forgetSealed` then dropped it (#3719).
-          let failure: { error: unknown } | undefined;
-          const candidates = registry.sweepCandidates(
-            sweepLiveness(started),
-            (session) =>
-              session.harness === "cursor"
-                ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
-                : timers.idleSessionMs,
-            (session) =>
-              pendingSessionEnds.has(session.recorder.sessionUuid) ||
-              spoolHolds(session),
-          );
-          for (const candidate of candidates) {
-            const recorder = candidate.record.recorder;
-            const mark = recorder.markChain();
-            try {
-              record(registry.finalizeSwept(candidate));
-            } catch (error) {
-              recorder.rollbackChain(mark);
-              failure ??= { error };
-              continue;
-            }
-            registry.settleSwept(candidate);
-            // The sweep keeps the record, so its recall hints go here. A
-            // session the next hook reopens builds them again.
-            forgetRecallHints(candidate.record);
-            await removeSweptSkills(candidate.record, candidate.closedIdle);
+    // The drain replays hooks of any session in the order they were spooled,
+    // so it takes the host queue, and only when the spool holds a file. An
+    // empty spool still watches the clock and prunes the hook ledgers, which
+    // seal nothing, so that needs no queue.
+    await stage("spool", async () => {
+      if (spoolFileNames().length > 0) {
+        await queues.host(() => drainSpool(t));
+      } else {
+        watchLedgerClock(t);
+        noteEmptySpool(t);
+      }
+      drained = true;
+    });
+    // Bounded per file and per tick. The reads run outside the hook queues,
+    // and each seal takes its own session's queue (#4394).
+    await stage("transcripts", () => transcriptTailer.tick());
+    // Skipped after a drain that failed, as when both ran in one stage: the
+    // spool may still hold a hook for a session the sweep would close.
+    if (drained && t - lastSweep >= timers.sweepMs)
+      await stage("sweep", async () => {
+        lastSweep = t;
+        // Each session is written and sealed on its own. A write that
+        // fails rolls back only that chain and leaves it open for the next
+        // sweep. Sealing every chain first and writing them together left
+        // a chain whose write failed marked sealed with no `agent_stop` on
+        // disk, and `forgetSealed` then dropped it (#3719).
+        //
+        // The candidates are chosen and sealed in one synchronous stretch,
+        // on no queue. A session whose queue is running a task, or every
+        // session while a host task runs, waits for a later sweep: that task
+        // may stand between a chain mark and its WAL write, and a frame
+        // sealed there would be rolled back with it.
+        let failure: { error: unknown } | undefined;
+        const candidates = registry.sweepCandidates(
+          sweepLiveness(started),
+          (session) =>
+            session.harness === "cursor"
+              ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
+              : timers.idleSessionMs,
+          (session) =>
+            pendingSessionEnds.has(session.recorder.sessionUuid) ||
+            spoolHolds(session) ||
+            queues.busy(session.harnessSessionId),
+        );
+        const closed: typeof candidates = [];
+        for (const candidate of candidates) {
+          const recorder = candidate.record.recorder;
+          const mark = recorder.markChain();
+          try {
+            record(registry.finalizeSwept(candidate));
+          } catch (error) {
+            recorder.rollbackChain(mark);
+            failure ??= { error };
+            continue;
           }
+          registry.settleSwept(candidate);
+          // The sweep keeps the record, so its recall hints go here. A
+          // session the next hook reopens builds them again.
+          forgetRecallHints(candidate.record);
+          closed.push(candidate);
+        }
+        // Not while a host task runs: a spool replay can hold a record this
+        // would forget or empty.
+        if (!queues.hostBusy()) {
           registry.forgetSealed(timers.walRetainMs);
           // A sealed session is kept for a week; what only a running chain
           // needs is dropped an hour after it went quiet, so `daemon.json`
           // stays bounded however many sessions that week held (C-02).
           if (registry.releaseSealedState() > 0) stateDirty = true;
-          swept = true;
-          if (failure !== undefined) throw failure.error;
         }
-        if (t - lastCheckpoint >= timers.checkpointMs) {
-          lastCheckpoint = t;
-          checkpoint();
-        }
-        if (stateDirty) persistState();
-      }),
-    );
+        swept = true;
+        // After the synchronous stretch, since each removal awaits the disk.
+        for (const candidate of closed)
+          await removeSweptSkills(candidate.record, candidate.closedIdle);
+        if (failure !== undefined) throw failure.error;
+      });
+    await stage("checkpoint", () => {
+      if (t - lastCheckpoint < timers.checkpointMs) return;
+      lastCheckpoint = t;
+      checkpoint((session) => queues.busy(session.harnessSessionId));
+    });
+    await stage("state", () => persistWhenQuiet());
     // A forgotten session reconciles no more, so its pre-session copies go.
     // So do any a crash left behind. A sealed session keeps its copies until
     // then, because a `SessionStart` resume reopens it and it reconciles
@@ -4117,11 +4500,16 @@ async function initializeDaemon(
      * needs to observe the two independently.
      */
     flushGitReads: () => startGitReads(),
-    drainSpool: () => serial.run(drainSpool),
+    drainSpool: () => queues.host(() => drainSpool()),
+    queues,
     refreshBundle: () => refreshBundle({ force: true }),
     stop: async () => {
       if (stopped) return;
       stopped = true;
+      // A hook reading a repository answers now rather than at its git
+      // command's ten second ceiling, so the seal below is not queued behind
+      // it past `STOP_GRACE_MS` (#4366).
+      stopping.abort();
       if (timer) clearInterval(timer);
       if (memoryTimer) clearInterval(memoryTimer);
       // Persist now, before the waits below. A stop timeout that kills this
@@ -4135,8 +4523,8 @@ async function initializeDaemon(
       // meant the process exited before the finalize ran. A read abandoned
       // here is lost with nothing owed: a pending SessionEnd stays in
       // `pending-session-ends.json`, and the next start reads its worktree
-      // again. A read that lands after this applies through `serial` to its
-      // own session's chain, never to the host's.
+      // again. A read that lands after this applies through its session's
+      // queue to that session's chain, never to the host's.
       if (!(await settleWithin(gitLane, timers.stopLaneMs)))
         log(
           `stop: left a git read unfinished after ${timers.stopLaneMs} ms; a pending SessionEnd is read again at the next start`,
@@ -4144,11 +4532,12 @@ async function initializeDaemon(
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();
-      // Behind at most the task running now: a hook or OTLP post queued
-      // after it is refused. That task can wait on a git read for up to ten
-      // seconds, so the seal waits `stopQueueMs` for it. Past that the seal
-      // stays queued, and lands if the process lives long enough.
-      const sealed = serial.run(async () => {
+      // Behind the tasks running now in every queue: a hook or OTLP post
+      // that had not started is refused. A hook reading a repository gave up
+      // its read when `stop` began, so a running hook finishes in the time
+      // its own work takes. The seal waits `stopQueueMs` for them. Past that
+      // it stays queued, and lands if the process lives long enough.
+      const sealed = queues.host(async () => {
         record(hostRecorder.finalize("completed", toProtocolTimestamp(now())));
         hostRecord.sealed = true;
         persistState();

@@ -848,8 +848,8 @@ describe("the daemon's audit wiring", () => {
 
   it("answers a hook without waiting out a bundle request that hangs", async () => {
     // A mandate past its signed window asks for a refresh before a tool
-    // call. A hook holds the queue every agent on the host waits on, so it
-    // waits `hookBundleWaitMs` and then decides on the bundle it has.
+    // call. A hook holds its session's queue while it waits, so it waits
+    // `hookBundleWaitMs` and then decides on the bundle it has.
     let clock = 1_000;
     const { handle, plane } = await boot({
       bundle: {

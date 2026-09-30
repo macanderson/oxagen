@@ -7,7 +7,6 @@
  */
 import {
   existsSync,
-  promises as fsp,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -410,9 +409,10 @@ describe("tachod and frame bodies", () => {
   });
 
   it("leaves a gateway call to its PostToolUse when the session chain write fails", async () => {
-    // ADR-189 decision 5: the gateway's frame is written on the serial queue
-    // after the client has its answer. A failed write is logged and rolled
-    // back, the call stays claimed, and the hook seals the call's one frame.
+    // ADR-189 decision 5: the gateway's frame is written on the session's
+    // queue after the client has its answer. A failed write is logged and
+    // rolled back, the call stays claimed, and the hook seals the call's one
+    // frame.
     const { fetch, batches } = plane();
     const { handle, host, log } = await boot(fetch, {
       mode: "content_exact",
@@ -500,41 +500,48 @@ describe("tachod and frame bodies", () => {
   });
 
   /**
-   * Hold the next tick inside the serial queue, at the tailer's listing of
-   * `transcript`'s subagents directory. `reached` settles once the tick is
-   * held there, and `release` lets it go on.
+   * Hold one session's hook queue with a task the test lets go (#4601).
+   * `queuedBehind` settles once another task queues for that session behind
+   * it, and `release` restores the queues and lets the held task finish.
    */
-  function holdTickAt(transcript: string) {
-    const subagents = join(transcript.slice(0, -".jsonl".length), "subagents");
-    let held: () => void = () => {};
-    const reached = new Promise<void>((resolve) => {
-      held = resolve;
-    });
-    let release: () => void = () => {};
+  function holdQueue(handle: DaemonHandle, harnessSessionId: string) {
+    let open: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
-      release = resolve;
+      open = resolve;
     });
-    const readdir = fsp.readdir.bind(fsp) as (
-      path: string,
-    ) => Promise<string[]>;
-    const spy = vi.spyOn(fsp, "readdir").mockImplementation((async (
-      path: string,
+    const held = handle.queues.session(harnessSessionId, () => gate);
+    let behind: () => void = () => {};
+    const queuedBehind = new Promise<void>((resolve) => {
+      behind = resolve;
+    });
+    const session = handle.queues.session.bind(handle.queues);
+    const spy = vi.spyOn(handle.queues, "session").mockImplementation(((
+      key: string,
+      task: () => Promise<unknown>,
     ) => {
-      if (String(path) === subagents) {
-        held();
-        await gate;
-      }
-      return readdir(path);
-    }) as unknown as typeof fsp.readdir);
-    return { reached, release, restore: () => spy.mockRestore() };
+      if (key === harnessSessionId) behind();
+      return session(key, task);
+    }) as typeof handle.queues.session);
+    return {
+      queuedBehind,
+      release: () => {
+        spy.mockRestore();
+        open();
+        return held;
+      },
+    };
   }
 
-  /** A hooked session that has requested one gateway tool call. */
+  /**
+   * A hooked session that has requested one gateway tool call. `cwd` is the
+   * working directory its start reports, or none for `null`.
+   */
   async function hookedCall(
     port: number,
     token: string,
     hooked: string,
     toolUseId: string,
+    cwd: string | null = "/repo",
   ) {
     const dir = mkdtempSync(join(tmpdir(), "tacho-gateway-transcript-"));
     const transcript = join(dir, `${hooked}.jsonl`);
@@ -548,7 +555,7 @@ describe("tachod and frame bodies", () => {
       {
         session_id: hooked,
         hook_event_name: "SessionStart",
-        cwd: "/repo",
+        ...(cwd !== null ? { cwd } : {}),
         transcript_path: transcript,
       },
       { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
@@ -572,10 +579,10 @@ describe("tachod and frame bodies", () => {
   }
 
   it("seals a gateway call on its session's chain when the transcript reported it while the frame was queued", async () => {
-    // A tick already on the queue reads the call's tool_result from the
-    // transcript before the gateway's frame is written. The frame was then
-    // sealed on the daemon's chain with no tool_use_id, a second identity
-    // for the call (G-11).
+    // A tick has read the call's tool_result from the transcript, and its
+    // seal waits on the session's queue ahead of the gateway's frame. The
+    // frame was then sealed on the daemon's chain with no tool_use_id, a
+    // second identity for the call (G-11).
     const { fetch, batches } = plane();
     const { handle, host } = await boot(fetch, {
       mode: "content_exact",
@@ -603,18 +610,18 @@ describe("tachod and frame bodies", () => {
           },
         })}\n`,
       );
-      const hold = holdTickAt(transcript);
+      const hold = holdQueue(handle, hooked);
       let ticking: Promise<void>;
       try {
         ticking = handle.tick();
-        await hold.reached;
+        // The tick read the line outside the queue, and its seal waits.
+        await hold.queuedBehind;
         const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 12), {
           sessionId: "mcp-sess-5",
         });
         expect(answer?.status).toBe(200);
       } finally {
-        hold.release();
-        hold.restore();
+        await hold.release();
       }
       await ticking;
       expect(
@@ -668,18 +675,12 @@ describe("tachod and frame bodies", () => {
     const port = handle.port as number;
     const hooked = "sess-gateway-twice";
     const toolUseId = "toolu_01GatewayTwice";
-    const { transcript, dir } = await hookedCall(
-      port,
-      host.local_token,
-      hooked,
-      toolUseId,
-    );
+    const { dir } = await hookedCall(port, host.local_token, hooked, toolUseId);
     try {
-      const hold = holdTickAt(transcript);
-      let ticking: Promise<void>;
+      // The first call's frame waits on the session's queue while the second
+      // call arrives.
+      const hold = holdQueue(handle, hooked);
       try {
-        ticking = handle.tick();
-        await hold.reached;
         for (const [id, mcpSession] of [
           [14, "mcp-sess-7"],
           [15, "mcp-sess-8"],
@@ -692,10 +693,8 @@ describe("tachod and frame bodies", () => {
             )?.status,
           ).toBe(200);
       } finally {
-        hold.release();
-        hold.restore();
+        await hold.release();
       }
-      await ticking;
       await handle.tick();
 
       const frames = batches
@@ -719,41 +718,45 @@ describe("tachod and frame bodies", () => {
   });
 
   it("says so when a queued gateway frame falls back to the daemon's chain", async () => {
-    // The session's chain closed while the frame waited on the queue: an
-    // idle sweep in the tick ahead of it sealed the session.
-    let clock = Date.parse("2026-09-25T00:00:00.000Z");
+    // The session's chain closed while the frame waited on its queue: the
+    // session's own SessionEnd, queued ahead of the frame, sealed it.
     const { fetch, batches } = plane();
-    const { handle, host, log } = await boot(
-      fetch,
-      { mode: "content_exact", classes: ["tool_call"] },
-      () => clock,
-    );
+    const { handle, host, log } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
     const port = handle.port as number;
     const hooked = "sess-gateway-swept";
     const toolUseId = "toolu_01GatewaySwept";
-    const { transcript, dir } = await hookedCall(
+    // No working directory, so its SessionEnd seals on the spot rather than
+    // wait for a final worktree read.
+    const { dir } = await hookedCall(
       port,
       host.local_token,
       hooked,
       toolUseId,
+      null,
     );
     try {
-      const hold = holdTickAt(transcript);
-      let ticking: Promise<void>;
+      const hold = holdQueue(handle, hooked);
+      let ending: Promise<number>;
       try {
-        ticking = handle.tick();
-        await hold.reached;
+        ending = post(port, host.local_token, {
+          session_id: hooked,
+          hook_event_name: "SessionEnd",
+          reason: "other",
+        });
+        // The end waits on the session's queue, and the frame queues
+        // behind it.
+        await hold.queuedBehind;
         const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 13), {
           sessionId: "mcp-sess-6",
         });
         expect(answer?.status).toBe(200);
-        // Seven hours on: the held tick's sweep finds the session idle.
-        clock += 7 * 60 * 60_000;
       } finally {
-        hold.release();
-        hold.restore();
+        await hold.release();
       }
-      await ticking;
+      expect(await ending).toBe(200);
       await handle.tick();
 
       expect(handle.registry.get(hooked)?.sealed).toBe(true);

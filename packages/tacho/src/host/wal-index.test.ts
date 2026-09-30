@@ -46,6 +46,11 @@ const bodyReads = vi.hoisted(() => ({
   syncBytes: 0,
   /** Run once, after the next awaited read of a body file returns. */
   afterAsyncRead: undefined as (() => void) | undefined,
+  /**
+   * Run after every awaited read of a body file returns, with the position
+   * the read started at, until a test clears it.
+   */
+  onAsyncRead: undefined as ((position: number) => void) | undefined,
 }));
 
 function isBodyFile(path: unknown): boolean {
@@ -92,6 +97,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
         const after = bodyReads.afterAsyncRead;
         bodyReads.afterAsyncRead = undefined;
         after?.();
+        bodyReads.onAsyncRead?.(args[3] as number);
         return result;
       };
       return handle;
@@ -500,6 +506,46 @@ describe("an index that goes stale while the shipper reads", () => {
     );
     expect(bodyReads.syncBytes - before).toBeLessThan(
       statSync(bodyPath).size / 4,
+    );
+    expect(report).not.toHaveBeenCalledWith(
+      expect.objectContaining({ code: "body_index_unusable" }),
+    );
+  });
+
+  it("ships the bodies when the index is stale on both awaited attempts", async () => {
+    // #4361, finding 2. Each awaited build reads a file that is rewritten in
+    // place, at the same size, once the build's first read returns, so each
+    // index it keeps puts the batch's bodies one byte off. The second stale
+    // attempt used to report `body_index_unusable` and ship the events with
+    // no bodies, which marked them shipped and lost the content the host
+    // still held. The synchronous read is the last resort now.
+    const paths = scratchPaths();
+    const report = vi.fn();
+    const wal = new Wal(paths.wal, report);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const original = readFileSync(bodyPath, "utf8");
+    // The same bytes one position later, and the same size: a leading
+    // newline in and the trailing one out, which a read skips as blank.
+    const shifted = `\n${original.slice(0, -1)}`;
+    expect(Buffer.byteLength(shifted)).toBe(Buffer.byteLength(original));
+    let rewrites = 0;
+    bodyReads.onAsyncRead = (position) => {
+      // A build starts its scan at byte 0. Only the two builds are touched.
+      if (position !== 0 || rewrites === 2) return;
+      rewrites += 1;
+      writeFileSync(bodyPath, rewrites === 1 ? shifted : original);
+    };
+    let read: Awaited<ReturnType<Wal["bodiesForAsync"]>>;
+    try {
+      read = await wal.bodiesForAsync(events.slice(0, BATCH));
+    } finally {
+      bodyReads.onAsyncRead = undefined;
+    }
+    expect(rewrites).toBe(2);
+    expect(read.map((body) => body.event_id_idem)).toEqual(
+      events.slice(0, BATCH).map((event) => event.event_id_idem),
     );
     expect(report).not.toHaveBeenCalledWith(
       expect.objectContaining({ code: "body_index_unusable" }),
