@@ -22,7 +22,7 @@ One code repository can be linked to many workspaces, in the same organization o
 - Authentication: session or API key. The handler admits an org Owner or Admin, or the workspace's Owner (INV-29).
 - Capability name: `link_repository`
 - Not billed (`noBillingGate: true`). IAM default-deny. Medium sensitivity.
-- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: medium`).
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Input
 

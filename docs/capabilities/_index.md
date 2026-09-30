@@ -444,7 +444,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_pr](repo.pr.get.md) | [repo.pr.get.ts](../../packages/oxagen/src/contracts/repo.pr.get.ts) | agent, api, mcp |
 | [get_pr_diff](repo.pr.diff.md) | [repo.pr.diff.ts](../../packages/oxagen/src/contracts/repo.pr.diff.ts) | agent, api, mcp |
 | [get_repo_metrics](repo.metrics.md) | [repo.metrics.ts](../../packages/oxagen/src/contracts/repo.metrics.ts) | api, mcp, agent |
-| `list_branches` | [repo.branch.list.ts](../../packages/oxagen/src/contracts/repo.branch.list.ts) | api, mcp |
+| [list_branches](repo.branch.list.md) | [repo.branch.list.ts](../../packages/oxagen/src/contracts/repo.branch.list.ts) | api, mcp |
 | [pause_repo](repo.pause.md) | [repo.pause.ts](../../packages/oxagen/src/contracts/repo.pause.ts) | api, mcp, cli, agent |
 | [resume_repo](repo.resume.md) | [repo.resume.ts](../../packages/oxagen/src/contracts/repo.resume.ts) | api, mcp, cli, agent |
 | [sync_repo](repo.sync.md) | [repo.sync.ts](../../packages/oxagen/src/contracts/repo.sync.ts) | api, mcp, cli, agent |

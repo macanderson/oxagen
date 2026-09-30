@@ -78,7 +78,7 @@ export const repositoryLink = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
-  agent: { requiresApproval: false, riskLevel: "medium", category: "vcs" },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "vcs" },
   input: z
     .object({
       provider: z.literal("github").default("github"),
