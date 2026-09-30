@@ -42,6 +42,8 @@ import {
   listPriceEntries,
   loadPriceBook,
   loadPriceBookSlice,
+  MAX_PRICE_BOOK_SLICE_ENTRIES,
+  PriceBookSliceLimitError,
   loadPriceBookSliceInTenantScope,
   priceBookNames,
   BOUNDARY_MARGIN_MS,
@@ -618,6 +620,29 @@ describe("loading one read's slice of the book", () => {
     // One connection holds all three selects.
     expect(store.seams).toEqual(["tenant"]);
     expect(ids(rows)).toEqual(["family"]);
+  });
+
+  it("rejects an oversized slice without returning a partial book", async () => {
+    for (let index = 0; index <= MAX_PRICE_BOOK_SLICE_ENTRIES; index += 1) {
+      fake.rows.push(priceRow({ id: `history-${index}` }));
+    }
+    const slice = { orgId: ORG, models: ["claude-sonnet-5"], ...SPAN };
+    await expect(loadPriceBookSlice(slice)).rejects.toBeInstanceOf(PriceBookSliceLimitError);
+    expect(fake.log.at(-1)?.limit).toBe(MAX_PRICE_BOOK_SLICE_ENTRIES + 1);
+    await expect(loadPriceBookSliceInTenantScope(slice)).rejects.toBeInstanceOf(PriceBookSliceLimitError);
+    // Administrative reads retain their complete-history contract.
+    expect(await loadPriceBook({ orgId: ORG })).toHaveLength(MAX_PRICE_BOOK_SLICE_ENTRIES + 1);
+  });
+
+  it("accepts the exact limit and enforces it across model chunks", async () => {
+    const half = MAX_PRICE_BOOK_SLICE_ENTRIES / 2;
+    for (let index = 0; index < MAX_PRICE_BOOK_SLICE_ENTRIES; index += 1) {
+      fake.rows.push(priceRow({ id: `history-${index}`, model: index < half ? "first" : "second" }));
+    }
+    const slice = { orgId: ORG, models: [...Array<string>(5_000).fill("first"), "second"], ...SPAN };
+    expect(await loadPriceBookSlice(slice)).toHaveLength(MAX_PRICE_BOOK_SLICE_ENTRIES);
+    fake.rows.push(priceRow({ id: "excess", model: "second" }));
+    await expect(loadPriceBookSlice(slice)).rejects.toBeInstanceOf(PriceBookSliceLimitError);
   });
 
   it("asks for every name the resolver would accept as the same model", () => {

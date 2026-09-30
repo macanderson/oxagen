@@ -293,6 +293,13 @@ describe("withRepeatableReadTenantDb", () => {
 });
 
 describe("withSystemDb", () => {
+  it("sets repeatable read before the bypass query takes a snapshot", async () => {
+    await withSystemDb(async () => undefined, { repeatableRead: true });
+    const calls = mocks.execute.mock.calls as unknown[][];
+    expect(sqlText(calls[0]?.[0])).toContain("set transaction isolation level repeatable read");
+    expect(sqlText(calls[1]?.[0])).toContain("app.rls_bypass");
+  });
+
   it("runs WITHOUT an active scope (the bypass escape hatch)", async () => {
     // No runInTenantScope wrapper — must not throw.
     const result = await withSystemDb(async (tx) => {

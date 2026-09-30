@@ -30,10 +30,13 @@ const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => {
     steeringTokens: steering,
   });
   return {
-    readModelCallFrames: vi.fn(async () => [
-      frame("2001-09-01T00:00:01.000Z", 12_000, 500),
-      frame("2001-09-01T00:00:02.000Z", 400, 400),
-    ]),
+    readModelCallFrames: vi.fn(async (_args: unknown, consume: (rows: ReturnType<typeof frame>[]) => Promise<void>) => {
+      await consume([
+        frame("2001-09-01T00:00:01.000Z", 12_000, 500),
+        frame("2001-09-01T00:00:02.000Z", 400, 400),
+      ]);
+      return [];
+    }),
     readTachoToolCallFrames: vi.fn(async () => []),
   };
 });
@@ -117,12 +120,12 @@ describe.skipIf(!enabled)("a wrapped run's session list against Postgres", () =>
       rootSessionUuid: uuids.root,
       sessionUuids: [uuids.root, uuids.child],
     };
-    expect(readModelCallFrames).toHaveBeenCalledWith({ ...scope, run });
+    expect(readModelCallFrames).toHaveBeenCalledWith({ ...scope, run }, expect.any(Function));
     expect(readTachoToolCallFrames).toHaveBeenCalledWith({
       ...scope,
       rootSessionUuid: uuids.root,
       sessionUuids: [uuids.root, uuids.child],
-    });
+    }, expect.any(Function));
   });
 
   it("stores the sources summed over its priced calls, with an unmeasured one as null (#4493)", async () => {

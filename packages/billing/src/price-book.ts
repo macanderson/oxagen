@@ -277,76 +277,56 @@ function matchLength(entry: PriceEntry, modelId: string): number | null {
   return best;
 }
 
-function bestMatch(
-  candidates: readonly PriceEntry[],
-  modelId: string,
-): PriceEntry | null {
-  let best: { entry: PriceEntry; length: number } | null = null;
-  for (const entry of candidates) {
-    const length = matchLength(entry, modelId);
-    if (length === null) continue;
-    if (
-      !best ||
-      length > best.length ||
-      // Among equal-length matches the latest effective row wins.
-      (length === best.length &&
-        entry.effectiveFrom.getTime() > best.entry.effectiveFrom.getTime())
-    )
-      best = { entry, length };
-  }
-  return best?.entry ?? null;
-}
-
-/**
- * The entry that prices `modelId`'s `tokenClass` at `at` for `orgId`: the
- * organization's negotiated rows first, then the list rows; within each, the
- * longest prefix over model and aliases, tried on the id as given and then
- * on the bare family behind a `creator/` prefix. Null when nothing prices
- * it, which the rollup records as `estimated`.
- */
-export function resolvePriceEntry(
+/** Resolve a price without allocating filtered copies of the book. */
+function resolveFromBook(
   book: PriceBook,
-  args: {
-    orgId: string;
-    modelId: string;
-    tokenClass: PriceTokenClass;
-    at: Date;
-  },
+  args: { orgId: string; modelId: string; at: Date; tokenClass?: PriceTokenClass },
 ): PriceEntry | null {
-  const classBook = book.filter((e) => e.tokenClass === args.tokenClass);
-  return resolvePriceEntryFromClassBook(classBook, args);
-}
-
-/**
- * {@link resolvePriceEntry}'s matching, over a book already narrowed to one
- * token class. A caller resolving many (model, at) pairs for the same class —
- * `findUnpricedModels` probing one observed model's usage buckets — filters
- * the whole book by class once with {@link indexPriceBookByClass} and calls
- * this for every probe, instead of rescanning every other class's rows (and
- * every other model's boundaries) on each one.
- */
-export function resolvePriceEntryFromClassBook(
-  classBook: PriceBook,
-  args: {
-    orgId: string;
-    modelId: string;
-    at: Date;
-  },
-): PriceEntry | null {
-  const live = classBook.filter((e) => effectiveAt(e, args.at));
-  const own = live.filter((e) => e.orgId === args.orgId);
-  const list = live.filter((e) => e.orgId === null);
   const slash = args.modelId.indexOf("/");
   const family = slash >= 0 ? args.modelId.slice(slash + 1) : null;
-  for (const candidates of [own, list]) {
-    const direct = bestMatch(candidates, args.modelId);
-    if (direct) return direct;
-    if (family !== null) {
-      const byFamily = bestMatch(candidates, family);
-      if (byFamily) return byFamily;
+  let best: PriceEntry | null = null;
+  let bestPriority = Infinity;
+  let bestLength = -1;
+  for (const entry of book) {
+    if (args.tokenClass !== undefined && entry.tokenClass !== args.tokenClass)
+      continue;
+    if (!effectiveAt(entry, args.at)) continue;
+    const own = entry.orgId === args.orgId;
+    if (!own && entry.orgId !== null) continue;
+    const direct = matchLength(entry, args.modelId);
+    const length = direct ?? (family === null ? null : matchLength(entry, family));
+    if (length === null) continue;
+    const priority = (own ? 0 : 2) + (direct === null ? 1 : 0);
+    if (
+      priority < bestPriority ||
+      (priority === bestPriority && (
+        length > bestLength ||
+        (length === bestLength && best !== null &&
+          entry.effectiveFrom > best.effectiveFrom)
+      ))
+    ) {
+      best = entry;
+      bestPriority = priority;
+      bestLength = length;
     }
   }
-  return null;
+  return best;
+}
+
+/** Organization prices precede list prices; direct names precede bare names. */
+export function resolvePriceEntry(
+  book: PriceBook,
+  args: { orgId: string; modelId: string; tokenClass: PriceTokenClass; at: Date },
+): PriceEntry | null {
+  return resolveFromBook(book, args);
+}
+
+/** Resolve a price from rows already narrowed to one token class. */
+export function resolvePriceEntryFromClassBook(
+  classBook: PriceBook,
+  args: { orgId: string; modelId: string; at: Date },
+): PriceEntry | null {
+  return resolveFromBook(classBook, args);
 }
 
 /**
@@ -565,6 +545,19 @@ function sliceCondition(slice: PriceBookSlice) {
  */
 const SLICE_MODELS_PER_SELECT = 5_000;
 
+/** Maximum rows retained by a model and time slice. */
+export const MAX_PRICE_BOOK_SLICE_ENTRIES = 16_384;
+
+/** A slice that cannot be read completely within its memory budget. */
+export class PriceBookSliceLimitError extends Error {
+  readonly maxEntries = MAX_PRICE_BOOK_SLICE_ENTRIES;
+
+  constructor() {
+    super(`Price book slice exceeds ${MAX_PRICE_BOOK_SLICE_ENTRIES} entries. Narrow the time window or model selection.`);
+    this.name = "PriceBookSliceLimitError";
+  }
+}
+
 /**
  * Runs a slice read on `tx`: one select per {@link SLICE_MODELS_PER_SELECT}
  * model ids, one after another on the same connection. Two ids in different
@@ -578,9 +571,16 @@ async function selectSlice(tx: Tx, slice: PriceBookSlice): Promise<PriceBook> {
     const rows = await tx
       .select()
       .from(schema.priceEntries)
-      .where(sliceCondition({ ...slice, models }));
-    for (const row of rows)
-      if (!byId.has(row.id)) byId.set(row.id, rowToEntry(row));
+      .where(sliceCondition({ ...slice, models }))
+      .limit(MAX_PRICE_BOOK_SLICE_ENTRIES + 1);
+    if (rows.length > MAX_PRICE_BOOK_SLICE_ENTRIES)
+      throw new PriceBookSliceLimitError();
+    for (const row of rows) {
+      if (byId.has(row.id)) continue;
+      if (byId.size >= MAX_PRICE_BOOK_SLICE_ENTRIES)
+        throw new PriceBookSliceLimitError();
+      byId.set(row.id, rowToEntry(row));
+    }
   }
   return [...byId.values()];
 }
@@ -613,6 +613,25 @@ export async function loadPriceBookSlice(
   // tenancy: system read because the cost rollup runs outside a tenant scope.
   // sliceCondition keeps it filtered to the list rows and the orgId's own rows.
   return withSystemDb((tx) => selectSlice(tx, slice));
+}
+
+/** Price all batches against one revision of the book with bounded read time. */
+export async function withPriceBookSnapshot<T>(
+  run: (load: (slice: PriceBookSlice) => Promise<PriceBook>) => Promise<T>,
+): Promise<T> {
+  // tenancy: scheduled rollups read global list rates and explicitly scoped org rates.
+  return withSystemDb(async (tx) => {
+    await tx.execute(sql`select
+      set_config('statement_timeout', '30s', true),
+      set_config('idle_in_transaction_session_timeout', '60s', true)`);
+    const deadline = Date.now() + 120_000;
+    return run(async (slice) => {
+      if (Date.now() >= deadline)
+        throw new Error("Price book snapshot exceeded the two minute read limit.");
+      if (slice.models.length === 0) return [];
+      return selectSlice(tx, slice);
+    });
+  }, { repeatableRead: true });
 }
 
 /**
@@ -1140,7 +1159,7 @@ export async function syncPriceBook(args: {
     // changes between syncs — the catalog that won it changed, or a vendor
     // renamed itself — writes a NEW row and leaves the old one open. Two open
     // rows for one model and class is not a duplicate the reader tolerates:
-    // `bestMatch` picks by longest name and then by latest `effective_from`,
+    // `resolveFromBook` picks by longest name and then by latest `effective_from`,
     // so whichever row happens to win keeps winning, and a price correction
     // can land on the row nothing reads. Superseding by (model, class, region)
     // is what keeps exactly one row open per thing a frame can be priced by.
@@ -1162,7 +1181,7 @@ export async function syncPriceBook(args: {
         // The old provider's row starts at this very instant, so it cannot be
         // closed here (`effective_to > effective_from`) and the new row has
         // already landed beside it: two open rows for one model and class
-        // with the same start, which `bestMatch` cannot tell apart. That is
+        // with the same start, which `resolveFromBook` cannot tell apart. That is
         // what the CLI's top-of-hour default produces when a re-run within
         // the hour finds a different vendor string for a model. Refused, and
         // the transaction rolls back, so the operator re-runs with a later

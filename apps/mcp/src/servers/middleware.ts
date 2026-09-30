@@ -1,3 +1,5 @@
+import { trackRequestWork } from "@oxagen/config/request-work";
+import type { OutgoingHttpHeader, OutgoingHttpHeaders } from "node:http";
 // middleware.ts: the served tools inside Oxagen's MCP endpoint (lane M15;
 // mcp-studio-spec, Call path).
 //
@@ -9,8 +11,8 @@
 // the transport before any database read.
 //
 // The request, response, and next types are structural. xmcp types its
-// middleware with express, which this app does not install, so the shapes
-// the middleware touches are named here.
+// middleware with Express. These interfaces name only the fields this
+// middleware needs and preserve Node's response overloads.
 import type { CallToolResult, EffectiveDefinition } from "@oxagen/mcp-studio";
 import type { CapabilityContext } from "@oxagen/oxagen/types";
 import { callServed } from "./call";
@@ -32,9 +34,13 @@ export interface ServedRequest {
 /** The fields of a node response the middleware reads, writes, or holds. */
 export interface ServedResponse {
   statusCode: number;
-  writeHead: (status: number, ...rest: unknown[]) => unknown;
-  write: (chunk: unknown, ...rest: unknown[]) => boolean;
-  end: (...rest: unknown[]) => unknown;
+  writeHead(status: number, message?: string, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]): unknown;
+  writeHead(status: number, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]): unknown;
+  write(chunk: unknown, callback?: (error: Error | null | undefined) => void): boolean;
+  write(chunk: unknown, encoding: BufferEncoding, callback?: (error: Error | null | undefined) => void): boolean;
+  end(callback?: () => void): unknown;
+  end(chunk: unknown, callback?: () => void): unknown;
+  end(chunk: unknown, encoding: BufferEncoding, callback?: () => void): unknown;
   flushHeaders?: () => void;
   setHeader: (name: string, value: string | number | readonly string[]) => unknown;
   getHeader: (name: string) => unknown;
@@ -116,7 +122,33 @@ function bufferOf(chunk: unknown, encoding: unknown): Buffer | null {
 interface Head {
   status: number;
   message?: string;
-  headers?: Record<string, unknown>;
+  headers?: OutgoingHttpHeaders;
+}
+
+function isHeaderValue(value: unknown): value is OutgoingHttpHeader | undefined {
+  return value === undefined || typeof value === "string" || typeof value === "number"
+    || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
+function outgoingHeaders(value: unknown): OutgoingHttpHeaders | undefined {
+  if (Array.isArray(value)) {
+    if (value.length % 2 !== 0) return undefined;
+    const headers: OutgoingHttpHeaders = Object.create(null);
+    for (let i = 0; i < value.length; i += 2) {
+      const name: unknown = value[i];
+      const entry: unknown = value[i + 1];
+      if (typeof name !== "string" || !isHeaderValue(entry)) return undefined;
+      headers[name] = entry;
+    }
+    return headers;
+  }
+  if (!isRecord(value)) return undefined;
+  const headers: OutgoingHttpHeaders = Object.create(null);
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isHeaderValue(entry)) return undefined;
+    headers[name] = entry;
+  }
+  return headers;
 }
 
 function headerIn(headers: Record<string, unknown> | undefined, name: string): unknown {
@@ -125,12 +157,11 @@ function headerIn(headers: Record<string, unknown> | undefined, name: string): u
 }
 
 /** The head to send for a rewritten body: a Content-Length the transport set is recomputed. */
-function headFor(head: Head, body: string): unknown[] {
-  const rest: unknown[] = head.message === undefined ? [] : [head.message];
-  if (head.headers === undefined) return rest;
+function headFor(head: Head, body: string): OutgoingHttpHeaders | undefined {
+  if (head.headers === undefined) return undefined;
   const kept = Object.fromEntries(Object.entries(head.headers).filter(([key]) => key.toLowerCase() !== "content-length"));
   const sized = headerIn(head.headers, "content-length") === undefined ? kept : { ...kept, "content-length": Buffer.byteLength(body) };
-  return [...rest, sized];
+  return sized;
 }
 
 /**
@@ -155,7 +186,7 @@ function holdAnswer(
 
   res.writeHead = (status: number, ...rest: unknown[]) => {
     const message = rest.find((arg): arg is string => typeof arg === "string");
-    const headers = rest.find(isRecord);
+    const headers = rest.map(outgoingHeaders).find((value) => value !== undefined);
     head = { status, ...(message === undefined ? {} : { message }), ...(headers === undefined ? {} : { headers: { ...headers } }) };
     return res;
   };
@@ -172,13 +203,17 @@ function holdAnswer(
     const held = Buffer.concat(chunks).toString("utf8");
     const written: Head | null = head;
     const typed = headerIn(written?.headers, "content-type") ?? res.getHeader("content-type");
-    void rewrite(held, typeof typed === "string" ? typed : undefined)
+    void trackRequestWork(() => rewrite(held, typeof typed === "string" ? typed : undefined)
       .catch(() => held)
       .then((body) => {
         if (res.getHeader("content-length") !== undefined) res.setHeader("content-length", Buffer.byteLength(body));
-        if (written !== null) writeHead(written.status, ...headFor(written, body));
-        end(body, ...(done === undefined ? [] : [done]));
-      })
+        if (written !== null) {
+          const headers = headFor(written, body);
+          if (written.message === undefined) writeHead(written.status, headers);
+          else writeHead(written.status, written.message, headers);
+        }
+        end(body, done);
+      }))
       .catch((error: unknown) => {
         log.warn("Oxagen could not send the tools/list answer.", { error: errorName(error) });
       });
@@ -245,7 +280,10 @@ export function createServedToolsMiddleware(deps: ServedMiddlewareDeps): ServedM
       return;
     }
     if (request.method === "tools/list") {
-      const served = servedList(deps, req.headers);
+      const served = trackRequestWork(() => servedList(deps, req.headers)).catch((error: unknown) => {
+        deps.log.warn("Oxagen could not read the served tools.", { error: errorName(error) });
+        return [];
+      });
       holdAnswer(res, async (body, contentType) => spliceTools(body, contentType, request.id, await served), deps.log);
       next();
       return;
@@ -258,7 +296,7 @@ export function createServedToolsMiddleware(deps: ServedMiddlewareDeps): ServedM
     }
     // answerCall guards every read and the call itself. Only writing the
     // answer can reject here, and the response is spent by then.
-    answerCall(deps, req, res, next, request, name).catch((error: unknown) => {
+    trackRequestWork(() => answerCall(deps, req, res, next, request, name)).catch((error: unknown) => {
       deps.log.warn("Oxagen could not send a served call's answer.", { tool: name, error: errorName(error) });
     });
   };

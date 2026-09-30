@@ -7,15 +7,17 @@ const mocks = vi.hoisted(() => ({
   orgSelect: vi.fn(),
   wsSelect: vi.fn(),
   persist: vi.fn(),
+  execute: vi.fn(),
   callCount: { value: 0 },
 }));
 
 // withTenantDb dispatch by call order:
-//   1 → conversation lookup, 2 → messages, 3 → org name, 4 → workspace name.
+//   1: bounded snapshot, 2: org name, 3: workspace name.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
 
   const makeChain = (leaf: () => Promise<unknown>) => ({
+    execute: mocks.execute,
     select: () => ({
       from: () => ({
         where: () => ({
@@ -36,7 +38,6 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       const leaf =
         [
           mocks.convSelect,
-          mocks.messageSelect,
           mocks.orgSelect,
           mocks.wsSelect,
         ][mocks.callCount.value - 1] ?? mocks.wsSelect;
@@ -50,6 +51,9 @@ vi.mock("./generated-asset.persist", () => ({
   persistGeneratedAsset: mocks.persist,
 }));
 
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
+import type { ConversationExportSnapshot } from "./lib/conversation-export-snapshot";
 import { conversationExportHandler } from "./conversation.export";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { TEST_CTX } from "./test-utils/fixtures";
@@ -119,6 +123,20 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     mocks.messageSelect.mockResolvedValue([]);
     mocks.orgSelect.mockResolvedValue([]);
     mocks.wsSelect.mockResolvedValue([]);
+    mocks.execute.mockImplementation(async () => {
+      const conversations: (typeof CONV_ROW)[] = await mocks.convSelect();
+      const conversation = conversations[0];
+      if (!conversation) return [];
+      const messages: typeof MESSAGE_ROWS = await mocks.messageSelect();
+      return [{
+        ...conversation,
+        createdAt: conversation.createdAt.toISOString(),
+        messageCount: messages.length,
+        sourceTooLarge: false,
+        titleTooLarge: false,
+        messages: messages.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+      }];
+    });
     mocks.persist.mockResolvedValue({
       id: "asset-uuid",
       publicId: "gen_export1",
@@ -145,6 +163,58 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     await expect(conversationExportHandler(MD_INPUT, TEST_CTX)).rejects.toThrow(
       "conversation.export: conversation not found",
     );
+  });
+
+  it.each([
+    [{ messageCount: 501 }, "500 messages across all branches"],
+    [{ sourceTooLarge: true }, "2 MiB of message content and metadata"],
+    [{ titleTooLarge: true }, "8 KiB of title text"],
+  ] as const)("rejects an oversized snapshot before reading names or persisting", async (override, limit) => {
+    const snapshot: ConversationExportSnapshot = {
+      title: CONV_ROW.title,
+      createdAt: CONV_ROW.createdAt.toISOString(),
+      activeLeafMessageId: CONV_ROW.activeLeafMessageId,
+      messageCount: 2,
+      sourceTooLarge: false,
+      titleTooLarge: false,
+      messages: null,
+      ...override,
+    };
+    mocks.execute.mockResolvedValueOnce([snapshot]);
+    await expect(conversationExportHandler(PDF_INPUT, TEST_CTX)).rejects.toThrow(limit);
+    expect(mocks.orgSelect).not.toHaveBeenCalled();
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+
+  it("bounds candidate rows and gates payload aggregation in the same scoped SQL statement", async () => {
+    seedHappyPath();
+    await conversationExportHandler(MD_INPUT, TEST_CTX);
+    const query: SQL = mocks.execute.mock.calls[0]![0];
+    const { sql, params } = new PgDialect().sqlToQuery(query);
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(params).toContain(501);
+    expect(params).toContain(2 * 1024 * 1024);
+    expect(params).toContain(TEST_CTX.orgId);
+    expect(params).toContain(TEST_CTX.workspaceId);
+    expect(sql).toContain("candidates as materialized");
+    expect(sql).toContain("octet_length(content_blocks::text)");
+    expect(sql).toContain("octet_length(metadata::text)");
+    expect(sql).toMatch(/case when budget.message_count <=[\s\S]*and not budget.too_large[\s\S]*then \(\s*select coalesce\(jsonb_agg/);
+    expect(sql).toContain('else null end as messages');
+  });
+
+  it("refuses oversized display names without persisting a PDF", async () => {
+    seedHappyPath();
+    mocks.orgSelect.mockReset().mockResolvedValue([{ name: null, tooLarge: true }]);
+    await expect(conversationExportHandler(PDF_INPUT, TEST_CTX)).rejects.toThrow("8 KiB of organization or workspace name text");
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+
+  it("refuses a snapshot with no payload instead of exporting an empty conversation", async () => {
+    mocks.execute.mockResolvedValueOnce([{
+      ...CONV_ROW, messageCount: 0, sourceTooLarge: false, titleTooLarge: false, messages: null,
+    }]);
+    await expect(conversationExportHandler(MD_INPUT, TEST_CTX)).rejects.toThrow("snapshot is incomplete");
   });
 
   // ── markdown ───────────────────────────────────────────────────────────────
@@ -207,6 +277,16 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     expect(result.filename).toMatch(/^untitled-conversation-/);
   });
 
+  it("rejects Markdown expansion above 4 MiB without returning partial content", async () => {
+    seedHappyPath();
+    mocks.messageSelect.mockReset().mockResolvedValue([{
+      ...MESSAGE_ROWS[0],
+      contentBlocks: Array.from({ length: 100_000 }, () => ({ type: "reasoning", text: "x" })),
+    }]);
+    await expect(conversationExportHandler(MD_INPUT, TEST_CTX)).rejects.toThrow("4 MiB of Markdown");
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+
   // ── pdf ────────────────────────────────────────────────────────────────────
 
   it("renders a parseable PDF, persists it privately, and returns the serve URL", async () => {
@@ -241,6 +321,15 @@ describe("conversationExportHandler (@oxagen/handlers)", () => {
     const parsed = await PDFDocument.load(args.bytes);
     expect(parsed.getPageCount()).toBeGreaterThan(0);
     expect(parsed.getTitle()).toBe("Quarterly Planning");
+  });
+
+  it("stores no asset when PDF rendering exceeds its page limit", async () => {
+    seedHappyPath();
+    mocks.messageSelect.mockReset().mockResolvedValue([{
+      ...MESSAGE_ROWS[0], content: "x\n".repeat(6_000), contentBlocks: [],
+    }]);
+    await expect(conversationExportHandler(PDF_INPUT, TEST_CTX)).rejects.toThrow("100 PDF pages");
+    expect(mocks.persist).not.toHaveBeenCalled();
   });
 
   it("does not forward ctx.messageId into the persisted asset", async () => {

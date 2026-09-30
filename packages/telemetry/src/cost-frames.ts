@@ -54,6 +54,7 @@
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
  */
+import type { ClickHouseSettings } from "@clickhouse/client";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
@@ -155,6 +156,7 @@ function nullableCount(
  * where the frame recorded none.
  */
 interface ToolCallFrameRow {
+  repeated?: boolean;
   /** Null when the frame names no tool. */
   name: string | null;
   /**
@@ -378,11 +380,54 @@ function runSessions(run: {
  * milliseconds, so two chains' calls can share one instant, and the findings
  * job tells their requests apart by the chain.
  */
+/** Per-query bounds keep spillable work below the service memory limit. */
+export const COST_FRAME_QUERY_SETTINGS: ClickHouseSettings = {
+  max_memory_usage: String(128 * 1024 * 1024),
+  max_bytes_before_external_group_by: String(16 * 1024 * 1024),
+  max_bytes_before_external_sort: String(16 * 1024 * 1024),
+  max_bytes_in_join: String(32 * 1024 * 1024),
+  join_algorithm: "grace_hash",
+  max_threads: 2,
+  max_execution_time: 30,
+  max_block_size: "256",
+};
+
+type FrameConsumer<T> = (frames: T[]) => Promise<void>;
+
+/** Await each batch before reading more rows from ClickHouse. */
+async function consumeFrames<Row, Frame>(
+  result: {
+    json(): Promise<unknown>;
+    stream(): AsyncIterable<{ json(): unknown }[]>;
+    close(): void;
+  },
+  convert: (row: Row) => Frame,
+  consume?: FrameConsumer<Frame>,
+): Promise<Frame[]> {
+  if (consume === undefined) return ((await result.json()) as Row[]).map(convert);
+  let batch: Frame[] = [];
+  try {
+    for await (const rows of result.stream()) {
+      for (const row of rows) {
+        batch.push(convert(row.json() as Row));
+        if (batch.length === 256) {
+          await consume(batch);
+          batch = [];
+        }
+      }
+    }
+    if (batch.length > 0) await consume(batch);
+    return [];
+  } finally {
+    result.close();
+  }
+}
+
 export async function readModelCallFrames(args: {
   orgId: string;
   workspaceId: string;
   run: FrameRunRef;
-}): Promise<ModelCallFrameRow[]> {
+}, consume?: FrameConsumer<ModelCallFrameRow>): Promise<ModelCallFrameRow[]> {
   const ch = clickhouse();
   const run = args.run;
   if (run.kind === "ledger") {
@@ -412,6 +457,7 @@ export async function readModelCallFrames(args: {
           ? { orgId: args.orgId, runId: run.runUuid }
           : { orgId: args.orgId, runId: run.runUuid, originMessageId: origin },
       format: "JSONEachRow",
+    clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
     });
     type Row = {
       at: string;
@@ -423,8 +469,7 @@ export async function readModelCallFrames(args: {
       output: string;
       cost_micros: string;
     };
-    const rows = (await result.json()) as Row[];
-    return rows.map((r) => ({
+    return consumeFrames<Row, ModelCallFrameRow>(result, (r) => ({
       at: r.at,
       model: r.model,
       provider: r.provider === "" ? null : r.provider,
@@ -440,7 +485,7 @@ export async function readModelCallFrames(args: {
       toolDefinitionTokens: null,
       contextFrameTokens: null,
       steeringTokens: null,
-    }));
+    }), consume);
   }
 
   const result = await ch.query({
@@ -462,7 +507,7 @@ export async function readModelCallFrames(args: {
         c.context_frame_tokens AS context_frame_tokens,
         c.steering_tokens AS steering_tokens,
         c.system_context_digest AS system_context_digest,
-        c.system_context_parts AS system_context_parts
+        ${consume === undefined ? "c.system_context_parts" : "NULL"} AS system_context_parts
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
@@ -523,6 +568,7 @@ export async function readModelCallFrames(args: {
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
     format: "JSONEachRow",
+    clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
   });
   type Row = {
     at: string;
@@ -543,8 +589,7 @@ export async function readModelCallFrames(args: {
     system_context_digest?: string | null;
     system_context_parts?: string | null;
   };
-  const rows = (await result.json()) as Row[];
-  return rows.map((r): ModelCallFrameRow => {
+  return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
     return {
       at: r.at,
@@ -568,7 +613,7 @@ export async function readModelCallFrames(args: {
         : {}),
       ...(parts === undefined ? {} : { systemContextParts: parts }),
     };
-  });
+  }, consume);
 }
 
 /**
@@ -591,7 +636,7 @@ export async function readTachoToolCallFrames(args: {
   rootSessionUuid: string;
   /** The run's sessions, root first ({@link FrameRunRef}). */
   sessionUuids: readonly string[];
-}): Promise<ToolCallFrameRow[]> {
+}, consume?: FrameConsumer<ToolCallFrameRow>): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
   const result = await ch.query({
     query: `
@@ -602,9 +647,17 @@ export async function readTachoToolCallFrames(args: {
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
         r.result_tokens                                                AS result_tokens
+        ${consume === undefined ? "" : ", h.repeated AS repeated"}
       FROM (
         SELECT ts, seq, tool_name, tool_status, tool_input_digest,
                tool_output_digest, tool_is_mutating, tool_use_id
+               ${consume === undefined ? "" : `,
+                 tool_name != '' AND tool_input_digest != '' AND tool_output_digest != '' AND
+                 count() OVER (
+                   PARTITION BY tool_name, tool_input_digest, tool_output_digest
+                   ORDER BY ts, seq, session_uuid
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) > 1 AS repeated`}
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -636,24 +689,26 @@ export async function readTachoToolCallFrames(args: {
       sessionUuids: runSessions(args),
     },
     format: "JSONEachRow",
+    clickhouse_settings: COST_FRAME_QUERY_SETTINGS,
   });
   type Row = {
     name: string;
+    repeated?: boolean | number;
     status: string;
     input_digest: string;
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
   };
-  const rows = (await result.json()) as Row[];
-  return rows.map((r) => ({
+  return consumeFrames<Row, ToolCallFrameRow>(result, (r) => ({
     name: r.name === "" ? null : r.name,
+    ...(consume === undefined ? {} : { repeated: Boolean(r.repeated) }),
     status: toolFrameStatus(r.status),
     inputDigest: r.input_digest === "" ? null : r.input_digest,
     outputDigest: r.output_digest === "" ? null : r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
-  }));
+  }), consume);
 }
 
 /**

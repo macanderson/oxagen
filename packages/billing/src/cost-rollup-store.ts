@@ -31,6 +31,7 @@ import {
   asc,
   eq,
   gte,
+  getTableColumns,
   inArray,
   isNull,
   lt,
@@ -41,8 +42,8 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
-  dailyTotalsFromRuns,
-  rollupRun,
+  createRunRollup,
+  createDailyRollup,
   type CostBasis,
   type DailyTotalsRecord,
   type ModelCallFrame,
@@ -54,6 +55,7 @@ import {
 } from "./cost-rollup";
 import {
   loadPriceBookSlice,
+  withPriceBookSnapshot,
   type PriceBook,
   type PriceBookSlice,
 } from "./price-book";
@@ -418,6 +420,67 @@ async function readLedgerToolCalls(args: {
   }));
 }
 
+/** Read one ledger snapshot through a transaction-scoped Postgres cursor. */
+export async function streamLedgerToolCalls(
+  source: RunSource,
+  consume: (calls: ToolCallFrame[]) => Promise<void>,
+): Promise<void> {
+  if (source.frames.kind !== "ledger") return;
+  const runUuid = source.frames.runUuid;
+  const payload = events.payloadInline;
+  // tenancy: the scheduled rollup filters events by the run's org and workspace.
+  await withSystemDb(async (tx) => {
+    await tx.execute(sql`select set_config('statement_timeout', '30s', true),
+      set_config('idle_in_transaction_session_timeout', '30s', true),
+      set_config('work_mem', '16MB', true)`);
+    await tx.execute(sql`DECLARE rollup_tools NO SCROLL CURSOR FOR
+      SELECT
+        ${toolCallName(payload)} AS name,
+        ${payload}->>'outcome' AS outcome,
+        ${payload}->>'input_digest' AS "inputDigest",
+        ${payload}->>'output_digest' AS "outputDigest",
+        coalesce(${payload}->>'output_digest', '') != '' AND
+        ${payload}->>'input_digest' IS NOT NULL AND
+        ${toolCallName(payload)} IS NOT NULL AND
+        count(*) OVER (
+          PARTITION BY ${toolCallName(payload)},
+            ${payload}->>'input_digest', ${payload}->>'output_digest'
+          ORDER BY ${events.runSeq}
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) > 1 AS repeated
+      FROM ${events}
+      WHERE ${events.orgId} = ${source.meta.orgId}
+        AND ${events.workspaceId} = ${source.meta.workspaceId}
+        AND ${events.runId} = ${runUuid}
+        AND ${events.eventRecordVersion} = 2
+        AND ${inArray(events.eventType, TOOL_CALL_TYPES)}
+      ORDER BY ${events.runSeq}`);
+    const deadline = Date.now() + 120_000;
+    for (;;) {
+      if (Date.now() >= deadline)
+        throw new Error("Tool rollup exceeded the two minute read limit.");
+      const rows = await tx.execute(sql`FETCH FORWARD 256 FROM rollup_tools`) as unknown as {
+        name: string | null;
+        outcome: string | null;
+        inputDigest: string | null;
+        outputDigest: string | null;
+        repeated: boolean;
+      }[];
+      if (rows.length === 0) break;
+      await consume(rows.map((row) => ({
+        name: row.name,
+        status: ledgerToolStatus(row.outcome),
+        inputDigest: row.inputDigest,
+        outputDigest: row.outputDigest,
+        isMutating: null,
+        resultTokens: null,
+        repeated: row.repeated,
+      })));
+    }
+    await tx.execute(sql`CLOSE rollup_tools`);
+  });
+}
+
 /**
  * What model calls spent on tool definitions, context frames, and steering
  * (spec §12.6, #4493): one call's measurements, or their sums over a run.
@@ -509,12 +572,21 @@ export interface RunRollupDeps {
     run: FrameRunRef;
   }) => Promise<PricedModelCall[]>;
   readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
+  streamModelCalls?: (
+    args: { orgId: string; workspaceId: string; run: FrameRunRef },
+    consume: (calls: PricedModelCall[]) => Promise<void>,
+  ) => Promise<void>;
+  streamToolCalls?: (
+    source: RunSource,
+    consume: (calls: ToolCallFrame[]) => Promise<void>,
+  ) => Promise<void>;
   /**
    * The rows that could price the run's models over its span, never the
    * whole book: the whole history is tens of thousands of rows, and loading
    * it per run ran the API out of heap (#4202).
    */
   loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
+  withPriceBookSnapshot?: typeof withPriceBookSnapshot;
   /** The acceptance a person recorded on the row, which no rebuild computes. */
   readCarried: (
     runId: string,
@@ -924,7 +996,20 @@ const productionRunRollupDeps: RunRollupDeps = {
   readModelCalls: async (args) =>
     (await readModelCallFrames(args)).map(toFrame),
   readToolCalls: readRunToolCalls,
+  streamModelCalls: async (args, consume) => {
+    await readModelCallFrames(args, async (rows) => consume(rows.map(toFrame)));
+  },
+  streamToolCalls: async (source, consume) => {
+    if (source.frames.kind === "ledger") return streamLedgerToolCalls(source, consume);
+    await readTachoToolCallFrames({
+      orgId: source.meta.orgId,
+      workspaceId: source.meta.workspaceId,
+      rootSessionUuid: source.frames.rootSessionUuid,
+      sessionUuids: source.frames.sessionUuids,
+    }, consume);
+  },
   loadPriceBook: loadPriceBookSlice,
+  withPriceBookSnapshot,
   readCarried,
   readVerdict: (scope, runId) =>
     withSystemDb((tx) => readRunVerdict(tx, scope, runId)),
@@ -974,34 +1059,12 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  // The book waits for the model calls, because which rows to load is the
-  // models they name over the span they cover.
-  const pricedCalls = deps
-    .readModelCalls({
-      orgId: source.meta.orgId,
-      workspaceId: source.meta.workspaceId,
-      run: source.frames,
-    })
-    .then(async (calls) => ({
-      calls,
-      book: await deps.loadPriceBook(runPriceSlice(source.meta.orgId, calls)),
-    }));
-  const [
-    { calls: modelCalls, book },
-    toolCalls,
-    carried,
-    verdict,
-    workerId,
-  ] = await Promise.all([
-    pricedCalls,
-    deps.readToolCalls(source),
+  const [carried, verdict, workerId] = await Promise.all([
     deps.readCarried(publicId),
     deps.readVerdict(scope, publicId),
     deps.readWitnessedRun(scope, publicId),
   ]);
-  // Summed from the frames the row prices, in the same read, so a call a
-  // live run adds mid-rebuild counts in both or in neither.
-  const sources = sumTokenSources(modelCalls);
+  const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.
@@ -1014,13 +1077,32 @@ export async function rebuildRunTotals(
         costCenter: worker.meta.costCenter,
       }
     : source.meta;
-  const record = rollupRun({
+  const accumulator = createRunRollup({
     meta,
-    modelCalls,
-    toolCalls,
-    book,
     carried: { verdict, accepted: carried?.accepted ?? null },
   });
+  const readModels = async (load: RunRollupDeps["loadPriceBook"]) => {
+    const consumeModels = async (calls: PricedModelCall[]) => {
+      const book = await load(runPriceSlice(source.meta.orgId, calls));
+      for (const call of calls) accumulator.addModel(call, book);
+      const batchSources = sumTokenSources(calls);
+      for (const member of SOURCE_MEMBERS) {
+        const value = batchSources[member];
+        if (value !== null) sources[member] = (sources[member] ?? 0) + value;
+      }
+    };
+    const frameArgs = { ...scope, run: source.frames };
+    if (deps.streamModelCalls) await deps.streamModelCalls(frameArgs, consumeModels);
+    else await consumeModels(await deps.readModelCalls(frameArgs));
+  };
+  if (deps.withPriceBookSnapshot) await deps.withPriceBookSnapshot(readModels);
+  else await readModels(deps.loadPriceBook);
+  const consumeTools = async (calls: ToolCallFrame[]) => {
+    for (const call of calls) accumulator.addTool(call);
+  };
+  if (deps.streamToolCalls) await deps.streamToolCalls(source, consumeTools);
+  else await consumeTools(await deps.readToolCalls(source));
+  const record = accumulator.finish();
   await deps.write(record, deps.now(), sources);
   return record;
 }
@@ -1037,25 +1119,39 @@ export function dayBounds(day: string): { start: Date; next: Date } {
 
 type DayArgs = { orgId: string; workspaceId: string; day: string };
 
-/** Every run row of one workspace that started on `day`. */
-async function readRunTotalsForDay(
+/** Read one snapshot of the day's runs in bounded cursor batches. */
+async function streamRunTotalsForDay(
   tx: Tx,
   args: DayArgs,
-): Promise<RunTotalsRecord[]> {
+  consume: (run: RunTotalsRecord) => void,
+): Promise<void> {
   const { start, next } = dayBounds(args.day);
-  const rows = await tx
-    .select()
-    .from(totals)
-    .where(
-      and(
-        eq(totals.orgId, args.orgId),
-        eq(totals.workspaceId, args.workspaceId),
-        gte(totals.startedAt, start),
-        lt(totals.startedAt, next),
-      ),
-    )
-    .orderBy(asc(totals.startedAt));
-  return rows.map(runTotalsRowToRecord);
+  const columns = Object.entries(getTableColumns(totals));
+  const selection = sql.join(columns.map(([key, column]) =>
+    sql`${column} AS ${sql.identifier(key)}`), sql`, `);
+  await tx.execute(sql`DECLARE daily_runs NO SCROLL CURSOR FOR
+    SELECT ${selection} FROM ${totals}
+    WHERE ${totals.orgId} = ${args.orgId}
+      AND ${totals.workspaceId} = ${args.workspaceId}
+      AND ${gte(totals.startedAt, start)}
+      AND ${lt(totals.startedAt, next)}
+    ORDER BY ${totals.startedAt}`);
+  const deadline = Date.now() + 120_000;
+  for (;;) {
+    if (Date.now() >= deadline)
+      throw new Error("Daily rollup exceeded the two minute read limit.");
+    const rows = await tx.execute(sql`FETCH FORWARD 256 FROM daily_runs`) as unknown as Record<string, unknown>[];
+    if (rows.length === 0) break;
+    for (const raw of rows) {
+      const row = Object.fromEntries(columns.map(([key, column]) => {
+        const value = raw[key];
+        const decoder: { mapFromDriverValue(value: unknown): unknown } = column;
+        return [key, value === null ? null : decoder.mapFromDriverValue(value)];
+      })) as Row;
+      consume(runTotalsRowToRecord(row));
+    }
+  }
+  await tx.execute(sql`CLOSE daily_runs`);
 }
 
 /** Replace the workspace-day's group rows inside the caller's transaction. */
@@ -1075,28 +1171,30 @@ async function replaceDailyTotals(
       ),
     );
   if (rows.length === 0) return;
-  await tx.insert(daily).values(
-    rows.map((r) => ({
-      orgId: r.orgId,
-      workspaceId: r.workspaceId,
-      day: r.day,
-      groupKind: r.groupKind,
-      groupKey: r.groupKey,
-      provider: r.provider,
-      runs: r.runs,
-      calls: r.calls,
-      costMicros: r.costMicros,
-      currency: r.currency,
-      costBasis: r.costBasis,
-      provenMicros: r.provenMicros,
-      acceptedMicros: r.acceptedMicros,
-      productiveRatio:
-        r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
-      gradedSteps: r.gradedSteps,
-      tokens: r.tokens,
-      rolledUpAt,
-    })),
-  );
+  for (let offset = 0; offset < rows.length; offset += 256) {
+    await tx.insert(daily).values(
+      rows.slice(offset, offset + 256).map((r) => ({
+        orgId: r.orgId,
+        workspaceId: r.workspaceId,
+        day: r.day,
+        groupKind: r.groupKind,
+        groupKey: r.groupKey,
+        provider: r.provider,
+        runs: r.runs,
+        calls: r.calls,
+        costMicros: r.costMicros,
+        currency: r.currency,
+        costBasis: r.costBasis,
+        provenMicros: r.provenMicros,
+        acceptedMicros: r.acceptedMicros,
+        productiveRatio:
+          r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
+        gradedSteps: r.gradedSteps,
+        tokens: r.tokens,
+        rolledUpAt,
+      })),
+    );
+  }
 }
 
 /**
@@ -1120,10 +1218,15 @@ export async function rebuildDailyTotals(
   // statement here is filtered by the orgId and workspaceId of the one
   // workspace-day being rebuilt, and the rows written carry that same pair.
   return withSystemDb(async (tx) => {
+    await tx.execute(sql`select set_config('statement_timeout', '30s', true),
+      set_config('idle_in_transaction_session_timeout', '30s', true),
+      set_config('work_mem', '16MB', true)`);
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`cost.daily_totals:${args.workspaceId}:${args.day}`}, 0))`,
     );
-    const rows = dailyTotalsFromRuns(await readRunTotalsForDay(tx, args));
+    const accumulator = createDailyRollup();
+    await streamRunTotalsForDay(tx, args, accumulator.addRun);
+    const rows = accumulator.finish();
     await replaceDailyTotals(tx, args, rows, now());
     return rows;
   });
