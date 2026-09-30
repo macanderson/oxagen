@@ -549,6 +549,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - set_mcp_credential
 - set_tool_classification
 - set_tool_state
+- try_studio_tool
 
 ## toolbelt
 

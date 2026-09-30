@@ -4481,6 +4481,17 @@
       "consumes": []
     },
     {
+      "name": "try_studio_tool",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "unbind_agent_environment",
       "domain": "agent",
       "surfaces": [

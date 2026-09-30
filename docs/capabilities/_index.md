@@ -637,6 +637,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [set_mcp_credential](tool.studio.credential.set.md) | [tool.studio.credential.set.ts](../../packages/oxagen/src/contracts/tool.studio.credential.set.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp |
 | [set_tool_state](tool.state.set.md) | [tool.state.set.ts](../../packages/oxagen/src/contracts/tool.state.set.ts) | api, mcp |
+| [try_studio_tool](tool.studio.try.md) | [tool.studio.try.ts](../../packages/oxagen/src/contracts/tool.studio.try.ts) | api, mcp |
 
 ## Toolbelt
 
