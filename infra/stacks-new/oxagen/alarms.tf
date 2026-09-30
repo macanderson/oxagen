@@ -299,13 +299,27 @@ resource "aws_cloudwatch_metric_alarm" "node_disk" {
 # figure — "held above 80%" — is below it outright. An alarm that would not have
 # fired during the incident it was written for is decoration.
 #
-# So 75, and 5 of 6 periods rather than all 6: still well clear of a deploy or an
-# ingestion burst, which spike and subside, and comfortably under a runaway,
-# which does not. The runaway held for twenty-six hours, so half an hour is
-# nowhere near the resolution this needs.
+# So 75 on the two-vCPU node that incident ran on, and 5 of 6 periods rather
+# than all 6: still well clear of a deploy or an ingestion burst, which spike
+# and subside, and comfortably under a runaway, which does not. The runaway held
+# for twenty-six hours, so half an hour is nowhere near the resolution this
+# needs.
+#
+# The normalisation moves with the vCPU count, so the threshold is set in cores
+# and converted: 1.5 busy cores is 75% of two vCPUs and 37.5% of the four an
+# m7g.xlarge has. The 171% runaway reads 42.75% there, which a fixed 75 would
+# never see. The vCPU count comes from the instance type itself, so a later
+# resize keeps the alarm on the same load.
+data "aws_ec2_instance_type" "app" {
+  instance_type = local.app_instance_type
+}
+locals {
+  node_cpu_alarm_cores = 1.5
+  node_cpu_threshold   = 100 * local.node_cpu_alarm_cores / data.aws_ec2_instance_type.app.default_vcpus
+}
 resource "aws_cloudwatch_metric_alarm" "node_cpu" {
   alarm_name        = "oxagen-node-cpu"
-  alarm_description = "The app node has averaged over 75% CPU (CloudWatch's normalised 0-100 scale) for half an hour. On 2026-08-25 this was ClickHouse burning its own system logs for 26 hours at what `docker stats` called 171% of 200%, which is 85.5% here. Check `docker stats` before assuming load."
+  alarm_description = "The app node has averaged over ${local.node_cpu_threshold}% CPU (CloudWatch's normalised 0-100 scale, ${local.node_cpu_alarm_cores} of its ${data.aws_ec2_instance_type.app.default_vcpus} vCPUs busy) for half an hour. On 2026-08-25 this was ClickHouse burning its own system logs for 26 hours at what `docker stats` called 171% of 200% on a two-vCPU node. Check `docker stats` before assuming load."
 
   namespace   = "AWS/EC2"
   metric_name = "CPUUtilization"
@@ -315,7 +329,7 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu" {
   period              = 300
   evaluation_periods  = 6
   datapoints_to_alarm = 5
-  threshold           = 75
+  threshold           = local.node_cpu_threshold
   comparison_operator = "GreaterThanThreshold"
   # Absent EC2 CPU means the instance is gone, which node_status_check and
   # no_healthy_host both say more clearly. Alarming here too would be three

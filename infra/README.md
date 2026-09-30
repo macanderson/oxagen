@@ -370,9 +370,9 @@ reads as an incident history:
 | `oxagen-node-status-check` | The instance fails its EC2 status checks | |
 | `oxagen-aurora-cpu` | Aurora saturates | |
 | `oxagen-node-disk-{root,data}` | A filesystem is over 80% full | Deploys refuse to unpack under 3 GB free; at 100% SSM cannot reach the box to fix it |
-| `oxagen-node-cpu` | Over 75% CPU for half an hour | 2026-08-25: ClickHouse burned its own system logs for 26 hours |
-| `oxagen-node-cpu-credits` | The burst credit balance runs out | The same runaway, billing silently in `unlimited` mode |
-| `oxagen-node-memory` | Over 90% memory | Two databases and six Node services on 8 GB; the OOM killer takes a database |
+| `oxagen-node-cpu` | 1.5 vCPUs busy for half an hour (37.5% of the m7g.xlarge's four) | 2026-08-25: ClickHouse burned its own system logs for 26 hours |
+| `oxagen-node-cpu-credits` | The burst credit balance runs out. Exists only on a t-family node, so not on the m7g.xlarge | The same runaway, billing silently in `unlimited` mode |
+| `oxagen-node-memory` | Over 90% memory | Two databases and six Node services on 16 GB since 2026-09-30 (8 GB before); the OOM killer takes a database |
 | `oxagen-container-restart-loop` | More than 5 container starts in each of three consecutive 5-minute periods | 2026-09-09 (#2813): a leftover `oxagen-worker` container restarted about 14 times a minute for two days and every alarm above stayed OK |
 
 ### The crash-loop alarm has parts outside `alarms.tf`
