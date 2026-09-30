@@ -33,3 +33,17 @@ variable "capture_email" {
   type        = bool
   default     = false
 }
+
+variable "dormant" {
+  description = <<-EOT
+    Keep the environment defined but not running, so it costs next to nothing
+    until it is needed. The app node and the NAT instance are stopped, and the
+    ALB, its listeners, and the service DNS records are removed. The
+    certificate, parameters, deploy bucket, EBS volumes, and database stay.
+    Aurora Serverless v2 already scales to zero once nothing connects. Set it
+    back to false to wake the environment: the instances start and the ALB and
+    DNS records come back.
+  EOT
+  type        = bool
+  default     = false
+}
