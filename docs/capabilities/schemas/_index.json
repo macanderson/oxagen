@@ -3662,6 +3662,16 @@
       "consumes": []
     },
     {
+      "name": "retry_steering_repo_provision",
+      "domain": "repository",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reveal_secret",
       "domain": "secret",
       "surfaces": [

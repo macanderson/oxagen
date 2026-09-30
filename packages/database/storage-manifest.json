@@ -3333,6 +3333,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "retry_steering_repo_provision",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "reveal_secret",
       "reads": [],
