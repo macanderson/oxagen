@@ -303,6 +303,12 @@ describe("doorbell", () => {
 
 describe("toWorkItem", () => {
   const scope = { repos: ["acme/web"] };
+  /** Maps a record these tests keep inside `scope`, so a null is a failure. */
+  function inScope(item: ProviderItem) {
+    const mapped = githubCollector.toWorkItem(item, scope);
+    if (mapped === null) throw new Error("the record is outside the collector's scope");
+    return mapped;
+  }
 
   it("maps a recorded open issue", () => {
     expect(githubCollector.toWorkItem(providerItem(restIssue()), scope)).toEqual({
@@ -330,7 +336,7 @@ describe("toWorkItem", () => {
 
   it("maps a closed, completed issue to Done", () => {
     const issue = restIssue({ state: "closed", state_reason: "completed", closed_at: "2026-09-21T09:00:00Z" });
-    const item = githubCollector.toWorkItem(providerItem(issue), scope);
+    const item = inScope(providerItem(issue));
     expect(item).toMatchObject({
       status: "closed",
       statusCategory: "closed",
@@ -348,7 +354,7 @@ describe("toWorkItem", () => {
     [null, [], "Other"],
   ])("maps state_reason %s with labels %j to %s", (stateReason, labels, resolution) => {
     const issue = restIssue({ state: "closed", state_reason: stateReason, labels });
-    expect(githubCollector.toWorkItem(providerItem(issue), scope).resolution).toBe(resolution);
+    expect(inScope(providerItem(issue)).resolution).toBe(resolution);
   });
 
   it("maps issue types and type labels, and keeps the most urgent priority", () => {
@@ -356,7 +362,7 @@ describe("toWorkItem", () => {
       type: { id: 5, name: "Feature" },
       labels: ["P2", "documentation", "P0", "Chore", "test", "improvement", "enhancement"],
     });
-    const item = githubCollector.toWorkItem(providerItem(issue), scope);
+    const item = inScope(providerItem(issue));
     expect(item.priorityRaw).toBe("P0");
     expect(item.labels).toEqual([
       "P2",
@@ -375,21 +381,21 @@ describe("toWorkItem", () => {
 
   it("maps issue type Bug and reads no Priority from an unmapped label", () => {
     const issue = restIssue({ type: { name: "Bug" }, labels: [{ name: "priority: high" }] });
-    const item = githubCollector.toWorkItem(providerItem(issue), scope);
+    const item = inScope(providerItem(issue));
     expect(item.labels).toEqual(["priority: high", "Bug"]);
     expect(item.priorityRaw).toBeNull();
   });
 
   it("falls back to the single assignee, then to no owner", () => {
     const single = restIssue({ assignees: [], assignee: { login: "solo" } });
-    expect(githubCollector.toWorkItem(providerItem(single), scope).owner).toBe("solo");
+    expect(inScope(providerItem(single)).owner).toBe("solo");
     const none = restIssue({ assignees: null, assignee: null });
-    expect(githubCollector.toWorkItem(providerItem(none), scope).owner).toBeNull();
+    expect(inScope(providerItem(none)).owner).toBeNull();
   });
 
   it("maps an empty body, a deleted author, and an unknown last actor to null", () => {
     const issue = restIssue({ body: null, user: null });
-    const item = githubCollector.toWorkItem(providerItem(issue, null), scope);
+    const item = inScope(providerItem(issue, null));
     expect(item.description).toBeNull();
     expect(item.sourceCreatedBy).toBeNull();
     expect(item.sourceUpdatedBy).toBeNull();
