@@ -28,6 +28,7 @@ import { dirname, join, relative, resolve } from "node:path";
 const BUILTINS = new Set(builtinModules);
 const SCRIPT_FILE = /\.(mjs|cjs|js|ts|mts|cts)$/;
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const RUN_CHECKS = /(^|\/)run-checks\.mjs$/;
 
 /**
  * Split a shell command into the simple commands it chains. Quotes are not
@@ -56,6 +57,12 @@ export function simpleCommands(command) {
  * by the root script it names. A script is expanded once, so a script that
  * names itself cannot loop.
  *
+ * `node tools/scripts/run-checks.mjs a b` runs `pnpm run a` and then
+ * `pnpm run b`, so each name after the runner expands the same way, after
+ * the runner's own command. `check:contracts` is such a list, and without
+ * this the pre-push preflight would see only the runner and miss every
+ * package its guards import.
+ *
  * @param {string} command
  * @param {Record<string, string>} scripts the root package.json `scripts`
  * @returns {string[][]}
@@ -64,6 +71,15 @@ export function expandCommand(command, scripts, seen = new Set()) {
   const out = [];
   for (const tokens of simpleCommands(command)) {
     const [head, ...rest] = tokens;
+    if (head === "node" && rest.length > 0 && RUN_CHECKS.test(rest[0])) {
+      out.push(tokens);
+      for (const listed of rest.slice(1)) {
+        if (scripts[listed] === undefined || seen.has(listed)) continue;
+        seen.add(listed);
+        out.push(...expandCommand(scripts[listed], scripts, seen));
+      }
+      continue;
+    }
     const name =
       head === "pnpm" ? (rest[0] === "run" ? rest[1] : rest[0]) : undefined;
     if (name && !name.startsWith("-") && scripts[name] !== undefined) {

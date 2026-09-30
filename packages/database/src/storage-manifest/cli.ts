@@ -94,23 +94,9 @@ export function firstDifference(
 }
 
 /**
- * A committed body without the scalars ADR-216 stopped committing, so a file
- * that still records them hashes the same as its content.
+ * Whether a committed body still records a scalar ADR-216 stopped committing.
+ * `contentHashOf` already excludes both, so this only picks the message.
  */
-function withoutDerivedScalars(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
-  const { contentHash: _hash, ...rest } = body;
-  if (Array.isArray(rest.stores)) {
-    rest.stores = rest.stores.map((store: unknown) => {
-      if (store === null || typeof store !== "object") return store;
-      const { tableCount: _count, ...kept } = store as Record<string, unknown>;
-      return kept;
-    });
-  }
-  return rest;
-}
-
 function carriesDerivedScalars(body: Record<string, unknown>): boolean {
   if ("contentHash" in body) return true;
   return (
@@ -175,7 +161,7 @@ export function driftReport(
     return out;
   }
 
-  const committedHash = contentHashOf(withoutDerivedScalars(body));
+  const committedHash = contentHashOf(body);
   out.push(`  committed content hash:    ${committedHash}`);
   out.push(`  regenerated content hash:  ${regeneratedHash}`);
   out.push(...differenceLines);

@@ -245,12 +245,19 @@ const ROLE_GATES = [
   "assertContractRole",
 ] as const;
 
-/** Whether the exported handler reaches one of `ROLE_GATES`, in this file. */
+/**
+ * Whether the exported handler calls one of `ROLE_GATES`, in this file. A gate
+ * the handler names and never calls does not count: this rule proves the role
+ * is asserted, not mentioned (#4664 item 11).
+ */
 function handlerCallsRoleGate(
   source: ts.SourceFile,
   exportName: string,
 ): boolean {
-  return reachesRoleGate(source, exportName, { gates: ROLE_GATES });
+  return reachesRoleGate(source, exportName, {
+    gates: ROLE_GATES,
+    requireCall: true,
+  });
 }
 
 /** `resolveActingUserId(...)` or `await resolveActingUserId(...)`. */
@@ -565,6 +572,30 @@ describe("INV-29: every role gate acts as the resolved user", () => {
       );
       expect(handlerCallsRoleGate(source, "probeHandler")).toBe(true);
       expect(soleHandlerExport(source)).toBe("probeHandler");
+    });
+
+    // #4664 item 11: the shared reader also counts a gate handed on as a
+    // value, for check-role-enforcement's dependency objects. INV-29 asks for
+    // a call, so a handler that only names the gate fails here.
+    it("fails a handler that names a gate and never calls it", () => {
+      const member = parseSource(
+        "probe.ts",
+        `export const h = async (_i, ctx) => {\n  void iam.assertOrgRole;\n};`,
+      );
+      expect(handlerCallsRoleGate(member, "h")).toBe(false);
+      const bare = parseSource(
+        "probe.ts",
+        `import { assertOrgRole } from "@oxagen/iam";\nexport const h = async (_i, ctx) => {\n  const gate = assertOrgRole;\n  return gate === undefined;\n};`,
+      );
+      expect(handlerCallsRoleGate(bare, "h")).toBe(false);
+    });
+
+    it("passes the same handler once it calls the gate as a member", () => {
+      const source = parseSource(
+        "probe.ts",
+        `export const h = async (_i, ctx) => {\n  await iam.assertOrgRole({ ...ctx, userId: null }, { org: ["Owner"] });\n};`,
+      );
+      expect(handlerCallsRoleGate(source, "h")).toBe(true);
     });
   });
 });

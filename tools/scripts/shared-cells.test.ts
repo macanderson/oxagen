@@ -41,9 +41,15 @@ describe("shared cells (ADR-216)", () => {
       "_index.json",
       "README.md",
       "ADR number",
+      "docs/adr/README.md",
     ]) {
       expect(paragraph, cell).toContain(cell);
     }
+    // The index is the one shared cell no generator rewrites, so its rule is
+    // the opposite of the others: keep both sides (#4664, item 22).
+    expect(paragraph).toContain(
+      "keep both sides' `docs/adr/README.md` entries, in number order",
+    );
   });
 
   it("the atlas-validate job checks the migration directory's hash", () => {

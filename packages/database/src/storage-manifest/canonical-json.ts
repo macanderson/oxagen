@@ -41,14 +41,28 @@ export function canonicalJson(value: unknown): string {
 /**
  * Compute the sha256 content hash of a manifest. The manifest is canonicalized
  * first, so the hash is a pure function of its meaningful content and is
- * stable across runs; for a current manifest it equals the sha256 of the
- * committed file's bytes.
+ * stable across runs. For a current manifest it equals the sha256 of the
+ * committed file's bytes. A file with CRLF line endings or other whitespace
+ * hashes to the same value, because the hash reads the parsed content.
  *
- * The manifest no longer commits this hash (ADR-216): it is computed wherever
- * it is read. A `contentHash` field is still excluded, so a file written
- * before that change hashes to the same value as its body.
+ * The manifest no longer commits this hash or a per-store `tableCount`
+ * (ADR-216). Both are computed wherever the manifest is read. A top-level
+ * `contentHash` and each store's `tableCount` are still excluded, so a file
+ * written before that change, or a merge that kept one side's copy of either
+ * field, hashes to the same value as its content.
+ *
+ * This is the one definition of the hash. `pnpm schema:manifest`, the drift
+ * report, and the architecture atlas all call it, so they print the same value
+ * for the same file.
  */
 export function contentHashOf(body: object): string {
   const { contentHash: _omit, ...rest } = body as Record<string, unknown>;
+  if (Array.isArray(rest.stores)) {
+    rest.stores = rest.stores.map((store: unknown) => {
+      if (store === null || typeof store !== "object") return store;
+      const { tableCount: _count, ...kept } = store as Record<string, unknown>;
+      return kept;
+    });
+  }
   return createHash("sha256").update(canonicalJson(rest)).digest("hex");
 }

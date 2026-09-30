@@ -1,5 +1,6 @@
 /**
- * The runner that replaced the `checks` job's eight-command `&&` chain (#3428).
+ * The runner that replaced the `checks` job's eight-command `&&` chain (#3428),
+ * and `check:contracts`'s 26-command one (#4664 item 9).
  *
  * The chain stopped at the first failure, so a later failure stayed hidden
  * until the next CI cycle. The witness below gives the runner one passing
@@ -7,20 +8,20 @@
  * failures.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   escapeData,
   escapeProperty,
-  isEntrypoint,
+  outputMode,
   runChecks,
   summaryLines,
 } from "./run-checks.mjs";
 
 const RUNNER = join(dirname(fileURLToPath(import.meta.url)), "run-checks.mjs");
+const TOP = { groups: true, annotate: true, parent: undefined };
 
 describe("runChecks", () => {
   beforeEach(() => {
@@ -103,6 +104,108 @@ describe("workflow command escaping", () => {
   });
 });
 
+describe("check:contracts", () => {
+  // Reads the root package.json, which tools/scripts/turbo.json declares as
+  // an input of this package's tests (#4664 item 2).
+  // check-checks-job-continues.mjs holds the same property live, inside
+  // check:contracts, on every CI run.
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const scripts: Record<string, string> = JSON.parse(
+    readFileSync(join(repoRoot, "package.json"), "utf8"),
+  ).scripts;
+  const command = scripts["check:contracts"] ?? "";
+  const names = command.split(/\s+/).slice(2);
+
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is a run-checks list of root scripts, not an && chain", () => {
+    expect(command.startsWith("node tools/scripts/run-checks.mjs ")).toBe(true);
+    expect(command).not.toContain("&&");
+    expect(names.filter((name) => scripts[name] === undefined)).toEqual([]);
+    // Spot checks that the guards the chain ran are still listed.
+    expect(names).toContain("check:role-enforcement");
+    expect(names).toContain("check:deploy-tip");
+    expect(names).toContain("docs:schemas:check");
+  });
+
+  it("reports two planted guard failures in one run", () => {
+    // The old chain stopped at the first of these and never reached the
+    // second, the last guard in the list.
+    const planted = new Set(["check:adr-index", "docs:schemas:check"]);
+    const ran: string[] = [];
+    const outcome = runChecks(
+      names,
+      (name: string) => {
+        ran.push(name);
+        return planted.has(name) ? 1 : 0;
+      },
+      TOP,
+    );
+    expect(ran).toEqual(names);
+    expect(outcome.failed).toEqual(["check:adr-index", "docs:schemas:check"]);
+    expect(summaryLines(outcome, TOP)).toContain(
+      `2 of ${names.length} checks failed: check:adr-index, docs:schemas:check`,
+    );
+  });
+});
+
+describe("outputMode", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("groups and annotates only at the top level on GitHub Actions", () => {
+    expect(outputMode({ GITHUB_ACTIONS: "true" })).toEqual(TOP);
+    expect(
+      outputMode({ GITHUB_ACTIONS: "true", RUN_CHECKS_PARENT: "check:contracts" }),
+    ).toEqual({ groups: false, annotate: true, parent: "check:contracts" });
+    expect(outputMode({})).toEqual({
+      groups: false,
+      annotate: false,
+      parent: undefined,
+    });
+  });
+
+  it("prints no group markers inside another runner's group", () => {
+    // GitHub does not nest log groups: an inner ::group:: would end the outer
+    // check:contracts group partway through.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    runChecks(["check:adr-index"], () => 0, {
+      groups: false,
+      annotate: true,
+      parent: "check:contracts",
+    });
+    const printed = log.mock.calls.map((c) => String(c[0]));
+    expect(printed.some((l) => l.includes("::group::"))).toBe(false);
+    expect(printed).toContain("\n=== check:adr-index");
+  });
+
+  it("points a nested failure at the outer group and drops annotations off Actions", () => {
+    const outcome = {
+      results: [{ name: "check:adr-index", status: 1 }],
+      failed: ["check:adr-index"],
+    };
+    const nested = summaryLines(outcome, {
+      annotate: true,
+      parent: "check:contracts",
+    });
+    expect(nested.find((l) => l.startsWith("::error "))).toContain(
+      '=== check:adr-index" in the "check:contracts" group',
+    );
+    const local = summaryLines(outcome, { annotate: false, parent: undefined });
+    expect(local.some((l) => l.startsWith("::error "))).toBe(false);
+    expect(local).toContain("1 of 1 checks failed: check:adr-index");
+  });
+});
+
 describe("entrypoint", () => {
   // The step in pipeline.yml runs `node tools/scripts/run-checks.mjs ...`.
   // If the entrypoint test misread that as an import, the script would exit
@@ -114,23 +217,6 @@ describe("entrypoint", () => {
     expect(result.stderr).toContain("name at least one pnpm script");
   });
 
-  it("runs when node starts it through a symlink", () => {
-    // Node resolves symlinks in import.meta.url but not in argv[1], so the
-    // `file://${argv[1]}` comparison the other guards use reads false here.
-    const dir = mkdtempSync(join(tmpdir(), "run-checks-"));
-    try {
-      const link = join(dir, "run-checks.mjs");
-      symlinkSync(RUNNER, link);
-      const result = spawnSync(process.execPath, [link], { encoding: "utf8" });
-      expect(result.status).toBe(2);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("reads false for another script and for no script", () => {
-    expect(isEntrypoint(undefined)).toBe(false);
-    expect(isEntrypoint(fileURLToPath(import.meta.url))).toBe(false);
-    expect(isEntrypoint("/no/such/file.mjs")).toBe(false);
-  });
+  // lib/is-entrypoint.test.ts starts this runner, and each guard that shares
+  // its entrypoint test, through a symlink.
 });

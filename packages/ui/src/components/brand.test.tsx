@@ -123,19 +123,16 @@ describe("OxagenIcon — the hive, two colours", () => {
   });
 });
 
-// #3074: the kit's two-colour rule holds in both themes. The outline takes
-// `currentColor` through `text-foreground`, so it follows the theme; the two
-// lit cells keep the metal and the kit's half strength, so they never flip.
-describe.each(["light", "dark"])("OxagenIcon in the %s theme", (theme) => {
-  const renderIn = () =>
-    render(
-      <div className={theme} data-theme={theme}>
-        <OxagenIcon />
-      </div>,
-    );
-
-  it("outlines in the surface's ink and follows the theme's foreground", () => {
-    const { container, getByRole } = renderIn();
+// #3074: the kit's two-colour rule. jsdom applies no CSS, so a test that
+// wraps the icon in a `light` or `dark` class renders the same thing either
+// way and cannot fail (#4664 item 13). These read the contract that makes the
+// theme work instead. The outline paints `currentColor` under
+// `text-foreground`, which each theme sets, and the lit cells paint the kit's
+// gold, which no theme changes. A part painted any other fixed colour would
+// not follow the theme, and the last test fails on it.
+describe("OxagenIcon keeps the kit's two colours", () => {
+  it("outlines each ink cell in currentColor under the theme's foreground", () => {
+    const { container, getByRole } = render(<OxagenIcon />);
     expect(getByRole("img").getAttribute("class")).toContain(
       "text-foreground",
     );
@@ -148,7 +145,7 @@ describe.each(["light", "dark"])("OxagenIcon in the %s theme", (theme) => {
   });
 
   it("lights the kit's two cells in its gold, one at its half strength", () => {
-    const { container } = renderIn();
+    const { container } = render(<OxagenIcon />);
     const lit = [...container.querySelectorAll("path")].filter(
       (p) => p.getAttribute("fill") === houseTokens.tokens.gold,
     );
@@ -159,13 +156,20 @@ describe.each(["light", "dark"])("OxagenIcon in the %s theme", (theme) => {
     );
   });
 
-  it("renders the same markup as the other theme, so nothing flips but the ink", () => {
-    const { container } = renderIn();
-    const svg = container.querySelector("svg")?.outerHTML;
-    cleanup();
-    const other = render(<OxagenIcon />).container.querySelector("svg")
-      ?.outerHTML;
-    expect(svg).toBe(other);
+  it("paints no part a fixed colour but the kit's gold", () => {
+    const { container } = render(<OxagenIcon />);
+    const painted = [...container.querySelectorAll("svg, g, path")].flatMap(
+      (el) =>
+        ["fill", "stroke", "color"]
+          .map((attr) => el.getAttribute(attr))
+          .filter((v): v is string => v !== null),
+    );
+    expect(painted.length).toBeGreaterThan(0);
+    for (const value of painted) {
+      expect(["none", "currentColor", houseTokens.tokens.gold]).toContain(
+        value,
+      );
+    }
   });
 });
 

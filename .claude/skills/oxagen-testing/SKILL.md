@@ -21,7 +21,7 @@ The full gate runs in CI on every push and PR — that is the authoritative gate
 
 **Turbo quirk:** `turbo run test` halts on the first failing package's coverage, masking other failures. Use `turbo run test:coverage --continue` if you genuinely need to see every package's failures in one pass (still not a mid-task habit).
 
-CI's `checks` job does the same since #3428. Its `turbo run lint typecheck` passes `--continue`, `tools/scripts/run-checks.mjs` runs the manifest, contracts, and env checks and names every failure, and each later step runs after an earlier failure (`if: ${{ !cancelled() && steps.install.outcome == 'success' }}`). One run reports every failure, and the job still fails if any check did. `check-checks-job-continues.mjs` in `check:contracts` holds that shape.
+CI's `checks` job does the same since #3428. Its `turbo run lint typecheck` passes `--continue`, `tools/scripts/run-checks.mjs` runs the scripts the `Manifest, contracts, env invariants` step lists and names every failure, and each later step still runs when an earlier one fails (`if: ${{ !cancelled() && steps.install.outcome == 'success' }}`). One run reports every failure, and the job still fails if any check did. `check-checks-job-continues.mjs` in `check:contracts` holds that shape.
 
 ## Location — co-located, not `__tests__/`
 
