@@ -21,6 +21,8 @@ export declare function agentHandlerModule(
   indexSource: ts.SourceFile,
   capability: string,
 ): string | null;
+/** `text` with every comment blanked to spaces, newlines kept. */
+export declare function withoutComments(fileName: string, text: string): string;
 export declare function exportedNames(source: ts.SourceFile): string[];
 export declare function soleHandlerExport(source: ts.SourceFile): string | null;
 
@@ -34,6 +36,11 @@ export interface RoleGateScanOptions {
     spec: string,
     importedName: string,
   ) => { source: ts.SourceFile; exportName: string } | null;
+  /**
+   * Count a gate only where the reached code calls it. Off by default, so a
+   * gate handed on as a value also counts.
+   */
+  requireCall?: boolean;
 }
 
 export declare function handlerCallsRoleGate(
