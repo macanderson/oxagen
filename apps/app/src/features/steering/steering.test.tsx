@@ -24,6 +24,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import {
   agentPage,
   contextPr,
@@ -702,15 +703,10 @@ describe("the Library, All shelf", () => {
         "Filter by Compiles to",
         "Filter by Force",
       ]);
-      fireEvent.change(
-        screen.getByRole("combobox", { name: "Filter by Force" }),
-        { target: { value: "must" } },
-      );
+      const force = screen.getByRole("combobox", { name: "Filter by Force" });
+      await pickOption(user, force, "must");
       expect(lineages()).toEqual(["ctx.r11"]);
-      fireEvent.change(
-        screen.getByRole("combobox", { name: "Filter by Force" }),
-        { target: { value: "" } },
-      );
+      await pickOption(user, force, "All · Force");
       fireEvent.change(
         screen.getByRole("searchbox", { name: "Search this list" }),
         { target: { value: "Record 7." } },
@@ -985,6 +981,7 @@ describe("Records", () => {
   });
 
   it("sorts the cards by label, with the title standing in for a record that declares none (ADR-178)", async () => {
+    const user = userEvent.setup();
     // The statements run the other way from the labels, so a sort by
     // statement would put the cards in the opposite order.
     await renderSteering("/records", {
@@ -1023,9 +1020,9 @@ describe("Records", () => {
     // Shown order is newest first.
     expect(labels()).toEqual(["Beta", "Alpha", "Gamma"]);
     const sort = within(panel).getByRole("combobox", { name: "Sort" });
-    fireEvent.change(sort, { target: { value: "asc" } });
+    await pickOption(user, sort, "Label A–Z");
     expect(labels()).toEqual(["Alpha", "Beta", "Gamma"]);
-    fireEvent.change(sort, { target: { value: "desc" } });
+    await pickOption(user, sort, "Label Z–A");
     expect(labels()).toEqual(["Gamma", "Beta", "Alpha"]);
   });
 
@@ -1189,7 +1186,7 @@ describe("Records", () => {
     expect(lineages()).toEqual(["ctx.r10", "ctx.r11"]);
     const rows = within(pager).getByRole("combobox", { name: "Rows" });
     await user.click(rows);
-    // Read the open list alone: the Sort select holds options too.
+    // Read the open list alone.
     const sizes = within(await screen.findByRole("listbox"));
     expect(sizes.getAllByRole("option").map((o) => o.textContent)).toEqual([
       "5",

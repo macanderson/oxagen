@@ -21,6 +21,161 @@
         "accepted": null,
         "productiveRatio": null
       },
+      "days": [
+        {
+          "day": "2026-09-01",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-02",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-03",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-04",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-05",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-06",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-07",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-08",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-09",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-10",
+          "cost": {
+            "micros": "1140000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "calls": 130,
+          "runs": 9
+        },
+        {
+          "day": "2026-09-11",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-12",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-13",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-14",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-15",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-16",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-17",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-18",
+          "cost": {
+            "micros": "700000",
+            "currency": "USD",
+            "basis": "gateway_observed"
+          },
+          "calls": 80,
+          "runs": 5
+        },
+        {
+          "day": "2026-09-19",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-20",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-21",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-22",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-23",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        },
+        {
+          "day": "2026-09-24",
+          "cost": null,
+          "calls": 0,
+          "runs": 0
+        }
+      ],
+      "reported": null,
       "rows": [
         {
           "cost": {
@@ -44,7 +199,8 @@
             "reasoning": 0,
             "server_tool_request": 0
           },
-          "operator": null
+          "operator": null,
+          "topRuns": []
         },
         {
           "cost": {
@@ -68,7 +224,8 @@
             "reasoning": 0,
             "server_tool_request": 0
           },
-          "operator": null
+          "operator": null,
+          "topRuns": []
         }
       ]
     }

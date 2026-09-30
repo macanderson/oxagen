@@ -21,6 +21,7 @@ import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import { type DraftOp, parseStoredDraft } from "./draft";
 import type { StudioServerView, StudioTool } from "./model";
 import {
@@ -414,14 +415,14 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const state = screen.getByRole("combobox", { name: "State" });
-    await user.selectOptions(state, "imported");
+    await pickOption(user, state, "Imported");
     expect(shownTools()).toEqual([
       "create_payment",
       "list_customers",
       "create_coupon",
     ]);
     expect(screen.getByText(range(1, 3, 3))).toBeInTheDocument();
-    await user.selectOptions(state, "available");
+    await pickOption(user, state, "Available");
     expect(screen.getByText(range(1, 20, 20))).toBeInTheDocument();
     expect(screen.queryByTestId("studio-tool-create_coupon")).toBeNull();
   });
@@ -430,10 +431,10 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const risk = screen.getByRole("combobox", { name: "Risk" });
-    await user.selectOptions(risk, "critical");
+    await pickOption(user, risk, "Critical");
     expect(shownTools()).toEqual(["create_payment", "create_refund"]);
     expect(screen.getByText(range(1, 2, 2))).toBeInTheDocument();
-    await user.selectOptions(risk, "unclassified");
+    await pickOption(user, risk, "Unclassified");
     expect(shownTools()).toEqual(["search_documentation"]);
   });
 
@@ -454,13 +455,13 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const sideEffect = screen.getByRole("combobox", { name: "Side effect" });
-    await user.selectOptions(sideEffect, "irreversible");
+    await pickOption(user, sideEffect, "irreversible");
     expect(shownTools()).toEqual([
       "create_payment",
       "create_coupon",
       "create_refund",
     ]);
-    await user.selectOptions(sideEffect, "unclassified");
+    await pickOption(user, sideEffect, "Unclassified");
     expect(shownTools()).toEqual(["search_documentation"]);
   });
 
@@ -528,12 +529,14 @@ describe("ToolsTab filters and paging", () => {
   it("combines filters, so Warehouse shows no available tool that only reads", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(WAREHOUSE)));
-    await user.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "State" }),
-      "available",
+      "Available",
     );
     expect(screen.getByText(range(1, 25, 400))).toBeInTheDocument();
-    await user.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Side effect" }),
       "read",
     );

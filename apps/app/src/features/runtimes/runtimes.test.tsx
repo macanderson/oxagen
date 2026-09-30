@@ -21,6 +21,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { nth } from "@/test/nth";
 import { phoneWidth } from "@/test/phone";
+import { optionNames, pickOption } from "@/test/select";
 import {
   enrollment,
   memberList,
@@ -235,9 +236,11 @@ describe("Runtimes, loaded", () => {
     const health = within(hosts).getByRole("combobox", {
       name: "Filter by Health",
     });
-    expect(
-      [...health.querySelectorAll("option")].map((o) => o.textContent),
-    ).toEqual(["All · Health", "not enrolled", "not recorded"]);
+    expect(await optionNames(userEvent.setup(), health)).toEqual([
+      "All · Health",
+      "not enrolled",
+      "not recorded",
+    ]);
     expect(
       within(hosts).queryByRole("combobox", { name: "Filter by Kind" }),
     ).toBeNull();
@@ -446,18 +449,17 @@ describe("Runtimes, loaded", () => {
       },
     );
 
-    fireEvent.change(
+    const user = userEvent.setup();
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "not enrolled" },
-      },
+      "not enrolled",
     );
     expect(shown()).toEqual(["host-03"]);
-    fireEvent.change(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "" },
-      },
+      "All · Health",
     );
 
     const runtime = screen.getByRole("columnheader", { name: "Runtime" });

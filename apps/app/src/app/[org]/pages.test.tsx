@@ -553,14 +553,27 @@ describe("the Spend page", () => {
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("opens one finding's evidence from the query on the bare path", async () => {
+  it("opens one finding's evidence from the query on the Findings tab", async () => {
     requireViewer.mockResolvedValue({ wsSlug: "core-platform" });
     const page = await SPEND();
     await renderPage(
-      await page.default(routeProps(SEGMENTS, { finding: "fnd_01k5rtgh" })),
+      await page.default(
+        routeProps({ ...SEGMENTS, tab: ["findings"] }, { finding: "fnd_01k5rtgh" }),
+      ),
     );
     expect(Spend.mock.calls.at(-1)?.[0]).toMatchObject({
       view: { tab: "findings", drill: null, finding: "fnd_01k5rtgh" },
+    });
+  });
+
+  it("opens the Month tab on the bare path, grouped the way the query asks", async () => {
+    requireViewer.mockResolvedValue({ wsSlug: "core-platform" });
+    const page = await SPEND();
+    await renderPage(
+      await page.default(routeProps(SEGMENTS, { by: "mcp_server" })),
+    );
+    expect(Spend.mock.calls.at(-1)?.[0]).toMatchObject({
+      view: { tab: "month", drill: null, finding: null, by: "mcp_server" },
     });
   });
 
