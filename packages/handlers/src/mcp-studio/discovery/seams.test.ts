@@ -420,6 +420,27 @@ describe("waitingLocalReporter", () => {
     expect(error).toBeInstanceOf(WaitingForMachine);
     expect((error as WaitingForMachine).groups).toEqual(["dev-laptops"]);
   });
+
+  it("refuses a server that names no machine groups, which no machine could claim (negative)", async () => {
+    const nowhere: ServerSource = {
+      type: "local",
+      command: "files-mcp",
+      args: ["--root", "/srv/files"],
+      env: ["WORK_DIR"],
+    };
+    const error = await waitingLocalReporter
+      .report(localRequest(nowhere, LOCAL_LOCK))
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).not.toBeInstanceOf(WaitingForMachine);
+    expect(error).toMatchObject({
+      code: "source",
+      message:
+        "files names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.",
+    });
+  });
 });
 
 describe("gatewayLocalReporter", () => {

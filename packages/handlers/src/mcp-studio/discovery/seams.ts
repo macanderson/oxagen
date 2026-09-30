@@ -175,14 +175,28 @@ export interface LocalToolsReporter {
 }
 
 /**
+ * A server whose source.machines names no group runs nowhere. No machine can
+ * claim its discovery, so it refuses rather than waits.
+ */
+function runsNowhere(server: string): DiscoveryRefused {
+  return new DiscoveryRefused(
+    "source",
+    `${server} names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.`,
+  );
+}
+
+/**
  * The default in a process that reaches no machine: the API's durable
  * functions (#4772). It lists nothing and records the discovery as waiting for
  * a machine in the server's groups. The MCP process one of them polls claims
- * it and runs it through its broker.
+ * it and runs it through its broker. A server that names no groups refuses,
+ * because nothing would ever claim it.
  */
 export const waitingLocalReporter: LocalToolsReporter = {
   report({ server, source }) {
-    return Promise.reject(new WaitingForMachine(server, machineGroupsOf(source)));
+    const groups = machineGroupsOf(source);
+    if (groups.length === 0) return Promise.reject(runsNowhere(server));
+    return Promise.reject(new WaitingForMachine(server, groups));
   },
 };
 
@@ -219,6 +233,7 @@ export function gatewayLocalReporter(
   return {
     async report({ scope, server, source, lockSource, signal }) {
       const groups = machineGroupsOf(source);
+      if (groups.length === 0) throw runsNowhere(server);
       const launch = launchSpecFor(server, lockSource, source);
       if (launch === undefined) {
         throw new DiscoveryRefused(

@@ -12,10 +12,15 @@
 -- server.toml's source.machines for a waiting row. The partial index serves
 -- the claim, which reads a workspace's waiting rows oldest first.
 --
+-- run_id names the run that owns the row. A run sets it when it begins and
+-- writes its finish only while the row still carries it, so a run a later
+-- one superseded cannot overwrite that run's result.
+--
 -- Every row the previous status check admitted is still admitted.
 
 ALTER TABLE "mcp"."server_discoveries"
-  ADD COLUMN "machine_groups" text[] NOT NULL DEFAULT '{}';
+  ADD COLUMN "machine_groups" text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN "run_id" uuid;
 
 ALTER TABLE "mcp"."server_discoveries"
   DROP CONSTRAINT "server_discoveries_status_check",

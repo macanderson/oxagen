@@ -183,13 +183,17 @@ export interface DiscoveryStore {
     requestedBy: string | null,
     now: Date,
   ): Promise<void>;
-  /** Mark the server running, and return its row from before this call. */
+  /**
+   * Mark the server running, and return its row from before this call.
+   * `runId` names the run that now owns the row.
+   */
   begin(
     scope: DiscoveryScope,
     server: string,
     trigger: DiscoveryTrigger,
     requestedBy: string | null,
     now: Date,
+    runId?: string,
   ): Promise<DiscoveryRow | null>;
   recordSource(
     scope: DiscoveryScope,
@@ -197,11 +201,16 @@ export interface DiscoveryStore {
     source: DiscoverySourceFields,
     now: Date,
   ): Promise<void>;
+  /**
+   * Record how the run ended. With `runId`, it writes only while the row
+   * still carries that run, so a run a later begin superseded writes nothing.
+   */
   finish(
     scope: DiscoveryScope,
     server: string,
     finish: DiscoveryFinish,
     now: Date,
+    runId?: string,
   ): Promise<void>;
   read(scope: DiscoveryScope, server: string): Promise<DiscoveryRow | null>;
   list(scope: DiscoveryScope): Promise<DiscoveryRow[]>;
@@ -384,7 +393,7 @@ export const postgresDiscoveryStore: DiscoveryStore = {
     );
   },
 
-  async begin(scope, server, trigger, requestedBy, now) {
+  async begin(scope, server, trigger, requestedBy, now, runId) {
     return inScope(scope, async (tx) => {
       const prior = await readIn(tx, scope, server);
       await upsertState(
@@ -396,6 +405,7 @@ export const postgresDiscoveryStore: DiscoveryStore = {
           startedAt: now,
           finishedAt: null,
           error: null,
+          runId: runId ?? null,
           // A queued row keeps the person who asked. A direct run names its own.
           requestedBy: requestedBy ?? prior?.requestedBy ?? null,
           requestedAt: prior?.requestedAt ?? now,
@@ -426,7 +436,7 @@ export const postgresDiscoveryStore: DiscoveryStore = {
     );
   },
 
-  async finish(scope, server, finish, now) {
+  async finish(scope, server, finish, now, runId) {
     // A run that waits for a machine has not finished: the claim runs it.
     const waiting = finish.status === "waiting_for_machine";
     await inScope(scope, (tx) =>
@@ -453,7 +463,11 @@ export const postgresDiscoveryStore: DiscoveryStore = {
           finishedAt: waiting ? null : now,
           updatedAt: now,
         })
-        .where(scoped(scope, server)),
+        .where(
+          runId === undefined
+            ? scoped(scope, server)
+            : and(scoped(scope, server), eq(t.runId, runId)),
+        ),
     );
   },
 
