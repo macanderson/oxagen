@@ -381,7 +381,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_members](workspace.member.list.md) | [workspace.member.list.ts](../../packages/oxagen/src/contracts/workspace.member.list.ts) | api, mcp, agent |
 | [list_orgs](org.list.md) | [org.list.ts](../../packages/oxagen/src/contracts/org.list.ts) | api, mcp, agent |
 | [list_slack_channels](list_slack_channels.md) | [org.slack_channels.list.ts](../../packages/oxagen/src/contracts/org.slack_channels.list.ts) | none |
-| [list_sso_providers](list_sso_providers.md) | [org.sso.list.ts](../../packages/oxagen/src/contracts/org.sso.list.ts) | api, mcp, agent |
+| [list_sso_providers](list_sso_providers.md) | [org.sso.list.ts](../../packages/oxagen/src/contracts/org.sso.list.ts) | api, mcp |
 | [remove_org_member](org.member.remove.md) | [org.member.remove.ts](../../packages/oxagen/src/contracts/org.member.remove.ts) | api, mcp, agent |
 | [revoke_scim_token](revoke_scim_token.md) | [org.scim_token.revoke.ts](../../packages/oxagen/src/contracts/org.scim_token.revoke.ts) | api, mcp |
 | [rotate_scim_token](rotate_scim_token.md) | [org.scim_token.rotate.ts](../../packages/oxagen/src/contracts/org.scim_token.rotate.ts) | api |

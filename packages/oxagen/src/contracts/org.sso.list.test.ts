@@ -16,16 +16,11 @@ describe("org.sso.list capability", () => {
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},
     });
-    expect(orgSsoList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(orgSsoList.surfaces).toEqual(["api", "mcp"]);
   });
 
-  it("is a low-risk agent read: Stella may read sign-in settings and never changes them", () => {
-    expect(orgSsoList.mutates).toBe(false);
-    expect(orgSsoList.agent).toEqual({
-      requiresApproval: false,
-      riskLevel: "low",
-      category: "organization",
-    });
+  it("is not an agent tool: the in-app agent never reconfigures sign-in", () => {
+    expect("agent" in orgSsoList).toBe(false);
   });
 
   it("takes no input", () => {
