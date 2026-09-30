@@ -48,6 +48,7 @@ The mode is not a column. ADR-061 decision 1 puts it in `.oxagen/rules/governanc
 | `commitSha` | string \| null | the commit when `applied` |
 | `pullRequest` | object \| null | `{ number, htmlUrl, reused }` when `proposed`; `reused` is true when a pull request already open on `oxagen/governance` was updated |
 | `overrodeReview` | boolean | true when the caller spent `applyImmediately` and the mode in force had asked for review |
+| `proposalId` | string \| null | the governance proposal (`prp_…`) a reviewer lands with `merge_context_pr`, when `proposed` in a steering repository; null otherwise |
 
 ## Refusals
 
@@ -67,7 +68,9 @@ There is deliberately no refusal for `applyImmediately` without the role: the ro
 
 | Event | When |
 |---|---|
-| `steering.governance_changed` | the mode moved — an `applied` outcome, whether or not the review was skipped |
+| `steering.governance_changed` | the mode moved: an `applied` outcome, whether or not the review was skipped |
 | `steering.governance_overridden` | additionally, when `overrodeReview` is true |
 
 Both are emitted for an override, so neither "every governance change" nor "every skipped review" is a filter that quietly misses rows. A `proposed` outcome emits neither: nothing has changed until someone merges the pull request. In a steering repository, `merge_context_pr` emits `steering.governance_changed` when it lands the proposal, with the approvers in `approvedBy`.
+
+A change can still reach a steering repository's production branch without Oxagen: a reviewer merges the governance PR on the host, or someone pushes past the branch rules. The repository sync records it. When the mode in `steering/governance.toml` differs from the mode at the last synced head, and Oxagen did not merge the commit that changed it, the sync emits `steering.governance_changed` with a null actor and `landedOutsideOxagen: true`. Oxagen merged a commit when a governance proposal it merged names that commit, or when the steering version store holds the commit at its `Oxagen-Version` trailer's version. A trailer alone does not count, because anyone who can push can write one. It also emits `steering.governance_overridden` when the mode it replaced asked for review. A governance PR merged on the host reads `merged` with its merge commit, and the event names its proposal. Every merge Oxagen makes is on that record and emits its own event, so the sync never records one twice.

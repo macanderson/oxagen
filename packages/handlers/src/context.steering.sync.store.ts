@@ -129,6 +129,23 @@ export interface SyncStore {
     },
   ): Promise<boolean>;
   /**
+   * Record a governance PR the host merged (#4795). A governance proposal
+   * publishes no record, so it points at none: the row moves to `merged` with
+   * its merge commit and no approver. False when the row is not a governance
+   * proposal, already left the open states, or a merge claimed it after
+   * `noClaimSince` and is still landing it.
+   */
+  linkMergedGovernance(
+    scope: Scope,
+    proposalId: string,
+    args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
+  ): Promise<boolean>;
+  /**
+   * True when a governance proposal Oxagen merged names `commitSha` as its
+   * merge commit: merge_context_pr landed it for an approver (#4795).
+   */
+  governanceMergedAt(scope: Scope, commitSha: string): Promise<boolean>;
+  /**
    * Write the settings workspace.toml sets into `workspaces.settings`. A null
    * value removes its key, so the reader falls back to its default.
    */
@@ -495,6 +512,55 @@ export const postgresSyncStore: SyncStore = {
         .returning({ id: schema.contextProposals.id });
       return row !== undefined;
     });
+  },
+
+  async linkMergedGovernance(scope, proposalId, args) {
+    return withTenantDb(async (tx) => {
+      await lockWorkspacePublication(tx, scope.workspaceId);
+      const [row] = await tx
+        .update(schema.contextProposals)
+        .set({
+          status: "merged",
+          mergedCommit: args.mergedCommit,
+          mergedAt: args.mergedAt,
+          mergedByUserId: null,
+          mergeClaimedAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(schema.contextProposals.id, proposalId),
+            scoped(schema.contextProposals, scope),
+            eq(schema.contextProposals.kind, "governance"),
+            inArray(schema.contextProposals.status, [...OPEN_PR]),
+            or(
+              isNull(schema.contextProposals.mergeClaimedAt),
+              lte(schema.contextProposals.mergeClaimedAt, args.noClaimSince),
+            ),
+          ),
+        )
+        .returning({ id: schema.contextProposals.id });
+      return row !== undefined;
+    });
+  },
+
+  async governanceMergedAt(scope, commitSha) {
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .select({ id: schema.contextProposals.id })
+        .from(schema.contextProposals)
+        .where(
+          and(
+            scoped(schema.contextProposals, scope),
+            eq(schema.contextProposals.kind, "governance"),
+            eq(schema.contextProposals.status, "merged"),
+            eq(schema.contextProposals.mergedCommit, commitSha),
+            isNotNull(schema.contextProposals.mergedByUserId),
+          ),
+        )
+        .limit(1),
+    );
+    return row !== undefined;
   },
 
   async publishWorkspaceSettings(scope, settings) {

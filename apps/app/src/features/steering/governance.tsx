@@ -27,10 +27,11 @@ import type { SteeringHub } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { buttonPrimary, buttonSecondary, linkText } from "@/ui/control-styles";
-import { PullRequestLink, useNavigate } from "@/ui/navigation";
+import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GovernanceChanged, setGovernanceMode } from "./actions";
 import { STEERING_GAPS } from "./gaps";
+import { type SteeringAt, steeringLink } from "./view";
 
 const MODES = ["solo", "team", "regulated"] as const;
 type Mode = (typeof MODES)[number];
@@ -126,6 +127,7 @@ export function GovernanceChip({
           branch: "",
           path,
           pullRequest: null,
+          proposalId: null,
         },
       });
       return;
@@ -178,7 +180,7 @@ export function GovernanceChip({
         }
       >
         {outcome?.ok ? (
-          <GovernanceResult value={outcome.value} />
+          <GovernanceResult at={{ org, ws }} value={outcome.value} />
         ) : (
           <div className="flex flex-col gap-3">
             <div
@@ -235,7 +237,13 @@ export function GovernanceChip({
   );
 }
 
-function GovernanceResult({ value }: { value: GovernanceChanged }) {
+function GovernanceResult({
+  at,
+  value,
+}: {
+  at: SteeringAt;
+  value: GovernanceChanged;
+}) {
   const t = useTranslations("steering.governance");
   const url =
     value.pullRequest === null
@@ -263,6 +271,17 @@ function GovernanceResult({ value }: { value: GovernanceChanged }) {
         <PullRequestLink to={url} className={linkText}>
           {t("openPr", { number: value.pullRequest.number })}
         </PullRequestLink>
+      )}
+      {/* A reviewer lands a steering repository's change from its Context PR
+          panel, through merge_context_pr (ADR-232). */}
+      {value.outcome !== "proposed" || value.proposalId === null ? null : (
+        <SafeLink
+          to={steeringLink(at, { tab: "prs", proposal: value.proposalId })}
+          className={linkText}
+          data-testid="governance-review"
+        >
+          {t("review")}
+        </SafeLink>
       )}
     </div>
   );

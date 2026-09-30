@@ -172,8 +172,9 @@ export const contextGovernanceModeSet = registerCapability({
        * - `proposed`: the change is on its branch (`oxagen/governance`, or
        *   `steering/governance` in a steering repository) with a pull request
        *   open against the production branch. The mode in force is unchanged
-       *   until that pull request merges. In a steering repository nothing in
-       *   Oxagen lands it yet (#4795).
+       *   until that pull request merges. In a steering repository it is a
+       *   governance proposal, which `merge_context_pr` lands for an approver
+       *   (ADR-232).
        * - `unchanged`: the file already declares `mode`; nothing was written.
        */
       outcome: z.enum(["applied", "proposed", "unchanged"]),
@@ -229,6 +230,13 @@ export const contextGovernanceModeSet = registerCapability({
        * route commits with no override to spend.
        */
       overrodeReview: z.boolean(),
+      /**
+       * The governance proposal (`prp_…`) a reviewer lands with
+       * `merge_context_pr`, when `proposed` in a steering repository. Null in
+       * every other case, including a legacy pull request, which nothing in
+       * Oxagen lands.
+       */
+      proposalId: z.string().min(1).nullable(),
     })
     .strict(),
 });
