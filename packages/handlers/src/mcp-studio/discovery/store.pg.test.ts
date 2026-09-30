@@ -422,6 +422,29 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       });
     });
 
+    it("drops the finish of a run a later begin superseded, and keeps the newer run's (#4772)", async () => {
+      const scope = newScope();
+      const api = "5f0a4c1e-7b2d-4e3f-9a10-000000000a01";
+      const machine = "5f0a4c1e-7b2d-4e3f-9a10-000000000a02";
+      // The API's run begins, then a machine claims the row and its run begins.
+      await store.begin(scope, "github", "manual", null, T0, api);
+      await store.begin(scope, "github", "manual", null, T1, machine);
+      await store.finish(scope, "github", finished(), T2, machine);
+      // The API's run ends later and would record waiting_for_machine.
+      await store.finish(
+        scope,
+        "github",
+        { ...finished(), status: "waiting_for_machine", machineGroups: ["dev-laptops"] },
+        T3,
+        api,
+      );
+
+      expect(await store.read(scope, "github")).toMatchObject({
+        status: "succeeded",
+        finishedAt: T2,
+      });
+    });
+
     it("begin names its own asker over the queued one", async () => {
       const scope = newScope();
       await store.request(scope, "github", "manual", USER, T0);

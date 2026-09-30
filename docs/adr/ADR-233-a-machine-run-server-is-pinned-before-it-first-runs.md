@@ -109,8 +109,17 @@ Added on 2026-09-30, when the listing was built:
   draft was saved after the listing was asked, because that draft is not the
   one that was pinned.
 - The listing starts a program on a person's machine before any review, so
-  it takes the roles that save a draft, is high sensitivity, and an in-app
-  agent asks a person before it calls it.
+  it takes the roles that save a draft, is high sensitivity, and names no
+  agent surface, so an in-app agent cannot call it.
+- A listing runs only on a machine the person who asked enrolled
+  (`tacho.hosts.created_by_id`). The digest proves which program runs, not
+  that anyone reviewed its arguments, so without this rule an org admin
+  could start any program on any member's machine in a group before Review.
+  On their own machine a person can already run what they like, so the
+  listing grants nothing new. `start_studio_listing` refuses with
+  `machine_not_yours` when the person enrolled no machine in the server's
+  groups, and a machine claims only its owner's listings. Added from the
+  #4855 security review.
 
 Added on 2026-09-30, when the app forms were built:
 

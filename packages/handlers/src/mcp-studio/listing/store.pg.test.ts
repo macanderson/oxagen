@@ -76,10 +76,13 @@ const request = (at: ListingScope, over: { draftRevision?: number; groups?: stri
       draftRevision: over.draftRevision ?? 3,
       groups: over.groups ?? ["dev-laptops"],
       lockSource: PIN,
-      requestedBy: null,
+      requestedBy: OWNER,
     },
     T0,
   );
+
+/** The person who asked for the listings here, and who enrolled the machine. */
+const OWNER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
 
 describe.skipIf(!enabled)("postgresListingStore", () => {
   afterAll(async () => {
@@ -131,20 +134,25 @@ describe.skipIf(!enabled)("postgresListingStore", () => {
     await seedDraft(at);
     await request(at);
 
-    expect(await postgresListingClaimStore.claimOpen(at, ["build-hosts"], T1)).toBeNull();
-    const claimed = await postgresListingClaimStore.claimOpen(at, ["dev-laptops", "build-hosts"], T1);
+    expect(await postgresListingClaimStore.claimOpen(at, ["build-hosts"], OWNER, T1)).toBeNull();
+    // Another person's machine never claims it: a listing runs only on a
+    // machine its requester enrolled (ADR-233).
+    expect(
+      await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], "0192d4a8-7c1e-7a00-8000-0000000005e2", T1),
+    ).toBeNull();
+    const claimed = await postgresListingClaimStore.claimOpen(at, ["dev-laptops", "build-hosts"], OWNER, T1);
     expect(claimed).toMatchObject({ server: "notes", draftRevision: 3, lockSource: PIN, claimedAt: T1 });
     // A running claim is not open again until it goes stale.
-    expect(await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], T1)).toBeNull();
+    expect(await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], OWNER, T1)).toBeNull();
     const later = new Date(T1.getTime() + CLAIM_STALE_MS + 1_000);
-    expect(await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], later)).toMatchObject({ claimedAt: later });
+    expect(await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], OWNER, later)).toMatchObject({ claimedAt: later });
   });
 
   it("writes the draft's source and finishes the listing in one transaction", async () => {
     const at = scope();
     const draftId = await seedDraft(at);
     await request(at);
-    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], T1))!;
+    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], OWNER, T1))!;
     const source = { type: "mcp" as const, lockSource: { ...PIN }, tools: TOOLS };
 
     const done = await postgresListingClaimStore.complete(
@@ -169,7 +177,7 @@ describe.skipIf(!enabled)("postgresListingStore", () => {
     const at = scope();
     const draftId = await seedDraft(at);
     await request(at);
-    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], T1))!;
+    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], OWNER, T1))!;
     await withSystemDb((tx) =>
       tx.update(schema.mcpStudioDrafts).set({ revision: 4 }).where(eq(schema.mcpStudioDrafts.id, draftId)),
     );
@@ -190,7 +198,7 @@ describe.skipIf(!enabled)("postgresListingStore", () => {
     const at = scope();
     const draftId = await seedDraft(at);
     await request(at);
-    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], T1))!;
+    const claimed = (await postgresListingClaimStore.claimOpen(at, ["dev-laptops"], OWNER, T1))!;
     await request(at);
 
     await postgresListingClaimStore.fail(at, claimed, "the machine went away", T1);

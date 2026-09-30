@@ -14,6 +14,7 @@
 // The row in mcp.server_discoveries always ends succeeded or failed. A
 // failure keeps the open PR and the withheld tools, and its message passes
 // through the run's scrubber first.
+import { randomUUID } from "node:crypto";
 import {
   CompileError,
   canonicalDigest,
@@ -794,12 +795,16 @@ export async function runDiscovery(
   const seams = deps.seams ?? (await discoverySeams());
   const store = deps.store ?? postgresDiscoveryStore;
   const { scope, server, trigger } = input;
+  // The run owns the row until another run begins. Its finish writes only
+  // while it still does, so a superseded run cannot regress a newer result.
+  const runId = randomUUID();
   const prior = await store.begin(
     scope,
     server,
     trigger,
     input.requestedBy ?? null,
     seams.now(),
+    runId,
   );
   const run: Run = {
     scope,
@@ -846,7 +851,7 @@ export async function runDiscovery(
       logger.error(fields, "MCP discovery failed");
     }
   }
-  await store.finish(scope, server, finish, seams.now());
+  await store.finish(scope, server, finish, seams.now(), runId);
   if (retry) {
     throw new RetriableDiscoveryFailure(
       `MCP discovery of ${server} failed: ${finish.error ?? "no reason given"}`,

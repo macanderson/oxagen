@@ -5,7 +5,10 @@
 // draft's source.machines. The MCP process holds the machines' long-polls in
 // its broker. On each poll it calls claimDraftListings, which claims the
 // workspace's open listings for the machine's groups, one at a time, and asks
-// that machine to start the pinned server and answer tools/list. The machine
+// that machine to start the pinned server and answer tools/list. A listing
+// starts a program before any review, so a machine claims only the listings
+// of the person who enrolled it (ADR-233): no one can use a listing to run a
+// program on another person's machine. The machine
 // checks the pin before it starts anything. The answer becomes the draft's MCP
 // source, written with the listing's finish in one transaction (store.ts), so
 // Review builds the folder and its first tools.lock.json from it.
@@ -20,7 +23,8 @@ import { logger } from "../../logger";
 import { gatewayLocalReporter, type LocalToolsReporter } from "../discovery/seams";
 import { postgresStudioDraftStore, type StudioDraftStore } from "../import/store";
 import type { LocalGatewayBroker } from "../local-calls/broker";
-import type { MachineGroupReader } from "../local-calls/machines";
+import { postgresMachineOwnerReader } from "../local-calls/groups-store";
+import type { MachineGroupReader, MachineOwnerReader } from "../local-calls/machines";
 import { draftSource } from "./pin";
 import {
   postgresListingClaimStore,
@@ -45,6 +49,8 @@ export interface MachineListingInput {
 export interface MachineListingDeps {
   broker: LocalGatewayBroker;
   reader: MachineGroupReader;
+  /** Who enrolled the machine. tacho.hosts when unset. */
+  owners?: MachineOwnerReader;
   claims?: ListingClaimStore;
   drafts?: StudioDraftStore;
   /** Asks the machine. A gateway reporter bound to this machine when unset. */
@@ -81,6 +87,9 @@ export async function claimDraftListings(
   const { scope, machine } = input;
   const groups = await deps.reader.groupsOf(scope, machine);
   if (groups.length === 0) return [];
+  // A machine no person enrolled runs no one's listing.
+  const owner = await (deps.owners ?? postgresMachineOwnerReader).ownerOf(scope, machine);
+  if (owner === null) return [];
   const claims = deps.claims ?? postgresListingClaimStore;
   const drafts = deps.drafts ?? postgresStudioDraftStore();
   const now = deps.now ?? (() => new Date());
@@ -92,7 +101,7 @@ export async function claimDraftListings(
 
   const outcomes: ListingOutcome[] = [];
   for (let count = 0; count < limit; count += 1) {
-    const claimed = await claims.claimOpen(scope, groups, now());
+    const claimed = await claims.claimOpen(scope, groups, owner, now());
     if (claimed === null) break;
     outcomes.push(await runListing(scope, machine, claimed, { claims, drafts, reporter, now }));
   }

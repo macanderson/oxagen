@@ -13,7 +13,7 @@ vi.mock("../../logger", () => ({
 import type { LocalToolsReporter } from "../discovery/seams";
 import type { StoredStudioDraft, StudioDraftStore } from "../import/store";
 import type { LocalGatewayBroker } from "../local-calls/broker";
-import type { MachineGroupReader } from "../local-calls/machines";
+import type { MachineGroupReader, MachineOwnerReader } from "../local-calls/machines";
 import { claimDraftListings, LISTINGS_PER_POLL } from "./claim";
 import type { ClaimedListing, CompletionResult, ListingClaimStore } from "./store";
 
@@ -54,6 +54,16 @@ const broker = { connected: () => true } as unknown as LocalGatewayBroker;
 
 function reader(groups: readonly string[]): MachineGroupReader {
   return { groupsOf: vi.fn(() => Promise.resolve(groups)) };
+}
+
+/** The person who enrolled the machine, and who asked for the listings here. */
+const OWNER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
+
+function owns(owner: string | null = OWNER): MachineOwnerReader {
+  return {
+    ownerOf: vi.fn(() => Promise.resolve(owner)),
+    ownsMachineIn: vi.fn(() => Promise.resolve(owner !== null)),
+  };
 }
 
 function claim(server = "files", draftRevision = 3): ClaimedListing {
@@ -108,6 +118,16 @@ function reporter(answer: () => Promise<Awaited<ReturnType<LocalToolsReporter["r
 const listed = () => Promise.resolve({ machine: MACHINE, server_version: "2026.8.1", tools: TOOLS });
 
 describe("claimDraftListings", () => {
+  it("claims nothing for a machine no person enrolled (negative)", async () => {
+    const claims = claimStore([claim()]);
+    const out = await claimDraftListings(
+      { scope: SCOPE, machine: MACHINE },
+      { broker, owners: owns(null), reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), now: () => NOW },
+    );
+    expect(out).toEqual([]);
+    expect(claims.claimOpen).not.toHaveBeenCalled();
+  });
+
   it("lists the claimed draft's tools on the machine and writes them into the draft", async () => {
     const claims = claimStore([claim()]);
     const report = reporter(listed);
@@ -115,11 +135,12 @@ describe("claimDraftListings", () => {
 
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: groups, claims, drafts: draftStore({}), reporter: report, now: () => NOW },
+      { broker, owners: owns(), reader: groups, claims, drafts: draftStore({}), reporter: report, now: () => NOW },
     );
 
     expect(out).toEqual([{ server: "files", status: "succeeded", toolCount: 2, error: null }]);
-    expect(claims.claimOpen).toHaveBeenCalledWith(SCOPE, ["dev-laptops"], NOW);
+    // The machine claims only the listings of the person who enrolled it.
+    expect(claims.claimOpen).toHaveBeenCalledWith(SCOPE, ["dev-laptops"], OWNER, NOW);
     // The machine starts the server from the draft's server.toml at the pin.
     expect(report.report).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -148,7 +169,7 @@ describe("claimDraftListings", () => {
     const claims = claimStore([claim()]);
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader([]), claims, drafts: draftStore({}), reporter: reporter(listed) },
+      { broker, owners: owns(), reader: reader([]), claims, drafts: draftStore({}), reporter: reporter(listed) },
     );
     expect(out).toEqual([]);
     expect(claims.claimOpen).not.toHaveBeenCalled();
@@ -158,7 +179,7 @@ describe("claimDraftListings", () => {
     const claims = claimStore(Array.from({ length: LISTINGS_PER_POLL + 2 }, () => claim()));
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
+      { broker, owners: owns(), reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
     );
     expect(out).toHaveLength(LISTINGS_PER_POLL);
     expect(claims.claimOpen).toHaveBeenCalledTimes(LISTINGS_PER_POLL);
@@ -169,7 +190,7 @@ describe("claimDraftListings", () => {
     const report = reporter(listed);
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader(["dev-laptops"]), claims, drafts: draftStore({ revision: 4 }), reporter: report, now: () => NOW },
+      { broker, owners: owns(), reader: reader(["dev-laptops"]), claims, drafts: draftStore({ revision: 4 }), reporter: report, now: () => NOW },
     );
     expect(out[0]).toMatchObject({ status: "failed" });
     expect(report.report).not.toHaveBeenCalled();
@@ -186,7 +207,7 @@ describe("claimDraftListings", () => {
     const claims = claimStore([claim()]);
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader(["dev-laptops"]), claims, drafts: draftStore(null), reporter: reporter(listed) },
+      { broker, owners: owns(), reader: reader(["dev-laptops"]), claims, drafts: draftStore(null), reporter: reporter(listed) },
     );
     expect(out[0]).toMatchObject({ status: "failed", error: "The draft for files is gone, so nothing was listed." });
   });
@@ -200,6 +221,7 @@ describe("claimDraftListings", () => {
       { scope: SCOPE, machine: MACHINE },
       {
         broker,
+        owners: owns(),
         reader: reader(["dev-laptops"]),
         claims,
         drafts: { ...draftStore({}), get: vi.fn((_scope, server: string) => draftStore({ server }).get(_scope, server)) },
@@ -222,7 +244,7 @@ describe("claimDraftListings", () => {
     const claims = claimStore([claim()], { status: "draft_changed" });
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
+      { broker, owners: owns(), reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
     );
     expect(out[0]).toMatchObject({ status: "failed" });
     expect(out[0]?.error).toMatch(/was saved after its tools were asked for, so the listing wrote nothing/);
@@ -232,7 +254,7 @@ describe("claimDraftListings", () => {
     const claims = claimStore([claim()], { status: "claim_lost" });
     const out = await claimDraftListings(
       { scope: SCOPE, machine: MACHINE },
-      { broker, reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
+      { broker, owners: owns(), reader: reader(["dev-laptops"]), claims, drafts: draftStore({}), reporter: reporter(listed) },
     );
     expect(out[0]?.error).toMatch(/^Another request replaced the listing for files/);
     expect(claims.fail).not.toHaveBeenCalled();
