@@ -176,6 +176,6 @@ describe("getters", () => {
     expect(c.getOrgId()).toBeUndefined();
     expect(c.getWorkspaceId()).toBeUndefined();
     expect(c.getApiUrl()).toBe("https://api.oxagen.sh");
-    expect(c.getAppUrl()).toBe("https://oxagen.app");
+    expect(c.getAppUrl()).toBe("https://app.oxagen.sh");
   });
 });

@@ -77,7 +77,7 @@ export function siteHeader({ wordmark, current }) {
       <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
     </nav>
     <div class="nav-cta">
-      <a class="login ext" href="https://oxagen.app" target="_blank" rel="noopener">Log in</a>
+      <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
       <a class="btn btn-primary btn-sm" href="/#demo">Get a demo</a>
       <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
     </div>
@@ -154,7 +154,7 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
         <h4>Resources</h4>
         <ul>
           <li><a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Documentation</a></li>
-          <li><a class="ext" href="https://oxagen.app" target="_blank" rel="noopener">Customer login</a></li>
+          <li><a class="ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Customer login</a></li>
           <li><a href="/#field-manual">Field manual</a></li>
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>

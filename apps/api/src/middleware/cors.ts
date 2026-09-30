@@ -22,18 +22,8 @@ import type { AppEnv } from "../app";
  * A production API that trusts localhost lets any page a victim runs locally
  * (or any attacker-controlled dev server bound to that port) make
  * credentialed cross-origin calls with the victim's session cookie. In prod
- * the allowlist is the configured APP_URL / NEXT_PUBLIC_APP_URL plus the two
- * production app hosts below.
+ * the allowlist is exactly the configured APP_URL / NEXT_PUBLIC_APP_URL.
  */
-/**
- * The production app's hosts (ADR-215). The app moved from app.oxagen.sh to
- * oxagen.app. This API reads its app origin from Parameter Store when its
- * container starts, while the app's page origin is inlined at build, and a
- * deploy updates the app before the API. For that window a page on one host
- * calls an API whose env names the other. Trusting both keeps those calls
- * working. Remove app.oxagen.sh once nothing is served from it.
- */
-const PRODUCTION_APP_ORIGINS = ["https://oxagen.app", "https://app.oxagen.sh"];
 /**
  * The marketing site is reachable at both the apex and www hosts (Vercel
  * 308-redirects one to the other, but a visitor's Origin header carries
@@ -68,9 +58,7 @@ function allowedOrigins(): Set<string> {
     (isProductionRuntime() ? "https://oxagen.sh" : "http://localhost:8080")
   ).replace(/\/$/, "");
   origins.push(...withWwwTwin(marketing));
-  if (isProductionRuntime()) {
-    origins.push(...PRODUCTION_APP_ORIGINS);
-  } else {
+  if (!isProductionRuntime()) {
     origins.push("http://localhost:3000");
   }
   return new Set(

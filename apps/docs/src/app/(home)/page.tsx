@@ -75,7 +75,7 @@ const SURFACES = [
   },
 ];
 
-const APP_URL = "https://oxagen.app";
+const APP_URL = "https://app.oxagen.sh";
 
 /**
  * The one command the docs actually recommend. Kept identical to the /install

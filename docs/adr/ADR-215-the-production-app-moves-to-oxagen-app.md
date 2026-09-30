@@ -219,3 +219,16 @@ Slack app's redirect URL is built from `APP_URL`, so step 3 adds
 sends a `redirect_uri` built from `BETTER_AUTH_URL`, so after step 5 each
 customer's identity provider needs `https://oxagen.app/api/auth/sso/callback/<providerId>`
 beside the old one. The SSO settings page shows the new URL from then on.
+
+## Amendment 2026-09-30: the cutover is held
+
+The cutover PR (#4798) merged on 2026-09-30 and was reverted before any deploy
+carried it. The Google sign-in client moves to a new Google Cloud account
+first, and the GitHub sign-in callback moves with it, so both are registered
+for `oxagen.app` before the build that makes it canonical ships. Until then the
+app stays canonical at `app.oxagen.sh`. `oxagen.app` keeps answering: page
+visits get a 307 to `app.oxagen.sh`, and `/api/*` answers there.
+
+To resume, revert the revert, then follow steps 3 to 5 above. The steps that
+need the maintainer are listed in one issue, "FOR MAINTAINER: SETUP & CONFIG
+REQUIRED FOR GO LIVE".

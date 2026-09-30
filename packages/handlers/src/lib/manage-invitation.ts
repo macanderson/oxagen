@@ -70,7 +70,7 @@ export async function manageInvitation<V extends "resend" | "revoke">(
       const delivery = await sendEmail({
         to: row.email,
         ...invitationEmailTemplate({
-          inviteUrl: `${process.env.APP_URL ?? "https://oxagen.app"}/invite/${row.publicId}`,
+          inviteUrl: `${process.env.APP_URL ?? "https://app.oxagen.sh"}/invite/${row.publicId}`,
           inviterName: inviter?.displayName ?? "A team member",
           orgName: org?.name ?? ctx.orgId,
           role: row.role,

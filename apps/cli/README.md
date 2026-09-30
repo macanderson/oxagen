@@ -133,7 +133,7 @@ oxagen logout                                        # clear the saved session
 oxagen graph search -q "workspace context" --limit 1 # confirm credentials work
 ```
 
-Create an account at https://oxagen.app, mint an API key under
+Create an account at https://app.oxagen.sh, mint an API key under
 **Organization → Developer → Tokens**, then see
 https://docs.oxagen.sh/docs/cli/account-setup for the full setup.
 

@@ -52,7 +52,7 @@ describe("resolveBuildEnv", () => {
 
     const appUrl = resolved.find((e) => e.key === "NEXT_PUBLIC_APP_URL");
     expect(appUrl).toMatchObject({
-      value: "https://oxagen.app",
+      value: "https://app.oxagen.sh",
       source: "registry",
     });
   });

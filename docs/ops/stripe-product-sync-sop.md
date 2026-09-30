@@ -54,7 +54,7 @@ The script uses whatever `STRIPE_SECRET_KEY` is in scope and **prints the mode**
 
 **Until the production cutover, every environment binds to one shared Stripe
 sandbox (`acct_1Ty2gjK5L8c4uZ0j`, test mode). That covers local, CI and
-production (`https://oxagen.app`, `https://api.oxagen.sh`). The banner
+production (`https://app.oxagen.sh`, `https://api.oxagen.sh`). The banner
 must read `test` everywhere. A `LIVE` banner today means the wrong key is in
 scope: stop.**
 [`docs/ops/stripe-sandbox-mode.md`](stripe-sandbox-mode.md) records where the
@@ -295,8 +295,8 @@ probe() {  # $1 = lookup_key, $2 = subscription|payment
   fi
   curl -sS https://api.stripe.com/v1/checkout/sessions -u "$STRIPE_SECRET_KEY:" \
     -d "mode=$2" -d "line_items[0][price]=$pid" -d "line_items[0][quantity]=1" \
-    --data-urlencode 'success_url=https://oxagen.app/billing' \
-    --data-urlencode 'cancel_url=https://oxagen.app/billing' \
+    --data-urlencode 'success_url=https://app.oxagen.sh/billing' \
+    --data-urlencode 'cancel_url=https://app.oxagen.sh/billing' \
     | jq -r --arg lk "$1" '"\($lk) -> \(.id) livemode=\(.livemode) amount=\(.amount_total)"'
 }
 

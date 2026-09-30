@@ -12,8 +12,8 @@ Use this checklist when Google or GitHub sign-in fails on `/login`, or when you 
 |---|---|---|
 | `GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRET` | Google Cloud OAuth 2.0 Client (Web application) | Better Auth `socialProviders.google` |
 | `GITHUB_LOGIN_CLIENT_ID` / `GITHUB_LOGIN_CLIENT_SECRET` | GitHub **OAuth App** (not a GitHub App) | Better Auth `socialProviders.github` |
-| `BETTER_AUTH_URL` | n/a | Auth base URL (`https://oxagen.app` in production) |
-| `OAUTH_PROXY_PRODUCTION_URL` | n/a | Defaults to `https://oxagen.app`. Preview social login relays through this origin. |
+| `BETTER_AUTH_URL` | n/a | Auth base URL (`https://app.oxagen.sh` in production) |
+| `OAUTH_PROXY_PRODUCTION_URL` | n/a | Defaults to `https://app.oxagen.sh`. Preview social login relays through this origin. |
 | `OAUTH_PROXY_SECRET` | n/a | Same value in production and preview. Encrypts the preview relay payload. |
 
 Production and preview load these from SSM under `/oxagen/production/*` (and the preview path your deploy uses). Local loads them from `.env.local`.
@@ -22,15 +22,15 @@ If either LOGIN pair is empty, Better Auth leaves that provider `undefined`. The
 
 ## Callback URLs (exact strings)
 
-Auth is served by the **app** host (`oxagen.app` → Next on `:3000`), not `api.oxagen.sh`.
+Auth is served by the **app** host (`app.oxagen.sh` → Next on `:3000`), not `api.oxagen.sh`.
 
 ### Production and preview (shared LOGIN apps)
 
 Register **one** callback per provider on the shared production LOGIN app:
 
 ```
-https://oxagen.app/api/auth/callback/google
-https://oxagen.app/api/auth/callback/github
+https://app.oxagen.sh/api/auth/callback/google
+https://app.oxagen.sh/api/auth/callback/github
 ```
 
 Preview deployments do not get their own callback host. Better Auth's OAuth Proxy rewrites the outgoing `redirect_uri` to the production callback, then relays the session back to the preview origin. Production itself is a passthrough.
@@ -52,7 +52,7 @@ In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
 
 1. **Application type:** Web application.
 2. **Authorized JavaScript origins:**
-   - Production: `https://oxagen.app`
+   - Production: `https://app.oxagen.sh`
    - Local (local client only): `http://localhost:3000`
 3. **Authorized redirect URIs:** exactly the callback strings above for that environment. No trailing slash. No `api.oxagen.sh` path. No old `*.vercel.app` host.
 4. **Scopes requested by Oxagen:** `openid`, `profile`, `email` only. Non-sensitive. No Google verification required for login.
@@ -63,7 +63,7 @@ In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
    - `/oxagen/production/GOOGLE_LOGIN_CLIENT_ID`
    - `/oxagen/production/GOOGLE_LOGIN_CLIENT_SECRET`
    - Not `GOOGLE_DATA_*`. Those are for Workspace connectors.
-7. **Smoke test:** `POST https://oxagen.app/api/auth/sign-in/social` with body `{"provider":"google","callbackURL":"/"}` returns JSON whose `url` has `redirect_uri=https%3A%2F%2Foxagen.app%2Fapi%2Fauth%2Fcallback%2Fgoogle`. Opening that URL shows Google's account chooser, not `redirect_uri_mismatch`.
+7. **Smoke test:** `POST https://app.oxagen.sh/api/auth/sign-in/social` with body `{"provider":"google","callbackURL":"/"}` returns JSON whose `url` has `redirect_uri=https%3A%2F%2Fapp.oxagen.sh%2Fapi%2Fauth%2Fcallback%2Fgoogle`. Opening that URL shows Google's account chooser, not `redirect_uri_mismatch`.
 
 ## GitHub LOGIN OAuth App checklist
 
@@ -71,9 +71,9 @@ In [GitHub Developer Settings → OAuth Apps](https://github.com/settings/develo
 
 1. **Kind:** OAuth App. Not a GitHub App. `GITHUB_APP_*` is a different credential set for the connector.
 2. **Application name:** production-facing (for example `Oxagen`). A name like `Oxagen (Development)` on the live app is a config smell: rename it or confirm you are not pointing production at a personal/dev app.
-3. **Homepage URL:** `https://oxagen.sh` or `https://oxagen.app`.
+3. **Homepage URL:** `https://oxagen.sh` or `https://app.oxagen.sh`.
 4. **Authorization callback URL:** exactly one value on a GitHub OAuth App:
-   - Production/preview shared app: `https://oxagen.app/api/auth/callback/github`
+   - Production/preview shared app: `https://app.oxagen.sh/api/auth/callback/github`
    - Local app: `http://localhost:3000/api/auth/callback/github`
 5. **Scopes Oxagen requests:** `read:user`, `user:email`.
 6. **Client secret:** regenerate if it was pasted into chat or a ticket. Store as `GITHUB_LOGIN_CLIENT_SECRET` in SSM / `.env.local`.
@@ -82,7 +82,7 @@ In [GitHub Developer Settings → OAuth Apps](https://github.com/settings/develo
 
 ## Preview relay checklist
 
-1. `OAUTH_PROXY_PRODUCTION_URL` is `https://oxagen.app` (or unset, which defaults to that).
+1. `OAUTH_PROXY_PRODUCTION_URL` is `https://app.oxagen.sh` (or unset, which defaults to that).
 2. `OAUTH_PROXY_SECRET` is set to the **same** value in production and preview.
 3. Preview origin is trusted (`https://preview-app.oxagen.sh` is in the hardcoded production trusted origins).
 4. Access previews via that stable alias when testing social login.

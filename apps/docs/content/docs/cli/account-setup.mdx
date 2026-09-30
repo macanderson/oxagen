@@ -15,7 +15,7 @@ To enroll a machine, install the app on it first. The app links the `oxagen` and
 
 ## 1. Create your Oxagen account
 
-1. Go to [oxagen.app](https://oxagen.app) and click **Sign up**.
+1. Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**.
 2. Enter your name, email, and a password, or use **Google** or **GitHub** sign-in. Oxagen emails you a verification link. Click it before you sign in.
 3. On **New organization**, name the organization and its first workspace, review their slugs, and create them.
 
@@ -41,7 +41,7 @@ Run `oxagen login`. The default flow opens a browser sign-in page:
 oxagen login            # opens a browser — follow the prompt, then pick your org and workspace
 ```
 
-After you sign in, the consent page asks which org and workspace the CLI acts in. Both pickers stay open even when you belong to only one. When you approve, the browser lands on `oxagen.app/cli/complete`, and the token is already in your terminal. To preselect the org and workspace and skip the picker:
+After you sign in, the consent page asks which org and workspace the CLI acts in. Both pickers stay open even when you belong to only one. When you approve, the browser lands on `app.oxagen.sh/cli/complete`, and the token is already in your terminal. To preselect the org and workspace and skip the picker:
 
 ```bash
 oxagen login --org your-org-slug --workspace your-workspace-slug

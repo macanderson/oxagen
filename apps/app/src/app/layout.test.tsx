@@ -50,7 +50,7 @@ describe("root layout metadata", () => {
 
   it("does not advertise localhost when the origin is unset (negative)", async () => {
     const { metadataBase } = await generateMetadata();
-    expect(String(metadataBase)).toBe("https://oxagen.app/");
+    expect(String(metadataBase)).toBe("https://app.oxagen.sh/");
   });
 
   it("opens from the home screen on the kit's launch screen for each device", async () => {

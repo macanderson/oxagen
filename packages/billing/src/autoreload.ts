@@ -467,7 +467,7 @@ export async function notifyLowBalance(
     );
     const orgName = orgRow?.name ?? "your organization";
 
-    const appUrl = process.env["APP_URL"] ?? "https://oxagen.app";
+    const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
     const topUpUrl = `${appUrl}/settings/billing/credits`;
     const template = lowBalanceAlertTemplate({
       orgName,

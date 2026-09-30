@@ -13,7 +13,7 @@ import {
 // Org + workspace scope is carried by the API key (auth.api_keys is org- and
 // workspace-bound), so the connect URL needs no org/workspace path segment.
 const PROD_MCP_URL = process.env["MCP_URL"] ?? "https://mcp.oxagen.sh";
-const PROD_APP_URL = process.env["APP_URL"] ?? "https://oxagen.app";
+const PROD_APP_URL = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 
 // Where a human mints the API key every one of these clients authenticates
 // with. Org + workspace scope rides on the key itself, so the connect URL needs
