@@ -7,7 +7,7 @@
 // `og:image` until the root layout passed this origin in (#3076, #3091).
 
 /** Where the app is served when nothing says otherwise. */
-const PROD_APP_URL = "https://app.oxagen.sh";
+const PROD_APP_URL = "https://oxagen.app";
 const DEV_APP_URL = "http://localhost:3000";
 
 /**
@@ -18,7 +18,7 @@ const DEV_APP_URL = "http://localhost:3000";
  * Resolution order:
  *   1. `NEXT_PUBLIC_APP_URL` — an explicit override wins in any environment.
  *   2. `NODE_ENV === "development"` → the local dev server on :3000.
- *   3. otherwise (production, preview, test) → `https://app.oxagen.sh`.
+ *   3. otherwise (production, preview, test) → `https://oxagen.app` (ADR-215).
  */
 function appBaseUrl(): string {
   const override = process.env.NEXT_PUBLIC_APP_URL?.trim();

@@ -259,7 +259,7 @@ const trustedOrigins: string[] = [
 // Multi-environment social login via Better Auth's OAuth Proxy.
 //
 // A GitHub OAuth App (and a Google OAuth client) allows only ONE callback host.
-// We share a SINGLE login OAuth app across production (app.oxagen.sh) and every
+// We share a SINGLE login OAuth app across production (oxagen.app) and every
 // preview deployment (preview-app.oxagen.sh, …), so a naive setup can satisfy
 // only ONE host — the other 403s with GitHub's "The redirect_uri is not
 // associated with this application" (the exact prod break after the oxagen.sh

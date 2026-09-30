@@ -14,7 +14,7 @@ import { GateSkeleton } from "./ui/gate-states";
 import { OrganizationForm } from "./ui/organization-form";
 
 /** The host the address is printed under when the request names none. */
-const FALLBACK_HOST = "app.oxagen.sh";
+const FALLBACK_HOST = "oxagen.app";
 
 export async function NewOrganizationScreen({
   searchParams,

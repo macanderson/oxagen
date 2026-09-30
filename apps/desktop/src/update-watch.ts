@@ -1,6 +1,6 @@
 /**
  * The automatic update check (#3697). The window renders the UI bundled
- * into this build and never loads app.oxagen.sh, so a web deploy cannot
+ * into this build and never loads oxagen.app, so a web deploy cannot
  * leave it stale. Only a new build of the app changes what it shows, and a
  * new build arrives through the updater feed. The masthead's Check for
  * updates button used to be the only thing that read that feed, so an app

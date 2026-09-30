@@ -222,7 +222,7 @@ env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
 
 It stages the export, uploads `_deploy/internal-docs-standalone.tgz`, sends
 `oxagen-deploy-service service=internal-docs`, and then checks from outside:
-401 without credentials, 200 with the password, and `app.oxagen.sh/login` and
+401 without credentials, 200 with the password, and `oxagen.app/login` and
 `api.oxagen.sh/health` still 200. Release swap and rollback are
 `deploy-service.sh`'s. No CI role may publish this artifact yet; until one is
 added to `stacks-new/ci-deploy/roles.tf`, it ships by hand.

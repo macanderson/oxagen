@@ -144,7 +144,7 @@ describe("markCredentialNeedsReauth", () => {
     // row offers Reconnect: never the dead /settings/integrations route or the
     // retired /workbench/tools/mcp page, and never a raw UUID path.
     const deepLink = sent["deepLink"] as string;
-    expect(deepLink).toBe("https://app.oxagen.sh/acme/main/tools/providers");
+    expect(deepLink).toBe("https://oxagen.app/acme/main/tools/providers");
     expect(deepLink).not.toContain("/settings/integrations");
     expect(deepLink).not.toContain("org-1"); // no UUID leakage in the path
     // serverName prefers the human title over the slug.
