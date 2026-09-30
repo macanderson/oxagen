@@ -4,21 +4,42 @@
 // it was paid, and the Stripe-hosted page that collects it. list_invoices
 // carries neither a governed-action count nor a paid date per invoice yet
 // (#3840), so those two columns say "not recorded" rather than a figure. The
-// table carries the design's list controls (@/ui/list-table) over the page the
-// read returned, 50 invoices. Only an organization with more than that sees
-// the older-and-newest links beneath it, the one way to reach the rest until
-// the read returns them all. One of the files money renders in (INV-25).
+// table carries the design's search and filters (@/ui/list-table) over the
+// page the read returned. The pager beneath it pages by address (#4693): Rows
+// per page on the left sets how many invoices a read returns, and Newest and
+// Older on the right walk the pages. One of the files money renders in
+// (INV-25).
 import { useTranslations } from "next-intl";
 import type { InvoicePage, InvoiceRow } from "@/data/contracts/billing";
 import { parseHostedInvoiceUrl } from "@/shared/invoice-url";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { linkText, mono, panelBody } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
-import { HostedInvoiceLink, SafeLink } from "@/ui/navigation";
+import { HostedInvoiceLink } from "@/ui/navigation";
 import { cell } from "@/ui/table";
 import { NotRecordedValue, Section, usePeriod } from "./section";
+
+/** The sizes Rows offers under the invoices (#4693). */
+const INVOICE_ROWS = [10, 25, 50, 100] as const;
+/** The invoices a page holds when the address names no size, the same 50 `list_invoices` reads by default. */
+const INVOICE_PAGE = 50;
+
+/**
+ * The invoices a page holds, from `?rows=`. A size Rows does not offer reads
+ * as `INVOICE_PAGE`, so a hand-typed URL cannot ask for a size the list never
+ * draws.
+ */
+export function invoiceRowsOf(raw: string | null): number {
+  const rows = Number(raw);
+  return INVOICE_ROWS.find((size) => size === rows) ?? INVOICE_PAGE;
+}
+
+/** `?rows=` for a size, left off at the default so the plain address stays the plain page. */
+function rowsParam(rows: number): { rows?: string } {
+  return rows === INVOICE_PAGE ? {} : { rows: String(rows) };
+}
 
 const STATUS_TONE: Record<InvoiceRow["status"], BadgeTone> = {
   paid: "allowed",
@@ -72,14 +93,18 @@ function useInvoiceRow(): (row: InvoiceRow) => ListRow {
 export function Invoices({
   invoices,
   cursor,
+  rows,
   org,
 }: {
   invoices: InvoicePage;
   /** The page on screen; null is the newest. */
   cursor: string | null;
+  /** The invoices a page holds, one of `INVOICE_ROWS` (#4693). */
+  rows: number;
   org: string;
 }) {
   const t = useTranslations("billing.invoices");
+  const list = useTranslations("ui.list");
   const toRow = useInvoiceRow();
   const title = t("title");
   const { items, nextCursor } = invoices;
@@ -104,27 +129,30 @@ export function Invoices({
           { label: t("columns.link"), hidden: true },
         ]}
         rows={items.map(toRow)}
+        // The cursor only walks toward older invoices, so the step back is
+        // the newest page. Both steps keep the size, and a new size starts
+        // over at the newest page (#4693).
+        pager={{
+          label: t("pager"),
+          rowsLabel: list("rows"),
+          previousLabel: t("newest"),
+          nextLabel: t("older"),
+          perPage: rows,
+          sizes: INVOICE_ROWS.map((size) => ({
+            size,
+            first: routes.billing(org, rowsParam(size)),
+          })),
+          previous:
+            cursor === null ? null : routes.billing(org, rowsParam(rows)),
+          next:
+            nextCursor === null
+              ? null
+              : routes.billing(org, {
+                  ...rowsParam(rows),
+                  cursor: nextCursor,
+                }),
+        }}
       />
-      {cursor === null && nextCursor === null ? null : (
-        <nav
-          aria-label={t("pager")}
-          className={`${panelBody} flex gap-4 text-sm`}
-        >
-          {cursor === null ? null : (
-            <SafeLink to={routes.billing(org)} className={linkText}>
-              {t("newest")}
-            </SafeLink>
-          )}
-          {nextCursor === null ? null : (
-            <SafeLink
-              to={routes.billing(org, { cursor: nextCursor })}
-              className={linkText}
-            >
-              {t("older")}
-            </SafeLink>
-          )}
-        </nav>
-      )}
     </Section>
   );
 }

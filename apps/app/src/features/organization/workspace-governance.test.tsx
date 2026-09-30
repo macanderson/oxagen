@@ -94,7 +94,7 @@ describe("EditWorkspace governance", () => {
   it("only offers the override once a mode is picked", async () => {
     const user = await openDialog();
     const override = screen.getByRole("checkbox", {
-      name: /Apply now, without review/,
+      name: /Apply now without review/,
     });
     expect(override).toBeDisabled();
     await user.selectOptions(

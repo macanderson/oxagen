@@ -28,6 +28,7 @@ import { readError, readOk } from "@/data/read";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import {
   LINEAGE,
   proposal,
@@ -287,7 +288,7 @@ describe("Record › the header", () => {
   it("says it is in force because its commit merged", async () => {
     await renderRecord();
     expect(screen.getByTestId("record-in-force").textContent).toBe(
-      "A hard boundary: require or forbid. It is in force because 4d5e6f7 merged, and it stops being in force the same way.",
+      "A hard boundary: require or forbid. It is in force because 4d5e6f7 merged.",
     );
   });
 
@@ -356,7 +357,7 @@ describe("Record › the statement editor", () => {
     await renderRecord();
     const editor = screen.getByTestId("record-editor");
     expect(editor.textContent).toContain(
-      `.oxagen/rules/${LINEAGE}.toml · statement`,
+      `statement in .oxagen/rules/${LINEAGE}.toml`,
     );
     const area = screen.getByTestId<HTMLTextAreaElement>("record-statement");
     expect(area.value).toBe(
@@ -455,7 +456,7 @@ describe("Record › the lineage panel", () => {
     await renderRecord();
     const panel = screen.getByTestId("record-lineage");
     expect(panel.textContent).toContain(
-      "the graph remembers everything; git decides what is in force",
+      "git decides what is in force",
     );
     const fact = (name: string) =>
       panel.querySelector(`[data-fact="${name}"]`)?.textContent;
@@ -493,10 +494,10 @@ describe("Record › the six kinds", () => {
       const panel = screen.getByTestId("record-kind-panel");
       expect(panel.getAttribute("data-kind")).toBe(kind);
       expect(within(panel).getByTestId("record-deliver").textContent).toMatch(
-        /^How it reaches a run/,
+        /^Delivery/,
       );
       const never = within(panel).getByTestId("record-kind-never");
-      expect(never.textContent).toMatch(/^What it can never do\. /);
+      expect(never.textContent).toMatch(/^Limits: /);
       expect(panel.lastElementChild?.lastElementChild).toBe(never);
     },
   );
@@ -593,7 +594,7 @@ describe("Record › the six kinds", () => {
     await renderRecord({ record: readOk(ofKind("memory")) });
     const panel = screen.getByTestId("record-kind-panel");
     expect(panel.querySelector('[data-fact="selection"]')?.textContent).toBe(
-      "by relevance, never pinned: 37 of 214 runs that carried it actually used it",
+      "by relevance: 37 of 214 runs that carried it used it",
     );
     expect(panel.querySelector('[data-fact="decay"]')?.textContent).toMatch(
       /^none automatic\./,
@@ -613,7 +614,7 @@ describe("Record › the six kinds", () => {
     await renderRecord({ record: readOk(ofKind("rule")) });
     const meter = (name: string) =>
       document.querySelector(`[data-meter="${name}"]`)?.textContent;
-    expect(meter("rendered")).toBe("Runs it was rendered into214 of 214");
+    expect(meter("rendered")).toBe("Runs rendered into214 of 214");
     expect(meter("cited")).toBe("Runs that cited it37 of 214");
     expect(meter("third")).toBe("Runs that went against itnot recorded");
   });
@@ -628,7 +629,7 @@ describe("Record › the six kinds", () => {
   it("names the bundle version on a rule and its share as not recorded", async () => {
     await renderRecord({ record: readOk(ofKind("rule")) });
     expect(screen.getByTestId("record-kind-panel").textContent).toContain(
-      "v12 · this record's tokens are not recorded yet",
+      "v12. This record's tokens are not recorded yet.",
     );
   });
 
@@ -691,7 +692,7 @@ describe("Record › Propose a change", () => {
       within(dialog).getByText("Propose a change to this record"),
     ).toBeDefined();
     expect(dialog.textContent).toContain(
-      "A published record is changed the way it was published: a branch, a pull request, the same six checks, and a merge. Nothing here edits what is in force.",
+      "Oxagen opens a branch and a pull request, runs the six checks, and changes the record when the pull request merges.",
     );
     expect(dialog.textContent).toContain(`context/${LINEAGE}`);
     expect(within(dialog).getByTestId("record-diff-stat").textContent).toBe(
@@ -806,7 +807,7 @@ describe("Record › Archive", () => {
     await renderRecord();
     await user.click(screen.getByTestId("record-archive-open"));
     const dialog = screen.getByTestId("record-archive");
-    expect(within(dialog).getByText(`Archive ${LINEAGE}?`)).toBeDefined();
+    expect(within(dialog).getByText(`Archive ${LINEAGE}`)).toBeDefined();
     expect(dialog.textContent).toContain(
       `Archiving is a pull request that sets status = "archived" on .oxagen/rules/${LINEAGE}.toml.`,
     );
@@ -817,7 +818,7 @@ describe("Record › Archive", () => {
     const submit = within(dialog).getByTestId("record-archive-submit");
     expect(submit.hasAttribute("disabled")).toBe(true);
     expect(submit.getAttribute("data-gap")).toBe("#3867");
-    expect(within(dialog).getByText("Keep it in force")).toBeDefined();
+    expect(within(dialog).getByText("Keep the record in force")).toBeDefined();
   });
 
   it("says a record with a pull request open already has one", () => {
@@ -941,7 +942,11 @@ describe("Record › related records", () => {
           .getByTestId("record-related-list")
           .querySelectorAll("li p:first-of-type"),
       ).map((p) => p.textContent);
-    await user.selectOptions(screen.getByLabelText("Sort"), "Label A–Z");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Label A–Z",
+    );
     expect(list()).toEqual(["Alpha", "Beta", "Gamma"]);
     await user.type(screen.getByLabelText("Search records"), "gam");
     expect(list()).toEqual(["Gamma"]);
@@ -1000,7 +1005,9 @@ describe("Record › the not-loaded states", () => {
     ).toBe("/acme/core-platform");
     expect(denied.textContent).toContain("Signed in as");
     expect(denied.textContent).toContain("Marcus Bell · workspace.member");
-    expect(denied.textContent).toContain("deny wins over every allow");
+    expect(
+      within(denied).getByText("the organization's policy").tagName,
+    ).toBe("DD");
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 

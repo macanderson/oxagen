@@ -92,7 +92,7 @@ describe("OrganizationForm", () => {
     );
     expect(screen.getByLabelText("Namespace")).toHaveValue("anders");
     expect(document.getElementById("ob-ns-hint")).toHaveTextContent(
-      "2–6 characters, immutable. Every agent key starts with it: anders.<workspace>.<agent>",
+      "It takes 2 to 6 characters and is immutable. Every agent key starts with it: anders.<workspace>.<agent>.",
     );
     // The first workspace is named after Connect, so the form has no
     // workspace section and no governance mode.

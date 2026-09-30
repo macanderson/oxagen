@@ -51,6 +51,7 @@ function sweepDouble(targets: OnChangeTarget[]) {
     dueDaily: vi.fn(async () => []),
     openPullRequests: vi.fn(async () => []),
     stalled: vi.fn(async () => []),
+    registryMoved: vi.fn(async () => []),
     onChangeByRepo: vi.fn(async () => targets),
   } satisfies DiscoverySweepStore;
 }

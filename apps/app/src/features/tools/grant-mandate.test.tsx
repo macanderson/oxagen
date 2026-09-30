@@ -101,15 +101,15 @@ async function grant(user: ReturnType<typeof userEvent.setup>) {
   await user.type(within(form).getByLabelText("Unit"), "rows");
   await user.type(within(form).getByLabelText("Per period"), "2000");
   await user.type(
-    within(form).getByLabelText("Allowed targets, separated by commas"),
+    within(form).getByLabelText("Allowed targets (comma-separated)"),
     "vendor:aws",
   );
   await user.type(
-    within(form).getByLabelText("Measure the target is read from"),
+    within(form).getByLabelText("Target measure"),
     "recipient",
   );
   await user.type(
-    within(form).getByLabelText("Who may answer"),
+    within(form).getByLabelText("Approvers"),
     "role:Billing",
   );
   await user.type(within(form).getByLabelText("Purpose"), "PO-4471");
@@ -165,7 +165,7 @@ describe("GrantMandate", () => {
     expect(within(form).getByText("Counterparties")).toBeInTheDocument();
     expect(within(form).getByText("Approval")).toBeInTheDocument();
     expect(form).toHaveTextContent("There is no unbounded option.");
-    expect(form).toHaveTextContent("Not a currency code");
+    expect(form).toHaveTextContent("Grant a money limit over the API or MCP");
     await expectNoAxe(document.body);
   });
 
@@ -233,7 +233,7 @@ describe("GrantMandate", () => {
     await grant(user);
     expect(
       await within(dialog()).findByTestId("grant-mandate-failure"),
-    ).toHaveTextContent("Check the field “Who may answer”.");
+    ).toHaveTextContent("Check the field “Approvers”.");
   });
 
   it("names a write that never answered (negative)", async () => {
@@ -298,10 +298,10 @@ describe("GrantMandate", () => {
     await user.type(within(form).getByLabelText("Tools"), "refund");
     await user.keyboard("{Enter}");
     await user.type(within(form).getByLabelText("Tools"), "linear__*,");
-    await user.type(within(form).getByLabelText("Who may answer"), "priya");
+    await user.type(within(form).getByLabelText("Approvers"), "priya");
     await user.keyboard("{Enter}");
     await user.type(
-      within(form).getByLabelText("Always ask a person for"),
+      within(form).getByLabelText("Consequences a person always answers"),
       "moves",
     );
     await user.keyboard("{Enter}");
@@ -346,7 +346,7 @@ describe("GrantMandate on a requested draft", () => {
     expect(form).toHaveTextContent("invoice-bot");
     expect(within(form).getByLabelText("moves_money")).toBeChecked();
     expect(within(form).getByLabelText("destroys_data")).not.toBeChecked();
-    expect(within(form).getByLabelText(/Others the tools declare/)).toHaveValue(
+    expect(within(form).getByLabelText(/Other impacts/)).toHaveValue(
       "ships_code",
     );
     expect(submitted(form, "tools")).toBe(
@@ -359,10 +359,10 @@ describe("GrantMandate on a requested draft", () => {
     expect(within(form).getByLabelText("Period")).toHaveValue("weekly");
     expect(within(form).getByLabelText("Calls per day")).toHaveValue("50");
     expect(
-      within(form).getByLabelText("Measure the target is read from"),
+      within(form).getByLabelText("Target measure"),
     ).toHaveValue("amount");
     expect(
-      within(form).getByLabelText("Allowed targets, separated by commas"),
+      within(form).getByLabelText("Allowed targets (comma-separated)"),
     ).toHaveValue("vendor:aws, vendor:github");
     expect(submitted(form, "alwaysHumanFor")).toBe("ships_code");
     expect(within(form).getByLabelText("Threshold")).toHaveValue("500");

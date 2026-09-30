@@ -13,7 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
 // Spend (#2962; mockup route `spend[/<tab>[/<drill>]]`): the tab and one
 // operator's, agent's or tool's drill are path segments on this one route, and
 // a segment that names neither is a 404 rather than a page that guesses. One
-// finding's evidence is a dialog over the Findings tab, opened by `?finding=`.
+// finding's evidence is a dialog over the Findings tab, opened by `?finding=`,
+// and the Month tab's grouping is `?by=`.
 // The feature renders the header, so a not-loaded state can replace the whole
 // page body the way the design draws it.
 export default async function SpendPage({
@@ -24,7 +25,7 @@ export default async function SpendPage({
     params,
     searchParams,
   ]);
-  const view = parseSpendView(segments, query.finding);
+  const view = parseSpendView(segments, query.finding, query.by);
   if (view === null) notFound();
   const ctx = await requireViewer(org, ws);
   return (

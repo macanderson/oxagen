@@ -215,7 +215,7 @@ describe("the API keys panel", () => {
   it("lists the surfaces a key reaches, with four oxagen command lines", async () => {
     await renderApiKeys(readOk([live]));
     const surfaces = screen.getByRole("region", {
-      name: "Surfaces this reaches",
+      name: "Surfaces",
     });
     expect(surfaces).toHaveTextContent("one agent tool contract");
     expect(surfaces).toHaveTextContent(
@@ -268,7 +268,7 @@ describe("ok", () => {
     await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(
       screen.getByText(
-        "A key is shown once, at creation, and never again. Until keys carry grants of their own, a key acts as the person who created it, in its workspace. Revoking a key ends its access at the next call.",
+        "Oxagen shows a key once, when it is created. A key acts as the person who created it in its workspace until keys carry their own grants. Revoking a key ends its access at the next call.",
       ),
     ).toBeInTheDocument();
     expect(keysTable()).not.toHaveTextContent(/secret|hash/i);
@@ -335,7 +335,7 @@ function manyRevoked(n: number): ApiKey[] {
   );
 }
 
-const filterNav = () => screen.getByRole("navigation", { name: "Which keys" });
+const filterNav = () => screen.getByRole("navigation", { name: "Key status" });
 // The range the pager under the keys reads, such as "1–10 of 15".
 const range = () => {
   const nav = screen.getByRole("navigation", { name: /pages/i });

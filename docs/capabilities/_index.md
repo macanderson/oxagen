@@ -466,6 +466,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, cli |
 | [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
 | [repair_steering_repo](steering_repo.repair.md) | [steering_repo.repair.ts](../../packages/oxagen/src/contracts/steering_repo.repair.ts) | api, mcp |
+| [retry_steering_repo_provision](steering_repo.provision.retry.md) | [steering_repo.provision.retry.ts](../../packages/oxagen/src/contracts/steering_repo.provision.retry.ts) | api |
 | [set_production_branch](repository.production_branch.set.md) | [repository.production_branch.set.ts](../../packages/oxagen/src/contracts/repository.production_branch.set.ts) | api, mcp, cli |
 | [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
 
@@ -624,16 +625,23 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [create_relay](tool.relay.create.md) | [tool.relay.create.ts](../../packages/oxagen/src/contracts/tool.relay.create.ts) | api |
+| [draft_studio_description](tool.studio.description.draft.md) | [tool.studio.description.draft.ts](../../packages/oxagen/src/contracts/tool.studio.description.draft.ts) | api, mcp |
+| [get_studio_discovery](tool.studio.discovery.get.md) | [tool.studio.discovery.get.ts](../../packages/oxagen/src/contracts/tool.studio.discovery.get.ts) | api, mcp |
 | [get_studio_draft](tool.studio.draft.get.md) | [tool.studio.draft.get.ts](../../packages/oxagen/src/contracts/tool.studio.draft.get.ts) | api, mcp |
 | [import_tools](tool.import.md) | [tool.import.ts](../../packages/oxagen/src/contracts/tool.import.ts) | api, mcp |
+| [list_studio_findings](tool.studio.findings.list.md) | [tool.studio.findings.list.ts](../../packages/oxagen/src/contracts/tool.studio.findings.list.ts) | api, mcp |
+| [list_studio_tools](tool.studio.tools.list.md) | [tool.studio.tools.list.ts](../../packages/oxagen/src/contracts/tool.studio.tools.list.ts) | api, mcp |
 | [list_tool_declarations](tool.declaration.list.md) | [tool.declaration.list.ts](../../packages/oxagen/src/contracts/tool.declaration.list.ts) | api, agent, mcp |
 | [list_tool_versions](tool.version.list.md) | [tool.version.list.ts](../../packages/oxagen/src/contracts/tool.version.list.ts) | api, mcp |
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |
 | [save_studio_draft](tool.studio.draft.save.md) | [tool.studio.draft.save.ts](../../packages/oxagen/src/contracts/tool.studio.draft.save.ts) | api, mcp |
+| [set_mcp_credential](tool.studio.credential.set.md) | [tool.studio.credential.set.ts](../../packages/oxagen/src/contracts/tool.studio.credential.set.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp |
 | [set_tool_state](tool.state.set.md) | [tool.state.set.ts](../../packages/oxagen/src/contracts/tool.state.set.ts) | api, mcp |
+| [start_studio_discovery](tool.studio.discovery.start.md) | [tool.studio.discovery.start.ts](../../packages/oxagen/src/contracts/tool.studio.discovery.start.ts) | api, mcp |
+| [try_studio_tool](tool.studio.try.md) | [tool.studio.try.ts](../../packages/oxagen/src/contracts/tool.studio.try.ts) | api, mcp |
 
 ## Toolbelt
 

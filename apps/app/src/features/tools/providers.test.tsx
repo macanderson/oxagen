@@ -35,6 +35,14 @@ const { router, actions } = vi.hoisted(() => ({
     setToolClassification: vi.fn(),
   },
 }));
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => actions);
 const { startProviderAuthorization, navigatePopup } = vi.hoisted(() => ({
@@ -62,7 +70,7 @@ const { mcpServerListOutput, toolVersionListOutput } = await import(
 );
 
 const at = { org: "acme", ws: "core-platform" };
-const PROVIDERS = "/acme/core-platform/tools/providers";
+const PROVIDERS = "/acme/core-platform/agents?tab=servers";
 const failure = translator("tools.actions.failure");
 const drill = translator("tools.providers.drill");
 const providers = translator("tools.providers");
@@ -107,6 +115,7 @@ function renderProviders({
         connections={readOk(connectionList())}
         grants={readOk(credentialGrantPage())}
         cursor={null}
+        rows={50}
       />
     </IntlProvider>,
   );

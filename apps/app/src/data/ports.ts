@@ -229,7 +229,11 @@ export interface DataSource {
     /** list_invoices, one cursor page, newest first */
     invoices(
       ctx: OrgCtx,
-      q: { cursor: string | null },
+      q: {
+        cursor: string | null;
+        /** Invoices to a page, 1 to 100. `list_invoices` reads 50 when it is omitted (#4693). */
+        limit?: number;
+      },
     ): Promise<Read<InvoicePage>>;
   };
   /**
@@ -428,7 +432,11 @@ export interface DataSource {
     incidents(
       ctx: WsCtx,
       agent: string,
-      q: { cursor: string | null },
+      q: {
+        cursor: string | null;
+        /** Incidents to a page, 1 to 100. `list_incidents` reads 50 when it is omitted (#4693). */
+        limit?: number;
+      },
     ): Promise<Read<IncidentPage>>;
   };
   /**
@@ -475,7 +483,7 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /**
      * get_operator_ranking (D15): operators by unproductive spend, for a
-     * manager. Caller: features/spend/spend.tsx on the operator tab, which
+     * manager. Caller: features/spend/spend.tsx on the Findings tab, which
      * reads it only for an org Owner or Admin.
      */
     operatorRanking(
@@ -613,9 +621,10 @@ export interface DataSource {
    */
   skills: {
     configuration(ctx: WsCtx): Promise<Read<SkillConfiguration>>;
+    /** `limit` is the page size, one of SKILL_ROWS; absent reads list_skills' default. */
     inventory(
       ctx: WsCtx,
-      q: { cursor: string | null },
+      q: { cursor: string | null; limit?: number },
     ): Promise<Read<SkillInventory>>;
   };
   /**
@@ -649,7 +658,12 @@ export interface DataSource {
      */
     proposals(
       ctx: WsCtx,
-      q: { offset: number; lineage?: string },
+      q: {
+        offset: number;
+        /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
+        limit?: number;
+        lineage?: string;
+      },
     ): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
@@ -705,12 +719,18 @@ export interface DataSource {
         category: string | null;
         cursor: string | null;
         serverId: string | null;
+        /** Versions to a page, 1 to 100. `list_tool_versions` reads 50 when it is omitted (#4693). */
+        limit?: number;
       },
     ): Promise<Read<ToolVersionPage>>;
     /** list_credential_grants: one cursor page of the broker's grants, newest first */
     grants(
       ctx: WsCtx,
-      q: { cursor: string | null },
+      q: {
+        cursor: string | null;
+        /** Grants to a page, 1 to 100. `list_credential_grants` reads 50 when it is omitted (#4693). */
+        limit?: number;
+      },
     ): Promise<Read<CredentialGrantPage>>;
     /** list_kill_switches: the switches reaching this workspace, with the deny generation */
     killSwitches(ctx: WsCtx): Promise<Read<KillSwitchBoard>>;

@@ -12,6 +12,7 @@ import type { MemberList } from "@/data/contracts/org";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { roleCatalog, roleRow } from "./organization.builders";
 
 vi.mock("next/link", () => ({
@@ -166,17 +167,8 @@ describe("People", () => {
     expect(twoFactor).toHaveAccessibleDescription(
       "No contract records a member's two-factor method yet, so this filter cannot narrow the list.",
     );
-    expect(
-      within(twoFactor)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual([
-      "All · Two-factor",
-      "TOTP",
-      "hardware key",
-      "passkey",
-      "passkey + TOTP",
-    ]);
+    // A disabled select cannot open, so its trigger shows All alone.
+    expect(twoFactor).toHaveTextContent("All (Two-factor)");
     expect(
       within(panel).getByRole("combobox", { name: "Rows" }),
     ).toBeInTheDocument();
@@ -338,29 +330,29 @@ describe("Invitations", () => {
   });
 
   it("filters by the day an invitation was sent and the day it expires", async () => {
+    const user = userEvent.setup();
     await renderInvitations();
     const panel = screen.getByRole("region", { name: "Pending invitations" });
     const sent = within(panel).getByLabelText("Sent");
     const expires = within(panel).getByLabelText("Expires");
-    expect(
-      within(sent)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Sent", "Sep 1, 2026", "Sep 10, 2026"]);
-    expect(
-      within(expires)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Expires", "Sep 17, 2026"]);
-    await userEvent.selectOptions(sent, "Sep 10, 2026");
+    expect(await optionNames(user, sent)).toEqual([
+      "All (Sent)",
+      "Sep 1, 2026",
+      "Sep 10, 2026",
+    ]);
+    expect(await optionNames(user, expires)).toEqual([
+      "All (Expires)",
+      "Sep 17, 2026",
+    ]);
+    await pickOption(user, sent, "Sep 10, 2026");
     expect(
       document.querySelector('[data-row="invi_4n5p6q7r8s9t0v1w2x3y4z"]'),
     ).not.toBeNull();
     expect(
       document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
     ).toBeNull();
-    await userEvent.selectOptions(sent, "");
-    await userEvent.selectOptions(expires, "Sep 17, 2026");
+    await pickOption(user, sent, "All (Sent)");
+    await pickOption(user, expires, "Sep 17, 2026");
     // An invitation that never expires falls outside any expiry day.
     expect(
       document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),

@@ -7,17 +7,21 @@
 // empty and failed states are the shared StateWrap, the design's .state-wrap.
 import { GraduationCapIcon } from "@phosphor-icons/react/ssr";
 import { useTranslations } from "next-intl";
-import type { SkillInventory } from "@/data/contracts/skills";
+import {
+  SKILL_PAGE,
+  SKILL_ROWS,
+  type SkillInventory,
+} from "@/data/contracts/skills";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import {
   buttonPrimary,
   buttonSecondary,
-  linkText,
   mono,
   panel,
 } from "@/ui/control-styles";
 import { CloneButton } from "@/ui/clone-button";
+import { LinkPager } from "@/ui/link-pager";
 import { SafeLink } from "@/ui/navigation";
 import { StateWrap, stateCode, stateTrace } from "@/ui/state-wrap";
 import { useFormatter } from "@/ui/formatter";
@@ -27,8 +31,14 @@ type SkillsAt = {
   org: string;
   ws: string;
   cursor: string | null;
+  /** The page size, one of SKILL_ROWS. */
+  rows: number;
   view?: string;
 };
+
+/** The size a Skills address carries: none at the default. */
+const rowsParam = (rows: number): string | undefined =>
+  rows === SKILL_PAGE ? undefined : String(rows);
 
 type Failed = Extract<Read<never>, { ok: false }>;
 
@@ -165,17 +175,50 @@ export function SkillsInventory({
           </li>
         ))}
       </ul>
-      {inventory.nextCursor === null ? null : (
-        <div className="border-t border-border px-4 py-3 text-sm">
-          <SafeLink
-            to={routes.skills(at.org, at.ws, { cursor: inventory.nextCursor })}
-            className={linkText}
-          >
-            {t("inventory.next")}
-          </SafeLink>
-        </div>
-      )}
+      <SkillsPager at={at} nextCursor={inventory.nextCursor} />
     </section>
+  );
+}
+
+/**
+ * The inventory's foot pager (#4693): Rows per page on the left, and First
+ * page and Next page on the right. `list_skills` pages forward by cursor
+ * alone, so the step back returns to the first page, as the tools registry
+ * does. A size opens the first page at that size, since the cursor does not
+ * carry one.
+ */
+function SkillsPager({
+  at,
+  nextCursor,
+}: {
+  at: SkillsAt;
+  nextCursor: string | null;
+}) {
+  const t = useTranslations("skills.inventory.pager");
+  const list = useTranslations("ui.list");
+  const rows = rowsParam(at.rows);
+  return (
+    <LinkPager
+      label={t("label")}
+      rowsLabel={list("rows")}
+      previousLabel={t("first")}
+      nextLabel={t("next")}
+      perPage={at.rows}
+      sizes={SKILL_ROWS.map((size) => ({
+        size,
+        first: routes.skills(at.org, at.ws, { rows: rowsParam(size) }),
+      }))}
+      previous={
+        at.cursor === null ? null : routes.skills(at.org, at.ws, { rows })
+      }
+      next={
+        nextCursor === null
+          ? null
+          : routes.skills(at.org, at.ws, { cursor: nextCursor, rows })
+      }
+      // The panel's 16 px inset, as the tools registry keeps.
+      className="border-t border-border px-4"
+    />
   );
 }
 
@@ -224,6 +267,7 @@ export function SkillsFailure({ read, at }: { read: Failed; at: SkillsAt }) {
             <SafeLink
               to={routes.steering(at.org, at.ws, {
                 tab: "skills",
+                rows: rowsParam(at.rows),
                 cursor: at.cursor ?? undefined,
                 view: at.view === "catalog" ? undefined : at.view,
               })}

@@ -7,7 +7,7 @@
       "hint": "Say the thing itself, not the reason for it. The reason belongs in the rationale on the pull request, where a reviewer reads it once. In the bundle, every agent pays for it on every turn.",
       "suggestions": {
         "changelog": "Do not re-read CHANGELOG.md more than once in a run",
-        "release": "The release manager opens the release pull request; a person merges it",
+        "release": "The release manager opens the release pull request, and a person merges it",
         "order": "Cut a release in this order: freeze, dry-run migrations, tag, publish",
         "flake": "The checkout e2e suite flaked on Safari through August"
       },
@@ -20,11 +20,11 @@
       "slugInvalid": "The slug needs at least two letters or digits from a to z or 0 to 9. Type a slug here if the label has none."
     },
     "kind": {
-      "title": "What kind is it?",
-      "subtitle": "The kind decides how the record reaches a run and what the checks assert. It is not a label.",
+      "title": "Record kind",
+      "subtitle": "The kind decides how the record reaches a run and what the checks assert.",
       "cards": "Record kinds",
       "never": "Can never: {text}",
-      "reaches": "How a {kind} reaches a run",
+      "reaches": "Delivery of a {kind}",
       "next": "Write the statement",
       "kinds": {
         "rule": {
@@ -75,7 +75,7 @@
       "title": "The statement",
       "subtitle": "This is the record. Everything else about it is metadata.",
       "drafted": {
-        "title": "A statement, drafted from what you wrote",
+        "title": "Drafted statement",
         "body": "Oxagen filled this in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
       },
       "path": "statement in {path}",
@@ -102,15 +102,15 @@
         "hint": "The only two values there are. A record can never grant authority, so there is no third."
       },
       "preview": {
-        "label": "How it will read",
+        "label": "Preview",
         "badge": "Not published. This is the preview."
       },
       "bundle": "Merging it recompiles the workspace’s steering bundle and adds about {tokens, number} tokens to each turn it reaches. A request already recorded keeps the bundle version it was sent with, so merging this never changes what an old run carried.",
       "next": "Run the checks"
     },
     "checks": {
-      "title": "What the checks will assert",
-      "subtitle": "Six of them, on the pull request, before anybody can merge it.",
+      "title": "Checks",
+      "subtitle": "Six checks run on the pull request before anybody can merge it.",
       "items": {
         "schema": {
           "name": "Schema",
@@ -143,7 +143,7 @@
     },
     "pr": {
       "title": "Open the pull request",
-      "subtitle": "People trust pull requests. That is the whole design.",
+      "subtitle": "Merging the pull request publishes the record.",
       "lead": "Merge is the publication. Nothing steers until then, and the record is in force from the merge commit, not from when you wrote it.",
       "fileRecord": "the record",
       "rationale": "Rationale on the pull request",
@@ -198,7 +198,7 @@
       "passed": "Every check passed. A reviewer can merge it under the workspace’s governance mode.",
       "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from Context PRs. Nothing is in force.",
       "running": "The checks are still running. Context PRs shows them as they finish.",
-      "onContextPrs": "Open it on Context PRs"
+      "onContextPrs": "Open the pull request on Context PRs"
     },
     "failure": {
       "orgRoleRequired": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace. Nothing was written.",
@@ -210,7 +210,7 @@
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "baseMoved": "The production branch moved while the pull request was opening. Try again.",
-      "proposalMoved": "Another change moved this proposal first. Open it on Context PRs to see where it stands.",
+      "proposalMoved": "Another change moved this proposal first. Open the pull request on Context PRs to see where it stands.",
       "unanswered": "Oxagen did not answer. Try again.",
       "slugTaken": "Another record or proposal already has this slug. Go back to the first step, change the slug, and try again. Nothing was written.",
       "refused": "The pull request was refused ({code}).",

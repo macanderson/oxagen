@@ -29,7 +29,7 @@ None. The org and workspace come from the capability context.
 | `status` | `provisioning`, `ready`, `failed`, or `blocked` | the provisioning status |
 | `step` | step or null | the last provisioning step that finished |
 | `failedStep` | step or null | the step that failed or stopped |
-| `error` | `{ code, message }` or null | why the step failed or stopped. `steering_reauthorize` asks an organization owner to authorize Oxagen Steering again |
+| `error` | `{ code, message }` or null | why the step failed or stopped. `steering_reauthorize` asks an organization owner to authorize the Oxagen GitHub App again |
 | `provider` | `github`, `gitlab`, or null | the host the repository is on |
 | `repository` | `{ fullName, url }` or null | the repository, null until `create_repository` finishes. `url` is `https://github.com/<fullName>` or `https://gitlab.com/<fullName>` |
 | `publishedVersion` | positive integer or null | the published steering version |
@@ -49,6 +49,10 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 ## No provisioning state
 
 A workspace with no `steering_repo` state answers `status: "provisioning"` with every other field null and no differences. The read does not fail, because the banner that calls it sits on every page of the workspace.
+
+## Retry
+
+While `status` reads `failed` or `blocked`, [retry_steering_repo_provision](steering_repo.provision.retry.md) resumes the same setup from the step that stopped it, instead of starting over (#4750).
 
 ## Refusals
 

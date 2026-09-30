@@ -359,7 +359,7 @@ describe("PolicyDecisions by who decided", () => {
       screen
         .getAllByTestId("policy-decided-by")
         .map((line) => line.textContent),
-    ).toEqual(["who decided is not recorded", "decided by sandbox"]);
+    ).toEqual(["decider not recorded", "decided by sandbox"]);
     expect(screen.queryByTestId("harness-checks")).toBeNull();
   });
 

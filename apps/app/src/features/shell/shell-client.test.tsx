@@ -307,7 +307,7 @@ describe("the user-menu trigger", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's ten links, Runtimes among them, and the current page", () => {
+  it("renders exactly the mockup's eight links, with Tools and Runtimes folded into Agents, and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
@@ -315,9 +315,7 @@ describe("sidebar", () => {
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Fleet", "/acme/core-platform"],
       ["Agents", "/acme/core-platform/agents"],
-      ["Tools", "/acme/core-platform/tools"],
       ["Steering", "/acme/core-platform/steering"],
-      ["Runtimes", "/acme/core-platform/runtimes"],
       ["Repositories", "/acme/core-platform/repositories"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
@@ -326,7 +324,7 @@ describe("sidebar", () => {
     ]);
     for (const link of links)
       expect(link.getAttribute("href")).not.toMatch(
-        /^\/acme\/core-platform\/(ontology|skills)(\/|$)/,
+        /^\/acme\/core-platform\/(ontology|skills|tools|runtimes)(\/|$)/,
       );
     expect(
       within(main).getByRole("link", { name: "Agents" }),
@@ -341,14 +339,14 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(10);
+    expect(within(main).getAllByRole("link")).toHaveLength(8);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(within(main).getByRole("link", { name: "Tools" })).toHaveAttribute(
+    expect(within(main).getByRole("link", { name: "Agents" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents",
     );
     expect(screen.getByTestId("workspace-switcher")).toHaveTextContent(
       "Core platform",
@@ -427,10 +425,8 @@ describe("command menu", () => {
     expect(labelsOf(menu)).toEqual([
       "Fleet",
       "Agents",
-      "Tools",
       "Steering",
       "Spend",
-      "Runtimes",
       "Repositories",
       "Organization",
       "Roles",
@@ -440,7 +436,7 @@ describe("command menu", () => {
       "Open the assistant",
       "Ask why a run came back tampered",
       "Ask what an agent cost this month",
-      "Mint a model key for this organization",
+      "Create a model key for this organization",
       "Create anything",
       "Add a skill",
       "Write a context record",
@@ -455,14 +451,14 @@ describe("command menu", () => {
       "Create an API key",
       "list_runs",
     ]);
-    // The five pages carry ⌘1 to ⌘5, as the mockup's Go group draws them.
+    // The four pages carry ⌘1 to ⌘4, Tools being a tab of Agents now.
     expect(
       within(menu).getByRole("option", { name: /^Spend/ }),
-    ).toHaveTextContent("⌘5");
+    ).toHaveTextContent("⌘4");
     // The group notes, and the search named as the governed read it is.
     expect(menu).toHaveTextContent("Each one is a governed action.");
     expect(menu).toHaveTextContent(
-      "Risk and side effect, the same trailer the model sees.",
+      "Each tool shows the risk and side effect the model sees.",
     );
     // A tool row's chips have no field to read yet, and the menu says so.
     const toolsGap = within(menu).getByTestId("command-tools-not-backed");
@@ -471,7 +467,7 @@ describe("command menu", () => {
       "search_tools returns no version, risk, side effect or decision for a tool yet.",
     );
     expect(within(menu).getByTestId("command-footer-note")).toHaveTextContent(
-      "search_tools · this search is itself a governed call, recorded in the audit record",
+      "search_tools records this search in the audit record.",
     );
     expect(searchCommands).toHaveBeenCalledWith("acme", "core-platform", "");
     await user.type(input, "api keys");

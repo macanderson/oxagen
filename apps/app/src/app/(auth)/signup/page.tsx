@@ -15,8 +15,8 @@ import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
 
 // The one sign-in page whose document title is not its h1 (ARCHITECTURE.md
-// §1.2): the h1 is the tagline, so the tab and a screen reader's window list
-// name the page by its eyebrow, "Create your account".
+// §1.2): the tab and a screen reader's window list name the page by its
+// eyebrow, "Create your account".
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("auth");
   return { title: t("signup.eyebrow") };
@@ -49,7 +49,7 @@ async function Signup({
         title={pages("signup")}
         description={t("signup.lead")}
       />
-      {/* Verify email's Change it returns the address here, editable. */}
+      {/* Verify email's Change email returns the address here, editable. */}
       <SignupForm next={next} email={queryEmail(params.email)} />
       <AuthFooter>
         {t("signup.haveAccount")}{" "}

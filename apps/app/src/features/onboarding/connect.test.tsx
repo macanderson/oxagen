@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // Connect a code host, onboarding step 2: who may see it (an org Owner or
-// Admin, checked before anything renders), the two GitHub apps and where each
-// install returns, the GitLab form, the continue to the first workspace, and
-// the line a GitHub install leaves behind. Axe runs after every test.
+// Admin, checked before anything renders), the one GitHub app with Install
+// before Authorize and where both return, the GitLab form, the continue to the
+// first workspace, and the line a GitHub connect leaves behind. The hrefs come
+// from the real steeringGithubHref, so the query each link sends is the one
+// the API reads. Axe runs after every test.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,16 +19,15 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("@/features/steering-repo", () => ({
-  steeringGithubHref: (
-    org: string,
-    leg: { app: string; mode: string },
-    returnTo: string,
-  ) =>
-    `/api/v1/${org}/connections/steering/github?app=${leg.app}&mode=${leg.mode}&return_to=${returnTo}`,
-  steeringGitlabPath: (org: string) =>
-    `/api/v1/${org}/connections/steering/gitlab`,
-}));
+// The lane's barrel pulls in server reads the step never calls. The two href
+// builders come through unchanged from the lane's own module.
+vi.mock("@/features/steering-repo", async () => {
+  const { steeringGithubHref, steeringGitlabPath } =
+    await vi.importActual<typeof import("../steering-repo/hrefs")>(
+      "../steering-repo/hrefs",
+    );
+  return { steeringGithubHref, steeringGitlabPath };
+});
 vi.mock("@/server/session", () => ({
   getSession: vi.fn(),
   getAuthUser: () =>
@@ -48,6 +49,11 @@ function ctxAs(orgRole: "owner" | "admin" | "member") {
   });
 }
 
+/** A link's href, parsed, so a test reads its path and query apart. */
+function hrefOf(link: HTMLElement) {
+  return new URL(link.getAttribute("href") ?? "", "https://app.oxagen.sh");
+}
+
 afterEach(async () => {
   try {
     await expectNoAxe(document.body);
@@ -58,7 +64,7 @@ afterEach(async () => {
 
 describe("Connect a code host", () => {
   it.each(["owner", "admin"] as const)(
-    "shows an %s both GitHub apps, the GitLab form and the continue, with step 2 current",
+    "shows an %s the Oxagen app, the GitLab form and the continue, with step 2 current",
     async (role) => {
       const element = await WelcomeConnect({ ctx: ctxAs(role), result: null });
       render(<IntlProvider>{element}</IntlProvider>);
@@ -80,24 +86,34 @@ describe("Connect a code host", () => {
       expect(
         within(github).getByRole("heading", { name: "GitHub" }),
       ).toBeInTheDocument();
-      expect(screen.getByTestId("connect-github-steering")).toHaveTextContent(
-        "Oxagen Steering",
-      );
+      const app = within(github).getByTestId("connect-github-app");
       expect(
-        screen.getByTestId("connect-github-steering-install"),
-      ).toHaveAttribute(
-        "href",
-        "/api/v1/acme/connections/steering/github?app=steering&mode=install&return_to=/welcome/acme/new-workspace",
+        within(app).getByRole("heading", { level: 3, name: "Oxagen" }),
+      ).toBeInTheDocument();
+
+      const install = within(app).getByTestId("connect-github-install");
+      expect(within(app).getByRole("link", { name: "Install Oxagen" })).toBe(
+        install,
       );
-      expect(
-        screen.getByRole("link", { name: "Install Oxagen Steering" }),
-      ).toBe(screen.getByTestId("connect-github-steering-install"));
-      expect(
-        screen.getByTestId("connect-github-oxagen-install"),
-      ).toHaveAttribute(
-        "href",
-        "/api/v1/acme/connections/steering/github?app=oxagen&mode=install&return_to=/welcome/acme/new-workspace/connect",
+      expect(hrefOf(install).pathname).toBe(
+        "/api/v1/acme/connections/steering/github",
       );
+      expect(Object.fromEntries(hrefOf(install).searchParams)).toEqual({
+        mode: "install",
+        return_to: "/welcome/acme/new-workspace",
+      });
+
+      const authorize = within(app).getByTestId("connect-github-authorize");
+      expect(within(app).getByRole("link", { name: "Authorize Oxagen" })).toBe(
+        authorize,
+      );
+      expect(hrefOf(authorize).pathname).toBe(
+        "/api/v1/acme/connections/steering/github",
+      );
+      expect(Object.fromEntries(hrefOf(authorize).searchParams)).toEqual({
+        mode: "authorize",
+        return_to: "/welcome/acme/new-workspace",
+      });
 
       const gitlab = screen.getByTestId("connect-gitlab");
       expect(
@@ -114,6 +130,21 @@ describe("Connect a code host", () => {
       expect(screen.queryByTestId("steering-error")).toBeNull();
     },
   );
+
+  it("puts Install before Authorize, and neither link names an app", async () => {
+    const element = await WelcomeConnect({ ctx: ctxAs("owner"), result: null });
+    render(<IntlProvider>{element}</IntlProvider>);
+    const app = screen.getByTestId("connect-github-app");
+    const links = within(app).getAllByRole("link");
+    expect(links.map((link) => link.dataset.testid)).toEqual([
+      "connect-github-install",
+      "connect-github-authorize",
+    ]);
+    for (const link of links) {
+      expect(hrefOf(link).searchParams.has("app")).toBe(false);
+      expect(link.getAttribute("href")).not.toContain("app=");
+    }
+  });
 
   it("shows a member the denied state and no install links (negative)", async () => {
     const element = await WelcomeConnect({

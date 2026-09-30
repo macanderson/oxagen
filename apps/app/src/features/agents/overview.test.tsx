@@ -163,7 +163,7 @@ describe("Overview › cache TTL", () => {
     );
     expect(
       within(coaching).getByRole("link", { name: "Open the finding" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?finding=fnd_ttl");
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings?finding=fnd_ttl");
     // The TTL is proposed, so the note no longer says nothing is.
     expect(within(coaching).getByTestId("not-backed")).toHaveTextContent(
       "Other coaching is read off the token classes, and the record does not split input by class yet.",
@@ -277,7 +277,7 @@ describe("Overview › composition", () => {
     const composition = region("Composition");
     expect(composition).toHaveTextContent("no steering manifest is recorded");
     expect(composition).toHaveTextContent(
-      "steering is a workspace library; this agent holds a reference, never a copy",
+      "this agent reads the workspace steering library by reference",
     );
     expect(composition).toHaveTextContent("the belt could not be read");
     expect(composition).toHaveTextContent("1 role · mandates not readable");
@@ -321,7 +321,7 @@ describe("Overview › composition", () => {
     renderOverview({ lastRun: null });
     const composition = region("Composition");
     expect(composition).toHaveTextContent("build-01");
-    expect(composition).toHaveTextContent("linux · bundle mode enforce");
+    expect(composition).toHaveTextContent("linux in bundle mode enforce");
     expect(within(composition).queryByText("harness")).toBeNull();
     cleanup();
     renderOverview({ detail: agentDetail({ hosts: [] }) });

@@ -21,6 +21,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { nth } from "@/test/nth";
 import { phoneWidth } from "@/test/phone";
+import { optionNames, pickOption } from "@/test/select";
 import {
   enrollment,
   memberList,
@@ -51,8 +52,7 @@ const setRuntimeContainment = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
   unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
   createRuntime: (...args: unknown[]) => createRuntime(...args),
-  setRuntimeContainment: (...args: unknown[]) =>
-    setRuntimeContainment(...args),
+  setRuntimeContainment: (...args: unknown[]) => setRuntimeContainment(...args),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -62,6 +62,7 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const { Runtimes } = await import("./runtimes");
 const { Runtime } = await import("./runtime");
 const { RuntimesLoading } = await import("./loading");
+const { AddRuntime } = await import("./controls");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -109,6 +110,17 @@ async function renderDetail(
   return calls;
 }
 
+/** Add a runtime, as the Agents page header draws it for an Owner or Admin. */
+async function openAddRuntime() {
+  render(
+    <IntlProvider>
+      <AddRuntime org="acme" ws="core-platform" gold={false} />
+    </IntlProvider>,
+  );
+  fireEvent.click(screen.getByTestId("runtimes-add"));
+  return screen.findByTestId("runtimes-add-dialog");
+}
+
 /** One host's row on the list, by its enrollment id. */
 const hostRow = (id: string): HTMLElement => {
   const found = document.querySelector<HTMLElement>(`[data-runtime="${id}"]`);
@@ -135,7 +147,7 @@ afterEach(async () => {
 });
 
 describe("Runtimes, loaded", () => {
-  it("draws the header, the four tiles, the hosts table and the ladder in the spec's order", async () => {
+  it("draws the four tiles, the hosts table and the ladder in the spec's order, under no header of its own", async () => {
     await renderList({
       list: runtimeList([
         enrollment(),
@@ -161,19 +173,11 @@ describe("Runtimes, loaded", () => {
         }),
       ]),
     });
-    expect(screen.getByText("Core platform")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Runtimes" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "The hosts agents run on, and what each host’s seam earns.",
-      ),
-    ).toBeInTheDocument();
-    const add = screen.getByTestId("runtimes-add");
-    expect(add).toHaveTextContent("Add a runtime");
-    expect(add).toHaveAttribute("aria-haspopup", "dialog");
-    expect(goldButtons()).toEqual([add]);
+    // The list is the Runtimes tab of the Agents page, whose header carries
+    // the title and Add a runtime (features/agents/area.tsx).
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("runtimes-add")).toBeNull();
+    expect(goldButtons()).toEqual([]);
 
     const tiles = screen.getByTestId("runtimes-tiles");
     expect(
@@ -187,10 +191,10 @@ describe("Runtimes, loaded", () => {
       within(screen.getByTestId("tile-agents")).getByText("2"),
     ).toBeInTheDocument();
     expect(screen.getByTestId("tile-agents")).toHaveTextContent(
-      "a host is shared; its hooks see every one of them",
+      "every agent on a host shares its hooks",
     );
     expect(screen.getByTestId("tile-runtimes")).toHaveTextContent(
-      "4 agent enrollments recorded; no host row yet",
+      "4 agent enrollments recorded",
     );
     for (const id of ["tile-runtimes", "tile-tier", "tile-degraded"])
       expect(
@@ -200,7 +204,7 @@ describe("Runtimes, loaded", () => {
       "computed per run from what was actually routed",
     );
     expect(screen.getByTestId("tile-degraded")).toHaveTextContent(
-      "a gap is a hole in the record, not a failed run",
+      "hosts with a telemetry gap in the last 24 hours",
     );
 
     const hosts = screen.getByRole("region", { name: "Enrolled hosts" });
@@ -235,9 +239,11 @@ describe("Runtimes, loaded", () => {
     const health = within(hosts).getByRole("combobox", {
       name: "Filter by Health",
     });
-    expect(
-      [...health.querySelectorAll("option")].map((o) => o.textContent),
-    ).toEqual(["All · Health", "not enrolled", "not recorded"]);
+    expect(await optionNames(userEvent.setup(), health)).toEqual([
+      "All (Health)",
+      "not enrolled",
+      "not recorded",
+    ]);
     expect(
       within(hosts).queryByRole("combobox", { name: "Filter by Kind" }),
     ).toBeNull();
@@ -260,10 +266,10 @@ describe("Runtimes, loaded", () => {
     // Nothing but the table and the note: the spec draws no paragraph above it.
     expect(within(hosts).queryByTestId("runtimes-record")).toBeNull();
     expect(hosts).toHaveTextContent(
-      "The tier is a property of the seam, not of the agent: two agents on one host earn the same tier, and the same agent moved to a weaker host earns less. It is computed per run from what was actually routed and is never upgraded after the fact.",
+      "The host sets the tier, so every agent on one host earns the same tier. Oxagen computes it per run from what was routed and does not raise it later.",
     );
 
-    const ladder = screen.getByRole("region", { name: "The tier ladder" });
+    const ladder = screen.getByRole("region", { name: "Tier ladder" });
     expect(
       [...within(ladder).getByTestId("tier-ladder").querySelectorAll("li")].map(
         (li) => li.getAttribute("data-rung"),
@@ -378,7 +384,7 @@ describe("Runtimes, loaded", () => {
     );
     expect(cells[2]).toHaveTextContent("none reported");
     expect(cells[3]).toHaveTextContent("not reported");
-    expect(cells[5]).toHaveTextContent(/^0enrolled, nothing assigned$/);
+    expect(cells[5]).toHaveTextContent(/^0enrolled with no agent assigned$/);
     // A daemon that has not reported yet is not a backend gap: no data-gap.
     const collector = nth(cells, 6, "cell");
     expect(collector.firstElementChild).toHaveTextContent("not reported yet");
@@ -446,18 +452,17 @@ describe("Runtimes, loaded", () => {
       },
     );
 
-    fireEvent.change(
+    const user = userEvent.setup();
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "not enrolled" },
-      },
+      "not enrolled",
     );
     expect(shown()).toEqual(["host-03"]);
-    fireEvent.change(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "" },
-      },
+      "All (Health)",
     );
 
     const runtime = screen.getByRole("columnheader", { name: "Runtime" });
@@ -484,7 +489,7 @@ describe("Runtimes, loaded", () => {
       "cell",
     );
     expect(cells[0]).toHaveTextContent(
-      "macOS · version and architecture not reported",
+      "macOS (version and architecture not reported)",
     );
     expect(cells[2]).toHaveTextContent("Codex CLI version not recorded");
     expect(cells[2]).toHaveTextContent("acme-bot version not recorded");
@@ -533,21 +538,24 @@ describe("Runtimes, loaded", () => {
 });
 
 describe("Runtimes, not loaded", () => {
-  it("shows the empty state with the spec's copy, one gold action and the CLI path", async () => {
+  it("shows the empty state with the spec's copy, Add a runtime in the default style and the CLI path", async () => {
     await renderList({ list: runtimeList([]) });
     const empty = screen.getByTestId("runtimes-empty");
     expect(
       within(empty).getByRole("heading", { name: "No runtime is enrolled" }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "Until a host enrolls, an agent has an identity and a toolbelt but no hook is installed. Its runs are graded observe, and no report can say more.",
+      "Until a host enrolls, an agent has an identity and a toolbelt but no installed hook. Its runs are graded observe.",
     );
-    // The header keeps Add a runtime; the empty state's copy of it is the gold one.
-    const adds = screen.getAllByTestId("runtimes-add");
-    expect(adds).toHaveLength(2);
-    expect(goldButtons()).toEqual([nth(adds, 1, "add button")]);
+    // The Agents page header keeps its own Add a runtime and Connect an agent,
+    // the page's one gold action, so the empty state's copy is not gold.
+    const add = within(empty).getByTestId("runtimes-add");
+    expect(add).toHaveTextContent("Add a runtime");
+    expect(add).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getAllByTestId("runtimes-add")).toEqual([add]);
+    expect(goldButtons()).toEqual([]);
     fireEvent.click(
-      within(empty).getByRole("button", { name: "Show the CLI path" }),
+      within(empty).getByRole("button", { name: "Enroll from the CLI" }),
     );
     const dialog = await screen.findByTestId("runtimes-cli-dialog");
     expect(dialog).toHaveTextContent("oxagen agent enroll");
@@ -617,7 +625,7 @@ describe("Runtimes, not loaded", () => {
     );
     const decided = screen.getByTestId("runtimes-decided-by");
     expect(decided).toHaveTextContent(
-      "policy not recorded · deny wins over every allow",
+      "policy not recorded",
     );
     expect(decided.querySelector("[data-not-backed]")).toHaveAttribute(
       "data-gap",
@@ -676,13 +684,19 @@ describe("One runtime", () => {
     );
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const host = screen.getByRole("region", { name: "mbell-mbp-16" });
     const subtitle = screen.getByTestId("runtime-subtitle");
-    expect(subtitle).toHaveTextContent(
-      "kind not recorded · macOS 15.6 · arm64 · started by not recorded",
-    );
+    expect(
+      within(subtitle)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "kind not recorded",
+      "macOS 15.6 · arm64",
+      "Started by not recorded",
+    ]);
     for (const gap of subtitle.querySelectorAll("[data-not-backed]"))
       expect(gap).toHaveAttribute("data-gap", "#3816");
     expect(host.querySelector("[data-health]")).toHaveTextContent(
@@ -711,7 +725,7 @@ describe("One runtime", () => {
       "tachod 1.6.2telemetry gaps in the last 24h not recorded",
     );
     expect(screen.getByTestId("fact-hook-binary")).toHaveTextContent(
-      "tacho-hook 1.6.2 · fails closed against its cached bundle",
+      "tacho-hook 1.6.2 (fails closed against its cached bundle)",
     );
     expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
       "every harness config names the loopback proxy",
@@ -760,7 +774,7 @@ describe("One runtime", () => {
     expect(row).toHaveTextContent("prn_01JQ8W3F2M6XKD7A9RZT4BVCNE");
     expect(row).toHaveTextContent("212");
     expect(agents).toHaveTextContent(
-      "Every agent here is seen through the same hooks and earns the same tier. An agent’s identity, its steering and its toolbelt are its own; only the seam is shared.",
+      "Every agent on this host shares its hooks and earns the same tier. Each keeps its own identity, steering, and toolbelt.",
     );
 
     const rollback = screen.getByRole("region", { name: "Rollback" });
@@ -768,7 +782,7 @@ describe("One runtime", () => {
       "oxagen agent unenroll release-manager \\ --host tch_mbellmbp16aaaaaaaaaaaaa",
     );
     expect(rollback).toHaveTextContent(
-      "If hooks are stripped by hand instead, the next run records hooks_removed and the tier falls to observe. It is never upgraded after the fact.",
+      "If hooks are stripped by hand instead, the next run records hooks_removed and the tier falls to observe. A recorded tier does not change later.",
     );
     expect(
       within(rollback).getByRole("button", { name: "Run a smoke session" }),
@@ -872,7 +886,7 @@ describe("One runtime", () => {
       list: runtimeList([enrollment({ modelRoute: "mixed" })]),
     });
     expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
-      "loopback proxy and provider directsome harness configs name the loopback proxy and some send model traffic to the provider direct",
+      "loopback proxy and provider directsome harness configs name the loopback proxy and others go straight to the provider",
     );
     expect(screen.getByTestId("fact-model-surface")).not.toHaveTextContent(
       "every harness config",
@@ -890,10 +904,10 @@ describe("One runtime", () => {
       "iam_principals_unavailable",
     );
     expect(screen.getByTestId("fact-hook-binary")).toHaveTextContent(
-      "allows when its bundle is stale, because this host is in observe mode",
+      "allows on a stale bundle in observe mode",
     );
     expect(screen.getByTestId("fact-model-surface")).toHaveTextContent(
-      "routing it is the gateway tier",
+      "model traffic goes from the harness straight to its provider",
     );
   });
 
@@ -968,7 +982,7 @@ describe("One runtime", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unenroll" }));
     const dialog = await screen.findByTestId("runtime-unenroll-dialog");
     expect(
-      within(dialog).getByRole("heading", { name: "Unenroll mbell-mbp-16?" }),
+      within(dialog).getByRole("heading", { name: "Unenroll mbell-mbp-16" }),
     ).toBeInTheDocument();
     expect(dialog).toHaveTextContent(
       "Calls routed through Oxagen are refused from this host from now on. The hooks stay on the host until the rollback command runs there",
@@ -977,10 +991,10 @@ describe("One runtime", () => {
       "This revokes the enrollment of acme.core.release-manager on this machine.",
     );
     expect(
-      within(dialog).getByRole("button", { name: "Keep it enrolled" }),
+      within(dialog).getByRole("button", { name: "Keep runtime" }),
     ).toBeInTheDocument();
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Unenroll it" }),
+      within(dialog).getByRole("button", { name: "Unenroll runtime" }),
     );
     await waitFor(() => {
       expect(refresh).toHaveBeenCalledOnce();
@@ -1025,7 +1039,7 @@ describe("One runtime", () => {
       fireEvent.click(screen.getByRole("button", { name: "Unenroll" }));
       const dialog = await screen.findByTestId("runtime-unenroll-dialog");
       fireEvent.click(
-        within(dialog).getByRole("button", { name: "Unenroll it" }),
+        within(dialog).getByRole("button", { name: "Unenroll runtime" }),
       );
       expect(
         await within(dialog).findByTestId("runtime-unenroll-failure"),
@@ -1040,7 +1054,7 @@ describe("One runtime", () => {
     fireEvent.click(screen.getByRole("button", { name: "Unenroll" }));
     const dialog = await screen.findByTestId("runtime-unenroll-dialog");
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Unenroll it" }),
+      within(dialog).getByRole("button", { name: "Unenroll runtime" }),
     );
     expect(
       await within(dialog).findByTestId("runtime-unenroll-failure"),
@@ -1166,9 +1180,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("fills the slug from the name, dropping apostrophes, until the slug is edited", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1192,9 +1204,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_macslaptop",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1216,9 +1226,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
       reason: "conflict",
       code: "runtime_slug_taken",
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1245,9 +1253,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_gpubox",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1290,9 +1296,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("refuses an empty name without calling the write (negative)", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
     expect(await within(dialog).findByText("Name the runtime.")).toBeVisible();
     expect(createRuntime).not.toHaveBeenCalled();
@@ -1367,7 +1371,7 @@ describe("A named runtime's page and its containment (ADR-204)", () => {
     await renderNamed();
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const facts = screen.getByRole("region", { name: "Mac's laptop" });
     expect(

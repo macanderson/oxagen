@@ -127,7 +127,7 @@ describe("LoginForm", () => {
       "Continue with Google",
       "Continue with GitHub",
       "input#login-email",
-      "Forgot password?",
+      "Reset password",
       "input#login-password",
       "Show",
       "input#rememberMe",
@@ -148,7 +148,7 @@ describe("LoginForm", () => {
       "current-password",
     );
     expect(
-      screen.getByRole("link", { name: "Forgot password?" }),
+      screen.getByRole("link", { name: "Reset password" }),
     ).toHaveAttribute("href", "/forgot-password");
     expect(
       screen.getByLabelText("Keep me logged in on this device for 30 days"),
@@ -392,13 +392,13 @@ describe("LoginForm", () => {
 });
 
 describe("InviteHint", () => {
-  it("Accept it says where the invitation opens", async () => {
+  it("Accept invitation says where the invitation opens", async () => {
     renderWithIntl(
       <p>
         <InviteHint />
       </p>,
     );
-    const button = screen.getByRole("button", { name: "Accept it" });
+    const button = screen.getByRole("button", { name: "Accept invitation" });
     expect(button).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(button);
     expect(button).toHaveAttribute("aria-expanded", "true");
@@ -690,7 +690,7 @@ describe("SignupForm", () => {
     });
   });
 
-  it("an address returned by Verify email's Change it starts in the field, editable", async () => {
+  it("an address returned by Verify email's Change email starts in the field, editable", async () => {
     live.liveSignUp.mockResolvedValue({ ok: true, needsVerification: true });
     renderWithIntl(<SignupForm email="marcus@a-intel.example" />);
     const field = screen.getByLabelText("Work email");
@@ -1120,7 +1120,7 @@ describe("ForgotPasswordForm", () => {
     );
     const alert = await screen.findByRole("alert");
     expect(alert.querySelector("b")).toHaveTextContent(
-      "We could not send that email.",
+      "Oxagen could not send that email.",
     );
     expect(alert).toHaveTextContent("Try again in a minute.");
   });
@@ -1757,10 +1757,10 @@ describe("AuthAlert and AuthTags", () => {
       "SOC 2 evidence built in",
     ];
     renderWithIntl(
-      <AuthTags label="What every organization gets" tags={tags} />,
+      <AuthTags label="Included features" tags={tags} />,
     );
     const list = screen.getByRole("list", {
-      name: "What every organization gets",
+      name: "Included features",
     });
     expect(
       within(list)

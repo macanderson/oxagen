@@ -26,19 +26,19 @@
     "tiles": {
       "label": "Billing this period",
       "plan": "Plan",
-      "planMonth": "monthly, cancel any time",
-      "planYear": "yearly, cancel any time",
+      "planMonth": "monthly and cancellable at any time",
+      "planYear": "yearly and cancellable at any time",
       "planNone": "no subscription",
       "governed": "Governed actions this period",
-      "governedNote": "above the included allowance · <basis></basis>",
+      "governedNote": "above the included allowance (<basis></basis>)",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
       "due": "Due {date}",
-      "dueNote": "{currency} · after the onboarding discount"
+      "dueNote": "{currency} after the onboarding discount"
     },
     "thisPeriod": {
       "title": "This period",
-      "badge": "Stripe invoices, Oxagen meter",
+      "badge": "Metered by Oxagen and invoiced by Stripe",
       "columns": {
         "line": "Line",
         "basis": "Basis",
@@ -53,12 +53,12 @@
         "total": "Total"
       },
       "basis": {
-        "tokens": "reported at zero · the customer’s own model spend is on Spend",
+        "tokens": "reported at zero (your model spend is on Spend)",
         "retention": "{months} months included · {held}",
         "retentionExtended": "{months} months included · {held} · extended retention on",
         "heldNotRecorded": "GB held not recorded",
         "discount": "the onboarding offer is not recorded yet (spec §20, deferred)",
-        "total": "rounded to cents once, half-even"
+        "total": "rounded once to cents (half-even)"
       }
     },
     "meters": {
@@ -69,15 +69,15 @@
         "note": "Note"
       },
       "governed": "Governed actions",
-      "governedNote": "the billable unit · {included} included this month",
+      "governedNote": "the billable unit ({included} included this month)",
       "sealed": "Sealed runs with at least one model call",
-      "sealedNote": "reported, not priced",
+      "sealedNote": "reported without a price",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
       "halted": "Runs Oxagen halted before any model call",
       "inApp": "Runs of the in-app agent",
       "free": "free",
-      "note": "One priced meter: the governed action, a call Oxagen decided, delivered and recorded. Runs, tokens and retained evidence are reported so the price can move later without rewriting the meter."
+      "note": "The governed action is the one priced meter: a call Oxagen decided, delivered, and recorded. Oxagen reports the other meters without a price."
     },
     "invoices": {
       "title": "Invoices",
@@ -119,14 +119,14 @@
       },
       "anchor": "Any day in the period",
       "anchorHint": {
-        "week": "The UTC week, Monday to Sunday, that contains this day.",
+        "week": "The UTC week from Monday to Sunday that contains this day.",
         "month": "The UTC calendar month that contains this day.",
         "quarter": "The UTC calendar quarter that contains this day.",
         "year": "The UTC calendar year that contains this day."
       },
       "firstDay": "First day",
       "lastDay": "Last day",
-      "customHint": "Both days are included, in UTC. Three days at least, 366 at most.",
+      "customHint": "The range includes both days in UTC and spans 3 to 366 days.",
       "download": {
         "csv": "Download CSV",
         "html": "Download HTML"
@@ -154,28 +154,28 @@
       "title": "Price list",
       "free": "Free",
       "freeTerms": "every governance feature, an included monthly allowance, <nr>days of evidence not recorded</nr>, <nr>seats not recorded</nr>",
-      "blocks": "Governed actions, blocks of {count}",
+      "blocks": "Governed actions in blocks of {count}",
       "blocksTerms": "<price></price> per block at the published rate",
       "negotiated": "Negotiated agreement",
-      "negotiatedTerms": "the same four figures, per organization",
+      "negotiatedTerms": "the same four figures negotiated per organization",
       "invoice": "Invoice billing",
-      "invoiceTerms": "never capped · overage invoiced at the contracted rate at period end",
+      "invoiceTerms": "uncapped with overage invoiced at the contracted rate at period end",
       "retention": "Evidence retention",
-      "retentionTerms": "{months} months included on paid plans, then <price></price> per GB-month",
+      "retentionTerms": "{months} months included on paid plans and <price></price> per GB-month after that",
       "tokens": "Tokens Oxagen buys for you",
-      "tokensTerms": "at cost, no markup, capped",
-      "enterprise": "Enterprise, annual",
+      "tokensTerms": "at cost and capped",
+      "enterprise": "Enterprise (annual)",
       "enterpriseTerms": "from <nr>not recorded</nr> per year",
-      "footer": "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident."
+      "footer": "The free tier includes every feature at any volume. Its limits are evidence retention and seats."
     },
     "billableUnits": {
       "title": "Billable units",
       "priced": "Priced",
       "pricedBody": "A governed action: a call Oxagen decided, delivered and recorded, with its receipt in the chain.",
       "reported": "Reported",
-      "reportedBody": "Sealed runs, tokens by class, retained evidence: secondary meters, never priced.",
+      "reportedBody": "Oxagen reports sealed runs, tokens by class, and retained evidence as secondary meters without a price.",
       "free": "Free",
-      "freeBody": "Denials, runs Oxagen halted before a model call, runs of the in-app agent. You never pay for Oxagen saying no."
+      "freeBody": "Denials, runs Oxagen halted before a model call, and runs of the in-app agent cost nothing."
     },
     "autoTopup": {
       "title": "Auto top-up",
@@ -194,7 +194,7 @@
       "attempt": {
         "none": "No auto top-up has run this month.",
         "paid": "Last top-up {date}: paid",
-        "open": "Last top-up {date}: open, its invoice is under Invoices",
+        "open": "Last top-up {date}: open under Invoices",
         "failed": "Last top-up {date}: failed"
       }
     },
@@ -224,7 +224,7 @@
       "exhausted": "The in-app agent's turns on Oxagen's model key stop until a top-up lands.",
       "presets": "Preset top-up amounts",
       "amount": "Top-up amount",
-      "min": "whole dollars, at least ${min}",
+      "min": "at least ${min} in whole dollars",
       "submit": "Continue to Checkout",
       "submitting": "Opening Checkout…",
       "denied": "An owner or a billing member can top up the token balance.",
@@ -239,9 +239,9 @@
       "open": "Change plan",
       "title": "Change plan",
       "plan": "Plan",
-      "perMonth": "{tier}, {price} a month",
-      "perYear": "{tier}, {price} a year",
-      "enterpriseOption": "Enterprise, annual, negotiated per organization",
+      "perMonth": "{tier} ({price} a month)",
+      "perYear": "{tier} ({price} a year)",
+      "enterpriseOption": "Enterprise (negotiated annually per organization)",
       "note": "The free tier is in every plan: an included monthly allowance of governed actions and every governance feature on. Enterprise adds a dedicated data plane or behind-the-firewall deployment, and support with an SLA.",
       "submit": "Change plan",
       "submitting": "Opening Checkout…",
@@ -276,7 +276,7 @@
       },
       "denied": {
         "title": "You cannot see billing",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code> (plan and invoices are readable only by a finance role). An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code> (plan and invoices are readable only by a finance role). An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
@@ -284,7 +284,7 @@
         "neededValue": "<code>{permission}</code>: plan and invoices are readable only by a finance role",
         "decidedBy": "Decided by",
         "signedInValue": "{name} · {role}",
-        "decidedByValue": "<policy>policy version not recorded</policy> · deny wins over every allow"
+        "decidedByValue": "<policy>policy version not recorded</policy>"
       },
       "pending": {
         "title": "Access to billing is waiting for approval",

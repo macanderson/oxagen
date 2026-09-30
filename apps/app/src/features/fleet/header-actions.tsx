@@ -1,6 +1,6 @@
 "use client";
-// Fleet's two header actions (fleet.md, Header): Steer, which opens "Steer the
-// fleet", and Register Agent, which opens the three-step register gate at its
+// Fleet's two header actions (fleet.md, Header): Steer the fleet, which opens
+// its dialog, and Register an agent, which opens the three-step register gate at its
 // first step. Neither is gold: runs are not started here, and the page's gold
 // is Approve in the shell's drawer or the primary button of an open dialog.
 import { useTranslations } from "next-intl";

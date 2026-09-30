@@ -95,7 +95,7 @@
       },
       "denied": {
         "title": "You cannot see this workspace’s repositories",
-        "body": "Your roles on <strong>{org}</strong> do not include <code>{needed}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <strong>{org}</strong> do not include <code>{needed}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "needed": "{permission} on {ws}",
         "request": "Request access",
         "requestNotRecorded": "Requesting access from this page is not recorded yet. Ask an organization owner for {needed}.",
@@ -104,7 +104,7 @@
         "signedIn": "{name} · <code>{role}</code>",
         "neededTerm": "Needed",
         "decidedByTerm": "Decided by",
-        "decidedBy": "the organization's policy · deny wins over every allow"
+        "decidedBy": "the organization's policy"
       },
       "empty": {
         "title": "This workspace has no repository yet",
@@ -117,10 +117,10 @@
       "bannerBody": "Repository-scoped records live in that repository, so until it has a <code>.oxagen/</code> tree there is nowhere to put one, and a record that tried would have to claim workspace scope, which the checks refuse.",
       "addOxagenShort": "Add Oxagen",
       "title": "Repositories",
-      "subtitle": "One main repo, any number of linked. The main repo holds the workspace’s steering and configuration; a linked repo may hold records that steer only runs on it.",
+      "subtitle": "The main repo holds the workspace’s steering and configuration, and a linked repo may hold records that steer only runs on it.",
       "label": "Repositories this workspace can see",
       "search": "Search this list",
-      "all": "All · {column}",
+      "all": "All ({column})",
       "rows": "Rows per page",
       "pager": "Pages",
       "range": "{from}–{to} of {total}",
@@ -180,10 +180,10 @@
       "facts": {
         "productionBranch": "Production branch",
         "at": "<code>{branch}</code> at <code>{sha}</code>",
-        "branchMissing": "<code>{branch}</code> · missing on GitHub",
+        "branchMissing": "<code>{branch}</code> is missing on GitHub",
         "visibility": "Visibility",
         "oxagen": ".oxagen/",
-        "filesAt": "· {count, plural, one {# file} other {# files}} at <code>{sha}</code>",
+        "filesAt": "with {count, plural, one {# file} other {# files}} at <code>{sha}</code>",
         "issues": "Issues",
         "events": "Events",
         "codeGraph": "Code graph",
@@ -199,7 +199,7 @@
       "noTreeAvailable": "This repository is not linked to {workspace} either. Adding Oxagen to it is what links it.",
       "noTreeLinked": "Runs on this repository are steered by {main} and by nothing of its own. There is nowhere to publish a repository-scoped record until the tree exists.",
       "initOpen": "Pull request #{number} adds .oxagen/ and is waiting for a person to merge it.",
-      "initOpenLink": "Open it on GitHub",
+      "initOpenLink": "Open the pull request on GitHub",
       "retiredLead": "Connection retired",
       "retired": "This steering repository's connection was retired, so steering is off.",
       "unlink": "Unlink",
@@ -225,8 +225,8 @@
       "body": "Its issues and events stop reaching this workspace, and a run can no longer bind to it here. The repository is untouched: nothing is deleted, no branch moves, and <code>.oxagen/</code> stays where it is.",
       "governed": "Records published in this repository stop steering runs in {workspace} once the unlink takes effect. Runs already recorded keep naming the hashes they carried.",
       "copies": "Working copies linked through it are not recorded yet, so this cannot say how many stop appearing on the Working copies tab.",
-      "keep": "Keep it linked",
-      "submit": "Unlink it",
+      "keep": "Keep the repository linked",
+      "submit": "Unlink the repository",
       "pending": "Unlinking",
       "done": "{repository} unlinked from {workspace}. Runs already recorded keep naming it. Nothing new binds to it here."
     },
@@ -291,7 +291,7 @@
     },
     "linkdir": {
       "title": "Connect a directory",
-      "subtitle": "three commands, run in the directory",
+      "subtitle": "Run three commands in the directory",
       "lead": "Run these in a checkout of the repository you want linked. <code>oxagen init</code> reads the git remote, writes the one gitignored file that says which workspace this checkout talks to, and reports the directory to this workspace.",
       "commandLabel": "In the directory",
       "loginComment": "# once per machine",
@@ -391,7 +391,7 @@
         "pullRequest": "Pull request",
         "branch": "Branch",
         "openedBy": "Opened by",
-        "why": "Why"
+        "why": "Reason"
       },
       "branchValue": "<code>{branch}</code> → <code>{base}</code>",
       "whyNotRecorded": "not recorded",
@@ -401,7 +401,7 @@
       "checkColumns": {
         "check": "Check",
         "result": "Result",
-        "what": "What it asserted"
+        "what": "Assertion"
       },
       "results": {
         "passed": "pass",
@@ -410,7 +410,7 @@
         "pending": "queued"
       },
       "stopped": "<strong>{check} stopped the run.</strong> {summary} The checks behind it stayed queued, merge is disabled, and nothing was published.",
-      "mergeTitle": "What merge will do",
+      "mergeTitle": "Merge steps",
       "merge": {
         "squash": "Squash the branch onto <code>{base}</code>, pinned to the commit the checks ran on.",
         "deleteBranch": "Delete the head branch.",
@@ -444,7 +444,7 @@
     },
     "config": {
       "on": "On <code>{repository}</code> at <code>{sha}</code>",
-      "notIndexed": "On <code>{repository}</code> · not indexed yet",
+      "notIndexed": "On <code>{repository}</code> and not indexed yet",
       "noMain": "This workspace binds no main repository, so there is no .oxagen/ to show.",
       "loading": "Reading .oxagen/ from {repository}",
       "workspaceMissing": "Not on the production branch yet. Add Oxagen to this repository to put it there.",
@@ -525,7 +525,7 @@
         "columns": {
           "permission": "Permission",
           "level": "Level",
-          "for": "What it is for"
+          "for": "Purpose"
         },
         "rows": {
           "contents": {
@@ -587,10 +587,10 @@
           },
           "governanceToml": "mode = {mode}",
           "rules": "published records land here",
-          "proposals": "candidates; steer nothing",
+          "proposals": "candidates that steer nothing until merged",
           "gitignore": "ignore .stella/private/ and the local .oxagen/workspace.json"
         },
-        "checksLabel": "What the checks will assert",
+        "checksLabel": "Pull request checks",
         "checks": {
           "schema": "<code>workspace.toml</code> parses, and every repository it declares resolves through this installation.",
           "layout": "No <code>.oxagen/</code> exists on {branch}. Nothing is overwritten, and a repository that already has one is refused rather than merged into.",
@@ -600,7 +600,7 @@
         }
       },
       "opened": {
-        "opened": "Opened {repository}#{number} · Add Oxagen",
+        "opened": "Opened pull request {repository}#{number} to add Oxagen",
         "reused": "{repository}#{number} already adds .oxagen/. Nothing new was pushed.",
         "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
         "link": "Open #{number} on GitHub"
@@ -636,7 +636,7 @@
       "healthNote": {
         "healthy": "Every prescribed setting matches, and main holds only merged steering PRs.",
         "drifted": "A prescribed setting differs, so Oxagen merges and publishes nothing until an owner or admin repairs it.",
-        "disconnected": "Oxagen Steering lost its grant, so Oxagen merges and publishes nothing until an owner or admin authorizes it again.",
+        "disconnected": "Oxagen lost its grant on the host, so it merges and publishes nothing until an owner or admin authorizes it again.",
         "diverged": "Main has a commit no steering PR merged, so Oxagen opened a steering PR that reverts it.",
         "unknown": "Oxagen has not read the repository's health yet."
       },
@@ -665,7 +665,7 @@
       },
       "reauthorize": {
         "heading": "Authorization needed",
-        "body": "Oxagen Steering lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
+        "body": "Oxagen lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
         "action": "Re-authorize"
       },
       "banner": {

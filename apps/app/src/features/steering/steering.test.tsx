@@ -4,9 +4,9 @@
 // segments, the Library's shelf row and its All shelf, the empty, error,
 // denied and loading states, and each tab and shelf making only its own
 // reads: Records in its ok, filtered, empty and paged states, Proposals with
-// their support and the writes each state allows, Context PRs with the table
-// and the selected proposal's panel, and Assignments with the delivery
-// report. An axe check runs in every one. The panel's own states are in
+// their support, the writes each state allows and the page size Rows per page
+// picks (#4693), Context PRs with the table and the selected proposal's panel,
+// and Assignments with the delivery report. An axe check runs in every one. The panel's own states are in
 // context-pr-panel.test.tsx and the dialog's in governance.test.tsx.
 import {
   cleanup,
@@ -24,6 +24,7 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import {
   agentPage,
   contextPr,
@@ -41,8 +42,10 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// One push for the whole file, so a test can read where Rows per page went.
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("./actions", () => ({
   openContextPr: vi.fn(),
@@ -138,6 +141,35 @@ async function renderSteering(path = "", reads: Partial<SteeringReads> = {}) {
 }
 
 const section = (name: string) => screen.getByRole("region", { name });
+
+/** The row holding Rows per page, the range, and the "Pages" steps. */
+function pagesRow(): HTMLElement {
+  const row = screen
+    .getByRole("navigation", { name: "Pages" })
+    .closest<HTMLElement>("[data-rows-pager]");
+  if (row === null) throw new Error("the Pages steps sit in no pager");
+  return row;
+}
+
+/**
+ * `count` proposals, each with its own id and pull request, from a list of
+ * `total`: one page of a longer list.
+ */
+function proposalPage(count: number, total: number) {
+  return readOk({
+    proposals: Array.from({ length: count }, (_, i) =>
+      proposal({
+        id: `prp_01k5rw${String(i).padStart(2, "0")}`,
+        pr: {
+          number: 600 + i,
+          repository: "acme/core-platform",
+          branch: `context/ctx.page.${String(i)}`,
+        },
+      }),
+    ),
+    total,
+  });
+}
 
 afterEach(async () => {
   // INV-26: every test ends in a state of its section; axe checks it.
@@ -405,7 +437,11 @@ describe("the hub", () => {
   it("opens Skills with the page the URL names and gives the gold to Add a skill", async () => {
     const calls = await renderSteering("/skills?cursor=c2");
     expect(calls.proposals).toEqual([]);
-    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ ctx, cursor: "c2" });
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({
+      ctx,
+      cursor: "c2",
+      rows: 100,
+    });
     expect(screen.getByTestId("skills-tab")).toHaveAttribute(
       "data-cursor",
       "c2",
@@ -414,6 +450,14 @@ describe("the hub", () => {
       "data-create",
       "skill",
     );
+  });
+
+  it("hands Skills the page size the URL names (#4693)", async () => {
+    await renderSteering("/skills?rows=25&cursor=c2");
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({
+      cursor: "c2",
+      rows: 25,
+    });
   });
 
   it("presses the Context PRs segment on /proposals/prs", async () => {
@@ -490,35 +534,35 @@ describe("the Library, All shelf", () => {
   it("prints the stat strip with each tile's basis, and not recorded for what no read measures", async () => {
     await renderSteering("/library", { records: three });
     expect(screen.getByTestId("tile-items")).toHaveTextContent(
-      "Items3everything that can steer an agent here",
+      "Items3in force in this workspace",
     );
     expect(screen.getByTestId("tile-by-kind")).toHaveTextContent(
-      "By kindrecord 3one shape, every kind",
+      "By kindrecord 3count per kind",
     );
     expect(screen.getByTestId("tile-compiled-size")).toHaveTextContent(
-      "Compiled sizenot recordedif every item were rendered at once, which no run does",
+      "Compiled sizenot recordedall items rendered together",
     );
     expect(screen.getByTestId("tile-grants")).toHaveTextContent(
-      "Carry a grantnot recordedthese compile to a gate as well as to text",
+      "Enforcement grantsnot recordeditems that also compile to a gate",
     );
   });
 
   it("prints the lead note verbatim", async () => {
     await renderSteering();
     expect(screen.getByTestId("library-lead")).toHaveTextContent(
-      "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
+      "The assembler reads these items in this order and picks the ones each run receives.",
     );
   });
 
-  it("lists everything written down in the assembler's order under the design's columns", async () => {
+  it("lists all items in the assembler's order under the design's columns", async () => {
     await renderSteering("/library", { records: three });
-    const panel = section("Everything written down");
+    const panel = section("All items");
     expect(within(panel).getByTestId("library-count")).toHaveTextContent("3");
     expect(
-      within(panel).getByRole("link", { name: "Who receives it" }),
+      within(panel).getByRole("link", { name: "Open the assignments" }),
     ).toHaveAttribute("href", `${BASE}/assignments`);
     const table = within(panel).getByRole("table", {
-      name: "Everything written down",
+      name: "All items",
     });
     expect(
       within(table)
@@ -565,9 +609,9 @@ describe("the Library, All shelf", () => {
   it("says steering and gating are two planes, and names the issue the other shelves wait on on the values it leaves out", async () => {
     await renderSteering();
     expect(
-      screen.getByText(/Steering is what the model reads/),
+      screen.getByText(/show the text the model reads/),
     ).toHaveTextContent(
-      "advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked.",
+      "The Library, Assignments, and the Compiler show the text the model reads. Gates shows the calls Oxagen refuses.",
     );
     // The design's footer holds no gap paragraph; the tooltips carry the issue.
     expect(screen.queryByTestId("library-gap")).toBeNull();
@@ -609,7 +653,7 @@ describe("the Library, All shelf", () => {
         total: 12,
       });
     const lineages = () =>
-      within(screen.getByRole("table", { name: "Everything written down" }))
+      within(screen.getByRole("table", { name: "All items" }))
         .getAllByRole("row")
         .slice(1)
         .map((row) => row.getAttribute("data-lineage"));
@@ -702,15 +746,10 @@ describe("the Library, All shelf", () => {
         "Filter by Compiles to",
         "Filter by Force",
       ]);
-      fireEvent.change(
-        screen.getByRole("combobox", { name: "Filter by Force" }),
-        { target: { value: "must" } },
-      );
+      const force = screen.getByRole("combobox", { name: "Filter by Force" });
+      await pickOption(user, force, "must");
       expect(lineages()).toEqual(["ctx.r11"]);
-      fireEvent.change(
-        screen.getByRole("combobox", { name: "Filter by Force" }),
-        { target: { value: "" } },
-      );
+      await pickOption(user, force, "All (Force)");
       fireEvent.change(
         screen.getByRole("searchbox", { name: "Search this list" }),
         { target: { value: "Record 7." } },
@@ -767,7 +806,7 @@ describe("states", () => {
       await renderSteering(path, { records: none });
       const empty = section("Nothing steers this workspace yet");
       expect(empty).toHaveTextContent(
-        "Published records live in .oxagen/rules/ on acme/platform. A record becomes published by being merged, never by being saved here.",
+        "Published records live in .oxagen/rules/ on acme/platform. A record is published when its pull request merges.",
       );
       expect(
         within(empty).getByRole("button", { name: "Write a context record" }),
@@ -816,7 +855,7 @@ describe("states", () => {
     await renderSteering("", { records: DENIED });
     const denied = section("You cannot see this workspace’s steering");
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -842,7 +881,7 @@ describe("states", () => {
     expect(denied).toHaveTextContent("Neededsteering.read on core-platform");
     // The refusal does not carry the policy that decided it yet (#3846).
     expect(denied).toHaveTextContent(
-      "Decided bypolicy not recorded (#3846) · deny wins over every allow",
+      "Decided bypolicy not recorded (#3846)",
     );
     fireEvent.click(
       within(denied).getByRole("button", { name: "Request access" }),
@@ -934,7 +973,7 @@ describe("Records", () => {
     const card = within(section("Published records")).getByRole("article");
     expect(
       within(card).getByTitle("The last merge published this record"),
-    ).toHaveTextContent("new · bundle v12");
+    ).toHaveTextContent("New in v12");
   });
 
   it("marks no record when the freshness read fails, and still lists them (negative)", async () => {
@@ -985,6 +1024,7 @@ describe("Records", () => {
   });
 
   it("sorts the cards by label, with the title standing in for a record that declares none (ADR-178)", async () => {
+    const user = userEvent.setup();
     // The statements run the other way from the labels, so a sort by
     // statement would put the cards in the opposite order.
     await renderSteering("/records", {
@@ -1023,9 +1063,9 @@ describe("Records", () => {
     // Shown order is newest first.
     expect(labels()).toEqual(["Beta", "Alpha", "Gamma"]);
     const sort = within(panel).getByRole("combobox", { name: "Sort" });
-    fireEvent.change(sort, { target: { value: "asc" } });
+    await pickOption(user, sort, "Label A–Z");
     expect(labels()).toEqual(["Alpha", "Beta", "Gamma"]);
-    fireEvent.change(sort, { target: { value: "desc" } });
+    await pickOption(user, sort, "Label Z–A");
     expect(labels()).toEqual(["Gamma", "Beta", "Alpha"]);
   });
 
@@ -1189,7 +1229,7 @@ describe("Records", () => {
     expect(lineages()).toEqual(["ctx.r10", "ctx.r11"]);
     const rows = within(pager).getByRole("combobox", { name: "Rows" });
     await user.click(rows);
-    // Read the open list alone: the Sort select holds options too.
+    // Read the open list alone.
     const sizes = within(await screen.findByRole("listbox"));
     expect(sizes.getAllByRole("option").map((o) => o.textContent)).toEqual([
       "5",
@@ -1234,8 +1274,8 @@ describe("Proposals", () => {
       record: [],
       records: [[ctx, { kind: null, offset: 0 }]],
       proposals: [
-        [ctx, { offset: 0 }],
-        [ctx, { offset: 0 }],
+        [ctx, { offset: 0, limit: 50 }],
+        [ctx, { offset: 0, limit: 50 }],
       ],
       contextPr: [],
       freshness: [],
@@ -1297,6 +1337,98 @@ describe("Proposals", () => {
     );
   });
 
+  it("reads a page at the size the URL names and steps by it, keeping it", async () => {
+    const calls = await renderSteering("/proposals?rows=10&offset=10", {
+      proposals: proposalPage(10, 30),
+    });
+    expect(calls.proposals).toEqual([[ctx, { offset: 10, limit: 10 }]]);
+    const pager = pagesRow();
+    expect(
+      within(pager).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("10");
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "11 to 20 of 30",
+    );
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals?rows=10`);
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals?rows=10&offset=20`);
+  });
+
+  it("opens the first page at the size picked from Rows", async () => {
+    const user = userEvent.setup();
+    await renderSteering("/proposals?offset=50", {
+      proposals: proposalPage(10, 60),
+    });
+    push.mockClear();
+    const pager = pagesRow();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+    await user.click(within(pager).getByRole("combobox", { name: "Rows" }));
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(`${BASE}/proposals?rows=25`);
+    });
+  });
+
+  it("draws Rows under a list one page holds, with both steps disabled", async () => {
+    await renderSteering("/proposals");
+    const pager = pagesRow();
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "1 to 1 of 1",
+    );
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+  });
+
+  // The pager hides only under an empty first page. A later page that comes
+  // back empty, from a stale link or a list that shrank, keeps the way back.
+  it("keeps the way back on a later page that came back empty (negative)", async () => {
+    await renderSteering("/proposals?rows=10&offset=40", {
+      proposals: readOk({ proposals: [], total: 30 }),
+    });
+    const pager = pagesRow();
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals?rows=10&offset=30`);
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+    expect(pager.querySelector("[data-range]")).toBeNull();
+  });
+
+  it("keeps the size on both segments and on the link to a Context PR", async () => {
+    const calls = await renderSteering("/proposals?rows=25");
+    // The hub's gold check asks with the body's size, so the read table
+    // still answers the second ask (tab-primary.ts).
+    expect(calls.proposals).toEqual([
+      [ctx, { offset: 0, limit: 25 }],
+      [ctx, { offset: 0, limit: 25 }],
+    ]);
+    const segments = screen.getByRole("group", {
+      name: "Proposals or pull requests",
+    });
+    expect(
+      within(segments).getByRole("button", { name: "Candidates" }),
+    ).toHaveAttribute("href", `${BASE}/proposals?rows=25`);
+    expect(
+      within(segments).getByRole("button", { name: "Context PRs" }),
+    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=25`);
+    expect(
+      screen.getByRole("link", { name: "Context PR #519" }),
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals/prs?rows=25&proposal=${PROPOSAL_ID}`,
+    );
+  });
+
   it("renders a denied read in place of the proposals", async () => {
     await renderSteering("/proposals", { proposals: DENIED });
     expect(section("Proposals")).toHaveTextContent(
@@ -1319,8 +1451,8 @@ describe("Context PRs", () => {
     // The hub's gold check and the body ask for the same page; the kernel's
     // per-request read table serves the second (tab-primary.ts).
     expect(calls.proposals).toEqual([
-      [ctx, { offset: 0 }],
-      [ctx, { offset: 0 }],
+      [ctx, { offset: 0, limit: 50 }],
+      [ctx, { offset: 0, limit: 50 }],
     ]);
     expect(calls.contextPr).toEqual([]);
     const table = screen.getByRole("table", { name: "Context PRs" });
@@ -1367,6 +1499,35 @@ describe("Context PRs", () => {
       "No proposal on this page has a Context PR.",
     );
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("pages the Context PRs at the size the URL names, keeping it on each row", async () => {
+    const calls = await renderSteering("/proposals/prs?rows=10&offset=10", {
+      proposals: proposalPage(10, 30),
+    });
+    expect(calls.proposals).toEqual([[ctx, { offset: 10, limit: 10 }]]);
+    const table = screen.getByRole("table", { name: "Context PRs" });
+    expect(
+      within(table).getByRole("link", { name: "#600 on acme/core-platform" }),
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals/prs?rows=10&offset=10&proposal=prp_01k5rw00`,
+    );
+    const pager = pagesRow();
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=10`);
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=10&offset=20`);
+  });
+
+  it("draws no pager under an empty first page (negative)", async () => {
+    await renderSteering("/proposals/prs", {
+      proposals: readOk({ proposals: [], total: 0 }),
+    });
+    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Rows" })).toBeNull();
   });
 
   it("renders an error read in place of the table", async () => {

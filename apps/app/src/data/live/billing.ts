@@ -120,7 +120,12 @@ export const billing: DataSource["billing"] = {
   async invoices(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: billingInvoiceList,
-      input: q.cursor === null ? {} : { cursor: q.cursor },
+      // The size goes only when the caller names one, so the contract's own
+      // default of 50 stands otherwise (#4693).
+      input: {
+        ...(q.cursor === null ? {} : { cursor: q.cursor }),
+        ...(q.limit === undefined ? {} : { limit: q.limit }),
+      },
       page: "billing",
     });
     return read.ok

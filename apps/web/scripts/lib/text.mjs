@@ -1,8 +1,8 @@
 // Text for generated images, set as glyph outlines rather than <text>, so the
-// raster never depends on which fonts a machine has installed. Space Grotesk
-// is the house face; the variable file is the one the brand kit ships, and a
-// weight is instanced from it on demand, the same way the kit's glyphs.py
-// does it.
+// raster never depends on which fonts a machine has installed. Geist is
+// the house face for text. Space Grotesk sets the wordmark only, and the card
+// draws the wordmark from its SVG. A weight is instanced from the variable file on
+// demand, the same way the kit's glyphs.py does it.
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ import * as fontkit from "fontkit";
 
 const FONT_FILE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../fonts/SpaceGrotesk-VariableFont_wght.ttf",
+  "../fonts/Geist-VariableFont_wght.ttf",
 );
 
 let base = null;

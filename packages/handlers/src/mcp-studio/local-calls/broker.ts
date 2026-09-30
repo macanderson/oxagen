@@ -11,10 +11,15 @@
 // so a second reply with the same id is refused. That is the cloud side's
 // replay check. The local gateway keeps its own ledger of nonces.
 //
-// This broker lives in one process. With more than one API instance, the
-// instance that holds a machine's long-poll must be the one that dispatches
-// to it, or the broker needs a shared queue. The PR that adds the HTTP routes
-// decides which.
+// A poll whose machine hangs up before the route writes the delivery gives
+// it back with release(), and the machine's next poll takes it.
+//
+// This broker lives in one process, so the instance that holds a machine's
+// long-poll must be the one that dispatches to it. #4773 chose one instance
+// over a shared queue: apps/mcp serves both the routes and the served-tools
+// call path, production runs it as one container on one node, and
+// tools/scripts/mcp-single-instance.test.ts fails when that changes. A second
+// instance needs a shared queue first.
 import { TransportError } from "@oxagen/mcp-studio";
 import {
   deliveryId,
@@ -22,6 +27,9 @@ import {
   type Delivery,
   type Reply,
 } from "@oxagen/tacho/local-servers";
+
+/** The two routes a machine's local gateway dials. tacho's cloud link names them, and apps/mcp serves them. */
+export { LOCAL_SERVERS_NEXT_PATH, LOCAL_SERVERS_REPLY_PATH } from "@oxagen/tacho/local-servers";
 
 /** How long a long-poll waits for a delivery before it returns none. */
 export const LONG_POLL_WAIT_MS = 25_000;
@@ -53,6 +61,17 @@ export interface LocalGatewayBroker {
   reply(machine: string, body: unknown): ReplyOutcome;
 }
 
+/** The broker the long-poll route holds. It can also take back a delivery the route could not write. */
+export interface LongPollBroker extends LocalGatewayBroker {
+  /**
+   * Take back a delivery a poll took but never wrote, because the machine hung
+   * up first. It goes to a poll that waits, or to the front of the machine's
+   * queue, and its pickup clock runs again. False when no call with that id
+   * waits for this machine's reply.
+   */
+  release(machine: string, delivery: Delivery): boolean;
+}
+
 export interface InProcessBrokerOptions {
   now?: () => number;
   presenceMs?: number;
@@ -63,6 +82,7 @@ interface Pending {
   delivery: Delivery;
   taken: boolean;
   settle(outcome: { reply: Reply } | { error: TransportError }): void;
+  pickupBy: number;
   replyWithinMs: number;
   timer: ReturnType<typeof setTimeout> | undefined;
 }
@@ -90,7 +110,7 @@ function kindFits(delivery: Delivery, reply: Reply): boolean {
   return delivery.kind === "call" ? reply.kind === "result" : reply.kind === "tools";
 }
 
-export function createInProcessBroker(options: InProcessBrokerOptions = {}): LocalGatewayBroker {
+export function createInProcessBroker(options: InProcessBrokerOptions = {}): LongPollBroker {
   const now = options.now ?? Date.now;
   const presenceMs = options.presenceMs ?? PRESENCE_MS;
   const machines = new Map<string, MachineState>();
@@ -128,6 +148,33 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Loc
     return entry.delivery;
   }
 
+  /**
+   * Hand the delivery to a poll that waits, or queue it until one comes. A
+   * queued delivery that no poll takes before its envelope expires fails as
+   * disconnected. A delivery the route gave back goes to the front.
+   */
+  function offer(state: MachineState, id: string, entry: Pending, front: boolean): void {
+    const waiter = state.waiters.shift();
+    if (waiter !== undefined) {
+      waiter.take(take(id));
+      return;
+    }
+    if (front) state.queue.unshift(id);
+    else state.queue.push(id);
+    entry.timer = setTimeout(
+      () => {
+        entry.settle({
+          error: new TransportError(
+            "disconnected",
+            `The local gateway on machine ${entry.machine} did not take the call before its envelope expired. Check that the local gateway is running and online, then retry.`,
+            false,
+          ),
+        });
+      },
+      Math.max(0, entry.pickupBy - now()),
+    );
+  }
+
   function dispatch(machine: string, delivery: Delivery, dispatchOptions: DispatchOptions): Promise<Reply> {
     if (!connected(machine)) return Promise.reject(notConnected(machine));
     const id = deliveryId(delivery);
@@ -153,6 +200,7 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Loc
         machine,
         delivery,
         taken: false,
+        pickupBy: dispatchOptions.pickupBy,
         replyWithinMs: dispatchOptions.replyWithinMs,
         timer: undefined,
         settle(outcome) {
@@ -168,34 +216,18 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Loc
       };
       pending.set(id, entry);
       signal.addEventListener("abort", onAbort, { once: true });
-
-      const waiter = state.waiters.shift();
-      if (waiter !== undefined) {
-        waiter.take(take(id));
-        return;
-      }
-      state.queue.push(id);
-      entry.timer = setTimeout(
-        () => {
-          entry.settle({
-            error: new TransportError(
-              "disconnected",
-              `The local gateway on machine ${machine} did not take the call before its envelope expired. Check that the local gateway is running and online, then retry.`,
-              false,
-            ),
-          });
-        },
-        Math.max(0, dispatchOptions.pickupBy - now()),
-      );
+      offer(state, id, entry, false);
     });
   }
 
   function next(machine: string, signal: AbortSignal, waitMs = LONG_POLL_WAIT_MS): Promise<Delivery | undefined> {
     const state = stateOf(machine);
     state.lastSeen = now();
+    // A poll whose machine already hung up takes nothing: a delivery handed
+    // to it would be written to nobody.
+    if (signal.aborted) return Promise.resolve(undefined);
     const queued = state.queue.shift();
     if (queued !== undefined) return Promise.resolve(take(queued));
-    if (signal.aborted) return Promise.resolve(undefined);
     return new Promise((resolve) => {
       const waiter: Waiter = {
         take(delivery) {
@@ -228,5 +260,15 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Loc
     return { accepted: true };
   }
 
-  return { connected, dispatch, next, reply };
+  function release(machine: string, delivery: Delivery): boolean {
+    const id = deliveryId(delivery);
+    const entry = pending.get(id);
+    if (entry === undefined || entry.machine !== machine || !entry.taken) return false;
+    entry.taken = false;
+    clearTimeout(entry.timer);
+    offer(stateOf(machine), id, entry, true);
+    return true;
+  }
+
+  return { connected, dispatch, next, reply, release };
 }

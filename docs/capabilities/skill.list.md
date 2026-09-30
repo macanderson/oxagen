@@ -22,6 +22,7 @@ The skills this workspace's harness sessions reported when they started, over a 
 |---|---|---|---|
 | `windowDays` | integer | no | 1 to 90, default 30: sessions started in the last N days |
 | `cursor` | string | no | the previous page's `nextCursor`; it carries that page's window, so `windowDays` is ignored beside it. A cursor this capability did not write, or one whose window is longer than the 90 days `windowDays` allows, is `invalid_input` |
+| `limit` | integer | no | 1 to 100, default 100: skill names on this page. The cursor does not carry it, so each page names its own |
 
 ## Output
 
@@ -31,7 +32,7 @@ The skills this workspace's harness sessions reported when they started, over a 
 | `sessions` | integer | sessions started in the window |
 | `reportedSessions` | integer or null | sessions in the window that reported an inventory; null when none did |
 | `notReportedSessions` | integer | sessions in the window whose inventory is null |
-| `skills` | object[] | `{ name, sessions, harnesses, harnessCount, firstSeenAt, lastSeenAt }` per reported name, by name, at most 100 a page |
+| `skills` | object[] | `{ name, sessions, harnesses, harnessCount, firstSeenAt, lastSeenAt }` per reported name, by name, at most `limit` a page |
 | `nextCursor` | string or null | the next page, or null on the last |
 
 A session whose `skills_available` is null (or anything but a JSON array) did not report an inventory and counts toward `notReportedSessions`, never as a session with no skills. A session that reported an empty array counts toward `reportedSessions` and names no skill. A name an inventory lists twice counts that session once.

@@ -1,7 +1,8 @@
 // The ledger of every draw on one mandate: what was held at decision time, what
 // was spent, what was handed back. Search, a facet on the movement state, and a
-// pager, all over the rows `get_mandate` returned (see view.ts for why that is
-// the contract's shape rather than a shortcut).
+// pager with Rows per page beside Newer and Older (#4693), all over the rows
+// `get_mandate` returned (see view.ts for why that is the contract's shape
+// rather than a shortcut).
 //
 // **State is a dot and a word.** A reservation, a settlement and a release are
 // three different facts about money, and a reader must be able to tell them
@@ -23,11 +24,15 @@ import {
 } from "@/data/contracts/mandates";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { LinkPager } from "@/ui/link-pager";
 import { Measure } from "@/ui/measure";
 import { SafeForm, SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
+import { LedgerStateSelect } from "./ledger-state-select";
 import {
   LEDGER_PAGE,
+  LEDGER_ROWS,
+  type LedgerPage,
   ledgerPage,
   type MandateAt,
   mandateLink,
@@ -73,6 +78,11 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
       data-testid="ledger-filters"
       className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3"
     >
+      {/* A get form sends its fields and drops the action's query, so the
+          size Rows set rides along here, or a search would reset it (#4693). */}
+      {view.rows === LEDGER_PAGE ? null : (
+        <input type="hidden" name="rows" value={String(view.rows)} />
+      )}
       <span className={field}>
         <label className={fieldLabel} htmlFor="ledger-search">
           {t("search")}
@@ -85,33 +95,87 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
         />
       </span>
       <span className={field}>
-        <label className={fieldLabel} htmlFor="ledger-state">
+        <span id="ledger-state-label" className={fieldLabel}>
           {t("state")}
-        </label>
-        <select
+        </span>
+        <LedgerStateSelect
+          key={view.state ?? ""}
           id="ledger-state"
-          name="state"
+          aria-labelledby="ledger-state-label"
           defaultValue={view.state ?? ""}
-          className={control}
-        >
-          <option value="">{t("anyState")}</option>
-          {MOVEMENT_STATES.map((state) => (
-            <option key={state} value={state}>
-              {t(`kind.${state}`)}
-            </option>
-          ))}
-        </select>
+          items={[
+            { value: "", label: t("anyState") },
+            ...MOVEMENT_STATES.map((state) => ({
+              value: state,
+              label: t(`kind.${state}`),
+            })),
+          ]}
+          className="w-full data-[size=default]:h-10 max-md:text-base"
+        />
       </span>
       <button type="submit" className={`${control} font-medium`}>
         {t("apply")}
       </button>
       {view.search === null && view.state === null ? null : (
-        <SafeLink to={mandateLink(at)} className={linkText}>
+        <SafeLink
+          to={mandateLink(at, { rows: view.rows })}
+          className={linkText}
+        >
           {t("clear")}
         </SafeLink>
       )}
       <p className="ms-auto text-xs text-muted-foreground">{t("searchHint")}</p>
     </SafeForm>
+  );
+}
+
+/**
+ * The pager under the table (#4693): Rows per page and the count on the left,
+ * Newer and Older on the right. The ledger reads newest first, so the page
+ * before this one is the newer one. Every address keeps the search, the facet
+ * and the size, and each size Rows offers opens its own first page.
+ */
+function Pager({
+  at,
+  view,
+  page,
+}: {
+  at: MandateAt;
+  view: MandateView;
+  page: LedgerPage;
+}) {
+  const t = useTranslations("mandate.ledger");
+  const list = useTranslations("ui.list");
+  return (
+    <LinkPager
+      label={t("pager.label")}
+      rowsLabel={list("rows")}
+      previousLabel={t("pager.newer")}
+      nextLabel={t("pager.older")}
+      perPage={view.rows}
+      sizes={LEDGER_ROWS.map((size) => ({
+        size,
+        first: mandateLink(at, { ...view, rows: size, offset: 0 }),
+      }))}
+      range={t("shown", {
+        shown: String(page.rows.length),
+        total: String(page.total),
+      })}
+      previous={
+        page.offset > 0
+          ? mandateLink(at, {
+              ...view,
+              offset: Math.max(page.offset - view.rows, 0),
+            })
+          : null
+      }
+      next={
+        page.hasMore
+          ? mandateLink(at, { ...view, offset: page.offset + view.rows })
+          : null
+      }
+      className="border-t border-border px-4"
+    />
   );
 }
 
@@ -179,7 +243,10 @@ export function MandateLedger({
           <p className="max-w-prose text-sm text-muted-foreground">
             {t("filteredEmptyBody")}
           </p>
-          <SafeLink to={mandateLink(at)} className={linkText}>
+          <SafeLink
+            to={mandateLink(at, { rows: view.rows })}
+            className={linkText}
+          >
             {t("clear")}
           </SafeLink>
         </div>
@@ -238,43 +305,7 @@ export function MandateLedger({
               </tr>
             ))}
           </Table>
-          <nav
-            aria-label={t("pager.label")}
-            className="flex flex-wrap items-center gap-4 border-t border-border px-4 py-3 text-sm"
-          >
-            <span className="text-muted-foreground">
-              {t("shown", {
-                shown: String(page.rows.length),
-                total: String(page.total),
-              })}
-            </span>
-            {page.offset > 0 ? (
-              <SafeLink
-                to={mandateLink(at, {
-                  ...view,
-                  offset: Math.max(page.offset - LEDGER_PAGE, 0),
-                })}
-                data-page="newer"
-                className={linkText}
-              >
-                {t("pager.newer")}
-              </SafeLink>
-            ) : null}
-            {page.hasMore ? (
-              <SafeLink
-                to={mandateLink(at, {
-                  ...view,
-                  offset: page.offset + LEDGER_PAGE,
-                })}
-                data-page="older"
-                className={linkText}
-              >
-                {t("pager.older")}
-              </SafeLink>
-            ) : (
-              <span className="text-muted-foreground">{t("pager.end")}</span>
-            )}
-          </nav>
+          <Pager at={at} view={view} page={page} />
         </>
       )}
       <div className="flex flex-col gap-1 border-t border-border px-4 py-3 text-xs text-muted-foreground">

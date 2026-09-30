@@ -11,7 +11,7 @@
 //   3. GitHub, through the workspace's installation: the repository must
 //      still be the one the binding pins (same immutable id) and the branch
 //      must exist (`not_found: branch_not_found`). A steering repository on
-//      a `github_steering` connection reads through the Oxagen Steering app.
+//      a `github_steering` connection reads through the Oxagen GitHub App.
 //   4. One transaction under the workspace's repository lock: the head is
 //      re-read (a concurrent write may have moved it), a successor binding
 //      version carrying the branch is written, and the head moves onto it.

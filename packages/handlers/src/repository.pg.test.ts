@@ -318,7 +318,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   /**
    * The steering head the steering repo job's bind step writes (ADR-212). The
    * workspace gets its own `github_steering` connection, created connected
-   * with the Oxagen Steering installation, and a head with role `steering`
+   * with the Oxagen GitHub App installation, and a head with role `steering`
    * written under the workspace lock. The repository comes from the same
    * fixture the link handler reads, so the store's cross-workspace rules see
    * one id for it. A write the store refuses rolls back the connection too.
@@ -1267,11 +1267,19 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
 
     // ── the provision event the backfill sends runs every step ───────────
     // The real dependencies read and write Postgres. A fake GitHub holds the
-    // Oxagen Steering installation on `acme`.
+    // Oxagen Steering installation on `acme`. The production first publish
+    // reads the repository through the real host, which mints a token from
+    // the Oxagen GitHub App's environment and never reaches the fake. This
+    // test proves the steps up to the bind, and the provision and
+    // first-version tests prove the publish, so it drops that port.
     const app = { symbol: OXAGEN_STEERING_APP, id: 9001, slug: "oxagen-steering-test" };
     const hub = new FakeGithub({ org: "acme", app });
+    const { publishFirst: _unused, ...production } = steeringRepoProvisionDeps({
+      actorUserId: userId,
+      env: {},
+    });
     const deps: ProvisionDeps = {
-      ...steeringRepoProvisionDeps({ actorUserId: userId, env: {} }),
+      ...production,
       github: () => ({
         app,
         installation: () => Promise.resolve(hub.appRest()),

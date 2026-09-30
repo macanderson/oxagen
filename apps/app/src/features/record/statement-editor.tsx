@@ -144,7 +144,7 @@ export function StatementEditor({
   onChange,
   bar,
 }: {
-  /** `.oxagen/rules/<lineage>.toml · statement`. */
+  /** `statement in .oxagen/rules/<lineage>.toml`. */
   path: string;
   value: string;
   /** The statement in force; the draft is modified when it differs. */

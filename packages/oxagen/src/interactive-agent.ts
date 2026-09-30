@@ -55,7 +55,7 @@ export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
  * - `get_run`: what one run did, frame by frame, from the Run page.
  * - `get_run_cost`: what one run cost, by model and token class.
  * - `get_spend`: what the workspace spent, by operator, agent, model, tool,
- *   task or cost center.
+ *   task, cost center, or MCP server.
  * - `list_approvals`: which tool calls wait on a person.
  * - `list_agents`: which agents exist, their status and 30-day figures.
  * - `search_graph`: the way into the workspace knowledge graph. It finds

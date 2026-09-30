@@ -212,7 +212,7 @@ export interface ImportResult {
 export type SteeringHeadRead =
   /** No steering head and no legacy connection. */
   | { kind: "none" }
-  /** The head hangs from an Oxagen Steering connection: the steering repo exists. */
+  /** The head hangs from a steering connection: the steering repo exists. */
   | { kind: "provisioned"; fullName: string }
   /** A host the import does not read, such as GitLab. */
   | { kind: "unsupported"; provider: string; fullName: string }

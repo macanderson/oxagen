@@ -253,6 +253,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oxagen/done-record':
+        specifier: workspace:*
+        version: link:../../packages/done-record
       '@oxagen/github':
         specifier: workspace:*
         version: link:../../packages/github
@@ -1499,6 +1502,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/done-record':
+        specifier: workspace:*
+        version: link:../done-record
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.28.17)(postgres@3.4.9)
@@ -1545,6 +1551,9 @@ importers:
 
   packages/handlers:
     dependencies:
+      '@cedar-policy/cedar-wasm':
+        specifier: 4.13.0
+        version: 4.13.0
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
@@ -1599,6 +1608,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@oxagen/relay-broker':
         specifier: workspace:*
         version: link:../relay-broker
@@ -1761,6 +1773,9 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
+      '@oxagen/done-record':
+        specifier: workspace:*
+        version: link:../done-record
       '@oxagen/functions':
         specifier: workspace:*
         version: link:../functions

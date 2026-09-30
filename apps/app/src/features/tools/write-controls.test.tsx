@@ -38,6 +38,14 @@ const {
   chooseSwitchTargets: vi.fn(),
   chooseServerTools: vi.fn(),
 }));
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
   importTools,
@@ -77,7 +85,7 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const SWITCHES = "/acme/core-platform/tools/switches";
+const SWITCHES = "/acme/core-platform/agents?tab=switches";
 const GENERATION = { org: 12, workspace: 4 };
 /** The operator level's picker (#3147): one member, so its option is unambiguous. */
 const MEMBERS = [
@@ -230,7 +238,7 @@ describe("ImportProvider", () => {
     fireEvent.change(tools, { target: { value: "create_page," } });
     fireEvent.click(screen.getByTestId("tools-import-classify"));
     expect(
-      screen.getByText("What import does not do.", { exact: false }),
+      screen.getByText("Import scope.", { exact: false }),
     ).toBeVisible();
     fireEvent.click(screen.getByTestId("tools-import-confirm"));
     await waitFor(() => {
@@ -244,7 +252,7 @@ describe("ImportProvider", () => {
     expect(router.refresh).toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
     expect(await screen.findByTestId("tools-import-done")).toHaveTextContent(
-      "2 new versions · 1 already registered.",
+      "2 new versions and 1 already registered.",
     );
   });
 
@@ -595,7 +603,7 @@ describe("FlipControls", () => {
     const radius = within(dialog).getByTestId("tools-flip-blast-radius");
     expect(radius).toHaveTextContent("Blast radius");
     expect(radius).toHaveTextContent(
-      "Every tool version carrying this impact",
+      "Every tool version in the organization that carries this impact",
     );
     // The blast radius is above the confirming button in the document.
     expect(
@@ -632,7 +640,7 @@ describe("FlipControls", () => {
       target: { value: "connection" },
     });
     expect(screen.getByTestId("tools-flip-blast-radius")).toHaveTextContent(
-      "live grants are revoked with the flip",
+      "The flip revokes live grants",
     );
     expect(
       screen.getByText(
@@ -664,7 +672,7 @@ describe("FlipControls", () => {
     const dialog = await screen.findByTestId("tools-flip-dialog");
     expect(
       within(dialog).getByTestId("tools-flip-blast-radius"),
-    ).toHaveTextContent("What this restores");
+    ).toHaveTextContent("Restored calls");
     fill(/^Reason/, "Rotation confirmed.");
     fireEvent.submit(formOf(within(dialog).getByText("Allow again")));
     await waitFor(() => {

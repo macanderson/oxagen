@@ -199,6 +199,37 @@ export interface GitHubPathCommit {
   summary: string;
 }
 
+/** The conclusions a completed check run can carry here. GitHub passes a required check on success and on neutral. */
+export type GitHubCheckRunConclusion = "success" | "failure" | "neutral";
+
+/** A completed check run carries a conclusion and an end time. A running one carries neither. */
+export type GitHubCheckRunState =
+  | {
+      status?: "completed";
+      conclusion: GitHubCheckRunConclusion;
+      completedAt: string;
+    }
+  | { status: "in_progress"; conclusion?: undefined; completedAt?: undefined };
+
+/** The arguments of `GitHubClient.createCheckRun`. */
+export type GitHubCheckRunArgs = {
+  owner: string;
+  repo: string;
+  name: string;
+  headSha: string;
+  /** The output title. GitHub allows at most 65535 characters in each output field. */
+  title: string;
+  /** Markdown shown under the title. */
+  summary: string;
+  /** Markdown shown below the summary. */
+  text?: string;
+  /** The page GitHub links as the run's details. */
+  detailsUrl?: string;
+  /** An id the caller chooses, such as a record digest. */
+  externalId?: string;
+  startedAt: string;
+} & GitHubCheckRunState;
+
 export interface GitHubClient {
   /**
    * Create a new repository.
@@ -472,21 +503,12 @@ export interface GitHubClient {
   listBranches(args: { owner: string; repo: string }): Promise<GitHubBranch[]>;
 
   /**
-   * Create a completed check run on a commit (Checks API). Needs a GitHub App
+   * Create a check run on a commit (Checks API). A run is completed, with a
+   * conclusion, unless `status` is `in_progress`. Needs a GitHub App
    * installation token with `checks: write`; an OAuth or personal token is
    * refused by GitHub with 403, which surfaces as the thrown error.
    */
-  createCheckRun(args: {
-    owner: string;
-    repo: string;
-    name: string;
-    headSha: string;
-    conclusion: "success" | "failure";
-    title: string;
-    summary: string;
-    startedAt: string;
-    completedAt: string;
-  }): Promise<{ id: number; htmlUrl: string }>;
+  createCheckRun(args: GitHubCheckRunArgs): Promise<{ id: number; htmlUrl: string }>;
 
   /**
    * Merge a pull request. `sha` pins the merge to that head commit: GitHub

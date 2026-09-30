@@ -45,6 +45,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { LinkPager } from "@/ui/link-pager";
 import { formatCount } from "@/ui/money-format";
 import { SafeForm } from "@/ui/navigation";
 import { cell, Table } from "@/ui/table";
@@ -52,7 +53,6 @@ import { CsvDialog } from "./dialogs";
 import { FilterSelect } from "./filter-select";
 import { AUDIT_OUTCOMES, auditQueryParams } from "./filters";
 import { AUDIT_GAPS } from "./gaps";
-import { AuditPager } from "./pager";
 
 /** An actor the record names, as the filter and the table print them. */
 export type AuditActor = { id: string; name: string };
@@ -182,7 +182,8 @@ const ACTOR_KIND_NOTE = "audit-actor-kind-note";
  * the page when the field takes focus.
  */
 const control = `${inputBase} max-md:min-h-11 max-md:text-base`;
-const select = `${control} w-auto`;
+/** A filter's trigger at the same phone size. It wears the input's colours. */
+const select = "max-md:min-h-11 max-md:text-base";
 
 function Filters({ org, query }: { org: string; query: AuditQuery }) {
   const t = useTranslations("audit.events");
@@ -207,39 +208,33 @@ function Filters({ org, query }: { org: string; query: AuditQuery }) {
             className={control}
           />
         </label>
-        <label>
-          <span className={label}>{t("result")}</span>
-          <FilterSelect
-            name="outcome"
-            defaultValue={query.outcome ?? ""}
-            className={select}
-          >
-            <option value="">{t("anyResult")}</option>
-            {AUDIT_OUTCOMES.filter(
+        <FilterSelect
+          key={query.outcome ?? ""}
+          name="outcome"
+          aria-label={t("result")}
+          defaultValue={query.outcome ?? ""}
+          items={[
+            { value: "", label: t("anyResult") },
+            ...AUDIT_OUTCOMES.filter(
               (outcome) => outcome === "allow" || outcome === "deny",
-            ).map((outcome) => (
-              <option key={outcome} value={outcome}>
-                {outcomes(outcome)}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label>
-          <span className={label}>{t("severity")}</span>
-          <select
-            disabled
-            defaultValue=""
-            aria-describedby="audit-severity-note"
-            className={select}
-          >
-            <option value="">{t("anySeverity")}</option>
-            {AUDIT_SEVERITIES.map((severity) => (
-              <option key={severity} value={severity}>
-                {t(`severities.${severity}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+            ).map((outcome) => ({ value: outcome, label: outcomes(outcome) })),
+          ]}
+          className={select}
+        />
+        <FilterSelect
+          disabled
+          aria-label={t("severity")}
+          aria-describedby="audit-severity-note"
+          defaultValue=""
+          items={[
+            { value: "", label: t("anySeverity") },
+            ...AUDIT_SEVERITIES.map((severity) => ({
+              value: severity,
+              label: t(`severities.${severity}`),
+            })),
+          ]}
+          className={select}
+        />
         <noscript>
           <button type="submit" className={buttonSecondary}>
             {t("apply")}
@@ -298,39 +293,36 @@ function HeaderFilters({
       aria-label={t("filters")}
       className="flex flex-wrap items-center gap-2"
     >
-      <label>
-        <span className={label}>{t("actor")}</span>
-        <FilterSelect
-          name="actor"
-          defaultValue={query.actor ?? ""}
-          aria-describedby={ACTOR_KIND_NOTE}
-          className={select}
-        >
-          <option value="">{t("anyActor")}</option>
-          {ACTOR_KINDS.map((kind) => (
-            <option key={kind} value={`kind:${kind}`} disabled>
-              {t(`actorKinds.${kind}`)}
-            </option>
-          ))}
-          {picked === null ? null : (
-            <option value={picked.id}>{picked.name}</option>
-          )}
-        </FilterSelect>
-      </label>
-      <label>
-        <span className={label}>{t("range")}</span>
-        <FilterSelect
-          name="range"
-          defaultValue={query.range}
-          className={select}
-        >
-          {AUDIT_RANGES.map((range) => (
-            <option key={range} value={range}>
-              {t(`ranges.${range}`)}
-            </option>
-          ))}
-        </FilterSelect>
-      </label>
+      <FilterSelect
+        key={query.actor ?? ""}
+        name="actor"
+        aria-label={t("actor")}
+        aria-describedby={ACTOR_KIND_NOTE}
+        defaultValue={query.actor ?? ""}
+        items={[
+          { value: "", label: t("anyActor") },
+          ...ACTOR_KINDS.map((kind) => ({
+            value: `kind:${kind}`,
+            label: t(`actorKinds.${kind}`),
+            disabled: true,
+          })),
+          ...(picked === null
+            ? []
+            : [{ value: picked.id, label: picked.name }]),
+        ]}
+        className={select}
+      />
+      <FilterSelect
+        key={query.range}
+        name="range"
+        aria-label={t("range")}
+        defaultValue={query.range}
+        items={AUDIT_RANGES.map((range) => ({
+          value: range,
+          label: t(`ranges.${range}`),
+        }))}
+        className={select}
+      />
       {query.outcome === null ? null : (
         <input type="hidden" name="outcome" value={query.outcome} />
       )}
@@ -480,7 +472,7 @@ function Pager({
   const at = (n: number) =>
     routes.audit(org, auditQueryParams(query, { offset: n * size }));
   return (
-    <AuditPager
+    <LinkPager
       label={t("pager")}
       rowsLabel={t("rows")}
       previousLabel={t("previous")}
@@ -502,6 +494,9 @@ function Pager({
       }
       previous={index > 0 ? at(index - 1) : null}
       next={hasOlder ? at(index + 1) : null}
+      // The panel's 16 px inset, which the filters above and the note below
+      // keep too.
+      className="px-4"
     />
   );
 }

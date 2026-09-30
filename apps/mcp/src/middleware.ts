@@ -20,6 +20,7 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
 import { extractBearerToken } from "./context";
+import { localServersRoute } from "./local-servers";
 import { servedToolsMiddleware } from "./servers/serve";
 // The relay's upgrade mount (lane M12, ADR-225). xmcp gives no handle to its
 // HTTP server, so the mount subscribes at module load and adds its upgrade
@@ -117,7 +118,9 @@ setSecurityEventEmitter((kernelEvent) => {
  * SECURITY: identity is derived solely from this validated credential — never
  * from client-controlled identity headers (`x-oxagen-org-id` & friends).
  */
-// The served tools (lane M15) run after the auth gate. They add a run's
+// The local-server routes run after the auth gate. They answer an enrolled
+// machine's long-poll for local tool calls and its replies (#4773), and pass
+// every other path on. The served tools (lane M15) run next. They add a run's
 // published tools to tools/list and answer a tools/call that names one.
 // Every other request reaches the transport untouched. The gate is built in
 // place: xmcp types it with express's RequestHandler, which this app does not
@@ -130,5 +133,6 @@ export default [
       return extractBearerToken(authHeader) !== null;
     },
   }),
+  localServersRoute,
   servedToolsMiddleware,
 ] satisfies Middleware[];

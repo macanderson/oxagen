@@ -128,7 +128,7 @@ describe("Open a Context PR", () => {
     expect(
       await screen.findByTestId("open-context-pr-failure"),
     ).toHaveTextContent(
-      "Another pull request is already open for this lineage. One concern, one pull request.",
+      "Another pull request is already open for this lineage. Merge or close it first.",
     );
     expect(router.replace).not.toHaveBeenCalled();
   });

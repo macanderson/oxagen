@@ -51,7 +51,7 @@ The workspace's `settings.steering_repo` holds the job's progress: the status, t
 | `provisioning` | the job is running, or queued |
 | `ready` | the repository exists, version 1 is published, and the steering binding is written |
 | `failed` | a step stopped, and a retry resumes from that step; `enqueue_failed` means the event was never sent |
-| `blocked` | an organization owner must act first, such as authorizing Oxagen Steering again |
+| `blocked` | an organization owner must act first, such as authorizing the Oxagen GitHub App again |
 
 ## Side effects
 
