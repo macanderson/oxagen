@@ -1,4 +1,4 @@
-// audit-exempt: read-only — reports which repository layout the workspace's
+// audit-exempt: read-only. Reports which repository layout the workspace's
 // bound repository uses. Mutates nothing. The kernel capability.invoke_*
 // audit covers access.
 //
@@ -6,7 +6,7 @@
 // writes a record file (readSteeringLayout, steering-repo/merge-queue.ts), so
 // a client can preview the path and branch it will actually write. Answers
 // `layout: null`, never a guess, when no repository is bound or the read
-// fails — a wrong preview is worse than none, and open_context_pr would
+// fails. A wrong preview is worse than none, and open_context_pr would
 // refuse the write on the same failure.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {

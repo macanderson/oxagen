@@ -2405,6 +2405,25 @@
       }
     },
     {
+      "name": "get_steering_layout",
+      "file": "context.steering.layout.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_published_steering",
       "file": "context.steering.published.get.ts",
       "domain": "context",

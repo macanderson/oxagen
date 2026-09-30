@@ -224,6 +224,7 @@ import { contextRecordsGetRoute } from "./routes/v1/context.records.get";
 import { contextRecordsAppendRoute } from "./routes/v1/context.records.append";
 import { contextSteeringDeliveriesRoute } from "./routes/v1/context.steering.deliveries";
 import { contextSteeringFreshnessRoute } from "./routes/v1/context.steering.freshness";
+import { contextSteeringLayoutRoute } from "./routes/v1/context.steering.layout";
 import { publishedSteeringGetRoute } from "./routes/v1/context.steering.published.get";
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
@@ -1241,6 +1242,7 @@ orgScoped.route("/context/records", contextRecordsListRoute);
 orgScoped.route("/context/records/get", contextRecordsGetRoute);
 orgScoped.route("/context/records/append", contextRecordsAppendRoute);
 orgScoped.route("/context/steering/freshness", contextSteeringFreshnessRoute);
+orgScoped.route("/context/steering/layout", contextSteeringLayoutRoute);
 orgScoped.route("/context/steering/deliveries", contextSteeringDeliveriesRoute);
 // The published .oxagen/ tree with every file's text, for `oxagen pull`.
 orgScoped.route("/context/steering/published", publishedSteeringGetRoute);

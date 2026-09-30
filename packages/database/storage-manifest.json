@@ -1760,6 +1760,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_steering_layout",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "get_steering_repo",
       "reads": [],
