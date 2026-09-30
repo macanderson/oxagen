@@ -7037,6 +7037,40 @@
       }
     },
     {
+      "name": "get_studio_discovery",
+      "file": "tool.studio.discovery.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "start_studio_discovery",
+      "file": "tool.studio.discovery.start.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_studio_draft",
       "file": "tool.studio.draft.get.ts",
       "domain": "tool",
@@ -7105,6 +7139,23 @@
       }
     },
     {
+      "name": "list_studio_tools",
+      "file": "tool.studio.tools.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "try_studio_tool",
       "file": "tool.studio.try.ts",
       "domain": "tool",
@@ -7115,10 +7166,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {

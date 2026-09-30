@@ -537,9 +537,11 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - create_relay
 - draft_studio_description
+- get_studio_discovery
 - get_studio_draft
 - import_tools
 - list_studio_findings
+- list_studio_tools
 - list_tool_declarations
 - list_tool_versions
 - open_studio_review
@@ -549,6 +551,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - set_mcp_credential
 - set_tool_classification
 - set_tool_state
+- start_studio_discovery
 - try_studio_tool
 
 ## toolbelt

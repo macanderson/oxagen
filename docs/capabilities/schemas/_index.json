@@ -1956,6 +1956,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_studio_draft",
       "domain": "tool",
       "surfaces": [
@@ -2909,6 +2920,17 @@
     },
     {
       "name": "list_studio_findings",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_studio_tools",
       "domain": "tool",
       "surfaces": [
         "api",
@@ -4350,6 +4372,17 @@
       "name": "start_slack_connection",
       "domain": "org",
       "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "component": null,
       "produces": [],
       "consumes": []

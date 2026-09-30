@@ -97,6 +97,9 @@ import { toolStudioCredentialSet } from "@oxagen/oxagen/contracts/tool.studio.cr
 import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
+import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
+import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
+import { toolStudioToolsList } from "@oxagen/oxagen/contracts/tool.studio.tools.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
@@ -236,6 +239,9 @@ import { toolStudioCredentialSetRoute } from "./tool.studio.credential.set";
 import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft";
 import { toolStudioTryRoute } from "./tool.studio.try";
+import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
+import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
+import { toolStudioToolsListRoute } from "./tool.studio.tools.list";
 import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
 import { killSwitchListRoute } from "./kill_switch.list";
@@ -1140,6 +1146,36 @@ const ROUTES: ThinRoute[] = [
     capability: toolStudioTry.name,
     body: { server: "ledger", tool: "list_entries", environment: "staging", arguments: {} },
     invalidBody: { server: "ledger", tool: "list_entries" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.discovery.start",
+    route: toolStudioDiscoveryStartRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDiscoveryStart.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.discovery.get",
+    route: toolStudioDiscoveryGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioDiscoveryGet.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.tools.list",
+    route: toolStudioToolsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioToolsList.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
     jsonGuard: true,
     status: 200,
   },

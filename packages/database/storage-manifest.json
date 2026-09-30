@@ -1781,6 +1781,16 @@
     },
     {
       "domain": "tool",
+      "name": "get_studio_discovery",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
       "name": "get_studio_draft",
       "reads": [],
       "surfaces": [
@@ -2648,6 +2658,16 @@
     {
       "domain": "tool",
       "name": "list_studio_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "list_studio_tools",
       "reads": [],
       "surfaces": [
         "api",
@@ -3957,6 +3977,16 @@
       "name": "start_slack_connection",
       "reads": [],
       "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "start_studio_discovery",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "writes": []
     },
     {

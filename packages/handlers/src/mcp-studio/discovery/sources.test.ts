@@ -1,7 +1,7 @@
 // sources.test.ts: discover() for each kind of source, and the helpers sync
 // uses beside it (lane M10, #4682). Every seam is a fake: the Transport, the
 // credential source, the steering checkout, the definition reader, the
-// registry catalog, the local reporter, and the gRPC reader. Each case that
+// registry catalog, the local reporter, and the gRPC importer. Each case that
 // places a credential checks that no form of the secret appears in what
 // discover returns or in the refusal it throws.
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +12,7 @@ import {
   type HeaderEntry,
   type HttpTransportRequest,
   type HttpTransportResponse,
+  type ImportResult,
   type ManifestAuth,
   type ManifestServer,
   type McpLockSource,
@@ -24,13 +25,12 @@ import {
 } from "@oxagen/mcp-studio";
 import { createScrubber, REDACTED, scrubValue } from "./scrub";
 import {
-  noGrpcDiscovery,
   noLocalReporter,
   noToolsPullRequestOpener,
   type DefinitionReader,
   type DiscoveryCredentials,
   type DiscoverySeams,
-  type GrpcDiscovery,
+  type GrpcImporter,
   type LocalToolsReport,
   type LocalToolsReporter,
   type RegistryCatalog,
@@ -39,10 +39,10 @@ import {
 import {
   discover,
   NeedsDigest,
+  servedDescriptorSet,
   snapshotsOf,
   utc,
   withServerVersion,
-  type Discovered,
   type SourceContext,
 } from "./sources";
 import {
@@ -348,7 +348,7 @@ function setup(options: Setup) {
     credentials,
     transport: () => wire.transport,
     local: noLocalReporter,
-    grpc: noGrpcDiscovery,
+    grpc: () => Promise.reject(new Error("This case imports no .proto files.")),
     definitions: {
       read: () => Promise.reject(new Error("This case reads no definition.")),
     },
@@ -2053,54 +2053,427 @@ describe("discover a GraphQL definition", () => {
 
 // ── gRPC definitions ─────────────────────────────────────────────────────────
 
-const ORDERS_GRPC: ServerSource = { type: "grpc", from: "reflection" };
+const ORDERS_FOLDER = "tools/servers/orders";
+const ORDERS_PROTO = [
+  'syntax = "proto3";',
+  "package orders.v1;",
+  'import "common/v1/money.proto";',
+  "service Orders { rpc GetOrder(GetOrderRequest) returns (Order); }",
+  "",
+].join("\n");
+const MONEY_PROTO = [
+  'syntax = "proto3";',
+  "package common.v1;",
+  "message Money { int64 cents = 1; }",
+  "",
+].join("\n");
+/** The folder as import wrote it: the package under proto/, by package path. */
+const ORDERS_FILES = {
+  [`${ORDERS_FOLDER}/proto/common/v1/money.proto`]: MONEY_PROTO,
+  [`${ORDERS_FOLDER}/proto/orders/v1/orders.proto`]: ORDERS_PROTO,
+};
+const ORDERS_DESCRIPTORS = encoder.encode("orders.v1 descriptor set");
+const ORDERS_HASH = documentHash("orders.v1 bundle");
+const ORDERS_REPO: ServerSource = {
+  type: "grpc",
+  from: "repository",
+  repo: "acme/orders-api",
+  path: "api/orders.proto",
+  ref: "main",
+};
+const ORDERS_URL = "https://api.orders.dev/v1/orders.proto";
+
+const GET_ORDER: McpTool = {
+  name: "orders_v1_Orders_GetOrder",
+  description: "Get one order.",
+  inputSchema: { type: "object" },
+};
+
+/** A gRPC importer that answers with one tool and a descriptor set. */
+function grpcImporter(result: Partial<ImportResult> = {}) {
+  return vi.fn<GrpcImporter>(() =>
+    Promise.resolve({
+      tools: offered([GET_ORDER]),
+      listed: [],
+      notes: [],
+      environments: [],
+      auth: [],
+      document_hash: ORDERS_HASH,
+      files: [],
+      descriptor_set: ORDERS_DESCRIPTORS,
+      ...result,
+    }),
+  );
+}
 
 describe("discover a gRPC definition", () => {
-  it("refuses while gRPC discovery is not bound", async () => {
-    const { ctx, sent, credentials } = setup({
+  it("refuses reflection before it reads anything", async () => {
+    const grpc = grpcImporter();
+    const { ctx, sent, credentials, read } = setup({
       server: "orders",
-      source: ORDERS_GRPC,
+      source: { type: "grpc", from: "reflection" },
+      seams: { grpc },
     });
     const error = await refusal(discover(ctx));
 
     expect(error.code).toBe("unsupported");
-    expect(error.message).toBe("gRPC discovery is not available yet.");
+    expect(error.message).toBe(
+      "orders reads its gRPC definition by server reflection, and discovery cannot call reflection yet. Import the server again in Studio to pick up a change.",
+    );
+    expect(grpc).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
     expect(sent).toEqual([]);
     expect(credentials).not.toHaveBeenCalled();
   });
 
-  it("returns what the gRPC seam discovered as it came", async () => {
-    const discovered: Discovered = {
-      offered: [],
-      lockSource: {
-        type: "grpc",
-        from: "reflection",
-        document_hash: documentHash("orders.v1 descriptor set"),
+  it("imports an uploaded definition from the folder's proto/ and writes nothing", async () => {
+    const grpc = grpcImporter();
+    const { ctx, sent } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "upload" },
+      files: {
+        ...ORDERS_FILES,
+        [`${ORDERS_FOLDER}/server.toml`]: "schema = \"mcp-server/v1\"\n",
       },
+      seams: { grpc },
+    });
+    const found = await discover(ctx);
+
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: ORDERS_PROTO },
+      ],
+    });
+    expect(toolNames(found)).toEqual(["orders_v1_Orders_GetOrder"]);
+    expect(found.lockSource).toEqual({
+      type: "grpc",
+      from: "upload",
+      document_hash: ORDERS_HASH,
+    });
+    expect(found).toMatchObject({
       securitySchemes: {},
-      descriptorSet: encoder.encode("orders.v1 descriptor set"),
+      descriptorSet: ORDERS_DESCRIPTORS,
       version: undefined,
       latestVersion: undefined,
       files: [],
       machine: null,
-      origin: `reflection changed at ${STAMP}`,
-    };
-    const grpc = vi.fn(() => Promise.resolve(discovered));
+      origin: `proto/ changed at ${COMMIT.slice(0, 7)}`,
+    });
+    expect(sent).toEqual([]);
+  });
+
+  it("refuses an uploaded definition when proto/ holds nothing", async () => {
+    const grpc = grpcImporter();
     const { ctx } = setup({
       server: "orders",
-      source: ORDERS_GRPC,
-      seams: {
-        grpc: {
-          discover: grpc as unknown as GrpcDiscovery["discover"],
-        },
+      source: { type: "grpc", from: "upload" },
+      seams: { grpc },
+    });
+    const error = await refusal(discover(ctx));
+
+    expect(error.code).toBe("source");
+    expect(error.message).toBe(`${ORDERS_FOLDER}/proto holds no .proto files.`);
+    expect(grpc).not.toHaveBeenCalled();
+  });
+
+  it("imports a repository file with the folder's other files and writes it over its copy", async () => {
+    const grpc = grpcImporter();
+    const changed = ORDERS_PROTO.replace("GetOrder(", "FetchOrder(");
+    const { read, reader } = definitions(changed);
+    const { ctx } = setup({
+      server: "orders",
+      source: ORDERS_REPO,
+      files: ORDERS_FILES,
+      seams: { grpc, definitions: reader },
+    });
+    const found = await discover(ctx);
+
+    expect(read).toHaveBeenCalledWith(
+      SCOPE,
+      { repo: "acme/orders-api", path: "api/orders.proto", ref: "main" },
+      ctx.signal,
+    );
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: changed },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders/v1/orders.proto", text: changed },
+    ]);
+    expect(found.lockSource).toEqual({
+      type: "grpc",
+      from: "repository",
+      document_hash: ORDERS_HASH,
+      repo: "acme/orders-api",
+      path: "api/orders.proto",
+      ref: "main",
+      commit: REPO_COMMIT,
+    });
+    expect(found.origin).toBe(
+      `orders.proto changed at orders-api@${REPO_COMMIT.slice(0, 7)}`,
+    );
+  });
+
+  it("fetches a url file and writes it under proto/ when the folder has no copy", async () => {
+    const grpc = grpcImporter();
+    const { ctx, sent, credentials } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url: ORDERS_URL },
+      files: { [`${ORDERS_FOLDER}/proto/common/v1/money.proto`]: MONEY_PROTO },
+      route: () => answer(200, ORDERS_PROTO, "text/plain"),
+      seams: { grpc },
+    });
+    const found = await discover(ctx);
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      method: "GET",
+      host: "api.orders.dev",
+      path: "/v1/orders.proto",
+    });
+    expect(header(sent[0], "Accept")).toBe("text/plain, */*;q=0.1");
+    expect(header(sent[0], "Authorization")).toBeUndefined();
+    expect(credentials).not.toHaveBeenCalled();
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders.proto", text: ORDERS_PROTO },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders.proto", text: ORDERS_PROTO },
+    ]);
+    expect(found.lockSource).toEqual({
+      type: "grpc",
+      from: "url",
+      document_hash: ORDERS_HASH,
+      url: ORDERS_URL,
+    });
+    expect(found.origin).toBe(`${ORDERS_URL} changed at ${STAMP}`);
+  });
+
+  it("names a url file that does not end in .proto service.proto", async () => {
+    const grpc = grpcImporter();
+    const url = "https://api.orders.dev/v1/definition";
+    const { ctx } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url },
+      route: () => answer(200, ORDERS_PROTO, "text/plain"),
+      seams: { grpc },
+    });
+    const found = await discover(ctx);
+
+    expect(found.files).toEqual([
+      { path: "proto/service.proto", text: ORDERS_PROTO },
+    ]);
+  });
+
+  it("writes a url file over the copy import put under its package path", async () => {
+    const grpc = grpcImporter();
+    const url = "https://api.orders.dev/v1/definition";
+    // The string holds "/*" and the comment names another package, so a
+    // scanner that read either as code would miss the orders.v1 copy.
+    const changed = [
+      'syntax = "proto3";',
+      "package orders.v1;",
+      'option java_package = "com.acme/*orders";',
+      "// package common.v1; message Money {}",
+      'import "common/v1/money.proto";',
+      "service Orders { rpc FetchOrder(GetOrderRequest) returns (Order); }",
+      "",
+    ].join("\n");
+    const { ctx } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url },
+      files: ORDERS_FILES,
+      route: () => answer(200, changed, "text/plain"),
+      seams: { grpc },
+    });
+    const found = await discover(ctx);
+
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: changed },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders/v1/orders.proto", text: changed },
+    ]);
+  });
+
+  it("writes over the held file that defines the same names when two share its file name", async () => {
+    const grpc = grpcImporter();
+    const v2 = [
+      'syntax = "proto3";',
+      "package orders.v2;",
+      "message Order { string id = 1; }",
+      "service Orders { rpc GetOrder(Order) returns (Order); }",
+      "",
+    ].join("\n");
+    const changed = v2.replace("GetOrder(", "FetchOrder(");
+    const { reader } = definitions(changed);
+    const { ctx } = setup({
+      server: "orders",
+      source: ORDERS_REPO,
+      files: {
+        ...ORDERS_FILES,
+        [`${ORDERS_FOLDER}/proto/orders/v2/orders.proto`]: v2,
       },
+      seams: { grpc, definitions: reader },
+    });
+    const found = await discover(ctx);
+
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: ORDERS_PROTO },
+        { path: "proto/orders/v2/orders.proto", text: changed },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders/v2/orders.proto", text: changed },
+    ]);
+  });
+
+  it("refuses a fetched file whose names two held files define", async () => {
+    const grpc = grpcImporter();
+    const merged = [
+      'syntax = "proto3";',
+      "package orders.v1;",
+      "message Order { string id = 1; }",
+      "service Orders { rpc GetOrder(Order) returns (Order); }",
+      "",
+    ].join("\n");
+    const { ctx, sent } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url: ORDERS_URL },
+      files: {
+        ...ORDERS_FILES,
+        [`${ORDERS_FOLDER}/proto/orders/v1/order.proto`]: [
+          'syntax = "proto3";',
+          "package orders.v1;",
+          "message Order { message Line { string sku = 1; } }",
+          "",
+        ].join("\n"),
+      },
+      route: () => answer(200, merged, "text/plain"),
+      seams: { grpc },
+    });
+    const error = await refusal(discover(ctx));
+
+    expect(sent).toHaveLength(1);
+    expect(error.code).toBe("source");
+    expect(error.message).toBe(
+      `${ORDERS_URL} defines names that 2 files under proto/ also define: proto/orders/v1/order.proto, proto/orders/v1/orders.proto. Import the server again in Studio to choose the file it replaces.`,
+    );
+    expect(grpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses a definition the importer cannot read", async () => {
+    const grpc = vi.fn<GrpcImporter>(() =>
+      Promise.reject(new Error("orders.proto:3: unknown type GetOrderRequest")),
+    );
+    const { ctx } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "upload" },
+      files: ORDERS_FILES,
+      seams: { grpc },
+    });
+    const error = await refusal(discover(ctx));
+
+    expect(error.code).toBe("source");
+    expect(error.message).toBe(
+      "The definition does not import: orders.proto:3: unknown type GetOrderRequest",
+    );
+  });
+
+  it("refuses a definition that imports with no descriptor set", async () => {
+    const grpc = grpcImporter({ descriptor_set: undefined });
+    const { ctx } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "upload" },
+      files: ORDERS_FILES,
+      seams: { grpc },
+    });
+    const error = await refusal(discover(ctx));
+
+    expect(error.code).toBe("source");
+    expect(error.message).toBe(
+      "The gRPC definition imported with no descriptor set.",
+    );
+  });
+});
+
+describe("servedDescriptorSet", () => {
+  function checkoutOf(files: Record<string, string>): SteeringCheckout {
+    const held = new Map(Object.entries(files));
+    return {
+      commit: COMMIT,
+      read: (path) => Promise.resolve(held.get(path) ?? null),
+      list: () => Promise.resolve([...held.keys()]),
+      pullRequest: () =>
+        Promise.resolve({ open: true, merged: false, headSha: null }),
+    };
+  }
+
+  it("reads the descriptor set from the production branch's proto/", async () => {
+    const grpc = grpcImporter();
+    const checkout = checkoutOf({
+      ...ORDERS_FILES,
+      [`${ORDERS_FOLDER}/tools.toml`]: "schema = \"mcp-tools/v1\"\n",
     });
 
-    await expect(discover(ctx)).resolves.toBe(discovered);
+    await expect(servedDescriptorSet(checkout, "orders", grpc)).resolves.toBe(
+      ORDERS_DESCRIPTORS,
+    );
     expect(grpc).toHaveBeenCalledWith({
-      scope: SCOPE,
-      server: "orders",
-      signal: ctx.signal,
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: ORDERS_PROTO },
+      ],
     });
+  });
+
+  it("refuses a folder with no .proto files", async () => {
+    const grpc = grpcImporter();
+    const error = await refusal(
+      servedDescriptorSet(checkoutOf({}), "orders", grpc),
+    );
+
+    expect(error.code).toBe("server_file");
+    expect(error.message).toBe(
+      `${ORDERS_FOLDER}/proto holds no files, and a gRPC server needs its .proto files there. Import the server in Studio to write them.`,
+    );
+    expect(grpc).not.toHaveBeenCalled();
+  });
+
+  it("refuses files that do not import", async () => {
+    const grpc = vi.fn<GrpcImporter>(() =>
+      Promise.reject(new Error("money.proto:2: syntax error")),
+    );
+    const error = await refusal(
+      servedDescriptorSet(checkoutOf(ORDERS_FILES), "orders", grpc),
+    );
+
+    expect(error.code).toBe("server_file");
+    expect(error.message).toBe(
+      `${ORDERS_FOLDER}/proto does not import on the production branch: money.proto:2: syntax error`,
+    );
+  });
+
+  it("refuses an import with no descriptor set", async () => {
+    const grpc = grpcImporter({ descriptor_set: undefined });
+    const error = await refusal(
+      servedDescriptorSet(checkoutOf(ORDERS_FILES), "orders", grpc),
+    );
+
+    expect(error.code).toBe("server_file");
+    expect(error.message).toBe(
+      `${ORDERS_FOLDER}/proto gave no descriptor set on the production branch.`,
+    );
   });
 });
