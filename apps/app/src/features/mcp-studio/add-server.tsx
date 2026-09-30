@@ -711,6 +711,7 @@ export function RegistryPackageFields({
 const STATUS_TONE: Readonly<Record<StudioDiscovery["status"], BadgeTone>> = {
   queued: "quiet",
   running: "approval",
+  waiting_for_machine: "quiet",
   succeeded: "allowed",
   failed: "failed",
 };

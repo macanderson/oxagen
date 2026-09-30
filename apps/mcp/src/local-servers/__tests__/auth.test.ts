@@ -50,7 +50,11 @@ describe("createMachineAuth", () => {
     const readHost = vi.fn(() => Promise.resolve(ACTIVE));
     const readScope = vi.fn(() => Promise.resolve(SCOPE));
     const auth = createMachineAuth(deps({ readHost, readScope }));
-    await expect(auth(HEADERS)).resolves.toEqual({ ok: true, machine: MACHINE });
+    await expect(auth(HEADERS)).resolves.toEqual({
+      ok: true,
+      machine: MACHINE,
+      scope: { orgId: "org_1", workspaceId: "ws_1" },
+    });
     expect(readScope).toHaveBeenCalledWith("org_1", "key_1");
     expect(readHost).toHaveBeenCalledWith({ orgId: "org_1", workspaceId: "ws_1" }, MACHINE);
   });

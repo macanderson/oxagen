@@ -32,7 +32,11 @@ export function launchSpecFor(server: string, lockSource: McpLockSource, source:
   if (lockSource.type === "registry" && source.type === "registry" && (source.machines?.length ?? 0) > 0) {
     const { command, args, package: pkg } = lockSource;
     if (command === undefined || args === undefined || pkg === undefined) return undefined;
-    return { server, command, args, env: source.env ?? [], package: pkg };
+    // A PyPI lock also names its file, which the launch already installs with
+    // --from. The machine's launch schema is strict and takes no file, so a
+    // machine that predates it still reads the launch (ADR-233).
+    const { name, version, digest, registry_type } = pkg;
+    return { server, command, args, env: source.env ?? [], package: { name, version, digest, registry_type } };
   }
   return undefined;
 }

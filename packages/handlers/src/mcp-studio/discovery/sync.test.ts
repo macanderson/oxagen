@@ -4,6 +4,7 @@
 // local reporter, and the opener. The store records each call and the logger
 // is mocked, so each case checks what the run wrote, logged, and sent, and
 // that no credential reached any of it.
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi, type Mock } from "vitest";
 import {
   compile,
@@ -39,7 +40,9 @@ import {
 import { REDACTED } from "./scrub";
 import {
   noCredentials,
+  noLocalReporter,
   noToolsPullRequestOpener,
+  waitingLocalReporter,
   type DefinitionReader,
   type DiscoveryCredentials,
   type DiscoverySeams,
@@ -1610,5 +1613,78 @@ describe("runDiscovery on an on-change repository definition", () => {
     expect(pushed).toMatchObject({ server: "pets", status: "succeeded" });
     expect(read).toHaveBeenCalledTimes(2);
     expect(h.pr.open.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+});
+
+// ── A server that runs on machines (#4772) ───────────────────────────────────
+
+/** mcp-studio's files fixture: a registry package on dev-laptops. */
+const FILES_FIXTURE = new URL(
+  "../../../../mcp-studio/fixtures/servers/files/",
+  import.meta.url,
+);
+
+function filesTree(): Record<string, string> {
+  return {
+    [serverTomlPath("files")]: readFileSync(
+      new URL("server.toml", FILES_FIXTURE),
+      "utf8",
+    ),
+    [toolsTomlPath("files")]: [
+      "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
+      'schema = "mcp-tools/v1"',
+      "",
+    ].join("\n"),
+    [toolsLockPath("files")]: readFileSync(
+      new URL("tools.lock.json", FILES_FIXTURE),
+      "utf8",
+    ),
+  };
+}
+
+describe("runDiscovery on a server that runs on machines", () => {
+  it("waits for a machine in the server's groups in a process that reaches none", async () => {
+    const h = harness({ server: "files", files: filesTree() });
+    h.report.mockImplementation((request) =>
+      waitingLocalReporter.report(request),
+    );
+
+    const result = await h.run("list_changed");
+
+    expect(result).toMatchObject({
+      server: "files",
+      status: "waiting_for_machine",
+      outcome: null,
+      error: null,
+    });
+    expect(lastFinish(h.db.fns)).toMatchObject({
+      status: "waiting_for_machine",
+      outcome: null,
+      error: null,
+      machineGroups: ["dev-laptops"],
+    });
+    expect(h.pr.open).not.toHaveBeenCalled();
+  });
+
+  it("failed unsupported before the API recorded a waiting discovery (witness)", async () => {
+    const h = harness({ server: "files", files: filesTree() });
+    h.report.mockImplementation((request) => noLocalReporter.report(request));
+
+    const result = await h.run("list_changed");
+
+    expect(result).toMatchObject({ status: "failed" });
+    expect(result.error).toContain("cannot reach the local gateway");
+  });
+
+  it("lists the tools when the process reaches the machine", async () => {
+    const h = harness({ server: "files", files: filesTree() });
+
+    const result = await h.run("list_changed");
+
+    expect(result.status).toBe("succeeded");
+    expect(h.report).toHaveBeenCalledWith(
+      expect.objectContaining({ server: "files" }),
+    );
+    expect(lastFinish(h.db.fns)).toMatchObject({ machine: "mac-01" });
   });
 });

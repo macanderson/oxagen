@@ -9,7 +9,10 @@
 // - credentials: lane M8's CredentialSource over the workspace's vault rows
 //   and its published servers (vaultCredentials). noCredentials refuses
 //   every request, for a process with no vault.
-// - local: lane M15 installs gatewayLocalReporter with the live broker.
+// - local: the API's durable functions reach no machine, so their default
+//   records the discovery as waiting for one (waitingLocalReporter). The MCP
+//   process a machine polls runs it with gatewayLocalReporter over its
+//   broker (./claim, #4772).
 // - grpc: lane M3's importGrpc, which reads .proto files into tools and a
 //   descriptor set.
 // - opener: lane M11's toolsPullRequestOpener (#4688) opens the tools
@@ -38,7 +41,11 @@ import { launchSpecFor, machineGroupsOf } from "../local-calls/launch";
 import type { MachineGroupReader } from "../local-calls/machines";
 import { registryDigests, type RegistryDigests } from "./digests";
 import { fetchText } from "./mcp-client";
-import { DiscoveryRefused, type DiscoveryScope } from "./types";
+import {
+  DiscoveryRefused,
+  WaitingForMachine,
+  type DiscoveryScope,
+} from "./types";
 
 // ── Steering files ───────────────────────────────────────────────────────────
 
@@ -167,7 +174,33 @@ export interface LocalToolsReporter {
   report(request: LocalToolsRequest): Promise<LocalToolsReport>;
 }
 
-/** Refuses until the local gateway's broker is installed. */
+/**
+ * A server whose source.machines names no group runs nowhere. No machine can
+ * claim its discovery, so it refuses rather than waits.
+ */
+function runsNowhere(server: string): DiscoveryRefused {
+  return new DiscoveryRefused(
+    "source",
+    `${server} names no machine groups in source.machines, so no machine may run it. Add a group, then run discovery again.`,
+  );
+}
+
+/**
+ * The default in a process that reaches no machine: the API's durable
+ * functions (#4772). It lists nothing and records the discovery as waiting for
+ * a machine in the server's groups. The MCP process one of them polls claims
+ * it and runs it through its broker. A server that names no groups refuses,
+ * because nothing would ever claim it.
+ */
+export const waitingLocalReporter: LocalToolsReporter = {
+  report({ server, source }) {
+    const groups = machineGroupsOf(source);
+    if (groups.length === 0) return Promise.reject(runsNowhere(server));
+    return Promise.reject(new WaitingForMachine(server, groups));
+  },
+};
+
+/** Refuses every local discovery, for a test that reaches no machine. */
 export const noLocalReporter: LocalToolsReporter = {
   report() {
     return Promise.reject(
@@ -207,6 +240,7 @@ export function gatewayLocalReporter(
           `The lock for ${server} names no package for a machine to run.`,
         );
       }
+      if (groups.length === 0) throw runsNowhere(server);
       const machines = await deps.machines(scope, groups);
       const machine = machines.find((id) => deps.broker.connected(id));
       if (machine === undefined) {
@@ -525,7 +559,7 @@ async function defaultSeams(): Promise<DiscoverySeams> {
     steering: hostSteeringFiles(createSteeringHost()),
     credentials: vaultCredentials(workspaceVault),
     transport: cloudTransport,
-    local: noLocalReporter,
+    local: waitingLocalReporter,
     grpc: importGrpc,
     definitions: githubDefinitionReader(async (scope, signal) =>
       createGitHubClient({

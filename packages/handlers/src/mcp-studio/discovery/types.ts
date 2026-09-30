@@ -81,6 +81,26 @@ export class DiscoveryRefused extends Error {
 }
 
 /**
+ * A server that runs on machines, discovered in a process that reaches none
+ * (#4772). The API's durable functions throw it from their local reporter,
+ * and runDiscovery records the row as waiting_for_machine with the groups
+ * that may run it. The MCP process a machine in those groups polls claims the
+ * row and runs the discovery through its broker. It is not a failure.
+ */
+export class WaitingForMachine extends Error {
+  /** server.toml's source.machines: the groups whose machines may run it. */
+  readonly groups: readonly string[];
+
+  constructor(server: string, groups: readonly string[]) {
+    super(
+      `${server} runs on machines in ${groups.join(", ") || "no group"}. Its discovery waits for one of them to poll.`,
+    );
+    this.name = "WaitingForMachine";
+    this.groups = groups;
+  }
+}
+
+/**
  * A discovery that failed for a reason that can pass. runDiscovery records
  * the failure on the row first, then throws this so the durable function
  * retries. Its message is the row's, with every credential removed.
@@ -95,7 +115,7 @@ export class RetriableDiscoveryFailure extends Error {
 /** What one discovery did, for the Inngest run's output and for tests. */
 export interface DiscoveryResult {
   server: string;
-  status: "succeeded" | "failed";
+  status: "succeeded" | "failed" | "waiting_for_machine";
   outcome: DiscoveryOutcome | null;
   toolCount: number | null;
   withheld: string[];

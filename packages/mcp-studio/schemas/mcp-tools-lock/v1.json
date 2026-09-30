@@ -93,7 +93,7 @@
                     "digest": {
                       "type": "string",
                       "pattern": "^sha256:[0-9a-f]{64}$",
-                      "description": "For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."
+                      "description": "For oci, the image's manifest digest. For pypi, the SHA-256 of file. For the others, the SHA-256 of the package archive."
                     },
                     "registry_type": {
                       "type": "string",
@@ -104,6 +104,29 @@
                         "nuget"
                       ],
                       "description": "source.registry_type: npm, pypi, oci, or nuget."
+                    },
+                    "file": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255,
+                          "description": "The file's name on the index: mcp_server_git-1.2.0-py3-none-any.whl."
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri",
+                          "pattern": "^https:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                          "description": "The URL the launch installs the file from, after uvx --from."
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "url"
+                      ],
+                      "additionalProperties": false,
+                      "description": "For pypi: the one file of the release the launch installs."
                     }
                   },
                   "required": [
@@ -113,6 +136,32 @@
                     "registry_type"
                   ],
                   "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "registry_type": {
+                            "const": "pypi"
+                          }
+                        },
+                        "required": [
+                          "registry_type"
+                        ]
+                      },
+                      "then": {
+                        "required": [
+                          "file"
+                        ]
+                      },
+                      "else": {
+                        "not": {
+                          "required": [
+                            "file"
+                          ]
+                        }
+                      }
+                    }
+                  ],
                   "description": "The package the local gateway runs, when server.toml names machines."
                 },
                 "command": {

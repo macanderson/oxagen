@@ -40,6 +40,12 @@ export interface LocalServersRouteDeps {
   broker(): LongPollBroker;
   /** How long a poll waits for a call. The broker's own wait when unset. */
   waitMs?: number;
+  /**
+   * Runs beside each authenticated poll, before it waits: the discoveries
+   * that wait for this machine (#4772). The poll never waits on it, and a
+   * failure is logged.
+   */
+  onPoll?(poll: { machine: string; scope: { orgId: string; workspaceId: string } }): Promise<void>;
   log?(event: string, fields: Record<string, unknown>): void;
 }
 
@@ -137,7 +143,17 @@ export function createLocalServersRoute(deps: LocalServersRouteDeps): LocalServe
         send(res, auth.status, auth.body);
         return;
       }
-      if (hangup !== undefined) await servePoll(auth.machine, hangup, res, deps);
+      if (hangup !== undefined) {
+        if (deps.onPoll !== undefined) {
+          deps.onPoll({ machine: auth.machine, scope: auth.scope }).catch((error: unknown) => {
+            deps.log?.("local_servers.poll_work_failed", {
+              machine: auth.machine,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+        await servePoll(auth.machine, hangup, res, deps);
+      }
       else serveReply(auth.machine, req.body, res, deps);
     }).catch((error: unknown) => {
       deps.log?.("local_servers.route_failed", { path, error: error instanceof Error ? error.message : String(error) });

@@ -14,6 +14,8 @@ Studio polls this while a discovery is queued or running, and reads it when a se
 
 Progress is the status. A discovery moves from `queued` to `running`, then ends `succeeded` or `failed`. It reports no percentage.
 
+A server that runs on machines, a `local` server or a `registry` server with `source.machines`, reads `waiting_for_machine` after its first step: the API's durable functions reach no machine (#4772). The MCP process that a machine in one of the server's groups polls claims the discovery, marks it `queued`, and runs it through that machine. A waiting discovery has no `finishedAt`, is not `stalled`, and the hourly sweep does not resend it.
+
 ## Input
 
 | Field | Type | Required | Constraint |
@@ -33,13 +35,13 @@ A discovery carries these fields. Each date is an ISO 8601 string.
 | `id` | uuid | the row's id. Each server keeps one row, and each discovery overwrites it, so the id stays the same across runs |
 | `server` | string | the folder name |
 | `mcpServerId` | string or null | `mcs_…`, or null before the server has a registry row |
-| `status` | enum | `queued`, `running`, `succeeded`, or `failed` |
+| `status` | enum | `queued`, `running`, `waiting_for_machine`, `succeeded`, or `failed` |
 | `trigger` | enum | what asked for it: `schedule`, `list_changed`, `push`, `registry_version`, `manual`, or `lock_merged` |
 | `requestedAt` | date | when it was asked for |
 | `requestedBy` | string or null | the person who asked, or null when the platform asked |
 | `startedAt`, `finishedAt` | date or null | when the run started and finished |
 | `error` | string or null | a failed run's message, with any credential scrubbed |
-| `outcome` | enum or null | `unchanged`, `pr_opened`, `pr_updated`, `needs_digest` (an OCI image or a PyPI release on machines has a newer version, and Oxagen cannot read the one digest the machine would check), or `skipped`. Null until the run finishes, and on a failed run |
+| `outcome` | enum or null | `unchanged`, `pr_opened`, `pr_updated`, `needs_digest` (an OCI image on machines has a newer version, and Oxagen cannot read the one digest the machine would check), or `skipped`. Null until the run finishes, and on a failed run |
 | `toolCount` | integer or null | the tools the source offered |
 | `machine` | string or null | the machine that reported, for a local server or a registry package |
 | `sourceKind`, `sourceRepo`, `sourcePath`, `sourceRef` | string or null | where the source was read from |
