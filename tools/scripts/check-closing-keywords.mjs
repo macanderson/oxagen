@@ -237,13 +237,12 @@ export function checkClosingKeywords(sources, { repository, commitsError } = {})
           sources.filter((s) => s.kind === "commit"),
           repository,
         );
-  const result = {
+  return {
     ok: findings.length === 0 && conflicts.length === 0 && !commitsError,
     findings,
     conflicts,
+    ...(commitsError ? { commitsError } : {}),
   };
-  if (commitsError) result.commitsError = commitsError;
-  return result;
 }
 
 /** Render a result as Markdown for a job summary or PR comment. */

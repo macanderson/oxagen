@@ -85,7 +85,7 @@ function readTurbo(path: string) {
 function globToRegExp(glob: string): RegExp {
   let out = "";
   for (let i = 0; i < glob.length; i += 1) {
-    const c = glob[i];
+    const c = glob.charAt(i);
     if (c === "*" && glob[i + 1] === "*") {
       out += ".*";
       i += 1;
