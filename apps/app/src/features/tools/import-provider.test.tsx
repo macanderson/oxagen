@@ -473,11 +473,9 @@ describe("ImportProvider › review and classify", () => {
     fireEvent.click(confirm);
     await screen.findByTestId("tools-import-done");
     expect(confirm).toHaveAttribute("aria-disabled", "true");
-    // Discovery progress follows the import, drawn as not available until
-    // get_studio_discovery merges (#4682).
-    const pending = screen.getByTestId("studio-discovery-pending");
-    expect(pending).toHaveAttribute("data-capability", "get_studio_discovery");
-    expect(pending).toHaveAttribute("data-gap", "#4682");
+    // Discovery progress follows the import. The import names no Studio
+    // server, so it says there is none to discover and offers no start.
+    expect(screen.getByTestId("studio-discovery-unnamed")).toBeInTheDocument();
     expect(
       screen.queryByTestId("studio-discovery-start"),
     ).not.toBeInTheDocument();
