@@ -160,11 +160,11 @@
     ],
     "ledger": [
       "model completed",
-      "tool get_run failed",
+      "tool get_run denied",
       "model completed",
       "seal completed"
     ],
-    "answers": ["error"],
+    "answers": ["refused_by_policy"],
     "refusals": ["authz_denied"],
     "invocations": ["get_run failed CapabilityError"],
     "approvals": [],

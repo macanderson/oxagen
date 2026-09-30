@@ -114,6 +114,8 @@ To see the engine posts and the stream parts behind a failure, set `REPLAY_DEBUG
 
 Keep the set between 10 and 20 turns. One test fails when the set leaves that range or when two turns share a name.
 
-## Known gaps
+## Refusals
 
-Fixtures 11, 12 and 13 pin today's behavior for IAM, credit and budget refusals. The engine is answered a plain `error`, and the ledger records `failed`. A refusal by policy should read `refused_by_policy` and `denied`. #4245 tracks the fix, and it will re-pin those three fixtures.
+A gate's refusal answers the engine `refused_by_policy` and records the tool row `denied`. Fixture 10 pins the kill switch, 11 pins IAM, 12 pins credits, and 13 pins the budget. `executeToolRequest` (`../engine/tools.ts`) reads the refusal off the error's `code`, so a refusal whose message reads like a fault still counts as a refusal (#4245). Fixture 08 pins the one exception: a write parked for approval also answers `refused_by_policy`, and its row records `parked`.
+
+The `invocations` field still records each refusal as `failed` with the error's class. That row is the kernel's own tool-invocation telemetry, which this set watches and does not change.

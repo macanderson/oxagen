@@ -114,11 +114,11 @@
     ],
     "ledger": [
       "model completed",
-      "tool search_graph failed",
+      "tool search_graph denied",
       "model completed",
       "seal completed"
     ],
-    "answers": ["error"],
+    "answers": ["refused_by_policy"],
     "refusals": ["budget_exceeded"],
     "invocations": ["search_graph failed BudgetExceededError"],
     "approvals": [],
