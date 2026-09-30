@@ -24,8 +24,11 @@ export const toolStudioListingStart = registerCapability({
   scoped: true,
   // Listing reads a server's tool list and spends no model tokens.
   noBillingGate: true,
+  // No agent surface: an in-app agent cannot call it. The approval flag
+  // guards the call if one is ever added.
   agent: { requiresApproval: true, riskLevel: "high", category: "governance" },
-  // It starts a program on a person's machine before any review.
+  // It starts a program on a person's machine before any review, so it runs
+  // only on a machine the person who asked enrolled (ADR-233).
   sensitivity: "high",
   mutates: true,
   defaultEffect: "deny",

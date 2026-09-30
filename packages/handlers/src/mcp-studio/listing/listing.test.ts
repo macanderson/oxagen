@@ -8,6 +8,7 @@ import type { StoredStudioDraft, StudioDraftStore } from "../import/store";
 import { makeCTX } from "../../test-utils/fixtures";
 import { createGetStudioListingHandler } from "./listing.get";
 import { createStartStudioListingHandler, type StartStudioListingDeps } from "./listing.start";
+import type { MachineOwnerReader } from "../local-calls/machines";
 import type { ListingStore, StoredListing } from "./store";
 
 const USER = "0192d4a8-7c1e-7a00-8000-0000000005e1";
@@ -71,7 +72,7 @@ function stored(lockSource: McpLockSource, over: Partial<StoredListing> = {}): S
   };
 }
 
-function harness(found: StoredStudioDraft | null) {
+function harness(found: StoredStudioDraft | null, ownsMachine = true) {
   const drafts: StudioDraftStore = { get: vi.fn(() => Promise.resolve(found)), save: vi.fn(), recordPr: vi.fn() };
   const listings = {
     request: vi.fn<ListingStore["request"]>((_scope, input) =>
@@ -81,15 +82,20 @@ function harness(found: StoredStudioDraft | null) {
   };
   const entry = vi.fn();
   const digest = vi.fn(() => Promise.resolve(DIGEST));
+  const owners: MachineOwnerReader = {
+    ownerOf: vi.fn(() => Promise.resolve(ownsMachine ? USER : null)),
+    ownsMachineIn: vi.fn(() => Promise.resolve(ownsMachine)),
+  };
   const deps: StartStudioListingDeps = {
     drafts,
     listings,
     authorize: vi.fn(() => Promise.resolve(USER)),
     catalog: () => ({ entry }),
     digests: () => ({ digest }),
+    owners,
     now: () => NOW,
   };
-  return { deps, drafts, listings, entry, digest };
+  return { deps, drafts, listings, entry, digest, owners };
 }
 
 async function refusal(promise: Promise<unknown>) {
@@ -147,6 +153,24 @@ describe("start_studio_listing", () => {
     const h = harness(null);
     const error = await refusal(createStartStudioListingHandler(h.deps)({ server: "notes", revision: 1 }, makeCTX()));
     expect(error).toMatchObject({ code: "not_found", reason: "draft_not_found" });
+  });
+
+  it("refuses a person with no enrolled machine in the server's groups, before any registry read (negative)", async () => {
+    const h = harness(draft({ serverToml: PACKAGE_TOML }), false);
+    const error = await refusal(
+      createStartStudioListingHandler(h.deps)({ server: "notes", revision: 3 }, makeCTX()),
+    );
+
+    // A listing starts a program before any review, so it runs only on a
+    // machine the person who asked enrolled (ADR-233).
+    expect(error).toMatchObject({ code: "conflict", reason: "machine_not_yours" });
+    expect(h.owners.ownsMachineIn).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: expect.any(String) }),
+      USER,
+      ["dev-laptops"],
+    );
+    expect(h.entry).not.toHaveBeenCalled();
+    expect(h.listings.request).not.toHaveBeenCalled();
   });
 
   it("refuses a local command sent with no pin, and records nothing (negative)", async () => {

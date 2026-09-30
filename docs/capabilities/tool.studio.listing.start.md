@@ -35,7 +35,7 @@ The listing waits for a machine. When one polls, the MCP process that holds its 
 
 ## Roles
 
-Org Owner or Admin, or workspace Owner: the roles that save a draft. A listing starts a program on a machine before any review, so the contract is high sensitivity, and an in-app agent asks a person first. The handler checks the role with `assertOrgRole` (INV-29).
+Org Owner or Admin, or workspace Owner: the roles that save a draft. A listing starts a program on a machine before any review, so the contract is high sensitivity, and it runs only on a machine the person who asked enrolled. No one can use it to start a program on another person's machine. The contract names no agent surface, so an in-app agent cannot call it. The handler checks the role with `assertOrgRole` (INV-29).
 
 ## Side effects
 
@@ -61,6 +61,7 @@ The contract declares the server folder (`tool_server_folder`) as its audit targ
 | `conflict` (409) | `server_toml_missing` or `server_toml_invalid`: the draft holds no `server.toml`, or it does not read |
 | `conflict` (409) | `listing_not_machine_run`: the server runs remotely, so Studio imports its tools with Connect |
 | `conflict` (409) | `machines_required`: `source.machines` names no group |
+| `conflict` (409) | `machine_not_yours`: you enrolled no machine in the server's groups, and a listing runs only on a machine the person who asked enrolled |
 | `conflict` (409) | `pin_required` or `pin_not_accepted`: a local command needs your pin, and a registry package takes none |
 | `conflict` (409) | `needs_digest`: an OCI image or a PyPI release, which Oxagen cannot pin yet |
 | `conflict` (409) | `registry_unreachable` or `source_invalid`: the registry did not answer, or the entry lists no package that runs on a machine |

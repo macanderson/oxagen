@@ -92,10 +92,17 @@ export interface ListingStore {
 export interface ListingClaimStore {
   /**
    * Claim the workspace's oldest open listing for a machine in one of
-   * `groups`: one waiting for a machine, or one whose claim went stale. The
-   * read locks the row and skips one another transaction holds.
+   * `groups` that `owner` asked for: one waiting for a machine, or one whose
+   * claim went stale. A listing starts a program before any review, so it
+   * runs only on a machine its requester enrolled (ADR-233). The read locks
+   * the row and skips one another transaction holds.
    */
-  claimOpen(scope: ListingScope, groups: readonly string[], now: Date): Promise<ClaimedListing | null>;
+  claimOpen(
+    scope: ListingScope,
+    groups: readonly string[],
+    owner: string,
+    now: Date,
+  ): Promise<ClaimedListing | null>;
   /** Write the draft's new source and finish the listing, in one transaction. */
   complete(scope: ListingScope, claim: ClaimedListing, done: ListingCompletion, now: Date): Promise<CompletionResult>;
   /** Finish the listing as failed, if the claim still holds. */
@@ -243,7 +250,7 @@ export const postgresListingStore: ListingStore = {
 };
 
 export const postgresListingClaimStore: ListingClaimStore = {
-  async claimOpen(scope, groups, now) {
+  async claimOpen(scope, groups, owner, now) {
     if (groups.length === 0) return null;
     const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
     return inScope(scope, async (tx) => {
@@ -260,6 +267,7 @@ export const postgresListingClaimStore: ListingClaimStore = {
           and(
             eq(listings.orgId, scope.orgId),
             eq(listings.workspaceId, scope.workspaceId),
+            eq(listings.requestedBy, owner),
             or(
               eq(listings.status, "waiting_for_machine"),
               and(eq(listings.status, "running"), lt(listings.claimedAt, staleBefore)),

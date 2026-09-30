@@ -21,6 +21,21 @@ export interface MachineGroupReader {
 }
 
 /**
+ * Who enrolled each machine. A Studio draft's listing starts a program before
+ * any review, so it runs only on a machine the person who asked enrolled
+ * (ADR-233). `groups-store.ts` reads it from tacho.hosts.
+ */
+export interface MachineOwnerReader {
+  /**
+   * The user who enrolled `machine` in this workspace, or null when it is not
+   * enrolled, is revoked, or no person enrolled it.
+   */
+  ownerOf(scope: MachineScope, machine: string): Promise<string | null>;
+  /** True when `userId` enrolled a machine, not revoked, in one of `groups`. */
+  ownsMachineIn(scope: MachineScope, userId: string, groups: readonly string[]): Promise<boolean>;
+}
+
+/**
  * The refusal for a machine none of whose groups the server names, or
  * undefined when the machine may run it. A server that names no groups runs
  * nowhere.
