@@ -23,7 +23,6 @@
  */
 import {
   loadEffectiveModelDefaults,
-  loadWorkspacePromptConfigSafe,
   modelIdOf,
   resolveModelFundingSource,
   resolveModelIdentity,
@@ -51,6 +50,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 import {
   assistantAsk,
   type AssistantGoal,
@@ -77,7 +77,7 @@ import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   assistantSystemPrompt,
-  loadAssistantSteering,
+  noWorkspaceSteering,
   steeringSection,
 } from "./assistant-steering";
 import {
@@ -274,6 +274,31 @@ export interface PreparedAssistantTurn {
 }
 
 /**
+ * The binding that marks every call of this turn as Stella's, so the kernel
+ * skips the workspace's decision rules for it (ADR-235), or nothing.
+ *
+ * It is minted here and never taken from the request, so a context an
+ * adapter hands in cannot bring its own. A turn a person starts from a
+ * session gets one. A turn an API key starts does not: the key's holder may
+ * be an automation, and a binding there would let it route an action a
+ * workspace rule refuses on the API through Stella instead. Such a turn keeps
+ * the rules, as its parked writes already fall back to a refusal
+ * (`unsupported_requester_context`, materialize-tools.ts).
+ *
+ * Exported for its own test.
+ */
+export function assistantBindingFor(
+  adapterCtx: Pick<CapabilityContext, "apiKeyId" | "requestId">,
+): Pick<CapabilityContext, "oxagenAssistant"> {
+  if (adapterCtx.apiKeyId) return {};
+  return {
+    oxagenAssistant: createOxagenAssistantBinding({
+      requestId: adapterCtx.requestId,
+    }),
+  };
+}
+
+/**
  * Check the person may ask, resolve who pays, pass the credit gate and pick
  * the model. Refuses before anything is written.
  */
@@ -301,7 +326,12 @@ export async function prepareAssistantTurn(
   });
   // Every gate, tool call and record of the turn is the person's, so the
   // context the turn runs on names them even when the request came by key.
-  const ctx: CapabilityContext = { ...request.ctx, userId };
+  const { oxagenAssistant: _fromAdapter, ...adapterCtx } = request.ctx;
+  const ctx: CapabilityContext = {
+    ...adapterCtx,
+    userId,
+    ...assistantBindingFor(request.ctx),
+  };
   const personRequest: AssistantTurnRequest = { ...request, ctx };
 
   // The agent the turn runs as in the record. An operator's `agent` switch on
@@ -531,7 +561,7 @@ async function runPreparedTurn(
   // pause's approval reads it the same way, when the pause fires.
   const runIdRef: { current: string | null } = { current: null };
 
-  const [materialised, promptConfig, recalledMemory] = await inScope(() =>
+  const [materialised, recalledMemory] = await inScope(() =>
     Promise.all([
       materializeTools(capCtx, {
         runIdRef,
@@ -562,7 +592,6 @@ async function runPreparedTurn(
         onApprovalRequired,
         approvalMode: "park",
       }),
-      loadWorkspacePromptConfigSafe(ctx.workspaceId),
       recallWorkspaceMemoryMessage({
         query: request.content,
         executionRef: messageId,
@@ -572,12 +601,10 @@ async function runPreparedTurn(
   );
   hooks.onTools?.(materialised.nameMap);
   const names = await resolveScopeNames(scope, request);
-  // Published steering and the workspace's instructions, ranked and fitted
-  // to one budget by the assembler (ADR-093 §7, #4158). What does not fit is
-  // cut and named in the manifest the run records below.
-  const steering = await inScope(() =>
-    loadAssistantSteering({ ...scope, promptConfig, requestId: ctx.requestId }),
-  );
+  // The workspace's published steering and its instructions steer its own
+  // agents, and the workspace does not govern Oxagen's (ADR-235). So the turn
+  // reads neither, and the manifest the run records below names no item.
+  const steering = noWorkspaceSteering(scope);
 
   const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
   // What the turn spent before the engine's first step: the history summary,
@@ -694,9 +721,9 @@ async function runPreparedTurn(
   let turn: Awaited<ReturnType<typeof runGovernedTurn>>;
   try {
     // Before the engine, so the record states what steered the agent even
-    // for a turn that then fails. A ledger that will not take this frame
-    // refuses the turn here, the same as any other receipt it will not take:
-    // steering the record cannot account for is what #3303 is about.
+    // for a turn that then fails: nothing from the workspace (ADR-235). A
+    // ledger that will not take this frame refuses the turn here, the same as
+    // any other receipt it will not take.
     await run.steeringManifest(steering);
     // The same holds for a summary carried in place of older messages. It
     // rides the history, not the system prompt, so the assembler never sees
@@ -737,7 +764,7 @@ async function runPreparedTurn(
       ...(funding.modelKey ? { credential: funding.modelKey } : {}),
       governance: { ...materialised.governance, ...belt.governance },
       principal: userId,
-      // The assembled steering, never the raw instructions column.
+      // Oxagen's baseline. The steering section is empty (ADR-235).
       system: assistantSystemPrompt(
         buildChatSystemPrompt({
           orgSlug: request.orgSlug,

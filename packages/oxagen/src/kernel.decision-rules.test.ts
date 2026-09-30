@@ -11,14 +11,18 @@ import { clearRegistryForTests, registerCapability } from "./registry";
 import {
   clearDecisionRulesGate,
   clearHandlersForTests,
+  clearKernelIAMRuntime,
   clearSecurityEventEmitter,
   clearKernelTraceSink,
+  setKernelIAMRuntime,
   setKernelTraceSink,
   setSecurityEventEmitter,
   invoke,
   registerHandler,
   setDecisionRulesGate,
+  type KernelIAMCheckFn,
 } from "./kernel";
+import { createOxagenAssistantBinding } from "./oxagen-assistant";
 
 const ctx: CapabilityContext = {
   orgId: "00000000-0000-0000-0000-000000000001",
@@ -48,6 +52,7 @@ const registerRefund = () =>
 afterEach(() => {
   clearDecisionRulesGate();
   clearHandlersForTests();
+  clearKernelIAMRuntime();
   clearRegistryForTests();
   clearSecurityEventEmitter();
   clearKernelTraceSink();
@@ -371,4 +376,215 @@ describe("kernel decision-rules gate — settlement", () => {
       invoke("test.refund", { amount_usd: 10 }, ctx),
     ).resolves.toEqual({ ok: true });
   });
+});
+
+// ── Stella's calls (ADR-235) ─────────────────────────────────────────────────
+//
+// The customer's workspace does not govern Stella, Oxagen's in-app assistant.
+// Its calls carry a kernel-minted binding and skip the workspace's decision
+// rules. The person's own IAM check still binds them, and a claimed binding
+// is refused as a forgery.
+
+describe("kernel decision-rules gate: Stella's calls (ADR-235)", () => {
+  /** The refund, reachable from the API and from Stella's agent surface. */
+  const registerSharedRefund = () =>
+    registerCapability({
+      name: "test.refund",
+      domain: "test",
+      description: "A scoped business action a rule can govern.",
+      mode: "sync" as const,
+      surfaces: ["api", "agent"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "allow" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ amount_usd: z.number() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+
+  /** A workspace rule that refuses any refund over $500. */
+  const denyBigRefunds = vi.fn(
+    async ({ input }: { input: unknown }): Promise<void> => {
+      if ((input as { amount_usd: number }).amount_usd > 500) {
+        throw Object.assign(new Error('refused by decision rule "deny-big"'), {
+          code: "decision_rule_denied",
+        });
+      }
+    },
+  );
+
+  const stellaCtx = (): CapabilityContext => ({
+    ...ctx,
+    surface: "app",
+    messageId: "msg_turn",
+    oxagenAssistant: createOxagenAssistantBinding({ requestId: ctx.requestId }),
+  });
+
+  afterEach(() => {
+    denyBigRefunds.mockClear();
+  });
+
+  it("blocks a refund through the API and lets Stella make the same refund", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    setDecisionRulesGate(denyBigRefunds);
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, ctx, { surface: "api" }),
+    ).rejects.toThrow(/deny-big/);
+    expect(handler).not.toHaveBeenCalled();
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, stellaCtx(), {
+        surface: "agent",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(handler).toHaveBeenCalledOnce();
+    // The rule judged the API call and never saw Stella's.
+    expect(denyBigRefunds).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the person's IAM check on Stella's call", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    setDecisionRulesGate(denyBigRefunds);
+    const check = vi.fn<KernelIAMCheckFn>(async () => ({
+      outcome: "deny",
+      reason: "role does not grant test.refund",
+      principal: null,
+    }));
+    setKernelIAMRuntime(check, /* enforced */ true);
+
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, stellaCtx(), {
+        surface: "agent",
+      }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(check).toHaveBeenCalledOnce();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("skips the gate for a call nested inside Stella's call", async () => {
+    registerSharedRefund();
+    setDecisionRulesGate(denyBigRefunds);
+    const amounts: number[] = [];
+    registerHandler("test.refund", async () => async (input, checkedCtx) => {
+      const amount = (input as { amount_usd: number }).amount_usd;
+      amounts.push(amount);
+      if (amount === 900) {
+        return invoke("test.refund", { amount_usd: 800 }, checkedCtx);
+      }
+      return { ok: true };
+    });
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, stellaCtx(), {
+        surface: "agent",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(amounts).toEqual([900, 800]);
+    expect(denyBigRefunds).not.toHaveBeenCalled();
+  });
+
+  it("runs the gate when the context also names a customer's agent run", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    setDecisionRulesGate(denyBigRefunds);
+    const agentRunCtx: CapabilityContext = {
+      ...stellaCtx(),
+      surface: "runner",
+      agentRun: {
+        principalKind: "agent",
+        agentPrincipal: {
+          id: "00000000-0000-0000-0000-0000000000a1",
+          kind: "agent",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+        humanPrincipal: {
+          id: "00000000-0000-0000-0000-0000000000a2",
+          kind: "human",
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        },
+        agentId: "agt_customer",
+        runId: "run_customer",
+        parentRunId: null,
+      },
+    };
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, agentRunCtx, {
+        surface: "agent",
+      }),
+    ).rejects.toThrow(/deny-big/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("resumes a parked Stella call with no rules gate registered", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    clearDecisionRulesGate();
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, stellaCtx(), {
+        surface: "agent",
+        requireFreshRules: true,
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  const forgeries: { name: string; binding: () => unknown }[] = [
+    { name: "a literal true", binding: () => true },
+    {
+      name: "a hand-built object",
+      binding: () => ({ principalKind: "oxagen_assistant", requestId: "r" }),
+    },
+    {
+      name: "a spread copy of a minted binding",
+      binding: () => ({ ...createOxagenAssistantBinding({ requestId: "r" }) }),
+    },
+    {
+      name: "a JSON round trip of a minted binding",
+      binding: () =>
+        JSON.parse(
+          JSON.stringify(createOxagenAssistantBinding({ requestId: "r" })),
+        ) as unknown,
+    },
+  ];
+
+  it.each(forgeries)(
+    "refuses $name as a forged binding and audits it",
+    async ({ binding }) => {
+      registerSharedRefund();
+      const handler = vi.fn(async () => ({ ok: true }));
+      registerHandler("test.refund", async () => handler);
+      setDecisionRulesGate(denyBigRefunds);
+      const security = vi.fn();
+      setSecurityEventEmitter(security);
+      // What an API or MCP request would have to smuggle into the context.
+      const claimed = {
+        ...ctx,
+        oxagenAssistant: binding(),
+      } as unknown as CapabilityContext;
+
+      await expect(
+        invoke("test.refund", { amount_usd: 10 }, claimed, { surface: "api" }),
+      ).rejects.toMatchObject({ code: "authz_denied" });
+      expect(handler).not.toHaveBeenCalled();
+      expect(denyBigRefunds).not.toHaveBeenCalled();
+      expect(security).toHaveBeenCalledWith(
+        expect.objectContaining({
+          capability: "test.refund",
+          outcome: "deny",
+          errorCode: "authz_denied",
+        }),
+      );
+    },
+  );
 });

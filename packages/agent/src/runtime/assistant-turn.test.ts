@@ -6,7 +6,6 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
-import { digestJcs } from "@oxagen/run-evidence";
 import { providerCostUsd } from "@oxagen/billing/pricing";
 import { resourceScopeDigestOf } from "@oxagen/iam";
 import { z } from "zod";
@@ -209,15 +208,16 @@ import {
   AssistantStoppedError,
   AssistantTurnNeedsUserError,
   AssistantTurnRefusedError,
+  assistantBindingFor,
   ConversationNotFoundError,
   prepareAssistantTurn,
   type AssistantTurnHooks,
 } from "./assistant-turn";
 import {
-  ASSISTANT_STEERING_BUDGET_TOKENS,
-  type AssistantSteeringFrame,
-  WORKSPACE_INSTRUCTIONS_ID,
-} from "./assistant-steering";
+  createOxagenAssistantBinding,
+  isKernelIssuedOxagenAssistant,
+} from "@oxagen/oxagen/oxagen-assistant";
+import { type AssistantSteeringFrame } from "./assistant-steering";
 import { LOAD_TOOLS, SEARCH_TOOLS } from "./tool-belt";
 
 const CTX = {
@@ -641,6 +641,72 @@ describe("prepareAssistantTurn", () => {
         ctx: { ...CTX, userId: null, apiKeyId: "aky-1" },
       }),
     ).rejects.toBeInstanceOf(AssistantTurnNeedsUserError);
+  });
+
+  // ADR-235: every call a person's turn makes carries a binding the kernel
+  // minted, so the workspace's decision rules skip it. The tool belt, the
+  // turn's own reads, and the execution record all run on that context.
+  it("marks every call of a person's turn as Stella's", async () => {
+    await runTurn(request);
+    const toolCtx = mocks.materializeTools.mock.calls[0]![0] as {
+      oxagenAssistant?: unknown;
+    };
+    expect(isKernelIssuedOxagenAssistant(toolCtx.oxagenAssistant)).toBe(true);
+    expect(mocks.invoke).toHaveBeenCalled();
+    for (const [, , ctx] of mocks.invoke.mock.calls) {
+      expect(
+        isKernelIssuedOxagenAssistant(
+          (ctx as { oxagenAssistant?: unknown }).oxagenAssistant,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  // A key's holder may be an automation. A binding on its turn would let it
+  // route an action a workspace rule refuses on the API through Stella.
+  it("leaves the workspace's rules on a turn an API key starts (negative)", async () => {
+    setup({ apiKeyCreator: "creator-1" });
+    await runTurn({
+      ...request,
+      ctx: { ...CTX, userId: null, apiKeyId: "aky-1" },
+    });
+    const toolCtx = mocks.materializeTools.mock.calls[0]![0] as object;
+    expect(toolCtx).not.toHaveProperty("oxagenAssistant");
+  });
+
+  it("never keeps a binding the adapter's context brings (negative)", async () => {
+    const brought = createOxagenAssistantBinding({ requestId: "other" });
+    await runTurn({
+      ...request,
+      ctx: { ...CTX, oxagenAssistant: brought },
+    });
+    const sessionCtx = mocks.materializeTools.mock.calls[0]![0] as {
+      oxagenAssistant?: unknown;
+    };
+    expect(sessionCtx.oxagenAssistant).not.toBe(brought);
+    expect(isKernelIssuedOxagenAssistant(sessionCtx.oxagenAssistant)).toBe(
+      true,
+    );
+
+    setup({ apiKeyCreator: "creator-1" });
+    mocks.materializeTools.mockClear();
+    await runTurn({
+      ...request,
+      ctx: { ...CTX, userId: null, apiKeyId: "aky-1", oxagenAssistant: brought },
+    });
+    const keyCtx = mocks.materializeTools.mock.calls[0]![0] as object;
+    expect(keyCtx).not.toHaveProperty("oxagenAssistant");
+  });
+});
+
+describe("assistantBindingFor", () => {
+  it("mints a fresh binding for a session and none for an API key", () => {
+    const session = assistantBindingFor({ apiKeyId: null, requestId: "r1" });
+    expect(isKernelIssuedOxagenAssistant(session.oxagenAssistant)).toBe(true);
+    expect(session.oxagenAssistant?.requestId).toBe("r1");
+    expect(assistantBindingFor({ apiKeyId: "aky-1", requestId: "r1" })).toEqual(
+      {},
+    );
   });
 });
 
@@ -1221,11 +1287,10 @@ describe("the prepared turn", () => {
     });
   });
 
-  // #4158: published steering and the workspace's instructions reach the
-  // prompt through the one assembler, and the run records what it kept and
-  // cut before the engine is asked anything (ADR-093 §7). Before, the
-  // instructions were refused whole past 8,000 characters and published
-  // records never reached the assistant.
+  // ADR-235: the workspace's published steering and its instructions steer
+  // its own agents, and the workspace does not govern Stella. The turn reads
+  // neither, and the run still records a manifest, one that names no item,
+  // before the engine is asked anything. This reverses the #4158 path.
   describe("steering", () => {
     const INSTRUCTIONS = "Answer in British English and cite the run id.";
     const RECORD = {
@@ -1238,35 +1303,43 @@ describe("the prepared turn", () => {
     const systemOf = (): string =>
       mocks.runGovernedTurn.mock.calls[0]![0].system as string;
 
-    it("carries published steering and the instructions in the prompt, and records the manifest before the engine", async () => {
+    it("keeps the workspace's published record and instructions out of the prompt", async () => {
       mocks.publishedSteering.mockResolvedValue([RECORD]);
       mocks.promptConfig.mockReturnValue({
         additionalInstructions: INSTRUCTIONS,
       });
       await runTurn(request);
 
-      const system = systemOf();
-      expect(system.startsWith("GOVERNANCE Acme/Core")).toBe(true);
-      expect(system).toContain(
-        "- Ask before deleting data. (rule; ask-before-deleting)",
-      );
-      expect(system).toContain(`- Workspace instructions: ${INSTRUCTIONS}`);
-      // The published MUST record is listed before the instructions.
-      expect(system.indexOf("Ask before deleting")).toBeLessThan(
-        system.indexOf(INSTRUCTIONS),
-      );
+      expect(systemOf()).toBe("GOVERNANCE Acme/Core");
+      expect(systemOf()).not.toContain("Ask before deleting");
+      expect(systemOf()).not.toContain(INSTRUCTIONS);
+      expect(systemOf()).not.toContain("Workspace steering");
+      // Neither source is read at all.
+      expect(mocks.publishedSteering).not.toHaveBeenCalled();
+      expect(mocks.promptConfig).not.toHaveBeenCalled();
+      // The engine is told of no steering in the context window.
+      expect(
+        mocks.runGovernedTurn.mock.calls[0]![0].window.steering,
+      ).toBeNull();
+    });
+
+    it("records a manifest that names no item, after admission and before the engine", async () => {
+      mocks.publishedSteering.mockResolvedValue([RECORD]);
+      mocks.promptConfig.mockReturnValue({
+        additionalInstructions: INSTRUCTIONS,
+      });
+      await runTurn(request);
 
       const [frame, ...rest] = steeringFrames();
       expect(rest).toEqual([]);
-      expect(frame!.manifest.items.map((i) => [i.id, i.outcome])).toEqual([
-        ["ask-before-deleting", "included"],
-        [WORKSPACE_INSTRUCTIONS_ID, "included"],
-      ]);
-      expect(frame!.manifest.text_digest).toMatch(/^sha256:/);
-      expect(frame!.instructionsDigest).toBe(digestJcs(INSTRUCTIONS));
+      expect(frame!.manifest).toMatchObject({
+        included: 0,
+        cut: 0,
+        text_digest: null,
+        items: [],
+      });
+      expect(frame!.instructionsDigest).toBeNull();
       expect(frame!.unavailableKinds).toEqual([]);
-      // After the run is admitted and before the engine is asked anything,
-      // so a turn that then fails still says what steered it.
       const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
         fn.mock.invocationCallOrder[0]!;
       expect(order(mocks.steeringManifest)).toBeGreaterThan(
@@ -1275,53 +1348,6 @@ describe("the prepared turn", () => {
       expect(order(mocks.steeringManifest)).toBeLessThan(
         order(mocks.runGovernedTurn),
       );
-    });
-
-    it("cuts instructions past the budget: the prompt carries the records and the manifest names the cut (negative)", async () => {
-      const oversized = "x".repeat(ASSISTANT_STEERING_BUDGET_TOKENS * 4 + 1);
-      mocks.publishedSteering.mockResolvedValue([RECORD]);
-      mocks.promptConfig.mockReturnValue({
-        additionalInstructions: oversized,
-      });
-      await runTurn(request);
-
-      const system = systemOf();
-      expect(system).toContain("Ask before deleting data.");
-      expect(system).not.toContain("xxxx");
-      const [frame] = steeringFrames();
-      expect(
-        frame!.manifest.items.find((i) => i.id === WORKSPACE_INSTRUCTIONS_ID),
-      ).toMatchObject({ outcome: "cut", reason: "budget" });
-      expect(frame!.instructionsDigest).toBe(digestJcs(oversized));
-      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
-    });
-
-    it("records an empty manifest when nothing steers, and sends the baseline alone (negative)", async () => {
-      await runTurn(request);
-      expect(systemOf()).toBe("GOVERNANCE Acme/Core");
-      const [frame] = steeringFrames();
-      expect(frame!.manifest).toMatchObject({
-        included: 0,
-        cut: 0,
-        text_digest: null,
-        items: [],
-      });
-      expect(frame!.instructionsDigest).toBeNull();
-    });
-
-    it("runs on the instructions alone when the registry does not answer, and the manifest says so", async () => {
-      mocks.publishedSteering.mockRejectedValue(new Error("registry is down"));
-      mocks.promptConfig.mockReturnValue({
-        additionalInstructions: INSTRUCTIONS,
-      });
-      await runTurn(request);
-
-      expect(systemOf()).toContain(INSTRUCTIONS);
-      const [frame] = steeringFrames();
-      expect(frame!.unavailableKinds).toEqual(["record"]);
-      expect(frame!.manifest.items.map((i) => i.id)).toEqual([
-        WORKSPACE_INSTRUCTIONS_ID,
-      ]);
     });
 
     it("does not run the turn when the record will not take the manifest", async () => {

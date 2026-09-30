@@ -11,6 +11,7 @@
     "./registry": "./src/registry.ts",
     "./kernel": "./src/kernel.ts",
     "./platform-operator": "./src/platform-operator.ts",
+    "./oxagen-assistant": "./src/oxagen-assistant.ts",
     "./handler-error": "./src/handler-error.ts",
     "./agent-credential": "./src/agent-credential.ts",
     "./cli-session": "./src/cli-session.ts",

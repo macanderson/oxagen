@@ -495,13 +495,17 @@ export async function seedLedgerRun(
   tenant: SeededTenant,
   agent: SeededAgent,
   startedAt: Date,
+  options: {
+    /** `chat` or `api-chat` seeds a Stella turn (ADR-235). */
+    surface?: "external" | "chat" | "api-chat";
+  } = {},
 ): Promise<void> {
   const digest = `sha256:${"0".repeat(64)}`;
   await withSystemDb(async (tx) => {
     await tx.insert(schema.agentRuns).values({
       orgId: tenant.orgId,
       workspaceId: tenant.workspaceId,
-      surface: "external",
+      surface: options.surface ?? "external",
       spec: {},
       status: "completed",
       startedAt,

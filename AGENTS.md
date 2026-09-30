@@ -69,7 +69,7 @@ Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the 
 | `tenancy` | `src/data-plane.ts` | Organisation-scoped data-plane resolver seam (ADR-042) |
 | `run-ledger` | `src/run-store.ts` | Durable run / attempt / event / seal / finalization evidence ledger (was `agent-runner`) |
 | `run-evidence` | `src/contextgraph.ts` | CGP conformance + RFC-8785 canonical digests for evidence envelopes |
-| `rules` | `src/gate.ts` | Workspace decision-rules gate in the kernel |
+| `rules` | `src/gate.ts` | Workspace decision-rules gate in the kernel. Stella's calls skip it (ADR-235) |
 | `telemetry` | `src/clickhouse.ts` | ClickHouse client + migration runner |
 | `telemetry` | `src/circuit-breaker.ts` | Circuit breaker for telemetry clients |
 | `auth` | | Better Auth integration (sessions, rate limits, org members) |

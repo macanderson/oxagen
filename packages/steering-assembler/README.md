@@ -25,14 +25,15 @@ Oxagen's slice of its context (ADR-093, ADR-144).
 - **Used by:** `@oxagen/handlers` (`src/lib/tacho-steering.ts`,
   `assembleWorkspaceSteering`, for a wrapped agent's bundle) and
   `@oxagen/agent` (`src/runtime/assistant-steering.ts`,
-  `assembleAssistantSteering`, for the in-app assistant's turn).
+  `noWorkspaceSteering`, which assembles no candidate for the in-app
+  assistant's turn, because the workspace does not steer Stella, ADR-235).
 
 ## Seams
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | `assembleSteering(run, budgetTokens)` | export | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` and `packages/agent/src/runtime/assistant-steering.ts` |
-| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/agent/src/runtime/published-steering.ts` maps context records to candidates; `assistant-steering.ts` adds the workspace instructions as an `instruction` candidate |
+| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/agent/src/runtime/published-steering.ts` maps context records to candidates; `assistant-steering.ts` can add a workspace's instructions as an `instruction` candidate, and no production turn hands it any (ADR-235) |
 | `STEERING_MANIFEST_SCHEMA` (`oxagen.steering.manifest/1`) | boundary | `packages/steering-assembler/src/assemble.ts` | Copied, not imported, as the same constant in `packages/tacho/src/wire.ts` |
 
 ## Entry points
@@ -82,15 +83,14 @@ about 2,500 tokens in Codex. Past that limit the agent reads a file path and
 a preview, not the records. `HARNESS_CONTEXT_MAX_CHARS` lists each limit and
 its source.
 
-`candidates` are context records, operator steer commands, the in-app
-assistant's workspace instructions and, later, skill descriptions, each with
+`candidates` are context records, operator steer commands and, later, skill
+descriptions, each with
 an id, a kind, a force (`must`, `should`, `may`, `info`), a body and the
 instant it took effect. The assembler ranks them by tier and then by recency,
 fits them to the budget by skipping what does not fit, and returns the text
 the agent reads. The text opens with `STEERING_HEADER` unless the run names
-its own `header`. The in-app assistant names one, because its text carries
-the workspace instructions beside published records, and it assembles under
-`ASSISTANT_STEERING_BUDGET_TOKENS` (4,096) rather than the prefix budget.
+its own `header`. The in-app assistant's turn hands it no candidate
+(ADR-235), so its text is null and its manifest names no item.
 
 The manifest lists every candidate in rank order with `included` or `cut` and
 the reason for a cut: `tier` (this injection point does not deliver that
