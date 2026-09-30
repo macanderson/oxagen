@@ -12,10 +12,10 @@
 
 export const LOCAL_SERVER_ERROR_CODES = [
   "not_in_group",
-  "machine_suspended",
   "digest_mismatch",
   "cloud_unreachable",
   "missing_variable",
+  "machine_suspended",
   "digest_unavailable",
   "envelope_invalid",
   "envelope_expired",
