@@ -39,7 +39,7 @@ A discovery carries these fields. Each date is an ISO 8601 string.
 | `requestedBy` | string or null | the person who asked, or null when the platform asked |
 | `startedAt`, `finishedAt` | date or null | when the run started and finished |
 | `error` | string or null | a failed run's message, with any credential scrubbed |
-| `outcome` | enum or null | `unchanged`, `pr_opened`, `pr_updated`, `needs_digest` (a registry package has a newer version and the lock needs its digest), or `skipped`. Null until the run finishes, and on a failed run |
+| `outcome` | enum or null | `unchanged`, `pr_opened`, `pr_updated`, `needs_digest` (an OCI image or a PyPI release on machines has a newer version, and Oxagen cannot read the one digest the machine would check), or `skipped`. Null until the run finishes, and on a failed run |
 | `toolCount` | integer or null | the tools the source offered |
 | `machine` | string or null | the machine that reported, for a local server or a registry package |
 | `sourceKind`, `sourceRepo`, `sourcePath`, `sourceRef` | string or null | where the source was read from |

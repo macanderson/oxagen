@@ -116,8 +116,10 @@ Poll `get_studio_discovery` while the status reads `queued` or `running`. A disc
 | `unchanged` | No imported tool changed, so the lock stands |
 | `pr_opened` | The discovery opened the sync steering PR |
 | `pr_updated` | The discovery added a commit to the open sync steering PR |
-| `needs_digest` | A registry package has a newer version, and discovery cannot read the digest the lock pins. It records the version and opens no PR |
+| `needs_digest` | An OCI image or a PyPI release that runs on machines has a newer version, and Oxagen cannot read the one digest the machine would check. It records the version and opens no PR |
 | `skipped` | The schedule does not allow this run, or the new lock matches the one the open PR already proposes |
+
+A registry package on machines from npm, PyPI, or NuGet moves to a new catalog version on its own. Oxagen reads the new version's digest from the public registry, the same way the machine reads it before it runs anything. A machine then lists the tools at that pin, and the sync steering PR moves `source.version` and shows the new digest in the lock.
 
 `sync.schedule` in `server.toml` decides which triggers run a discovery. `start_studio_discovery` and a merged sync steering PR always run one. A push to the steering repo runs one only for `on-change`. A changed tool list and a new registry version run one unless the schedule is `manual`. The hourly sweep runs one for a `daily` server whose last discovery is a day old, and once for an `on-change` server that has never finished one.
 

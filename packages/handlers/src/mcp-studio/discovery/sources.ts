@@ -16,6 +16,7 @@ import {
   DEFINITION_BYTES_MAX,
   importGraphql,
   importOpenApi,
+  registryLaunch,
   registryLockSource,
   upstreamFromMcpTool,
   type DefinitionLockSource,
@@ -348,12 +349,13 @@ function registryLock(
   source: RegistrySource,
   entry: RegistryEntry,
   serverVersion: string | undefined,
+  digest?: string,
 ): RegistryLockSource {
   try {
     return registryLockSource({
       source,
       entry,
-      digest: undefined,
+      digest,
       server_version: serverVersion,
     });
   } catch (error) {
@@ -365,7 +367,8 @@ function registryLock(
  * A registry server. The schedule, a manual run, and the catalog's own
  * signal read the catalog's newest entry. When it names a newer version, a
  * server with no machines is listed at the new entry's endpoint, and the PR
- * moves source.version. One on machines stops at needs_digest.
+ * moves source.version. One on machines is pinned at the new version's
+ * digest and listed on a machine (discoverMovedPackage).
  */
 async function discoverRegistry(
   ctx: SourceContext,
@@ -384,8 +387,8 @@ async function discoverRegistry(
   const moving = latest !== undefined && latestVersion !== source.version;
 
   if (source.machines !== undefined) {
-    if (moving && latestVersion !== undefined) {
-      throw new NeedsDigest(source.server, latestVersion);
+    if (moving && latest !== undefined && latestVersion !== undefined) {
+      return discoverMovedPackage(ctx, source, latest, latestVersion);
     }
     return discoverLocalReport(ctx, source, latestVersion);
   }
@@ -425,6 +428,73 @@ async function discoverRegistry(
     {
       latestVersion,
       machine: null,
+      origin: `${source.server} ${latestVersion} is in the catalog`,
+      version: latestVersion,
+    },
+  );
+}
+
+/**
+ * A registry package on machines whose catalog names a newer version. Oxagen
+ * reads the new version's digest from the public registry, pins it in the
+ * lock source, and asks a machine for tools/list at that pin, so the sync PR
+ * moves source.version and shows the new digest to its reviewer (ADR-233). An
+ * OCI image, and a process with no digest reader, stop at needs_digest. So
+ * does a PyPI release: its pin names one file, which uvx name@version does not
+ * install, and the file selection ships with the machine's reader (ADR-233).
+ */
+async function discoverMovedPackage(
+  ctx: SourceContext,
+  source: RegistrySource,
+  latest: RegistryEntry,
+  latestVersion: string,
+): Promise<Discovered> {
+  const reader = ctx.seams.digests;
+  if (
+    reader === undefined ||
+    source.registry_type === "oci" ||
+    source.registry_type === "pypi"
+  ) {
+    throw new NeedsDigest(source.server, latestVersion);
+  }
+  const next: RegistrySource = { ...source, version: latestVersion };
+  const unpinned = registryLaunch({ source: next, entry: latest, digest: "" });
+  if (!unpinned.ok) {
+    throw new DiscoveryRefused(
+      "source",
+      `${source.server} ${latestVersion} cannot run on a machine: ${unpinned.problems.map((problem) => `${problem.field}: ${problem.message}`).join("; ")}`,
+    );
+  }
+  const { name, version, registry_type } = unpinned.package;
+  let digest: string;
+  try {
+    digest = await reader.digest(
+      { name, version, registry_type },
+      { command: unpinned.command, args: unpinned.args },
+      ctx.signal,
+    );
+  } catch (error) {
+    // The registry may be down, so a retry can read it.
+    throw new DiscoveryRefused(
+      "source",
+      `Oxagen could not read the digest of ${name}@${version}: ${messageOf(error)}`,
+      { retriable: true },
+    );
+  }
+  const lockSource = registryLock(next, latest, undefined, digest);
+  const report = await ctx.seams.local.report({
+    scope: ctx.scope,
+    server: ctx.server,
+    source: next,
+    lockSource,
+    signal: ctx.signal,
+  });
+  return fromMcp(
+    report.tools,
+    withServerVersion(lockSource, report.server_version),
+    {
+      latestVersion,
+      machine: report.machine,
       origin: `${source.server} ${latestVersion} is in the catalog`,
       version: latestVersion,
     },
