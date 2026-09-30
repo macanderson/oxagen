@@ -296,6 +296,7 @@
           "authorization_expired": "This sign-in expired or was already used. Authorize again.",
           "authorization_failed": "The provider refused the sign-in. Check the OAuth app and scopes, then authorize again.",
           "authorization_discovery_failed": "The server's OAuth metadata could not be read. Check the endpoint URL.",
+          "registration_refused": "The provider refused to register Oxagen as an OAuth client, so signing in again will not help. If the provider lets you create your own OAuth app, enter its client ID and authorize again.",
           "authorization_url_invalid": "The provider returned a sign-in address that is not https, so it was not opened.",
           "endpoint_not_public": "The endpoint must be a public https address.",
           "redirect_url_invalid": "The redirect URL was refused. Reload the page and try again.",

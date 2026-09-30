@@ -2,7 +2,8 @@
 // disconnects it (mcp-studio-spec, Authentication).
 //
 // The operator follows the connect link the credential source returned. The
-// API finds the server in the workspace's published steering version,
+// link and the callback sit on the app's origin, where the session cookie is,
+// and the app proxies them to the API (see mcpStudioAppOrigin). The API finds the server in the workspace's published steering version,
 // discovers its authorization server, and sends the operator there with PKCE
 // and a one-time state. The callback trades the code for tokens and stores
 // them sealed in mcp.operator_tokens, one row per operator, server, and
@@ -266,13 +267,33 @@ export async function beginConnect(
  * who started it. Answers who connected what, for the page the operator sees.
  */
 export async function finishConnect(
-  input: { state: string; code: string },
+  input: {
+    state: string;
+    code: string;
+    /**
+     * The signed-in caller of the callback. When given, the state must name
+     * the same operator and workspace, so a token is never stored for a
+     * person other than the one whose session finished the sign-in.
+     */
+    caller?: { orgId: string; workspaceId: string; userId: string };
+  },
   deps: ConnectDeps,
 ): Promise<ConnectTarget & { label: string }> {
   const rt = runtime(deps);
   const data = await deps.states.take(input.state, rt.now());
   if (data === null) {
     throw new ConnectError(400, "state", "This connect link expired or was already used. Start again from Oxagen.");
+  }
+  const caller = input.caller;
+  if (
+    caller !== undefined &&
+    (caller.userId !== data.userId || caller.orgId !== data.orgId || caller.workspaceId !== data.workspaceId)
+  ) {
+    throw new ConnectError(
+      403,
+      "not_operator",
+      "Another Oxagen account started this connect, so nothing was connected. Start again from Oxagen.",
+    );
   }
   const scope = { orgId: data.orgId, workspaceId: data.workspaceId };
   const store = deps.store(scope);
@@ -371,38 +392,94 @@ export async function disconnect(input: ConnectTarget, deps: ConnectDeps): Promi
   return true;
 }
 
-/** The link an operator follows to connect an account: the API's connect route. */
+const DEFAULT_APP_ORIGIN = "https://app.oxagen.sh";
+
+const APP_ORIGIN_SOURCES = ["APP_URL", "NEXT_PUBLIC_APP_URL"] as const;
+
+/**
+ * The origin of the web app an operator signs in to. The connect link and the
+ * OAuth callback both live there.
+ *
+ * Better Auth sets its session cookie with no domain, so the cookie belongs to
+ * the app host alone. A browser sends none of it to the API host, and a connect
+ * link there answered 401 to an operator who was signed in. The app proxies
+ * `/api/v1/*` to the API with the cookie attached (`apps/app/next.config.ts`),
+ * so a link on the app origin reaches the same route with the session.
+ *
+ * `APP_URL` comes first because the env registry sets it on the api and mcp
+ * services. `NEXT_PUBLIC_APP_URL` is the app's own variable. A value that does
+ * not parse as a URL is skipped, and the answer is the origin alone.
+ */
+export function mcpStudioAppOrigin(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  for (const name of APP_ORIGIN_SOURCES) {
+    const raw = env[name]?.trim();
+    if (!raw) continue;
+    try {
+      return new URL(raw).origin;
+    } catch {
+      // Not a URL. Try the next source.
+    }
+  }
+  return DEFAULT_APP_ORIGIN;
+}
+
+/**
+ * A URL on the workspace's operator OAuth routes, as the browser reaches them
+ * through the app's `/api/v1/*` proxy. `connect` is the link an operator
+ * follows. `callback` is the redirect URI the authorization server sends the
+ * operator back to, so the state cookie the connect set comes back with it.
+ */
+export function mcpStudioOauthUrl(
+  input: { appBaseUrl: string; orgSlug: string; workspaceSlug: string },
+  leaf: "connect" | "callback",
+): string {
+  const base = input.appBaseUrl.replace(/\/+$/, "");
+  return `${base}${mcpStudioOauthPath(input)}/${leaf}`;
+}
+
+/** The browser-facing path of a workspace's operator OAuth routes. */
+export function mcpStudioOauthPath(input: { orgSlug: string; workspaceSlug: string }): string {
+  return `/api/v1/${encodeURIComponent(input.orgSlug)}/${encodeURIComponent(input.workspaceSlug)}/mcp-studio/oauth`;
+}
+
+/** The link an operator follows to connect an account, on the app's origin. */
 export function mcpStudioConnectLink(input: {
-  apiBaseUrl: string;
+  appBaseUrl: string;
   orgSlug: string;
   workspaceSlug: string;
   server: string;
   environment: string;
 }): string {
-  const base = input.apiBaseUrl.replace(/\/+$/, "");
-  const path = `/v1/${encodeURIComponent(input.orgSlug)}/${encodeURIComponent(input.workspaceSlug)}/mcp-studio/oauth/connect`;
   const query = new URLSearchParams({ server: input.server, environment: input.environment });
-  return `${base}${path}?${query.toString()}`;
+  return `${mcpStudioOauthUrl(input, "connect")}?${query.toString()}`;
 }
 
 /**
  * The CredentialSource for one workspace's runs: its credential rows, its
- * published servers, and connect links to the API's connect route. Build one
- * per run, so the servers match the steering version the run was planned on.
+ * published servers, and connect links on the app's origin. Build one per run,
+ * so the servers match the steering version the run was planned on.
  */
 export async function workspaceCredentialSource(
-  input: CredentialScope & { apiBaseUrl: string; orgSlug: string; workspaceSlug: string },
+  input: CredentialScope & {
+    orgSlug: string;
+    workspaceSlug: string;
+    /** The app origin the link is built on. Defaults to `mcpStudioAppOrigin()`. */
+    appBaseUrl?: string;
+  },
   deps: Pick<ConnectDeps, "fetch" | "now" | "kms" | "timeoutMs"> &
     Partial<Pick<ConnectDeps, "store" | "servers">> = {},
 ): Promise<CredentialSource> {
   const scope = { orgId: input.orgId, workspaceId: input.workspaceId };
   const servers = await (deps.servers ?? publishedServers)(scope);
+  const appBaseUrl = input.appBaseUrl ?? mcpStudioAppOrigin();
   return createCredentialSource({
     store: (deps.store ?? postgresCredentialStore)(scope),
     server: (name) => servers.get(name),
     connectUrl: ({ server, environment }) =>
       mcpStudioConnectLink({
-        apiBaseUrl: input.apiBaseUrl,
+        appBaseUrl,
         orgSlug: input.orgSlug,
         workspaceSlug: input.workspaceSlug,
         server,
