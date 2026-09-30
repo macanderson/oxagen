@@ -32,29 +32,33 @@ async function readMachineHost(
   return row;
 }
 
-/** The machines whose waiting discoveries this process is running now. */
+/** The machines whose waiting discoveries and listings this process is running now. */
 const claiming = new Set<string>();
 
 /**
- * Runs the discoveries that wait for a machine that polls (#4772). One pass
- * per machine at a time: a poll that arrives while the last pass runs adds
- * nothing. The modules load on the first poll, not at boot.
+ * Runs the discoveries (#4772) and the Studio draft listings (ADR-233, #4756)
+ * that wait for a machine that polls. One pass per machine at a time: a poll
+ * that arrives while the last pass runs adds nothing. The modules load on the
+ * first poll, not at boot.
  */
 async function claimForPoll(poll: { machine: string; scope: { orgId: string; workspaceId: string } }): Promise<void> {
   if (claiming.has(poll.machine)) return;
   claiming.add(poll.machine);
   try {
-    const [{ claimMachineDiscoveries }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
-      import("@oxagen/handlers/mcp-studio/discovery/claim"),
-      import("@oxagen/handlers/mcp-studio/discovery/seams"),
-      import("@oxagen/handlers/tools.pr.open"),
-    ]);
+    const [{ claimMachineDiscoveries }, { discoverySeams }, { toolsPullRequestOpener }, { claimDraftListings }] =
+      await Promise.all([
+        import("@oxagen/handlers/mcp-studio/discovery/claim"),
+        import("@oxagen/handlers/mcp-studio/discovery/seams"),
+        import("@oxagen/handlers/tools.pr.open"),
+        import("@oxagen/handlers/mcp-studio/listing/claim"),
+      ]);
     await claimMachineDiscoveries(poll, {
       broker: localGatewayBroker(),
       reader: postgresMachineGroupReader,
       // The opener the API installs before each discovery (handlers' register.ts).
       seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
     });
+    await claimDraftListings(poll, { broker: localGatewayBroker(), reader: postgresMachineGroupReader });
   } finally {
     claiming.delete(poll.machine);
   }
