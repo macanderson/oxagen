@@ -122,6 +122,7 @@ const source: DataSource = {
     costCenters: vi.fn(),
     modelCredential: vi.fn(),
     dataPlane: vi.fn(),
+    slackConnection: vi.fn(),
     workspaceFacts: vi.fn(),
     sso: vi.fn(),
   },

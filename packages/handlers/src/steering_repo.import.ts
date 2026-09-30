@@ -39,6 +39,7 @@ export const importWorkspaceSteeringHandler: CapabilityHandler<
       ...(input.constraintEffects
         ? { constraintEffects: input.constraintEffects }
         : {}),
+      ...(input.startFresh ? { startFresh: true } : {}),
     },
     steeringImportDeps({ actorUserId }),
   );

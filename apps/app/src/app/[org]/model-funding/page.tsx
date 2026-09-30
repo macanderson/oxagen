@@ -24,13 +24,8 @@ export default async function ModelFundingPage({
   const { org } = await params;
   const ctx = await requireViewer(org);
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<OrganizationSkeleton />}>
-        <OrganizationModelFunding ctx={ctx} source={dataSource()} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<OrganizationSkeleton />}>
+      <OrganizationModelFunding ctx={ctx} source={dataSource()} />
+    </Suspense>
   );
 }

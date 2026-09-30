@@ -1,8 +1,11 @@
-// Which Tools view a request asks for: a tab, a category chip and a provider
-// chip on the Tools tab, the labels/API-names toggle and a cursor. The tab is
-// a path segment (`/tools/providers`), as the rev1 route names it (mockup
-// `tools.md`), and the rest are query values. A tab id that is no longer
-// served falls back to Tools, so an old link never renders an empty page:
+// Which Tools view a request asks for: a view, a category chip and a provider
+// chip on the registry, the labels/API-names toggle and a cursor. The Tools
+// page is gone: its views are tabs of the Agents page, named by `?tab=`
+// (`toolsTabOfAgentsTab`), and the rest are query values.
+//
+// `parseToolsTab` reads the retired `/tools[/<tab>]` route, which now only
+// redirects. A tab id that is no longer served falls back to the registry, so
+// an old link never renders an empty page:
 //
 //   - `/tools/servers` is the Providers tab's name before rev1 and lands there;
 //   - the query tabs this page had before its tabs became segments
@@ -15,8 +18,18 @@ import type {
   McpServer,
   ToolVersion,
 } from "@/data/contracts/tools";
-import { firstParam, routes, type SafePath } from "@/shared/safe-path";
+import {
+  type AgentsPageTab,
+  firstParam,
+  routes,
+  type SafePath,
+} from "@/shared/safe-path";
 
+/**
+ * The Tools views, in the order the retired Tools page drew them.
+ *
+ * @internal Exported for its unit tests; nothing outside this module imports it.
+ */
 export const TOOLS_TABS = [
   "tools",
   "toolbelts",
@@ -59,6 +72,29 @@ export function parseToolsTab(
   }
   if (segments.length > 1) return null;
   return toolsTabOf(segments[0]);
+}
+
+/**
+ * The Tools view an Agents `?tab=` names: Tool servers is the providers list,
+ * with the registry (`tools`) and the toolbelts as its other two views,
+ * Policies is Policy, and Off switches is Kill switches. Null for the Agents
+ * and Runtimes tabs, which hold no Tools view.
+ */
+export function toolsTabOfAgentsTab(tab: AgentsPageTab): ToolsTab | null {
+  switch (tab) {
+    case "servers":
+      return "providers";
+    case "tools":
+    case "toolbelts":
+      return tab;
+    case "policies":
+      return "policy";
+    case "switches":
+      return "switches";
+    case "agents":
+    case "runtimes":
+      return null;
+  }
 }
 
 /** How a tool version is named in the tables: its human label, or its API name. */

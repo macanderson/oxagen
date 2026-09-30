@@ -4,6 +4,7 @@ import {
   assistantParkedCardSchema,
   assistantToolCallSchema,
 } from "./assistant.ask";
+import { assistantAttachmentSchema } from "./assistant.attachment.upload";
 import {
   conversationPublicIdSchema,
   conversationSummary,
@@ -18,7 +19,8 @@ export const CONVERSATION_MESSAGES_MAX = 200;
  * recorded as, and the governed writes it parked for a person. `toolCalls` is
  * read from that run's ledger each time, never stored on the message, so it
  * lists what `ask_assistant` listed when the reply was new (#4161). A message
- * no turn wrote carries `null`, `[]` and `[]`.
+ * no turn wrote carries `null`, `[]` and `[]`. `attachments` lists the files
+ * the person sent with a question, and is `[]` on every other message.
  */
 export const conversationMessage = z.object({
   publicId: z.string(),
@@ -36,6 +38,13 @@ export const conversationMessage = z.object({
   toolCalls: z.array(assistantToolCallSchema),
   /** True when the person stopped the turn and this is its partial reply (#4164). */
   stopped: z.boolean(),
+  /**
+   * The files the person sent with this message, in the order they were
+   * uploaded, in the shape `upload_assistant_attachment` returned (#4690).
+   * Empty on a message sent without files and on every reply. A file that was
+   * deleted, or never finished storing, is left out.
+   */
+  attachments: z.array(assistantAttachmentSchema),
 });
 
 /**

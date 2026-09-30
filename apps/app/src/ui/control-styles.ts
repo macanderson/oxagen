@@ -1,8 +1,10 @@
 // Class recipes for plain controls (buttons, links, inputs, panels, tiles,
-// eyebrows) that are not their own component. Each recipe is one rule of the
-// design of record, `mockups/src/engine.css` in the roadmap repository, named
-// in the comment above it (ADR-132); the values are house tokens, so a reskin
-// in the kit reaches every screen and the shape stays the mockup's.
+// eyebrows) that are not their own component. Each recipe draws one rule of
+// the design of record that ADR-226 names: the v3 mockup at its pin for the
+// shape, and the brand kit's tokens for colour and type. The comment above a
+// recipe quotes the rev1 `engine.css` rule it was first built from, which is
+// history now. The values are house tokens, so a reskin in the kit reaches
+// every screen.
 //
 // `design-record.test.ts` holds these recipes to the rules they cite. Change a
 // recipe with the rule, never around it.
@@ -12,7 +14,7 @@
 // inputs, 14px control text, rounder cards, and translucent menus and
 // popovers. Colour stays the house's. Where a comment below quotes an
 // engine.css rule and a recipe now differs from it, the recipe names the maia
-// value it took, and engine.css follows.
+// value it took.
 
 /**
  * `.btn { border:1px solid var(--border); background:var(--panel);
@@ -80,17 +82,18 @@ export const inputBase = `${fieldSkin} min-h-9 rounded-4xl py-1.5`;
 export const textareaBase = `${fieldSkin} rounded-xl py-3`;
 
 /**
- * A menu, listbox or picker surface, as the preset draws one: 70% of the menu
- * fill over a blurred, saturated copy of what lies beneath, a 2xl corner, a
- * faint ring in place of the border, and a deep shadow. `isolate` keeps the
- * blur layer (`before:-z-1`) under the items and over the page, and
- * `relative` anchors it. Its callers sit in the flow or inside a positioner,
- * so none adds a position of its own. `menuPopup` adds the 4px inset a menu's
- * rows sit in.
+ * A menu, listbox or picker surface, as the preset draws one: the menu fill
+ * over a blurred, saturated copy of what lies beneath, a 2xl corner, a faint
+ * ring in place of the border, and a deep shadow. The light theme fills at 55%
+ * over a 16px blur, because 70% white over a white page reads as solid. The
+ * dark theme keeps 70% over a 40px blur. `isolate` keeps the blur layer
+ * (`before:-z-1`) under the items and over the page, and `relative` anchors
+ * it. Its callers sit in the flow or inside a positioner, so none adds a
+ * position of its own. `menuPopup` adds the 4px inset a menu's rows sit in.
  */
 export const menuSurface =
-  "relative isolate overflow-hidden rounded-2xl bg-menu-popup-bg/70 text-menu-popup-fg shadow-2xl ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 " +
-  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate overflow-hidden rounded-2xl bg-menu-popup-bg/55 dark:bg-menu-popup-bg/70 text-menu-popup-fg shadow-2xl ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 " +
+  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 export const menuPopup = `${menuSurface} p-1`;
 
 /**
@@ -119,8 +122,8 @@ export const menuLabel = "px-3 py-2.5 text-xs text-muted-foreground";
  * `relative` here would pull the popover back into the flow.
  */
 export const popoverSurface =
-  "isolate rounded-2xl bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
-  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /**
  * `.panel { background:var(--panel); border:1px solid var(--border);
@@ -178,7 +181,7 @@ export const linkChip =
 /**
  * `.panel-h { padding:12px 16px; border-bottom:1px solid var(--border) }` and
  * the maia card title's 14px, on the `--panel-head` band: light grey
- * on paper, a step lighter than the panel on ink (ADR-170). The footer keeps
+ * on paper, a step lighter than the panel on ink (ADR-226). The footer keeps
  * the hairline and stays flat on the panel.
  */
 export const panelHeader =

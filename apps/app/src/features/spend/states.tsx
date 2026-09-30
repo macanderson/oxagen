@@ -42,19 +42,15 @@ const bone = "skeleton rounded-md";
 
 /**
  * The route's loading state: four tile blocks and a panel of seven rows, the
- * shape of what is coming. The frame keeps the page's container classes but is
- * a busy region, not a `main`: React holds the resolved page hidden beside this
- * fallback, and only the page may own the landmark. A second `main`, with or
- * without an `id`, gives the document two main landmarks during the swap
- * (#4053, arch/loading-landmarks.test.ts).
+ * shape of what is coming. The frame is a busy region inside the shell's
+ * `main#main`, the page's one landmark (ADR-227). A `main` here, with or
+ * without an `id`, would give the document two while the page streams in
+ * beside it (#4053, arch/loading-landmarks.test.ts).
  */
 export function SpendLoading() {
   const t = useTranslations("spend.states");
   return (
-    <div
-      aria-busy="true"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
+    <div aria-busy="true" className="flex w-full flex-col gap-4">
       <div
         role="status"
         aria-busy="true"

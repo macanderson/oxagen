@@ -1,0 +1,5 @@
+# The [training] table of workspace.toml in agent-work-spec.html (Owned models), copied verbatim.
+[training]
+consent = "own_model"     # or "off", the default
+approved_by = "mac"       # an org owner
+base = "open-weight/code-32b"

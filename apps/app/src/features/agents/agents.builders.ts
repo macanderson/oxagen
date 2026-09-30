@@ -646,6 +646,7 @@ export function agentsSource(reads: AgentReads) {
       costCenters: refuse,
       modelCredential: refuse,
       dataPlane: refuse,
+      slackConnection: refuse,
       workspaceFacts: refuse,
       sso: refuse,
     },

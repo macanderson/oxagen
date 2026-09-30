@@ -3,15 +3,18 @@
 // test in agents.test.tsx does not draw: no operator, an operator with no name
 // or a blank one, no key, no description, no spend basis, no mandate count,
 // and a sort over columns where some rows hold nothing, which sort last in
-// either direction, and the built-in assistant, which offers no action. Axe
-// runs after every test (INV-26).
+// either direction, and the built-in assistant, which offers no action. It
+// also draws the pager under the rows: Rows, the range, and Previous and Next.
+// Axe runs after every test (INV-26).
 import {
   cleanup,
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
@@ -251,5 +254,73 @@ describe("AgentsTable › sorting", () => {
       },
     });
     expect(rows().length).toBeLessThan(4);
+  });
+});
+
+describe("AgentsTable › pager", () => {
+  const twelve = () =>
+    Array.from({ length: 12 }, (_, i) =>
+      row(`agent-${String(i).padStart(2, "0")}`),
+    );
+
+  it("draws Rows, the range, and Previous and Next in one pager under the rows", async () => {
+    const user = userEvent.setup();
+    renderTable(twelve());
+    const table = screen.getByRole("table", {
+      name: "Agents registered in Core platform",
+    });
+    const pager = document.querySelector<HTMLElement>("[data-rows-pager]");
+    if (pager === null) throw new Error("the list has no pager");
+    expect(
+      table.compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // One Rows select, and it is the pager's: none sits above the rows.
+    expect(screen.getAllByRole("combobox", { name: "Rows" })).toHaveLength(1);
+    const size = within(pager).getByRole("combobox", { name: "Rows" });
+    expect(size).toHaveTextContent("10");
+    // Previous and Next are the only steps: no numbered page buttons.
+    const steps = within(pager).getByRole("navigation", { name: "Pages" });
+    expect(within(steps).getAllByRole("button")).toHaveLength(2);
+    const previous = within(steps).getByRole("button", {
+      name: "Previous page",
+    });
+    const next = within(steps).getByRole("button", { name: "Next page" });
+
+    expect(rows()).toHaveLength(10);
+    expect(within(pager).getByText("1–10 of 12")).toBeInTheDocument();
+    expect(previous).toBeDisabled();
+
+    await user.click(next);
+    expect(rows().map((r) => r.dataset.agent)).toEqual([
+      "agent-10",
+      "agent-11",
+    ]);
+    expect(within(pager).getByText("11–12 of 12")).toBeInTheDocument();
+    expect(next).toBeDisabled();
+    expect(previous).toBeEnabled();
+
+    await user.click(size);
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    await waitFor(() => {
+      expect(rows()).toHaveLength(12);
+    });
+    expect(size).toHaveTextContent("25");
+    // A new size goes back to the first page, which now holds every row.
+    expect(within(pager).getByText("1–12 of 12")).toBeInTheDocument();
+    expect(previous).toBeDisabled();
+    expect(next).toBeDisabled();
+  });
+
+  it("draws the pager with both steps off when the rows fit one page (negative)", () => {
+    renderTable([row("a"), row("b")]);
+    const pager = document.querySelector<HTMLElement>("[data-rows-pager]");
+    if (pager === null) throw new Error("the list has no pager");
+    expect(within(pager).getByText("1–2 of 2")).toBeInTheDocument();
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
   });
 });

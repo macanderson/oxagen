@@ -46,6 +46,7 @@ import type {
   MemberList,
   ModelCredential,
   RoleCatalog,
+  SlackConnection,
   SsoSettings,
   WorkspaceFacts,
   WorkspaceList,
@@ -474,7 +475,7 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /**
      * get_operator_ranking (D15): operators by unproductive spend, for a
-     * manager. Caller: features/spend/spend.tsx on the operator tab, which
+     * manager. Caller: features/spend/spend.tsx on the Findings tab, which
      * reads it only for an org Owner or Admin.
      */
     operatorRanking(
@@ -572,6 +573,13 @@ export interface DataSource {
      * features/organization/sso.tsx and roles.tsx.
      */
     sso(ctx: OrgCtx): Promise<Read<SsoSettings>>;
+    /**
+     * get_slack_connection: whether this deployment has a Slack app, the
+     * Slack workspace the organisation connected, the channel steering repo
+     * health notices post to, and the last failed post. No token. Org-scoped;
+     * caller features/organization/notifications.tsx.
+     */
+    slackConnection(ctx: OrgCtx): Promise<Read<SlackConnection>>;
   };
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an

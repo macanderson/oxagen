@@ -460,7 +460,7 @@ function request(m: Model): Section {
   return {
     id: "request",
     title: "Request path",
-    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a tenant table without the four GUCs set, except through the audited withSystemDb bypass, and nothing reaches a handler without passing the kernel's gates.",
+    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a tenant table without the four GUCs set, except through the deliberate withSystemDb bypass, and nothing reaches a handler without passing the kernel's gates.",
     body:
       flowsIn("request") +
       `<h3>Auth tiers in apps/api</h3><p>Middleware registered per sub-router in <code>apps/api/src/app.ts</code>, in the order Hono runs it.</p>` +

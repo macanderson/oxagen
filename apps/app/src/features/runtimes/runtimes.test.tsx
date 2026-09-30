@@ -13,6 +13,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -20,6 +21,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { nth } from "@/test/nth";
 import { phoneWidth } from "@/test/phone";
+import { optionNames, pickOption } from "@/test/select";
 import {
   enrollment,
   memberList,
@@ -50,8 +52,7 @@ const setRuntimeContainment = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
   unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
   createRuntime: (...args: unknown[]) => createRuntime(...args),
-  setRuntimeContainment: (...args: unknown[]) =>
-    setRuntimeContainment(...args),
+  setRuntimeContainment: (...args: unknown[]) => setRuntimeContainment(...args),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -61,6 +62,7 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const { Runtimes } = await import("./runtimes");
 const { Runtime } = await import("./runtime");
 const { RuntimesLoading } = await import("./loading");
+const { AddRuntime } = await import("./controls");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -108,6 +110,17 @@ async function renderDetail(
   return calls;
 }
 
+/** Add a runtime, as the Agents page header draws it for an Owner or Admin. */
+async function openAddRuntime() {
+  render(
+    <IntlProvider>
+      <AddRuntime org="acme" ws="core-platform" gold={false} />
+    </IntlProvider>,
+  );
+  fireEvent.click(screen.getByTestId("runtimes-add"));
+  return screen.findByTestId("runtimes-add-dialog");
+}
+
 /** One host's row on the list, by its enrollment id. */
 const hostRow = (id: string): HTMLElement => {
   const found = document.querySelector<HTMLElement>(`[data-runtime="${id}"]`);
@@ -134,7 +147,7 @@ afterEach(async () => {
 });
 
 describe("Runtimes, loaded", () => {
-  it("draws the header, the four tiles, the hosts table and the ladder in the spec's order", async () => {
+  it("draws the four tiles, the hosts table and the ladder in the spec's order, under no header of its own", async () => {
     await renderList({
       list: runtimeList([
         enrollment(),
@@ -160,19 +173,11 @@ describe("Runtimes, loaded", () => {
         }),
       ]),
     });
-    expect(screen.getByText("Core platform")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Runtimes" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "The hosts agents run on, and what each host’s seam earns.",
-      ),
-    ).toBeInTheDocument();
-    const add = screen.getByTestId("runtimes-add");
-    expect(add).toHaveTextContent("Add a runtime");
-    expect(add).toHaveAttribute("aria-haspopup", "dialog");
-    expect(goldButtons()).toEqual([add]);
+    // The list is the Runtimes tab of the Agents page, whose header carries
+    // the title and Add a runtime (features/agents/area.tsx).
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("runtimes-add")).toBeNull();
+    expect(goldButtons()).toEqual([]);
 
     const tiles = screen.getByTestId("runtimes-tiles");
     expect(
@@ -211,24 +216,34 @@ describe("Runtimes, loaded", () => {
       "data-gap",
       "#3816",
     );
-    // The design's list controls: search, Rows and the pager.
+    // The design's list controls: search over the table, and under it the
+    // pager with Rows, the range, and Previous and Next.
     expect(
       within(hosts).getByRole("searchbox", { name: "Search this list" }),
     ).toBeInTheDocument();
-    expect(within(hosts).getByRole("combobox", { name: "Rows" })).toHaveValue(
-      "10",
-    );
+    const hostsPager = hosts.querySelector<HTMLElement>("[data-rows-pager]");
+    if (hostsPager === null) throw new Error("the hosts list has no pager");
     expect(
-      within(hosts).getByRole("navigation", { name: "Enrolled hosts pages" }),
-    ).toHaveTextContent("1–4 of 4");
+      within(hostsPager).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("10");
+    expect(
+      within(hostsPager).getByRole("navigation", {
+        name: "Enrolled hosts pages",
+      }),
+    ).toBeInTheDocument();
+    expect(hostsPager.querySelector("[data-range]")?.textContent).toBe(
+      "1–4 of 4",
+    );
     // Four rows, and Health reads two values: the design's rule offers it.
     // Kind reads not recorded on every row and offers nothing.
     const health = within(hosts).getByRole("combobox", {
       name: "Filter by Health",
     });
-    expect(
-      [...health.querySelectorAll("option")].map((o) => o.textContent),
-    ).toEqual(["All · Health", "not enrolled", "not recorded"]);
+    expect(await optionNames(userEvent.setup(), health)).toEqual([
+      "All · Health",
+      "not enrolled",
+      "not recorded",
+    ]);
     expect(
       within(hosts).queryByRole("combobox", { name: "Filter by Kind" }),
     ).toBeNull();
@@ -402,16 +417,19 @@ describe("Runtimes, loaded", () => {
     const pager = screen.getByRole("navigation", {
       name: "Enrolled hosts pages",
     });
-    expect(pager).toHaveTextContent("1–10 of 12");
+    const rowsPager = pager.closest("[data-rows-pager]");
+    const range = () => rowsPager?.querySelector("[data-range]")?.textContent;
+    expect(range()).toBe("1–10 of 12");
     expect(shown()).toHaveLength(10);
-    fireEvent.click(within(pager).getByRole("button", { name: "2" }));
-    expect(pager).toHaveTextContent("11–12 of 12");
+    fireEvent.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(range()).toBe("11–12 of 12");
     expect(shown()).toEqual(["host-10", "host-11"]);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
-      target: { value: "0" },
+    await userEvent.click(screen.getByRole("combobox", { name: "Rows" }));
+    await userEvent.click(await screen.findByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(12);
     });
-    expect(shown()).toHaveLength(12);
 
     fireEvent.change(
       screen.getByRole("searchbox", { name: "Search this list" }),
@@ -434,18 +452,17 @@ describe("Runtimes, loaded", () => {
       },
     );
 
-    fireEvent.change(
+    const user = userEvent.setup();
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "not enrolled" },
-      },
+      "not enrolled",
     );
     expect(shown()).toEqual(["host-03"]);
-    fireEvent.change(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Health" }),
-      {
-        target: { value: "" },
-      },
+      "All · Health",
     );
 
     const runtime = screen.getByRole("columnheader", { name: "Runtime" });
@@ -521,7 +538,7 @@ describe("Runtimes, loaded", () => {
 });
 
 describe("Runtimes, not loaded", () => {
-  it("shows the empty state with the spec's copy, one gold action and the CLI path", async () => {
+  it("shows the empty state with the spec's copy, Add a runtime in the default style and the CLI path", async () => {
     await renderList({ list: runtimeList([]) });
     const empty = screen.getByTestId("runtimes-empty");
     expect(
@@ -530,10 +547,13 @@ describe("Runtimes, not loaded", () => {
     expect(empty).toHaveTextContent(
       "Until a host enrolls, an agent has an identity and a toolbelt but no hook is installed. Its runs are graded observe, and no report can say more.",
     );
-    // The header keeps Add a runtime; the empty state's copy of it is the gold one.
-    const adds = screen.getAllByTestId("runtimes-add");
-    expect(adds).toHaveLength(2);
-    expect(goldButtons()).toEqual([nth(adds, 1, "add button")]);
+    // The Agents page header keeps its own Add a runtime and Connect an agent,
+    // the page's one gold action, so the empty state's copy is not gold.
+    const add = within(empty).getByTestId("runtimes-add");
+    expect(add).toHaveTextContent("Add a runtime");
+    expect(add).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getAllByTestId("runtimes-add")).toEqual([add]);
+    expect(goldButtons()).toEqual([]);
     fireEvent.click(
       within(empty).getByRole("button", { name: "Show the CLI path" }),
     );
@@ -664,7 +684,7 @@ describe("One runtime", () => {
     );
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const host = screen.getByRole("region", { name: "mbell-mbp-16" });
     const subtitle = screen.getByTestId("runtime-subtitle");
@@ -731,7 +751,10 @@ describe("One runtime", () => {
       within(agents).getByRole("navigation", {
         name: "Agents on this host pages",
       }),
-    ).toHaveTextContent("1–1 of 1");
+    ).toBeInTheDocument();
+    expect(
+      agents.querySelector("[data-rows-pager] [data-range]")?.textContent,
+    ).toBe("1–1 of 1");
     expect(within(row).getByRole("link")).toHaveAttribute(
       "href",
       "/acme/core-platform/agents/release-manager",
@@ -1151,9 +1174,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("fills the slug from the name, dropping apostrophes, until the slug is edited", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1177,9 +1198,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_macslaptop",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1201,9 +1220,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
       reason: "conflict",
       code: "runtime_slug_taken",
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1230,9 +1247,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_gpubox",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1275,9 +1290,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("refuses an empty name without calling the write (negative)", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
     expect(await within(dialog).findByText("Name the runtime.")).toBeVisible();
     expect(createRuntime).not.toHaveBeenCalled();
@@ -1352,7 +1365,7 @@ describe("A named runtime's page and its containment (ADR-204)", () => {
     await renderNamed();
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const facts = screen.getByRole("region", { name: "Mac's laptop" });
     expect(

@@ -1,6 +1,6 @@
 // A run's state as a dot and a word in the mockup's state pill (`statusBadge`
 // in engine.js draws `.b.b-<state>`), through the shared `Badge` recipe and
-// never around it (ADR-132). The hue never reaches the gold.
+// never around it (ADR-226). The hue never reaches the gold.
 //
 // The word is the run's outcome once the run has ended, and `live` while it is
 // open. `status` alone could not say it: it folds every ended run into

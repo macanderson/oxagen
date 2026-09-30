@@ -9,15 +9,21 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
-import { buttonDanger, buttonPrimary } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonPrimary,
+  buttonSecondary,
+} from "@/ui/control-styles";
 import { agentPage, agentRow, agentsSource } from "./agents.builders";
 
 const push = vi.fn();
@@ -44,7 +50,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agents, AgentsLoading } = await import("./agents");
-const { AgentsCreate } = await import("./create-actions");
+const { AddRuntimeLink, ConnectAgentLink } = await import("./create-actions");
 
 const t = translator("agents.list");
 
@@ -60,8 +66,6 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-const HEADER = <h1>Agents</h1>;
-
 async function renderAgents(
   reads: Parameters<typeof agentsSource>[0],
   cursor: string | null = null,
@@ -74,7 +78,6 @@ async function renderAgents(
     source,
     cursor,
     ...(showRetired === undefined ? {} : { showRetired }),
-    header: HEADER,
     viewerName: "Marcus Bell",
   });
   render(
@@ -145,14 +148,13 @@ afterEach(async () => {
 });
 
 describe("Agents, loaded", () => {
-  it("reads one agents page at the URL's cursor and draws the header it is handed", async () => {
+  it("reads one agents page at the URL's cursor and draws no page header of its own", async () => {
     const calls = await renderAgents({ list: agentPage([agentRow()]) }, "c1");
     expect(calls.list).toEqual([
       [ctx, { cursor: "c1", includeRetired: false }],
     ]);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Agents",
-    );
+    // The Agents page (area.tsx) draws the one header over every tab.
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
   it("draws four tiles, each one number and one basis line from the workspace totals", async () => {
@@ -597,9 +599,7 @@ describe("Agents, loaded", () => {
 
   it("opens the agent when a row is clicked anywhere but its actions", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
-    fireEvent.click(
-      within(only(rows())).getByText("Marcus Bell"),
-    );
+    fireEvent.click(within(only(rows())).getByText("Marcus Bell"));
     expect(push).toHaveBeenCalledWith("/acme/core-platform/agents/release-bot");
   });
 });
@@ -620,25 +620,45 @@ describe("Agents list controls", () => {
       }),
     );
 
-  it("pages ten rows at a time with a range and numbered pages, and Rows changes the page size", async () => {
+  it("pages ten rows at a time with a range, Previous and Next, and Rows changes the page size", async () => {
+    const user = userEvent.setup();
     await renderAgents({ list: many() });
     expect(rows()).toHaveLength(10);
     expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
-    const pager = screen.getByRole("navigation", { name: "Pages" });
-    fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
+    const steps = screen.getByRole("navigation", { name: "Pages" });
+    const previous = within(steps).getByRole("button", {
+      name: "Previous page",
+    });
+    expect(previous).toBeDisabled();
+    await user.click(within(steps).getByRole("button", { name: "Next page" }));
     expect(rows()).toHaveLength(2);
     expect(screen.getByText("11–12 of 12")).toBeInTheDocument();
-    const size = screen.getByRole("combobox", { name: "Rows" });
-    expect(
-      within(size)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["5", "10", "25", "50", "All"]);
-    fireEvent.change(size, { target: { value: "0" } });
-    expect(rows()).toHaveLength(12);
+    expect(previous).toBeEnabled();
+    // Rows sits in the pager under the rows, beside Previous and Next, and
+    // is the page's only Rows select.
+    const pager = steps.closest<HTMLElement>("[data-rows-pager]");
+    if (pager === null) throw new Error("the list has no pager");
+    expect(screen.getAllByRole("combobox", { name: "Rows" })).toHaveLength(1);
+    const size = within(pager).getByRole("combobox", { name: "Rows" });
+    await user.click(size);
+    // Read the open list alone: the facet selects hold options too.
+    const sizes = within(await screen.findByRole("listbox"));
+    expect(sizes.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "5",
+      "10",
+      "25",
+      "50",
+      "All",
+    ]);
+    await user.click(screen.getByRole("option", { name: "All" }));
+    await waitFor(() => {
+      expect(rows()).toHaveLength(12);
+    });
+    expect(size).toHaveTextContent("All");
   });
 
-  it("windows the pager past seven pages with an ellipsis, as the design's pager does", async () => {
+  it("steps through a long list with Previous and Next, and draws no numbered pages", async () => {
+    const user = userEvent.setup();
     await renderAgents({
       list: agentPage(
         Array.from({ length: 100 }, (_, i) => {
@@ -651,20 +671,25 @@ describe("Agents list controls", () => {
         }),
       ),
     });
-    fireEvent.change(screen.getByRole("combobox", { name: "Rows" }), {
-      target: { value: "5" },
+    await user.click(screen.getByRole("combobox", { name: "Rows" }));
+    await user.click(await screen.findByRole("option", { name: "5" }));
+    await waitFor(() => {
+      expect(rows()).toHaveLength(5);
     });
-    const pager = screen.getByRole("navigation", { name: "Pages" });
-    const labels = () => [...pager.children].map((child) => child.textContent);
-    expect(labels()).toEqual(["‹", "1", "2", "…", "20", "›"]);
-    fireEvent.click(within(pager).getByRole("button", { name: "Page 2" }));
-    fireEvent.click(within(pager).getByRole("button", { name: "Page 3" }));
-    fireEvent.click(within(pager).getByRole("button", { name: "Page 4" }));
-    expect(labels()).toEqual(["‹", "1", "…", "3", "4", "5", "…", "20", "›"]);
-    expect(
-      within(pager).getByRole("button", { name: "Page 4" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("1–5 of 100")).toBeInTheDocument();
+    const steps = screen.getByRole("navigation", { name: "Pages" });
+    expect(within(steps).getAllByRole("button")).toHaveLength(2);
+    expect(within(steps).queryByRole("button", { name: "Page 2" })).toBeNull();
+    const next = within(steps).getByRole("button", { name: "Next page" });
+    await user.click(next);
+    await user.click(next);
+    await user.click(next);
     expect(screen.getByText("16–20 of 100")).toBeInTheDocument();
+    expect(rows()[0]?.dataset.agent).toBe("agent-015");
+    await user.click(
+      within(steps).getByRole("button", { name: "Previous page" }),
+    );
+    expect(screen.getByText("11–15 of 100")).toBeInTheDocument();
   });
 
   it("searches the rows and says when nothing matches, in a row of the table", async () => {
@@ -822,6 +847,8 @@ describe("Agents, deregistered", () => {
     expect(table().compareDocumentPosition(link)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    // In the pager, after the range.
+    expect(link.closest("[data-rows-pager]")).not.toBeNull();
     expect(link.className).toContain("text-muted-foreground");
   });
 
@@ -863,32 +890,46 @@ describe("Agents, deregistered", () => {
   });
 });
 
-describe("Agents header actions", () => {
-  it("draws Add a runtime and Register an agent, with Register the one gold action into the register flow (ADR-198)", async () => {
+describe("Agents create actions", () => {
+  it("draws Connect an agent gold by default, into the register flow at its first step (ADR-198)", async () => {
     const { container } = render(
       <IntlProvider>
-        <AgentsCreate org="acme" ws="core-platform" />
+        <ConnectAgentLink org="acme" ws="core-platform" />
       </IntlProvider>,
     );
-    expect(
-      [...document.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["Add a runtime", "Register an agent"]);
-    const register = screen.getByRole("link", { name: "Register an agent" });
-    expect(register).toHaveAttribute(
+    const connect = screen.getByRole("link", { name: "Connect an agent" });
+    expect(connect).toHaveAttribute(
       "href",
       "/acme/core-platform/register/name",
     );
-    expect(register.className).toBe(buttonPrimary);
-    expect(screen.getByRole("link", { name: "Add a runtime" })).toHaveAttribute(
-      "href",
-      "/acme/core-platform/runtimes",
-    );
+    expect(connect).toHaveAttribute("data-testid", "agents-register");
+    expect(connect.className).toBe(buttonPrimary);
     await expectNoAxe(container);
+  });
+
+  it("draws Connect an agent in the default style where the page header already carries the gold", () => {
+    render(
+      <IntlProvider>
+        <ConnectAgentLink org="acme" ws="core-platform" primary={false} />
+      </IntlProvider>,
+    );
     expect(
-      [...document.querySelectorAll("button, a")].filter(
-        (el) => el.className === buttonPrimary,
-      ),
-    ).toHaveLength(1);
+      screen.getByRole("link", { name: "Connect an agent" }).className,
+    ).toBe(buttonSecondary);
+  });
+
+  it("sends Add a runtime to the Runtimes tab of the Agents page", () => {
+    render(
+      <IntlProvider>
+        <AddRuntimeLink org="acme" ws="core-platform" />
+      </IntlProvider>,
+    );
+    const add = screen.getByRole("link", { name: "Add a runtime" });
+    expect(add).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=runtimes",
+    );
+    expect(add.className).toBe(buttonSecondary);
   });
 });
 
@@ -906,7 +947,12 @@ describe("Agents, not loaded", () => {
     );
     expect(
       [...empty.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["Register an agent", "Add a runtime"]);
+    ).toEqual(["Connect an agent", "Add a runtime"]);
+    // Under the Agents page header, whose Connect an agent is the gold one,
+    // the empty state draws both in the default style.
+    expect(
+      [...empty.querySelectorAll("button, a")].map((el) => el.className),
+    ).toEqual([buttonSecondary, buttonSecondary]);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -1069,16 +1115,18 @@ describe("Agents at phone width", () => {
         .at(-1);
       expect(actionsHeader?.textContent).toBe("");
       expect(actionsHeader).toHaveAttribute("aria-label", "Row actions");
-      // The list controls are 44px targets too: the search box and the Rows
-      // select, beside the buttons.
+      // The list controls are 44px targets too: the search box beside the
+      // buttons, and the Rows select in the pager, which takes its height from
+      // its own class (ui/pagination) because jsdom does not apply Tailwind.
       expect(
         within(phone.container).getByRole("searchbox", {
           name: "Search this list",
         }),
       ).toHaveAttribute("data-touch-target");
-      expect(
-        within(phone.container).getByRole("combobox", { name: "Rows" }),
-      ).toHaveAttribute("data-touch-target");
+      const size = within(phone.container).getByRole("combobox", {
+        name: "Rows",
+      });
+      expect(size.className).toContain("max-md:min-h-11");
       const targets = phone.container.querySelectorAll("[data-touch-target]");
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets)

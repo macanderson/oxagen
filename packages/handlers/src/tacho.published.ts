@@ -1,13 +1,15 @@
 // tacho.published.ts: what the Tacho host routes read of a workspace's
 // published steering (steering-repo-spec, Shared contract: bundle/v1).
 //
-// Two host routes read it. get_tacho_bundle chooses the skills a host places
+// Four host routes read it. get_tacho_bundle chooses the skills a host places
 // at session start, and recall_tacho_memories ranks the merged memory records
-// against one prompt. Both read it through this port, so the version store
-// that holds bundle/v1 binds in one place.
+// against one prompt. ingest_tacho_events and fetch_commands read the same
+// skills for the bundle etag their control envelope publishes. All four read
+// it through this port, so the version store that holds bundle/v1 binds in
+// one place.
 //
 // `VERSION_STORE_PUBLISHED` binds the port to the Postgres version store that
-// publish() writes (#4550), and both routes use it by default. It loads that
+// publish() writes (#4550), and every route uses it by default. It loads that
 // binding on first use, so importing a handler opens no database client.
 //
 // `NOTHING_PUBLISHED` answers as if nothing had published: no version, no

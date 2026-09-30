@@ -1,11 +1,12 @@
 "use client";
 // A list table with the design's list tools (the mockup's `ltTable`,
-// `ltBar` and `ltPager` in engine.js): a search box, a filter per small
-// enumeration column, a rows-per-page select, sortable column headers, and a
-// numbered pager under the table reading "1–10 of 75". The rows arrive whole,
-// in the order the caller means them to be read, and every tool works over
-// them in the browser; a header sorts on its first press, reverses on its
-// second, and gives the caller's order back on its third.
+// `ltBar` and `ltPager` in engine.js): a search box and a filter per small
+// enumeration column above the table, sortable column headers, and under the
+// table the pager every list draws (ui/pagination): Rows and the range,
+// "1–10 of 75", on the left, Previous and Next on the right. The rows arrive
+// whole, in the order the caller means them to be read, and every tool works
+// over them in the browser; a header sorts on its first press, reverses on
+// its second, and gives the caller's order back on its third.
 //
 // Each row is drawn by the caller (`node`, a `<tr>`), with the plain text the
 // tools compare beside it, so a cell can hold a link or a badge and still be
@@ -13,10 +14,10 @@
 // no grouped cells, so a phone still turns the table into labelled cards
 // (features/shell/card-tables.ts); the sort glyph is drawn by CSS, so it never
 // becomes part of a card's label.
-import { CaretDownIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { type ComponentProps, type ReactNode, useMemo, useState } from "react";
-import { buttonSecondary } from "./control-styles";
+import { type ReactNode, useMemo, useState } from "react";
+import { ListSelect } from "./list-select";
+import { RowsPager } from "./pagination";
 import { headCell } from "./table";
 
 export type ListColumn = {
@@ -39,26 +40,14 @@ const PER_PAGE = [5, 10, 25, 50, 0] as const;
 // The bar's controls share one skin and size to their content. `inputBase`
 // is a form field (`block w-full`), and in this flex row it stretched the
 // search and every select to a full line of its own, so the bar stacked into
-// five rows. The search takes the room left over; each select is as wide as
-// its longest option, with its own chevron in place of the browser's.
+// five rows. The search takes the room left over. Each filter is the app's
+// Select, as wide as the choice it shows, so its list opens on the
+// translucent menu surface. It keeps the bar's height and never shrinks.
 const control =
   "min-h-8 max-md:min-h-11 rounded-4xl border border-input-border bg-input-bg py-1.5 text-sm max-md:text-base text-input-fg " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
 const search = `${control} min-w-0 flex-[1_1_14rem] px-3 placeholder:text-input-placeholder`;
-const select = `${control} cursor-pointer appearance-none pl-3 pr-8`;
-
-/** A select with the bar's chevron; the wrapper keeps it one flex item. */
-function BarSelect(props: ComponentProps<"select">) {
-  return (
-    <span className="relative inline-flex shrink-0">
-      <select {...props} className={select} />
-      <CaretDownIcon
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-      />
-    </span>
-  );
-}
+const filter = "shrink-0 max-md:min-h-11 max-md:text-base";
 
 type Sort = { key: string; dir: 1 | -1 } | null;
 
@@ -75,19 +64,6 @@ function compare(
     numeric: true,
     sensitivity: "base",
   });
-}
-
-/** The page numbers the pager draws: all of them to seven, else the ends and the neighbours. */
-export function pageNumbers(page: number, pages: number): (number | "gap")[] {
-  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
-  const shown: (number | "gap")[] = [1];
-  const lo = Math.max(2, page - 1);
-  const hi = Math.min(pages - 1, page + 1);
-  if (lo > 2) shown.push("gap");
-  for (let n = lo; n <= hi; n++) shown.push(n);
-  if (hi < pages - 1) shown.push("gap");
-  shown.push(pages);
-  return shown;
 }
 
 export function ListTable({
@@ -124,7 +100,8 @@ export function ListTable({
           ...new Set(
             rows.flatMap((row) => {
               const value = row.values[key];
-              return value === null || value === undefined
+              // An empty value would repeat the All choice, whose value is "".
+              return value === null || value === undefined || value === ""
                 ? []
                 : [String(value)];
             }),
@@ -200,42 +177,22 @@ export function ListTable({
           }}
         />
         {facets.map((facet) => (
-          <BarSelect
+          <ListSelect
             key={facet.key}
-            data-filter={facet.key}
+            size="sm"
+            className={filter}
             aria-label={t("filterBy", { column: facet.label })}
+            items={[
+              { value: "", label: t("all", { column: facet.label }) },
+              ...facet.values.map((value) => ({ value, label: value })),
+            ]}
             value={picked[facet.key] ?? ""}
-            onChange={(event) => {
-              setPicked((was) => ({ ...was, [facet.key]: event.target.value }));
+            onValue={(next) => {
+              setPicked((was) => ({ ...was, [facet.key]: next }));
               setPage(1);
             }}
-          >
-            <option value="">{t("all", { column: facet.label })}</option>
-            {facet.values.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </BarSelect>
+          />
         ))}
-        <label className="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-          {t("rows")}
-          <BarSelect
-            data-rows=""
-            aria-label={t("rows")}
-            value={per}
-            onChange={(event) => {
-              setPer(Number(event.target.value));
-              setPage(1);
-            }}
-          >
-            {PER_PAGE.map((n) => (
-              <option key={n} value={n}>
-                {n === 0 ? t("allRows") : n}
-              </option>
-            ))}
-          </BarSelect>
-        </label>
       </div>
       <div className="min-w-0 overflow-x-auto">
         <table
@@ -290,72 +247,43 @@ export function ListTable({
           </tbody>
         </table>
       </div>
-      <nav
-        aria-label={t("pager")}
-        className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-[12px] text-muted-foreground"
-      >
-        <span className="font-mono" data-range="">
-          {total === 0
+      <RowsPager
+        className="border-t border-border px-4"
+        label={t("pager")}
+        rowsLabel={t("rows")}
+        perPage={per}
+        sizes={PER_PAGE}
+        onPerPage={(size) => {
+          setPer(size);
+          setPage(1);
+        }}
+        sizeLabel={(size) => (size === 0 ? t("allRows") : String(size))}
+        range={
+          total === 0
             ? t("rangeEmpty")
             : t("range", {
                 from: String(from),
                 to: String(to),
                 total: String(total),
-              })}
-        </span>
-        <span className="flex items-center gap-1">
-          <button
-            type="button"
-            data-touch-target=""
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={t("previous")}
-            disabled={current <= 1}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            ‹
-          </button>
-          {pageNumbers(current, pages).map((n, index) =>
-            n === "gap" ? (
-              <span
-                // Two gaps can sit in one pager; the index keeps them apart.
-                key={`gap-${String(index)}`}
-                aria-hidden="true"
-                className="px-1"
-              >
-                …
-              </span>
-            ) : (
-              <button
-                key={n}
-                type="button"
-                data-touch-target=""
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px] aria-[current=page]:border-gold aria-[current=page]:text-foreground`}
-                aria-current={n === current ? "page" : undefined}
-                aria-label={t("page", { page: String(n) })}
-                onClick={() => {
-                  setPage(n);
-                }}
-              >
-                {n}
-              </button>
-            ),
-          )}
-          <button
-            type="button"
-            data-touch-target=""
-            className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-[12px]`}
-            aria-label={t("next")}
-            disabled={current >= pages}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            ›
-          </button>
-        </span>
-      </nav>
+              })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
+        previous={
+          current <= 1
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+      />
     </div>
   );
 }

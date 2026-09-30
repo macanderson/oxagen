@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The whole value of text that ends in an ellipsis, in a table cell or marked
-// `data-truncate`: a pointer resting on it, or focus landing on it, shows the
-// value in one hover card, and a value that fits shows nothing. jsdom has no layout, so each case sets
+// The whole value of text that ends in an ellipsis, or that the code shortened,
+// in a table cell or marked `data-truncate`: a pointer resting on it, or focus
+// landing on it, shows the value in one hover card, and a value that fits and
+// leaves nothing out shows nothing. jsdom has no layout, so each case sets
 // the widths a browser would measure.
 import {
   cleanup,
@@ -23,6 +24,12 @@ const LONG =
   "Watches the release branch and cuts a tag when every required check passes";
 
 const GIVEN = "run_01J9Z3K4Q2W8XYV5T6R7S8P9M0";
+
+/** A line that carries the text it prints, as a transcript row's does. */
+const SAME = "a-intel/platform · state closed · base main";
+
+/** A mark with a newline and a double space, for a value its row prints on one line. */
+const SPACED = "git log --oneline\n  --since v4.10.3";
 
 /** Gives `node` the widths a browser measures for text cut at `clientWidth`. */
 function measure(node: HTMLElement, scrollWidth: number, clientWidth: number) {
@@ -81,6 +88,12 @@ function page() {
               </td>
             </tr>
             <tr>
+              <td data-truncate={GIVEN} data-testid="digest-cell">
+                run_01J9Z3K4…
+              </td>
+              <td>Fits</td>
+            </tr>
+            <tr>
               <td data-testid="holder">
                 <span data-truncate="" data-testid="cell-marked">
                   {LONG}
@@ -110,6 +123,16 @@ function page() {
       <code data-truncate={GIVEN} data-testid="given">
         run_01J9Z3K4
       </code>
+      <p data-truncate="Called Read and Grep" data-testid="given-whole">
+        <span className="sr-only">Agent</span>
+        Called Read and Grep
+      </p>
+      <p data-truncate={SAME} data-testid="given-same">
+        {SAME}
+      </p>
+      <p data-truncate={SPACED} data-testid="given-spaced">
+        git log --oneline --since v4.10.3
+      </p>
       <button type="button">
         <span data-truncate="" data-testid="in-button">
           {LONG}
@@ -149,6 +172,18 @@ describe("CellOverflow", () => {
     expect(card).toHaveAttribute("data-slot", "hover-card-content");
   });
 
+  it("shows a digest the code shortened, though its text fits", async () => {
+    page();
+    fireEvent.pointerOver(screen.getByTestId("given"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(GIVEN);
+  });
+
+  it("shows the digest a shortened cell carries", async () => {
+    page();
+    fireEvent.pointerOver(screen.getByTestId("digest-cell"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(GIVEN);
+  });
+
   it("shows nothing for a value that fits its cell", async () => {
     page();
     const name = screen.getByTestId("name");
@@ -176,6 +211,16 @@ describe("CellOverflow", () => {
     expect(description).toHaveAttribute("tabindex", "0");
     fireEvent.focusIn(description);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(LONG);
+  });
+
+  it("shows a cut titled value to focus, since the browser shows its title only to a pointer", async () => {
+    page();
+    const titled = screen.getByTestId("titled");
+    measure(titled, 900, 300);
+    fireEvent.focusIn(titled);
+    const card = await screen.findByRole("tooltip");
+    expect(card).toHaveTextContent(LONG);
+    expect(card).toHaveAttribute("data-slot", "hover-card-content");
   });
 
   it("hides the value when the pointer moves to a value that fits", async () => {
@@ -254,6 +299,30 @@ describe("clippedElement", () => {
     expect(clippedElement(marked)).toBe(marked);
   });
 
+  it("takes a shortened value whose text fits, and not one shown whole", () => {
+    page();
+    const given = screen.getByTestId("given");
+    expect(clippedElement(given)).toBe(given);
+    const cell = screen.getByTestId("digest-cell");
+    expect(clippedElement(cell, true)).toBe(cell);
+    expect(clippedElement(screen.getByTestId("given-whole"))).toBeNull();
+  });
+
+  it("takes a value that carries its own text only while it is cut", () => {
+    page();
+    const same = screen.getByTestId("given-same");
+    expect(clippedElement(same)).toBeNull();
+    expect(clippedElement(same, true)).toBeNull();
+    measure(same, 900, 300);
+    expect(clippedElement(same)).toBe(same);
+  });
+
+  it("reads a mark's whitespace the way the row prints it", () => {
+    page();
+    // The row prints the mark's newline and double space as one space each.
+    expect(clippedElement(screen.getByTestId("given-spaced"))).toBeNull();
+  });
+
   it("skips a cell that spans columns and text outside a table", () => {
     page();
     const spanning = screen.getByTestId("spanning");
@@ -304,6 +373,15 @@ describe("markCutCells", () => {
     markCutCells(document);
     expect(holder).toHaveAttribute("tabindex", "0");
     expect(inCell).not.toHaveAttribute("tabindex");
+  });
+
+  it("gives a shortened value a stop though its text fits (#4692)", () => {
+    page();
+    markCutCells(document);
+    expect(screen.getByTestId("given")).toHaveAttribute("tabindex", "0");
+    expect(screen.getByTestId("digest-cell")).toHaveAttribute("tabindex", "0");
+    expect(screen.getByTestId("given-whole")).not.toHaveAttribute("tabindex");
+    expect(screen.getByTestId("given-same")).not.toHaveAttribute("tabindex");
   });
 
   it("gives no stop to a marked value inside a control", () => {

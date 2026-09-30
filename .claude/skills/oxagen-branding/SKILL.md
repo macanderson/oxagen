@@ -15,14 +15,15 @@ Read this whole file first. Then read the reference for what you are making:
 | Outreach, a sales brief, or anything that names who Oxagen sells to | `references/positioning.md`, the section *The buyer we are built for* |
 | A page, ad, deck, or UI | `references/system.md` and `assets/tokens.css` |
 | Copy for a specific surface (site, ad, email, docs, UI, launch) | `references/examples.md` |
+| Always-on copy: agents that keep working after the operator's day ends | `references/always-on.md`, then `references/always-on-lines.md` |
 
 ## Where this skill lives
 
 The source of truth is `skills/oxagen-branding/` in the house brand kit, `oxagenai/oxagen-brand`, beside the marks, tokens, ads, and content cards it describes. The oxagen repo vendors a copy at `.claude/skills/oxagen-branding/` through `tools/scripts/sync-brand-assets.mjs`, and `pnpm check:brand` fails on drift. Edit the kit, run the sync, commit both. Never edit the vendored copy alone.
 
-Copy changes start in the message registry at `messages/` in `oxagenai/oxagen-brand`. Each entry carries the line, its audience, its release status, its evidence, and its owner. The registry generates `message-bank.html` and the ad copy. Change the registry entry first, then bring this skill's inline lists into line with it.
+Copy changes start in the message registry at `messages/` in `oxagenai/oxagen-brand`. Each entry carries the line, its audience, its release status, its evidence, and its owner. The registry generates `message-bank.html`, `always-on.html`, and the ad copy. Change the registry entry first, then bring this skill's inline lists into line with it.
 
-## What Oxagen is, in one sentence
+## Definition
 
 Oxagen is workforce management for autonomous agents: give each agent an identity, set its authority and budget, equip it with tools and skills, and review what it did and what its operators spent, through a shared agent control plane.
 
@@ -41,7 +42,7 @@ Completion is optional. A definition of done is a control for bounded tasks that
 5. **The workforce vocabulary is the product's vocabulary.** Run, turn, step, frame, operator, agent, workspace, governed action, mandate, request, rule. Use the exact terms for UI labels and on detail pages. Familiar explanatory language around them is fine. Never session, trace, attempt, execution, or invocation in customer-facing prose. See `references/words.md`.
 6. **The agent asks, the rule decides, the record keeps the answer, for actions routed through Oxagen.** Each agent has its own identity. For mediated connections, Oxagen uses the connection credential on the agent's behalf and the agent does not receive it. A rule the owning team wrote answers each request: allowed, denied, or routed to a person. State that scope beside the claim. Never write "connect your agent to X" or "give the agent access to X", and never promise that an agent has nothing to leak. See *The keys stay with you* in `references/positioning.md`.
 
-## Positioning, the short version
+## Positioning
 
 The operator's job is to give each agent an identity, set its authority and budget, equip it with tools and skills, and oversee what it does. Oxagen is where that job happens. The agent control plane is what makes those decisions apply to the actions routed through Oxagen and keeps the record of them.
 
@@ -51,7 +52,13 @@ Some work has an endpoint. For those bounded tasks, define completion before the
 
 The homepage eyebrow is **Workforce management for autonomous agents** and the headline is **Your agents are a workforce now. Manage them like one.** For the security reader, the access line is **Don't hand your agents the keys.** For the finance reader, it is **See which agent spent what, and on whose behalf.** For knowledge, it is **Give agents the business context their work requires.** The dod lines are held until the dod ships and then apply to bounded tasks only. The full list, the retired lines, and the reasons are in `references/positioning.md`.
 
-## Voice, the short version
+## Always-on
+
+Mac's draft of 2026-09-26 adds an always-on pillar. The agents keep working after the operator's day ends, and the operator comes back to a report. Its 85 lines sit in `messages/always-on/`. Three of Mac's worked ads are approved and render into `ads/`: night shift, capacity, and driver seat. The other 82 lines are candidates, and none ships until Mac approves it. `references/always-on-lines.md` lists every line with its status. `always-on.html` sets them as ads, banners, website sections, and calls to action.
+
+Three rules hold for every always-on line. Oxagen governs the agents and does not run them. Every run keeps an owning operator, so going home hands off the hours and keeps the ownership. The record covers governed actions, so a line about automatic records says so. The sets, the pairings, and the lines that need Mac's decision are in `references/always-on.md`.
+
+## Voice
 
 Oxagen sounds like a senior engineer who has read the logs and is telling you what happened. Plain, specific, unhurried, a little dry. It states facts, names numbers, and stops. It never sells fear, never says "AI-powered", and never claims more than the record shows.
 
@@ -84,13 +91,13 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 - [ ] No savings claim without the measured workload and conditions
 - [ ] No SOC 2 attestation claim unless the actual report supports it
 - [ ] Completion is presented as optional, for bounded tasks, and never as the lead
-- [ ] An operator review line reports what the record shows, with each habit's definition beside it, and does not grade the person
+- [ ] An operator review line reports what the record shows, with each habit's definition beside it, and does not grade the person. The one ranking of people is the manager's ranking of operators by unproductive spend (decided 2026-09-27)
 - [ ] Short forms keep the qualifiers of their longer versions
 - [ ] Buyer quotes are labelled hypothetical unless an attributed customer approved them
 - [ ] No traction numbers, partner counts, or setup durations without dated evidence
 - [ ] Every claim is one the record can back
 - [ ] Space Grotesk for wordmarks and h1 to h3 only, Geist for h4 to h6, body, and UI, Monaspace Neon for code, data, digests, and commands
 - [ ] One type scale per surface: marketing (`text-m-*`) or app (`text-a-*`)
-- [ ] 12px card radius, 1120px wrap, dark first on obsidian with the white light theme intact
+- [ ] Card radius 12px on the website and 13px in the app, 1120px wrap, dark first on obsidian with the white light theme intact
 - [ ] Gold as text on white is gold-deep `#8A7223`
 - [ ] Every text role that carries meaning clears 4.5:1 on its ground

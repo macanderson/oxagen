@@ -30,22 +30,23 @@ export interface PolicyEntry {
 // keys on those columns. Postgres RLS is not transitive through a foreign key.
 // A query that names a child table evaluates only that table's policies, so a
 // policied parent protects nothing on its own. The absent tables fall into
-// three groups:
+// two groups:
 //   - Children with their own EXISTS-against-parent policy. The ingestion
 //     credential tables (auth_credentials, oauth_tokens, webhook_subscriptions)
 //     pass a row only when its ingestion.source_connections parent is visible.
 //     20260910120000_ingestion_credential_rls.sql adds those policies and
 //     integration/ingestion-credential-rls.test.ts holds them in place.
-//   - Children with NO RLS at all. agent.agent_versions (FK to agent.agents)
-//     has no policy in any migration. A tenant-scoped session can read every
-//     org's rows from it, so callers must reach it through a join on the
-//     policied parent. Issue #2156 tracks this.
+//     agent.agent_versions passes a row only when its agent.agents parent is
+//     in the current org and workspace, or in the current org under an
+//     org-wide read. 20260929124500_agent_versions_rls.sql adds those
+//     policies and integration/agent-versions-rls.test.ts holds them in place.
 //   - Shared or system catalogs (billing.plans, billing.stripe_events,
 //     mcp.catalog_servers, ingestion.connector_schemas, Better Auth).
 export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
-  // It has no RLS policy, so the agents policy does not cover it (#2156).
+  // It carries its own EXISTS-against-agents policy instead
+  // (20260929124500_agent_versions_rls.sql).
   { table: "agent.agents", policyClass: "standard" },
   // The named runtimes agents run on (ADR-198).
   { table: "agent.runtimes", policyClass: "standard" },
@@ -415,4 +416,28 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // hosts may run a local server. Read by the cloud gateway before it signs
   // a local call envelope.
   { table: "tacho.machine_group_members", policyClass: "standard" },
+
+  // ── work.* — work items and the agent work around them
+  //   (agent-work-spec.html, Storage). Every one carries org_id +
+  //   workspace_id NOT NULL → standard tenant_isolation.
+  // A collector, mirrored from its file under work/collectors/.
+  { table: "work.collectors", policyClass: "standard" },
+  // An event a collector heard, keyed by the provider's delivery id.
+  { table: "work.inbound_events", policyClass: "standard" },
+  // A work item and its seventeen fields.
+  { table: "work.items", policyClass: "standard" },
+  // A link between two work items.
+  { table: "work.item_links", policyClass: "standard" },
+  // A triage decision and its triage/v1 output.
+  { table: "work.triage_decisions", policyClass: "standard" },
+  // A field a person changed on a triage decision.
+  { table: "work.triage_corrections", policyClass: "standard" },
+  // A locked done record and its done-record/v1 body.
+  { table: "work.done_records", policyClass: "standard" },
+  // A done record's verdict change. Append only.
+  { table: "work.done_verdicts", policyClass: "standard" },
+  // An autonomy level change. Append only.
+  { table: "work.autonomy_events", policyClass: "standard" },
+  // An export of training examples.
+  { table: "work.training_exports", policyClass: "standard" },
 ];

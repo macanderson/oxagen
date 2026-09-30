@@ -31,7 +31,9 @@ describe("messages/shell.json", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
     expect(messages.nav.agents).toBe("Agents");
-    expect(messages.nav.runtimes).toBe("Runtimes");
+    // Tools and Runtimes are tabs of Agents, so neither is a nav item.
+    expect(messages.nav).not.toHaveProperty("tools");
+    expect(messages.nav).not.toHaveProperty("runtimes");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 
@@ -45,7 +47,7 @@ describe("messages/shell.json", () => {
   it("carries a catalog only for the chrome that renders", () => {
     // The command menu carries the mockup's groups, its runs coming from
     // search_tools (ARCHITECTURE.md §1.2). The Account dialog and the assistant render and write
-    // (update_profile, ask_assistant); the rev1 design put the approvals
+    // (update_profile, ask_assistant); the rev1 mockup put the approvals
     // drawer and the bell back in the top bar (fleet.md "Shell"). `choices`
     // is the words a record picker's tool rows carry (choice-actions.ts).
     // The avatar editor's words live in `ui.avatarEditor`, because one editor

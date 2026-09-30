@@ -180,7 +180,7 @@ function lineClick(open: () => void): () => void {
   };
 }
 
-// ── The design's rules, as class recipes (ADR-132) ──────────────────────────
+// ── The design's rules, as class recipes (ADR-226) ──────────────────────────
 
 /**
  * `.txs { font-family:var(--mono); font-size:12.5px; line-height:1.65;
@@ -844,7 +844,7 @@ function ToolRow({
                 <span
                   data-testid="tx-tool-arg"
                   className="tx-arg"
-                  title={call.arg}
+                  data-truncate={call.whole ?? call.arg}
                 >
                   <Hi text={call.arg} q={q} />
                 </span>
@@ -1244,7 +1244,7 @@ function EventRow({
                 <span
                   data-testid="tx-event-line"
                   className="tx-arg tx-dim"
-                  title={line}
+                  data-truncate={line}
                 >
                   <Hi text={line} q={q} />
                 </span>

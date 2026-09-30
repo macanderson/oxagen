@@ -584,12 +584,19 @@ describe("a relay credential", () => {
     expect(relay.unread()).toStrictEqual([]);
   });
 
-  it("is refused, not sent, when the plan check fails", async () => {
-    const h = await startBroker({ credentialEntitled: () => Promise.reject(new Error("billing down")) });
+  it("is refused, not sent, when the plan check fails, and the failure's text stays out", async () => {
+    const h = await startBroker({
+      credentialEntitled: () => Promise.reject(new Error("billing down at postgres://billing:hunter2@db")),
+    });
     const relay = await FakeRelay.connect(h.url, h.token);
-    await expect(
-      h.broker.transport(scope).http(httpRequest({ relay_credential: credential })),
-    ).rejects.toMatchObject({ code: "not_sent", sent: false });
+    const error = await h.broker
+      .transport(scope)
+      .http(httpRequest({ relay_credential: credential }))
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "not_sent", sent: false });
+    expect((error as Error).message).toContain("billing-token");
+    expect((error as Error).message).not.toContain("billing down");
+    expect((error as Error).message).not.toContain("hunter2");
     expect(relay.unread()).toStrictEqual([]);
   });
 
@@ -600,6 +607,78 @@ describe("a relay credential", () => {
     void h.broker.transport(scope).http(httpRequest()).catch(() => undefined);
     await relay.next("request");
     expect(entitled).not.toHaveBeenCalled();
+  });
+});
+
+describe("the ready check", () => {
+  const credential = { name: "billing-token", scheme: "bearer" as const };
+
+  it("passes for a connected relay, and sends nothing", async () => {
+    const h = await startBroker();
+    const relay = await FakeRelay.connect(h.url, h.token);
+    await expect(h.broker.ready(scope, "relay:office", undefined)).resolves.toBeUndefined();
+    expect(relay.unread()).toStrictEqual([]);
+  });
+
+  it("refuses a relay that is not connected, as a send would", async () => {
+    const h = await startBroker();
+    const checked = await h.broker.ready(scope, "relay:warehouse", undefined).catch((caught: unknown) => caught);
+    const sent = await h.broker
+      .transport(scope)
+      .http(httpRequest({ network: "relay:warehouse" }))
+      .catch((caught: unknown) => caught);
+    expect(checked).toBeInstanceOf(TransportError);
+    expect(checked).toMatchObject({ code: "disconnected", sent: false });
+    expect((checked as Error).message).toBe((sent as Error).message);
+  });
+
+  it("refuses a relay of another workspace with the same name", async () => {
+    const h = await startBroker();
+    const relay = await FakeRelay.connect(h.url, h.token);
+    const other: RelayScope = { ...scope, workspaceId: "ws-2", workspacePublicId: "wrk_zzzzzzzzzzzzzzzzzzzzzz" };
+    await expect(h.broker.ready(other, "relay:office", undefined)).rejects.toMatchObject({
+      code: "disconnected",
+      sent: false,
+    });
+    expect(relay.unread()).toStrictEqual([]);
+  });
+
+  it("refuses a network that is not relay:<name>", async () => {
+    const h = await startBroker();
+    await expect(h.broker.ready(scope, "cloud", undefined)).rejects.toMatchObject({
+      code: "unsupported",
+      sent: false,
+    });
+  });
+
+  it("refuses a relay credential below the Enterprise plan", async () => {
+    const h = await startBroker({ credentialEntitled: () => Promise.resolve(false) });
+    const relay = await FakeRelay.connect(h.url, h.token);
+    const error = await h.broker
+      .ready({ ...scope, planTier: "scale" }, "relay:office", credential)
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "unsupported", sent: false });
+    expect((error as Error).message).toContain("Enterprise");
+    expect(relay.unread()).toStrictEqual([]);
+  });
+
+  it("refuses a relay credential when the plan check fails, without the failure's text", async () => {
+    const h = await startBroker({ credentialEntitled: () => Promise.reject(new Error("billing down")) });
+    await FakeRelay.connect(h.url, h.token);
+    const error = await h.broker.ready(scope, "relay:office", credential).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "not_sent", sent: false });
+    expect((error as Error).message).not.toContain("billing down");
+  });
+
+  it("does not move the round robin on", async () => {
+    const h = await startBroker();
+    const first = await FakeRelay.connect(h.url, h.token);
+    const second = await FakeRelay.connect(h.url, h.token);
+    await h.broker.ready(scope, "relay:office", undefined);
+    // The first connection takes the first call, as it would with no check.
+    void h.broker.transport(scope).http(httpRequest()).catch(() => undefined);
+    await first.next("request");
+    expect(second.unread()).toStrictEqual([]);
   });
 });
 

@@ -16,7 +16,6 @@
       "retired": "retired"
     },
     "list": {
-      "description": "Every actor in this workspace and what it is made of.",
       "tiles": {
         "label": "Agents summary",
         "agentsHere": {
@@ -111,7 +110,6 @@
         "pager": "Pages",
         "previous": "Previous page",
         "next": "Next page",
-        "page": "Page {page}",
         "sortBy": "Sort by {column}",
         "noMatch": "No rows match.",
         "cursor": "Agents beyond this page",
@@ -129,7 +127,7 @@
         "body": "An agent is one harness on one runtime, working for you. Register one to give it a principal, a runtime and a toolbelt."
       },
       "create": {
-        "register": "Register an agent",
+        "register": "Connect an agent",
         "addRuntime": "Add a runtime"
       },
       "states": {
@@ -1228,6 +1226,19 @@
       "gateway": "gateway",
       "harness": "harness",
       "observe": "observe"
+    },
+    "area": {
+      "description": "Your agents, the tool servers they call, the policies that decide each call, where they run, and the off switches.",
+      "tabs": {
+        "label": "Agents sections",
+        "agents": "Agents",
+        "servers": "Tool servers",
+        "policies": "Policies",
+        "runtimes": "Runtimes",
+        "switches": "Off switches",
+        "switchesOn": "{count, plural, one {# on} other {# on}}",
+        "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
+      }
     }
   }
 }

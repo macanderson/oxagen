@@ -13,8 +13,10 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AuditBundle,
@@ -28,6 +30,7 @@ import { PAGE_FAILURES, type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { nth } from "@/test/nth";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 
 const { getAuthUser, buildBundle, push, refresh } = vi.hoisted(() => ({
   getAuthUser: vi.fn(),
@@ -169,6 +172,7 @@ const source: DataSource = {
     costCenters: refuse,
     modelCredential: refuse,
     dataPlane: refuse,
+    slackConnection: refuse,
     workspaceFacts: refuse,
     sso: refuse,
   },
@@ -257,6 +261,14 @@ function selectOf(element: HTMLElement): HTMLSelectElement {
   if (!(element instanceof HTMLSelectElement))
     throw new Error(`expected a select, found ${element.tagName}`);
   return element;
+}
+
+/** The value a filter's form sends for this query parameter. */
+function sent(filter: HTMLElement, name: string): string {
+  const field = filter.closest("form")?.elements.namedItem(name);
+  if (!(field instanceof HTMLInputElement))
+    throw new Error(`no ${name} field in the filter's form`);
+  return field.value;
 }
 
 /** The section a heading titles. */
@@ -428,7 +440,9 @@ describe("Events", () => {
     expect(events.mock.calls[0]?.[1]).toMatchObject({
       since: "2026-09-14T12:00:00.000Z",
     });
-    expect(screen.getByRole("combobox", { name: "Range" })).toHaveValue("48h");
+    const range = screen.getByRole("combobox", { name: "Range" });
+    expect(range).toHaveTextContent("Last 48 hours");
+    expect(sent(range, "range")).toBe("48h");
   });
 
   it("prints the design's columns, with the actor named, severity not recorded and the request as the reference", async () => {
@@ -492,9 +506,14 @@ describe("Events", () => {
 
     // The design's actor kinds, disabled until the record carries one; the
     // person a link named stays visible so the filter can be cleared.
+    const user = userEvent.setup();
     const actor = screen.getByRole("combobox", { name: "Actor" });
-    expect(actor).toHaveValue(ADA);
-    const options = within(actor).getAllByRole("option");
+    expect(actor).toHaveTextContent("Ada Lovelace");
+    expect(sent(actor, "actor")).toBe(ADA);
+    await user.click(actor);
+    const options = within(await screen.findByRole("listbox")).getAllByRole(
+      "option",
+    );
     expect(options.map((option) => option.textContent)).toEqual([
       "All actors",
       "Humans",
@@ -502,34 +521,37 @@ describe("Events", () => {
       "Services",
       "Ada Lovelace",
     ]);
-    expect(options.map((option) => option.matches(":disabled"))).toEqual([
-      false,
-      true,
-      true,
-      true,
-      false,
-    ]);
+    expect(
+      options.map((option) => option.hasAttribute("data-disabled")),
+    ).toEqual([false, true, true, true, false]);
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("listbox")).toBeNull();
+    });
     expect(actor).toHaveAccessibleDescription(
       "An audit event records no actor kind yet, so Humans, Agents and Services cannot be picked.",
     );
     expect(
-      within(screen.getByRole("combobox", { name: "Rows" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["5", "10", "25", "50"]);
-    expect(
-      within(screen.getByRole("combobox", { name: "Range" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
+      await optionNames(user, screen.getByRole("combobox", { name: "Range" })),
     ).toEqual(["Last 48 hours", "Last 7 days", "Last 30 days"]);
     const result = screen.getByRole("combobox", { name: "Result" });
-    expect(result).toHaveValue("deny");
+    expect(result).toHaveTextContent("denied");
+    expect(sent(result, "outcome")).toBe("deny");
+    expect(await optionNames(user, result)).toEqual([
+      "All results",
+      "allowed",
+      "denied",
+    ]);
+    // Rows sits in the pager under the table (#4693). The filters form
+    // carries its size as a hidden field, so picking a result keeps it.
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
     expect(
-      within(result)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["All results", "allowed", "denied"]);
-    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
+      screen
+        .getByTestId("audit-filters")
+        .querySelector("input[type=hidden][name=rows]"),
+    ).toHaveValue("25");
 
     const search = screen.getByRole("searchbox", {
       name: "Search the audit record",
@@ -544,17 +566,15 @@ describe("Events", () => {
     );
     const severity = screen.getByRole("combobox", { name: "Severity" });
     expect(severity).toBeDisabled();
-    expect([...selectOf(severity).options].map((o) => o.textContent)).toEqual([
-      "All severities",
-      "critical",
-      "info",
-      "warning",
-    ]);
+    // A disabled select cannot open, so its trigger shows All alone.
+    expect(severity).toHaveTextContent("All severities");
     // Every filter is a 44 px tap target with 16 px text on a phone (rev1
-    // audit.md, Mobile); the house input alone is about 38 px tall.
+    // audit.md, Mobile); the house input alone is about 38 px tall. A
+    // select's form value rides in an input hidden from everyone, which has
+    // no size to check.
     const filters = screen.getByTestId("audit-filters");
     for (const each of filters.querySelectorAll(
-      "select, input:not([type=hidden])",
+      "[data-slot=select-trigger], input:not([type=hidden]):not([aria-hidden=true])",
     )) {
       expect(each.className).toContain("max-md:min-h-11");
       expect(each.className).toContain("max-md:text-base");
@@ -572,7 +592,7 @@ describe("Events", () => {
     );
   });
 
-  it("draws the design's numbered pager when the window read holds every row", async () => {
+  it("steps the record with Previous and Next, and numbers no pages", async () => {
     const rows = Array.from({ length: 30 }, (_, i) =>
       event({ request: `req_${String(i)}` }),
     );
@@ -586,28 +606,64 @@ describe("Events", () => {
       name: "Pages of the audit record",
     });
     expect(screen.getByTestId("audit-shown")).toHaveTextContent("11–20 of 30");
-    expect(pager).toHaveTextContent("11–20 of 30‹123›");
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny");
-    expect(within(pager).getByRole("link", { name: "2" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(within(pager).getByRole("link", { name: "3" })).toHaveAttribute(
-      "href",
-      "/acme/audit?outcome=deny&offset=20",
-    );
     expect(
       within(pager).getByRole("link", { name: "Next page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny&offset=20");
+    // Previous and Next are the only steps (#4693).
+    expect(within(pager).getAllByRole("link")).toHaveLength(2);
     // A 44 px tap target on a phone (rev1 audit.md, Mobile).
     expect(
       within(pager).getByRole("link", { name: "Next page" }).className,
     ).toContain("max-md:min-h-11");
   });
 
-  it("folds a long record into 1 2 … 45, as the design draws it", async () => {
+  it("draws Rows in the pager under the table, and a picked size reads its first page", async () => {
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      event({ request: `req_${String(i)}` }),
+    );
+    answer({
+      window: recordOf(rows),
+      page: recordOf(rows.slice(10, 20), { hasMore: true, offset: 10 }),
+    });
+    await renderAudit({ outcome: "deny", offset: "10" });
+
+    const size = screen.getByRole("combobox", { name: "Rows" });
+    const pager = size.closest("[data-rows-pager]");
+    if (!(pager instanceof HTMLElement)) throw new Error("Rows has no pager");
+    // The filters above the table no longer hold it.
+    expect(screen.getByTestId("audit-filters").contains(size)).toBe(false);
+    // The pager comes after the table, with the range and the steps.
+    const table = screen.getByRole("table", { name: "Control-plane events" });
+    expect(
+      table.compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(pager).getByTestId("audit-shown")).toHaveTextContent(
+      "11–20 of 30",
+    );
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?outcome=deny&offset=20");
+
+    expect(size).toHaveTextContent("10");
+    await userEvent.click(size);
+    await screen.findByRole("option", { name: "25" });
+    // Only the pager's list is open, so these are its options.
+    expect(
+      within(screen.getByRole("listbox"))
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["5", "10", "25", "50"]);
+    await userEvent.click(screen.getByRole("option", { name: "25" }));
+    // A new size starts at its own first page and keeps the filters.
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/audit?outcome=deny&rows=25");
+    });
+  });
+
+  it("steps a long record one page at a time at the Rows size", async () => {
     const rows = Array.from({ length: 200 }, (_, i) =>
       event({ request: `req_${String(i)}` }),
     );
@@ -620,14 +676,13 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    expect(pager).toHaveTextContent("1–5 of 200‹12…40›");
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent("1–5 of 200");
     expect(
       within(pager).getByRole("button", { name: "Previous page" }),
     ).toBeDisabled();
-    expect(within(pager).getByRole("link", { name: "40" })).toHaveAttribute(
-      "href",
-      "/acme/audit?rows=5&offset=195",
-    );
+    expect(
+      within(pager).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/audit?rows=5&offset=5");
   });
 
   it("claims no last page when the window read did not hold every row (negative)", async () => {
@@ -640,8 +695,9 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    // Pages 1 and 2 are read, page 3 exists, and nothing past it is known.
-    expect(pager).toHaveTextContent("26–26‹123…›");
+    // The range names no total, and Next leads on while the page read
+    // reports an older page.
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent(/^26–26$/);
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
     ).toHaveAttribute("href", "/acme/audit?outcome=deny&rows=25");
@@ -651,35 +707,38 @@ describe("Events", () => {
     expect(document.body).not.toHaveTextContent("Older events");
   });
 
-  it("applies a picked filter at once, but a keyboard step only on Enter or leaving the select", async () => {
+  it("applies a filter picked from its list at once, with the picked value, but not a letter typed on the closed trigger", async () => {
     answer({ window: recordOf([denied]) });
     await renderAudit();
+    const user = userEvent.setup();
+    const range = screen.getByRole("combobox", { name: "Range" });
+    // The value the form holds at the moment it submits.
+    const submitted: string[] = [];
     const submit = vi
       .spyOn(HTMLFormElement.prototype, "requestSubmit")
-      .mockImplementation(() => undefined);
-    const range = screen.getByRole("combobox", { name: "Range" });
+      .mockImplementation(() => {
+        submitted.push(sent(range, "range"));
+      });
 
-    // A pick from the open list (a click or a tap) applies.
-    fireEvent.pointerDown(range);
-    fireEvent.change(range, { target: { value: "7d" } });
-    expect(submit).toHaveBeenCalledTimes(1);
+    // A pick from the open list (a click or a tap) applies the new value.
+    await pickOption(user, range, "Last 7 days");
+    expect(submitted).toEqual(["7d"]);
 
-    // An arrow key on the closed select steps the value and reloads nothing
-    // (WCAG 3.2.2): the page keeps focus on the select.
-    fireEvent.keyDown(range, { key: "ArrowDown" });
-    fireEvent.change(range, { target: { value: "30d" } });
+    // A letter on the closed trigger would pick a match without opening the
+    // list. It reloads nothing (WCAG 3.2.2), so focus stays on the trigger.
+    range.focus();
+    await user.keyboard("L");
     expect(submit).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(range, { key: "Enter" });
+    expect(range).toHaveFocus();
+    expect(range).toHaveTextContent("Last 7 days");
+
+    // A pick from the list of another filter applies too.
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Result" }),
+      "denied",
+    );
     expect(submit).toHaveBeenCalledTimes(2);
-
-    // A stepped value applies when focus leaves, and a clean blur does nothing.
-    const result = screen.getByRole("combobox", { name: "Result" });
-    fireEvent.keyDown(result, { key: "ArrowDown" });
-    fireEvent.change(result, { target: { value: "deny" } });
-    fireEvent.blur(result);
-    expect(submit).toHaveBeenCalledTimes(3);
-    fireEvent.blur(result);
-    expect(submit).toHaveBeenCalledTimes(3);
   });
 
   it("opens an event's recorded facts from a 44 px summary on a phone", async () => {
@@ -709,9 +768,10 @@ describe("Events", () => {
     await renderAudit();
 
     expect(
-      within(screen.getByRole("combobox", { name: "Actor" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent),
+      await optionNames(
+        userEvent.setup(),
+        screen.getByRole("combobox", { name: "Actor" }),
+      ),
     ).toEqual(["All actors", "Humans", "Agents", "Services"]);
   });
 
@@ -790,9 +850,9 @@ describe("Events", () => {
     answer({ window: recordOf([event({ actor: GONE })]) });
     await renderAudit({ actor: GONE });
 
-    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
-    expect(actor.value).toBe(GONE);
-    expect(actor.selectedOptions[0]?.textContent).toBe(GONE);
+    const actor = screen.getByRole("combobox", { name: "Actor" });
+    expect(sent(actor, "actor")).toBe(GONE);
+    expect(actor).toHaveTextContent(GONE);
   });
 
   it("names the picked actor from the roster, and by email when they set no name", async () => {
@@ -814,8 +874,9 @@ describe("Events", () => {
     answer({ window: recordOf([denied]) });
     await renderAudit({ actor: ADA });
 
-    const actor = selectOf(screen.getByRole("combobox", { name: "Actor" }));
-    expect(actor.selectedOptions[0]?.textContent).toBe("ada@acme.test");
+    expect(screen.getByRole("combobox", { name: "Actor" })).toHaveTextContent(
+      "ada@acme.test",
+    );
   });
 
   it("prints actors by public id when the roster read fails, and keeps the page (negative)", async () => {
@@ -839,8 +900,14 @@ describe("Events", () => {
     const pager = screen.getByRole("navigation", {
       name: "Pages of the audit record",
     });
-    expect(pager).toHaveTextContent("26–26‹12›");
+    expect(screen.getByTestId("audit-shown")).toHaveTextContent(/^26–26$/);
+    expect(
+      within(pager).getByRole("link", { name: "Previous page" }),
+    ).toHaveAttribute("href", "/acme/audit?rows=25");
     expect(within(pager).queryByRole("link", { name: "Next page" })).toBeNull();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
   });
 });
 

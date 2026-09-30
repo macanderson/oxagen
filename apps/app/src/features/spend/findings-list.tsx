@@ -1,18 +1,20 @@
 "use client";
 // The ranked finding cards with the design's filters (spec "Findings"):
-// Level, Confidence, Sort (Rank, Savings high first, Savings low first,
-// Finding A to Z), Rows and a pager. Filtering runs over the open findings the
-// server listed, largest saving first, so a finding's rank is its place in
-// that list and never changes with a filter. Each card names who the finding
-// is about, the finding, what it cites, the amount at stake and its share of
-// the identified total, and opens Evidence and Fix.
+// Level, Confidence and Sort (Rank, Savings high first, Savings low first,
+// Finding A to Z) above the cards, and under them the shared pager with Rows
+// per page, the range, Previous and Next. Filtering runs over the open
+// findings the server listed, largest saving first, so a finding's rank is its
+// place in that list and never changes with a filter. Each card names who the
+// finding is about, the finding, what it cites, the amount at stake and its
+// share of the identified total, and opens Evidence and Fix.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { byMicrosDescending } from "@/data/contracts/money";
 import type { SpendFinding } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, inputBase, mono, panel } from "@/ui/control-styles";
+import { buttonSecondary, mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { ListSelect } from "@/ui/list-select";
 import { Money } from "@/ui/money";
 import {
   formatCount,
@@ -21,6 +23,7 @@ import {
   ratioWidth,
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { RowsPager } from "@/ui/pagination";
 import { FixDialog } from "./fix-dialog";
 import type { SpendAt } from "./view";
 
@@ -35,7 +38,8 @@ type Sort = (typeof SORTS)[number];
 
 type Ranked = { finding: SpendFinding; rank: number; share: number | null };
 
-function Select<T extends string | number>({
+// A filter is the shared list select (`ui/list-select.tsx`).
+function Filter<T extends string>({
   id,
   label,
   value,
@@ -49,29 +53,21 @@ function Select<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <label
-      htmlFor={id}
-      className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
-    >
-      {label}
-      <select
-        id={id}
-        value={String(value)}
-        onChange={(event) => {
-          const next = options.find(
-            (option) => String(option.value) === event.target.value,
-          );
-          if (next !== undefined) onChange(next.value);
+    <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+      <span id={`${id}-label`}>{label}</span>
+      <ListSelect
+        items={options}
+        value={value}
+        onValue={(next) => {
+          const picked = options.find((option) => option.value === next);
+          if (picked !== undefined) onChange(picked.value);
         }}
-        className={`${inputBase} w-auto py-1`}
-      >
-        {options.map((option) => (
-          <option key={String(option.value)} value={String(option.value)}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+        id={id}
+        aria-labelledby={`${id}-label`}
+        size="sm"
+        className="text-[12px] max-md:min-h-11 max-md:text-base"
+      />
+    </span>
   );
 }
 
@@ -255,7 +251,7 @@ export function FindingsList({
         aria-label={t("filters.label")}
         className={`${panel} flex flex-wrap items-center gap-3 px-3 py-2.5`}
       >
-        <Select<Level>
+        <Filter<Level>
           id="spend-findings-level"
           label={t("filters.level")}
           value={level}
@@ -265,7 +261,7 @@ export function FindingsList({
           }))}
           onChange={reset(setLevel)}
         />
-        <Select<Confidence>
+        <Filter<Confidence>
           id="spend-findings-confidence"
           label={t("filters.confidence")}
           value={confidence}
@@ -276,7 +272,7 @@ export function FindingsList({
           }))}
           onChange={reset(setConfidence)}
         />
-        <Select<Sort>
+        <Filter<Sort>
           id="spend-findings-sort"
           label={t("filters.sort")}
           value={sort}
@@ -285,16 +281,6 @@ export function FindingsList({
             label: t(`filters.sorts.${value}`),
           }))}
           onChange={reset(setSort)}
-        />
-        <Select<number>
-          id="spend-findings-rows"
-          label={t("filters.rows")}
-          value={size}
-          options={PAGE_SIZES.map((value) => ({
-            value,
-            label: formatCount(value, locale),
-          }))}
-          onChange={reset(setSize)}
         />
       </div>
       {slice.length === 0 ? (
@@ -308,45 +294,41 @@ export function FindingsList({
           ))}
         </ol>
       )}
-      <nav
-        aria-label={t("pager.label")}
-        className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted-foreground"
-      >
-        <span className={mono}>
-          {t("pager.range", {
-            from: formatCount(
-              shown.length === 0 ? 0 : current * size + 1,
-              locale,
-            ),
-            to: formatCount(current * size + slice.length, locale),
-            total: formatCount(shown.length, locale),
-          })}
-        </span>
-        <span className="flex gap-1.5">
-          <button
-            type="button"
-            data-touch-target=""
-            className={buttonSecondary}
-            disabled={current === 0}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            {t("pager.previous")}
-          </button>
-          <button
-            type="button"
-            data-touch-target=""
-            className={buttonSecondary}
-            disabled={current >= pages - 1}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            {t("pager.next")}
-          </button>
-        </span>
-      </nav>
+      {/* The cards sit in no panel, so the pager drops its side padding and
+          lines up with their edges. Changing the rows goes back to page 1. */}
+      <RowsPager
+        label={t("pager.label")}
+        rowsLabel={t("filters.rows")}
+        perPage={size}
+        sizes={PAGE_SIZES}
+        onPerPage={reset(setSize)}
+        sizeLabel={(value) => formatCount(value, locale)}
+        range={t("pager.range", {
+          from: formatCount(
+            shown.length === 0 ? 0 : current * size + 1,
+            locale,
+          ),
+          to: formatCount(current * size + slice.length, locale),
+          total: formatCount(shown.length, locale),
+        })}
+        previousLabel={t("pager.previous")}
+        nextLabel={t("pager.next")}
+        previous={
+          current <= 0
+            ? null
+            : () => {
+                setPage(current - 1);
+              }
+        }
+        next={
+          current >= pages - 1
+            ? null
+            : () => {
+                setPage(current + 1);
+              }
+        }
+        className="px-0"
+      />
     </section>
   );
 }

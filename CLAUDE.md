@@ -114,19 +114,22 @@ Oxagen wraps four agent harnesses as equals (ADR-101): **Claude Code, Codex, Cur
 
 `apps/app` has its own components at `src/ui/`, feature lanes at `src/features/`, and data ports at `src/data/`. Import UI through `@/ui/<name>`. `apps/docs` and `apps/app_deprecated` use `@/components/ui/<name>`. See AGENTS.md for the import rule and its enforcement limits.
 
+Before you start a UI slice, read ADR-226, then the v3 mockup at the commit it pins, then the kit's tokens. The rev1 mockup (`mc.html`, `missioncontrol.html`, `engine.css`) is gone, and a page row or log entry that cites it is history.
+
 Use these files to inspect the current app:
 
 | Concern | Source |
 |---|---|
 | Routes | `apps/app/src/app/` and `apps/app/e2e/routes.ts` |
 | Architecture and enforced invariants | `apps/app/ARCHITECTURE.md` and `apps/app/src/test/arch/` |
+| Design of record | `docs/adr/ADR-226-the-v3-mockup-and-the-brand-kit-are-the-design-of-record.md`: the v3 mockup at its pin for layout and behavior, and the brand kit (`packages/ui/src/styles/house-tokens.css`) for tokens, type, and marks |
 | Shell and assistant flyout | `apps/app/src/features/shell/` |
 | Server data adapters | `apps/app/src/data/live/` |
 | Capability to UI bindings | `apps/app/capability-ui-map.json` |
 | Translations | `apps/app/messages/` |
 | Package versions | Each app's `package.json` and `pnpm-workspace.yaml` overrides |
 
-The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, Tools, Steering, Spend, Skills, and registration. Organization routes include Organization, Billing, Audit, Roles, API keys, and Model funding. Read the route source before adding a link. The former `[orgSlug]/[workspaceSlug]` routes and `src/components/` belong to `apps/app_deprecated`.
+The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, Steering, Spend, Skills, and registration. Agents carries the Tool servers, Policies, Runtimes, and Off switches tabs as `?tab=` values, and `/tools` and `/runtimes` redirect there. Organization routes include Organization, Billing, Audit, Roles, API keys, and Model funding. Read the route source before adding a link. The former `[orgSlug]/[workspaceSlug]` routes and `src/components/` belong to `apps/app_deprecated`.
 
 The current assistant flyout and the retained API chat transport are separate surfaces. Do not copy the deprecated app's `use-tool-stream.ts` path into new app guidance. Use existing data ports and server actions, and keep platform actions behind capability contracts.
 

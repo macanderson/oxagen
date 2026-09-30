@@ -24,7 +24,7 @@ import { decryptCredentialSecrets, resolveCredentialKms } from "@oxagen/plugins"
 import { runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray, ne, notInArray, or } from "drizzle-orm";
 import { logger } from "../logger";
-import { searchUsageRecorder } from "./search-usage";
+import { searchUsageMeter } from "./search-usage";
 
 /** The workspace an index belongs to, with the principal its reads run as. */
 export type SearchScope = TenantScope;
@@ -207,15 +207,16 @@ export async function embedderFor(target: EmbeddingTarget, scope: SearchScope): 
           "VOYAGE_API_KEY is not set, so search ranks by keyword. Set it in this deployment's environment.",
         );
       }
-      // Oxagen pays for these tokens, so each request writes a token_usage
-      // row with no charge. A custom provider's own account pays for its tokens.
+      // Oxagen pays for these tokens, so each request is admitted to the
+      // usage outbox before it is sent and writes a token_usage row with no
+      // charge. A custom provider's own account pays for its tokens.
       return httpEmbedder({
         url: target.url,
         model: target.model,
         key: target.key,
         apiKey,
         inputType: true,
-        onUsage: searchUsageRecorder(scope, target.model),
+        meter: searchUsageMeter(scope, target.model),
       });
     }
     case "custom": {

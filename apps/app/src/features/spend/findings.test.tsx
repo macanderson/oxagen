@@ -3,8 +3,9 @@
 // the legend names: each share reads "not recorded" and never a guessed
 // percentage, the smaller findings roll into one legend entry, the list sorts
 // by saving and by kind, an operator the rollup cannot name is shown by id,
-// and a filter that hides every card says so. Evidence with no runs says so,
-// and closing it returns to the list.
+// and a filter that hides every card says so. The pager under the cards holds
+// Rows per page, turns to the next ten and shows every card at 25. Evidence
+// with no runs says so, and closing it returns to the list.
 import {
   cleanup,
   render,
@@ -24,6 +25,7 @@ import type {
 import { readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -64,6 +66,25 @@ const NINE: SpendFinding[] = Array.from({ length: 9 }, (_, i) => ({
     micros: String((9 - i) * 1_000_000),
     currency: "USD",
     basis: i === 1 ? null : "gateway_observed",
+  },
+  confidence: "high",
+  window: WINDOW,
+  why: "Why.",
+  fix: "Fix.",
+  runs: 1,
+  calls: 2,
+}));
+
+/** Twelve findings, largest saving first: two more than the first page holds. */
+const TWELVE: SpendFinding[] = Array.from({ length: 12 }, (_, i) => ({
+  id: `fnd_${String(i)}p`,
+  kind: KINDS[i % KINDS.length] ?? "unpaged_results",
+  level: "tool",
+  subject: `tool_${String(i)}`,
+  saving: {
+    micros: String((12 - i) * 1_000_000),
+    currency: "USD",
+    basis: "gateway_observed",
   },
   confidence: "high",
   window: WINDOW,
@@ -160,17 +181,23 @@ describe("Findings with an unknown total", () => {
   it("sorts by saving, high first, and by kind", async () => {
     const user = userEvent.setup();
     section(null);
-    await user.selectOptions(
-      screen.getByLabelText("Sort"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
       "Savings low first",
     );
     expect(order()[0]).toBe("fnd_8a");
-    await user.selectOptions(
-      screen.getByLabelText("Sort"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
       "Savings high first",
     );
     expect(order()[0]).toBe("fnd_0a");
-    await user.selectOptions(screen.getByLabelText("Sort"), "Finding A to Z");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Finding A to Z",
+    );
     const kinds = Array.from(document.querySelectorAll("li[data-finding]")).map(
       (li) => li.getAttribute("data-finding"),
     );
@@ -181,8 +208,9 @@ describe("Findings with an unknown total", () => {
   it("says no finding matches when a filter hides every card (negative)", async () => {
     const user = userEvent.setup();
     section(null);
-    await user.selectOptions(
-      screen.getByLabelText("Confidence"),
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Confidence" }),
       "medium confidence",
     );
     expect(screen.getByText("No finding matches these filters.")).toBeTruthy();
@@ -198,6 +226,67 @@ describe("Findings with a known total", () => {
     // The ninth finding saves 1 of 45.
     expect(tail?.textContent).toMatch(/2(\.\d)?%/);
     expect(hero.querySelectorAll("span[data-finding]")).toHaveLength(9);
+  });
+});
+
+describe("Findings pager", () => {
+  it("draws Rows under the cards, turns to the next ten, and shows every card at 25", async () => {
+    const user = userEvent.setup();
+    render(
+      <IntlProvider>
+        <FindingsSection
+          findings={{
+            window: WINDOW,
+            saving: {
+              micros: "78000000",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+            spend: null,
+            share: null,
+            annualised: null,
+            counts: { findings: 12, high: 12, medium: 0, operators: 0 },
+            findings: TWELVE,
+          }}
+          operators={[]}
+          at={AT}
+          evidence={null}
+        />
+      </IntlProvider>,
+    );
+    const list = screen.getByRole("list", {
+      name: "Findings ranked by savings",
+    });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    const pager = rows.closest("[data-rows-pager]");
+    if (pager === null) throw new Error("Rows sits outside the pager");
+    // The pager, Rows with it, comes after the cards, not above them.
+    expect(
+      list.compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(rows).toHaveTextContent("10");
+    expect(order()).toHaveLength(10);
+    expect(pager).toHaveTextContent("1 to 10 of 12");
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(pager).toHaveTextContent("11 to 12 of 12");
+    expect(order()).toEqual(["fnd_10p", "fnd_11p"]);
+    expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+    // A new size goes back to the first page.
+    await user.click(rows);
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    await waitFor(() => {
+      expect(order()).toHaveLength(12);
+    });
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+    expect(pager).toHaveTextContent("1 to 12 of 12");
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 });
 
@@ -229,8 +318,10 @@ describe("Finding evidence", () => {
     const dialog = screen.getByTestId("spend-evidence-dialog");
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
-      // Findings is the default tab, so the list is the bare Spend path.
-      expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
+      // Closing the evidence returns to the list on the Findings tab.
+      expect(nav.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend/findings",
+      );
     });
   });
 

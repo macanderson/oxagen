@@ -68,6 +68,8 @@ describe("toSpendReport", () => {
       period: { from: "2026-09-01", to: "2026-09-15" },
       groupBy: "model",
       total: figure,
+      days: [],
+      reported: null,
       rows: [
         {
           ...figure,
@@ -75,6 +77,7 @@ describe("toSpendReport", () => {
           provider: "anthropic",
           operator: null,
           tokens: wireTokens,
+          topRuns: [],
         },
         {
           ...figure,
@@ -84,6 +87,7 @@ describe("toSpendReport", () => {
           provider: null,
           operator: null,
           tokens: wireTokens,
+          topRuns: [],
         },
       ],
     });
@@ -97,6 +101,54 @@ describe("toSpendReport", () => {
     expect(view.rows[1]?.accepted).toBeNull();
     expect(view.rows[0]?.proven).toBeNull();
   });
+
+  it("copies the spend by day, the reported spend and each row's top runs", () => {
+    const run = {
+      runId: "tse_01k9",
+      name: "Fix the billing export",
+      startedAt: "2026-09-14T09:30:00.000Z",
+      agentKey: "claude-code",
+      operatorKey: "prn_7h2",
+      cost: priced,
+      calls: 12,
+    };
+    const out = spendGet.output.parse({
+      period: { from: "2026-09-14", to: "2026-09-15" },
+      groupBy: "mcp_server",
+      total: figure,
+      days: [
+        { day: "2026-09-14", cost: priced, calls: 40, runs: 12 },
+        { day: "2026-09-15", cost: null, calls: 0, runs: 0 },
+      ],
+      reported: { micros: "2000000", currency: "USD" },
+      rows: [
+        {
+          ...figure,
+          key: "github",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [run],
+        },
+        {
+          ...figure,
+          key: "~other",
+          provider: null,
+          operator: null,
+          tokens: wireTokens,
+          topRuns: [],
+        },
+      ],
+    });
+    const view = SpendReport.parse(toSpendReport(out));
+    expect(view.days?.map((d) => [d.day, d.cost])).toEqual([
+      ["2026-09-14", priced],
+      ["2026-09-15", null],
+    ]);
+    expect(view.reported).toEqual({ micros: "2000000", currency: "USD" });
+    expect(view.rows[0]?.topRuns).toEqual([run]);
+    expect(view.rows[1]?.topRuns).toEqual([]);
+  });
 });
 
 describe("toFleetSpend", () => {
@@ -107,6 +159,8 @@ describe("toFleetSpend", () => {
       period: day,
       groupBy: "model",
       total: figure,
+      days: [],
+      reported: null,
       rows: [
         {
           ...figure,
@@ -114,6 +168,7 @@ describe("toFleetSpend", () => {
           provider: "anthropic",
           operator: null,
           tokens: wireTokens,
+          topRuns: [],
         },
         {
           ...figure,
@@ -121,6 +176,7 @@ describe("toFleetSpend", () => {
           provider: "anthropic",
           operator: null,
           tokens: { ...wireTokens, input_uncached: 800, cache_read: 1200 },
+          topRuns: [],
         },
       ],
     });
@@ -136,6 +192,8 @@ describe("toFleetSpend", () => {
       period: day,
       groupBy: "model",
       total: { ...figure, cost: null, calls: 0, runs: 0, accepted: null },
+      days: [],
+      reported: null,
       rows: [],
     });
     expect(FleetSpend.parse(toFleetSpend(out))).toEqual({

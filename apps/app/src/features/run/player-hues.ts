@@ -1,4 +1,4 @@
-// The Governed actions tab's two hue families, as token classes (ADR-132).
+// The Governed actions tab's two hue families, as token classes (ADR-226).
 //
 // `.fk-model{--c:var(--fk-model)} .fk-tool{--c:var(--fk-tool)}
 // .fk-gov{--c:var(--fk-gov)} .fk-ctx{--c:var(--fk-ctx)}

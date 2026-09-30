@@ -795,7 +795,7 @@ function FilesChanged({
                 <span>{t(`capture.${diff.completeness}`)}</span>
                 {diff.digest === null ? null : (
                   <code
-                    title={diff.digest}
+                    data-truncate={diff.digest}
                     className={`${mono} min-w-0 break-all text-[11px] text-dim`}
                   >
                     {`${diff.digest.slice(0, "sha256:".length + 12)}…`}

@@ -46,8 +46,9 @@ describe("tenant policy manifest", () => {
   });
 
   it("omits immutable children that carry no org columns", () => {
-    // A manifest policy on them cannot compile. RLS is not transitive via FK,
-    // so agent.agent_versions has no row isolation of its own (#2156).
+    // A manifest policy on them cannot compile. agent.agent_versions carries
+    // its own policy that checks the parent agent instead
+    // (20260929124500_agent_versions_rls.sql, #2156).
     const tables = POLICY_MANIFEST.map((e) => e.table);
     expect(tables).not.toContain("agent.agent_versions");
   });
@@ -278,7 +279,11 @@ describe("tenant policy manifest", () => {
     // 150 adds mcp.studio_drafts (M11, #4686, 2026-09-28).
     // 151 adds mcp.server_discoveries (M10, #4682, 2026-09-28).
     // 152 adds mcp.relays (M12, #4685, 2026-09-28).
-    expect(POLICY_MANIFEST.length).toBe(152);
+    // 162 adds the ten work.* tables: collectors, inbound_events, items,
+    // item_links, triage_decisions, triage_corrections, done_records,
+    // done_verdicts, autonomy_events and training_exports (C0, #4735,
+    // 2026-09-29).
+    expect(POLICY_MANIFEST.length).toBe(162);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

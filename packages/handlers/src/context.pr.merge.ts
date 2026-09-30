@@ -431,6 +431,9 @@ export function createMergeContextPrHandler(
         return { commitSha, attempts, version, result, live };
       });
       const { commitSha, attempts, version, result, live } = outcome;
+      // The steering version this merge made live. A legacy repository has
+      // no version store, so its merge publishes no steering version.
+      const publishedVersion = publisher !== null && live ? version : null;
       const deploymentUrl = live
         ? await recordPublishDeployment(deps.github, repo, {
             sha: commitSha,
@@ -458,6 +461,7 @@ export function createMergeContextPrHandler(
           commit: commitSha,
           bundleVersion: result.ledgerBefore + 1,
           version,
+          publishedVersion,
           attempts,
           layout: layout.layout,
           deploymentUrl,
@@ -485,6 +489,7 @@ export function createMergeContextPrHandler(
           before: result.ledgerBefore,
           after: result.ledgerBefore + 1,
         },
+        publishedVersion,
       };
     });
   };

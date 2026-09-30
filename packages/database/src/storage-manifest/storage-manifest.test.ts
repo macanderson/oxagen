@@ -41,6 +41,7 @@ const EXPECTED_PG_SCHEMAS = [
   "skills",
   "tacho",
   "tools",
+  "work",
   "workspace",
 ] as const;
 

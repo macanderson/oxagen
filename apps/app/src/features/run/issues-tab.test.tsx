@@ -23,6 +23,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { runIssue, runIssues } from "./issues.builders";
 import {
   runDetail,
@@ -299,20 +300,23 @@ describe("the Issues panel", () => {
         }),
       ),
     });
+    const user = userEvent.setup();
     const filter = screen.getByRole("combobox", { name: "Filter by status" });
-    expect(
-      within(filter)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["All · Status", "open", "closed", "in progress", "blocked"]);
-    await userEvent.selectOptions(filter, "closed");
+    expect(await optionNames(user, filter)).toEqual([
+      "All · Status",
+      "open",
+      "closed",
+      "in progress",
+      "blocked",
+    ]);
+    await pickOption(user, filter, "closed");
     expect(visible()).toEqual(["a-intel/platform#490"]);
-    await userEvent.selectOptions(filter, "open");
+    await pickOption(user, filter, "open");
     expect(visible()).toEqual(["a-intel/platform#482", "a-intel/platform#480"]);
-    await userEvent.selectOptions(filter, "blocked");
+    await pickOption(user, filter, "blocked");
     expect(screen.queryAllByTestId("run-issue")).toHaveLength(0);
     expect(screen.getByText("No issue has this status.")).toBeTruthy();
-    await userEvent.selectOptions(filter, "");
+    await pickOption(user, filter, "All · Status");
     expect(visible()).toHaveLength(4);
   });
 
@@ -329,19 +333,22 @@ describe("the Issues panel", () => {
     );
     await renderIssues({ issues: readOk(runIssues({ issues: many })) });
     expect(visible()).toHaveLength(7);
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Rows" }),
-      "5",
-    );
-    expect(visible()).toEqual([
-      "a-intel/platform#500",
-      "a-intel/platform#501",
-      "a-intel/platform#502",
-      "a-intel/platform#503",
-      "a-intel/platform#504",
-    ]);
+    await userEvent.click(screen.getByRole("combobox", { name: "Rows" }));
+    await userEvent.click(await screen.findByRole("option", { name: "5" }));
+    await waitFor(() => {
+      expect(visible()).toEqual([
+        "a-intel/platform#500",
+        "a-intel/platform#501",
+        "a-intel/platform#502",
+        "a-intel/platform#503",
+        "a-intel/platform#504",
+      ]);
+    });
     const pager = screen.getByRole("navigation", { name: "Issues pages" });
-    expect(pager).toHaveTextContent("1–5 of 7");
+    const rowsPager = pager.closest("[data-rows-pager]");
+    expect(rowsPager?.querySelector("[data-range]")?.textContent).toBe(
+      "1–5 of 7",
+    );
     await userEvent.click(
       within(pager).getByRole("button", { name: "Next page" }),
     );
@@ -563,6 +570,16 @@ describe("Linked work", () => {
     if (captured === undefined) throw new Error("a captured diff");
     expect(within(captured).getByText("patch retained")).toBeTruthy();
     expect(within(captured).getByRole("link", { name: "fr 31" })).toBeTruthy();
+    // The short digest carries the whole one for its hover card (#4692). The
+    // pull request's patch has a digest of its own, so the test names the
+    // captured diff's digest rather than any sha256.
+    const [diff] = runWork().diffs;
+    if (diff?.digest == null) throw new Error("a captured diff's digest");
+    const digest = captured.querySelector("code");
+    expect(digest).toHaveAttribute("data-truncate", diff.digest);
+    expect(digest).toHaveTextContent(`sha256:${"9".repeat(12)}…`);
+    expect(digest?.textContent).not.toContain(diff.digest);
+    expect(digest).not.toHaveAttribute("title");
   });
 
   it("counts the inferred rows against the total, and none is inferred", async () => {

@@ -29,6 +29,7 @@ export const SpendGroupKind = z.enum([
   "tool",
   "task",
   "cost_center",
+  "mcp_server",
 ]);
 export type SpendGroupKind = z.infer<typeof SpendGroupKind>;
 
@@ -37,6 +38,12 @@ export type SpendGroupKind = z.infer<typeof SpendGroupKind>;
  * (ADR-142). The label pattern refuses `~`, so no label collides with it.
  */
 export const UNASSIGNED_COST_CENTER_KEY = "~none";
+
+/**
+ * The key of the `mcp_server` row that holds the spend no MCP server's tool
+ * results carried. A server name has no `~`, so no server collides with it.
+ */
+export const OTHER_SPEND_KEY = "~other";
 
 /** The levels a drill opens (spec §12.9): a model has none. */
 export const SpendDrillKind = z.enum(["operator", "agent", "tool"]);
@@ -78,14 +85,37 @@ const SpendTokens = z.object({
   server_tool_request: Count.optional(),
 });
 
+/** One of a row's costliest runs, with the row's part of its cost. */
+const SpendTopRun = z.object({
+  runId: PublicId.regex(RUN_PUBLIC_ID),
+  /** The session name the Fleet board shows; null when the run has none. */
+  name: z.string().nullable(),
+  startedAt: z.iso.datetime({ offset: true }),
+  agentKey: z.string().nullable(),
+  /** The operator's principal public id; null for a run with no operator. */
+  operatorKey: z.string().nullable(),
+  cost: Cost.nullable(),
+  calls: Count,
+});
+export type SpendTopRun = z.infer<typeof SpendTopRun>;
+
 const SpendRow = SpendFigure.extend({
   tokens: SpendTokens,
-  /** A principal public id, an agent key, a model id, a tool name, a task reference or a cost-center label. */
+  /**
+   * A principal public id, an agent key, a model id, a tool name, a task
+   * reference, a cost-center label, an MCP server name, or
+   * {@link OTHER_SPEND_KEY}.
+   */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
   provider: z.string().nullable(),
   /** The person an operator row names; null on every other row. */
   operator: OperatorFacts.nullable(),
+  /**
+   * The row's costliest runs, at most eight. Absent from a view built
+   * before get_spend listed them.
+   */
+  topRuns: z.array(SpendTopRun).optional(),
 });
 
 /**
@@ -99,10 +129,28 @@ const UnmeteredRuns = z.object({
 });
 export type UnmeteredRuns = z.infer<typeof UnmeteredRuns>;
 
+/** One day of a spend series. */
+const SpendDay = z.object({
+  day: Day,
+  cost: Cost.nullable(),
+  calls: Count,
+  runs: Count,
+});
+
 /** `get_spend` at one level: the period total and its groups, largest spend first. */
 export const SpendReport = z.object({
   period: DayRange,
   total: SpendFigure,
+  /**
+   * One entry per day of the period, oldest first. Absent from a view built
+   * before get_spend answered it.
+   */
+  days: z.array(SpendDay).optional(),
+  /**
+   * The part of the total the harness reported and the gateway did not
+   * meter; null when there is none.
+   */
+  reported: Money.nullable().optional(),
   /** Runs still open whose cost is in these figures as a running estimate. */
   estimatedRuns: z.number().int().nonnegative().optional(),
   /** Runs in `total.runs` whose cost `total.cost` leaves out. */
@@ -130,9 +178,7 @@ export const SpendDrill = z.object({
   period: DayRange,
   total: SpendFigure,
   /** One entry per day of the window, oldest first. */
-  series: z.array(
-    z.object({ day: Day, cost: Cost.nullable(), calls: Count, runs: Count }),
-  ),
+  series: z.array(SpendDay),
   perCall: Money.nullable(),
   perRun: Money.nullable(),
   /** The key's share of the workspace's spend over the window. */

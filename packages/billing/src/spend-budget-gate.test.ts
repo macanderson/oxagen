@@ -28,6 +28,11 @@ vi.mock("./spend-counter", () => ({
   sumSpendCounter: counter.sumSpendCounter,
 }));
 
+const logs = vi.hoisted(() => ({ error: vi.fn() }));
+vi.mock("./logger", () => ({
+  logger: { error: logs.error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
 import {
   assertWithinSpendBudget,
   budgetThresholdNotificationRows,
@@ -151,6 +156,8 @@ describe("assertWithinSpendBudget — admission", () => {
 });
 
 describe("assertWithinSpendBudget — fail open", () => {
+  beforeEach(() => logs.error.mockClear());
+
   it("config load failure never blocks a turn", async () => {
     const d = deps({
       loadBudgets: vi.fn(async () => {
@@ -158,6 +165,15 @@ describe("assertWithinSpendBudget — fail open", () => {
       }),
     });
     await expect(assertWithinSpendBudget(args, d)).resolves.toBeUndefined();
+    // The alert field is what pages someone when the gate stays open.
+    expect(logs.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: "org-1",
+        alert: "billing_spend_budget_gate_failed_open",
+        err: "db down",
+      }),
+      expect.any(String),
+    );
   });
 
   it("spend read failure never blocks a turn (per budget)", async () => {
@@ -168,6 +184,14 @@ describe("assertWithinSpendBudget — fail open", () => {
       }),
     });
     await expect(assertWithinSpendBudget(args, d)).resolves.toBeUndefined();
+    expect(logs.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budgetId: "bdg-1",
+        alert: "billing_spend_budget_gate_failed_open",
+        err: "clickhouse down",
+      }),
+      expect.any(String),
+    );
   });
 });
 

@@ -19,7 +19,8 @@
  *   6. Client PUTs /connections/:id/mappings to save the selection and trigger sync.
  *
  * The steering connect (onboarding) also lives here: see "Steering connect"
- * below for its start route and its callback at /oauth/github/steering.
+ * below. It uses the same GitHub App and returns through the same callback
+ * (ADR-228).
  */
 
 import { Hono } from "hono";
@@ -54,6 +55,7 @@ import {
   REAUTHORIZE,
   initialSteeringRepoState,
   keepSteeringConnection,
+  moveSteeringInstallation,
   readSteeringRepoState,
   startSteeringRepoProvision,
   type SteeringConnection,
@@ -407,32 +409,34 @@ async function assertMayMintInstallState(
 // ── Steering connect ──────────────────────────────────────────────────────────
 //
 // Onboarding connects the host that holds an organization's steering repos:
-// GitHub through the Oxagen Steering app, or a GitLab group through a group
-// access token (gitlab-oauth.ts). The connect answers for the organization,
-// not a workspace, so its start routes mount on the org-only group:
+// GitHub through the Oxagen GitHub App, the same app a workspace connects its
+// repositories through (ADR-228), or a GitLab group through a group access
+// token (gitlab-oauth.ts). The connect answers for the organization, not a
+// workspace, so its start routes mount on the org-only group:
 //
 //   GET  /v1/:org_slug/connections/steering/github   signs a state, redirects to GitHub
 //   POST /v1/:org_slug/connections/steering/gitlab   verifies and stores a group token
-//   GET  /oauth/github/steering                      the Oxagen Steering app's callback
+//   GET  /oauth/github/callback                      the app's one callback, which
+//                                                    completes a steering state too
 //
 // Once a token is stored, every scope whose steering repo waits on a
 // connection gets its provision event again.
 
-/** How long a steering or install state stays valid. The connect state uses the same limit. */
+/** How long a steering state stays valid. The connect state uses the same limit. */
 const PURPOSE_STATE_TTL_MS = 10 * 60 * 1000;
 
 /** The longest `return_to` path a connect accepts. */
 const RETURN_TO_MAX_LENGTH = 512;
 
 /**
- * Why a state was signed. The main callback reads a state with no purpose as
- * a workspace connect, as it always has. A steering state completes only on
- * `/oauth/github/steering` and an install state only on the main callback, so
- * a state signed for one write cannot be replayed into another.
+ * Why a state was signed. The callback reads a state with no purpose as a
+ * workspace connect, as it always has, and a state with purpose "steering"
+ * as the organization's steering connect. The purpose is inside the signed
+ * payload, so a state signed for one write cannot be replayed into the other.
  */
-type StatePurpose = "steering" | "install";
+type StatePurpose = "steering";
 
-/** A verified steering or install state. */
+/** A verified steering state. */
 interface PurposeState {
   purpose: StatePurpose;
   orgId: string;
@@ -519,7 +523,7 @@ function appReturnUrl(
 }
 
 /**
- * Sign a steering or install state with the scheme `verifyInstallState`
+ * Sign a steering state with the scheme `verifyInstallState`
  * checks: `{base64url_json}.{hmac_hex}` with an expiry and a fresh nonce.
  */
 function signPurposeState(
@@ -581,9 +585,9 @@ type GithubCodeExchange =
 
 /**
  * Trade an OAuth `code` for a user access token of the app `clientId` names.
- * The Oxagen app and the Oxagen Steering app each exchange their own codes
- * here. A failure comes back with the status and wording the main callback
- * has always answered with. A network error throws.
+ * The workspace connect and the steering connect both exchange their codes
+ * here. A failure comes back with the status and wording the callback has
+ * always answered with. A network error throws.
  */
 async function exchangeGithubCode(
   clientId: string,
@@ -832,19 +836,18 @@ export async function resendSteeringProvisioning(
   return sent;
 }
 
-/** The keys the Oxagen Steering connect needs, in the order a 503 names them. */
+/**
+ * The keys the steering connect needs, in the order a 503 names them. The
+ * start reads only the slug, the client id and the state secret. It checks
+ * the rest so that an owner cannot start a connect that the callback, or the
+ * provisioning job, would then fail for want of a key.
+ */
 const STEERING_START_ENV_KEYS = [
-  "OXAGEN_STEERING_APP_SLUG",
-  "OXAGEN_STEERING_APP_CLIENT_ID",
-  "OXAGEN_STEERING_APP_CLIENT_SECRET",
-  "OXAGEN_STEERING_APP_ID",
-  "OXAGEN_STEERING_APP_PRIVATE_KEY",
-  "GITHUB_APP_INSTALL_STATE_SECRET",
-] as const;
-
-/** The keys the Oxagen app's install leg from onboarding needs. */
-const OXAGEN_INSTALL_ENV_KEYS = [
   "GITHUB_APP_SLUG",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
   "GITHUB_APP_INSTALL_STATE_SECRET",
 ] as const;
 
@@ -1408,6 +1411,18 @@ const GITHUB_CONNECTOR_ID = "github";
 const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
 
 /**
+ * A steering connection stores its installation id as a number, so the
+ * steering leg also refuses an id the pattern admits but a number cannot hold
+ * exactly (past `Number.MAX_SAFE_INTEGER`). The registry write and the stored
+ * connection apply this one rule.
+ */
+function isSteeringInstallationId(raw: string): boolean {
+  return (
+    INSTALLATION_ID_PATTERN.test(raw) && Number.isSafeInteger(Number(raw))
+  );
+}
+
+/**
  * What the callback settled about which installation this workspace acts
  * through. Five states, because the operator's next click differs in each and
  * a redirect that flattened them would put the wrong door in front of them.
@@ -1927,15 +1942,16 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   }
   const statePayload: GithubInstallState = verified.state;
 
-  // A state signed with a purpose is not a workspace connect. An install state
-  // comes from onboarding, which installs the Oxagen app before any workspace
-  // has a repository, so it binds nothing and stores no token: the person
-  // picks repositories later. The installation still goes into the platform
-  // registry, as it does on the no-state leg above. A steering state completes
-  // only on /oauth/github/steering, so it is refused here.
+  // A state signed with a purpose is not a workspace connect. The steering
+  // connect from onboarding returns here too, because a GitHub App sends every
+  // install and every authorization to its first callback URL (ADR-228). Its
+  // installation goes into the platform registry, as it does on the no-state
+  // leg above, and the rest of the leg stores the organization's steering
+  // token. Any other purpose is refused. A malformed installation_id goes
+  // nowhere near the registry.
   if (statePurpose(statePayload) !== undefined) {
-    const install = readPurposeState(statePayload, "install");
-    if (install === null) {
+    const steering = readPurposeState(statePayload, "steering");
+    if (steering === null) {
       return c.json(
         {
           error:
@@ -1944,18 +1960,25 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         400,
       );
     }
-    if (installationId) {
+    if (installationId && isSteeringInstallationId(installationId)) {
       await upsertGithubInstallation({
         installationId,
         reactivate: true,
       }).catch((err) =>
         logger.warn(
           { err: String(err), installationId },
-          "github_installations registry upsert failed (onboarding install leg), relying on the App webhook",
+          "github_installations registry upsert failed (steering connect leg), relying on the App webhook",
         ),
       );
     }
-    return c.redirect(appReturnUrl(appBaseUrl, install.returnTo), 302);
+    return completeSteeringConnect(c, steering, {
+      code,
+      setupAction,
+      installationId,
+      clientId,
+      clientSecret,
+      appBaseUrl,
+    });
   }
 
   const { orgId, workspaceId, connectionId: connectionPublicId } = statePayload;
@@ -2304,15 +2327,18 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
  * `GET /v1/:org_slug/connections/steering/github`, and only an org Owner or
  * Admin passes.
  *
- * Query: `app`, `mode` and `return_to`, a path on the app.
+ * Query: `mode` and `return_to`, a path on the app.
  *
- *   app=steering&mode=install     install Oxagen Steering on a GitHub organization
- *   app=steering&mode=authorize   authorize Oxagen Steering for the GitHub user again
- *   app=oxagen&mode=install       install the Oxagen app, which works on code repositories
+ *   mode=install     install the Oxagen GitHub App on a GitHub organization
+ *   mode=authorize   authorize the app for the GitHub user again
  *
- * Answers 302 to GitHub. Oxagen Steering returns to /oauth/github/steering and
- * the Oxagen app to the main callback, which binds nothing for this leg. Each
- * sends the person back to `return_to`.
+ * Steering uses the same GitHub App as a workspace's repositories (ADR-228).
+ * Answers 302 to GitHub, which returns to the app's first callback URL,
+ * `/oauth/github/callback`. The signed state carries purpose "steering", so
+ * the callback stores the organization's steering token and sends the person
+ * back to `return_to`. Neither URL carries `redirect_uri`: GitHub refuses one
+ * that does not match a registered callback exactly, and the install URL
+ * cannot carry one at all.
  */
 export const githubSteeringStartRoute = new Hono<AppEnv>();
 
@@ -2337,15 +2363,6 @@ githubSteeringStartRoute.get("/", async (c) => {
   }
   await assertMayConnectSteering(orgId, userId);
 
-  const app = c.req.query("app");
-  if (app !== "steering" && app !== "oxagen") {
-    return steeringError(
-      c,
-      400,
-      "validation_error",
-      "The app parameter must be steering or oxagen.",
-    );
-  }
   const mode = c.req.query("mode");
   if (mode !== "install" && mode !== "authorize") {
     return steeringError(
@@ -2365,56 +2382,17 @@ githubSteeringStartRoute.get("/", async (c) => {
     );
   }
 
-  if (app === "oxagen") {
-    // Authorizing the Oxagen app is the workspace connect's job, which binds
-    // a repository. Onboarding only installs it.
-    if (mode === "authorize") {
-      return steeringError(
-        c,
-        400,
-        "validation_error",
-        "The Oxagen app is only installed from onboarding. Use mode=install, or connect a repository from the workspace's settings.",
-      );
-    }
-    const env = requireEnv(OXAGEN_INSTALL_ENV_KEYS);
-    const unset = firstUnset(env, OXAGEN_INSTALL_ENV_KEYS);
-    const slug = env.GITHUB_APP_SLUG;
-    const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
-    if (unset !== null || !slug || !stateSecret) {
-      return steeringError(
-        c,
-        503,
-        "github_app_unconfigured",
-        `The Oxagen GitHub app is not configured: ${unset ?? "GITHUB_APP_SLUG"} is unset.`,
-      );
-    }
-    const state = signPurposeState(stateSecret, {
-      purpose: "install",
-      orgId,
-      userId,
-      returnTo,
-    });
-    return c.redirect(
-      `https://github.com/apps/${encodeURIComponent(slug)}/installations/new` +
-        `?state=${encodeURIComponent(state)}`,
-      302,
-    );
-  }
-
-  // The start needs only the slug, the client id and the state secret. It
-  // checks all six keys so that an owner who starts the connect cannot finish
-  // it into a callback, or a provisioning job, that is missing the rest.
   const env = requireEnv(STEERING_START_ENV_KEYS);
   const unset = firstUnset(env, STEERING_START_ENV_KEYS);
-  const slug = env.OXAGEN_STEERING_APP_SLUG;
-  const clientId = env.OXAGEN_STEERING_APP_CLIENT_ID;
+  const slug = env.GITHUB_APP_SLUG;
+  const clientId = env.GITHUB_APP_CLIENT_ID;
   const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
   if (unset !== null || !slug || !clientId || !stateSecret) {
     return steeringError(
       c,
       503,
-      "steering_app_unconfigured",
-      `Oxagen Steering is not configured: ${unset ?? "OXAGEN_STEERING_APP_SLUG"} is unset.`,
+      "github_app_unconfigured",
+      `The Oxagen GitHub App is not configured: ${unset ?? "GITHUB_APP_SLUG"} is unset.`,
     );
   }
   const state = signPurposeState(stateSecret, {
@@ -2433,83 +2411,45 @@ githubSteeringStartRoute.get("/", async (c) => {
   return c.redirect(target, 302);
 });
 
+/** What the callback read from GitHub's redirect and from its own env. */
+interface SteeringCallbackInput {
+  code: string | undefined;
+  setupAction: string | undefined;
+  installationId: string | undefined;
+  clientId: string;
+  clientSecret: string;
+  appBaseUrl: string;
+}
+
 /**
- * GET /oauth/github/steering: the Oxagen Steering app's callback. Public, like
- * the main callback: the signed state is the security boundary. It must carry
- * purpose "steering", so a workspace connect state or an install state cannot
- * store a steering token.
+ * Finish the steering connect for a verified state with purpose "steering".
+ * The callback has already checked the signature, so the state is the
+ * security boundary: a workspace connect state cannot reach this function.
  *
  * It trades the code for the owner's user token, stores the token as the
  * organization's `github_steering` account, and sends the provision event
  * again for each scope that waits on a connection. When the install leg names
- * an `installation_id` that the token lists on a GitHub organization, the
- * callback stores that installation as the organization's steering connection
- * first, so the job uses it even when the owner can reach several. Without
- * one, the job finds the installation from the token's `/user/installations`.
+ * an `installation_id` that the token lists on a GitHub organization, it
+ * stores that installation as the organization's steering connection first,
+ * so the job uses it even when the owner can reach several. Without one, the
+ * job finds the installation from the token's `/user/installations`.
  *
- * An invalid or expired state answers 400, since there is nowhere trusted to
- * send the person. Any later failure redirects to the state's `return_to`
- * with `steering=error&code=<reason>`. Success adds `steering=connected`.
+ * Every failure redirects to the state's `return_to` with
+ * `steering=error&code=<reason>`. Success adds `steering=connected`.
  */
-githubOauthCallbackRoute.get("/steering", async (c) => {
-  const code = c.req.query("code");
-  const rawState = c.req.query("state");
-  const setupAction = c.req.query("setup_action");
-  const installationId = c.req.query("installation_id");
-
-  const callbackKeys = [
-    "OXAGEN_STEERING_APP_CLIENT_ID",
-    "OXAGEN_STEERING_APP_CLIENT_SECRET",
-    "GITHUB_APP_INSTALL_STATE_SECRET",
-    "NEXT_PUBLIC_APP_URL",
-  ] as const;
-  const env = requireEnv(callbackKeys);
-  const unset = firstUnset(env, callbackKeys);
-  const clientId = env.OXAGEN_STEERING_APP_CLIENT_ID;
-  const clientSecret = env.OXAGEN_STEERING_APP_CLIENT_SECRET;
-  const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
-  if (unset !== null || !clientId || !clientSecret || !stateSecret) {
-    return steeringError(
-      c,
-      503,
-      "steering_app_unconfigured",
-      `Oxagen Steering is not configured: ${unset ?? "OXAGEN_STEERING_APP_CLIENT_ID"} is unset.`,
-    );
-  }
-  const appBaseUrl = env.NEXT_PUBLIC_APP_URL;
-
-  if (!rawState) {
-    return steeringError(
-      c,
-      400,
-      "invalid_state",
-      "GitHub returned without the connect's state. Start the connect again from Oxagen.",
-    );
-  }
-  const verified = verifyInstallState(rawState, stateSecret);
-  if (!verified.ok) {
-    return steeringError(
-      c,
-      400,
-      "invalid_state",
-      verified.error === "expired"
-        ? "The connect expired. Start it again from Oxagen."
-        : "The connect's state did not verify. Start the connect again from Oxagen.",
-    );
-  }
-  const steering = readPurposeState(verified.state, "steering");
-  if (steering === null) {
-    return steeringError(
-      c,
-      400,
-      "wrong_state_purpose",
-      "This connect was not started for Oxagen Steering. Start it again from Oxagen.",
-    );
-  }
+async function completeSteeringConnect(
+  c: Context<AppEnv>,
+  steering: PurposeState,
+  input: SteeringCallbackInput,
+) {
+  const { code, setupAction, installationId, clientId, clientSecret } = input;
   const { orgId, userId, returnTo } = steering;
   const fail = (reason: string) =>
     c.redirect(
-      appReturnUrl(appBaseUrl, returnTo, { steering: "error", code: reason }),
+      appReturnUrl(input.appBaseUrl, returnTo, {
+        steering: "error",
+        code: reason,
+      }),
       302,
     );
 
@@ -2529,14 +2469,14 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
   } catch (err) {
     logger.warn(
       { err: String(err), orgId },
-      "Oxagen Steering token exchange threw",
+      "Steering connect token exchange threw",
     );
     return fail("github_token_exchange_failed");
   }
   if (!exchanged.ok) {
     logger.warn(
       { status: exchanged.status, message: exchanged.message, orgId },
-      "Oxagen Steering token exchange failed",
+      "Steering connect token exchange failed",
     );
     return fail("github_token_exchange_failed");
   }
@@ -2568,13 +2508,16 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
   } catch (err) {
     logger.error(
       { err: String(err), orgId },
-      "Storing the Oxagen Steering token failed",
+      "Storing the steering connect token failed",
     );
     return fail("store_failed");
   }
 
   // Keep the installation the owner just picked before provisioning runs
-  // again, so pick_connection finds it stored and never stops to ask.
+  // again, so pick_connection finds it stored and never stops to ask. An
+  // organization whose stored installation belongs to the retired Oxagen
+  // Steering app moves to this one when both sit on the same GitHub account
+  // (ADR-228).
   if (installationId !== undefined) {
     const connection = await steeringInstallationConnection(
       orgId,
@@ -2583,11 +2526,23 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
     );
     if (connection !== null) {
       try {
-        await keepSteeringConnection(orgId, connection);
+        const kept = await keepSteeringConnection(orgId, connection);
+        if (!kept && connection.provider === "github") {
+          const from = await moveSteeringInstallation(
+            orgId,
+            connection,
+            userId,
+          );
+          if (from !== null)
+            logger.info(
+              { orgId, from, to: connection.installation_id },
+              "The steering connect moved the organization's steering connection to the installation the owner just authorized.",
+            );
+        }
       } catch (err) {
         logger.error(
           { err: String(err), orgId },
-          "Storing the Oxagen Steering installation failed",
+          "Storing the steering installation failed",
         );
         return fail("store_failed");
       }
@@ -2605,10 +2560,10 @@ githubOauthCallbackRoute.get("/steering", async (c) => {
   }
 
   return c.redirect(
-    appReturnUrl(appBaseUrl, returnTo, { steering: "connected" }),
+    appReturnUrl(input.appBaseUrl, returnTo, { steering: "connected" }),
     302,
   );
-});
+}
 
 /**
  * The steering connection for the installation the install leg named, or null
@@ -2626,10 +2581,10 @@ async function steeringInstallationConnection(
   rawId: string,
 ): Promise<SteeringConnection | null> {
   const id = Number(rawId);
-  if (!INSTALLATION_ID_PATTERN.test(rawId) || !Number.isSafeInteger(id)) {
+  if (!isSteeringInstallationId(rawId)) {
     logger.warn(
       { orgId, installationId: rawId },
-      "The Oxagen Steering install named a malformed installation_id. The connect did not store it.",
+      "The steering connect named a malformed installation_id. The connect did not store it.",
     );
     return null;
   }
@@ -2641,7 +2596,7 @@ async function steeringInstallationConnection(
   } catch (err) {
     logger.warn(
       { err: String(err), orgId, installationId: id },
-      "Listing the owner's Oxagen Steering installations failed. The connect did not store the installation.",
+      "Listing the owner's installations of the Oxagen GitHub App failed. The connect did not store the installation.",
     );
     return null;
   }
@@ -2649,7 +2604,7 @@ async function steeringInstallationConnection(
   if (found === undefined || found.account_type !== "Organization") {
     logger.warn(
       { orgId, installationId: id, accountType: found?.account_type ?? null },
-      "The owner's token does not show this Oxagen Steering installation on a GitHub organization. The connect did not store it.",
+      "The owner's token does not show this installation on a GitHub organization. The connect did not store it.",
     );
     return null;
   }

@@ -3,25 +3,23 @@
 // (#4678). The route resolves the workspace viewer and hands the viewer, the
 // data source and the parsed route to the Studio body. A Studio path that
 // names no page is a 404 before anyone is resolved, and every other path
-// stays with the Tools tabs. pages.test.tsx covers the Tools tabs themselves.
+// moves to the Agents tab that absorbed the Tools page (#4806); pages.test.tsx
+// covers each of those moves.
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
-import { renderPage, routeProps } from "@/test/render-page";
+import { renderPage } from "@/test/render-page";
 
-const { requireViewer, StudioServer, StudioLoading, Tools, ToolsLoading, source } =
-  vi.hoisted(() => ({
+const { requireViewer, StudioServer, StudioLoading, source } = vi.hoisted(
+  () => ({
     requireViewer: vi.fn(),
     StudioServer: vi.fn((props: { route: { tab: string } }) => (
       <p data-testid="studio-body" data-tab={props.route.tab} />
     )),
     StudioLoading: vi.fn(() => null),
-    Tools: vi.fn((props: { tab: string }) => (
-      <p data-testid="tools-body" data-tab={props.tab} />
-    )),
-    ToolsLoading: vi.fn(() => null),
     source: {},
-  }));
+  }),
+);
 vi.mock("@/server/viewer", () => ({ requireViewer }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -35,10 +33,12 @@ vi.mock("@/features/mcp-studio", async (importOriginal) => ({
   StudioServer,
   StudioLoading,
 }));
-vi.mock("@/features/tools", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/features/tools")>()),
-  Tools,
-  ToolsLoading,
+// A redirect throws, as Next's does, with the target in its message.
+vi.mock("@/shared/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/navigation")>()),
+  permanentRedirectTo: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
 }));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
@@ -64,7 +64,6 @@ beforeEach(() => {
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(VIEWER);
   StudioServer.mockClear();
-  Tools.mockClear();
 });
 
 describe("the MCP Studio server page", () => {
@@ -81,7 +80,6 @@ describe("the MCP Studio server page", () => {
       "data-tab",
       "tools",
     );
-    expect(Tools).not.toHaveBeenCalled();
   });
 
   it.each(["connection", "try", "changes"])(
@@ -109,19 +107,23 @@ describe("the MCP Studio server page", () => {
     },
   );
 
-  it("leaves the Tools tabs to Tools", async () => {
-    await renderPage(await open(["providers"]));
-    expect(Tools.mock.calls[0]?.[0]).toMatchObject({ tab: "providers" });
+  it("moves every other path to the Agents tab that absorbed it, after resolving the viewer", async () => {
+    await expect(Promise.resolve(open(["providers"]))).rejects.toThrow(
+      "REDIRECT /acme/core-platform/agents?tab=servers",
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(StudioServer).not.toHaveBeenCalled();
+    // `/tools/servers` alone names no server, so it is the old Providers tab.
+    await expect(Promise.resolve(open(["servers"]))).rejects.toThrow(
+      "REDIRECT /acme/core-platform/agents?tab=servers",
+    );
   });
 
-  it("names a server's page by the Studio title and every other path Tools", async () => {
-    const studio = translator("mcpStudio")("title");
-    const tools = translator("pages")("tools");
-    const title = async (tab: string[]) =>
-      (await page.generateMetadata(routeProps({ ...SEGMENTS, tab }))).title;
-    expect(await title(["servers", "mcs_01k5s1", "try"])).toBe(studio);
-    expect(await title(["servers", "stripe"])).toBe(tools);
-    expect(await title(["providers"])).toBe(tools);
+  it("names its one page, a server's, by the Studio title", async () => {
+    // The paths that redirect never render, so the route reads no segment to
+    // title them: every page it renders is a Studio server's.
+    expect((await page.generateMetadata()).title).toBe(
+      translator("mcpStudio")("title"),
+    );
   });
 });

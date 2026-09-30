@@ -198,8 +198,9 @@ describe("RouteError", () => {
         /^trace 2731905432 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
       );
     });
-    // The skip link's target is on the boundary's own <main>.
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main");
+    // The shell frame holds the skip link's target, so the boundary adds no
+    // second main landmark (ADR-227).
+    expect(screen.queryByRole("main")).toBeNull();
   });
 
   it("names the page the shell resolved from the path, as the mock's title does", () => {
@@ -323,12 +324,13 @@ describe("PageNotFound", () => {
     const back = within(state).getByRole("link");
     expect(back).toHaveAccessibleName("Back to Fleet");
     expect(back).toHaveAttribute("href", "/acme/core-platform");
-    // The empty glyph in the neutral tone, and the skip link's target.
+    // The empty glyph in the neutral tone, and no main landmark: the shell
+    // frame holds the skip link's target (ADR-227).
     expect(state.querySelector("[data-state-icon]")).toHaveAttribute(
       "data-state-icon",
       "neutral",
     );
-    expect(screen.getByRole("main")).toHaveAttribute("id", "main");
+    expect(screen.queryByRole("main")).toBeNull();
   });
 
   it("above a workspace, names the organization and goes back to the Organization page", () => {

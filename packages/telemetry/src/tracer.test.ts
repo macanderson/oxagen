@@ -417,7 +417,7 @@ describe("getTracer", () => {
 
 describe("trace_id/span_id in insert payloads", () => {
   // Verify that currentTraceIds() returns values suitable for stamping into
-  // ClickHouse insertTokenUsage / insertToolInvocation rows.
+  // ClickHouse stampTokenUsage / insertToolInvocation rows.
 
   let exporter: InMemorySpanExporter;
 
@@ -429,7 +429,7 @@ describe("trace_id/span_id in insert payloads", () => {
     teardownProvider();
   });
 
-  it("returns non-empty ids inside withSpan() — matches what insertTokenUsage stamps", async () => {
+  it("returns the non-empty ids inside withSpan() that stampTokenUsage stamps", async () => {
     const ids = await withSpan(
       "kernel.invoke",
       { "capability.name": "agent.chat" },
