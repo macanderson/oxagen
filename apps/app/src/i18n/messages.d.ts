@@ -3570,10 +3570,14 @@ type Messages = {
         commandHint: string;
         arguments: string;
         argumentsHint: string;
+        variables: string;
+        variablesHint: string;
         machines: string;
         machinesHint: string;
-        submit: string;
-        pending: string;
+        version: string;
+        versionHint: string;
+        digest: string;
+        digestHint: string;
       };
       offer: {
         remote: string;
@@ -3586,10 +3590,10 @@ type Messages = {
         intro: string;
         type: string;
         arguments: string;
-        secretHint: string;
+        secretFrom: string;
         variables: string;
-        submit: string;
-        pending: string;
+        unpinned: string;
+        noPackage: string;
       };
       discovery: {
         title: string;
@@ -3617,6 +3621,60 @@ type Messages = {
         starting: string;
         failed: string;
         thrown: string;
+      };
+      machine: {
+        submit: string;
+        retry: string;
+        saving: string;
+        opened: string;
+        exists: string;
+        moved: string;
+        unlisted: string;
+        needsDigest: string;
+        registryUnreachable: string;
+        tomlInvalid: string;
+        problems: {
+          name: string;
+          reserved: string;
+          label: string;
+          description: string;
+          command: string;
+          arguments: string;
+          variables: string;
+          variable: string;
+          machines: string;
+          machine: string;
+          version: string;
+          digest: string;
+          entryVersion: string;
+          argumentRequired: string;
+          argumentInvalid: string;
+        };
+      };
+      listing: {
+        title: string;
+        loading: string;
+        none: string;
+        statuses: {
+          waiting_for_machine: string;
+          running: string;
+          succeeded: string;
+          failed: string;
+        };
+        pin: string;
+        waiting: string;
+        readFailed: string;
+        thrown: string;
+        reread: string;
+      };
+      classify: {
+        title: string;
+        intro: string;
+        import: string;
+        submit: string;
+        saving: string;
+        reviewing: string;
+        none: string;
       };
     };
   };

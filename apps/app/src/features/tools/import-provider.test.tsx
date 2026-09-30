@@ -68,6 +68,7 @@ const failure = translator("tools.actions.failure");
 const t = translator("tools.import");
 const sources = translator("mcpStudio.addServer.sources");
 const local = translator("mcpStudio.addServer.local");
+const machine = translator("mcpStudio.addServer.machine");
 
 function element(node: Element | null | undefined, what: string): HTMLElement {
   if (!(node instanceof HTMLElement)) throw new Error(`no ${what}`);
@@ -209,17 +210,17 @@ describe("ImportProvider › Studio sources", () => {
     expect(document.getElementById("tools-import-connect")).toBeNull();
   });
 
-  it("draws the local command form disabled, naming #4756", () => {
+  it("draws the local command form, which lists the server's tools on a machine (#4756)", () => {
     open();
     fireEvent.click(screen.getByTestId("tools-import-source-local"));
     expect(screen.getByTestId("studio-add-local")).toBeVisible();
     const submit = screen.getByTestId("studio-add-local-submit");
-    expect(submit).toBeDisabled();
-    expect(submit).toHaveAccessibleDescription(local("pending"));
-    const note = screen.getByTestId("studio-add-local-pending");
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-gap", "#4756");
-    expect(screen.getByLabelText(local("command"))).toBeDisabled();
+    expect(submit).toBeEnabled();
+    expect(submit).toHaveTextContent(machine("submit"));
+    expect(submit).toHaveAttribute("data-capability", "start_studio_listing");
+    expect(screen.queryByTestId("studio-add-local-pending")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(local("command"))).toBeEnabled();
+    expect(screen.getByLabelText(local("digest"))).toBeEnabled();
     expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
   });
 

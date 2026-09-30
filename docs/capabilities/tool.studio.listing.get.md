@@ -10,7 +10,7 @@
 
 ## Intent
 
-You asked a machine to list a draft's tools with [start_studio_listing](tool.studio.listing.start.md), and you want to know whether it has. This capability reads the draft's listing: its status, the pin the machine checks, the machine that answered, how many tools it listed, and why a listing failed. Studio polls it while the listing runs, and reads the draft again once it succeeds, because the listing saved the draft.
+You asked a machine to list a draft's tools with [start_studio_listing](tool.studio.listing.start.md), and you want to know whether it has. This capability reads the draft's listing: its status, the pin the machine checks, the machine that answered, how many tools it listed, and why a listing failed. Studio polls it while the listing runs. Once it succeeds, the answer carries the tools the machine listed, so Add server can import and classify them before Review. Read the draft again before the next save, because the listing saved it.
 
 ## Input
 
@@ -32,6 +32,7 @@ You asked a machine to list a draft's tools with [start_studio_listing](tool.stu
 | `listing.machine` | string or null | the machine that answered tools/list |
 | `listing.toolCount` | integer or null | how many tools the machine listed |
 | `listing.error` | string or null | why the listing failed |
+| `listing.tools` | object[] or null | once the listing succeeded, the tools the machine listed, each with its `name`, `description`, and the classification Studio suggests (`suggested`: `risk`, `sideEffect`, `egress`, `impacts`). Null before then, or once a later save replaced the draft's source |
 
 ## Roles
 
@@ -39,7 +40,7 @@ Org Owner or Admin, or workspace Owner: the roles that read a draft. The handler
 
 ## Side effects
 
-None. It reads one `mcp.studio_listings` row.
+None. It reads one `mcp.studio_listings` row, and the draft once the listing succeeded.
 
 ## Surfaces
 

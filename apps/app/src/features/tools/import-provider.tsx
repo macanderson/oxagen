@@ -14,11 +14,13 @@
 //         (#4678, item 1), rendered through `@/features/mcp-studio/client`.
 //         From a definition saves the uploaded definition and opens the
 //         steering PR that adds the server's folder, then follows its
-//         discovery. Local command renders disabled until #4756.
+//         discovery. Local command saves the server, has a machine list its
+//         tools, and asks which tools to import before it opens the PR
+//         (ADR-233, #4756).
 //     A registry entry says whether it offers a remote, a package, or both.
 //     Running it as a package opens Studio's package form, which asks for
-//     machine groups, the package type and the required arguments, and waits
-//     on #4742 to submit.
+//     machine groups, the package type and the required arguments, then
+//     runs the same steps as Local command.
 //     OAuth runs in a popup (`use-provider-oauth.ts`): the person signs in to
 //     the provider, the popup posts back and closes, and the wizard moves on.
 //     A server that registers no OAuth clients itself (Slack, GitHub) asks for
@@ -772,7 +774,7 @@ export function ImportProvider({
               {source === "definition" ? (
                 <DefinitionFields at={at} />
               ) : source === "local" ? (
-                <LocalCommandFields />
+                <LocalCommandFields at={at} />
               ) : source === "browse" && packagePick !== null ? (
                 <div className="flex flex-col gap-3">
                   <div
@@ -803,7 +805,7 @@ export function ImportProvider({
                       {t("browse.change")}
                     </button>
                   </div>
-                  <RegistryPackageFields server={packagePick} />
+                  <RegistryPackageFields at={at} server={packagePick} />
                 </div>
               ) : source === "browse" && picked === null ? (
                 <RegistryBrowser

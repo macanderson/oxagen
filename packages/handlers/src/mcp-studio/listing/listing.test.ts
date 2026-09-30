@@ -171,14 +171,58 @@ describe("start_studio_listing", () => {
   });
 });
 
+const LOCAL_LOCK: McpLockSource = {
+  type: "local",
+  command: "/usr/local/bin/notes-mcp",
+  package: { name: "notes-mcp", version: "0.9.2", digest: DIGEST },
+};
+
+/** The draft a succeeded listing leaves: its tools as the MCP source, one revision on. */
+const LISTED = draft({
+  revision: 4,
+  source: {
+    type: "mcp",
+    lockSource: LOCAL_LOCK,
+    tools: [
+      {
+        name: "list_notes",
+        description: "Lists the notes on this machine.",
+        inputSchema: { type: "object" },
+        annotations: { readOnlyHint: true },
+      },
+      { name: "delete_note", inputSchema: { type: "object" }, annotations: { destructiveHint: true } },
+      { name: "sync_notes", inputSchema: { type: "object" } },
+    ],
+  },
+});
+
+function getHarness(found: StoredStudioDraft | null) {
+  const listings = {
+    request: vi.fn(),
+    get: vi.fn<ListingStore["get"]>(() => Promise.resolve(null)),
+  };
+  const drafts: StudioDraftStore = { get: vi.fn(() => Promise.resolve(found)), save: vi.fn(), recordPr: vi.fn() };
+  const handler = createGetStudioListingHandler({
+    listings,
+    drafts,
+    authorize: vi.fn(() => Promise.resolve(USER)),
+  });
+  return { listings, drafts, handler };
+}
+
+const SUCCEEDED: Partial<StoredListing> = {
+  status: "succeeded",
+  claimedAt: new Date("2026-09-30T10:00:05.000Z"),
+  finishedAt: new Date("2026-09-30T10:00:09.000Z"),
+  machine: "tch_laptop01",
+  toolCount: 3,
+};
+
 describe("get_studio_listing", () => {
   it("answers null for a draft with no listing, and the listing's view when there is one", async () => {
-    const listings = {
-      request: vi.fn(),
-      get: vi.fn<ListingStore["get"]>(() => Promise.resolve(null)),
-    };
-    const handler = createGetStudioListingHandler({ listings, authorize: vi.fn(() => Promise.resolve(USER)) });
+    const { listings, drafts, handler } = getHarness(null);
     expect(await handler({ server: "notes" }, makeCTX())).toEqual({ listing: null });
+    expect(drafts.get).not.toHaveBeenCalled();
 
     listings.get.mockResolvedValueOnce(
       stored(
@@ -204,6 +248,69 @@ describe("get_studio_listing", () => {
       toolCount: 4,
       claimedAt: "2026-09-30T10:00:05.000Z",
       finishedAt: "2026-09-30T10:00:09.000Z",
+      // The draft the harness holds has no MCP source, so there is nothing to classify.
+      tools: null,
     });
+  });
+
+  it("carries the tools a succeeded listing wrote, each with the classification Studio suggests", async () => {
+    const { listings, handler } = getHarness(LISTED);
+    listings.get.mockResolvedValueOnce(stored(LOCAL_LOCK, SUCCEEDED));
+
+    const out = await handler({ server: "notes" }, makeCTX());
+    expect(() => toolStudioListingGet.output.parse(out)).not.toThrow();
+    // A local server's egress is local. The hints set the side effect and
+    // the risk, and a tool with no hints takes the fail-safe row.
+    expect(out.listing?.tools).toStrictEqual([
+      {
+        name: "list_notes",
+        description: "Lists the notes on this machine.",
+        suggested: { risk: "low", sideEffect: "read", egress: "local", impacts: [] },
+      },
+      {
+        name: "delete_note",
+        description: null,
+        suggested: { risk: "high", sideEffect: "irreversible", egress: "local", impacts: ["destroys_data"] },
+      },
+      {
+        name: "sync_notes",
+        description: null,
+        suggested: { risk: "high", sideEffect: "write", egress: "local", impacts: [] },
+      },
+    ]);
+  });
+
+  it("reads no draft while the listing waits or runs, and shows no tools for it (negative)", async () => {
+    const { listings, drafts, handler } = getHarness(LISTED);
+    listings.get.mockResolvedValueOnce(stored(LOCAL_LOCK, { status: "running", claimedAt: NOW }));
+
+    const out = await handler({ server: "notes" }, makeCTX());
+    expect(out.listing).toMatchObject({ status: "running", tools: null });
+    expect(drafts.get).not.toHaveBeenCalled();
+  });
+
+  it("shows no tools once the draft is not the one the listing wrote (negative)", async () => {
+    // The draft is still at the revision the listing was asked on, so the
+    // listing's write never landed there.
+    const unwritten = getHarness({ ...LISTED, revision: 3 });
+    unwritten.listings.get.mockResolvedValueOnce(stored(LOCAL_LOCK, SUCCEEDED));
+    expect((await unwritten.handler({ server: "notes" }, makeCTX())).listing?.tools).toBeNull();
+
+    // A tools/list answer that names one tool twice does not import.
+    const unreadable = getHarness(
+      draft({
+        revision: 4,
+        source: {
+          type: "mcp",
+          lockSource: LOCAL_LOCK,
+          tools: [
+            { name: "list_notes", inputSchema: { type: "object" } },
+            { name: "list_notes", inputSchema: { type: "object" } },
+          ],
+        },
+      }),
+    );
+    unreadable.listings.get.mockResolvedValueOnce(stored(LOCAL_LOCK, SUCCEEDED));
+    expect((await unreadable.handler({ server: "notes" }, makeCTX())).listing?.tools).toBeNull();
   });
 });
