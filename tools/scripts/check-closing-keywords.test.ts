@@ -7,6 +7,8 @@ import {
   findNegatedClosings,
   findRefsCommitConflicts,
   formatClosingKeywords,
+  isNegatedInSentence,
+  pullRequestSources,
 } from "./check-closing-keywords.mjs";
 
 describe("findNegatedClosings", () => {
@@ -68,9 +70,89 @@ describe("findNegatedClosings", () => {
     );
   });
 
+  // #4664 item 24: a period inside a token ended the sentence, so the
+  // negation before it was dropped and GitHub closed the issue anyway.
+  it("keeps a negation across a period inside a token", () => {
+    const found = (text: string) =>
+      findNegatedClosings(text).map((f) => f.match);
+    expect(found("This does not, in v2.0, close #12.")).toEqual(["close #12"]);
+    expect(found("It does not, per example.com, fix #3.")).toEqual(["fix #3"]);
+    expect(found("It never, in check-closing-keywords.mjs, resolves #4.")).toEqual(
+      ["resolves #4"],
+    );
+  });
+
+  it("ends a sentence at a mark followed by whitespace or the end", () => {
+    const text = "Not a refactor. Closes #7";
+    expect(isNegatedInSentence(text, text.indexOf("Closes"))).toBe(false);
+    const glued = "Not v1.Closes #7";
+    expect(isNegatedInSentence(glued, glued.indexOf("Closes"))).toBe(true);
+    const asked = "Does it not work? Fixes #9";
+    expect(isNegatedInSentence(asked, asked.indexOf("Fixes"))).toBe(false);
+  });
+
   it("returns nothing for an empty or missing text", () => {
     expect(findNegatedClosings("")).toEqual([]);
     expect(findNegatedClosings(null)).toEqual([]);
+  });
+});
+
+// dod-check.yml skipped the commit half of the check when listing the
+// commits failed, and passed on the description alone. The failure is now
+// part of the result, so the check fails and the comment says why.
+describe("pullRequestSources", () => {
+  it("reads the description, then each commit message", async () => {
+    const { sources, commitsError } = await pullRequestSources(
+      "Refs #1",
+      async () => [
+        { sha: "abc1234def", commit: { message: "Closes #1" } },
+        { sha: "0123456789", commit: { message: "tidy" } },
+      ],
+    );
+    expect(commitsError).toBeNull();
+    expect(sources).toEqual([
+      { label: "PR body", text: "Refs #1", kind: "body" },
+      { label: "commit abc1234", text: "Closes #1", kind: "commit" },
+      { label: "commit 0123456", text: "tidy", kind: "commit" },
+    ]);
+  });
+
+  it("returns the listing error with the description alone", async () => {
+    const { sources, commitsError } = await pullRequestSources(
+      "Refs #1",
+      async () => {
+        throw new Error("API rate limit exceeded");
+      },
+    );
+    expect(commitsError).toBe("API rate limit exceeded");
+    expect(sources).toEqual([{ label: "PR body", text: "Refs #1", kind: "body" }]);
+  });
+
+  it("fails the check when the commits could not be read", async () => {
+    const { sources, commitsError } = await pullRequestSources(
+      "Refs #1",
+      async () => {
+        throw new Error("502 Bad Gateway");
+      },
+    );
+    const result = checkClosingKeywords(sources, { commitsError });
+    expect(result.ok).toBe(false);
+    expect(result.findings).toEqual([]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.commitsError).toBe("502 Bad Gateway");
+    const text = formatClosingKeywords(result);
+    expect(text).toContain("### Commit messages not read");
+    expect(text).toContain("502 Bad Gateway");
+    expect(text).toContain("Re-run the failed `dod` job");
+  });
+
+  it("leaves a clean result unchanged when the commits were read", () => {
+    expect(
+      checkClosingKeywords(
+        [{ label: "PR body", text: "Refs #1", kind: "body" }],
+        { commitsError: null },
+      ),
+    ).toEqual({ ok: true, findings: [], conflicts: [] });
   });
 });
 
@@ -306,8 +388,15 @@ describe("dod-check.yml runs the closing-keyword check on every PR event", () =>
 
   it("imports check-closing-keywords.mjs and hands it the body and every commit", () => {
     expect(workflow).toContain("tools/scripts/check-closing-keywords.mjs");
-    expect(workflow).toMatch(/kind: 'body'/);
-    expect(workflow).toMatch(/kind: 'commit'/);
+    expect(workflow).toContain("pullRequestSources(pr.body");
+    expect(workflow).toContain("github.rest.pulls.listCommits");
     expect(workflow).toContain("checkClosingKeywords(sources");
+  });
+
+  it("fails the check, rather than warning, when the commits cannot be listed", () => {
+    expect(workflow).toMatch(
+      /checkClosingKeywords\(sources, \{\s*repository: context\.repo, commitsError \}\)/,
+    );
+    expect(workflow).not.toMatch(/core\.warning\(`Could not list the pull request's commits/);
   });
 });
