@@ -718,7 +718,7 @@ describe("Add a provider › registry and OAuth", () => {
     expect(screen.getByTestId("studio-add-package-submit")).toBeDisabled();
     const note = screen.getByTestId("studio-add-package-pending");
     expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveAttribute("data-gap", "#4678");
     expect(note).toHaveTextContent(pkg("pending"));
     // A package never takes the remote Connect.
     expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
