@@ -1428,5 +1428,60 @@ describe.skipIf(process.platform === "win32")(
       expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
       expect(rig.serviceLoaded()).toBe(false);
     });
+
+    it("moves an enrollment that names the bundle onto the per-user copy on Re-apply", async () => {
+      const seed = seedHome();
+      const app = join(seed.home, "Applications", "Oxagen.app");
+      const bundled = join(app, "Contents", "MacOS", "tacho");
+      const kept = join(
+        seed.home,
+        "Library",
+        "Application Support",
+        "oxagen",
+        "bin",
+        "2.1.3",
+      );
+      stubTacho(bundled);
+      stubTacho(join(kept, "tacho"));
+      // An enrollment from before ADR-230: the sidecar named itself.
+      const before = buildRig(seed, {
+        overrides: {
+          runtime: runtimeCommands(undefined, {}, bundled, "darwin", true),
+        },
+      });
+      expect((await enroll({ harnesses: ALL }, before.deps)).ok).toBe(true);
+      for (const command of Object.values(preToolUseCommands(before)))
+        expect(command).toContain("Oxagen.app");
+
+      // Re-apply from the app that hands its sidecar the copy.
+      const after = buildRig(seed, {
+        overrides: {
+          runtime: runtimeCommands(
+            undefined,
+            { TACHO_BIN_DIR: kept },
+            bundled,
+            "darwin",
+            true,
+          ),
+        },
+      });
+      expect((await enroll({}, after.deps)).ok).toBe(true);
+      expect(after.lines.join("\n")).toContain(
+        `service and hooks now run from ${kept}`,
+      );
+      const commands = preToolUseCommands(after);
+      for (const command of Object.values(commands))
+        expect(command).not.toContain("Oxagen.app");
+      expect(
+        text(seed.home, "Library", "LaunchAgents", "sh.oxagen.tachod.plist"),
+      ).not.toContain("Oxagen.app");
+
+      rmSync(app, { recursive: true, force: true });
+      for (const [harness, command] of Object.entries(commands)) {
+        const result = run(command);
+        expect(result.status, `${harness}: ${result.stderr}`).toBe(0);
+        expect(result.stdout, harness).toBe(`${ANSWER}\n`);
+      }
+    });
   },
 );
