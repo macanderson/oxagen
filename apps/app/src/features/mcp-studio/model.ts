@@ -3,11 +3,12 @@
 // Two sources meet here. The registry is recorded today: the server row
 // (`list_mcp_servers`), the tool versions imported from it
 // (`list_tool_versions`) and the kill switches (`list_kill_switches`). The
-// Studio record is not: the server's steering folder (server.toml, tools.toml,
-// the lock and the tests) and the tools discovery offered. That record arrives
-// through `readStudioRecord` (seams.ts), which answers null until lanes M10
-// and M11 write it. Every value only the record holds renders as not recorded,
-// never as a zero or an empty list the record cannot back.
+// Studio record is the server's steering folder (server.toml, tools.toml and
+// the lock) and the tools discovery offered. It arrives through
+// `readStudioRecord` (record-read.ts, over get_studio_server), and is null for
+// a server no steering repo defines or when the read is refused. Every value
+// only the record holds renders as not recorded, never as a zero or an empty
+// list the record cannot back.
 //
 // The words mirror @oxagen/mcp-studio's contract (`mcp-server/v1`,
 // `mcp-tools/v1`, lint's `Finding`): the same source types, transports,
@@ -92,8 +93,8 @@ export type StudioSource =
   | {
       type: "remote";
       url: string;
-      /** MCP's streamable HTTP transport; review refuses `sse` (ADR-211). */
-      transport: "http";
+      /** `http`, MCP's streamable HTTP transport. Review refuses `sse` (ADR-211). */
+      transport: string;
       network: string | null;
     }
   | {

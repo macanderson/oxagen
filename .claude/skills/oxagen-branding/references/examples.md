@@ -1,6 +1,6 @@
 # Examples
 
-Finished prose per surface. Copy the structure, not the sentences, unless the sentence is an approved line. Approved lines live in the message registry at `messages/` in `oxagenai/oxagen-brand`, and `positioning.md` lists the current ones. Every control claim below carries its scope. Keep the scope when you shorten a line.
+Finished prose per surface. Copy the structure, not the sentences, unless the sentence is an approved line. Approved lines live in the message registry at `messages/` in `macanderson/oxagen-brand`, and `positioning.md` lists the current ones. Every control claim below carries its scope. Keep the scope when you shorten a line.
 
 ## Website hero
 

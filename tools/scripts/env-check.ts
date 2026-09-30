@@ -66,6 +66,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // them before it installs lefthook. No deployed service reads them.
   "LEFTHOOK",
   "HUSKY",
+  // tools/scripts/run-checks.mjs sets this on each check it starts, and a
+  // runner started inside that check reads it to print plain headers inside
+  // the outer log group. The runner writes it and reads it. No service does.
+  "RUN_CHECKS_PARENT",
   // Oxagen internal platform version tag
   "PLATFORM_VERSION",
   // Turborepo remote cache. .github/actions/turbo-cache sets all three in CI

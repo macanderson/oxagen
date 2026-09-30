@@ -82,10 +82,11 @@ pre-commit:
       stage_fixed: true
 
     # Typecheck ONLY the staged files, never the whole repo. The wrapper groups
-    # the changed files by their owning package tsconfig and runs `tsc-files`
-    # per group, so tsc loads only those files plus their import closure — fast,
-    # local feedback. The authoritative affected-package typecheck runs in CI
-    # (`turbo run typecheck --filter=...[origin/main]`).
+    # the changed files by their owning package tsconfig and runs tsc once per
+    # group against a temporary config, so tsc loads only those files plus
+    # their import closure. For apps/app it first runs `next typegen` when the
+    # route types are missing or do not list a staged route yet (#3403). The
+    # authoritative affected-package typecheck runs in CI.
     typecheck:
       glob: "*.{ts,tsx,js,jsx,mjs,mts,cts}"
       exclude:

@@ -304,6 +304,31 @@ jobs:
           check:inngest-senders
           docs:architecture:check
 
+      # #3074: check:brand ran only in the local gate, so CI checked no
+      # vendored brand file. The checkout follows macanderson/oxagen-brand's
+      # main branch, with no pin, tag, or sha, by Mac's decision of
+      # 2026-09-29. The repository is public, so it needs no token. A kit push
+      # to main fails the next step until someone runs
+      # `node tools/scripts/sync-brand-assets.mjs` against the kit's main and
+      # commits the result.
+      - name: Check out the brand kit
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen-brand
+          ref: main
+          path: .brand-kit
+
+      # With CI=true a missing kit fails the check, and PNG and ICO files are
+      # compared by size, because this image's librsvg renders different
+      # bytes from the one that made them. Every SVG, token, font, the web
+      # palette, and the branding skill are compared byte for byte.
+      - name: Brand assets match the house kit
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          OXAGEN_BRAND_KIT: .brand-kit
+        run: pnpm check:brand
+
       # Unconditional, and that is the whole point. The affected-package gate
       # (`turbo … --filter=…[<base sha>]`) selects a package only when it or one
       # of its dependencies changed, and @oxagen/compliance declares no
@@ -619,6 +644,7 @@ jobs:
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       - name: Coverage thresholds
+        id: coverage
         if: steps.scope.outputs.run == 'true'
         env:
           LANE: ${{ matrix.lane }}
@@ -646,11 +672,14 @@ jobs:
           fi
 
       # apps/app's coverage report must name only apps/app/src files that
-      # exist. On 2026-09-19 it counted ~80 retired-app files at 0% and failed
-      # the floor while every test passed (#3431). reportOnFailure in
-      # apps/app/vitest.config.ts keeps the report present for this read.
+      # exist. #3431 read another package's table in a shared log as this
+      # report. The guard fails if this report ever names a file outside
+      # apps/app/src or one not on disk. reportOnFailure in
+      # apps/app/vitest.config.ts keeps a report present for this read. The
+      # guard runs only when Coverage thresholds ran, so a failed Bootstrap,
+      # Migrate, or Seed step does not add a "no report" line (#4664 item 4).
       - name: Coverage report names only apps/app source
-        if: ${{ !cancelled() && matrix.lane == 'app' && steps.scope.outputs.run == 'true' }}
+        if: ${{ !cancelled() && matrix.lane == 'app' && steps.scope.outputs.run == 'true' && (steps.coverage.outcome == 'success' || steps.coverage.outcome == 'failure') }}
         run: node tools/scripts/check-coverage-scope.mjs apps/app
 
   # The required status check. The ruleset on main requires `test`, and
@@ -1582,7 +1611,7 @@ jobs:
           - service: docs
             hostname: docs.oxagen.sh
           - service: app
-            hostname: app.oxagen.sh
+            hostname: oxagen.app
           - service: api
             hostname: api.oxagen.sh
           - service: mcp
@@ -1839,4 +1868,4 @@ jobs:
         with:
           service: app
           directory: dist-deploy/app
-          hostname: app.oxagen.sh
+          hostname: oxagen.app

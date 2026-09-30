@@ -78,7 +78,7 @@ describe("search_mcp_registry contract", () => {
         ...page,
         servers: [{ ...server, packages: [pkg] }],
       }).servers[0]?.packages,
-    ).toEqual([pkg]);
+    ).toEqual([{ ...pkg, packageArguments: [] }]);
     expect(() =>
       agentMcpRegistrySearch.output.parse({
         ...page,

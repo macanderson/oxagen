@@ -1,6 +1,6 @@
 // The production app's canonical host (ADR-215, ARCHITECTURE.md §3.8). The app
-// answers on app.oxagen.sh, oxagen.app and www.oxagen.app while it moves to
-// oxagen.app, and Caddyfile.alb sends all three names to this server. A page
+// is canonical at oxagen.app and still answers on www.oxagen.app and
+// app.oxagen.sh, and Caddyfile.alb sends all three names to this server. A page
 // visit on a name that is not canonical moves to the same page on the one that
 // is. A CanonicalHostUrl is that target: an https URL on the canonical origin,
 // with no credentials and no fragment, written exactly as the URL parser writes
@@ -76,8 +76,8 @@ function isCanonicalHostUrl(
  * so nothing outside production redirects. A build whose origin names a host
  * outside `APP_HOSTS` (a staging or local `NEXT_PUBLIC_APP_URL`) redirects
  * nothing either, rather than sending production visitors to it. An origin
- * that does not parse falls back to app.oxagen.sh, as the page metadata does,
- * and app.oxagen.sh is then canonical.
+ * that does not parse falls back to oxagen.app, as the page metadata does,
+ * and oxagen.app is then canonical.
  */
 export function canonicalHostRedirect(request: {
   readonly method: string;

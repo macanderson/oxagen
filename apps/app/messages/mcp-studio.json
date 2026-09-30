@@ -467,9 +467,8 @@
         "arguments": "Required arguments",
         "secretHint": "A secret argument takes its value from a variable set on each machine.",
         "variables": "Required variables",
-        "noPackages": "The registry lists this server's packages, and Oxagen does not read them yet.",
         "submit": "Open steering PR",
-        "pending": "Adding a registry package is not available yet."
+        "pending": "Adding a registry package is not available yet, because a new folder needs its tools listed before a steering PR can open."
       },
       "discovery": {
         "title": "Discovery",

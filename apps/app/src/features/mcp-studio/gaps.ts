@@ -12,13 +12,8 @@ const STUDIO_GAPS = {
    */
   record: 4678,
   /**
-   * A registry entry's packages: the registry keeps `packages[]` (#4742), but
-   * the app's RegistryServer does not carry them yet, so the package path
-   * cannot list what to ask for.
-   */
-  packages: 4678,
-  /**
-   * Adding a server by local command. Review refuses a new local server with
+   * Adding a server the local gateway runs, by local command or as a
+   * registry package. Review refuses a new local server with
    * `source_required`, because its draft carries no source and its folder has
    * no tools.lock.json yet, and only discovery, which needs the folder, can
    * list its tools (packages/handlers/src/mcp-studio/import/build.ts).

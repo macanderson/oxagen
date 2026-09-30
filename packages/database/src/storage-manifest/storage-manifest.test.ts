@@ -69,6 +69,28 @@ describe("canonical-json", () => {
     // The stored (possibly-stale) hash value must not affect the result.
     expect(contentHashOf({ ...body, contentHash: "DIFFERENT" })).toBe(expected);
   });
+
+  it("contentHashOf excludes each store's tableCount (#4664)", () => {
+    // A file written before ADR-216, or a merge that kept one side's count,
+    // still records tableCount. The drift report and the architecture atlas
+    // hash it through this function, so the count must not change the hash.
+    const body = {
+      version: 2,
+      stores: [{ kind: "postgres", purpose: "p", domains: [] }],
+      tables: [{ id: "postgres:agent.agents", store: "postgres" }],
+    };
+    const expected = createHash("sha256")
+      .update(canonicalJson(body))
+      .digest("hex");
+    const legacy = {
+      ...body,
+      contentHash: "0".repeat(64),
+      stores: [{ ...body.stores[0], tableCount: 99 }],
+    };
+    expect(contentHashOf(legacy)).toBe(expected);
+    // The input is not mutated: the caller's copy keeps its count.
+    expect(legacy.stores[0]?.tableCount).toBe(99);
+  });
 });
 
 describe("storage manifest — determinism", () => {
@@ -88,8 +110,9 @@ describe("storage manifest — determinism", () => {
   });
 
   it("the content hash, computed at read time, is the sha256 of the committed bytes", () => {
-    // The archdocs site and `pnpm schema:manifest` both show this value, one
-    // from the file bytes and one from the parsed manifest. They must agree.
+    // The archdocs site and `pnpm schema:manifest` both show this value, and
+    // both compute it with `contentHashOf`. For the committed file, which is
+    // canonical, it is also the sha256 of the bytes.
     const m = buildManifest();
     expect(contentHashOf(m)).toBe(
       createHash("sha256").update(renderManifest()).digest("hex"),

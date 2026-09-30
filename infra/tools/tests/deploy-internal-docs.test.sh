@@ -150,7 +150,7 @@ internal_docs_verdict 401 200 200 200 >/dev/null && pass \
   || fail "401 anonymous, 200 with password, app and api up is a pass"
 internal_docs_verdict 200 200 200 200 >/dev/null && fail "a site answering 200 without a password fails" || pass
 internal_docs_verdict 401 401 200 200 >/dev/null && fail "a password that does not work fails" || pass
-internal_docs_verdict 401 200 502 200 >/dev/null && fail "app.oxagen.sh down after the deploy fails" || pass
+internal_docs_verdict 401 200 502 200 >/dev/null && fail "oxagen.app down after the deploy fails" || pass
 internal_docs_verdict 401 200 200 000 >/dev/null && fail "api.oxagen.sh unreachable after the deploy fails" || pass
 
 # --- the site's Caddyfile keeps the site private ---------------------------

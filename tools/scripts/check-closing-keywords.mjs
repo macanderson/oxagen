@@ -24,7 +24,7 @@
 // The negation window does not. The DoD gate reads the few words before the
 // keyword, and this check reads the whole sentence (see `isNegatedInSentence`).
 
-import { pathToFileURL } from "node:url";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 import {
   CLOSING_PATTERN,
   linkedIssues,
@@ -42,17 +42,21 @@ import {
 // with its work unfinished, and nothing reports it.
 const SENTENCE_NEGATIONS = new Set([...NEGATION_WORDS, "without"]);
 
+// A sentence ends at `.`, `!` or `?` followed by whitespace or the end of the
+// text, or at a line break. A period inside a token, as in `v2.0`,
+// `example.com` or `check-closing-keywords.mjs`, ends nothing, so the negation
+// before it still counts (#4664 item 24).
+const SENTENCE_END = /[.!?](?=\s|$)|\n/g;
+
 /** Whether a negation word sits before `index` in the same sentence. */
 export function isNegatedInSentence(text, index) {
-  const before = text.slice(0, index);
-  const sentenceStart = Math.max(
-    before.lastIndexOf("."),
-    before.lastIndexOf("!"),
-    before.lastIndexOf("?"),
-    before.lastIndexOf("\n"),
-  );
-  return before
-    .slice(sentenceStart + 1)
+  let sentenceStart = 0;
+  for (const end of text.matchAll(SENTENCE_END)) {
+    if (end.index >= index) break;
+    sentenceStart = end.index + 1;
+  }
+  return text
+    .slice(sentenceStart, index)
     .split(/\s+/)
     .some((word) =>
       SENTENCE_NEGATIONS.has(word.toLowerCase().replace(/[^\w']/g, "")),
@@ -164,6 +168,45 @@ export function findRefsCommitConflicts(prBody, commits, repository = {}) {
 }
 
 /**
+ * The texts the check reads for one pull request: its description, then each
+ * commit message.
+ *
+ * `listCommits` returns the PR's commits as GitHub's API gives them, each with
+ * `sha` and `commit.message`. When it throws, the result carries the error in
+ * `commitsError` and only the description in `sources`. The caller passes
+ * `commitsError` on to `checkClosingKeywords`, which fails over it: a commit
+ * that says `Closes #N` closes the issue on a squash merge, so a check that
+ * could not read the commits has not checked the pull request.
+ *
+ * @param {string | null | undefined} body
+ * @param {() => Promise<Array<{ sha: string, commit: { message: string } }>>} listCommits
+ * @returns {Promise<{
+ *   sources: Array<{ label: string, text: string | null | undefined, kind: "body" | "commit" }>,
+ *   commitsError: string | null,
+ * }>}
+ */
+export async function pullRequestSources(body, listCommits) {
+  const sources = [{ label: "PR body", text: body, kind: "body" }];
+  let commits;
+  try {
+    commits = await listCommits();
+  } catch (error) {
+    return {
+      sources,
+      commitsError: error instanceof Error ? error.message : String(error),
+    };
+  }
+  for (const c of commits) {
+    sources.push({
+      label: `commit ${c.sha.slice(0, 7)}`,
+      text: c.commit.message,
+      kind: "commit",
+    });
+  }
+  return { sources, commitsError: null };
+}
+
+/**
  * Check a PR body and its commit messages.
  *
  * `sources` is a list of `{ label, text, kind }`, for example
@@ -172,10 +215,13 @@ export function findRefsCommitConflicts(prBody, commits, repository = {}) {
  * checked for a negated close. When a `body` source is present, the `commit`
  * sources are also checked for a close the body demoted to `Refs`, with
  * `repository` (the PR's `{ owner, repo }`) resolving same-repo references.
+ * `commitsError`, from `pullRequestSources`, says the commit messages could
+ * not be read. It fails the check, and the result carries it.
  * Returns
- * `{ ok, findings, conflicts }`, where each record carries its source label.
+ * `{ ok, findings, conflicts }`, where each record carries its source label,
+ * plus `commitsError` when one was given.
  */
-export function checkClosingKeywords(sources, { repository } = {}) {
+export function checkClosingKeywords(sources, { repository, commitsError } = {}) {
   const findings = [];
   for (const { label, text } of sources) {
     for (const finding of findNegatedClosings(text)) {
@@ -192,9 +238,10 @@ export function checkClosingKeywords(sources, { repository } = {}) {
           repository,
         );
   return {
-    ok: findings.length === 0 && conflicts.length === 0,
+    ok: findings.length === 0 && conflicts.length === 0 && !commitsError,
     findings,
     conflicts,
+    ...(commitsError ? { commitsError } : {}),
   };
 }
 
@@ -219,6 +266,19 @@ export function formatClosingKeywords(result) {
         "an edited message. The check reads the whole sentence before the",
         "keyword, so if a line does mean to close the issue, give the close its",
         "own sentence.",
+      ].join("\n"),
+    );
+  }
+  if (result.commitsError) {
+    sections.push(
+      [
+        "### Commit messages not read",
+        "",
+        `The check could not list this pull request's commits: ${result.commitsError.replace(/`/g, "'")}`,
+        "",
+        "A commit that says `Closes #N` closes the issue on a squash merge, even",
+        "when the description says `Refs #N`, so this check has not passed.",
+        "Re-run the failed `dod` job from the pull request's Checks tab.",
       ].join("\n"),
     );
   }
@@ -257,9 +317,6 @@ async function main() {
   process.exit(result.ok ? 0 : 1);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isEntrypoint(import.meta.url)) {
   await main();
 }

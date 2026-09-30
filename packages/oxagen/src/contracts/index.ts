@@ -296,6 +296,7 @@ import { toolStudioDiscoveryStart } from "./tool.studio.discovery.start";
 import { toolStudioListingGet } from "./tool.studio.listing.get";
 import { toolStudioListingStart } from "./tool.studio.listing.start";
 import { toolStudioToolsList } from "./tool.studio.tools.list";
+import { toolStudioServerGet } from "./tool.studio.server.get";
 import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
@@ -1000,6 +1001,7 @@ export {
   toolStudioListingGet,
   toolStudioListingStart,
   toolStudioToolsList,
+  toolStudioServerGet,
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
@@ -1449,6 +1451,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioListingGet,
   toolStudioListingStart,
   toolStudioToolsList,
+  toolStudioServerGet,
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,

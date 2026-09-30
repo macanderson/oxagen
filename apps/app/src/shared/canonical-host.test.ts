@@ -142,16 +142,19 @@ describe("canonicalHostRedirect while app.oxagen.sh is canonical", () => {
     expect(target("app.oxagen.sh", "/acme")).toBeNull();
   });
 
-  it("falls back to app.oxagen.sh as canonical when nothing is set", () => {
-    delete process.env.NEXT_PUBLIC_APP_URL;
-    expect(target("oxagen.app", "/")).toBe("https://app.oxagen.sh/");
+});
+
+describe("canonicalHostRedirect with no usable origin configured", () => {
+  it("falls back to oxagen.app as canonical when nothing is set", () => {
+    expect(target("app.oxagen.sh", "/")).toBe("https://oxagen.app/");
+    expect(target("oxagen.app", "/")).toBeNull();
   });
 
-  it("treats an origin that does not parse as app.oxagen.sh, as the metadata does", () => {
-    process.env.NEXT_PUBLIC_APP_URL = "oxagen.app";
-    const moved = canonicalHostRedirect(visit("oxagen.app", "/acme"));
-    expect(moved?.url).toBe("https://app.oxagen.sh/acme");
-    expect(moved?.permanent).toBe(false);
+  it("treats an origin that does not parse as oxagen.app, as the metadata does", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "app.oxagen.sh";
+    const moved = canonicalHostRedirect(visit("app.oxagen.sh", "/acme"));
+    expect(moved?.url).toBe("https://oxagen.app/acme");
+    expect(moved?.permanent).toBe(true);
   });
 });
 

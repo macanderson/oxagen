@@ -31,7 +31,7 @@ function describeInvoice(invoice: BillingInvoice): string {
 function receiptUrlForInvoice(invoice: BillingInvoice): string {
   if (invoice.hostedInvoiceUrl) return invoice.hostedInvoiceUrl;
   if (invoice.invoicePdfUrl) return invoice.invoicePdfUrl;
-  const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
+  const appUrl = process.env["APP_URL"] ?? "https://oxagen.app";
   return `${appUrl}/settings/billing`;
 }
 

@@ -19,6 +19,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -62,11 +63,7 @@ export function duplicateNumbers(adrFileNames) {
     .sort((a, b) => a.number.localeCompare(b.number));
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   const adrDir = join(repoRoot, "docs", "adr");
   const files = readdirSync(adrDir).filter((name) => ADR_FILE.test(name));
   const readme = readFileSync(join(adrDir, "README.md"), "utf8");
