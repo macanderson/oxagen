@@ -317,14 +317,22 @@ export function ContextPrPanel({
             {t("onMerge.title")}
           </h3>
           <ol className="flex list-decimal flex-col gap-1 ps-5 text-sm text-foreground">
-            <li>{t("onMerge.publishes", { path: onMerge.path })}</li>
-            <li>
-              {t("onMerge.version", {
-                current: formatCount(onMerge.bundleVersion.current, locale),
-                next: formatCount(onMerge.bundleVersion.afterMerge, locale),
-              })}
-            </li>
-            <li>{t("onMerge.promotion")}</li>
+            {/* A governance change publishes no record and appends no
+                promotion event (ADR-232), so it lists only what it does. */}
+            {governance ? (
+              <li>{t("onMerge.governance", { path: onMerge.path })}</li>
+            ) : (
+              <>
+                <li>{t("onMerge.publishes", { path: onMerge.path })}</li>
+                <li>
+                  {t("onMerge.version", {
+                    current: formatCount(onMerge.bundleVersion.current, locale),
+                    next: formatCount(onMerge.bundleVersion.afterMerge, locale),
+                  })}
+                </li>
+                <li>{t("onMerge.promotion")}</li>
+              </>
+            )}
             <li>{t("onMerge.review", { review: mode })}</li>
           </ol>
         </div>
