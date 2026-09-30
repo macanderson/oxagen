@@ -28,6 +28,7 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useId, useRef, useState } from "react";
+import { ListSelect } from "@/ui/list-select";
 import { RowsPager } from "@/ui/pagination";
 import { cell, headCell, numericCell } from "@/ui/table";
 
@@ -143,11 +144,12 @@ function compare(a: string, b: string, numeric: boolean): number {
 }
 
 /**
- * The mockup's `.lt select`: the column filters, and any filter a caller
- * draws beside them.
+ * The trigger classes of the mockup's `.lt select`, for the column filters and
+ * any filter a caller draws beside them. Each is a small ListSelect
+ * (`size="sm"`), so its list opens on the translucent menu surface. These keep
+ * the old 12px text, and make the trigger 44px tall with 16px text on a phone.
  */
-export const listSelect =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none max-md:text-base";
+export const listSelect = "text-[12px] max-md:min-h-11 max-md:text-base";
 
 /** What each row in a body renders, by the row's key, whitespace collapsed. */
 function readTexts(
@@ -323,25 +325,22 @@ export function ListTable({
         {facets.map(({ column, values }) => {
           const name = columns[column]?.label ?? "";
           return (
-            <select
+            <ListSelect
               key={name}
               aria-label={t("facetLabel", { column: name })}
+              items={[
+                { value: "", label: t("facetAll", { column: name }) },
+                ...values.map((value) => ({ value, label: value })),
+              ]}
               value={chosen[column] ?? ""}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
+              onValue={(value) => {
                 setChosen((was) => ({ ...was, [column]: value }));
                 setPage(1);
               }}
+              size="sm"
               data-touch-target=""
               className={`${listSelect} max-w-[220px]`}
-            >
-              <option value="">{t("facetAll", { column: name })}</option>
-              {values.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+            />
           );
         })}
       </div>

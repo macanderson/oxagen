@@ -463,7 +463,9 @@ describe("Fix a finding", () => {
     );
 
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend/findings",
+      );
     });
     expect(recordFindingFixAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
     expect(dismissFindingAction).not.toHaveBeenCalled();
@@ -478,7 +480,9 @@ describe("Fix a finding", () => {
     );
 
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend/findings",
+      );
     });
     expect(dismissFindingAction).toHaveBeenCalledWith(at, "fnd_01k5rtgh");
     expect(recordFindingFixAction).not.toHaveBeenCalled();

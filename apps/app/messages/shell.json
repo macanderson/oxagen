@@ -22,9 +22,7 @@
     "nav": {
       "fleet": "Fleet",
       "agents": "Agents",
-      "tools": "Tools",
       "steering": "Steering",
-      "runtimes": "Runtimes",
       "repositories": "Repositories",
       "spend": "Spend",
       "organization": "Organization",
@@ -149,7 +147,6 @@
       "slots": {
         "fleet": "Fleet",
         "agents": "Agents",
-        "tools": "Tools",
         "spend": "Spend"
       },
       "more": "More",
@@ -158,7 +155,6 @@
       "tileWaiting": "{count} waiting",
       "sub": {
         "steering": "library and assignments",
-        "runtimes": "hosts and harnesses",
         "repositories": "bindings and changes",
         "organization": "people and workspaces",
         "billing": "plan and invoices",

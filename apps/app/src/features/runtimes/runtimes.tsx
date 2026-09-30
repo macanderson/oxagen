@@ -16,9 +16,13 @@
 // The table carries the design's list controls (`ListTable`): search, the
 // filters its rule offers, Rows, and the pager.
 //
-// States: the route's loading.tsx replaces the body while the read is in
-// flight; a refused or failed read replaces the body, header included; a
-// workspace with no enrollment keeps the header and shows the empty state.
+// The list is the Runtimes tab of the Agents page, which draws the one header
+// and the tab strip; Add a runtime sits in that header. RuntimesHeader stays
+// for one runtime's page.
+//
+// States: the tab's skeleton replaces the body while the read is in flight; a
+// refused or failed read replaces the body, and the header and strip stay; a
+// workspace with no enrollment shows the empty state.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -364,29 +368,15 @@ export async function Runtimes({
   // with no host yet is listed, with its Register an agent action.
   const nothingNamed = named.ok && named.value.runtimes.length === 0;
   if (read.value.enrollments.length === 0 && nothingNamed)
-    return (
-      <>
-        <RuntimesHeader
-          org={org}
-          ws={ws}
-          wsName={ctx.wsName}
-          canAdd={canAdd}
-          gold={false}
-        />
-        <RuntimesEmpty org={org} ws={ws} canAdd={canAdd} />
-      </>
-    );
+    return <RuntimesEmpty org={org} ws={ws} canAdd={canAdd} />;
   return (
-    <>
-      <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} canAdd={canAdd} />
-      <RuntimesLoaded
-        list={read.value}
-        named={named}
-        org={org}
-        ws={ws}
-        now={now}
-        canAdd={canAdd}
-      />
-    </>
+    <RuntimesLoaded
+      list={read.value}
+      named={named}
+      org={org}
+      ws={ws}
+      now={now}
+      canAdd={canAdd}
+    />
   );
 }

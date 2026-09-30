@@ -23,6 +23,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { runIssue, runIssues } from "./issues.builders";
 import {
   runDetail,
@@ -299,20 +300,23 @@ describe("the Issues panel", () => {
         }),
       ),
     });
+    const user = userEvent.setup();
     const filter = screen.getByRole("combobox", { name: "Filter by status" });
-    expect(
-      within(filter)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["All (Status)", "open", "closed", "in progress", "blocked"]);
-    await userEvent.selectOptions(filter, "closed");
+    expect(await optionNames(user, filter)).toEqual([
+      "All (Status)",
+      "open",
+      "closed",
+      "in progress",
+      "blocked",
+    ]);
+    await pickOption(user, filter, "closed");
     expect(visible()).toEqual(["a-intel/platform#490"]);
-    await userEvent.selectOptions(filter, "open");
+    await pickOption(user, filter, "open");
     expect(visible()).toEqual(["a-intel/platform#482", "a-intel/platform#480"]);
-    await userEvent.selectOptions(filter, "blocked");
+    await pickOption(user, filter, "blocked");
     expect(screen.queryAllByTestId("run-issue")).toHaveLength(0);
     expect(screen.getByText("No issue has this status.")).toBeTruthy();
-    await userEvent.selectOptions(filter, "");
+    await pickOption(user, filter, "All (Status)");
     expect(visible()).toHaveLength(4);
   });
 

@@ -18,6 +18,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { facetsOf, type ListRow, ListTable, leadingNumber } from "./list-table";
 
 const COLUMNS = [
@@ -341,6 +342,7 @@ describe("ListTable filters", () => {
   });
 
   it("offers a status-like column first, reads the values the cells show, and filters on one", async () => {
+    const user = userEvent.setup();
     renderStatuses(statusRows());
     const filters = within(controls())
       .getAllByRole("combobox")
@@ -349,23 +351,26 @@ describe("ListTable filters", () => {
     // value per row and Amount is a number, so neither offers a filter.
     expect(filters).toEqual(["Filter by Status", "Filter by Currency"]);
     const status = screen.getByRole("combobox", { name: "Filter by Status" });
-    expect(
-      within(status)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All (Status)", "open", "paid", "void"]);
-    await userEvent.selectOptions(status, "paid");
+    expect(await optionNames(user, status)).toEqual([
+      "All (Status)",
+      "open",
+      "paid",
+      "void",
+    ]);
+    await pickOption(user, status, "paid");
     expect(visible()).toEqual(["OXA-0", "OXA-2", "OXA-4"]);
     expect(range()).toBe("1–3 of 3");
-    await userEvent.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Currency" }),
       "EUR",
     );
     expect(visible()).toEqual(["OXA-0"]);
-    await userEvent.selectOptions(status, "");
-    await userEvent.selectOptions(
+    await pickOption(user, status, "All (Status)");
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Filter by Currency" }),
-      "",
+      "All (Currency)",
     );
     expect(visible()).toHaveLength(5);
   });

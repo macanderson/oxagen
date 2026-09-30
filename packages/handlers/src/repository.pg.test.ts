@@ -70,7 +70,6 @@ import {
 } from "./context.steering.github";
 import { readMainRepositoryProvider } from "./context.steering.host";
 import { readMainBoundRepository } from "./context.steering.published.get";
-import type { SyncPublish } from "./context.steering.sync";
 import { GITHUB_STEERING_PROVIDER } from "./lib/steering-app";
 import {
   repositoryHeadConflict,
@@ -1268,18 +1267,19 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
 
     // ── the provision event the backfill sends runs every step ───────────
     // The real dependencies read and write Postgres. A fake GitHub holds the
-    // Oxagen Steering installation on `acme`.
+    // Oxagen Steering installation on `acme`. The production first publish
+    // reads the repository through the real host, which mints a token from
+    // the Oxagen GitHub App's environment and never reaches the fake. This
+    // test proves the steps up to the bind, and the provision and
+    // first-version tests prove the publish, so it drops that port.
     const app = { symbol: OXAGEN_STEERING_APP, id: 9001, slug: "oxagen-steering-test" };
     const hub = new FakeGithub({ org: "acme", app });
-    // The production publish port mints a token for the real GitHub App,
-    // which a test run has no key for. A spy stands in for it, so the test
-    // checks that bind_repository publishes the first version once (#4732).
-    const publishFirst = vi.fn<SyncPublish>(() =>
-      Promise.resolve({ status: "published", version: 1 }),
-    );
+    const { publishFirst: _unused, ...production } = steeringRepoProvisionDeps({
+      actorUserId: userId,
+      env: {},
+    });
     const deps: ProvisionDeps = {
-      ...steeringRepoProvisionDeps({ actorUserId: userId, env: {} }),
-      publishFirst,
+      ...production,
       github: () => ({
         app,
         installation: () => Promise.resolve(hub.appRest()),
@@ -1302,8 +1302,6 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         workspaceId: legacyId,
       }),
     ).resolves.toBe("ready");
-    expect(publishFirst).toHaveBeenCalledOnce();
-    expect(publishFirst).toHaveBeenCalledWith({ orgId, workspaceId: legacyId });
 
     const [row] = await withSystemDb((tx) =>
       tx
