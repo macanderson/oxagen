@@ -2,16 +2,20 @@
 // The Month tab's table (#2962; v3 mockup `spdMonth`): one row per group, and a
 // row that has runs opens under itself to its costliest ones. The server
 // component renders every cell and every list of runs; this one holds only
-// which row is open. The row's label is the toggle, a button that says whether
-// its runs are showing, so the row opens from the keyboard as well as the
-// pointer.
+// which row is open. A caret button beside the row's label is the toggle, and
+// says whether its runs are showing, so the row opens from the keyboard as
+// well as the pointer. The label stays apart from the button because it links
+// to the group's drill where the group has one.
 import { CaretRightIcon } from "@phosphor-icons/react";
 import { type ReactNode, useState } from "react";
 import { cell, headCell, numericCell } from "@/ui/table";
 
 export type MonthTableRow = {
   key: string;
+  /** The group's name, a link to its drill where the group has one. */
   label: ReactNode;
+  /** The caret's accessible name, already translated. */
+  toggleLabel: string;
   runs: ReactNode;
   share: ReactNode;
   cost: ReactNode;
@@ -70,25 +74,28 @@ export function MonthTable({
               >
                 <th scope="row" className={`${cell} text-left font-normal`}>
                   {row.runList === null ? (
-                    <span className="flex min-w-0 items-center gap-2 pl-6">
+                    <span className="flex min-w-0 items-center gap-2 pl-8">
                       {row.label}
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      aria-controls={listId}
-                      onClick={() => {
-                        setOpen(isOpen ? null : row.key);
-                      }}
-                      className="flex min-w-0 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                    >
-                      <CaretRightIcon
-                        aria-hidden="true"
-                        className={`size-4 flex-none text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
-                      />
+                    <span className="flex min-w-0 items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={row.toggleLabel}
+                        aria-expanded={isOpen}
+                        aria-controls={listId}
+                        onClick={() => {
+                          setOpen(isOpen ? null : row.key);
+                        }}
+                        className="flex size-6 flex-none items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        <CaretRightIcon
+                          aria-hidden="true"
+                          className={`size-4 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                        />
+                      </button>
                       {row.label}
-                    </button>
+                    </span>
                   )}
                 </th>
                 <td className={numericCell}>{row.runs}</td>

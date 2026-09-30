@@ -684,12 +684,20 @@ describe("Spend › Month", () => {
     expect(triageRow).toHaveTextContent("72.9%");
     expect(triageRow).toHaveTextContent("$9.00");
     expect(within(table).getByRole("rowheader", { name: "Total" })).toBeInTheDocument();
-    // A group with no runs listed has nothing to open.
+    // A group with no runs listed has nothing to open, and still links its drill.
     expect(
       within(rowOf("acme.core.review")).queryByRole("button"),
     ).toBeNull();
+    expect(
+      within(rowOf("acme.core.review")).getByRole("link", {
+        name: "acme.core.review",
+      }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/agent/acme.core.review");
+    expect(
+      within(triageRow).getByRole("link", { name: "acme.core.triage" }),
+    ).toHaveAttribute("href", "/acme/core-platform/spend/agent/acme.core.triage");
     const toggle = within(triageRow).getByRole("button", {
-      name: "acme.core.triage",
+      name: "Costliest runs of acme.core.triage",
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(
@@ -737,6 +745,38 @@ describe("Spend › Month", () => {
     expect(headers(table)[0]).toBe("Operator");
     expect(rowOf("prn_marcusbell")).toHaveTextContent("Marcus Bell");
     expect(rowOf("prn_marcusbell")).not.toHaveTextContent("prn_marcusbell");
+    expect(
+      within(rowOf("prn_marcusbell")).getByRole("link", { name: "Marcus Bell" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/spend/operator/prn_marcusbell",
+    );
+    expect(
+      within(rowOf("prn_marcusbell")).getByRole("button", {
+        name: "Costliest runs of Marcus Bell",
+      }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("links no model row, since no drill takes a model (negative)", async () => {
+    loadedMonth(() =>
+      month([
+        row("claude-opus-5-5", {
+          cost: cost("12345678"),
+          provider: "anthropic",
+          topRuns: [triage],
+        }),
+      ]),
+    );
+    await renderSpend([], undefined, ctx, "model");
+    const model = rowOf("claude-opus-5-5");
+    expect(model).toHaveTextContent("anthropic");
+    expect(within(model).queryByRole("link")).toBeNull();
+    expect(
+      within(model).getByRole("button", {
+        name: "Costliest runs of claude-opus-5-5",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("prints the rest of the spend on the MCP server grouping as Other spend, with no runs and nothing to open", async () => {
@@ -761,6 +801,9 @@ describe("Spend › Month", () => {
       "Spend outside MCP server calls",
     );
     expect(within(rest).queryByRole("button")).toBeNull();
+    expect(within(rest).queryByRole("link")).toBeNull();
+    // No drill takes an MCP server.
+    expect(within(rowOf("github")).queryByRole("link")).toBeNull();
     expect(rest).toHaveTextContent("83.8%");
     expect(
       screen.getByText(
@@ -790,6 +833,7 @@ describe("Spend › Month", () => {
     expect(rest).toHaveTextContent("$3.35");
     expect(rest).toHaveTextContent("27.1%");
     expect(within(rest).queryByRole("button")).toBeNull();
+    expect(within(rest).queryByRole("link")).toBeNull();
   });
 
   it("adds no Not grouped row when the groups carry the whole total (negative)", async () => {
