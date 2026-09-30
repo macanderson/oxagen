@@ -1990,6 +1990,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_listing",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_studio_server",
       "domain": "tool",
       "surfaces": [
@@ -4411,6 +4422,17 @@
     },
     {
       "name": "start_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "start_studio_listing",
       "domain": "tool",
       "surfaces": [
         "api",

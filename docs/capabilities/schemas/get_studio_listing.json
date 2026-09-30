@@ -1,0 +1,197 @@
+{
+  "name": "get_studio_listing",
+  "domain": "tool",
+  "description": "Read the tool listing of one Studio draft for a server that runs on machines: whether a machine has listed its tools yet, which machine answered, how many tools it listed, and why a listing failed. Null when the draft has none.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "server"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "listing": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "waiting_for_machine",
+                  "running",
+                  "succeeded",
+                  "failed"
+                ]
+              },
+              "machineGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pin": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "digest": {
+                    "type": "string"
+                  },
+                  "registryType": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "npm",
+                          "pypi",
+                          "oci",
+                          "nuget"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "version",
+                  "digest",
+                  "registryType"
+                ],
+                "additionalProperties": false
+              },
+              "draftRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "requestedAt": {
+                "type": "string"
+              },
+              "requestedBy": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "claimedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finishedAt": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "machine": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "toolCount": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "server",
+              "status",
+              "machineGroups",
+              "pin",
+              "draftRevision",
+              "requestedAt",
+              "requestedBy",
+              "claimedAt",
+              "finishedAt",
+              "machine",
+              "toolCount",
+              "error"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "listing"
+    ],
+    "additionalProperties": false
+  }
+}

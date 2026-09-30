@@ -98,6 +98,8 @@ import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.fin
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
+import { toolStudioListingGet } from "@oxagen/oxagen/contracts/tool.studio.listing.get";
+import { toolStudioListingStart } from "@oxagen/oxagen/contracts/tool.studio.listing.start";
 import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
 import { toolStudioServerGet } from "@oxagen/oxagen/contracts/tool.studio.server.get";
 import { toolStudioToolsList } from "@oxagen/oxagen/contracts/tool.studio.tools.list";
@@ -241,6 +243,8 @@ import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft";
 import { toolStudioTryRoute } from "./tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
+import { toolStudioListingGetRoute } from "./tool.studio.listing.get";
+import { toolStudioListingStartRoute } from "./tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
 import { toolStudioServerGetRoute } from "./tool.studio.server.get";
 import { toolStudioToolsListRoute } from "./tool.studio.tools.list";
@@ -1148,6 +1152,26 @@ const ROUTES: ThinRoute[] = [
     capability: toolStudioTry.name,
     body: { server: "ledger", tool: "list_entries", environment: "staging", arguments: {} },
     invalidBody: { server: "ledger", tool: "list_entries" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.listing.start",
+    route: toolStudioListingStartRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioListingStart.name,
+    body: { server: "files", revision: 3 },
+    invalidBody: { server: "files", revision: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.listing.get",
+    route: toolStudioListingGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioListingGet.name,
+    body: { server: "files" },
+    invalidBody: { server: "Files" },
     jsonGuard: true,
     status: 200,
   },

@@ -96,6 +96,22 @@ The listing reaches the machine through the same broker path discovery uses,
 so it waits on #4772. It uses the same wait discovery uses, with no third
 wait.
 
+Added on 2026-09-30, when the listing was built:
+
+- `start_studio_listing` pins the server on the draft revision the person
+  sees and records one `mcp.studio_listings` row per draft. Asking again
+  replaces the row. `get_studio_listing` reads it.
+- The MCP process that holds a machine's poll claims an open listing for the
+  machine's groups, after the discoveries that wait for it, and asks that
+  machine for tools/list. A claim older than five minutes is open again.
+- One transaction writes the tools into the draft as its MCP source, raises
+  the draft's revision, and finishes the listing. It writes nothing when the
+  draft was saved after the listing was asked, because that draft is not the
+  one that was pinned.
+- The listing starts a program on a person's machine before any review, so
+  it takes the roles that save a draft, is high sensitivity, and an in-app
+  agent asks a person before it calls it.
+
 ### 3. Review is unchanged
 
 The draft's source is an MCP source with a local or registry lock source, so

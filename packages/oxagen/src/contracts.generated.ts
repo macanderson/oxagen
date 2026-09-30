@@ -430,6 +430,8 @@ import "./contracts/tool.studio.discovery.start";
 import "./contracts/tool.studio.draft.get";
 import "./contracts/tool.studio.draft.save";
 import "./contracts/tool.studio.findings.list";
+import "./contracts/tool.studio.listing.get";
+import "./contracts/tool.studio.listing.start";
 import "./contracts/tool.studio.review.open";
 import "./contracts/tool.studio.server.get";
 import "./contracts/tool.studio.tools.list";
