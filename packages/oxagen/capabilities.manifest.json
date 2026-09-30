@@ -7174,6 +7174,23 @@
       }
     },
     {
+      "name": "get_studio_server",
+      "file": "tool.studio.server.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_studio_tools",
       "file": "tool.studio.tools.list.ts",
       "domain": "tool",

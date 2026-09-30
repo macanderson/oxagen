@@ -252,7 +252,7 @@ export async function handleLogin(input: LoginOptions): Promise<void> {
       return;
     }
     process.stdout.write(
-      `\nOxagen API token (create one at https://app.oxagen.sh/settings/tokens):\n`,
+      `\nOxagen API token (create one at https://oxagen.app/settings/tokens):\n`,
     );
     token = await promptLine("  Token: ");
   }
@@ -275,7 +275,7 @@ export async function handleLogin(input: LoginOptions): Promise<void> {
       process.stderr.write(
         `Error: Token validation failed. The API rejected this key (HTTP 401).\n` +
           `  Verify the token is a current, non-expired Oxagen API key.\n` +
-          `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
+          `  Get a token at: https://oxagen.app/settings/tokens\n`,
       );
       process.exitCode = 1;
       return;

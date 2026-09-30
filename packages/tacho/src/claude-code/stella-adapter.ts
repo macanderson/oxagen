@@ -15,10 +15,13 @@
  *     process that ran the hook and the instance is a digest of that
  *     process's start time. Stella spawns `bash -c <command>`; bash either
  *     execs the hook (the parent is Stella) or forks it (the parent is the
- *     shell, and Stella is the grandparent). The same pid goes to the daemon
- *     as `TACHO_HARNESS_PID`, so the registry sweep seals the chain when
- *     Stella exits: Stella has no SessionEnd. The start time is what keeps a
- *     reused pid off the retained sealed chain of the run that had it before.
+ *     shell, and Stella is the grandparent). A Stella that exports its own
+ *     pid as `STELLA_PID` is taken at its word. Stella sets no such variable
+ *     yet (read 2026-09-30 in `crates/stella-tools/src/hook_runner.rs`).
+ *     The same pid goes to the daemon as `TACHO_HARNESS_PID`, so the registry
+ *     sweep seals the chain when Stella exits: Stella has no SessionEnd. The
+ *     start time is what keeps a reused pid off the retained sealed chain of
+ *     the run that had it before.
  *   - `tool_use_id` is a digest of the tool name and input, so a PreToolUse
  *     and its PostToolUse pair. Two identical calls in one session digest
  *     alike, so this id names the call, not the invocation; the daemon
@@ -41,6 +44,13 @@ import { join } from "node:path";
 import { z } from "zod";
 import { digestJcs, type JsonValue } from "../digest";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
+import {
+  psExecWithin,
+  type ReadText,
+  readProcessStarts,
+  readProcParent,
+} from "../host/process-scan";
+import type { Exec } from "../host/service";
 import { digestText } from "./context";
 
 /** What `ps` says about one process. */
@@ -102,6 +112,39 @@ function isShellWithParent(parent: ProcessInfo): boolean {
   return SHELLS.has(name) && parent.ppid > 1;
 }
 
+/**
+ * The environment variable a Stella hook reads the Stella process's pid
+ * from. Stella does not set it yet. It is the key the Tacho spec (§10.1)
+ * asks Stella to export, because nothing else a forked hook can read without
+ * `ps` names the Stella process on macOS.
+ */
+export const STELLA_PID_ENV = "STELLA_PID";
+
+/**
+ * The pid in a `STELLA_PID` value, or undefined when the value is absent or
+ * is not a pid. Only a decimal integer above 1 counts: 1 is init, and a
+ * hook's harness is never init.
+ */
+export function stellaExportedPid(
+  value: string | undefined,
+): number | undefined {
+  const text = value?.trim();
+  if (text === undefined || !/^\d+$/.test(text)) return undefined;
+  const pid = Number(text);
+  return Number.isSafeInteger(pid) && pid > 1 ? pid : undefined;
+}
+
+/**
+ * The parent lookup from `/proc` on Linux, which spawns nothing and cannot
+ * hang. Elsewhere there is no `/proc`, and the lookup answers nothing.
+ */
+function procLookupFor(
+  platform: NodeJS.Platform,
+): (pid: number) => ProcessInfo | undefined {
+  if (platform !== "linux") return () => undefined;
+  return (pid) => readProcParent(pid);
+}
+
 /** The Stella process a hook belongs to: its pid and its instance token. */
 export interface StellaIdentity {
   pid: number;
@@ -148,7 +191,16 @@ export const STELLA_IDENTITY_TRUST_MS = 5 * 60_000;
 const identityCacheSchema = z.object({
   schema: z.literal("tacho.stella-identity.v1"),
   pid: z.number().int().positive(),
+  /** The instance token in the session id. */
   instance: z.string().min(1),
+  /**
+   * The token a later hook compares its own start-time read with
+   * (`processStartInstance`). It equals `instance`, except in an entry
+   * carried across #4366, which keeps its old `instance` so the run keeps
+   * its session id. An entry written before #4366 has none
+   * (`confirmsCached`).
+   */
+  check: z.string().min(1).optional(),
   confirmed_at: z.number(),
 });
 
@@ -224,6 +276,13 @@ function processAlive(pid: number): boolean {
 export interface StellaIdentityOptions {
   /** This hook's parent pid: Stella itself when bash exec'd the hook. */
   parentPid: number;
+  /**
+   * The Stella pid the hook's environment names (`STELLA_PID`), when Stella
+   * exports one. It names the Stella process outright, so no parent lookup
+   * runs and a forking shell cannot stand in for Stella. A pid that names no
+   * live process is ignored.
+   */
+  exportedPid?: number;
   platform: NodeJS.Platform;
   /** Where identities are cached, one file per Stella pid. */
   cacheDir: string;
@@ -233,8 +292,21 @@ export interface StellaIdentityOptions {
    * `SessionStart` always reads the start time before it trusts the cache.
    */
   event?: string;
+  /** A process's parent and name from `ps`. */
   lookup?: PsLookup;
+  /**
+   * The same from `/proc`, asked before `lookup` because it spawns nothing
+   * and cannot hang. Defaults to `/proc/<pid>/stat` on Linux and to nothing
+   * elsewhere.
+   */
+  procLookup?: (pid: number) => ProcessInfo | undefined;
   startInstance?: StartInstanceLookup;
+  /**
+   * The instance token as `tacho-hook` built it before #4366: `ps -o lstart=`
+   * in the hook's own zone and locale. It is read only to confirm a cache
+   * entry written before that change (`confirmsCached`).
+   */
+  legacyStartInstance?: StartInstanceLookup;
   isAlive?: (pid: number) => boolean;
   /** The clock `STELLA_PS_BUDGET_MS` is measured on. */
   clock?: () => number;
@@ -247,8 +319,25 @@ export type StartInstanceLookup = (
 ) => string | undefined;
 
 /**
+ * Whether a start-time read confirms a cache entry. An entry keeps the token
+ * to compare with in `check`. An entry written before #4366 has no `check`,
+ * and its instance is the old `ps -o lstart=` token, read in the hook's own
+ * zone. It is confirmed when the old token and the new one agree, and
+ * otherwise by one read made the old way, so a run that was live across the
+ * upgrade keeps its chain.
+ */
+function confirmsCached(
+  cached: CachedIdentity,
+  current: string,
+  legacy: () => string | undefined,
+): boolean {
+  if (cached.check !== undefined) return cached.check === current;
+  return cached.instance === current || cached.instance === legacy();
+}
+
+/**
  * The Stella process this hook belongs to, from a cache under `TACHO_HOME`
- * where it can be, and from `ps` where it cannot (H-14).
+ * where it can be, and from `/proc` or `ps` where it cannot (H-14).
  *
  * Without the cache every Stella hook ran `ps` twice, once for the parent
  * and once for its start time. A transient failure of either one changed the
@@ -257,98 +346,131 @@ export type StartInstanceLookup = (
  * on a new chain, and a shell pid sent as `TACHO_HARNESS_PID` let the sweep
  * seal that chain as soon as the shell exited.
  *
- * The cache is keyed by the parent pid and holds that process's start time.
+ * The cache is keyed by the Stella pid when `STELLA_PID` names it, and by the
+ * parent pid otherwise. It holds that process's start time.
  *
  * - A hook within `STELLA_IDENTITY_FRESH_MS` of the entry's last check
  *   runs no `ps`.
- * - A later hook reads the parent's start time once. A match refreshes the
- *   entry. A different start time means the pid was reused, and the hook
- *   looks the process up afresh.
+ * - A later hook reads the start time once. A match refreshes the entry. A
+ *   different start time means the pid was reused, and the hook looks the
+ *   process up afresh.
  * - A `SessionStart` always reads the start time. A new Stella can get the
  *   pid of one that exited inside the minute, and trusting the entry would
  *   file the new run on the old run's chain as a resume. An entry that read
  *   does not confirm, because it failed or found another start time, is
  *   removed, so the hooks after it do not return to the old chain either.
  * - Any other failed start-time read keeps the cached identity when the
- *   entry was checked within `STELLA_IDENTITY_TRUST_MS`: the parent is
+ *   entry was checked within `STELLA_IDENTITY_TRUST_MS`: the process is
  *   alive, since it ran this hook, and its chain is the one to continue. An
  *   older entry is looked up afresh, as below.
- * - With no entry, the hook does what it did before the cache: two `ps`
- *   calls, and the parent pid and the bare form when they fail.
+ * - With no entry, the hook looks its parent up and reads a start time. On
+ *   Linux both come from `/proc` and spawn nothing, so a failing `ps` cannot
+ *   name the forking shell there (#4358). Elsewhere they are two `ps` calls,
+ *   and the parent pid and the bare form stand when they fail.
  *
  * All the `ps` calls share `STELLA_PS_BUDGET_MS`, and each gets at least
  * `STELLA_PS_FLOOR_MS`.
  *
- * The cache cannot tell a reused pid from its Stella without `ps`. Suppose
- * Stella exits and its pid goes to another process that runs a hook, such as
- * a shell forked for another Stella. Inside the fresh window the cache files
- * that hook on the old run's chain and sends the old pid as the harness pid.
- * Past the fresh window the start-time read catches it, unless that read
- * fails inside the trust window. A reused pid needs the system to hand out
- * every other pid first, so both cases need pid reuse within minutes.
- * Entries for exited Stellas stay until the next new entry prunes them.
+ * The cache cannot tell a reused pid from its Stella without a start-time
+ * read. Suppose Stella exits and its pid goes to another process that runs a
+ * hook, such as a shell forked for another Stella. Inside the fresh window
+ * the cache files that hook on the old run's chain and sends the old pid as
+ * the harness pid. Past the fresh window the start-time read catches it,
+ * unless that read fails inside the trust window. A reused pid needs the
+ * system to hand out every other pid first, so both cases need pid reuse
+ * within minutes. Entries for exited Stellas stay until the next new entry
+ * prunes them.
  *
- * Only a parent that is Stella itself is cached. When bash forks the hook
- * instead of exec'ing it, the parent is a new shell on every hook, so an
- * entry keyed by it would never be read again. That case keeps two `ps`
- * calls per hook. Windows has no `ps`, and there the parent is the harness.
+ * Without `STELLA_PID`, only a parent that is Stella itself is cached. When
+ * bash forks the hook instead of exec'ing it, the parent is a new shell on
+ * every hook, so an entry keyed by it would never be read again. That case
+ * reads the parent and a start time on every hook. Windows has no `ps`, and
+ * there the parent is the harness unless `STELLA_PID` names it.
  */
 export function resolveStellaIdentity(
   options: StellaIdentityOptions,
 ): StellaIdentity {
   const { parentPid, platform, cacheDir, now } = options;
-  if (platform === "win32") return { pid: parentPid };
+  const isAlive = options.isAlive ?? processAlive;
+  const exported =
+    options.exportedPid !== undefined && isAlive(options.exportedPid)
+      ? options.exportedPid
+      : undefined;
+  if (platform === "win32") return { pid: exported ?? parentPid };
   const clock = options.clock ?? Date.now;
   const deadline = clock() + STELLA_PS_BUDGET_MS;
   // Read before each call. The floor also keeps the timeout above 0, which
   // `spawnSync` would read as no timeout at all.
   const left = (): number => Math.max(STELLA_PS_FLOOR_MS, deadline - clock());
+  const procLookup = options.procLookup ?? procLookupFor(platform);
   const lookup = (pid: number): ProcessInfo | undefined =>
-    (options.lookup ?? psLookup)(pid, left());
+    procLookup(pid) ?? (options.lookup ?? psLookup)(pid, left());
   const startInstance = (pid: number): string | undefined =>
-    (options.startInstance ?? psStartInstance)(pid, left());
+    options.startInstance !== undefined
+      ? options.startInstance(pid, left())
+      : processStartInstance(pid, left(), platform);
+  const legacyStartInstance = (pid: number): string | undefined =>
+    (options.legacyStartInstance ?? lstartInstance)(pid, left());
   const starting = options.event === "SessionStart";
-  const cached = readCachedIdentity(cacheDir, parentPid);
-  let parentInstance: string | undefined;
+  // The pid the cache is keyed by: Stella's own when it said which it is.
+  const key = exported ?? parentPid;
+  const cached = readCachedIdentity(cacheDir, key);
+  let keyInstance: string | undefined;
   if (cached !== undefined) {
     const identity = { pid: cached.pid, instance: cached.instance };
     const age = now - cached.confirmed_at;
     if (!starting && age >= 0 && age < STELLA_IDENTITY_FRESH_MS)
       return identity;
-    parentInstance = startInstance(parentPid);
+    keyInstance = startInstance(key);
     if (
-      parentInstance === undefined &&
+      keyInstance === undefined &&
       !starting &&
       age >= 0 &&
       age < STELLA_IDENTITY_TRUST_MS
     )
       return identity;
-    if (parentInstance === cached.instance) {
-      writeCachedIdentity(cacheDir, { ...cached, confirmed_at: now });
+    if (
+      keyInstance !== undefined &&
+      confirmsCached(cached, keyInstance, () => legacyStartInstance(key))
+    ) {
+      writeCachedIdentity(cacheDir, {
+        ...cached,
+        check: keyInstance,
+        confirmed_at: now,
+      });
       return identity;
     }
-    if (starting) dropCachedIdentity(cacheDir, parentPid);
+    if (starting) dropCachedIdentity(cacheDir, key);
   }
-  const parent = lookup(parentPid);
-  if (parent !== undefined && isShellWithParent(parent)) {
-    const instance = startInstance(parent.ppid);
-    return instance === undefined
-      ? { pid: parent.ppid }
-      : { pid: parent.ppid, instance };
+  if (exported === undefined) {
+    const parent = lookup(parentPid);
+    if (parent !== undefined && isShellWithParent(parent)) {
+      const instance = startInstance(parent.ppid);
+      return instance === undefined
+        ? { pid: parent.ppid }
+        : { pid: parent.ppid, instance };
+    }
+    // A parent nobody could look up may be a forking shell, so it is not
+    // cached as Stella.
+    if (parent === undefined) {
+      const instance = keyInstance ?? startInstance(parentPid);
+      return instance === undefined
+        ? { pid: parentPid }
+        : { pid: parentPid, instance };
+    }
   }
-  const instance = parentInstance ?? startInstance(parentPid);
-  if (parent !== undefined && instance !== undefined) {
+  const instance = keyInstance ?? startInstance(key);
+  if (instance !== undefined) {
     writeCachedIdentity(cacheDir, {
       schema: "tacho.stella-identity.v1",
-      pid: parentPid,
+      pid: key,
       instance,
+      check: instance,
       confirmed_at: now,
     });
-    pruneCachedIdentities(cacheDir, parentPid, options.isAlive ?? processAlive);
+    pruneCachedIdentities(cacheDir, key, isAlive);
   }
-  return instance === undefined
-    ? { pid: parentPid }
-    : { pid: parentPid, instance };
+  return instance === undefined ? { pid: key } : { pid: key, instance };
 }
 
 /**
@@ -366,21 +488,46 @@ export function stellaToolUseId(name: string, input: unknown): string {
 
 /**
  * A short token for one process instance, from its start time. Undefined for
- * an empty line, which is what `ps` prints for a pid that is gone.
+ * an empty value, which is what `ps` prints for a pid that is gone.
  */
-export function startInstanceToken(lstart: string): string | undefined {
-  const text = lstart.trim();
+export function startInstanceToken(started: string): string | undefined {
+  const text = started.trim();
   if (text.length === 0) return undefined;
   return digestJcs(text).slice("sha256:".length, "sha256:".length + 12);
 }
 
 /**
- * The start time of a process as an instance token: one `ps -o lstart=` call
- * (BSD and GNU `ps` both carry `lstart`) with a short timeout, the same shape
- * as `psLookup`. Undefined when `ps` cannot answer, and the caller then falls
+ * The start time of a process as an instance token, read the way the
+ * daemon reads a harness's start time (`readProcessStarts`). On Linux that
+ * is the boot id and field 22 of `/proc/<pid>/stat`, which spawns nothing
+ * and which a wall-clock step or a zone change does not move. Elsewhere it
+ * is one `ps -o pid=,lstart=` call in UTC and the C locale, with
+ * `timeoutMs`. Undefined when neither can answer, and the caller then falls
  * back to the bare pid form.
+ *
+ * Before #4366 the token came from `ps -o lstart=` in the hook's own zone
+ * (`lstartInstance`). On Linux procps prints that as the boot time plus the
+ * start ticks, and the kernel moves the boot time on every clock step, so
+ * one Stella process could get a second session id mid-run.
  */
-export function psStartInstance(
+export function processStartInstance(
+  pid: number,
+  timeoutMs = 2_000,
+  platform: NodeJS.Platform = process.platform,
+  exec: Exec = psExecWithin(timeoutMs),
+  read?: ReadText,
+): string | undefined {
+  const started = readProcessStarts([pid], exec, platform, read)?.get(pid);
+  return started === undefined ? undefined : startInstanceToken(started);
+}
+
+/**
+ * The instance token as `tacho-hook` built it before #4366: one
+ * `ps -o lstart=` call in the hook's own zone and locale. It is read only to
+ * confirm a cache entry written before then (`confirmsCached`), so a run that
+ * was live across the upgrade keeps its session id.
+ */
+export function lstartInstance(
   pid: number,
   timeoutMs = 2_000,
 ): string | undefined {

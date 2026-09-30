@@ -32,7 +32,7 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
 | Sidecar bridge (`run_sidecar`) | boundary | `apps/desktop/src/bridge.ts`, `apps/desktop/src-tauri/src/sidecar.rs` | Every panel action. The Rust shell runs only the commands on its allowlist, with an environment it sets. `src-tauri/sidecar-calls.json` lists one of each argv `commands.ts` builds, and both test suites read it. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
 | Panel-to-argv mapping and the `Harness` union | boundary | `apps/desktop/src/commands.ts` | `apps/desktop/src/app.tsx`. The union must track `WRAPPED_HARNESSES` in `packages/tacho/src/wire.ts` plus `claude-desktop` (ADR-101) |
 | Opener and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime. The page holds no shell permission |
-| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs` | A close or a Quit while a command that writes files runs hides the window, and the app exits when the work ends. A second Quit exits at once. Sign-in and a first run hold nothing. On macOS the Dock's Quit and a logout skip it |
+| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs`, `apps/desktop/src-tauri/src/macos_quit.rs` | A close or a Quit while a command that writes files runs hides the window, and the app exits when the work ends. A second Quit exits at once. Sign-in and a first run hold nothing. On macOS the Dock's Quit, a logout, and a quit Apple event wait the same way, for at most 20 seconds, and then the app quits whether or not the work has ended |
 | User-scoped API calls (`USER_ROUTES`) | boundary | `apps/desktop/src-tauri/src/lib.rs` | The Workspace panel. Served by `apps/api/src/app.ts` |
 | Release feed (`latest.json`) | boundary | `apps/desktop/src-tauri/tauri.conf.json` (`plugins.updater.endpoints`) | `apps/desktop/src/updater.ts` |
 
@@ -82,14 +82,28 @@ collector's `/status` on loopback) and every action runs a sidecar:
 ### What installing does
 
 The two CLIs ship inside the app bundle (`externalBin`). On every launch the
-app links them onto PATH itself — there is nothing to click for a fresh
-install to work from a terminal. `cli_install::ensure_cli_installed`
-(`src-tauri/src/cli_install.rs`) runs once per launch, off the main thread:
+app copies them out of the bundle and links that copy onto PATH itself, so
+there is nothing to click for a fresh install to work from a terminal.
+`cli_install::ensure_cli_installed` (`src-tauri/src/cli_install.rs`) runs
+once per launch, off the main thread:
 
+- **Keeps a versioned per-user copy (ADR-230).** Both sidecars are copied
+  into `<data-local>/oxagen/bin/<version>`: `~/Library/Application
+  Support/oxagen/bin/<version>` on macOS, `~/.local/share/oxagen/bin/<version>`
+  on Linux, `%LOCALAPPDATA%\oxagen\bin\<version>` on Windows. It happens on
+  every launch, with PATH linking on or off, and a copy that is already
+  current is left alone. Every sidecar the app runs gets `TACHO_BIN_DIR` set
+  to that directory, so `tacho enroll` writes it into every hook, the
+  credential helper, the MCP entry and the service unit, never a path in the
+  bundle. Moving the app to the Trash or removing the package leaves the
+  copy, so the hooks keep running. A new version copies itself beside the
+  old one, so an update never replaces a file the running collector holds.
+  The hooks and the collector move to it on **Re-apply**, and a later launch
+  removes an old version once no `host.json` and no PATH link names it.
 - **Never clobbers what it didn't write.** A missing link is created; a
   symlink (or, on Windows, a `.cmd` shim) that already points at an Oxagen
-  location — an older app path, an AppImage/App Translocation copy, or the
-  durable `<data-local>/oxagen/bin` copy — is replaced; anything else (a
+  location — an older app path, an AppImage/App Translocation copy, or a
+  per-user copy under `<data-local>/oxagen/bin` — is replaced; anything else (a
   Homebrew `oxagen`, a hand-written shim, a plain file) is left alone and
   reported back, never overwritten.
 - **Puts the directory on PATH for new terminals too**, not just this
@@ -234,8 +248,8 @@ a relaunch under the hold used to hide the window and never reopen the app.
 ### Bundled UI
 
 The window renders the UI bundled into the app at build time
-(`build.frontendDist` is `../dist`). It never loads app.oxagen.sh: the CSP
-allows `connect-src ipc:` only, and the app opens app.oxagen.sh in the system
+(`build.frontendDist` is `../dist`). It never loads oxagen.app: the CSP
+allows `connect-src ipc:` only, and the app opens oxagen.app in the system
 browser. A web deploy therefore changes nothing in an open window. A new
 build of the app does, and a new build reaches an installed app only through
 the updater feed.
@@ -303,10 +317,13 @@ runs the new build either way. A download, signature, or install error logs
 to the Activity panel and falls back to the prompt for the same version.
 
 Every install restarts the collector (`restart_tacho_service`): launchd's
-`kickstart -k` on macOS, `systemctl --user restart` on Linux. The collector
-runs from the sidecar inside the bundle, so without the restart it kept the
-old binary until the next sign-out or `tacho enroll`. The restart skips a
-service that is not loaded (macOS) or not active (Linux), so it starts nothing.
+`kickstart -k` on macOS, `systemctl --user restart` on Linux. The restart skips
+a service that is not loaded (macOS) or not active (Linux), so it starts
+nothing. Since ADR-230 the collector runs from the per-user copy its last
+enroll named, not from the bundle, so an install replaces no file it holds and
+the restart keeps its version. The next launch copies the new version beside
+it, and the panel offers **Re-apply**, which moves the hooks and the collector
+to the new copy.
 
 ### Signing key
 

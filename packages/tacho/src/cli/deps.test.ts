@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { cursorAppFacts, cursorFacts } from "./deps";
+import { cursorAppFacts, cursorFacts, runtimeCommands } from "./deps";
 
 /** A machine where no executable is on PATH and nothing is on disk. */
 const bareExec = (): { stdout: string; stderr: string; status: number } => ({
@@ -110,5 +110,76 @@ describe("Cursor detection", () => {
     expect(
       cursorFacts(bareExec, "darwin", {}, "/Users/test", () => false),
     ).toEqual({});
+  });
+});
+
+/**
+ * ADR-230: the desktop app hands `tacho` its versioned per-user copy in
+ * `TACHO_BIN_DIR`, and every command names that copy, never the bundle the
+ * sidecar runs from.
+ */
+describe("the desktop app's per-user copy", () => {
+  const bundle = "/Applications/Oxagen.app/Contents/MacOS/tacho";
+  const kept = "/Users/dev/Library/Application Support/oxagen/bin/2.1.4-17";
+
+  it("names the copy in every command while the bundle runs", () => {
+    const runtime = runtimeCommands(
+      undefined,
+      { TACHO_BIN_DIR: kept },
+      bundle,
+      "darwin",
+      true,
+      (candidate) => candidate === `${kept}/tacho` || candidate === bundle,
+    );
+    expect(runtime.binDir).toBe(kept);
+    expect(runtime.hookCommand).toBe(`'${kept}/tacho' hook`);
+    expect(runtime.credentialHelperCommand).toBe(
+      `'${kept}/tacho' credential issue --harness claude-code`,
+    );
+    expect(runtime.daemonCommand).toEqual([`${kept}/tacho`, "daemon"]);
+    expect(runtime.mcpStdioCommand).toEqual([`${kept}/tacho`, "mcp-stdio"]);
+    expect(runtime).not.toHaveProperty("executableProblem");
+    expect(runtime).not.toHaveProperty("transient");
+    for (const command of [
+      runtime.hookCommand,
+      runtime.credentialHelperCommand,
+      ...runtime.daemonCommand,
+      ...runtime.mcpStdioCommand,
+    ])
+      expect(command).not.toContain("Oxagen.app");
+  });
+
+  it("refuses rather than name the bundle before the copy is made", () => {
+    // The launch copies the sidecars off the main thread. An enroll that
+    // ran before the copy landed fell back to this process, which is the
+    // bundle's sidecar, and wrote the bundle into every hook.
+    const runtime = runtimeCommands(
+      undefined,
+      { TACHO_BIN_DIR: kept },
+      bundle,
+      "darwin",
+      true,
+      (candidate) => candidate === bundle,
+    );
+    expect(runtime.executableProblem).toBe(
+      `TACHO_BIN_DIR names ${kept}, which holds no tacho`,
+    );
+    expect(runtime.hookCommand).not.toContain("Oxagen.app");
+  });
+
+  it("still names a Scoop install by its release asset's name", () => {
+    // No TACHO_BIN_DIR: the running binary is the one to name.
+    const scoop =
+      "C:\\Users\\dev\\scoop\\apps\\tacho\\current\\tacho-x86_64-pc-windows-msvc.exe";
+    const runtime = runtimeCommands(
+      undefined,
+      {},
+      scoop,
+      "win32",
+      true,
+      () => false,
+    );
+    expect(runtime.daemonCommand).toEqual([scoop, "daemon"]);
+    expect(runtime).not.toHaveProperty("executableProblem");
   });
 });

@@ -1,0 +1,33 @@
+{
+  // Files this package's tests read from outside the package (#4664 item 2).
+  // Turbo hashes a test task over its own package, so a change to one of
+  // these files alone would restore a cached pass. Listing them as inputs
+  // re-runs the tests when they change. A package config replaces the root
+  // `inputs` array rather than adding to it, so the root's entries come first.
+  // tools/scripts/turbo-test-inputs.test.ts holds both rules.
+  //
+  // theme.test.mjs checks the INK palette against the kit's tokens in @oxagen/ui.
+  "extends": ["//"],
+  "tasks": {
+    "test:unit": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "vitest.config.*",
+        "$TURBO_ROOT$/packages/ui/src/styles/house-tokens.json"
+      ]
+    },
+    "test:coverage": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "vitest.config.*",
+        "$TURBO_ROOT$/packages/ui/src/styles/house-tokens.json"
+      ]
+    }
+  }
+}

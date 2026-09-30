@@ -86,21 +86,24 @@ JSON artifact, `packages/database/storage-manifest.json`:
 
 **Determinism is a hard requirement.** A canonical serializer sorts object keys
 at every level (arrays are sorted by the generator where order is not semantic),
-and the manifest carries **no timestamps**. The `contentHash` is a sha256 over
-the canonical body with the hash field excluded, so identical committed inputs
-always produce byte-identical output. `pnpm schema:manifest` writes the file;
+and the manifest carries **no timestamps**, so identical committed inputs always
+produce byte-identical output. Since version 2 (ADR-216), the manifest commits
+no content hash and no per-store table count. Readers compute both when they
+read it. `contentHashOf` returns a sha256 over the canonical body, and
+`manifestSummary` counts each store's tables from the `tables` array.
+`pnpm schema:manifest` writes the file and prints both values.
 `pnpm schema:manifest --check` regenerates in memory and exits non-zero with a
-diff summary if the committed file is stale — the CI drift gate. (`biome.json`
-excludes the manifest so Biome's JSON array-collapse cannot fight the canonical
-serializer.)
+diff summary if the committed file is stale. CI runs it as the drift gate.
+(`biome.json` excludes the manifest so Biome's JSON array-collapse cannot fight
+the canonical serializer.)
 
-Manifest shape (abridged):
+Manifest shape (abridged). Version 2 commits neither `contentHash` nor
+`stores[].tableCount`. Compute them with `contentHashOf` and `manifestSummary`.
 
 ```jsonc
 {
-  "version": 1,
-  "contentHash": "<sha256 of the canonical body>",
-  "stores":   [{ "kind": "postgres", "purpose": "…", "domains": [], "tableCount": 121 }],
+  "version": 2,
+  "stores":   [{ "kind": "postgres", "purpose": "…", "domains": [] }],
   "domains":  [{ "name": "billing", "stores": ["clickhouse", "postgres"], "tables": [] }],
   "tables":   [{ "id": "postgres:billing.invoices", "store": "postgres",
                  "domain": "billing", "tenantScoped": true, "rls": "org_only",
@@ -140,7 +143,8 @@ grounds them in the platform's own structure:
   org/workspace scope, not any tenant's, so tenant queries never see them and a
   platform-model write can never leak into customer data.
 
-The projector is idempotent and keyed on `contentHash`: it re-projects only when
+The projector is idempotent and keyed on the manifest's content hash, which it
+computes with `contentHashOf` when it reads the file. It re-projects only when
 the manifest changes, so the graph is a pure downstream materialization of the
 Phase-1 artifact.
 
@@ -151,9 +155,10 @@ Expose the model to agents along a strict cost gradient, mirroring the
 
 - **Tier 0 — cache-stable domain index (~300 tokens, in the system prompt).**
   A tiny, prefix-stable summary — the domain list with each domain's stores and
-  table counts — injected into the immutable system-prompt block. It changes only
-  when the manifest's `contentHash` changes, so it does not break the KV cache
-  turn to turn. This alone lets an agent answer "which domains exist and where
+  table counts — injected into the immutable system-prompt block. The counts
+  come from `manifestSummary`. The index changes only when the manifest's
+  content hash, computed with `contentHashOf`, changes, so it does not break
+  the KV cache turn to turn. This alone lets an agent answer "which domains exist and where
   they live" with zero tool calls.
 - **Tier 1 — `platform.schema.describe` (budgeted domain packs).** A capability
   that returns a token-budgeted pack for a named domain (its tables, columns,

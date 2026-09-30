@@ -55,7 +55,17 @@ type RegistryPackage = {
   version?: unknown;
   runtimeHint?: unknown;
   transport?: { type?: unknown };
+  packageArguments?: unknown;
   environmentVariables?: unknown;
+};
+type RegistryArgument = {
+  type?: unknown;
+  name?: unknown;
+  valueHint?: unknown;
+  isRequired?: unknown;
+  isSecret?: unknown;
+  value?: unknown;
+  default?: unknown;
 };
 type RegistryVariable = {
   name?: unknown;
@@ -130,6 +140,30 @@ function isTransport(
 }
 
 /**
+ * A package's arguments, each named or positional. An argument of another
+ * type is dropped, because Studio could not say where it goes.
+ */
+function argumentsOf(value: unknown): McpRegistryPackage["packageArguments"] {
+  if (!Array.isArray(value)) return [];
+  return (value as unknown[]).flatMap((raw) => {
+    if (typeof raw !== "object" || raw === null) return [];
+    const argument = raw as RegistryArgument;
+    if (argument.type !== "named" && argument.type !== "positional") return [];
+    return [
+      {
+        type: argument.type,
+        name: str(argument.name),
+        valueHint: str(argument.valueHint),
+        isRequired: argument.isRequired === true,
+        isSecret: argument.isSecret === true,
+        value: str(argument.value),
+        default: str(argument.default),
+      },
+    ];
+  });
+}
+
+/**
  * The entry's packages, each with the fields Studio offers. A package with no
  * registry type, no identifier, or a transport the registry does not define is
  * dropped, because nothing could start it.
@@ -159,6 +193,7 @@ export function packagesOf(value: unknown): McpRegistryPackage[] {
         version: str(pkg.version),
         transport,
         runtimeHint: str(pkg.runtimeHint),
+        packageArguments: argumentsOf(pkg.packageArguments),
         environmentVariables: variables.flatMap((item) => {
           if (typeof item !== "object" || item === null) return [];
           const variable = item as RegistryVariable;

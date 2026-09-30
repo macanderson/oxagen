@@ -27,15 +27,18 @@
 // commit that staged a route file failed here with TS2304 while CI was green
 // (#3403). The hook now does what the package's own typecheck does: when the
 // owning package's `typecheck` script runs `next typegen` (today only
-// `apps/app`) and `.next/types/routes.d.ts` is missing, it runs
-// `pnpm exec next typegen` in that package once, then adds `next-env.d.ts` and
+// `apps/app`), it runs the package's `next typegen` by its real path, as it
+// runs tsc. It does so when `.next/types/routes.d.ts` is missing, and when a
+// staged page, layout, or route handler declares a route that file does not
+// list yet, since a new route typed `PageProps<"/new">` fails against the old
+// list (#4664 item 3). Then it adds `next-env.d.ts` and
 // `.next/types/routes.d.ts` to the temp config's `files` (the package's
 // `exclude` hides `.next` from `include`), and no other generated file, so the
-// staged program is never stricter than the package's own. It never regenerates
-// types that are already there, and it generates nothing when no staged file
-// belongs to such a package. Route files are then checked like any other
-// staged file, so a real type error in one still fails the commit. The
-// decisions live in `tools/scripts/lib/typecheck-staged-plan.mjs`.
+// staged program is never stricter than the package's own. It does not
+// regenerate types that already list every staged route, and it generates
+// nothing when no staged file belongs to such a package. Route files are then
+// checked like any other staged file, so a real type error in one still fails
+// the commit. The decisions live in `tools/scripts/lib/typecheck-staged-plan.mjs`.
 import {
   existsSync,
   readFileSync,
@@ -47,9 +50,11 @@ import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import ts from "typescript";
 import {
+  ROUTE_TYPES,
   generatedDeclarations,
   needsTypegen,
   stagedConfig,
+  typegenCommand,
 } from "./lib/typecheck-staged-plan.mjs";
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/;
@@ -133,20 +138,37 @@ for (const [tsconfig, absFiles] of groups) {
   const pkgDir = dirname(tsconfig);
   const pkgJson = packageJsonOf(pkgDir);
 
-  if (needsTypegen(pkgDir, pkgJson, existsSync)) {
+  const staged = absFiles.map((f) => relative(pkgDir, f));
+  const hadRouteTypes = existsSync(join(pkgDir, ROUTE_TYPES));
+  if (
+    needsTypegen(pkgDir, pkgJson, existsSync, {
+      staged,
+      read: (p) => readFileSync(p, "utf8"),
+    })
+  ) {
+    const why = hadRouteTypes
+      ? "a staged route file is not in .next/types/routes.d.ts yet"
+      : "missing .next/types/routes.d.ts";
     process.stdout.write(
-      `typecheck-staged: generating Next route types for ${relative(repoRoot, pkgDir)} (missing .next/types/routes.d.ts)\n`,
+      `typecheck-staged: generating Next route types for ${relative(repoRoot, pkgDir)} (${why})\n`,
     );
-    const gen = spawnSync("pnpm", ["exec", "next", "typegen"], {
-      cwd: pkgDir,
-      stdio: "inherit",
-      shell: process.platform === "win32",
+    const typegen = typegenCommand(pkgDir, repoRoot, {
+      exists: existsSync,
+      realpath: realpathSync,
     });
+    const gen = typegen
+      ? spawnSync(typegen.command, typegen.args, {
+          cwd: pkgDir,
+          stdio: "inherit",
+        })
+      : { status: null };
     if (gen.status !== 0) {
       // Say that the files were not checked, rather than let tsc report a
       // wall of TS2304 that reads like the staged change is broken.
       process.stderr.write(
-        `typecheck-staged: \`next typegen\` failed in ${relative(repoRoot, pkgDir)}, so its staged files were not typechecked.\n`,
+        typegen
+          ? `typecheck-staged: \`next typegen\` failed in ${relative(repoRoot, pkgDir)}, so its staged files were not typechecked.\n`
+          : `typecheck-staged: no \`next\` binary is installed for ${relative(repoRoot, pkgDir)}, so \`next typegen\` could not run and its staged files were not typechecked. Run \`pnpm install\` at the repository root.\n`,
       );
       failed = true;
       continue;
@@ -158,15 +180,7 @@ for (const [tsconfig, absFiles] of groups) {
   const declarations = generatedDeclarations(pkgDir, pkgJson, {
     exists: existsSync,
   });
-  writeFileSync(
-    tempPath,
-    JSON.stringify(
-      stagedConfig(
-        absFiles.map((f) => relative(pkgDir, f)),
-        declarations,
-      ),
-    ),
-  );
+  writeFileSync(tempPath, JSON.stringify(stagedConfig(staged, declarations)));
   try {
     const result = spawnSync(tsc, ["-p", tempPath], { stdio: "inherit" });
     if (result.status !== 0) failed = true;

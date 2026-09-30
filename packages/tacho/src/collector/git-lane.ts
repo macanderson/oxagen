@@ -11,7 +11,7 @@
  *
  * The daemon still decides when the lane runs (`startGitReads`) and settles
  * a pending SessionEnd (`settleEnding`), because both are about the hook
- * queue and the chain's terminal, which are the daemon's.
+ * queues and the chain's terminal, which are the daemon's.
  */
 import { join } from "node:path";
 import { jsonContent } from "../evidence/frame-body";
@@ -89,16 +89,24 @@ export interface GitLaneDeps {
   /** The asynchronous exec every git probe runs through. */
   execAsync: ExecAsync;
   now: () => number;
-  /** The daemon's hook queue. Results are applied on it. */
-  serial: { run<T>(task: () => Promise<T>): Promise<T> };
+  /**
+   * Run `task` on the hook queue of one session, named by its raw harness
+   * session id. A read's results are applied on it, between that session's
+   * hooks and never inside one.
+   */
+  inSession: <T>(
+    harnessSessionId: string,
+    task: () => Promise<T>,
+  ) => Promise<T>;
   /** SessionEnds waiting for their final read, by session uuid. */
   pendingSessionEnds: ReadonlyMap<
     string,
     HookEnvelope & { terminal?: unknown }
   >;
   /**
-   * Record a pending SessionEnd's outcome and forget it. Called on the hook
-   * queue, once the final read has been applied or cannot be made.
+   * Record a pending SessionEnd's outcome and forget it, once the final read
+   * has been applied or cannot be made. It takes the queue it needs itself,
+   * so the lane calls it outside every queue.
    */
   settleEnding: (ending: HookEnvelope, sessionUuid: string) => Promise<void>;
   /** Write sealed events to the WAL. Throws when the write fails. */
@@ -128,7 +136,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
     registry,
     execAsync,
     now,
-    serial,
+    inSession,
     pendingSessionEnds,
     settleEnding,
     record,
@@ -143,8 +151,8 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    * in the hook handler. `contextFactsFromEnv` is pure and reads environment
    * variables only; shelling out from it would put a process spawn inside a
    * normalizer that the transcript reader and the OTel path also call. The
-   * hook handler runs on the serial queue that every wrapped agent on this
-   * host waits on, and a hook has a decision budget measured in seconds. The
+   * hook handler runs on its session's queue, which that wrapped agent waits
+   * on, and a hook has a decision budget measured in seconds. The
    * daemon already owns the `Exec` port, already knows each session's cwd,
    * and already has a place to hold state across frames, so it reads the
    * facts once per worktree and hands them to the recorder, which merges
@@ -177,9 +185,9 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    * The git work one session is waiting for, by harness session id.
    *
    * A hook never reads a worktree. It records that one wants reading and
-   * returns; the tick drains this map outside the serial queue. Two reasons.
-   * A hook holds the queue that every wrapped agent on this host waits on,
-   * and a prompt hook has a budget measured in seconds, so four `git`
+   * returns, and the tick drains this map outside the hook queues.
+   * A hook holds its session's queue, which its agent waits on, and a
+   * prompt hook has a budget measured in seconds, so four `git`
    * invocations for one session times every live session was a way to spend
    * that budget on someone else's repository. And the read this seam now
    * also does, the worktree reconciliation, is heavier still: a whole-tree
@@ -262,10 +270,11 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
   /**
    * Do the pending git reads, then apply what they found.
    *
-   * Called from the tick outside `serial.run`, so the spawns are not holding
-   * the hook queue. Applying the results is in-memory work and goes back on
-   * the queue, because sealing a frame moves a chain a hook may be moving
-   * too.
+   * Called from the tick outside the hook queues, so the spawns hold none of
+   * them. Applying the results is in-memory work and goes on the session's
+   * own queue, because sealing a frame moves a chain a hook may be moving
+   * too. A pending SessionEnd is then settled through `settleEnding`, which
+   * takes the host queue.
    */
   async function drainGitReads(): Promise<void> {
     if (gitPending.size === 0) return;
@@ -310,9 +319,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
         dir === undefined ||
         ending?.terminal !== undefined
       ) {
-        if (ending !== undefined) {
-          await serial.run(() => settleEnding(ending, harnessSessionId));
-        }
+        if (ending !== undefined) await settleEnding(ending, harnessSessionId);
         continue;
       }
       const at = now();
@@ -432,56 +439,76 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
           : {}),
       });
     }
-    if (found.length === 0) return;
-    await serial.run(async () => {
-      for (const {
-        session,
-        cwd,
-        dir,
-        facts,
-        reading,
-        snapshot,
-        ending,
-      } of found) {
-        if (session.sealed) continue;
-        // The session moved while the probe ran, so this answer describes a
-        // repository it is no longer in. A later turn reads the new one.
-        if ((session.workDir ?? session.cwd) !== dir) {
-          if (ending !== undefined)
-            requestGitRead(session.recorder.sessionUuid, {
-              force: true,
-              reconcile: true,
-            });
-          continue;
-        }
-        // The root rides with the git facts, so the run's checkout names the
-        // worktree the facts came from rather than the directory the session
-        // was started in.
-        if (facts !== undefined)
-          session.recorder.noteContext({
-            ...gitContextOf(facts),
-            worktree_path: cwd,
-          });
-        if (reading !== undefined) {
-          recordReconciliation(session, reading, snapshot);
-          if (
-            reading.ownCommits.length > 0 ||
-            session.sessionCommits?.[cwd] !== undefined
-          )
-            session.sessionCommits = rememberForRoot(
-              session.sessionCommits,
-              cwd,
-              reading.ownCommits,
-            );
-        }
-        if (
-          ending !== undefined &&
-          pendingSessionEnds.get(session.recorder.sessionUuid) === ending
-        ) {
-          await settleEnding(ending, session.recorder.sessionUuid);
-        }
-      }
-    });
+    // One session at a time, in the order the reads were made. A throw stops
+    // the rest, which a later tick reads again.
+    for (const item of found) {
+      const { session, ending } = item;
+      const settles = await inSession(session.harnessSessionId, async () =>
+        applyRead(item),
+      );
+      // After the session's queue is let go: `settleEnding` takes the host
+      // queue, which waits for every session task queued before it.
+      if (settles && ending !== undefined)
+        await settleEnding(ending, session.recorder.sessionUuid);
+    }
+  }
+
+  /**
+   * Apply one session's read, on that session's queue, and answer whether
+   * its pending SessionEnd is now due to settle.
+   */
+  function applyRead({
+    session,
+    cwd,
+    dir,
+    facts,
+    reading,
+    snapshot,
+    ending,
+  }: {
+    session: SessionRecord;
+    cwd: string;
+    dir: string;
+    ending?: HookEnvelope;
+    facts?: GitFacts;
+    reading?: SessionChanges;
+    snapshot?: WorktreeSnapshot;
+  }): boolean {
+    if (session.sealed) return false;
+    // The session moved while the probe ran, so this answer describes a
+    // repository it is no longer in. A later turn reads the new one.
+    if ((session.workDir ?? session.cwd) !== dir) {
+      if (ending !== undefined)
+        requestGitRead(session.recorder.sessionUuid, {
+          force: true,
+          reconcile: true,
+        });
+      return false;
+    }
+    // The root rides with the git facts, so the run's checkout names the
+    // worktree the facts came from rather than the directory the session
+    // was started in.
+    if (facts !== undefined)
+      session.recorder.noteContext({
+        ...gitContextOf(facts),
+        worktree_path: cwd,
+      });
+    if (reading !== undefined) {
+      recordReconciliation(session, reading, snapshot);
+      if (
+        reading.ownCommits.length > 0 ||
+        session.sessionCommits?.[cwd] !== undefined
+      )
+        session.sessionCommits = rememberForRoot(
+          session.sessionCommits,
+          cwd,
+          reading.ownCommits,
+        );
+    }
+    return (
+      ending !== undefined &&
+      pendingSessionEnds.get(session.recorder.sessionUuid) === ending
+    );
   }
 
   /**

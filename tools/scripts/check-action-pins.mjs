@@ -22,6 +22,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -87,11 +88,7 @@ export function workflowFiles(root) {
   return files.sort();
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   const failures = [];
   for (const file of workflowFiles(repoRoot)) {
     for (const hit of findUnpinned(readFileSync(file, "utf8"))) {

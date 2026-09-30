@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { parseSource } from "./lib/role-gate-ast.mjs";
+import { parseSource, withoutComments } from "./lib/role-gate-ast.mjs";
 import {
   declaredCapabilityName,
   declaresAgentRoleRestriction,
@@ -17,6 +17,7 @@ import {
   findGaps,
   handlerAssertsRole,
   parseDefaultRoles,
+  parseSurfaces,
   resolveHandler,
   ROLE_ENFORCEMENT_BASELINE,
   ROLE_ENFORCEMENT_EXEMPT,
@@ -286,6 +287,68 @@ describe("parseDefaultRoles", () => {
         'sensitivity: "high", defaultRoles: { org: { Owner: "allow" }, workspace: {} },',
       ),
     ).toBe(true);
+  });
+});
+
+// #4664 item 7: the contract readers took the first match in the raw file.
+// billing.contract_terms.set.ts, billing.org_terms.set.ts and
+// billing.prepaid_invoice.create.ts each quote `surfaces: []` in a doc comment
+// above the real array, so a comment could decide what the check read.
+describe("contract readers ignore comments", () => {
+  const withHeader = (header: string, body: string) =>
+    `/**\n * ${header}\n */\nexport const x = registerCapability({\n${body}\n});\n`;
+
+  it("reads the declared surfaces, not ones a header comment quotes", () => {
+    const src = withHeader(
+      "Was `surfaces: []` before the agent surface was added.",
+      '  surfaces: ["api", "mcp", "agent"],',
+    );
+    expect(parseSurfaces(src)).toEqual(["api", "mcp", "agent"]);
+  });
+
+  it("keeps the agent rule on a contract whose comment quotes other surfaces", () => {
+    const src = withHeader(
+      'Formerly `surfaces: ["api"]`.',
+      '  surfaces: ["agent"],\n  sensitivity: "low",\n  defaultRoles: { org: { Owner: "allow" }, workspace: { Owner: "allow" } },',
+    );
+    expect(declaresAgentRoleRestriction(src)).toBe(true);
+  });
+
+  it("reads the declared roles, not a grant a comment quotes", () => {
+    const src = withHeader(
+      'Once `defaultRoles: { workspace: { Member: "allow" } }`.',
+      '  surfaces: ["agent"],\n  // defaultRoles: { workspace: { Member: "allow" } },\n  defaultRoles: { org: { Owner: "allow" }, workspace: { Owner: "allow" } },',
+    );
+    expect(parseDefaultRoles(src)).toEqual({
+      org: { Owner: "allow" },
+      workspace: { Owner: "allow" },
+    });
+    expect(declaresAgentRoleRestriction(src)).toBe(true);
+  });
+
+  it("reads sensitivity and name from code only", () => {
+    const src = withHeader(
+      'Was `name: "old_name"` with `sensitivity: "high"`.',
+      '  name: "new_name",\n  sensitivity: "low",\n  defaultRoles: { org: { Owner: "allow" } },',
+    );
+    expect(declaredCapabilityName(src)).toBe("new_name");
+    expect(declaresRoleRestriction(src)).toBe(false);
+  });
+
+  it("blanks comments and leaves strings, templates, and regexes alone", () => {
+    const src = [
+      'const url = "https://example.com/a"; // trailing',
+      "const re = /^https?:\\/\\//;",
+      "const t = `a // b ${1 /* inner */} c`;",
+      "/* block */ const n = 1;",
+    ].join("\n");
+    const out = withoutComments("probe.ts", src);
+    expect(out).toHaveLength(src.length);
+    expect(out.split("\n")).toHaveLength(src.split("\n").length);
+    expect(out).toContain('"https://example.com/a"');
+    expect(out).toContain("/^https?:\\/\\//");
+    expect(out).toContain("`a // b ${1 ");
+    expect(out).not.toMatch(/trailing|inner|block/);
   });
 });
 

@@ -12,8 +12,8 @@
 //   - list_studio_findings: the Changes tab's findings (#4742).
 //   - set_mcp_credential: the Connection tab's service secret and OAuth
 //     client forms (#4742). Org Owner and Admin only.
-//   - registryPackagesOf: a registry entry's packages. The app's
-//     RegistryServer does not carry them yet, so the package path stays off.
+//   - registryPackagesOf: a registry entry's packages, with the arguments
+//     each takes, from search_mcp_registry.
 //
 // A component takes each call as a prop, so a test passes a fake. A refusal
 // reaches the page as a code, never as the handler's text. Try it is the one
@@ -25,6 +25,7 @@
 // only set_mcp_credential's input, which a form reads at submit and never
 // holds in state.
 import type {
+  RegistryPackage,
   RegistryServer,
   ToolEgress,
   ToolRiskGrade,
@@ -409,48 +410,22 @@ export type SetMcpCredential = typeof setMcpCredential;
 
 // ---- Registry packages (#4678) --------------------------------------------
 
-/** An argument a registry package takes (the registry's packageArguments). */
-export type RegistryPackageArgument = {
-  type: "named" | "positional";
-  /** A named argument's flag, such as `--port`. source.arguments keys it by this. */
-  name: string | null;
-  /** A positional argument's hint. source.arguments keys it by this. */
-  valueHint: string | null;
-  isRequired: boolean;
-  /** A secret takes its value from `${NAME}` only. */
-  isSecret: boolean;
-  /** A fixed value the registry says a person does not change. */
-  value: string | null;
-  /** The value when source.arguments sets none. */
-  default: string | null;
-};
-
-/** One package a registry entry offers (the registry's `packages[]`). */
-export type RegistryPackage = {
-  /** npm, pypi, oci, nuget, or another type the local gateway does not run. */
-  registryType: string;
-  identifier: string;
-  version: string | null;
-  /** The package's transport. The local gateway runs stdio only. */
-  transport: string;
-  runtimeHint: string | null;
-  packageArguments: readonly RegistryPackageArgument[];
-  /** The variables the package reads. source.env lists every required one. */
-  environmentVariables: readonly { name: string; isRequired: boolean }[];
-};
+export type {
+  RegistryPackage,
+  RegistryPackageArgument,
+} from "@/data/contracts/tools";
 
 /** The package types the local gateway runs (source.registry_type). */
 export const REGISTRY_PACKAGE_TYPES = ["npm", "pypi", "oci", "nuget"] as const;
 
 /**
- * A registry entry's packages, or null while the app's RegistryServer does
- * not carry them (#4678). An entry whose transports include stdio offers at
- * least one package.
+ * A registry entry's packages, as search_mcp_registry carries them. An entry
+ * whose transports include stdio offers at least one package.
  */
 export function registryPackagesOf(
-  _server: RegistryServer,
-): readonly RegistryPackage[] | null {
-  return null;
+  server: RegistryServer,
+): readonly RegistryPackage[] {
+  return server.packages;
 }
 
 /** Whether a registry entry offers a remote, a package, or both. */

@@ -39,6 +39,7 @@ import type { LocalGatewayBroker } from "../local-calls/broker";
 import { discoverLocalTools } from "../local-calls/discovery";
 import { launchSpecFor, machineGroupsOf } from "../local-calls/launch";
 import type { MachineGroupReader } from "../local-calls/machines";
+import { registryDigests, type RegistryDigests } from "./digests";
 import { fetchText } from "./mcp-client";
 import {
   DiscoveryRefused,
@@ -516,6 +517,12 @@ export interface DiscoverySeams {
   catalog: RegistryCatalog;
   opener: ToolsPullRequestOpener;
   now(): Date;
+  /**
+   * Reads a registry package's digest from its public registry, so a package
+   * on machines can move to a new catalog version (ADR-233). Without it, such
+   * a move stops at needs_digest.
+   */
+  digests?: RegistryDigests;
 }
 
 let cloud: Transport | undefined;
@@ -551,6 +558,7 @@ async function defaultSeams(): Promise<DiscoverySeams> {
     catalog: transportRegistryCatalog(cloudTransport),
     opener: noToolsPullRequestOpener,
     now: () => new Date(),
+    digests: registryDigests(),
   };
 }
 

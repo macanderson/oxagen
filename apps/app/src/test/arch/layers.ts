@@ -434,9 +434,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   // The On disk panel strips the steering tree's folder from each path, and
   // reads the folder's name from the one module that names every steering
-  // path, which imports nothing (lane S0, #4387).
+  // path, which imports nothing (lane S0, #4387). A steering repository keeps
+  // its tree under steering/, a legacy one under .oxagen/ (#4821).
   "src/data/live/mappers/steering.ts": {
-    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_OXAGEN_DIR"],
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_OXAGEN_DIR", "STEERING_DIR"],
   },
   // A failed read carries the trace id active when it failed, so a person can
   // hand support one handle (#3841). The kernel seam reads it from the tracer
