@@ -3,7 +3,9 @@ import { digestBytes } from "../../digest";
 import {
   createPackageDigester,
   npmNameSegment,
+  pickPypiFile,
   platformPathSearch,
+  pypiFromUrl,
   REGISTRY_URLS,
   whichOnPath,
   type DigestFetch,
@@ -242,41 +244,97 @@ describe("createPackageDigester for npm", () => {
   });
 });
 
-describe("createPackageDigester for pypi", () => {
+describe("createPackageDigester for pypi (ADR-233)", () => {
   const locked = `sha256:${"e".repeat(64)}`;
   const pkg: LaunchPackage = { name: "mcp-server-git", version: "1.2.0", digest: locked, registry_type: "pypi" };
-  const url = `${REGISTRY_URLS.pypi}/mcp-server-git/1.2.0/json`;
-  const launch = { command: "uvx", args: ["mcp-server-git@1.2.0"] };
+  const index = `${REGISTRY_URLS.pypi}/mcp-server-git/1.2.0/json`;
+  const wheel = "https://files.pythonhosted.org/packages/ab/cd/mcp_server_git-1.2.0-py3-none-any.whl";
+  const sdist = "https://files.pythonhosted.org/packages/ef/01/mcp_server_git-1.2.0.tar.gz";
+  const file = (filename: string, url: string, packagetype: string, extra: Record<string, unknown> = {}) => ({
+    filename,
+    url,
+    packagetype,
+    ...extra,
+  });
 
-  it("matches the lock against any file the index lists", async () => {
+  it("hashes the one file the launch installs with --from, and reads it once", async () => {
+    const fetch = registry({ [wheel]: bytesAnswer("wheel bytes") });
+    const digests = digester({ fetch });
+    const launch = { command: "uvx", args: ["--from", wheel, "mcp-server-git"] };
+    expect(await digests.digest(pkg, launch)).toBe(digestOfText("wheel bytes"));
+    expect(await digests.digest(pkg, launch)).toBe(digestOfText("wheel bytes"));
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a launch that lets uvx pick the file (negative)", async () => {
+    const fetch = registry({});
+    const launch = { command: "uvx", args: ["mcp-server-git@1.2.0"] };
+    expect(await refusalOf(digester({ fetch }).digest(pkg, launch))).toEqual(
+      digestUnavailable("mcp-server-git@1.2.0", "the launch does not install one pinned file with --from <url>"),
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("picks the universal wheel over the source distribution and a platform wheel", async () => {
     const fetch = registry({
-      [url]: jsonAnswer({
+      [index]: jsonAnswer({
         urls: [
-          { digests: { sha256: "f".repeat(64) } },
-          "not a file",
-          { digests: { sha256: "NOT-HEX" } },
-          {},
-          { digests: { sha256: "e".repeat(64) } },
+          file("mcp_server_git-1.2.0.tar.gz", sdist, "sdist"),
+          file("mcp_server_git-1.2.0-cp312-cp312-manylinux_2_17_x86_64.whl", "https://files.pythonhosted.org/x.whl", "bdist_wheel"),
+          file("mcp_server_git-1.2.0-py3-none-any.whl", wheel, "bdist_wheel"),
         ],
       }),
     });
-    expect(await digester({ fetch }).digest(pkg, launch)).toBe(locked);
+    expect(await digester({ fetch }).pypiFile(pkg)).toStrictEqual({
+      name: "mcp_server_git-1.2.0-py3-none-any.whl",
+      url: wheel,
+    });
   });
 
-  it("returns the first file's digest when none matches the lock", async () => {
-    const fetch = registry({ [url]: jsonAnswer({ urls: [{ digests: { sha256: "f".repeat(64) } }] }) });
-    expect(await digester({ fetch }).digest(pkg, launch)).toBe(`sha256:${"f".repeat(64)}`);
+  it.each([
+    ["a py2.py3 wheel", "mcp_server_git-1.2.0-py2.py3-none-any.whl", true],
+    ["a py3 wheel", "mcp_server_git-1.2.0-py3-none-any.whl", true],
+    ["a CPython wheel", "mcp_server_git-1.2.0-cp312-none-any.whl", false],
+  ])("counts %s as universal: %s", (_what, filename, universal) => {
+    const picked = pickPypiFile([
+      file(filename, wheel, "bdist_wheel"),
+      file("mcp_server_git-1.2.0.tar.gz", sdist, "sdist"),
+    ]);
+    expect(picked?.name).toBe(universal ? filename : "mcp_server_git-1.2.0.tar.gz");
+  });
+
+  it("skips a yanked file and a file served over http", () => {
+    expect(
+      pickPypiFile([
+        file("mcp_server_git-1.2.0-py3-none-any.whl", wheel, "bdist_wheel", { yanked: true }),
+        file("mcp_server_git-1.2.0.tar.gz", sdist.replace("https:", "http:"), "sdist"),
+        "not a file",
+        {},
+      ]),
+    ).toBeUndefined();
   });
 
   it.each([
     ["no urls list", { urls: "none" }],
     ["no release", null],
-    ["no file with a sha256", { urls: [{ digests: { md5: "abc" } }] }],
-  ])("refuses an index answer with %s", async (_name, body) => {
-    const fetch = registry({ [url]: jsonAnswer(body) });
-    expect(await refusalOf(digester({ fetch }).digest(pkg, launch))).toEqual(
-      digestUnavailable("mcp-server-git@1.2.0", "the index lists no file with a sha256 digest"),
+    ["no universal wheel and no source distribution", { urls: [file("x-cp312.whl", wheel, "bdist_wheel")] }],
+  ])("answers no file for an index answer with %s, which only a new release changes (negative)", async (_name, body) => {
+    const fetch = registry({ [index]: jsonAnswer(body) });
+    expect(await digester({ fetch }).pypiFile(pkg)).toBeNull();
+  });
+
+  it("refuses when the index does not answer, which a later read may (negative)", async () => {
+    const fetch = registry({ [index]: jsonAnswer({}, 503) });
+    expect(await refusalOf(digester({ fetch }).pypiFile(pkg))).toEqual(
+      digestUnavailable("mcp-server-git@1.2.0", `the registry answered 503 for ${index}`),
     );
+  });
+
+  it("reads the URL after --from, when it is https", () => {
+    expect(pypiFromUrl(["--from", wheel, "mcp-server-git"])).toBe(wheel);
+    expect(pypiFromUrl(["--from", wheel.replace("https:", "http:"), "mcp-server-git"])).toBeUndefined();
+    expect(pypiFromUrl(["--from"])).toBeUndefined();
+    expect(pypiFromUrl(["mcp-server-git@1.2.0"])).toBeUndefined();
   });
 });
 

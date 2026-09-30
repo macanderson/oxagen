@@ -853,6 +853,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
         authorLogin: item.author?.login ?? null,
         committedAt: item.commit.author?.date ?? "",
         summary: (item.commit.message ?? "").split("\n", 1)[0] ?? "",
+        message: item.commit.message ?? "",
       }));
     } catch (err) {
       if (isNotFound(err)) return [];

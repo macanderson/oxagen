@@ -83,11 +83,18 @@ import {
 } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import {
+  MERGE_GRACE_SECONDS,
+  syncWorkspaceSteering,
+  type SyncDeps,
+} from "./context.steering.sync";
+import {
   AUTHOR,
   ctx,
   harness,
+  MemorySyncStore,
   REPO,
   REVIEWER,
+  SCOPE,
   type Harness,
 } from "./context.steering.test-support";
 import {
@@ -581,7 +588,8 @@ describe("set_governance_mode in a steering repository", () => {
     // A proposal records no governance change and no override.
     expect(deps.events).toEqual([]);
     // The PR is recorded as a governance proposal, for merge_context_pr to
-    // land for an approver (#4795).
+    // land for an approver (#4795), and the answer names it for the page.
+    expect(out.proposalId).toBe(deps.store.proposals[0]?.publicId);
     expect(deps.store.proposals).toEqual([
       expect.objectContaining({
         lineageId: "governance",
@@ -1077,5 +1085,210 @@ describe("merge_context_pr on a governance proposal", () => {
       )({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ reason: "review_required" });
     expect(deps.github.merges).toEqual([]);
+  });
+});
+
+// ── The repository sync on a governance change ──────────────────────────────
+
+/**
+ * The repository sync over the harness, with its clock past the merge grace,
+ * after one baseline sync. The fake names the seed commit after its branch, so
+ * a commit first gives the baseline a head of its own to compare against.
+ */
+async function syncedBaseline(
+  deps: Harness,
+  steeringVersionAt?: SyncDeps["steeringVersionAt"],
+) {
+  deps.github.commit(REPO.defaultBranch, "README.md", "The steering repo.");
+  const syncDeps: SyncDeps = {
+    github: deps.github,
+    store: new MemorySyncStore(deps.store),
+    steering: deps.store,
+    now: () =>
+      new Date(deps.now().getTime() + (MERGE_GRACE_SECONDS + 60) * 1000),
+    emit: deps.emit,
+    steeringVersionAt,
+  };
+  const sync = () => syncWorkspaceSteering(syncDeps, SCOPE);
+  expect((await sync()).governanceChange).toBeNull();
+  return sync;
+}
+
+/** The production branch's governance.toml with `from` swapped for `to`. */
+async function pushMode(
+  deps: Harness,
+  from: string,
+  to: string,
+  message = `Set the mode to ${to}`,
+) {
+  const text = await productionText(deps);
+  return deps.github.commit(
+    REPO.defaultBranch,
+    STEERING_FILE,
+    text.replace(`mode = "${from}"`, `mode = "${to}"`),
+    message,
+  );
+}
+
+describe("the repository sync on a governance change", () => {
+  it("records a governance PR merged on GitHub, and the proposal reads merged", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    const proposalId = await proposeSolo(deps);
+    const pr = deps.github.pulls[0]!;
+    const mergeSha = deps.github.mergeOnHost(pr.number);
+    deps.events.length = 0;
+
+    const out = await sync();
+
+    expect(out.proposals.merged).toBe(1);
+    const row = deps.store.proposals.find((p) => p.publicId === proposalId);
+    expect(row).toMatchObject({
+      status: "merged",
+      mergedCommit: mergeSha,
+      mergedByUserId: null,
+      publishedRecordId: null,
+      promotionEventId: null,
+      mergeClaimedAt: null,
+    });
+    expect(deps.github.deletedBranches).toContain(STEERING_BRANCH);
+    expect(out.governanceChange).toEqual({
+      previousMode: "team",
+      mode: "solo",
+      commitSha: mergeSha,
+      proposalId,
+      pullRequest: row?.prUrl,
+    });
+    // Nobody approved it in Oxagen, and team asked for review, so the change
+    // is recorded twice: as a change and as a skipped review.
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+      "steering.governance_overridden",
+    ]);
+    expect(deps.events[0]).toMatchObject({
+      actorUserId: null,
+      capability: null,
+      workspaceId: SCOPE.workspaceId,
+      detail: {
+        previousMode: "team",
+        mode: "solo",
+        commitSha: mergeSha,
+        overrodeReview: true,
+        landedOutsideOxagen: true,
+        proposalId,
+        pullRequest: row?.prUrl,
+      },
+    });
+    expect(deps.events[0]?.detail).not.toHaveProperty("approvedBy");
+  });
+
+  it("records a direct push that changes the mode, and names no proposal", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    const sha = await pushMode(deps, "team", "solo");
+
+    const out = await sync();
+
+    expect(out.governanceChange).toEqual({
+      previousMode: "team",
+      mode: "solo",
+      commitSha: sha,
+      proposalId: null,
+      pullRequest: null,
+    });
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+      "steering.governance_overridden",
+    ]);
+    expect(deps.events[0]?.detail).not.toHaveProperty("proposalId");
+  });
+
+  it("records a push whose commit forges an Oxagen-Version trailer (negative)", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    // Anyone who can push can write the trailer. No Oxagen record holds this
+    // commit, so it is still a change made outside Oxagen.
+    const sha = await pushMode(deps, "team", "solo", "Set the mode to solo\n\nOxagen-Version: 22");
+
+    const out = await sync();
+
+    expect(out.governanceChange).toMatchObject({ commitSha: sha, previousMode: "team", mode: "solo" });
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+      "steering.governance_overridden",
+    ]);
+  });
+
+  it("records nothing for a commit whose trailer matches the version Oxagen stored at it", async () => {
+    const deps = steeringMode("solo");
+    let landed = "";
+    // A solo change lands through the merge queue with no proposal, and the
+    // version store holds its commit at the trailer's version.
+    const sync = await syncedBaseline(deps, async (_scope, _repo, commitSha) =>
+      commitSha === landed ? { version: 22 } : null,
+    );
+    landed = await pushMode(deps, "solo", "team", "steering: set governance mode to team\n\nOxagen-Version: 22");
+
+    const out = await sync();
+
+    expect(out.governanceChange).toBeNull();
+    expect(deps.events).toEqual([]);
+  });
+
+  it("records a change away from solo as a change only, since solo asks for no review", async () => {
+    const deps = steeringMode("solo");
+    const sync = await syncedBaseline(deps);
+    await pushMode(deps, "solo", "team");
+
+    await sync();
+
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+    ]);
+    expect(deps.events[0]?.detail).toMatchObject({
+      previousMode: "solo",
+      mode: "team",
+      overrodeReview: false,
+      landedOutsideOxagen: true,
+    });
+  });
+
+  it("records nothing for a change merge_context_pr landed, which recorded its own", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    const proposalId = await proposeSolo(deps);
+    await createMergeContextPrHandler(deps, mergeSeams(doubles()))(
+      { proposalId },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+    ]);
+    deps.events.length = 0;
+
+    const out = await sync();
+
+    expect(out.governanceChange).toBeNull();
+    expect(deps.events).toEqual([]);
+    // The sync leaves the proposal merge_context_pr landed as it was.
+    expect(
+      deps.store.proposals.find((p) => p.publicId === proposalId),
+    ).toMatchObject({ status: "merged", mergedByUserId: REVIEWER });
+  });
+
+  it("records nothing for a push that leaves the mode alone (negative)", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    const text = await productionText(deps);
+    deps.github.commit(
+      REPO.defaultBranch,
+      STEERING_FILE,
+      `${text}\n# Reviewed on 2026-09-30.\n`,
+    );
+
+    const out = await sync();
+
+    expect(out.governanceChange).toBeNull();
+    expect(deps.events).toEqual([]);
   });
 });

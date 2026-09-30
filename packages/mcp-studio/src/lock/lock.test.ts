@@ -232,6 +232,66 @@ describe("lock with a registry package", () => {
     ).toThrow("source.registry_type: the entry lists no pypi package");
   });
 
+  describe("a pypi package (ADR-233)", () => {
+    const WHEEL = "https://files.pythonhosted.org/packages/ab/cd/acme_files-2026.8.1-py3-none-any.whl";
+    const FILE = { name: "acme_files-2026.8.1-py3-none-any.whl", url: WHEEL };
+    const pypiEntry = () =>
+      registryEntrySchema.parse({
+        server: {
+          ...packageEntry().server,
+          packages: [{ registryType: "pypi", identifier: "acme-files", transport: { type: "stdio" } }],
+        },
+      });
+    const pypiSource = () =>
+      registrySourceSchema.parse({
+        ...registrySource(filesServer()),
+        registry_type: "pypi",
+        env: undefined,
+        arguments: undefined,
+      }) as RegistrySource;
+
+    it("pins the one file the launch installs, and records it", () => {
+      const source = registryLockSource({
+        source: pypiSource(),
+        entry: pypiEntry(),
+        digest: filesDigest(),
+        file: FILE,
+        server_version: undefined,
+      });
+      expect(source.package).toStrictEqual({
+        name: "acme-files",
+        version: "2026.8.1",
+        digest: filesDigest(),
+        registry_type: "pypi",
+        file: FILE,
+      });
+      expect(source.args).toStrictEqual(["--from", WHEEL, "acme-files"]);
+      expect(mcpLockSchema.shape.source.safeParse(source).success).toBe(true);
+    });
+
+    it("refuses a pypi lock that names no file (negative)", () => {
+      expect(() =>
+        registryLockSource({
+          source: pypiSource(),
+          entry: pypiEntry(),
+          digest: filesDigest(),
+          server_version: undefined,
+        }),
+      ).toThrow(`${FILESYSTEM} is a pypi package, so its lock names the one file of the release it pins.`);
+    });
+
+    it("lets only a pypi package name a file (negative)", () => {
+      const pkg = { name: "acme-files", version: "2026.8.1", digest: filesDigest() };
+      const base = { type: "registry", registry: REGISTRY, server: FILESYSTEM, version: "2026.8.1", command: "uvx" };
+      const parse = (packageFields: Record<string, unknown>) =>
+        mcpLockSchema.shape.source.safeParse({ ...base, args: [], package: { ...pkg, ...packageFields } }).success;
+      expect(parse({ registry_type: "pypi", file: FILE })).toBe(true);
+      expect(parse({ registry_type: "pypi" })).toBe(false);
+      expect(parse({ registry_type: "npm", file: FILE })).toBe(false);
+      expect(parse({ registry_type: "pypi", file: { ...FILE, url: WHEEL.replace("https:", "http:") } })).toBe(false);
+    });
+  });
+
   it("refuses an entry with no remote when server.toml names no machines", () => {
     const source = registrySourceSchema.parse({ type: "registry", registry: REGISTRY, server: FILESYSTEM, version: "2026.8.1" });
     expect(() =>

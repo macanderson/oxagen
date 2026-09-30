@@ -1279,12 +1279,36 @@ function acmePackageEntry(version: string): RegistryEntry {
   };
 }
 
+/** The universal wheel of acme-files 1.4.0 on PyPI. */
+const ACME_WHEEL =
+  "https://files.pythonhosted.org/packages/ab/cd/acme_files-1.4.0-py3-none-any.whl";
+
 /** A digest reader that answers `digest`, or rejects with `error`. */
 function digestReader(digest: string, error?: Error) {
   const read = vi.fn<RegistryDigests["digest"]>(() =>
     error === undefined ? Promise.resolve(digest) : Promise.reject(error),
   );
-  return { read, digests: { digest: read } };
+  const pypiFile = vi.fn<RegistryDigests["pypiFile"]>(() =>
+    Promise.resolve({ name: "acme_files-1.4.0-py3-none-any.whl", url: ACME_WHEEL }),
+  );
+  return { read, pypiFile, digests: { digest: read, pypiFile } };
+}
+
+/** A catalog entry at `version` that lists acme's PyPI package. */
+function acmePypiEntry(version: string): RegistryEntry {
+  return {
+    server: {
+      ...acmeEntry(version).server,
+      packages: [
+        {
+          registryType: "pypi",
+          identifier: "acme-files",
+          version,
+          transport: { type: "stdio" },
+        },
+      ],
+    },
+  };
 }
 
 function acmeEntry(version: string): RegistryEntry {
@@ -1429,9 +1453,11 @@ describe("discover a registry package on machines", () => {
     expect(report).not.toHaveBeenCalled();
   });
 
-  it("stops at needs_digest for a PyPI release, whose pin names one file (ADR-233)", async () => {
+  it("pins a PyPI release's new version to one file and lists it on a machine (ADR-233)", async () => {
     const { report, local } = reporter();
-    const { digests, read } = digestReader(DIGEST_NEXT);
+    const { digests, read, pypiFile } = digestReader(DIGEST_NEXT);
+    const oldWheel =
+      "https://files.pythonhosted.org/packages/00/aa/acme_files-1.3.0-py3-none-any.whl";
     const { ctx } = acmeServer(
       {
         trigger: "schedule",
@@ -1444,19 +1470,41 @@ describe("discover a registry package on machines", () => {
             version: "1.3.0",
             digest: DIGEST,
             registry_type: "pypi",
+            file: { name: "acme_files-1.3.0-py3-none-any.whl", url: oldWheel },
           },
           command: "uvx",
-          args: ["acme-files==1.3.0"],
+          args: ["--from", oldWheel, "acme-files"],
         },
       },
-      acmePackageEntry("1.4.0"),
+      acmePypiEntry("1.4.0"),
     );
-    const error = await refusal(discover(ctx));
+    const found = await discover(ctx);
 
-    expect(error).toBeInstanceOf(NeedsDigest);
-    expect(error).toMatchObject({ code: "needs_digest", latestVersion: "1.4.0" });
-    expect(read).not.toHaveBeenCalled();
-    expect(report).not.toHaveBeenCalled();
+    expect(pypiFile).toHaveBeenCalledWith(
+      { name: "acme-files", version: "1.4.0" },
+      ctx.signal,
+    );
+    expect(read).toHaveBeenCalledWith(
+      { name: "acme-files", version: "1.4.0", registry_type: "pypi" },
+      { command: "uvx", args: ["--from", ACME_WHEEL, "acme-files"] },
+      ctx.signal,
+    );
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(found).toMatchObject({
+      lockSource: {
+        version: "1.4.0",
+        package: {
+          name: "acme-files",
+          version: "1.4.0",
+          digest: DIGEST_NEXT,
+          registry_type: "pypi",
+          file: { name: "acme_files-1.4.0-py3-none-any.whl", url: ACME_WHEEL },
+        },
+        command: "uvx",
+        args: ["--from", ACME_WHEEL, "acme-files"],
+      },
+      version: "1.4.0",
+    });
   });
 
   it("stops at needs_digest when no digest reader is installed", async () => {

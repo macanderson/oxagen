@@ -430,6 +430,7 @@ export function makeSetGovernanceModeHandler(
               commitSha: null,
               pullRequest: null,
               overrodeReview: false,
+              proposalId: null,
             };
           }
           const wantsReview = currentMode !== "solo";
@@ -487,6 +488,7 @@ export function makeSetGovernanceModeHandler(
               commitSha: null,
               pullRequest: result.pullRequest,
               overrodeReview: false,
+              proposalId: proposal.publicId,
             };
           }
           // The change landed on the PR the open proposal named, so nothing
@@ -537,6 +539,7 @@ export function makeSetGovernanceModeHandler(
             commitSha: result.commitSha,
             pullRequest: result.pullRequest,
             overrodeReview,
+            proposalId: null,
           };
         }
 
@@ -576,6 +579,7 @@ export function makeSetGovernanceModeHandler(
             commitSha: null,
             pullRequest: null,
             overrodeReview: false,
+            proposalId: null,
           };
         }
 
@@ -629,6 +633,7 @@ export function makeSetGovernanceModeHandler(
             commitSha,
             pullRequest: null,
             overrodeReview,
+            proposalId: null,
           };
         }
 
@@ -698,6 +703,7 @@ export function makeSetGovernanceModeHandler(
           commitSha: null,
           pullRequest,
           overrodeReview: false,
+          proposalId: null,
         };
       },
     );

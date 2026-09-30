@@ -346,6 +346,7 @@ describe("listPathCommits", () => {
         authorEmail: "ada@example.com",
         committedAt: "2026-09-01T00:00:00Z",
         summary: "Tighten rule",
+        message: "Tighten rule\n\nlong body",
       },
       {
         sha: "sha2",
@@ -353,6 +354,7 @@ describe("listPathCommits", () => {
         authorEmail: null,
         committedAt: "2026-08-01T00:00:00Z",
         summary: "First",
+        message: "First\nsecond",
       },
     ]);
     expect(calls[0]?.url).toBe(
