@@ -48,7 +48,7 @@ export function ToolsEmpty({
       actions={
         canImport ? (
           <>
-            <ImportProvider at={at} servers={[]} />
+            <ImportProvider at={at} servers={[]} primary />
             <AddConnection at={at} connectors={[]} primary={false} />
           </>
         ) : undefined

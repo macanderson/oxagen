@@ -59,6 +59,7 @@ export function Providers({
     <ImportProvider
       at={at}
       servers={servers.ok ? servers.value.servers : null}
+      primary
       label="add"
     />
   ) : null;

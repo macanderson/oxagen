@@ -1,8 +1,8 @@
-// Where MCP Studio lives (#4678): one page per server at
+// Where MCP Studio lives inside Tools (#4678): one page per server at
 // `/tools/servers/<mcs_id>`, and each of its four tabs one more segment
-// (`/tools/servers/<mcs_id>/connection`). The Tools page itself is gone, its
-// tabs now tabs of the Agents page; every other `/tools` path redirects there,
-// and parseToolsTab reads which tab it named.
+// (`/tools/servers/<mcs_id>/connection`). The Tools tabs keep their own
+// segments: `/tools/servers` alone is still the Providers tab's old name, and
+// parseToolsTab answers it.
 import { pathOf, type SafePath } from "@/shared/safe-path";
 
 export const STUDIO_TABS = ["tools", "connection", "try", "changes"] as const;

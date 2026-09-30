@@ -50,41 +50,6 @@ export function pathOf(...segments: readonly string[]): SafePath {
 
 const ROOT = mint("/");
 
-/**
- * The Agents page's tabs, in the order the strip draws them (roadmap mockups
- * `agents`): the agents, the tool servers they call, the policies that decide
- * each call, the runtimes they run on, and the off switches.
- */
-export const AGENTS_AREA_TABS = [
-  "agents",
-  "servers",
-  "policies",
-  "runtimes",
-  "switches",
-] as const;
-export type AgentsAreaTab = (typeof AGENTS_AREA_TABS)[number];
-
-/**
- * The `?tab=` values the Agents page serves: its five tabs, and the two views
- * of Tool servers that carry no tab of their own, the tool registry and the
- * toolbelts.
- */
-export type AgentsPageTab = AgentsAreaTab | "tools" | "toolbelts";
-
-/** The Agents `?tab=` each view of the retired Tools page lands on. */
-const TOOLS_VIEW_TAB: Readonly<
-  Record<
-    "tools" | "toolbelts" | "providers" | "policy" | "switches",
-    AgentsPageTab
-  >
-> = {
-  tools: "tools",
-  toolbelts: "toolbelts",
-  providers: "servers",
-  policy: "policies",
-  switches: "switches",
-};
-
 function withQuery(
   path: SafePath,
   query: Readonly<Record<string, string | undefined>>,
@@ -227,7 +192,10 @@ export const routes = {
    * notices post to (#4608). `slack` is how a connection attempt ended, set
    * only by the OAuth callback.
    */
-  notifications: (org: string, q?: { slack?: SlackConnectOutcome }): SafePath =>
+  notifications: (
+    org: string,
+    q?: { slack?: SlackConnectOutcome },
+  ): SafePath =>
     withQuery(pathOf(org), { tab: "notifications", slack: q?.slack }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
@@ -298,25 +266,15 @@ export const routes = {
     });
   },
   /**
-   * Agents, the one page for agents and what governs them (roadmap mockups
-   * `agents?tab=`). `tab` picks Tool servers, Policies, Runtimes or Off
-   * switches, and is left off for the Agents tab. It is a query value, not a
-   * path segment, because `/agents/<segment>` is one agent's page. On the
-   * Agents tab `cursor` opens a later page of the identities table and
+   * Agent IAM; `cursor` opens a later page of the identities table, and
    * `deregistered` lists retired agents beside the live ones.
    */
   agents: (
     org: string,
     ws: string,
-    q?: {
-      tab?: AgentsPageTab;
-      cursor?: string;
-      view?: string;
-      deregistered?: boolean;
-    },
+    q?: { cursor?: string; view?: string; deregistered?: boolean },
   ): SafePath =>
     withQuery(pathOf(org, ws, "agents"), {
-      tab: q?.tab === "agents" ? undefined : q?.tab,
       deregistered: q?.deregistered === true ? "show" : undefined,
       cursor: q?.cursor,
       view: q?.view,
@@ -499,13 +457,10 @@ export const routes = {
       cursor: q?.cursor,
     }),
   /**
-   * The governance views of the Agents page, which absorbed the Tools page.
-   * Each Tools view keeps its name here and lands on the Agents tab that holds
-   * it: Providers on Tool servers, Policy on Policies, Kill switches on Off
-   * switches. The registry (`tab` left off) and Toolbelts are views of the
-   * Tool servers tab, `?tab=tools` and `?tab=toolbelts`. A category chip, a
+   * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
+   * route names them, and the first tab is the bare path. A category chip, a
    * provider chip, the API-names toggle, a cursor and the toolbelt open on the
-   * Toolbelts view (`belt`, ADR-198) are query values.
+   * Toolbelts tab (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,
@@ -519,14 +474,18 @@ export const routes = {
       belt?: string;
     } = {},
   ): SafePath =>
-    withQuery(pathOf(org, ws, "agents"), {
-      tab: TOOLS_VIEW_TAB[q.tab ?? "tools"],
-      category: q.category,
-      provider: q.provider,
-      names: q.names,
-      cursor: q.cursor,
-      belt: q.belt,
-    }),
+    withQuery(
+      q.tab === undefined
+        ? pathOf(org, ws, "tools")
+        : pathOf(org, ws, "tools", q.tab),
+      {
+        category: q.category,
+        provider: q.provider,
+        names: q.names,
+        cursor: q.cursor,
+        belt: q.belt,
+      },
+    ),
   /**
    * Repositories; its tabs are path segments (`/repositories/changes`), as the
    * mockup's route names them, and the first tab is the bare path.
@@ -543,9 +502,8 @@ export const routes = {
       : tab === "changes" && change !== undefined
         ? pathOf(org, ws, "repositories", tab, change)
         : pathOf(org, ws, "repositories", tab),
-  /** Runtimes, the hosts agents run on: a tab of the Agents page (roadmap mockups/pages/runtimes.md). */
-  runtimes: (org: string, ws: string): SafePath =>
-    withQuery(pathOf(org, ws, "agents"), { tab: "runtimes" }),
+  /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
+  runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
   /**
    * One runtime: a host enrollment by its public id (`tch_…`), or a named
    * runtime by its id (`rtm_…`, ADR-198), whose page carries its containment

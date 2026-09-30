@@ -21,6 +21,7 @@ import type { ApprovalRule } from "@/data/contracts/tools";
 import { chooseToolPatterns } from "@/features/shell/client";
 import type { ActionResult } from "@/server/kernel";
 import {
+  buttonPrimary,
   buttonSecondary,
   inputBase,
   mono,
@@ -247,7 +248,7 @@ export function RuleEditor({
         data-testid={
           creating ? "rule-create-open" : `rule-edit-${existing.slug}`
         }
-        className={buttonSecondary}
+        className={creating ? buttonPrimary : buttonSecondary}
         onClick={() => {
           renderedRef.current =
             existing === null ? null : renderedDraft(existing);

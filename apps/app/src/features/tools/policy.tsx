@@ -10,8 +10,7 @@
 // sent to a person skip them; a receipt cites one as `policy:<id>`. The
 // mandates ledger is the financial authority the gate draws on. Both were tabs
 // of their own before the tabs became path segments, and their old links land
-// here. Create rule is drawn in the default style, because Connect an agent is
-// the Agents page's one gold action.
+// here. Create rule is this tab's one gold action.
 import { useTranslations } from "next-intl";
 import type { ApprovalRuleSet } from "@/data/contracts/tools";
 import type { MandateList } from "@/data/contracts/mandates";

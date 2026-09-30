@@ -92,6 +92,7 @@ function CurrentMarker() {
 /** The keys the More sheet carries, each with its own line under the name. */
 type MoreKey =
   | "steering"
+  | "runtimes"
   | "repositories"
   | "organization"
   | "billing"
@@ -100,6 +101,7 @@ type MoreKey =
 function isMoreKey(key: NavKey): key is MoreKey {
   return (
     key === "steering" ||
+    key === "runtimes" ||
     key === "repositories" ||
     key === "organization" ||
     key === "billing" ||

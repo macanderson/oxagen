@@ -2,5 +2,4 @@
 // reaches into the folder (eslint: `@/features/*/*` is restricted).
 export { RuntimesLoading } from "./loading";
 export { Runtime } from "./runtime";
-export { AddRuntime } from "./controls";
-export { mayAddRuntime, Runtimes } from "./runtimes";
+export { Runtimes } from "./runtimes";

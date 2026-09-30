@@ -45,7 +45,7 @@ import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
-import { AddRuntimeLink, ConnectAgentLink } from "./create-actions";
+import { AddRuntimeLink, RegisterAgentLink } from "./create-actions";
 import { NotRecordedValue, Tile } from "./parts";
 import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
@@ -197,7 +197,7 @@ function Empty({
       title={t("title", { workspace })}
       actions={
         <>
-          <ConnectAgentLink org={org} ws={ws} primary={false} />
+          <RegisterAgentLink org={org} ws={ws} />
           <AddRuntimeLink org={org} ws={ws} />
         </>
       }
@@ -381,6 +381,7 @@ export async function Agents({
   source,
   cursor,
   showRetired = false,
+  header,
   viewerName,
 }: {
   ctx: WsCtx;
@@ -391,6 +392,8 @@ export async function Agents({
   cursor: string | null;
   /** List retired (deregistered) agents beside the live ones; the URL's `deregistered=show`. */
   showRetired?: boolean;
+  /** The page header, drawn only when the page has agents to show. */
+  header: ReactNode;
 }) {
   const read = await source.agents.list(ctx, {
     cursor,
@@ -419,31 +422,34 @@ export async function Agents({
   if (page.agents.length === 0 && cursor === null)
     return <Empty workspace={ctx.wsName} {...place} retired={retired} />;
   return (
-    <div className="flex flex-col gap-4">
-      <Tiles page={page} workspace={ctx.wsName} />
-      <AgentsTable
-        rows={page.agents}
-        org={place.org}
-        ws={place.ws}
-        workspace={ctx.wsName}
-        more={
-          page.nextCursor === null
-            ? null
-            : routes.agents(place.org, place.ws, {
-                cursor: page.nextCursor,
-                deregistered: showRetired,
-              })
-        }
-        first={
-          cursor === null
-            ? null
-            : routes.agents(place.org, place.ws, {
-                deregistered: showRetired,
-              })
-        }
-        retired={retired}
-      />
-    </div>
+    <>
+      {header}
+      <div className="flex flex-col gap-4">
+        <Tiles page={page} workspace={ctx.wsName} />
+        <AgentsTable
+          rows={page.agents}
+          org={place.org}
+          ws={place.ws}
+          workspace={ctx.wsName}
+          more={
+            page.nextCursor === null
+              ? null
+              : routes.agents(place.org, place.ws, {
+                  cursor: page.nextCursor,
+                  deregistered: showRetired,
+                })
+          }
+          first={
+            cursor === null
+              ? null
+              : routes.agents(place.org, place.ws, {
+                  deregistered: showRetired,
+                })
+          }
+          retired={retired}
+        />
+      </div>
+    </>
   );
 }
 

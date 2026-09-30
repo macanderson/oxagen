@@ -210,7 +210,7 @@ is unambiguous.
 
 **App ports**: `apps/app` → `:3000`, `apps/docs` → `:3300`, API → `:4000`, MCP → `:4100`.
 
-**Login**: Email and password, plus configured social providers. Local development can bypass email verification through the explicit local-environment settings. New user → `/signup` → `/new-organization` → create org → `/{org}/{ws}` (Fleet) by default. An explicit destination can override this for CLI consent. `/{org}` is Organization. The workspace root `/{org}/{ws}` is Fleet; the other workspace pages are `runs/[run]`, `mandates/[mandate]`, `agents` (with the Tool servers, Policies, Runtimes and Off switches tabs), `steering`, `spend` and `skills`. Read `apps/app/src/app/` and `apps/app/e2e/routes.ts` for current routes. Returning: `/login`.
+**Login**: Email and password, plus configured social providers. Local development can bypass email verification through the explicit local-environment settings. New user → `/signup` → `/new-organization` → create org → `/{org}/{ws}` (Fleet) by default. An explicit destination can override this for CLI consent. `/{org}` is Organization. The workspace root `/{org}/{ws}` is Fleet; the other workspace pages are `runs/[run]`, `mandates/[mandate]`, `agents`, `tools`, `steering`, `spend` and `skills`. Read `apps/app/src/app/` and `apps/app/e2e/routes.ts` for current routes. Returning: `/login`.
 
 ## CI Config
 
