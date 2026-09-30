@@ -12,3 +12,7 @@ export function timeZoneChoices(
 ): string[] {
   return names.includes(current) ? [...names] : [current, ...names];
 }
+
+// Scratch proof for #3428. Do not merge: nothing imports this export, so
+// knip reports it.
+export const z2ProofUnusedExport = "z2-proof";
