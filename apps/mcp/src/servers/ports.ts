@@ -18,6 +18,7 @@ import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-sco
 import { createCloudTransport, type CredentialSource, type Transport } from "@oxagen/mcp-studio";
 import { parseCredentialRef } from "@oxagen/oxagen/steering-repo/names";
 import type { CedarRuntime } from "@oxagen/policy";
+import { recordServedToolCall } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { productionLocalTransport } from "../local-servers";
@@ -27,13 +28,14 @@ import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
 import { servedEmergencyDenies, type SwitchTargets } from "./kill-switch";
-import { METER_LABEL, meterEntry } from "./meter";
+import { METER_LABEL, meterEntry, servedCallRow } from "./meter";
 import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
 import {
   type Admission,
   type MeterEvent,
   type OffSwitches,
+  type ServedCallRecord,
   type ServedLog,
   type ServedPorts,
   type ServedRoute,
@@ -201,6 +203,13 @@ export async function meterServed(event: MeterEvent): Promise<void> {
   );
 }
 
+/** One call to a tool into served_tool_calls, filed under the run's workspace (ADR-234). */
+export async function recordServedCall(call: ServedCallRecord): Promise<void> {
+  const row = servedCallRow(call);
+  if (row === null) return;
+  await runInTenantScope(scopeOf(call.run), () => recordServedToolCall(row));
+}
+
 let cedar: Promise<CedarRuntime | null> | undefined;
 
 /**
@@ -230,6 +239,7 @@ export function createServedPorts(run: ServedRun): ServedPorts {
     credentials: servedCredentials(run),
     transport: transportFor,
     meter: meterServed,
+    recordCall: recordServedCall,
     cedar: loadCedar,
     log: servedLog,
     // The workspace's [embeddings] setting picks the index on each search.

@@ -188,6 +188,26 @@ export interface MeterEvent {
   at: Date;
 }
 
+/**
+ * Why a served call did not do what the agent asked, when the tool is the
+ * reason: its input schema refused the arguments, or it ran and answered
+ * with an error result. A refusal by policy, billing, or the route has none.
+ */
+export type ServedCallProblem = "schema_rejected" | "error_result";
+
+/** One call to a published server's tool, as MCP Studio's agent feedback counts it (ADR-234). */
+export interface ServedCallRecord {
+  /** The server's name in the manifest, which is its steering folder's name: billing. */
+  server: string;
+  /** The full tool name: billing__create_refund. */
+  tool: string;
+  outcome: MeterOutcome;
+  /** Null when the tool is not why the call failed. */
+  problem: ServedCallProblem | null;
+  run: ServedRun;
+  at: Date;
+}
+
 /** Why billing refused a governed action. */
 export type AdmissionRefusal = "units_exhausted" | "no_payment_method" | "suspended";
 
@@ -232,6 +252,13 @@ export interface ServedPorts {
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */
   transport(route: ServedRoute): ServedTransport;
   meter(event: MeterEvent): Promise<void>;
+  /**
+   * Record one call to a tool for MCP Studio's agent feedback (ADR-234).
+   * Called beside meter for every call billing admits that names a tool. A
+   * call billing refuses is neither metered nor recorded. A failure is
+   * logged and the call's result stands.
+   */
+  recordCall(call: ServedCallRecord): Promise<void>;
   /** Cedar's evaluator, or null when it is not installed. */
   cedar(): Promise<CedarRuntime | null>;
   log: ServedLog;

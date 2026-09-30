@@ -1,7 +1,7 @@
 // call.test.ts: a served tools/call from each source in each exposure mode,
 // decided on the real tool, parked, refused, and metered (lane M15).
 import type { CallToolResult, ManifestServer, RequestKind, ResolvedCredential } from "@oxagen/mcp-studio";
-import type { PolicyFile } from "@oxagen/policy";
+import { requireCedarRuntime, type CedarRuntime, type PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
 import { callServed, sandboxOf } from "../call";
 import type { Ranker, SearchEntry } from "../search";
@@ -1001,6 +1001,136 @@ describe("callServed upstream failures", () => {
       {
         message: "Oxagen could not record a governed action. The call's result stands.",
         fields: { kind: "call", tool: "stripe__list_customers", outcome: "allowed", error: "Error" },
+      },
+    ]);
+  });
+});
+
+describe("callServed agent feedback records (ADR-234)", () => {
+  function problems(recorded: Recorded): string[] {
+    return recorded.calls.map((c) => `${c.tool} ${c.outcome} ${c.problem ?? "none"}`);
+  }
+
+  it("records an allowed call with its server, run, and time, and no problem", async () => {
+    const { call, recorded } = await setup();
+    await call("billing__list_charges");
+    expect(recorded.calls).toEqual([
+      {
+        server: "billing",
+        tool: "billing__list_charges",
+        outcome: "allowed",
+        problem: null,
+        run: run(),
+        at: new Date(NOW),
+      },
+    ]);
+  });
+
+  it("records an error result when the tool answers with an error", async () => {
+    const { call, recorded } = await setup({
+      answer: () => ({
+        ok: false,
+        error: { title: "Upstream error", detail: "The upstream answered 502.", status: 502 },
+        attempts: 1,
+      }),
+    });
+    await call("billing__list_charges");
+    expect(problems(recorded)).toEqual(["billing__list_charges failed error_result"]);
+  });
+
+  it("records a schema rejection when the input schema refuses the arguments", async () => {
+    const { call, recorded } = await setup({
+      approval: () => Promise.resolve({ state: "approved", id: "apr_3", approvers: 1 }),
+    });
+    await call("billing__create_refund", { amount: 100 });
+    expect(problems(recorded)).toEqual(["billing__create_refund failed schema_rejected"]);
+  });
+
+  it("records a schema rejection when Cedar cannot read the arguments", async () => {
+    const { call, recorded } = await setup();
+    await call("billing__list_charges", { limit: "5" });
+    expect(problems(recorded)).toEqual(["billing__list_charges denied schema_rejected"]);
+  });
+
+  it("records no problem when Cedar itself fails, and names the policy as the fix", async () => {
+    const real = await requireCedarRuntime();
+    // Visibility asks isAuthorizedPartial, so the tool stays served. Only
+    // the call's own decision fails inside Cedar.
+    // Only the fields readCedarDecision reads from a failure answer.
+    const failure = {
+      type: "failure",
+      errors: [{ message: "The evaluator stopped." }],
+      warnings: [],
+    } as unknown as ReturnType<CedarRuntime["isAuthorized"]>;
+    const failing: CedarRuntime = { ...real, isAuthorized: () => failure };
+    const { call, recorded } = await setup({ cedar: () => Promise.resolve(failing) });
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toBe(
+      "Oxagen could not decide billing__list_charges: The evaluator stopped. Ask a workspace admin to check the steering record's policy.",
+    );
+    expect(problems(recorded)).toEqual(["billing__list_charges denied none"]);
+  });
+
+  it("records nothing for a call billing refuses", async () => {
+    const { call, recorded } = await setup({
+      admit: () => Promise.resolve({ admitted: false, reason: "units_exhausted" }),
+    });
+    const result = await call("billing__list_charges");
+    expect(result?.isError).toBe(true);
+    expect(recorded.meter).toEqual([]);
+    expect(recorded.calls).toEqual([]);
+  });
+
+  it("records a policy denial, a parked call, and a missing credential with no problem", async () => {
+    const { call, recorded } = await setup({
+      credential: () =>
+        Promise.resolve({
+          type: "missing",
+          message: "Connect your Billing account in Oxagen, then retry.",
+          connect_url: "https://app.oxagen.sh/connect/billing",
+        }),
+    });
+    await call("billing__list_charges", { limit: 500 });
+    await call("billing__create_refund", REFUND);
+    await call("billing__list_charges");
+    expect(problems(recorded)).toEqual([
+      "billing__list_charges denied none",
+      "billing__create_refund parked none",
+      "billing__list_charges failed none",
+    ]);
+  });
+
+  it("records a schema rejection when call's arguments are not an object, and nothing for a call that names no tool", async () => {
+    const { call, recorded } = await setup({}, searchBilling());
+    await call("billing__call", { tool: "list_charges", arguments: [] });
+    await call("billing__call", { tool: "nope" });
+    await call("billing__call", { tool: "" });
+    expect(problems(recorded)).toEqual(["billing__list_charges failed schema_rejected"]);
+  });
+
+  it("records a call through call as the tool it names", async () => {
+    const { call, recorded } = await setup({}, searchBilling());
+    await call("billing__call", { tool: "list_charges" });
+    expect(recorded.calls.map((c) => [c.server, c.tool, c.outcome])).toEqual([
+      ["billing", "billing__list_charges", "allowed"],
+    ]);
+  });
+
+  it("records nothing for search and describe", async () => {
+    const { call, recorded } = await setup({}, searchBilling());
+    await call("billing__search", { query: "charges" });
+    await call("billing__describe", { tool: "list_charges" });
+    expect(recorded.calls).toEqual([]);
+  });
+
+  it("keeps a call's result when the record cannot be written", async () => {
+    const { call, recorded } = await setup({ recordCall: () => Promise.reject(new Error("clickhouse is down")) });
+    const result = await call("stripe__list_customers");
+    expect(textOf(result)).toBe("mcp answered");
+    expect(recorded.logs).toEqual([
+      {
+        message: "Oxagen could not record a served call for agent feedback. The call's result stands.",
+        fields: { tool: "stripe__list_customers", outcome: "allowed", error: "Error" },
       },
     ]);
   });
