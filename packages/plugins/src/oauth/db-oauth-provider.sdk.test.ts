@@ -103,7 +103,9 @@ const CLIENT_METADATA_URL =
  * `metadataDocumentOnly` it registers no clients and takes Oxagen's client
  * metadata document URL as a public client ID instead.
  */
-function linear(options: { metadataDocumentOnly?: boolean } = {}) {
+function linear(
+  options: { metadataDocumentOnly?: boolean; revokedRefresh?: boolean } = {},
+) {
   const clients = new Map<string, { secret: string | null; method: string }>();
   if (options.metadataDocumentOnly === true) {
     clients.set(CLIENT_METADATA_URL, { secret: null, method: "none" });
@@ -183,6 +185,15 @@ function linear(options: { metadataDocumentOnly?: boolean } = {}) {
         return json(401, {
           error: "invalid_client",
           error_description: "Client authentication failed",
+        });
+      }
+      if (
+        options.revokedRefresh === true &&
+        body.get("grant_type") === "refresh_token"
+      ) {
+        return json(400, {
+          error: "invalid_grant",
+          error_description: "The refresh token was revoked",
         });
       }
       issued += 1;
@@ -329,5 +340,33 @@ describe("DbOAuthClientProvider through the SDK against a method-bound server", 
       { grantType: "authorization_code", authorization: null },
     ]);
     expect(credStore.get("ws-1:listing-linear")?.accessToken).toBe("access-1");
+  });
+
+  it("asks for sign-in again once the server revokes the refresh token", async () => {
+    const server = linear({ revokedRefresh: true });
+    const starting = await providerFor("state-revoked-01");
+    await auth(starting, { serverUrl: SERVER_URL, fetchFn: server.fetchFn });
+    const completing = await providerFor("state-revoked-01");
+    await auth(completing, {
+      serverUrl: SERVER_URL,
+      authorizationCode: "code-from-linear",
+      fetchFn: server.fetchFn,
+    });
+
+    // Reconnect: the stored refresh token is refused, so the provider forgets
+    // it and the SDK starts a new sign-in with the same client, instead of
+    // failing on the dead token every time.
+    const reconnecting = await providerFor("state-revoked-02");
+    await expect(
+      auth(reconnecting, { serverUrl: SERVER_URL, fetchFn: server.fetchFn }),
+    ).resolves.toBe("REDIRECT");
+    expect(reconnecting.pendingRedirect?.searchParams.get("client_id")).toBe(
+      "client-1",
+    );
+    expect(credStore.get("ws-1:listing-linear")).toMatchObject({
+      oauthClientId: "client-1",
+      accessToken: null,
+      refreshToken: null,
+    });
   });
 });

@@ -11,6 +11,7 @@ const credStore: Record<
     oauthClientId?: string | null;
     oauthClientSecret?: string | null;
     oauthClientAuthMethod?: string | null;
+    oauthClientRedirectUri?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
     expiresAt?: Date | null;
@@ -27,6 +28,7 @@ vi.mock("../credentials/workspace-credential", () => ({
     oauthClientId?: string | null;
     oauthClientSecret?: string | null;
     oauthClientAuthMethod?: string | null;
+    oauthClientRedirectUri?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
     expiresAt?: Date | null;
@@ -38,6 +40,7 @@ vi.mock("../credentials/workspace-credential", () => ({
       oauthClientId: input.oauthClientId ?? null,
       oauthClientSecret: input.oauthClientSecret ?? null,
       oauthClientAuthMethod: input.oauthClientAuthMethod ?? null,
+      oauthClientRedirectUri: input.oauthClientRedirectUri ?? null,
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
       expiresAt: input.expiresAt ?? null,
@@ -362,5 +365,32 @@ describe("DbOAuthClientProvider", () => {
     const info = await new DbOAuthClientProvider(ctx).clientInformation();
     expect(info).toMatchObject({ token_endpoint_auth_method: "none" });
     expect("client_secret" in (info ?? {})).toBe(false);
+  });
+
+  it("records the callback a registered client is bound to", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    await new DbOAuthClientProvider(ctx).saveClientInformation({
+      client_id: "dcr",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+    });
+    expect(credStore["ws-1:ol-1"]?.oauthClientRedirectUri).toBe(
+      ctx.redirectUrl,
+    );
+  });
+
+  it("forgets a refused client, so the next sign-in obtains a new one", async () => {
+    const { DbOAuthClientProvider } = await import("./db-oauth-provider");
+    const provider = new DbOAuthClientProvider(ctx);
+    await provider.saveClientInformation({
+      client_id: "dead-client",
+      client_secret: "s",
+      redirect_uris: [ctx.redirectUrl],
+    });
+    await provider.saveCodeVerifier("verifier");
+    await provider.invalidateCredentials("all");
+    // The in-session cache is dropped too, not only the stored row.
+    await expect(provider.clientInformation()).resolves.toBeUndefined();
+    await expect(provider.codeVerifier()).rejects.toThrow(/expired or missing/);
   });
 });

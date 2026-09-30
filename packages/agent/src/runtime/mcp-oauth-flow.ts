@@ -36,6 +36,7 @@ import {
   getWorkspaceSecret,
   loadOAuthState,
   preregisteredClientForEndpoint,
+  resolveEndpointRedirects,
   setWorkspaceSecret,
 } from "@oxagen/plugins";
 import type {
@@ -263,18 +264,39 @@ async function upsertListing(
   return { id: row.id, title: input.title, endpointUrl: input.endpointUrl };
 }
 
-/**
- * Whether a client exists for this listing without dynamic registration: one
- * the workspace stored, or a platform pre-registered one for the host.
- */
-async function hasClient(scope: FlowScope, listing: Listing): Promise<boolean> {
+/** The client stored for a listing, and the callback it was registered with. */
+async function storedClient(
+  scope: FlowScope,
+  listing: Listing,
+): Promise<{ redirectUri: string | null } | null> {
   const stored = await getWorkspaceSecret({
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,
     orgListingId: listing.id,
   });
-  if (stored?.oauthClientId) return true;
-  return preregisteredClientForEndpoint(listing.endpointUrl) !== undefined;
+  return stored?.oauthClientId
+    ? { redirectUri: stored.oauthClientRedirectUri ?? null }
+    : null;
+}
+
+/**
+ * Forgets a listing's client and the tokens issued to it, so sign-in can
+ * obtain a client that is bound to the current callback.
+ */
+async function forgetClient(scope: FlowScope, listing: Listing): Promise<void> {
+  await setWorkspaceSecret({
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    orgListingId: listing.id,
+    authKind: "oauth",
+    oauthClientId: null,
+    oauthClientSecret: null,
+    oauthClientAuthMethod: null,
+    oauthClientRedirectUri: null,
+    accessToken: null,
+    refreshToken: null,
+    expiresAt: null,
+  });
 }
 
 type StartDeps = {
@@ -301,7 +323,14 @@ export async function startMcpAuthorization(
         "Name a provider to reconnect, or a name and an endpoint to add",
       );
     }
-    const endpointUrl = assertEndpoint(input.endpointUrl);
+    // A registry record can name a vanity URL that redirects to the real MCP
+    // endpoint. Discovery and the SDK's resource check run against the URL
+    // stored here, so it is the one the redirects end at, checked again.
+    const endpointUrl = assertEndpoint(
+      await resolveEndpointRedirects(assertEndpoint(input.endpointUrl), {
+        fetchFn,
+      }),
+    );
     // A server that says it needs no credential is added open, and the
     // wizard says so rather than storing an OAuth listing that will never
     // authorize. A server that did not answer the probe is not taken for
@@ -334,41 +363,60 @@ export async function startMcpAuthorization(
       oauthClientSecret: input.client.clientSecret ?? null,
       // The method a registered client held does not carry over to this one.
       oauthClientAuthMethod: null,
+      // The person registered their app with the callback the form showed.
+      oauthClientRedirectUri: redirectUrl,
       ...(input.client.scopes
         ? { scopes: input.client.scopes.split(/\s+/).filter(Boolean) }
         : {}),
     });
   }
 
+  // Which client sign-in presents: see "Client identity" in the capability
+  // doc. Discovery runs when there is no usable client, to answer a server
+  // that cannot give one with the form for the workspace's own OAuth app
+  // rather than an SDK error.
   let scopesSupported: string[] = [];
-  if (input.client === undefined && !(await hasClient(scope, listing))) {
-    // No client to present: the server has to register one. Read its
-    // metadata first so a server that cannot is answered with the form for
-    // the workspace's own OAuth app, not an SDK error.
-    try {
-      const info = await discoverOAuthServerInfo(listing.endpointUrl, {
-        fetchFn,
-      });
+  let metadataFound = true;
+  if (input.client === undefined) {
+    const stored = await storedClient(scope, listing);
+    const platform =
+      preregisteredClientForEndpoint(listing.endpointUrl) !== undefined;
+    // A client registered for another callback (the app moved origin, or it
+    // was stored before the callback was recorded) cannot complete sign-in.
+    const stale = stored !== null && stored.redirectUri !== redirectUrl;
+    if ((stored === null && !platform) || stale) {
+      let info: Awaited<ReturnType<typeof discoverOAuthServerInfo>>;
+      try {
+        info = await discoverOAuthServerInfo(listing.endpointUrl, { fetchFn });
+      } catch {
+        return refuse(
+          "conflict",
+          "authorization_discovery_failed",
+          "The server's OAuth metadata could not be read",
+        );
+      }
       scopesSupported = info.resourceMetadata?.scopes_supported ?? [];
       const meta = info.authorizationServerMetadata;
+      metadataFound =
+        meta !== undefined || info.resourceMetadata !== undefined;
       // A server that takes Oxagen's client metadata document needs no
       // registration endpoint: the document's URL is the client ID.
       const takesMetadataDocument =
         meta?.client_id_metadata_document_supported === true &&
         clientMetadataUrlFor(redirectUrl) !== undefined;
-      if (
-        meta !== undefined &&
-        !meta.registration_endpoint &&
-        !takesMetadataDocument
-      ) {
+      const issuesClient =
+        platform || Boolean(meta?.registration_endpoint) || takesMetadataDocument;
+      if (stored === null) {
+        if (meta !== undefined && !issuesClient) {
+          return { status: "client_required", scopesSupported };
+        }
+      } else if (issuesClient) {
+        await forgetClient(scope, listing);
+      } else if (stored.redirectUri !== null) {
+        // The workspace's own app was registered with another callback, and
+        // the server issues no client itself: the app needs the new one.
         return { status: "client_required", scopesSupported };
       }
-    } catch {
-      return refuse(
-        "conflict",
-        "authorization_discovery_failed",
-        "The server's OAuth metadata could not be read",
-      );
     }
   }
 
@@ -392,6 +440,13 @@ export async function startMcpAuthorization(
     // itself. Vercel does this for any redirect URL it has not approved. The
     // person is told that, not that sign-in failed, since signing in again
     // cannot help and their own OAuth app might.
+    if (!metadataFound) {
+      return refuse(
+        "conflict",
+        "authorization_discovery_failed",
+        "The server publishes no OAuth metadata to sign in with",
+      );
+    }
     if ((await provider.clientInformation()) === undefined) {
       return refuse(
         "conflict",
@@ -519,6 +574,10 @@ async function recordAuthorizedServer(
     ),
   });
   const now = new Date();
+  // The tokens are stored either way. A check that could not reach the server
+  // right after sign-in is recorded as not yet known, since the runtime leaves
+  // an unreachable provider out of every turn.
+  const storedHealth = probe.status === "unreachable" ? "unknown" : probe.status;
   const [server] = await withTenantDb((tx) =>
     tx
       .insert(schema.mcpServers)
@@ -533,7 +592,7 @@ async function recordAuthorizedServer(
         // `bearer` is the strategy the OAuth callback has always written.
         authStrategy: "bearer",
         authConfig: {},
-        healthStatus: probe.status,
+        healthStatus: storedHealth,
         lastHealthcheckAt: now,
         discoveredTools: probe.discoveredTools as object,
         enabled: true,
@@ -546,7 +605,7 @@ async function recordAuthorizedServer(
         set: {
           name: listing.title,
           endpointUrl: listing.endpointUrl,
-          healthStatus: probe.status,
+          healthStatus: storedHealth,
           lastHealthcheckAt: now,
           discoveredTools: probe.discoveredTools as object,
           enabled: true,

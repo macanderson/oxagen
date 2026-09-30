@@ -20,16 +20,34 @@ const fixtures: {
   updates: Array<Record<string, unknown>>;
   notifies: Array<Record<string, unknown>>;
   notifyRejects: boolean;
-} = { listing: null, updates: [], notifies: [], notifyRejects: false };
+  /**
+   * The credential row's status before the update runs. Null means no row
+   * exists for the listing in the workspace. The mock applies the update only
+   * when the row exists and is not already needs_reauth, as the real
+   * `status <> 'needs_reauth'` predicate does.
+   */
+  credentialStatus: string | null;
+} = {
+  listing: null,
+  updates: [],
+  notifies: [],
+  notifyRejects: false,
+  credentialStatus: "active",
+};
 
 vi.mock("@oxagen/database", () => {
   const tx = {
     update: () => ({
       set: (vals: Record<string, unknown>) => ({
-        where: async () => {
-          fixtures.updates.push(vals);
-          return undefined;
-        },
+        where: () => ({
+          returning: async () => {
+            fixtures.updates.push(vals);
+            const status = fixtures.credentialStatus;
+            if (status === null || status === "needs_reauth") return [];
+            fixtures.credentialStatus = "needs_reauth";
+            return [{ id: "cred-1" }];
+          },
+        }),
       }),
     }),
     // The listing lookup joins organizations + workspaces, so the builder chain
@@ -50,8 +68,10 @@ vi.mock("@oxagen/database", () => {
     withSystemDb: async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
     schema: {
       mcpCredentials: {
+        id: "id",
         workspaceId: "workspaceId",
         orgListingId: "orgListingId",
+        status: "status",
       },
       pluginInstalledPlugins: {
         id: "id",
@@ -86,6 +106,7 @@ beforeEach(() => {
   fixtures.updates = [];
   fixtures.notifies = [];
   fixtures.notifyRejects = false;
+  fixtures.credentialStatus = "active";
   vi.resetModules();
 });
 
@@ -157,5 +178,40 @@ describe("markCredentialNeedsReauth", () => {
       markCredentialNeedsReauth("ws-1", "ol-1"),
     ).resolves.toBeUndefined();
     expect(fixtures.updates).toHaveLength(1);
+  });
+
+  it("notifies once when a second turn marks an already needs_reauth credential", async () => {
+    fixtures.listing = { ...LISTING };
+    const { markCredentialNeedsReauth } = await import("./mark-reauth");
+
+    // First 401: the row moves from active to needs_reauth and managers hear.
+    await markCredentialNeedsReauth("ws-1", "ol-1");
+    expect(fixtures.notifies).toHaveLength(1);
+
+    // Every later turn hits the same 401. The row is already needs_reauth,
+    // so nothing transitions and nobody is notified again.
+    await markCredentialNeedsReauth("ws-1", "ol-1");
+    await markCredentialNeedsReauth("ws-1", "ol-1");
+    expect(fixtures.notifies).toHaveLength(1);
+    expect(fixtures.credentialStatus).toBe("needs_reauth");
+  });
+
+  it("sends no notification when the credential is already needs_reauth", async () => {
+    fixtures.listing = { ...LISTING };
+    fixtures.credentialStatus = "needs_reauth";
+    const { markCredentialNeedsReauth } = await import("./mark-reauth");
+    await markCredentialNeedsReauth("ws-1", "ol-1");
+
+    expect(fixtures.updates).toHaveLength(1); // the conditional update ran
+    expect(fixtures.notifies).toHaveLength(0);
+  });
+
+  it("sends no notification when no credential row exists for the listing", async () => {
+    fixtures.listing = { ...LISTING };
+    fixtures.credentialStatus = null;
+    const { markCredentialNeedsReauth } = await import("./mark-reauth");
+    await markCredentialNeedsReauth("ws-1", "ol-1");
+
+    expect(fixtures.notifies).toHaveLength(0);
   });
 });

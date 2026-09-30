@@ -99,6 +99,9 @@ export const mcpCredentials = mcpSchema.table(
     // registration granted it (client_secret_basic | client_secret_post |
     // none). NULL when not recorded (migration 20260930120000).
     oauthClientAuthMethod: text("oauth_client_auth_method"),
+    // The callback URL that client was registered with. A registered client is
+    // bound to it, so sign-in registers again when the app's origin changes.
+    oauthClientRedirectUri: text("oauth_client_redirect_uri"),
     scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     status: text("status").notNull().default("active"), // active | needs_reauth | revoked

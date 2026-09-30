@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   detect: vi.fn(),
   getSecret: vi.fn(),
   setSecret: vi.fn(),
+  resolve: vi.fn(),
   prereg: vi.fn(),
   loadState: vi.fn(),
   deleteState: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("@oxagen/plugins", () => ({
   getWorkspaceSecret: m.getSecret,
   setWorkspaceSecret: m.setSecret,
   preregisteredClientForEndpoint: m.prereg,
+  resolveEndpointRedirects: m.resolve,
   loadOAuthState: m.loadState,
   deleteOAuthState: m.deleteState,
 }));
@@ -110,6 +112,7 @@ beforeEach(() => {
   m.clientInfo = { client_id: "x" };
   m.detect.mockResolvedValue("oauth");
   m.getSecret.mockResolvedValue(null);
+  m.resolve.mockImplementation(async (url: string) => url);
   m.prereg.mockReturnValue(undefined);
   m.deleteState.mockResolvedValue(undefined);
   m.healthcheck.mockResolvedValue({
@@ -366,7 +369,10 @@ describe("startMcpAuthorization", () => {
         authKind: "oauth",
       },
     ]);
-    m.getSecret.mockResolvedValue({ oauthClientId: "dcr-client" });
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "dcr-client",
+      oauthClientRedirectUri: REDIRECT,
+    });
     m.auth.mockResolvedValue("AUTHORIZED");
     const out = await startMcpAuthorization(
       SCOPE,
@@ -385,6 +391,113 @@ describe("startMcpAuthorization", () => {
     );
   });
 
+  it("replaces a client registered for another callback when the server issues a new one", async () => {
+    m.rows.push([
+      {
+        id: "listing-1",
+        title: "Linear",
+        endpointUrl: "https://mcp.linear.app/mcp",
+        authKind: "oauth",
+      },
+    ]);
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "old-client",
+      oauthClientRedirectUri: "https://old.example/api/v1/mcp/oauth/callback",
+    });
+    m.discover.mockResolvedValue({
+      authorizationServerMetadata: {
+        registration_endpoint: "https://mcp.linear.app/register",
+      },
+      resourceMetadata: { scopes_supported: [] },
+    });
+    m.auth.mockImplementation(async () => {
+      m.pendingRedirect = new URL("https://mcp.linear.app/authorize?state=s5");
+      return "REDIRECT";
+    });
+    const out = await startMcpAuthorization(
+      SCOPE,
+      { mcpServerId: "mcs_1", redirectUrl: REDIRECT },
+      { fetchFn, newState: () => "s5" },
+    );
+    expect(out).toMatchObject({ status: "redirect", state: "s5" });
+    expect(m.setSecret).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgListingId: "listing-1",
+        oauthClientId: null,
+        oauthClientRedirectUri: null,
+        refreshToken: null,
+      }),
+    );
+  });
+
+  it("asks for a new OAuth app when the workspace's own was registered for another callback", async () => {
+    m.rows.push([
+      {
+        id: "listing-1",
+        title: "Slack",
+        endpointUrl: "https://mcp.slack.com/mcp",
+        authKind: "oauth",
+      },
+    ]);
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "123.456",
+      oauthClientRedirectUri: "https://old.example/api/v1/mcp/oauth/callback",
+    });
+    m.discover.mockResolvedValue({
+      authorizationServerMetadata: {},
+      resourceMetadata: { scopes_supported: ["chat:write"] },
+    });
+    await expect(
+      startMcpAuthorization(
+        SCOPE,
+        { mcpServerId: "mcs_1", redirectUrl: REDIRECT },
+        { fetchFn },
+      ),
+    ).resolves.toEqual({
+      status: "client_required",
+      scopesSupported: ["chat:write"],
+    });
+    expect(m.setSecret).not.toHaveBeenCalled();
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("stores the endpoint a vanity registry URL redirects to", async () => {
+    m.resolve.mockResolvedValue("https://api.example.dev/mcp");
+    m.discover.mockResolvedValue({
+      authorizationServerMetadata: {
+        registration_endpoint: "https://api.example.dev/register",
+      },
+      resourceMetadata: { scopes_supported: [] },
+    });
+    m.auth.mockImplementation(async () => {
+      m.pendingRedirect = new URL("https://api.example.dev/authorize");
+      return "REDIRECT";
+    });
+    await startMcpAuthorization(
+      SCOPE,
+      { ...add, endpointUrl: "https://vanity.example.dev" },
+      { fetchFn, newState: () => "s6" },
+    );
+    expect(m.inserts[0]?.values).toMatchObject({
+      endpointUrl: "https://api.example.dev/mcp",
+    });
+  });
+
+  it("says the metadata could not be read when a server publishes none and sign-in fails", async () => {
+    m.discover.mockResolvedValue({
+      resourceMetadata: undefined,
+      authorizationServerMetadata: undefined,
+    });
+    m.clientInfo = undefined;
+    m.auth.mockRejectedValueOnce(new Error("HTTP 404 registering client"));
+    await expect(
+      startMcpAuthorization(SCOPE, add, { fetchFn }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "authorization_discovery_failed",
+    });
+  });
+
   it("answers not_found for a reconnect of a provider not in this workspace", async () => {
     m.rows.push([]);
     await expect(
@@ -397,7 +510,10 @@ describe("startMcpAuthorization", () => {
   });
 
   it("maps an SDK registration failure to client_required and any other to authorization_failed", async () => {
-    m.getSecret.mockResolvedValue({ oauthClientId: "x" });
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "x",
+      oauthClientRedirectUri: REDIRECT,
+    });
     m.auth.mockRejectedValueOnce(
       new Error(
         "Incompatible auth server: does not support dynamic client registration",
@@ -464,7 +580,10 @@ describe("startMcpAuthorization", () => {
   });
 
   it("refuses a REDIRECT that carries no sign-in URL rather than returning an empty one", async () => {
-    m.getSecret.mockResolvedValue({ oauthClientId: "x" });
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "x",
+      oauthClientRedirectUri: REDIRECT,
+    });
     m.auth.mockResolvedValue("REDIRECT");
     await expect(
       startMcpAuthorization(SCOPE, add, { fetchFn }),
@@ -486,7 +605,10 @@ describe("startMcpAuthorization", () => {
   });
 
   it("keys a custom server by its endpoint, marks it custom, and drops an icon that is not https", async () => {
-    m.getSecret.mockResolvedValue({ oauthClientId: "x" });
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "x",
+      oauthClientRedirectUri: REDIRECT,
+    });
     m.auth.mockImplementation(async () => {
       m.pendingRedirect = new URL("https://auth.acme.dev/authorize");
       return "REDIRECT";
@@ -679,5 +801,7 @@ describe("completeMcpAuthorization", () => {
       ),
     ).resolves.toMatchObject({ healthStatus: "unreachable" });
     expect(m.snapshots).not.toHaveBeenCalled();
+    // Stored as not yet known, so the runtime still offers the provider.
+    expect(m.inserts.at(-1)?.values).toMatchObject({ healthStatus: "unknown" });
   });
 });

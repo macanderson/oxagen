@@ -1,8 +1,9 @@
 /**
- * The MCP Studio operator OAuth routes: connect, disconnect, and the public
- * callback. The connect handlers are mocked, so these tests check what each
- * route accepts, what it refuses, and the cookie that binds a callback to the
- * browser that started the connect.
+ * The MCP Studio operator OAuth routes: connect, callback, disconnect, and the
+ * retired public callback. The connect handlers are mocked, so these tests
+ * check what each route accepts, what it refuses, and the cookie that binds a
+ * callback to the browser that started the connect. The connect and the
+ * callback live on the app's origin, where the session cookie is.
  */
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   finishConnect: vi.fn(),
   disconnect: vi.fn(),
   defaultConnectDeps: vi.fn(),
-  requireEnv: vi.fn(),
 }));
 
 vi.mock("@oxagen/handlers/mcp-studio/credentials/connect", async (importOriginal) => {
@@ -27,16 +27,12 @@ vi.mock("@oxagen/handlers/mcp-studio/credentials/connect", async (importOriginal
   };
 });
 
-vi.mock("@oxagen/config/env", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@oxagen/config/env")>();
-  return { ...real, requireEnv: mocks.requireEnv };
-});
-
 import { ConnectError } from "@oxagen/handlers/mcp-studio/credentials/connect";
 import {
   CALLBACK_BASE,
   CONNECT_COOKIE,
   callbackUri,
+  connectCookiePath,
   mcpStudioOauthCallbackRoute,
   mcpStudioOauthRoute,
 } from "./mcp-studio.oauth";
@@ -47,8 +43,11 @@ const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const WORKSPACE_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "33333333-3333-4333-8333-333333333333";
 
-const API_URL = "https://api.oxagen.test";
-const REDIRECT_URI = `${API_URL}/oauth/mcp-studio/callback`;
+const APP_URL = "https://app.oxagen.test";
+const SLUGS = { orgSlug: "acme", workspaceSlug: "tools" };
+const OAUTH_PATH = "/api/v1/acme/tools/mcp-studio/oauth";
+const COOKIE_PATH = `${OAUTH_PATH}/callback`;
+const REDIRECT_URI = `${APP_URL}${COOKIE_PATH}`;
 const AUTH_URL = "https://auth.example.com/authorize?client_id=oxagen&state=state-abc-123";
 const STATE = "state-abc-123";
 const DEPS = { deps: "default" };
@@ -67,8 +66,11 @@ const SIGNED_IN: Caller = {
   apiKeyId: null,
 };
 
-/** The route behind middleware that sets the caller the auth middleware would. */
-function mount(route: Hono<AppEnv>, caller: Partial<Caller> = {}): Hono<AppEnv> {
+/**
+ * The route behind middleware that sets the caller the auth middleware would,
+ * at the path the API mounts it on.
+ */
+function mount(route: Hono<AppEnv>, caller: Partial<Caller> = {}, at = SCOPED): Hono<AppEnv> {
   const who: Caller = { ...SIGNED_IN, ...caller };
   const app = new Hono<AppEnv>();
   app.use("*", async (c, next) => {
@@ -79,20 +81,23 @@ function mount(route: Hono<AppEnv>, caller: Partial<Caller> = {}): Hono<AppEnv> 
     c.set("apiKeyId", who.apiKeyId);
     await next();
   });
-  app.route("/", route);
+  app.route(at, route);
   return app;
 }
 
+const SCOPED = "/v1/:org_slug/:workspace_slug/mcp-studio/oauth";
+const SCOPED_BASE = "http://localhost/v1/acme/tools/mcp-studio/oauth";
+
 function connect(query: string, caller: Partial<Caller> = {}): Promise<Response> {
   return Promise.resolve(
-    mount(mcpStudioOauthRoute, caller).fetch(new Request(`http://localhost/connect${query}`)),
+    mount(mcpStudioOauthRoute, caller).fetch(new Request(`${SCOPED_BASE}/connect${query}`)),
   );
 }
 
 function disconnectRequest(body: string, caller: Partial<Caller> = {}): Promise<Response> {
   return Promise.resolve(
     mount(mcpStudioOauthRoute, caller).fetch(
-      new Request("http://localhost/disconnect", {
+      new Request(`${SCOPED_BASE}/disconnect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body,
@@ -101,13 +106,11 @@ function disconnectRequest(body: string, caller: Partial<Caller> = {}): Promise<
   );
 }
 
-function callback(query: string, cookie: string | null): Promise<Response> {
+function callback(query: string, cookie: string | null, caller: Partial<Caller> = {}): Promise<Response> {
   const headers = new Headers();
   if (cookie !== null) headers.set("cookie", `${CONNECT_COOKIE}=${cookie}`);
   return Promise.resolve(
-    mount(mcpStudioOauthCallbackRoute).fetch(
-      new Request(`http://localhost/callback${query}`, { headers }),
-    ),
+    mount(mcpStudioOauthRoute, caller).fetch(new Request(`${SCOPED_BASE}/callback${query}`, { headers })),
   );
 }
 
@@ -117,7 +120,7 @@ function setCookie(res: Response): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireEnv.mockReturnValue({ NEXT_PUBLIC_API_URL: API_URL });
+  vi.stubEnv("APP_URL", APP_URL);
   mocks.defaultConnectDeps.mockReturnValue(DEPS);
   mocks.beginConnect.mockResolvedValue({ authorizationUrl: AUTH_URL, state: STATE });
   mocks.finishConnect.mockResolvedValue({
@@ -133,23 +136,35 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 // ── callbackUri ──────────────────────────────────────────────────────────────
 
 describe("callbackUri", () => {
-  it("appends the callback path to the API URL", () => {
-    expect(callbackUri()).toBe(REDIRECT_URI);
+  it("puts the workspace's callback on the app's origin", () => {
+    expect(callbackUri(SLUGS)).toBe(REDIRECT_URI);
   });
 
-  it("strips trailing slashes from the API URL", () => {
-    mocks.requireEnv.mockReturnValue({ NEXT_PUBLIC_API_URL: `${API_URL}//` });
-    expect(callbackUri()).toBe(REDIRECT_URI);
+  it("strips trailing slashes from the app URL", () => {
+    expect(callbackUri(SLUGS, `${APP_URL}//`)).toBe(REDIRECT_URI);
   });
 
-  it("asks requireEnv for the public API URL", () => {
-    callbackUri();
-    expect(mocks.requireEnv).toHaveBeenCalledWith(["NEXT_PUBLIC_API_URL"]);
+  it("falls back to NEXT_PUBLIC_APP_URL when APP_URL is unset", () => {
+    vi.stubEnv("APP_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://oxagen.test");
+    expect(callbackUri(SLUGS)).toBe(`https://oxagen.test${COOKIE_PATH}`);
+  });
+
+  it("never names the API's host, where the browser sends no session", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.oxagen.test");
+    expect(callbackUri(SLUGS).startsWith(APP_URL)).toBe(true);
+  });
+});
+
+describe("connectCookiePath", () => {
+  it("is the callback's path as the browser sees it", () => {
+    expect(connectCookiePath(SLUGS)).toBe(COOKIE_PATH);
   });
 });
 
@@ -165,12 +180,12 @@ describe("GET /connect", () => {
     expect(cookie).toContain(`${CONNECT_COOKIE}=${STATE}`);
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Lax");
-    expect(cookie).toContain(`Path=${CALLBACK_BASE}`);
+    expect(cookie).toContain(`Path=${COOKIE_PATH}`);
     expect(cookie).toContain("Secure");
     expect(cookie).toContain("Max-Age=600");
   });
 
-  it("starts the connect for the caller with the API's callback URI", async () => {
+  it("starts the connect for the caller with the workspace's callback on the app origin", async () => {
     await connect("?server=billing&environment=production");
 
     expect(mocks.beginConnect).toHaveBeenCalledWith(
@@ -186,15 +201,15 @@ describe("GET /connect", () => {
     );
   });
 
-  it("sets no Secure flag when the API URL is plain http", async () => {
-    mocks.requireEnv.mockReturnValue({ NEXT_PUBLIC_API_URL: "http://localhost:3001" });
+  it("sets no Secure flag when the app URL is plain http", async () => {
+    vi.stubEnv("APP_URL", "http://localhost:3000");
 
     const res = await connect("?server=billing&environment=production");
 
     expect(res.status).toBe(302);
     expect(setCookie(res)).not.toContain("Secure");
     expect(mocks.beginConnect).toHaveBeenCalledWith(
-      expect.objectContaining({ redirectUri: "http://localhost:3001/oauth/mcp-studio/callback" }),
+      expect.objectContaining({ redirectUri: `http://localhost:3000${COOKIE_PATH}` }),
       DEPS,
     );
   });
@@ -232,18 +247,6 @@ describe("GET /connect", () => {
     expect(await res.text()).toBe(
       "The connect link names no server or environment. Copy it again from the failed call.",
     );
-    expect(mocks.beginConnect).not.toHaveBeenCalled();
-  });
-
-  it("answers 503 when the API has no public URL", async () => {
-    mocks.requireEnv.mockImplementation(() => {
-      throw new Error("NEXT_PUBLIC_API_URL is not set");
-    });
-
-    const res = await connect("?server=billing&environment=production");
-
-    expect(res.status).toBe(503);
-    expect(await res.text()).toContain("Set NEXT_PUBLIC_API_URL on the API.");
     expect(mocks.beginConnect).not.toHaveBeenCalled();
   });
 
@@ -344,7 +347,14 @@ describe("GET /callback", () => {
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("Billing API is connected. Go back to Oxagen and retry the call.");
-    expect(mocks.finishConnect).toHaveBeenCalledWith({ state: STATE, code: "code-1" }, DEPS);
+    expect(mocks.finishConnect).toHaveBeenCalledWith(
+      {
+        state: STATE,
+        code: "code-1",
+        caller: { orgId: ORG_ID, workspaceId: WORKSPACE_ID, userId: USER_ID },
+      },
+      DEPS,
+    );
   });
 
   it("clears the state cookie on the callback path", async () => {
@@ -353,7 +363,18 @@ describe("GET /callback", () => {
     const cookie = setCookie(res);
     expect(cookie).toContain(`${CONNECT_COOKIE}=;`);
     expect(cookie).toContain("Max-Age=0");
-    expect(cookie).toContain(`Path=${CALLBACK_BASE}`);
+    expect(cookie).toContain(`Path=${COOKIE_PATH}`);
+  });
+
+  it.each<[string, Partial<Caller>]>([
+    ["no session", { userId: null }],
+    ["an API key", { apiKeyId: "key_1" }],
+  ])("answers 401 for a callback with %s and connects nothing", async (_label, caller) => {
+    const res = await callback(`?code=code-1&state=${STATE}`, STATE, caller);
+
+    expect(res.status).toBe(401);
+    expect(await res.text()).toBe("Sign in to Oxagen in this browser, then start the connect again.");
+    expect(mocks.finishConnect).not.toHaveBeenCalled();
   });
 
   it("answers 400 with the provider's error code and connects nothing", async () => {
@@ -425,5 +446,26 @@ describe("GET /callback", () => {
 
     expect(res.status).toBe(500);
     expect(await res.text()).not.toContain("code-1");
+  });
+});
+
+// ── GET /oauth/mcp-studio/callback (retired) ─────────────────────────────────
+
+describe("the retired API-host callback", () => {
+  it("answers 410, clears its old cookie, and connects nothing", async () => {
+    const res = await mount(mcpStudioOauthCallbackRoute, {}, CALLBACK_BASE).fetch(
+      new Request(`http://localhost${CALLBACK_BASE}/callback?code=code-1&state=${STATE}`, {
+        headers: { cookie: `${CONNECT_COOKIE}=${STATE}` },
+      }),
+    );
+
+    expect(res.status).toBe(410);
+    expect(await res.text()).toBe(
+      "This connect link is out of date, so nothing was connected. Start again from Oxagen.",
+    );
+    const cookie = setCookie(res);
+    expect(cookie).toContain("Max-Age=0");
+    expect(cookie).toContain(`Path=${CALLBACK_BASE}`);
+    expect(mocks.finishConnect).not.toHaveBeenCalled();
   });
 });

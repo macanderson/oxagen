@@ -24,7 +24,11 @@ import {
   type OAuthClientAuthMethod,
   oauthClientAuthMethodOf,
 } from "./client-auth-method";
-import { saveOAuthState, loadOAuthState } from "./state-store";
+import {
+  deleteOAuthState,
+  loadOAuthState,
+  saveOAuthState,
+} from "./state-store";
 import { preregisteredClientForEndpoint } from "./preregistered-clients";
 
 export interface DbProviderCtx {
@@ -152,6 +156,9 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       authKind: "oauth",
       oauthClientId: info.client_id,
       oauthClientSecret: info.client_secret ?? null,
+      // The client is bound to this callback. Sign-in registers again once the
+      // app's callback no longer matches it.
+      oauthClientRedirectUri: this.c.redirectUrl,
       // The method the server granted, which may differ from the one asked
       // for; a response that names none granted the one asked for.
       oauthClientAuthMethod:
@@ -204,6 +211,49 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       expiresAt,
       lastRefreshedAt: new Date(now),
     });
+  }
+
+  // ── Invalidation ────────────────────────────────────────────────────────────
+
+  /**
+   * Forgets what the authorization server said is no longer valid. The SDK
+   * calls this when a refresh answers invalid_grant (`tokens`) or the client
+   * is refused as invalid_client or unauthorized_client (`all`), and then
+   * retries. Without it the dead refresh token or client stayed stored, so
+   * every retry and every Reconnect failed the same way and the provider
+   * could never be signed in to again.
+   */
+  async invalidateCredentials(
+    scope: "all" | "client" | "tokens" | "verifier" | "discovery",
+  ): Promise<void> {
+    const key = {
+      orgId: this.c.orgId,
+      workspaceId: this.c.workspaceId,
+      orgListingId: this.c.orgListingId,
+      authKind: "oauth" as const,
+    };
+    const tokens = scope === "all" || scope === "tokens";
+    const client = scope === "all" || scope === "client";
+    if (tokens || client) {
+      await setWorkspaceSecret({
+        ...key,
+        ...(tokens
+          ? { accessToken: null, refreshToken: null, expiresAt: null }
+          : {}),
+        ...(client
+          ? {
+              oauthClientId: null,
+              oauthClientSecret: null,
+              oauthClientAuthMethod: null,
+              oauthClientRedirectUri: null,
+            }
+          : {}),
+      });
+    }
+    if (client) this.clientInfoCache = null;
+    if (scope === "all" || scope === "verifier") {
+      await deleteOAuthState(this.c.state);
+    }
   }
 
   // ── Authorization redirect ───────────────────────────────────────────────────
