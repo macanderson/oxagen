@@ -529,12 +529,16 @@ describe("tachod and frame bodies", () => {
     return { reached, release, restore: () => spy.mockRestore() };
   }
 
-  /** A hooked session that has requested one gateway tool call. */
+  /**
+   * A hooked session that has requested one gateway tool call, or, with
+   * `requested` false, is about to: its `PreToolUse` is left to the caller.
+   */
   async function hookedCall(
     port: number,
     token: string,
     hooked: string,
     toolUseId: string,
+    requested = true,
   ) {
     const dir = mkdtempSync(join(tmpdir(), "tacho-gateway-transcript-"));
     const transcript = join(dir, `${hooked}.jsonl`);
@@ -552,10 +556,32 @@ describe("tachod and frame bodies", () => {
         transcript_path: transcript,
       },
       { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
-      { ...tool, hook_event_name: "PreToolUse" },
+      ...(requested ? [{ ...tool, hook_event_name: "PreToolUse" }] : []),
     ])
       expect(await post(port, token, hook)).toBe(200);
     return { tool, transcript, dir };
+  }
+
+  /**
+   * The file `tacho-hook` leaves in the spool when the daemon has not answered
+   * a hook in time, under the id its live request carried.
+   */
+  function spoolHook(
+    paths: ReturnType<typeof scratchPaths>,
+    hookId: string,
+    payload: Record<string, unknown>,
+  ): void {
+    mkdirSync(paths.spool, { recursive: true });
+    writeFileSync(
+      join(paths.spool, `${hookId}.json`),
+      JSON.stringify({
+        schema: "tacho.spool.v1",
+        received_at: new Date().toISOString(),
+        hook_id: hookId,
+        payload,
+        env: {},
+      }),
+    );
   }
 
   function gatewayCall(toolUseId: string, id: number) {
@@ -769,6 +795,215 @@ describe("tachod and frame bodies", () => {
         .filter((event) => event.kind === "tool_call");
       expect(frames).toHaveLength(1);
       expect(frames[0]?.session_uuid).toBe(handle.hostRecorder.sessionUuid);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("seals one tool_call on the session's chain for a gateway call whose PreToolUse was spooled", async () => {
+    // tacho-hook gives a PreToolUse ten seconds, then spools it and answers,
+    // and Claude Code calls the tool while the live request still waits on
+    // the queue. No session had claimed the call, so the gateway's frame
+    // sealed on the daemon's chain and the hook's tool_call on the session's:
+    // one call under two identities (#4355, ADR-189 decision 7).
+    const { fetch, batches } = plane();
+    const { handle, host, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-spooled";
+    const toolUseId = "toolu_01GatewaySpooled";
+    const { tool, transcript, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+      false,
+    );
+    try {
+      const request = { ...tool, hook_event_name: "PreToolUse" };
+      const hold = holdTickAt(transcript);
+      let ticking: Promise<void>;
+      let requested: Promise<unknown>;
+      try {
+        ticking = handle.tick();
+        await hold.reached;
+        // The live request waits on the queue behind the held tick. Its
+        // client, out of time, spools the same hook under the same id.
+        requested = handle.api.handleHook({
+          payload: request,
+          hook_id: "hook_pre_spooled",
+        });
+        spoolHook(paths, "hook_pre_spooled", request);
+        const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 16), {
+          sessionId: "mcp-sess-9",
+        });
+        expect(answer?.status).toBe(200);
+      } finally {
+        hold.release();
+        hold.restore();
+      }
+      await ticking;
+      await requested;
+      expect(
+        await post(port, host.local_token, {
+          ...tool,
+          hook_event_name: "PostToolUse",
+          tool_response: MCP_RESULT,
+        }),
+      ).toBe(200);
+      await handle.tick();
+
+      const events = batches.flatMap((b) => b.events);
+      const frames = events.filter((event) => event.kind === "tool_call");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.session_uuid).toBe(
+        handle.registry.get(hooked)?.recorder.sessionUuid,
+      );
+      expect(frames[0]?.body).toMatchObject({ tool_use_id: toolUseId });
+      expect(frames[0]?.attrs["oxagen.enforcement_tier"]).toBe("gateway");
+      // The live request and its spool replay requested the call once.
+      expect(
+        events.filter((event) => event.kind === "tool_requested"),
+      ).toHaveLength(1);
+      expect(
+        handle.wal.read(handle.hostRecorder.sessionUuid),
+      ).not.toContainEqual(expect.objectContaining({ kind: "tool_call" }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("seals a gateway call on its session's chain when its PreToolUse is still in the spool", async () => {
+    // What a restart between the hook and the call leaves: tacho-hook could
+    // not reach the daemon and spooled the PreToolUse, and the gateway call
+    // arrived before anything had replayed the spool. The frame's task
+    // drains the spool first, as every hook does (ADR-189 decision 7).
+    const { fetch, batches } = plane();
+    const { handle, host, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-replayed";
+    const toolUseId = "toolu_01GatewayReplayed";
+    const { tool, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+      false,
+    );
+    try {
+      spoolHook(paths, "hook_pre_replayed", {
+        ...tool,
+        hook_event_name: "PreToolUse",
+      });
+      const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 17), {
+        sessionId: "mcp-sess-10",
+      });
+      expect(answer?.status).toBe(200);
+      expect(
+        await post(port, host.local_token, {
+          ...tool,
+          hook_event_name: "PostToolUse",
+          tool_response: MCP_RESULT,
+        }),
+      ).toBe(200);
+      await handle.tick();
+
+      const frames = batches
+        .flatMap((b) => b.events)
+        .filter((event) => event.kind === "tool_call");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.session_uuid).toBe(
+        handle.registry.get(hooked)?.recorder.sessionUuid,
+      );
+      expect(frames[0]?.attrs["oxagen.enforcement_tier"]).toBe("gateway");
+      expect(
+        handle.wal.read(handle.hostRecorder.sessionUuid),
+      ).not.toContainEqual(expect.objectContaining({ kind: "tool_call" }));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a gateway call to its hooks while its PreToolUse waits in the spool", async () => {
+    // The spooled PreToolUse cannot be replayed before the frame's turn, as
+    // when the daemon is stopping or the WAL refuses the replay. The spool
+    // keeps it, and its replay and the call's PostToolUse record the call on
+    // the session's chain, at this start or the next. A frame on the
+    // daemon's chain would be the call's second identity (ADR-189
+    // decision 7).
+    const { fetch, batches } = plane();
+    const { handle, host, log, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-left";
+    const toolUseId = "toolu_01GatewayLeft";
+    const { tool, dir } = await hookedCall(
+      port,
+      host.local_token,
+      hooked,
+      toolUseId,
+      false,
+    );
+    try {
+      spoolHook(paths, "hook_pre_left", {
+        ...tool,
+        hook_event_name: "PreToolUse",
+      });
+      const append = handle.wal.append.bind(handle.wal);
+      const fault = vi
+        .spyOn(handle.wal, "append")
+        .mockImplementation((events, bodies) => {
+          if (events.some((event) => event.kind === "tool_requested"))
+            throw Object.assign(new Error("event disk full"), {
+              code: "ENOSPC",
+            });
+          append(events, bodies);
+        });
+      try {
+        const answer = await handle.api.mcp?.(gatewayCall(toolUseId, 18), {
+          sessionId: "mcp-sess-11",
+        });
+        expect(answer?.status).toBe(200);
+        // Queued behind the frame, so the frame has had its turn.
+        await handle.drainSpool();
+      } finally {
+        fault.mockRestore();
+      }
+      expect(
+        log.some((line) =>
+          line.includes(
+            `mcp gateway left query_ontology (${toolUseId}) to its hooks: its PreToolUse waits in the spool`,
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        await post(port, host.local_token, {
+          ...tool,
+          hook_event_name: "PostToolUse",
+          tool_response: MCP_RESULT,
+        }),
+      ).toBe(200);
+      await handle.tick();
+
+      const frames = batches
+        .flatMap((b) => b.events)
+        .filter((event) => event.kind === "tool_call");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.session_uuid).toBe(
+        handle.registry.get(hooked)?.recorder.sessionUuid,
+      );
+      expect(frames[0]?.body).toMatchObject({ tool_use_id: toolUseId });
+      expect(frames[0]?.attrs["oxagen.enforcement_tier"]).not.toBe("gateway");
+      expect(
+        handle.wal.read(handle.hostRecorder.sessionUuid),
+      ).not.toContainEqual(expect.objectContaining({ kind: "tool_call" }));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

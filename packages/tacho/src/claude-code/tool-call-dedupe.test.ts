@@ -1,7 +1,8 @@
 /**
  * What the tool-call ledger takes on from another ledger's state: the calls
  * an older build's subagent chain remembered, which a restart moves into the
- * session family's ledger (ADR-168).
+ * session family's ledger (ADR-168). And which calls it has met, which the
+ * MCP gateway asks before it seals a call (ADR-189 decision 7).
  */
 import { describe, expect, it } from "vitest";
 import { TOOL_CALL_LEDGER_CAPACITY, ToolCallLedger } from "./tool-call-dedupe";
@@ -42,5 +43,26 @@ describe("ToolCallLedger.absorb", () => {
       root.judge(`toolu_${TOOL_CALL_LEDGER_CAPACITY - 1}`, "otel_log", false)
         .verdict,
     ).toEqual({ kind: "repeat" });
+  });
+});
+
+describe("ToolCallLedger.knows", () => {
+  it("knows a call from its claim or its first committed sighting on", () => {
+    const ledger = new ToolCallLedger();
+    expect(ledger.knows("toolu_gateway")).toBe(false);
+    ledger.claim("toolu_gateway");
+    expect(ledger.knows("toolu_gateway")).toBe(true);
+    expect(ledger.awaits("toolu_gateway")).toBe(true);
+    ledger.judge("toolu_gateway", "gateway", true).commit();
+    // Met and no longer awaited: a second gateway call naming it is not the
+    // one the session waits on.
+    expect(ledger.knows("toolu_gateway")).toBe(true);
+    expect(ledger.awaits("toolu_gateway")).toBe(false);
+
+    ledger.judge("toolu_otel", "otel_log", false).commit();
+    expect(ledger.knows("toolu_otel")).toBe(true);
+    // A verdict nobody committed registers nothing.
+    ledger.judge("toolu_refused", "hook", true);
+    expect(ledger.knows("toolu_refused")).toBe(false);
   });
 });
