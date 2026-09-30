@@ -29,9 +29,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return Promise.resolve(stores.rows);
     },
   };
+  const tx = { select: () => chain };
   return {
     ...real,
-    withTenantDb: (fn: (tx: unknown) => unknown) => fn({ select: () => chain }),
+    withTenantDb: (fn: (tx: unknown) => unknown) => fn(tx),
+    // The reader never reads through withOrgDb. It is stubbed so no real
+    // seam is left behind the mock (check:db-mock-seams, ADR-086).
+    withOrgDb: (fn: (tx: unknown) => unknown) => fn(tx),
   };
 });
 
