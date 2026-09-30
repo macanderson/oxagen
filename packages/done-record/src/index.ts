@@ -4,6 +4,7 @@
 export * from "./claim";
 export * from "./convert";
 export * from "./decide";
+export * from "./evaluators";
 export * from "./errors";
 export * from "./lint";
 export * from "./lock-digest";

@@ -1,0 +1,124 @@
+---
+title: "Agents are waiting on a process built for people"
+description: "An agent can write a change in minutes. Then the change waits for a person to read it. This post looks at that wait, and at the process Oxagen uses to ship at every hour."
+date: 2026-09-30
+authors:
+  - Oxagen Research
+pillars:
+  - autonomous-agents
+  - coding-agents
+tags:
+  - process
+  - review
+  - delivery
+  - sdlc
+draft: false
+---
+
+An agent can write a change to your code in a few minutes. In most teams, that change then waits. It waits for a person to open it, read it, and say yes. At night, it waits until morning. On a Friday evening, it waits until Monday. The agent could start the next change, but the next change waits in the same line.
+
+The agent is not the slow part. The process around it is. Most software processes were made for people, and they still expect a person at every step.
+
+## The wait
+
+A week has 168 hours. A 40-hour work week covers 40 of them. A process that needs a person at every step can only move in those 40 hours. For the other 128 hours, the work sits still.
+
+The wait inside the work week is long too. Meta measured how long code changes wait for a reviewer. In early 2021, the typical change waited a few hours. The slowest quarter of changes waited as much as a day.[^1] Meta then built a tool that reminds reviewers about old changes. It cut the average wait by 7 percent. It cut the number of changes that waited more than three days by 12 percent.[^1] Those are real gains. They are gains on a wait counted in hours and days, for work an agent does in minutes.
+
+Reading also has limits. A SmartBear study of a Cisco team found that a person reads code best in chunks of 200 to 400 lines. Past 400 lines, people find fewer problems. The study also advises reading for no more than 60 minutes at a time.[^2] One agent task can produce more than 400 lines. Read well, that is about an hour of one person's time, for each task.
+
+## Bigger changes
+
+Agents are taking on bigger jobs. METR measures the length of task an AI model can finish, counted in the time a skilled person would need. That length has doubled about every seven months since 2019.[^3] Longer tasks make bigger changes, and bigger changes take longer to read.
+
+DORA's 2024 report shows what happens when teams add AI and keep the old process. When a team's use of AI went up by a quarter, delivery throughput fell by an estimated 1.5 percent. Delivery stability fell by an estimated 7.2 percent.[^4] The report names large batches as one cause. An earlier post, [The problem is not slop, it is your process](/blog/the-problem-is-not-slop-it-is-your-process), looks at that finding in detail.
+
+## A process made for agents
+
+A process made for agents keeps people in charge and takes them out of the line. It has four parts.
+
+- **Rules.** People write the rules before the work starts. The rules say what an agent may do, what it may spend, and when it must ask a person.
+- **Checks.** Automatic checks build and test every change. Review agents read it and rate each problem they find. A serious problem blocks the change.
+- **Decisions.** A rule can send a request to a person: more budget, a new tool, or a change to production data. The run waits for that answer, and only for that answer.
+- **The record.** Every change leaves a record of what it did, which checks passed, and what it cost. A person reads the record each day instead of reading every line.
+
+Each change then moves through ten stages. Agents run all ten.
+
+<Flow
+  title="Ten stages of the agent SDLC"
+  loop="Each run ends with a note that the next issue can use"
+  steps={[
+    { label: "Issue", detail: "The issue says what done looks like" },
+    { label: "Triage", detail: "A triage agent sets priority and size" },
+    { label: "Claim", detail: "One change, one writer" },
+    { label: "Build", detail: "The change ships with its tests" },
+    { label: "Check", detail: "Automatic checks build and test it", emph: true },
+    { label: "Review", detail: "Review agents rate each finding" },
+    { label: "Merge", detail: "Green checks and no serious finding" },
+    { label: "Release", detail: "Database changes go first" },
+    { label: "Watch", detail: "A broken main opens an issue" },
+    { label: "Learn", detail: "Minutes planned against minutes spent" },
+  ]}
+  caption="Schematic. Each stage is described in full at sdlc.oxagen.cloud."
+/>
+
+## Oxagen's own process
+
+Oxagen builds its own product this way. Four agent tools do the work: Claude Code, Codex, Cursor, and Stella. They follow one set of written rules, kept in the code next to the product. These are some of the rules:
+
+- Every change starts as an issue, and the issue says what done looks like.
+- A triage agent sets each issue's priority and size. Whoever files the issue does not.
+- One change has one writer. An agent posts a claim before it writes, and the claim lasts 90 minutes.
+- Automatic checks are the only place the code is built and tested.
+- An agent looks at each open change every 60 seconds. It fixes failed checks, answers review comments, and clears conflicts.
+- When the main branch breaks, a check opens a top-priority issue. The fix goes straight to the main branch. The check closes the issue when the branch is green again.
+
+From September 1 to 29, 2026, 1,064 changes merged into Oxagen's main branch.[^5] Of those, 685 merged outside weekday work hours. That is 64 percent. 283 merged on a Saturday or a Sunday, and 289 merged between 10 pm and 6 am Pacific time.
+
+<Bars
+  title="Changes merged into Oxagen, September 1 to 29, 2026"
+  head={["When the change merged", "Changes"]}
+  data={[
+    { label: "Weekdays, 9 am to 6 pm", value: 379 },
+    { label: "Weekdays, other hours", value: 402, emph: true },
+    { label: "Saturday and Sunday", value: 283, emph: true },
+  ]}
+  caption="Source: GitHub search over Oxagen's repository, pull requests merged September 1 to 29, 2026, counted by UTC date. Hours are Pacific time."
+/>
+
+These numbers show when changes merged. They do not show how good each change was. The checks and the review findings answer that for each change, and the record keeps the answer.
+
+Oxagen is workforce management for autonomous agents. In this process, Oxagen is where each agent gets its own identity and works under a mandate: its access, its budget and rules, and its tools and skills. For actions routed through Oxagen, a rule answers each request, and the record shows what each agent did and what it cost.
+
+## A copy for your team
+
+The full process is at [sdlc.oxagen.cloud](https://sdlc.oxagen.cloud). It has the ten stages, the rules, the checks, and a four-week plan to start. Type your company name below to get a copy with your name in it, ready to edit.
+
+<form className="sdlc-form" action="https://sdlc.oxagen.cloud/api/template" method="get">
+  <div className="sdlc-row">
+    <div className="field">
+      <label htmlFor="sdlc-company">Company name</label>
+      <input id="sdlc-company" type="text" name="company" maxLength={80} placeholder="Acme Robotics" autoComplete="organization" required />
+    </div>
+    <button className="btn btn-primary" type="submit">Make my SDLC</button>
+  </div>
+  <fieldset className="sdlc-formats">
+    <legend>Format</legend>
+    <label><input type="radio" name="format" value="docx" defaultChecked /><span>Word</span></label>
+    <label><input type="radio" name="format" value="gdoc" /><span>Google Docs</span></label>
+    <label><input type="radio" name="format" value="pdf" /><span>PDF</span></label>
+  </fieldset>
+  <p className="sdlc-note">Google Docs opens the Word file. The page that opens shows you how.</p>
+</form>
+
+## Limits
+
+- The merge counts come from one repository over 29 days. They describe when Oxagen's changes merged. They do not predict what another team will see.
+- The Meta and SmartBear numbers describe people reading code that people wrote. They were measured before agents wrote much of the code.
+- DORA reports links in survey data. A link is not proof of a cause.
+
+[^1]: Riggs, P. (2022). *Improving code review time at Meta*. Engineering at Meta. https://engineering.fb.com/2022/11/16/culture/meta-code-review-time-improving/
+[^2]: SmartBear. *Best practices for code review*, reporting a SmartBear study of a Cisco Systems programming team. https://smartbear.com/learn/code-review/best-practices-for-peer-code-review/
+[^3]: Kwa, T., West, B., Becker, J., et al. (2025). *Measuring AI Ability to Complete Long Software Tasks*. METR. https://arxiv.org/abs/2503.14499
+[^4]: DORA (2024). *Announcing the 2024 DORA report*. Google Cloud. https://cloud.google.com/blog/products/devops-sre/announcing-the-2024-dora-report
+[^5]: Oxagen (2026). GitHub search `repo:macanderson/oxagen is:pr is:merged merged:2026-09-01..2026-09-29`, run on September 30, 2026. It returned 1,064 pull requests.

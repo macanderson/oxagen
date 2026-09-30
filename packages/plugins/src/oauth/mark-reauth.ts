@@ -1,9 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import { notifyOrgManagers, reauthEmailTemplate } from "@oxagen/notifications";
 
 /**
  * Flip a credential row to needs_reauth and notify org managers.
+ *
+ * Only a row that changed state sends a notification. Every agent turn that
+ * reaches a server with a broken credential gets a 401 and calls this again,
+ * so a row already at needs_reauth is left alone and nobody is re-notified.
  *
  * Notification failure does NOT propagate — the credential flip is the
  * authoritative action; notification is best-effort.
@@ -12,18 +16,26 @@ export async function markCredentialNeedsReauth(
   workspaceId: string,
   orgListingId: string,
 ): Promise<void> {
-  // 1. Flip credential status.
-  await withSystemDb(async (tx) => {
-    await tx
+  // 1. Flip credential status, unless it is already needs_reauth.
+  // tenancy: system write to one credential row, filtered by workspaceId and
+  // orgListingId, both taken from the calling turn's tenant scope.
+  const transitioned = await withSystemDb(async (tx) =>
+    tx
       .update(schema.mcpCredentials)
       .set({ status: "needs_reauth", updatedAt: new Date() })
       .where(
         and(
           eq(schema.mcpCredentials.workspaceId, workspaceId),
           eq(schema.mcpCredentials.orgListingId, orgListingId),
+          ne(schema.mcpCredentials.status, "needs_reauth"),
         ),
-      );
-  });
+      )
+      .returning({ id: schema.mcpCredentials.id }),
+  );
+
+  // No row moved: it was already needs_reauth (managers were told then), or
+  // there is no credential row for this listing in this workspace.
+  if (transitioned.length === 0) return;
 
   // 2. Resolve notification context: server name, org name, and — crucially —
   // the org + workspace SLUGS. The deep link must be a real, navigable app URL

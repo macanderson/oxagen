@@ -303,7 +303,8 @@ export const routes = {
    * switches, and is left off for the Agents tab. It is a query value, not a
    * path segment, because `/agents/<segment>` is one agent's page. On the
    * Agents tab `cursor` opens a later page of the identities table and
-   * `deregistered` lists retired agents beside the live ones.
+   * `deregistered` lists retired agents beside the live ones. On Runtimes
+   * `runtime` opens one runtime in the drawer over the tab.
    */
   agents: (
     org: string,
@@ -313,6 +314,7 @@ export const routes = {
       cursor?: string;
       view?: string;
       deregistered?: boolean;
+      runtime?: string;
     },
   ): SafePath =>
     withQuery(pathOf(org, ws, "agents"), {
@@ -320,6 +322,7 @@ export const routes = {
       deregistered: q?.deregistered === true ? "show" : undefined,
       cursor: q?.cursor,
       view: q?.view,
+      runtime: q?.runtime,
     }),
   /**
    * One agent. `tab` picks the section, `rows` how many of its incidents a
@@ -564,12 +567,13 @@ export const routes = {
   runtimes: (org: string, ws: string): SafePath =>
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes" }),
   /**
-   * One runtime: a host enrollment by its public id (`tch_…`), or a named
-   * runtime by its id (`rtm_…`, ADR-198), whose page carries its containment
-   * (ADR-204).
+   * One runtime, opened in the drawer over the Runtimes tab (roadmap mockups
+   * `agt-runtime`): a host enrollment by its public id (`tch_…`), or a named
+   * runtime by its id (`rtm_…`, ADR-198), whose drawer carries its
+   * containment (ADR-204). `/runtimes/<id>` redirects here.
    */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
-    pathOf(org, ws, "runtimes", runtime),
+    withQuery(pathOf(org, ws, "agents"), { tab: "runtimes", runtime }),
   /**
    * Steering (roadmap pages/steering.md): the five tabs and the Library
    * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and

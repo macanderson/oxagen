@@ -1179,6 +1179,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .getSteeringFreshnessHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_steering_layout",
+    async () =>
+      (await import("./context.steering.layout"))
+        .getSteeringLayoutHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "propose_record",
     async () =>
       (await import("./context.proposal.create"))

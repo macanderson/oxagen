@@ -24,12 +24,13 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { DESCRIPTION_MAX, type DraftOp } from "./draft";
 import type { StudioTool } from "./model";
-import type { DraftStudioDescription } from "./pending-capabilities";
+import type { DraftStudioDescription } from "./studio-calls";
 import {
   BILLING,
   fakeDraft,
   graphqlTool,
   STRIPE,
+  STUDIO_AT,
   studioTool,
   studioView,
   WAREHOUSE,
@@ -56,17 +57,15 @@ afterEach(async () => {
 
 type PanelProps = ComponentProps<typeof ToolPanel>;
 type DraftAnswer = Awaited<ReturnType<DraftStudioDescription["call"]>>;
-type DraftInput = Parameters<DraftStudioDescription["call"]>[0];
+type DraftInput = Parameters<DraftStudioDescription["call"]>[1];
 
-/** draft_studio_description once #4742 merges, answering through `answer`. */
+/** draft_studio_description, answering through `answer`. */
 function draftCalling(
   answer: (input: DraftInput) => Promise<DraftAnswer>,
 ): DraftStudioDescription {
   return {
     name: "draft_studio_description",
-    available: true,
-    gap: "capability",
-    call: answer,
+    call: (_at, input) => answer(input),
   };
 }
 
@@ -141,6 +140,7 @@ function renderPanel(
   const onStage = vi.fn<(op: DraftOp) => boolean>(() => true);
   const onOpenChange = vi.fn<(open: boolean) => void>();
   const props: PanelProps = {
+    at: STUDIO_AT,
     serverName: "stripe",
     tool,
     ops: [],
@@ -693,43 +693,13 @@ describe("ToolPanel Draft", () => {
     );
   });
 
-  it.each([
-    { gap: "capability", ref: "#4742" },
-    { gap: "discovery", ref: "#4682" },
-  ] as const)(
-    "says Draft is not built yet and points the note at $ref for the $gap gap",
-    async ({ gap, ref }) => {
-      const user = userEvent.setup();
-      const { draft } = fakeDraft({ ok: false, reason: "not_built", gap });
-      renderPanel(toolOn(STRIPE, "create_payment"), { draft });
-      const section = within(region("Description"));
-      await user.click(section.getByRole("button", { name: "Draft" }));
-      const note = await section.findByTestId("studio-panel-draft-not-built");
-      expect(note).toHaveAttribute("role", "status");
-      expect(note).toHaveAttribute("data-state", "not-built");
-      expect(note).toHaveAttribute("data-gap", ref);
-      expect(note).toHaveTextContent(COPY.draftNotBuilt);
-      expect(section.getByRole("textbox", { name: "Description" })).toHaveValue(
-        "Charges a customer.",
-      );
-      expect(section.getByRole("button", { name: "Draft" })).toBeEnabled();
-    },
-  );
-
-  it("keeps Draft off with a note while draft_studio_description has not merged", async () => {
+  it("lets the person write and stage a description without Draft", async () => {
     const user = userEvent.setup();
     const panel = renderPanel(toolOn(STRIPE, "create_payment"));
     const section = within(region("Description"));
     const button = section.getByRole("button", { name: "Draft" });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
     expect(button).toHaveAttribute("data-capability", "draft_studio_description");
-    const note = section.getByTestId("studio-panel-draft-pending");
-    expect(button).toHaveAttribute("aria-describedby", note.id);
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-capability", "draft_studio_description");
-    expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent(COPY.draftNotBuilt);
-    // The person can still write the description and stage it.
     const text = section.getByRole("textbox", { name: "Description" });
     fireEvent.change(text, { target: { value: "Charges a customer in cents." } });
     await user.click(section.getByRole("button", { name: "Add to draft" }));
@@ -756,7 +726,7 @@ describe("ToolPanel Draft", () => {
     expect(calls).toEqual([]);
   });
 
-  it("draws no note once the capability is available", () => {
+  it("draws no note when the record names the folder", () => {
     const { draft } = fakeDraft({ ok: true, description: "Unused." });
     renderPanel(toolOn(STRIPE, "create_payment"), { draft });
     const section = within(region("Description"));
@@ -768,7 +738,7 @@ describe("ToolPanel Draft", () => {
 
   it("shows why Draft failed, and clears it when the next Draft succeeds", async () => {
     const user = userEvent.setup();
-    const { draft, calls } = fakeDraft(
+    const { draft, calls, workspaces } = fakeDraft(
       { ok: false, reason: "failed", message: "The model timed out." },
       { ok: true, description: "Charges a customer in cents." },
     );
@@ -780,7 +750,6 @@ describe("ToolPanel Draft", () => {
     const failed = await section.findByRole("alert");
     expect(failed).toHaveTextContent("Draft failed: The model timed out.");
     expect(text).toHaveValue("Charges a customer.");
-    expect(section.queryByTestId("studio-panel-draft-not-built")).toBeNull();
 
     await user.click(section.getByRole("button", { name: "Draft" }));
     await waitFor(() => {
@@ -788,6 +757,7 @@ describe("ToolPanel Draft", () => {
     });
     expect(section.queryByRole("alert")).toBeNull();
     expect(calls).toHaveLength(2);
+    expect(workspaces).toEqual([STUDIO_AT, STUDIO_AT]);
   });
 
   it("says Draft did not finish when it throws, and frees the button", async () => {

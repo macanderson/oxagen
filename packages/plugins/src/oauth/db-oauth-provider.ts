@@ -11,7 +11,6 @@
  */
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
-  OAuthClientInformation,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
   OAuthClientMetadata,
@@ -21,7 +20,15 @@ import {
   setWorkspaceSecret,
   getWorkspaceSecret,
 } from "../credentials/workspace-credential";
-import { saveOAuthState, loadOAuthState } from "./state-store";
+import {
+  type OAuthClientAuthMethod,
+  oauthClientAuthMethodOf,
+} from "./client-auth-method";
+import {
+  deleteOAuthState,
+  loadOAuthState,
+  saveOAuthState,
+} from "./state-store";
 import { preregisteredClientForEndpoint } from "./preregistered-clients";
 
 export interface DbProviderCtx {
@@ -45,7 +52,21 @@ export interface DbProviderCtx {
    * matched by this URL's host.
    */
   serverUrl?: string;
+  /**
+   * The https URL of Oxagen's OAuth client metadata document, served by the
+   * app. The SDK presents it as the client ID to any authorization server
+   * that advertises `client_id_metadata_document_supported`, in place of
+   * dynamic registration. Absent (a local http origin, a refresh), the SDK
+   * registers as before.
+   */
+  clientMetadataUrl?: string;
 }
+
+/**
+ * The method Oxagen asks for when it registers a client. A server that grants
+ * it binds the client to it, so the exchange and every refresh must use it too.
+ */
+const REGISTERED_AUTH_METHOD: OAuthClientAuthMethod = "client_secret_post";
 
 export class DbOAuthClientProvider implements OAuthClientProvider {
   /** Set by redirectToAuthorization(); the authorize route reads this to redirect the browser. */
@@ -60,13 +81,17 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
     return this.c.redirectUrl;
   }
 
+  get clientMetadataUrl(): string | undefined {
+    return this.c.clientMetadataUrl;
+  }
+
   get clientMetadata(): OAuthClientMetadata {
     return {
       client_name: this.c.clientName,
       redirect_uris: [this.c.redirectUrl],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
-      token_endpoint_auth_method: "client_secret_post",
+      token_endpoint_auth_method: REGISTERED_AUTH_METHOD,
     };
   }
 
@@ -76,7 +101,7 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
 
   // ── Client information (DCR result) ─────────────────────────────────────────
 
-  async clientInformation(): Promise<OAuthClientInformation | undefined> {
+  async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
     if (this.clientInfoCache) return this.clientInfoCache;
     const cred = await getWorkspaceSecret({
       orgId: this.c.orgId,
@@ -94,12 +119,26 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       }
       return undefined;
     }
-    // Return the minimal OAuthClientInformation shape.
-    const info: OAuthClientInformation = {
+    // The stored client with the token endpoint auth method it holds. The SDK
+    // authenticates the exchange and every refresh with this method when the
+    // server lists it; without one it picks client_secret_basic, which a
+    // server that bound the client to client_secret_post at registration
+    // refuses with invalid_client (Linear does). A client whose method was not
+    // recorded (a workspace's own OAuth app, or one registered before the
+    // column) is sent the method Oxagen registers with, and the SDK falls back
+    // to its own choice when the server does not list that one.
+    const secret =
+      cred.oauthClientSecret === null || cred.oauthClientSecret === ""
+        ? undefined
+        : cred.oauthClientSecret;
+    const method: OAuthClientAuthMethod =
+      cred.oauthClientAuthMethod ??
+      (secret === undefined ? "none" : REGISTERED_AUTH_METHOD);
+    const info: OAuthClientInformationFull = {
+      ...this.clientMetadata,
       client_id: cred.oauthClientId,
-      ...(cred.oauthClientSecret
-        ? { client_secret: cred.oauthClientSecret }
-        : {}),
+      ...(secret === undefined ? {} : { client_secret: secret }),
+      token_endpoint_auth_method: method,
     };
     return info;
   }
@@ -117,6 +156,18 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       authKind: "oauth",
       oauthClientId: info.client_id,
       oauthClientSecret: info.client_secret ?? null,
+      // The client is bound to this callback. Sign-in registers again once the
+      // app's callback no longer matches it.
+      oauthClientRedirectUri: this.c.redirectUrl,
+      // The method the server granted, which may differ from the one asked
+      // for; a response that names none granted the one asked for.
+      oauthClientAuthMethod:
+        oauthClientAuthMethodOf(
+          "token_endpoint_auth_method" in info
+            ? info.token_endpoint_auth_method
+            : undefined,
+        ) ??
+        (info.client_secret === undefined ? "none" : REGISTERED_AUTH_METHOD),
     });
   }
 
@@ -160,6 +211,49 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
       expiresAt,
       lastRefreshedAt: new Date(now),
     });
+  }
+
+  // ── Invalidation ────────────────────────────────────────────────────────────
+
+  /**
+   * Forgets what the authorization server said is no longer valid. The SDK
+   * calls this when a refresh answers invalid_grant (`tokens`) or the client
+   * is refused as invalid_client or unauthorized_client (`all`), and then
+   * retries. Without it the dead refresh token or client stayed stored, so
+   * every retry and every Reconnect failed the same way and the provider
+   * could never be signed in to again.
+   */
+  async invalidateCredentials(
+    scope: "all" | "client" | "tokens" | "verifier" | "discovery",
+  ): Promise<void> {
+    const key = {
+      orgId: this.c.orgId,
+      workspaceId: this.c.workspaceId,
+      orgListingId: this.c.orgListingId,
+      authKind: "oauth" as const,
+    };
+    const tokens = scope === "all" || scope === "tokens";
+    const client = scope === "all" || scope === "client";
+    if (tokens || client) {
+      await setWorkspaceSecret({
+        ...key,
+        ...(tokens
+          ? { accessToken: null, refreshToken: null, expiresAt: null }
+          : {}),
+        ...(client
+          ? {
+              oauthClientId: null,
+              oauthClientSecret: null,
+              oauthClientAuthMethod: null,
+              oauthClientRedirectUri: null,
+            }
+          : {}),
+      });
+    }
+    if (client) this.clientInfoCache = null;
+    if (scope === "all" || scope === "verifier") {
+      await deleteOAuthState(this.c.state);
+    }
   }
 
   // ── Authorization redirect ───────────────────────────────────────────────────

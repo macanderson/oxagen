@@ -1,0 +1,56 @@
+---
+title: Local servers
+description: "How a tool call reaches an MCP server that runs on an enrolled machine, and what each route answers."
+---
+
+Some MCP servers work only on the machine that runs the agent, such as a server that reads local files, or a registry package that starts as a local command. A steering repo can pin such a server to machines. Oxagen then sends each call to one of those machines, which runs it and sends the answer back.
+
+The machine starts every exchange. Oxagen opens no connection to it, so the machine needs no open port and no inbound firewall rule.
+
+## How a call reaches the machine
+
+1. The agent calls a tool on a local server through Oxagen's MCP endpoint.
+2. Oxagen checks that the machine is in a group the server's `source.machines` names, signs a call envelope for that machine, and holds it.
+3. The machine's collector is already waiting on `GET /v1/local-servers/next`. It receives the envelope, checks the signature, and runs the call on the local server.
+4. The machine posts the result to `POST /v1/local-servers/replies`, and Oxagen hands it to the agent.
+
+A machine counts as connected while it polls, and for 10 seconds after its last poll ends. A call to a machine that is not connected fails at once as disconnected. Oxagen keeps no queue for an offline machine, so no call runs later on a machine that was away.
+
+## The machine loop
+
+`tacho enroll` stores a gateway key for the machine, and the collector daemon starts the loop. The loop runs while all three of these hold:
+
+- The machine's `host.json` holds a gateway key.
+- The machine's enrollment is not revoked.
+- The machine is not suspended.
+
+When one stops holding, the loop stops. A revoke or a suspension reaches the daemon from Oxagen, and the loop stops then. `tacho unenroll` stops the daemon, and the loop with it.
+
+The loop pulls from the MCP origin with the gateway key. It never uses a personal API key.
+
+## The two routes
+
+Both routes take the gateway key as `Authorization: Bearer <key>`, and the machine's enrollment id in the `X-Tacho-Host` header. The header must name the enrollment the key belongs to.
+
+| Route | Answers |
+|---|---|
+| `GET /v1/local-servers/next` | `200` with one call envelope, or `204` when no call came within 25 seconds |
+| `POST /v1/local-servers/replies` | `204` when a call waits for the reply |
+
+The poll holds for up to 25 seconds, and then the machine polls again. When the machine hangs up after Oxagen picked a call for it, Oxagen keeps the call for the machine's next poll.
+
+A deploy of Oxagen's MCP service fails a call in flight at that moment. The machine's next poll reaches the new service, and the agent can call again.
+
+## Refusals
+
+| Status | Code | When |
+|---|---|---|
+| `401` | `unauthorized` | The key is missing, malformed, invalid, expired, locked to another purpose, or in an archived workspace. |
+| `403` | `forbidden` | The key is not a machine's gateway key, the header names another machine, the machine is unknown, its enrollment expired, or the organization requires single sign-on for the key's creator. |
+| `403` | `forbidden`, reason `host_revoked` | The machine's enrollment is revoked. |
+| `403` | `forbidden`, reason `host_suspended` | The machine is suspended. |
+| `400` | `bad_request`, reason `invalid` | The reply does not match the reply shape. |
+| `409` | `conflict` | No call waits for this reply. The reason says why: `unknown_id` when the call timed out, was answered, or was never sent to this machine, `wrong_machine` when the reply names another machine, and `wrong_kind` when the reply does not answer the call it names. |
+| `405` | `method_not_allowed` | The poll was not a `GET`, or the reply was not a `POST`. |
+
+A revoked or suspended machine gets no calls. Enroll it again, or ask an admin to lift the suspension.

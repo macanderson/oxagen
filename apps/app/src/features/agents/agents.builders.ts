@@ -663,6 +663,7 @@ export function agentsSource(reads: AgentReads) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      layout: refuse,
       hub: refuse,
       deliveries: answer(reads.deliveries, "deliveries"),
       memories: refuse,

@@ -728,11 +728,7 @@
         "host": {
           "title": "Host",
           "lead": "The enrollment tacho records for this host, the same record the host reports into.",
-          "open": {
-            "label": "Open the runtime",
-            "title": "Open the runtime",
-            "body": "Oxagen would open this host on the Runtimes page. That page is not built yet, so nothing opens."
-          },
+          "open": "Open the runtime",
           "runtime": "Runtime",
           "runtimeSub": "{platform} in bundle mode {mode}",
           "harness": "Harness",
@@ -769,11 +765,7 @@
         "tier": {
           "title": "Tier coverage",
           "lead": "The tier is computed per run from what was actually routed.",
-          "all": {
-            "label": "All runtimes",
-            "title": "All runtimes",
-            "body": "Oxagen would open the Runtimes page with every host in this workspace. That page is not built yet, so nothing opens."
-          },
+          "all": "All runtimes",
           "ladder": "Enforcement tiers, weakest first",
           "thisAgent": "this agent",
           "noRun": "No run of this agent is on the newest page of runs, so no tier is recorded for it.",
@@ -891,7 +883,7 @@
           "notRequired": "Not required",
           "setOn": "set on the runtime <runtime>{name}</runtime>",
           "noRuntime": "This agent runs on no named runtime, so nothing requires it.",
-          "note": "An organization Owner or Admin changes it on the runtime’s page. The change applies to every agent on that runtime and reaches each host on its next bundle fetch."
+          "note": "An organization Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch."
         }
       },
       "activity": {

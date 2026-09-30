@@ -6,12 +6,13 @@
 // assert about it, and each kind card says what that kind can never do.
 //
 // The last step calls propose_record, then open_context_pr: the proposal is
-// the Context PR's own state, and open_context_pr cuts `context/<lineage>`
-// from the main repository, commits `.oxagen/rules/<lineage>.toml` in the
-// context-record/v0.1 format, and runs the six checks (MC spec §10.3). The
-// record steers nothing until a person merges it. On success the page behind
-// the dialog moves to Steering · Context PRs with the new pull request
-// selected, so closing the wizard lands there (creation-spec §5).
+// the Context PR's own state, and open_context_pr cuts a branch and commits a
+// record whose path and branch follow the bound repository's layout (steering
+// or legacy; recordPathFor/branchFor in ./record-file mirror the handler) and
+// runs the six checks (MC spec §10.3). The record steers nothing until a
+// person merges it. On success the page behind the dialog moves to Steering ·
+// Context PRs with the new pull request selected, so closing the wizard lands
+// there (creation-spec §5).
 import {
   CONTEXT_RECORD_LABEL_MAX,
   CONTEXT_RECORD_LINEAGE,
@@ -47,6 +48,7 @@ import {
   PullRequestPlan,
 } from "./parts";
 import {
+  branchFor,
   choiceKey,
   forceOf,
   forcesFor,
@@ -55,6 +57,8 @@ import {
   lineageOf,
   normalizeStatement,
   type RecordChoice,
+  recordPathFor,
+  type RepoLayout,
   STATEMENT_MAX,
   seedStatement,
   statementTokens,
@@ -193,13 +197,17 @@ function recordOf(api: Api, ctx: CreateContext) {
     sharingScope: "workspace",
     statement: sent,
   };
+  const layout: RepoLayout =
+    ctx.repo.state === "bound" ? ctx.repo.layout : null;
+  const path = recordPathFor(layout, kind, lineageId);
   return {
     choice,
     seed,
     statement,
     sent,
     edited: statement !== seed,
-    path: `.oxagen/rules/${lineageId}.toml`,
+    path,
+    branch: branchFor(path, lineageId),
     tokens: statementTokens(sent),
     fits:
       sent !== "" &&
@@ -348,7 +356,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
     <div className="flex flex-col gap-3 text-sm">
       <DraftNote title={t("drafted.title")} body={t("drafted.body")} />
       <FileEditor
-        path={t("path", { path: record.path })}
+        path={t("path", { path: record.path ?? "…" })}
         value={record.statement}
         onChange={set}
         bar={
@@ -562,8 +570,10 @@ function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
         base={
           repo.state === "bound" ? `${repo.fullName}:${repo.defaultRef}` : null
         }
-        branch={`context/${lineage}`}
-        files={[{ change: "add", path: record.path, note: t("fileRecord") }]}
+        branch={record.branch ?? "…"}
+        files={[
+          { change: "add", path: record.path ?? "…", note: t("fileRecord") },
+        ]}
         checks={CHECKS.map((c) => ({
           name: t(`names.${c}`),
           detail: detail[c],

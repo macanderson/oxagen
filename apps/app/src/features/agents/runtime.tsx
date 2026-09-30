@@ -8,8 +8,8 @@
 // per run, not per host (G6), so "Tier earned" and the ladder's marker read
 // the newest run of this agent, and with no run they mark nothing.
 //
-// The Runtimes page is not built in this workspace yet, so Open the runtime
-// and All runtimes say so. Unenroll is `revoke_host_enrollment`, and Show the
+// Open the runtime opens the host in the drawer over the Agents page's
+// Runtimes tab, and All runtimes opens that tab. Unenroll is `revoke_host_enrollment`, and Show the
 // CLI path mints the single-use token and prints the enroll command
 // (`create_enrollment_token`); a retired identity is archived, so it is
 // offered neither. Both writes admit only an organization Owner or Admin, so
@@ -54,11 +54,15 @@ function HostPanel({
   detail,
   lastRun,
   index,
+  org,
+  ws,
 }: {
   host: Host;
   detail: AgentDetail;
   lastRun: RunRow | null;
   index: number;
+  org: string;
+  ws: string;
 }) {
   const t = useTranslations("agents.detail.runtime.host");
   const agents = useTranslations("agents");
@@ -76,13 +80,13 @@ function HostPanel({
           <Badge tone={live && host.hooksOk !== false ? "allowed" : "approval"}>
             <span className={mono}>{host.status}</span>
           </Badge>
-          <StubAction
-            label={t("open.label")}
-            title={t("open.title")}
-            body={t("open.body")}
-            gap="runtimes_page"
-            testId="open-runtime"
-          />
+          <SafeLink
+            to={routes.runtime(org, ws, host.hostEnrollmentId)}
+            data-testid="open-runtime"
+            className={buttonSecondary}
+          >
+            {t("open")}
+          </SafeLink>
         </>
       }
     >
@@ -221,7 +225,15 @@ function HostPanel({
   );
 }
 
-function TierDelivers({ tier }: { tier: EnforcementTier | null }) {
+function TierDelivers({
+  tier,
+  org,
+  ws,
+}: {
+  tier: EnforcementTier | null;
+  org: string;
+  ws: string;
+}) {
   const t = useTranslations("agents.detail.runtime.tier");
   const answer = (row: "model" | "mcp" | "native" | "budgets" | "steering") =>
     tier === null ? <NotRecordedValue /> : t(`rows.${row}.${tier}`);
@@ -231,13 +243,13 @@ function TierDelivers({ tier }: { tier: EnforcementTier | null }) {
       title={t("title")}
       lead={t("lead")}
       aside={
-        <StubAction
-          label={t("all.label")}
-          title={t("all.title")}
-          body={t("all.body")}
-          gap="runtimes_page"
-          testId="all-runtimes"
-        />
+        <SafeLink
+          to={routes.runtimes(org, ws)}
+          data-testid="all-runtimes"
+          className={buttonSecondary}
+        >
+          {t("all")}
+        </SafeLink>
       }
     >
       <ol
@@ -414,6 +426,8 @@ export function RuntimeSection({
             detail={detail}
             lastRun={lastRun}
             index={index}
+            org={org}
+            ws={ws}
           />
         ))}
       </div>
@@ -428,10 +442,16 @@ export function RuntimeSection({
           detail={detail}
           lastRun={lastRun}
           index={index}
+          org={org}
+          ws={ws}
         />
       ))}
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <TierDelivers tier={lastRun?.enforcementTier ?? null} />
+        <TierDelivers
+          tier={lastRun?.enforcementTier ?? null}
+          org={org}
+          ws={ws}
+        />
         <Rollback
           hosts={live}
           org={org}

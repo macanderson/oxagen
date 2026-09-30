@@ -12,21 +12,11 @@ const STUDIO_GAPS = {
    */
   record: 4678,
   /**
-   * Discovery progress and the tools discovery found: lane M10 part 2
-   * (start_studio_discovery, get_studio_discovery, list_studio_tools).
+   * A registry entry's packages: the registry keeps `packages[]` (#4742), but
+   * the app's RegistryServer does not carry them yet, so the package path
+   * cannot list what to ask for.
    */
-  discovery: 4682,
-  /** Test and Draft: try_studio_tool and draft_studio_description. */
-  capability: 4742,
-  /** Findings on the draft: list_studio_findings, which runs lane M5's lint. */
-  findings: 4742,
-  /** Writing a named credential: set_mcp_credential. */
-  credentials: 4742,
-  /**
-   * A registry entry's packages: search_mcp_registry drops `packages[]` today
-   * (toRegistryServer), so the package path cannot list what to ask for.
-   */
-  packages: 4742,
+  packages: 4678,
   /**
    * Adding a server by local command. Review refuses a new local server with
    * `source_required`, because its draft carries no source and its folder has

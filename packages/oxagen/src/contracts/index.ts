@@ -327,6 +327,7 @@ import { steeringRepoRepair } from "./steering_repo.repair";
 import { steeringRepoImport } from "./steering_repo.import";
 import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
 import { contextSteeringFreshness } from "./context.steering.freshness";
+import { contextSteeringLayout } from "./context.steering.layout";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
@@ -1017,6 +1018,7 @@ export {
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringLayout,
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,
@@ -1463,6 +1465,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordsList,
   contextRecordsGet,
   contextSteeringFreshness,
+  contextSteeringLayout,
   contextSteeringDeliveries,
   steeringRepoGet,
   steeringRepoRepair,

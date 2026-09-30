@@ -214,7 +214,6 @@
         "clientId": "Client ID",
         "clientSecret": "Client secret",
         "secretHint": "Sent once to the Oxagen vault. This page never shows it again.",
-        "pending": "Storing a credential from this page is not available yet.",
         "saving": "Storing",
         "saved": "Stored as {reference}",
         "failed": "The credential was not stored. Oxagen answered {code}.",
@@ -313,7 +312,7 @@
       },
       "findings": {
         "title": "Findings",
-        "missing": "Findings are not available yet.",
+        "missing": "Findings show once this server's folder is recorded.",
         "none": "The tool checks found nothing.",
         "server": "Server",
         "columns": {
@@ -474,7 +473,6 @@
       },
       "discovery": {
         "title": "Discovery",
-        "notAvailable": "Discovery progress is not available yet.",
         "unnamed": "Discovery starts once the server's folder merges. Its progress shows on the server's Tools tab.",
         "loading": "Reading discovery",
         "none": "Discovery has not run for this server yet.",

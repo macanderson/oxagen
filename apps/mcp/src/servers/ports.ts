@@ -7,7 +7,6 @@
 // environment's network names.
 import { postgresKillSwitchReads } from "@oxagen/agent/runtime/kill-switch-gate";
 import { assertGauAvailable, BillingSuspendedError, GauExhaustedError, recordGovernedActions } from "@oxagen/billing";
-import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
 import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
@@ -153,13 +152,13 @@ async function scopeSlugs(scope: Scope): Promise<{ orgSlug: string; workspaceSlu
 
 /**
  * The vault's CredentialSource for one run, built on the first call that
- * needs a credential. Its connect link is the API's connect route for the
- * run's workspace.
+ * needs a credential. Its connect link is on the app's origin, where the
+ * operator's session cookie lives (`mcpStudioAppOrigin`).
  */
 export function servedCredentials(run: ServedRun): CredentialSource {
   const scope = scopeOf(run);
   return lazyCredentialSource(async () =>
-    workspaceCredentialSource({ ...scope, ...(await scopeSlugs(scope)), apiBaseUrl: apiPublicOrigin() }),
+    workspaceCredentialSource({ ...scope, ...(await scopeSlugs(scope)) }),
   );
 }
 

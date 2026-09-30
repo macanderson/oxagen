@@ -16,6 +16,24 @@ person never leaves the dialog.
 The handler requires an org Owner or Admin, or a workspace Owner, and asserts
 the role itself. A person authorizes a connection, never an agent.
 
+## Client identity
+
+Oxagen presents itself to the authorization server in the first of these ways
+the server accepts:
+
+1. A client already stored for the provider: a workspace's own OAuth app, or
+   one registered earlier.
+2. A platform client configured for the server's host
+   (`MCP_OAUTH_PREREGISTERED_CLIENTS`).
+3. Oxagen's Client ID Metadata Document, when the server advertises
+   `client_id_metadata_document_supported` and the callback is https. The
+   client ID is `<app origin>/api/v1/mcp/oauth/client-metadata`, a public
+   document the app serves that lists the callback. Nothing is registered.
+4. Dynamic client registration (RFC 7591), when the server publishes a
+   registration endpoint.
+
+A server that accepts none of them answers `client_required`.
+
 ## Input
 
 | Field         | Type                         | Notes                                                        |
@@ -37,13 +55,13 @@ A union on `status`:
 | ----------------- | ------------------------------------------- | ---------------------------------------------------- |
 | `redirect`        | `authorizationUrl`, `state`                 | Open the URL; the callback completes the flow.       |
 | `authorized`      | `mcpServerId`, `healthStatus`, `discoveredTools` | A stored refresh token still worked.            |
-| `client_required` | `scopesSupported`                           | Supply `client`: the server registers no clients.    |
+| `client_required` | `scopesSupported`                           | Supply `client`: the server takes neither a metadata document nor a registration. |
 | `not_oauth`       | none                                        | The endpoint asks for no OAuth. Use `register_mcp_server`. |
 
 ## Side effects
 
 - Postgres: upserts a `plugin.installed_plugins` listing (`plugin_type = 'mcp_server'`, `auth_kind = 'oauth'`).
-- Postgres: writes the OAuth client to `mcp.credentials`, with the secret envelope-encrypted, when one is supplied or registered.
+- Postgres: writes the OAuth client to `mcp.credentials`, with the secret envelope-encrypted, when one is supplied or registered. A registered client also records its token endpoint auth method (`oauth_client_auth_method`), and the code exchange and every refresh authenticate with that method. A supplied client clears it.
 - Postgres: stores the PKCE verifier and state in `auth.verifications` for 10 minutes.
 
 ## Errors
@@ -56,4 +74,5 @@ A union on `status`:
 | `conflict`  | `redirect_url_invalid`           | The redirect URL is not the callback.        |
 | `conflict`  | `provider_unnamed`               | Neither `mcpServerId` nor a name and endpoint. |
 | `conflict`  | `authorization_discovery_failed` | The server's OAuth metadata could not be read. |
+| `conflict`  | `registration_refused`           | The server refused to register Oxagen as a client. |
 | `conflict`  | `authorization_failed`           | The authorization server refused to start.   |

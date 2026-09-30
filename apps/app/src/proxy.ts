@@ -30,6 +30,8 @@ import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
  * /api/scim/v2 is public because an identity provider calls it with the
  * organization's SCIM bearer token and never a cookie; the Hono API the app
  * proxies it to refuses a request without a valid token (#3734).
+ * The MCP OAuth client metadata document is public because an authorization
+ * server fetches it anonymously: its URL is Oxagen's client ID (#4814).
  */
 export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/(login|signup|verify|two-factor|forgot-password|reset-password)(\/|$)/,
@@ -38,6 +40,7 @@ export const PUBLIC_PATHS: readonly RegExp[] = [
   /^\/api\/scim\/v2(\/|$)/,
   /^\/cli\/(authorize|complete)(\/|$)/,
   /^\/github\/setup(\/|$)/,
+  /^\/api\/v1\/mcp\/oauth\/client-metadata$/,
 ];
 
 export function isPublicPath(pathname: string): boolean {

@@ -204,6 +204,8 @@ function selectServerRows(ctx: CapabilityContext) {
         healthStatus: schema.mcpServers.healthStatus,
         lastHealthcheckAt: schema.mcpServers.lastHealthcheckAt,
         discoveredTools: schema.mcpServers.discoveredTools,
+        origin: schema.mcpServers.origin,
+        steeringName: schema.mcpServers.steeringName,
         authStrategy: schema.mcpServers.authStrategy,
         listingAuthKind: schema.pluginInstalledPlugins.authKind,
         iconUrl: schema.pluginInstalledPlugins.iconUrl,
@@ -278,5 +280,17 @@ function serverView(
       : null,
     toolCount: r.discoveredTools.length,
     ...authorizationOf(r),
+    steeringName: steeringNameOf(r),
   };
+}
+
+/**
+ * The folder a steering repo gives the server, or null for a server added
+ * any other way. A steering row always names one, and a row from before the
+ * column was written reads as null.
+ */
+function steeringNameOf(
+  r: Pick<ServerRow, "origin" | "steeringName">,
+): string | null {
+  return r.origin === "steering" && r.steeringName ? r.steeringName : null;
 }

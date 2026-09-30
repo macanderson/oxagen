@@ -22,6 +22,8 @@ export function RecordWorkbench({
   at,
   detail,
   repository,
+  path,
+  branch,
   canWrite,
   pendingBranch: initialPending,
   lineagePanel,
@@ -32,6 +34,10 @@ export function RecordWorkbench({
   detail: RecordDetail;
   /** The main repository, `owner/name`; null when it could not be read. */
   repository: string | null;
+  /** The record's file; null while the repository's layout is unread. */
+  path: string | null;
+  /** The branch a proposal opens on; null while the path is. */
+  branch: string | null;
   /** Whether this viewer's role may revise. The handler stays the authority. */
   canWrite: boolean;
   pendingBranch: string | null;
@@ -42,7 +48,7 @@ export function RecordWorkbench({
   const t = useTranslations("record.editor");
   const { record } = detail;
   const inForce = record.statement ?? "";
-  const path = record.path ?? `.oxagen/rules/${at.lineage}.toml`;
+  const shownPath = path ?? "…";
   const [base, setBase] = useState(inForce);
   const [draft, setDraft] = useState(inForce);
   const [pending, setPending] = useState(initialPending);
@@ -70,7 +76,7 @@ export function RecordWorkbench({
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)]">
         <div className="flex min-w-0 flex-col gap-3.5">
           <StatementEditor
-            path={t("path", { path })}
+            path={t("path", { path: shownPath })}
             value={draft}
             base={base}
             onChange={setDraft}
@@ -98,7 +104,8 @@ export function RecordWorkbench({
         open={proposing}
         onOpenChange={setProposing}
         at={at}
-        path={path}
+        path={shownPath}
+        branch={branch}
         repository={repository}
         base={base}
         draft={draft}
@@ -117,7 +124,7 @@ export function RecordWorkbench({
         open={archiving}
         onOpenChange={setArchiving}
         lineage={at.lineage}
-        path={path}
+        path={shownPath}
         repository={repository}
         archived={record.status !== "active"}
         pendingBranch={pending}

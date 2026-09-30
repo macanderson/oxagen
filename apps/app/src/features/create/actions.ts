@@ -12,34 +12,54 @@
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
+import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
-import type { RecordChoice } from "./record-file";
+import type { RecordChoice, RepoLayout } from "./record-file";
 
-/** The main repository a wizard's pull request targets; null while the workspace binds none. */
-type MainRepository = { fullName: string; defaultRef: string } | null;
+/**
+ * The main repository a wizard's pull request targets, and the layout its
+ * production branch carries (#4765): `steering` when it holds
+ * `steering/governance.toml`, `legacy` otherwise, null while the layout read
+ * failed. The wizard's preview needs this to show the path and branch
+ * open_context_pr will actually write, because the two layouts disagree on
+ * both. Null while the workspace binds no repository.
+ */
+type MainRepository = {
+  fullName: string;
+  defaultRef: string;
+  layout: RepoLayout;
+} | null;
 
 export async function readMainRepository(
   org: string,
   ws: string,
 ): Promise<ActionResult<MainRepository>> {
   const ctx = await requireViewer(org, ws);
-  const read = await kernelRead(ctx, {
-    contract: contextSteeringFreshness,
-    input: {},
-    page: "repositories",
-  });
-  const result = readToActionResult(read);
+  const [freshnessRead, layoutRead] = await Promise.all([
+    kernelRead(ctx, {
+      contract: contextSteeringFreshness,
+      input: {},
+      page: "repositories",
+    }),
+    kernelRead(ctx, {
+      contract: contextSteeringLayout,
+      input: {},
+      page: "repositories",
+    }),
+  ]);
+  const result = readToActionResult(freshnessRead);
   if (!result.ok) return result;
   const { repository, defaultBranch } = result.value;
+  const layout: RepoLayout = layoutRead.ok ? layoutRead.value.layout : null;
   return {
     ok: true,
     value:
       repository === null || defaultBranch === null
         ? null
-        : { fullName: repository, defaultRef: defaultBranch },
+        : { fullName: repository, defaultRef: defaultBranch, layout },
   };
 }
 
@@ -156,10 +176,12 @@ export type OpenedRecord = {
 };
 
 /**
- * The wizard's last write: open_context_pr cuts `context/<lineage>` from the
- * main repository's production branch, commits the one record file, opens the
- * pull request, and runs the six checks. It answers with where the checks
- * stopped.
+ * The wizard's last write: open_context_pr cuts a branch from the main
+ * repository's production branch, commits the one record file at the path
+ * its layout uses, opens the pull request, and runs the six checks. It
+ * answers with where the checks stopped, and with the path and branch it
+ * actually wrote (`pr.path`, `pr.branch`), which is the source of truth for
+ * every step after this one.
  */
 export async function openRecordPr(
   org: string,

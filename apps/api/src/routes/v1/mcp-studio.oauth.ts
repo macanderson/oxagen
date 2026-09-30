@@ -6,38 +6,49 @@
  * "Connect your <label> account in Oxagen, then retry." with a link to the
  * connect route below.
  *
+ * The browser reaches the connect route and the callback on the app's origin,
+ * at /api/v1/..., which the app proxies here. Better Auth's session cookie
+ * belongs to the app host alone, so a browser sends it only there. The state
+ * cookie the connect sets lands on the app host too, and the callback on the
+ * same host gets it back.
+ *
  * Mount points:
  *   GET  /v1/:org_slug/:workspace_slug/mcp-studio/oauth/connect?server=&environment=
  *        Signed-in session only. Sends the browser to the server's
  *        authorization server with PKCE and a one-time state, and sets a
  *        cookie that binds the callback to this browser.
+ *   GET  /v1/:org_slug/:workspace_slug/mcp-studio/oauth/callback?code=&state=
+ *        Signed-in session only. The cookie must carry the state, and the
+ *        state must name the caller. Trades the code for tokens and stores
+ *        them sealed.
  *   POST /v1/:org_slug/:workspace_slug/mcp-studio/oauth/disconnect
  *        Body { server, environment }. Revokes the caller's token at the
  *        authorization server and deletes it.
- *   GET  /oauth/mcp-studio/callback?code=&state=
- *        Public. The state names the operator and the workspace, and the
- *        cookie must carry the same state. Trades the code for tokens and
- *        stores them sealed.
+ *   GET  /oauth/mcp-studio/callback
+ *        Retired. The API-host callback never received the state cookie, so
+ *        it answers 410 and asks the operator to start again.
  *
  * No response and no log line carries a token, a code, or a client secret.
  */
 import { timingSafeEqual } from "node:crypto";
-import { requireEnv } from "@oxagen/config/env";
 import {
   beginConnect,
   ConnectError,
   defaultConnectDeps,
   disconnect,
   finishConnect,
+  mcpStudioAppOrigin,
+  mcpStudioOauthPath,
+  mcpStudioOauthUrl,
 } from "@oxagen/handlers/mcp-studio/credentials/connect";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import type { AppEnv } from "../../app";
 
 /** The cookie that binds a callback to the browser that started the connect. */
 export const CONNECT_COOKIE = "oxagen_mcp_connect";
-/** Where the public callback is mounted. The cookie's path. */
+/** Where the retired public callback is mounted. */
 export const CALLBACK_BASE = "/oauth/mcp-studio";
 const COOKIE_MAX_AGE_SECONDS = 600;
 
@@ -48,10 +59,30 @@ const targetSchema = z.object({
   environment: z.string().min(1).max(64),
 });
 
-/** The callback URI every OAuth client for MCP Studio registers. */
-export function callbackUri(): string {
-  const { NEXT_PUBLIC_API_URL } = requireEnv(["NEXT_PUBLIC_API_URL"] as const);
-  return `${NEXT_PUBLIC_API_URL.replace(/\/+$/, "")}${CALLBACK_BASE}/callback`;
+interface Slugs {
+  orgSlug: string;
+  workspaceSlug: string;
+}
+
+/**
+ * The redirect URI for a workspace's connects: its callback on the app's
+ * origin. The connect saves it with the state, so the token request sends the
+ * same URI the authorization request did.
+ */
+export function callbackUri(slugs: Slugs, appBaseUrl: string = mcpStudioAppOrigin()): string {
+  return mcpStudioOauthUrl({ appBaseUrl, ...slugs }, "callback");
+}
+
+/** The state cookie's path: the callback's path as the browser sees it. */
+export function connectCookiePath(slugs: Slugs): string {
+  return `${mcpStudioOauthPath(slugs)}/callback`;
+}
+
+function slugsOf(c: Context<AppEnv>): Slugs | null {
+  const orgSlug = c.req.param("org_slug");
+  const workspaceSlug = c.req.param("workspace_slug");
+  if (!orgSlug || !workspaceSlug) return null;
+  return { orgSlug, workspaceSlug };
 }
 
 function sameState(cookie: string | undefined, state: string): boolean {
@@ -61,19 +92,28 @@ function sameState(cookie: string | undefined, state: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export const mcpStudioOauthRoute = new Hono<AppEnv>();
-
-mcpStudioOauthRoute.get("/connect", async (c) => {
+/** The signed-in person behind a browser session, or null. */
+function sessionCaller(c: Context<AppEnv>): { orgId: string; workspaceId: string; userId: string } | null {
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
   const userId = c.get("userId");
-  if (orgId === null || workspaceId === null || userId === null || !UUID.test(userId)) {
+  if (orgId === null || workspaceId === null || userId === null || !UUID.test(userId)) return null;
+  return { orgId, workspaceId, userId };
+}
+
+export const mcpStudioOauthRoute = new Hono<AppEnv>();
+
+mcpStudioOauthRoute.get("/connect", async (c) => {
+  const caller = sessionCaller(c);
+  if (caller === null) {
     return c.text("Sign in to Oxagen, then open the connect link again.", 401);
   }
   if (c.get("apiKeyId") !== null) {
     // The token belongs to a person, so a person's browser session connects it.
     return c.text("Open the connect link in a browser signed in to Oxagen. An API key cannot connect an account.", 403);
   }
+  const slugs = slugsOf(c);
+  if (slugs === null) return c.notFound();
   const target = targetSchema.safeParse({
     server: c.req.query("server"),
     environment: c.req.query("environment"),
@@ -81,25 +121,50 @@ mcpStudioOauthRoute.get("/connect", async (c) => {
   if (!target.success) {
     return c.text("The connect link names no server or environment. Copy it again from the failed call.", 400);
   }
-  let redirectUri: string;
+  const redirectUri = callbackUri(slugs);
   try {
-    redirectUri = callbackUri();
-  } catch {
-    return c.text("The API has no public URL, so the authorization server has nowhere to send you back. Set NEXT_PUBLIC_API_URL on the API.", 503);
-  }
-  try {
-    const started = await beginConnect(
-      { orgId, workspaceId, userId, ...target.data, redirectUri },
-      defaultConnectDeps(),
-    );
+    const started = await beginConnect({ ...caller, ...target.data, redirectUri }, defaultConnectDeps());
     setCookie(c, CONNECT_COOKIE, started.state, {
-      path: CALLBACK_BASE,
+      path: connectCookiePath(slugs),
       httpOnly: true,
       sameSite: "Lax",
       secure: redirectUri.startsWith("https://"),
       maxAge: COOKIE_MAX_AGE_SECONDS,
     });
     return c.redirect(started.authorizationUrl, 302);
+  } catch (error) {
+    if (error instanceof ConnectError) return c.text(error.message, error.status);
+    throw error;
+  }
+});
+
+mcpStudioOauthRoute.get("/callback", async (c) => {
+  const slugs = slugsOf(c);
+  if (slugs === null) return c.notFound();
+  const cookie = getCookie(c, CONNECT_COOKIE);
+  deleteCookie(c, CONNECT_COOKIE, { path: connectCookiePath(slugs) });
+  const caller = sessionCaller(c);
+  if (caller === null || c.get("apiKeyId") !== null) {
+    return c.text("Sign in to Oxagen in this browser, then start the connect again.", 401);
+  }
+  const providerError = c.req.query("error");
+  if (providerError !== undefined) {
+    // The authorization server's error code, cut to its RFC 6749 alphabet so
+    // nothing it sent lands in the page as markup.
+    const code = /^[a-z_]{1,64}$/.test(providerError) ? providerError : "an error";
+    return c.text(`The authorization server answered ${code}, so nothing was connected. Start again from Oxagen.`, 400);
+  }
+  const state = c.req.query("state");
+  const code = c.req.query("code");
+  if (state === undefined || code === undefined || state === "" || code === "") {
+    return c.text("The authorization server sent no code. Start again from Oxagen.", 400);
+  }
+  if (!sameState(cookie, state)) {
+    return c.text("This connect link was started in another browser, or it expired. Start again from Oxagen.", 400);
+  }
+  try {
+    const connected = await finishConnect({ state, code, caller }, defaultConnectDeps());
+    return c.text(`${connected.label} is connected. Go back to Oxagen and retry the call.`, 200);
   } catch (error) {
     if (error instanceof ConnectError) return c.text(error.message, error.status);
     throw error;
@@ -127,31 +192,14 @@ mcpStudioOauthRoute.post("/disconnect", async (c) => {
   return c.json({ disconnected });
 });
 
+/**
+ * The retired API-host callback. Connects started before the move to the app
+ * origin named it as their redirect URI, and it never received their state
+ * cookie. It clears any such cookie and sends the operator back to start again.
+ */
 export const mcpStudioOauthCallbackRoute = new Hono<AppEnv>();
 
-mcpStudioOauthCallbackRoute.get("/callback", async (c) => {
-  const cookie = getCookie(c, CONNECT_COOKIE);
+mcpStudioOauthCallbackRoute.get("/callback", (c) => {
   deleteCookie(c, CONNECT_COOKIE, { path: CALLBACK_BASE });
-  const providerError = c.req.query("error");
-  if (providerError !== undefined) {
-    // The authorization server's error code, cut to its RFC 6749 alphabet so
-    // nothing it sent lands in the page as markup.
-    const code = /^[a-z_]{1,64}$/.test(providerError) ? providerError : "an error";
-    return c.text(`The authorization server answered ${code}, so nothing was connected. Start again from Oxagen.`, 400);
-  }
-  const state = c.req.query("state");
-  const code = c.req.query("code");
-  if (state === undefined || code === undefined || state === "" || code === "") {
-    return c.text("The authorization server sent no code. Start again from Oxagen.", 400);
-  }
-  if (!sameState(cookie, state)) {
-    return c.text("This connect link was started in another browser, or it expired. Start again from Oxagen.", 400);
-  }
-  try {
-    const connected = await finishConnect({ state, code }, defaultConnectDeps());
-    return c.text(`${connected.label} is connected. Go back to Oxagen and retry the call.`, 200);
-  } catch (error) {
-    if (error instanceof ConnectError) return c.text(error.message, error.status);
-    throw error;
-  }
+  return c.text("This connect link is out of date, so nothing was connected. Start again from Oxagen.", 410);
 });

@@ -1,31 +1,29 @@
-// The Runtimes page (roadmap mockups/pages/runtimes.md, mockup `pRuntimes()`):
-// the hosts your agents run on and the tier each host earns.
+// The Runtimes tab of the Agents page (roadmap mockups `agtRuntimesTab()`):
+// where agents run, in one table with the design's five columns: Runtime,
+// Kind, Health, Agents and Last seen. A row opens the runtime in the drawer
+// over the tab (`routes.runtime`); the name is the link, stretched over the
+// row. The Agents page draws the one header and the tab strip.
 //
-// The runtimes the workspace named (`list_runtimes`, ADR-198) come first, each
-// with its agents by harness. Add a runtime names one and goes straight on to
-// registering its first agent.
+// The record holds two kinds of row, and the table lists both. The runtimes
+// the workspace named (`list_runtimes`, ADR-198) come first, each with its
+// agents by harness and Register an agent while it has none. The host
+// enrollments (`list_tacho_hosts`) follow: one agent key on one machine. The
+// record has no link from an enrollment to the runtime it enrolled against,
+// so the table does not fold one into the other.
 //
-// What the record carries today is an enrollment per agent
-// (`list_tacho_hosts`): one agent key on one machine. The page lists those rows
-// rather than grouping them by hostname into a host the record does not hold.
-// Every element the spec draws from a host row that does not exist (the kind,
-// the tier rolled up per host, the telemetry gaps in 24 hours and the health
-// judged from them, the hooks written, the last checkpoint, and the counts
-// over hosts) renders as not recorded, carrying the gap that would record it.
-// A row opens the runtime: the hostname is the link, stretched over the row.
-// The table carries the design's list controls (`ListTable`): search, the
-// filters its rule offers, Rows, and the pager.
+// Kind is not recorded (#3816). Health reads what the record backs: an
+// enrollment revoked or past its expiry is not enrolled, a runtime unseen for
+// a day is offline (roadmap README, Offline runtime), and a host whose hooks
+// the collector read back incomplete says so. Healthy is judged from the
+// collector's telemetry gaps, which nothing records (#3818), so a runtime
+// seen within the day has no health word.
 //
-// The list is the Runtimes tab of the Agents page, which draws the one header
-// and the tab strip; Add a runtime sits in that header. RuntimesHeader stays
-// for one runtime's page.
-//
-// States: the tab's skeleton replaces the body while the read is in flight; a
-// refused or failed read replaces the body, and the header and strip stay; a
-// workspace with no enrollment shows the empty state.
+// States: the tab's skeleton replaces the body while the reads run; a refused
+// or failed host read replaces the body, and the header and strip stay; a
+// workspace with nothing named and nothing enrolled shows the empty state.
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
 import type {
+  NamedRuntime,
   NamedRuntimeList,
   RuntimeEnrollment,
   RuntimeList,
@@ -34,272 +32,223 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
-import { mono, panelBody, statStrip } from "@/ui/control-styles";
+import { Badge } from "@/ui/badge";
+import { mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { PageHeader } from "@/ui/page-header";
-import { AddRuntime } from "./controls";
-import { NamedRuntimes } from "./named";
-import {
-  HarnessNames,
-  HealthBadge,
-  hooksReadBack,
-  isEnrolled,
-  ModelSurface,
-  NotBacked,
-  Note,
-  OsLine,
-  Panel,
-  Sub,
-  TierLadder,
-  Tile,
-} from "./parts";
+import { ReadFailure } from "@/ui/read-failure";
+import { AddRuntime, RegisterOnRuntime } from "./controls";
+import { AgentsCell, LastSeen } from "./named";
+import { HealthBadge, isEnrolled, NotBacked, OsLine, Sub } from "./parts";
 import { RuntimesEmpty, RuntimesFailure } from "./states";
 
-/**
- * The page header: the workspace as the eyebrow, the h1, the one sentence,
- * and Add a runtime for an org Owner or Admin, the roles `create_runtime` and
- * `register_agent` admit (INV-29).
- */
-export function RuntimesHeader({
-  org,
-  ws,
-  wsName,
-  canAdd,
-  gold = true,
-}: {
-  org: string;
-  ws: string;
-  wsName: string;
-  canAdd: boolean;
-  /** False where the body already carries the screen's one gold action. */
-  gold?: boolean;
-}) {
-  const t = useTranslations();
-  return (
-    <PageHeader
-      eyebrow={t("runtimes.page.eyebrow", { workspace: wsName })}
-      title={t("pages.runtimes")}
-      description={t("runtimes.page.description")}
-      actions={canAdd ? <AddRuntime org={org} ws={ws} gold={gold} /> : null}
-    />
-  );
-}
-
-/** The org roles that may name a runtime and register its agents. */
+/** The org roles that may name a runtime and register its agents (INV-29). */
 export function mayAddRuntime(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 
+/** A day, after which a runtime that has not reported reads offline. */
+const OFFLINE_AFTER_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Agents on a host that is still enrolled: distinct keys, a revoked or an
- * expired enrollment excluded. It is the rule the Health cell reads, so the
- * tile never counts an agent on a row the table calls not enrolled.
+ * Whether a runtime has reported within the day: `unseen` before its first
+ * report, `offline` a day after its last, and `seen` otherwise.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
  */
-function hostedAgents(list: RuntimeList, now: number): number {
-  const keys = new Set<string>();
-  for (const host of list.enrollments)
-    if (isEnrolled(host, now) && host.agentKey !== "") keys.add(host.agentKey);
-  return keys.size;
+export function seenState(
+  lastSeenAt: string | null,
+  now: number,
+): "unseen" | "offline" | "seen" {
+  if (lastSeenAt === null) return "unseen";
+  return now - Date.parse(lastSeenAt) >= OFFLINE_AFTER_MS ? "offline" : "seen";
 }
 
-function StatStrip({ list, now }: { list: RuntimeList; now: number }) {
-  const t = useTranslations("runtimes.tiles");
-  const locale = useLocale();
+/** The health word the last report backs: offline, not seen yet, or not recorded (#3818). */
+function SeenHealth({
+  lastSeenAt,
+  now,
+}: {
+  lastSeenAt: string | null;
+  now: number;
+}) {
+  const t = useTranslations("runtimes.list.health");
+  const seen = seenState(lastSeenAt, now);
+  if (seen === "offline")
+    return (
+      <Badge tone="failed" data-health="offline">
+        {t("offline")}
+      </Badge>
+    );
+  if (seen === "unseen")
+    return (
+      <Badge tone="quiet" data-health="unseen">
+        {t("unseen")}
+      </Badge>
+    );
   return (
-    <div className={statStrip} data-testid="runtimes-tiles">
-      <Tile
-        testId="tile-runtimes"
-        term={t("runtimes")}
-        value={<NotBacked gap="host" />}
-        basis={t("runtimesBasis", { count: list.enrollments.length })}
-      />
-      <Tile
-        testId="tile-agents"
-        term={t("agentsHosted")}
-        value={formatCount(hostedAgents(list, now), locale)}
-        basis={t("agentsHostedBasis")}
-      />
-      <Tile
-        testId="tile-tier"
-        term={t("highestTier")}
-        value={<NotBacked gap="tier" />}
-        basis={t("highestTierBasis")}
-      />
-      <Tile
-        testId="tile-degraded"
-        term={t("degraded")}
-        value={<NotBacked gap="gaps" />}
-        basis={t("degradedBasis")}
-      />
-    </div>
+    <span data-health="not_recorded">
+      <NotBacked gap="gaps" />
+    </span>
   );
 }
 
-/** The Runtime cell: the name, which opens the runtime, with the OS in mono under it. */
-function RuntimeName({
+function HostHealth({
   host,
+  now,
+}: {
+  host: RuntimeEnrollment;
+  now: number;
+}) {
+  const t = useTranslations("runtimes.list.health");
+  if (!isEnrolled(host, now)) return <HealthBadge host={host} now={now} />;
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <SeenHealth lastSeenAt={host.lastSeenAt} now={now} />
+      {host.hooksOk === false ? (
+        <Badge tone="approval" data-health="hooks">
+          {t("hooksIncomplete")}
+        </Badge>
+      ) : null}
+    </span>
+  );
+}
+
+function NamedHealth({
+  runtime,
+  now,
+}: {
+  runtime: NamedRuntime;
+  now: number;
+}) {
+  const t = useTranslations("runtimes.list.health");
+  if (runtime.liveHosts === 0)
+    return (
+      <Badge tone="quiet" data-health="no_host">
+        {t("noHost")}
+      </Badge>
+    );
+  return <SeenHealth lastSeenAt={runtime.lastSeenAt} now={now} />;
+}
+
+/** The Runtime cell's link: the name, which opens the drawer, stretched over the row. */
+function RuntimeLink({
+  id,
+  name,
   org,
   ws,
 }: {
-  host: RuntimeEnrollment;
+  id: string;
+  name: string;
   org: string;
   ws: string;
 }) {
-  const t = useTranslations("runtimes.hosts");
+  const t = useTranslations("runtimes.list");
   return (
-    <>
-      <SafeLink
-        to={routes.runtime(org, ws, host.id)}
-        aria-label={t("open", { hostname: host.hostname })}
-        data-touch-target=""
-        className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        <span className="min-w-0 md:truncate">{host.hostname}</span>
-      </SafeLink>
-      <Sub monoFace>
-        <OsLine host={host} />
-      </Sub>
-    </>
+    <SafeLink
+      to={routes.runtime(org, ws, id)}
+      aria-label={t("open", { runtime: name })}
+      data-touch-target=""
+      className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      <span className="min-w-0 md:truncate">{name}</span>
+    </SafeLink>
   );
 }
 
-/** The Agents cell (`td.num`): the count right-aligned, its sub-line under it. */
-function AgentsCell({ host }: { host: RuntimeEnrollment }) {
-  const t = useTranslations("runtimes.hosts");
+function NamedHosts({ count }: { count: number }) {
+  const t = useTranslations("runtimes.list");
+  return <Sub>{count === 0 ? t("hostsNone") : t("hosts", { count })}</Sub>;
+}
+
+function HostAgent({ host }: { host: RuntimeEnrollment }) {
+  const t = useTranslations("runtimes.named");
   return host.agentKey === "" ? (
-    <>
-      <span className="text-muted-foreground">0</span>
-      <Sub>{t("agentsNone")}</Sub>
-    </>
+    <span className="text-muted-foreground">{t("noAgent")}</span>
   ) : (
-    <>
-      1<Sub monoFace>{host.agentKey}</Sub>
-    </>
+    <span className={`${mono} block md:truncate`}>{host.agentKey}</span>
   );
 }
 
-function CollectorCell({ host }: { host: RuntimeEnrollment }) {
-  const t = useTranslations("runtimes");
-  return (
-    <>
-      {host.collectorVersion === null ? (
-        <span className="text-muted-foreground">{t("notReported")}</span>
-      ) : (
-        <span className={`${mono} text-xs`}>
-          {t("hosts.collector", { version: host.collectorVersion })}
-        </span>
-      )}
-      <Sub>
-        <NotBacked gap="gaps">{t("hosts.gaps")}</NotBacked>
-      </Sub>
-    </>
-  );
+function namedRow(
+  runtime: NamedRuntime,
+  at: { org: string; ws: string; now: number; canRegister: boolean },
+): ListRow {
+  return {
+    key: runtime.id,
+    data: { "data-testid": "named-runtime", "data-runtime": runtime.id },
+    className: "relative cursor-pointer",
+    cells: [
+      <span key="runtime">
+        <RuntimeLink
+          id={runtime.id}
+          name={runtime.name}
+          org={at.org}
+          ws={at.ws}
+        />
+        <NamedHosts count={runtime.liveHosts} />
+      </span>,
+      <NotBacked key="kind" gap="host" />,
+      <NamedHealth key="health" runtime={runtime} now={at.now} />,
+      <span key="agents">
+        <AgentsCell runtime={runtime} />
+        {runtime.agents.length === 0 && at.canRegister ? (
+          <span className="block pt-1">
+            <RegisterOnRuntime
+              org={at.org}
+              ws={at.ws}
+              runtimeId={runtime.id}
+              runtimeName={runtime.name}
+            />
+          </span>
+        ) : null}
+      </span>,
+      <LastSeen key="seen" at={runtime.lastSeenAt} />,
+    ],
+  };
 }
 
-/** One enrollment as a list row, in the spec's column order. */
 function hostRow(
   host: RuntimeEnrollment,
-  org: string,
-  ws: string,
-  now: number,
-  hookCount: ReactNode,
-  hookCountAll: ReactNode,
+  at: { org: string; ws: string; now: number },
 ): ListRow {
   return {
     key: host.id,
     data: { "data-testid": "runtime-row", "data-runtime": host.id },
     className: "relative cursor-pointer",
     cells: [
-      <RuntimeName key="runtime" host={host} org={org} ws={ws} />,
+      <span key="runtime">
+        <RuntimeLink
+          id={host.id}
+          name={host.hostname}
+          org={at.org}
+          ws={at.ws}
+        />
+        <Sub monoFace>
+          <OsLine host={host} />
+        </Sub>
+      </span>,
       <NotBacked key="kind" gap="host" />,
-      <HarnessNames key="harness" host={host} />,
-      <ModelSurface key="model" host={host} />,
-      <NotBacked key="tier" gap="tier" />,
-      <AgentsCell key="agents" host={host} />,
-      <CollectorCell key="collector" host={host} />,
-      hooksReadBack(host) ? (
-        <span key="hooks">{hookCountAll}</span>
-      ) : (
-        <NotBacked key="hooks" gap="hooks">
-          {hookCount}
-        </NotBacked>
-      ),
-      <HealthBadge key="health" host={host} now={now} />,
-      <NotBacked key="checkpoint" gap="checkpoint" />,
+      <HostHealth key="health" host={host} now={at.now} />,
+      <HostAgent key="agents" host={host} />,
+      <LastSeen key="seen" at={host.lastSeenAt} />,
     ],
   };
 }
 
-function EnrolledHosts({
-  list,
-  org,
-  ws,
-  now,
-}: {
-  list: RuntimeList;
-  org: string;
-  ws: string;
-  now: number;
-}) {
-  const t = useTranslations("runtimes.hosts");
-  const locale = useLocale();
+/** How many runtimes the table lists with no agent on them. */
+function idleCount(
+  named: readonly NamedRuntime[],
+  hosts: readonly RuntimeEnrollment[],
+): number {
   return (
-    <Panel
-      id="runtimes-hosts"
-      title={t("title")}
-      // The design badges the runtime count. The record holds enrollments,
-      // not hosts (#3816), so the badge is not recorded, as the tile is.
-      count={<NotBacked gap="host" />}
-    >
-      <ListTable
-        label={t("title")}
-        columns={[
-          { label: t("columns.runtime") },
-          { label: t("columns.kind") },
-          { label: t("columns.harness") },
-          { label: t("columns.modelSurface") },
-          { label: t("columns.tier") },
-          { label: t("columns.agents"), numeric: true },
-          { label: t("columns.collector") },
-          { label: t("columns.hooks"), numeric: true },
-          { label: t("columns.health") },
-          { label: t("columns.checkpoint") },
-        ]}
-        rows={list.enrollments.map((host) =>
-          hostRow(host, org, ws, now, t("hookCount"), t("hookCountAll")),
-        )}
-      />
-      {list.more ? (
-        <p
-          data-testid="runtimes-more"
-          className={`${panelBody} text-xs text-muted-foreground`}
-        >
-          {t("more", {
-            count: formatCount(list.enrollments.length, locale),
-          })}
-        </p>
-      ) : null}
-      <Note>{t("note")}</Note>
-    </Panel>
+    named.filter((runtime) => runtime.agents.length === 0).length +
+    hosts.filter((host) => host.agentKey === "").length
   );
 }
 
-function Ladder() {
-  const t = useTranslations("runtimes.ladder");
-  const code = (chunks: ReactNode) => <code className={mono}>{chunks}</code>;
-  return (
-    <Panel id="runtimes-ladder" title={t("title")}>
-      <div className={panelBody}>
-        <TierLadder />
-      </div>
-      <Note>{t.rich("note", { code })}</Note>
-    </Panel>
-  );
-}
-
-/** The loaded list, below its header. */
+/** The loaded tab: the idle note and Add a runtime, then the table. */
 function RuntimesLoaded({
   list,
   named,
@@ -315,14 +264,59 @@ function RuntimesLoaded({
   now: number;
   canAdd: boolean;
 }) {
+  const t = useTranslations("runtimes.list");
+  const locale = useLocale();
+  const runtimes = named.ok ? named.value.runtimes : [];
+  const idle = idleCount(runtimes, list.enrollments);
+  const at = { org, ws, now, canRegister: canAdd };
   return (
     <>
-      <StatStrip list={list} now={now} />
-      <NamedRuntimes read={named} org={org} ws={ws} canRegister={canAdd} />
-      {list.enrollments.length === 0 ? null : (
-        <EnrolledHosts list={list} org={org} ws={ws} now={now} />
+      {idle === 0 && !canAdd ? null : (
+        <div className="flex flex-wrap items-center gap-2">
+          {idle === 0 ? null : (
+            <p
+              data-testid="runtimes-idle"
+              className="text-xs text-muted-foreground"
+            >
+              {t("idle", { count: idle })}
+            </p>
+          )}
+          {canAdd ? (
+            <span className="ml-auto">
+              <AddRuntime org={org} ws={ws} gold={false} />
+            </span>
+          ) : null}
+        </div>
       )}
-      <Ladder />
+      {named.ok ? null : (
+        <div data-testid="runtimes-named-failed">
+          <ReadFailure read={named} section={t("title")} />
+        </div>
+      )}
+      <ListTable
+        label={t("title")}
+        columns={[
+          { label: t("columns.runtime") },
+          { label: t("columns.kind") },
+          { label: t("columns.health") },
+          { label: t("columns.agents") },
+          { label: t("columns.lastSeen") },
+        ]}
+        rows={[
+          ...runtimes.map((runtime) => namedRow(runtime, at)),
+          ...list.enrollments.map((host) => hostRow(host, at)),
+        ]}
+      />
+      {list.more ? (
+        <p
+          data-testid="runtimes-more"
+          className="text-xs text-muted-foreground"
+        >
+          {t("more", {
+            count: formatCount(list.enrollments.length, locale),
+          })}
+        </p>
+      ) : null}
     </>
   );
 }
@@ -379,4 +373,18 @@ export async function Runtimes({
       canAdd={canAdd}
     />
   );
+}
+
+/**
+ * How many runtimes the Runtimes tab lists: the named runtimes and the host
+ * enrollments. Null when either read did not answer, so the strip prints no
+ * figure rather than a partial one.
+ */
+export async function runtimesCount(
+  ctx: WsCtx,
+  source: DataSource,
+): Promise<number | null> {
+  const { read, named } = await readRuntimes(ctx, source);
+  if (!read.ok || !named.ok) return null;
+  return named.value.runtimes.length + read.value.enrollments.length;
 }

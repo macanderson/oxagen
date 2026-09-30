@@ -193,6 +193,17 @@
                 }
               ],
               "default": null
+            },
+            "steeringName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [

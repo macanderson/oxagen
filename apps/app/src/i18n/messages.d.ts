@@ -37,7 +37,6 @@ type Messages = {
     record: string;
     steering: string;
     repositories: string;
-    runtimes: string;
     spend: string;
     people: string;
     roles: string;
@@ -792,11 +791,7 @@ type Messages = {
         host: {
           title: string;
           lead: string;
-          open: {
-            label: string;
-            title: string;
-            body: string;
-          };
+          open: string;
           runtime: string;
           runtimeSub: string;
           harness: string;
@@ -833,11 +828,7 @@ type Messages = {
         tier: {
           title: string;
           lead: string;
-          all: {
-            label: string;
-            title: string;
-            body: string;
-          };
+          all: string;
           ladder: string;
           thisAgent: string;
           noRun: string;
@@ -3344,7 +3335,6 @@ type Messages = {
         clientId: string;
         clientSecret: string;
         secretHint: string;
-        pending: string;
         saving: string;
         saved: string;
         failed: string;
@@ -3604,7 +3594,6 @@ type Messages = {
       };
       discovery: {
         title: string;
-        notAvailable: string;
         unnamed: string;
         loading: string;
         none: string;
@@ -7924,10 +7913,33 @@ type Messages = {
   };
   runtimes: {
     page: {
-      eyebrow: string;
-      description: string;
       add: string;
       loading: string;
+    };
+    list: {
+      title: string;
+      columns: {
+        runtime: string;
+        kind: string;
+        health: string;
+        agents: string;
+        lastSeen: string;
+      };
+      open: string;
+      hosts: string;
+      hostsNone: string;
+      idle: string;
+      more: string;
+      health: {
+        offline: string;
+        unseen: string;
+        noHost: string;
+        hooksIncomplete: string;
+      };
+    };
+    drawer: {
+      title: string;
+      missing: string;
     };
     add: {
       title: string;
@@ -7955,18 +7967,14 @@ type Messages = {
       };
     };
     named: {
-      title: string;
       columns: {
-        runtime: string;
         agents: string;
         hosts: string;
         lastSeen: string;
       };
-      none: string;
       noAgent: string;
       register: string;
       registerOn: string;
-      open: string;
       never: string;
     };
     containment: {
@@ -7990,38 +7998,8 @@ type Messages = {
     };
     notRecorded: string;
     notReported: string;
-    tiles: {
-      runtimes: string;
-      runtimesBasis: string;
-      agentsHosted: string;
-      agentsHostedBasis: string;
-      highestTier: string;
-      highestTierBasis: string;
-      degraded: string;
-      degradedBasis: string;
-    };
     hosts: {
-      title: string;
-      more: string;
-      columns: {
-        runtime: string;
-        kind: string;
-        harness: string;
-        modelSurface: string;
-        tier: string;
-        agents: string;
-        collector: string;
-        hooks: string;
-        health: string;
-        checkpoint: string;
-      };
-      open: string;
-      agentsNone: string;
       collector: string;
-      gaps: string;
-      hookCount: string;
-      hookCountAll: string;
-      note: string;
     };
     modelSurface: {
       loopback: string;
@@ -8048,15 +8026,6 @@ type Messages = {
       none: string;
       atEnrollment: string;
       versionUnrecorded: string;
-    };
-    ladder: {
-      title: string;
-      label: string;
-      observe: string;
-      harness: string;
-      gateway: string;
-      contained: string;
-      note: string;
     };
     empty: {
       title: string;
@@ -8104,7 +8073,6 @@ type Messages = {
       smokeBody: string;
     };
     detail: {
-      back: string;
       subtitle: string;
       kindUnrecorded: string;
       healthUnrecorded: string;
@@ -10488,6 +10456,7 @@ type Messages = {
     import: {
       open: string;
       openAdd: string;
+      openServer: string;
       title: string;
       subtitle: string;
       reviewTitle: string;
@@ -10536,6 +10505,7 @@ type Messages = {
       importing: string;
       done: string;
       addTitle: string;
+      serverTitle: string;
       theProvider: string;
       pickProvider: string;
       source: {
@@ -10607,6 +10577,7 @@ type Messages = {
           authorization_expired: string;
           authorization_failed: string;
           authorization_discovery_failed: string;
+          registration_refused: string;
           authorization_url_invalid: string;
           endpoint_not_public: string;
           redirect_url_invalid: string;
@@ -11118,19 +11089,12 @@ type Messages = {
     };
     notBacked: string;
     header: {
-      newTool: string;
-      wizard: {
+      import: {
+        open: string;
         title: string;
         subtitle: string;
         note: string;
         confirm: string;
-        steps: {
-          describe: string;
-          recommend: string;
-          manifest: string;
-          code: string;
-          pr: string;
-        };
       };
     };
     empty: {

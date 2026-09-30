@@ -19,7 +19,6 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
-import { FlipControls } from "./switch-controls";
 import { ImportProvider } from "./import-provider";
 import type { LedgerGrant } from "./mandates-ledger";
 import { Policy } from "./policy";
@@ -116,44 +115,27 @@ function grantableAgents(read: Read<AgentPage>): LedgerGrant {
 }
 
 /**
- * The Tools actions in the Agents page header, each in the default style
- * because Connect an agent is the page's one gold action: Import a provider
- * and New tool on every tab, and Flip a kill switch on Off switches, the tab
- * whose record it writes. An org Owner or Admin only; nobody else may write
- * what they open.
+ * The Tools actions in the Agents page header, on every tab (roadmap mockups
+ * `agents`): Import, then Add server, each in the default style because
+ * Connect an agent is the page's one gold action. Import reads the MCP servers
+ * the harness configs on enrolled runtimes name, which nothing records yet,
+ * so it says so (#4810). Add server opens the import dialog. An org Owner or
+ * Admin only; nobody else may write what they open.
  */
 export async function ToolsHeaderActions({
   ctx,
   source,
-  tab,
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The Tools view the Agents tab shows, or null on Agents and Runtimes. */
-  tab: ToolsTab | null;
 }) {
   if (!canAdministerOrg(ctx)) return null;
   const at: ToolsAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
-  const flips = tab === "switches";
-  const [servers, board, members] = await Promise.all([
-    source.tools.mcpServers(ctx),
-    flips ? source.tools.killSwitches(ctx) : Promise.resolve(null),
-    flips ? source.org.members(ctx) : Promise.resolve(null),
-  ]);
+  const servers = await source.tools.mcpServers(ctx);
   return (
     <ToolsHeaderButtons
       at={at}
       servers={servers.ok ? servers.value.servers : null}
-      flip={
-        board === null
-          ? null
-          : {
-              denyGeneration: board.ok
-                ? board.value.denyGeneration
-                : { org: 0, workspace: 0 },
-              members: members?.ok === true ? members.value.members : [],
-            }
-      }
     />
   );
 }
@@ -161,45 +143,24 @@ export async function ToolsHeaderActions({
 function ToolsHeaderButtons({
   at,
   servers,
-  flip,
 }: {
   at: ToolsAt;
   servers: readonly { id: string; name: string }[] | null;
-  flip: {
-    denyGeneration: { org: number; workspace: number };
-    members: readonly { id: string; name: string | null; email: string }[];
-  } | null;
 }) {
-  const t = useTranslations("tools");
+  const t = useTranslations("tools.header.import");
   return (
     <>
-      <ImportProvider at={at} servers={servers} />
       <StubAction
-        label={t("header.newTool")}
+        label={t("open")}
         tone="secondary"
-        title={t("header.wizard.title")}
-        subtitle={t("header.wizard.subtitle")}
-        gap="toolWizard"
-        note={t("header.wizard.note")}
-        confirm={t("header.wizard.confirm")}
-        testId="tools-new-tool"
-      >
-        <ol className="flex list-decimal flex-col gap-1 pl-5 text-[13px] text-muted-foreground">
-          <li>{t("header.wizard.steps.describe")}</li>
-          <li>{t("header.wizard.steps.recommend")}</li>
-          <li>{t("header.wizard.steps.manifest")}</li>
-          <li>{t("header.wizard.steps.code")}</li>
-          <li>{t("header.wizard.steps.pr")}</li>
-        </ol>
-      </StubAction>
-      {flip === null ? null : (
-        <FlipControls
-          at={at}
-          denyGeneration={flip.denyGeneration}
-          existing={null}
-          members={flip.members}
-        />
-      )}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        gap="harnessImport"
+        note={t("note")}
+        confirm={t("confirm")}
+        testId="tools-harness-import"
+      />
+      <ImportProvider at={at} servers={servers} label="server" />
     </>
   );
 }
