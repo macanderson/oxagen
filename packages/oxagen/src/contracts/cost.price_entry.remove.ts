@@ -58,7 +58,7 @@ export const costPriceEntryRemove = registerCapability({
   description:
     "End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again. The row is closed, not deleted: a run priced before the instant still names the entry it was priced with. Owner / Admin / Billing only.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "app", "unit", "docs"],
   scoped: true,
   // Returning to list pricing must never be refused for being over budget, and
@@ -71,6 +71,7 @@ export const costPriceEntryRemove = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "billing" },
   input: z
     .object({
       provider: z.string().min(1).max(128),

@@ -1,5 +1,7 @@
 # get_run_export
 
+**Surfaces:** api, mcp, agent, cli
+
 Read one run export back: where the job stands, the bundle's digest and size once it is built, the job's error if it failed, and a download URL that expires (Mission Control spec §13.4, App. E; ADR-058). `export_run` queues the bundle and answers an export id. This capability is how every surface turns that id into a file.
 
 ## Mode
@@ -15,6 +17,7 @@ Read one run export back: where the job stands, the bundle's digest and size onc
 - Authentication: session or API key; org Owner or Admin, checked in the handler (`assertOrgRole`), the same gate as `export_run`
 - Capability name: `get_run_export`
 - `mutates: false`; not billed (`noBillingGate: true`). IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

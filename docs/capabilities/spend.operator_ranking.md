@@ -2,7 +2,7 @@
 
 The operators of the active workspace ranked by unproductive spend, highest first (spend spec, Operator ranking; D15). A manager reads it to see where coaching pays. Each figure is a count of claimed frames. The ranking gives no verdict on the person.
 
-**Surfaces:** api
+**Surfaces:** api, agent
 
 ## Mode
 
@@ -14,6 +14,7 @@ The operators of the active workspace ranked by unproductive spend, highest firs
 - Authentication: session (org Owner or Admin; workspace Owner)
 - Capability name: `get_operator_ranking`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. The handler asserts the role itself, so an org Member, a Billing member, and a workspace Member are refused with `forbidden` (`org_role_required`) on every tier.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

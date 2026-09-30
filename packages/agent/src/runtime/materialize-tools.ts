@@ -29,7 +29,7 @@ import {
   recordGovernedActions,
 } from "@oxagen/billing";
 import { withTenantDb } from "@oxagen/database";
-import { readActiveEmergencyDenies } from "@oxagen/iam";
+import { implicitScopeDigests, readActiveEmergencyDenies } from "@oxagen/iam";
 import {
   resolveActingUserId,
   resolveActorOrgRoles,
@@ -39,6 +39,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { pluginForContract } from "@oxagen/oxagen/plugins";
 import { capabilityMutates } from "@oxagen/oxagen/types";
 import { listEntitledCapabilityPluginIds } from "@oxagen/plugins";
+import type { DecisionRuleApprovalRequiredError } from "@oxagen/rules";
 import { externalDecisionCheck } from "./external-tool-rules";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { checkConsent, recordConsent, DEFAULT_CONSENT_TTL_MS } from "./consent";
@@ -57,7 +58,9 @@ import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 import {
   createKillSwitchGate,
   KillSwitchDeniedError,
+  readClassificationIndex,
   type ActingAgent,
+  type ClassificationIndex,
   type KillSwitchGate,
 } from "./kill-switch-gate";
 import {
@@ -81,6 +84,28 @@ function byteSize(v: unknown): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * The rules gate's `DecisionRuleApprovalRequiredError`, told by its code so
+ * this module does not load the rules engine. Returns the rules that asked
+ * for a person and the digest the gate accepts once one approves, or null for
+ * any other error.
+ */
+function ruleApprovalRequired(err: unknown): {
+  ruleIds: readonly string[];
+  approvalDigest: string | undefined;
+} | null {
+  if (!(err instanceof Error)) return null;
+  const e = err as Partial<
+    Pick<DecisionRuleApprovalRequiredError, "code" | "ruleIds" | "approvalDigest">
+  >;
+  if (e.code !== "decision_rule_approval_required") return null;
+  return {
+    ruleIds: Array.isArray(e.ruleIds) ? e.ruleIds : [],
+    approvalDigest:
+      typeof e.approvalDigest === "string" ? e.approvalDigest : undefined,
+  };
 }
 
 /**
@@ -211,6 +236,15 @@ export interface MaterializeOptions {
   callerRoles?: CallerRoles;
   /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
   serverAllowlist?: Set<string>;
+  /**
+   * Build the set from Oxagen's capability contracts alone (#4310, ADR-053).
+   * True skips every plugin type contributor, `mcp_server` and
+   * `mcp_server_local` both, so no workspace MCP server is connected and no
+   * workspace credential is decrypted. The in-app assistant's turn is the
+   * caller this is for. Absent or false keeps today's set, which
+   * `governed-turn`, `approval-resume` and `tools.load` rely on.
+   */
+  capabilitiesOnly?: boolean;
   /**
    * Called immediately after an approval request is created and BEFORE
    * `waitForApproval` blocks. Lets the stream route emit an
@@ -688,6 +722,31 @@ export async function materializeTools(
           workspaceId: ctx.workspaceId || null,
         }),
       );
+  // The facts a `resource_scope` deny matches on, built the way the per-call
+  // gate builds them (#4218): the org, the workspace, the operator
+  // (`ctx.userId`), and the agent (the run's, else the one the turn acts as).
+  const scopeDigests = implicitScopeDigests({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId || null,
+    agentId:
+      (agentRun?.principalKind === "agent" ? agentRun.agentId : null) ??
+      opts.actingAgent?.agentId ??
+      null,
+    operatorUserId: ctx.userId ?? null,
+  });
+  // The class tags of each tool version, which a `class` switch matches on.
+  // Read only while a `resource_scope` deny is on, since no other deny can
+  // name a class, and read from the same index the gate matches against.
+  const classTags: ClassificationIndex | undefined =
+    ctx.workspaceId &&
+    emergencyDenies.some((d) => d.denyKind === "resource_scope")
+      ? await withTenantDb((tx) =>
+          readClassificationIndex(tx, {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+          }),
+        )
+      : undefined;
 
   // Entitlement filter: if a capability is claimed by a plugin, the org must
   // have that plugin installed and enabled. Lazily fetch the entitled set on
@@ -763,6 +822,8 @@ export async function materializeTools(
       clientIp: ctx.clientIp ?? null,
       emergencyDenies,
       actingAgent: opts.actingAgent ?? null,
+      scopeDigests,
+      ...(classTags ? { classTags } : {}),
       entitledPluginIds: await entitledPluginIdsFor(cap),
       callerRoles: await callerRolesFor(cap),
     });
@@ -912,20 +973,84 @@ export async function materializeTools(
             // this call's ledger row by it (ADR-165): a retried tool call bills
             // once. Without an id the context goes through unchanged.
             const toolCallId = modelToolCallId(options);
-            const result = await invoke(
-              cap.name,
-              input,
-              toolCallId === null ? ctx : { ...ctx, toolCallId },
-              {
-                surface: "agent",
-                // Read fresh at call time, same reasoning as the manual-approval
-                // runId above: the in-app assistant opens its run only after
-                // materializing tools, so ctx.agentRun is unset when these
-                // closures are built (finding 9, #3370). Without this, an
-                // auto-approved call's receipt (#3153) attaches to no run.
-                runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
-              },
-            );
+            let result: unknown;
+            try {
+              result = await invoke(
+                cap.name,
+                input,
+                toolCallId === null ? ctx : { ...ctx, toolCallId },
+                {
+                  surface: "agent",
+                  // Read fresh at call time, same reasoning as the
+                  // manual-approval runId above: the in-app assistant opens
+                  // its run only after materializing tools, so ctx.agentRun is
+                  // unset when these closures are built (finding 9, #3370).
+                  // Without this, an auto-approved call's receipt (#3153)
+                  // attaches to no run.
+                  runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
+                },
+              );
+            } catch (err) {
+              const rule = ruleApprovalRequired(err);
+              if (rule === null || opts.approvalMode !== "park") throw err;
+              // A workspace decision rule sent this call to a person (#4226).
+              // The turn parks it the way the contract gate above does, with
+              // the rule named on the row and the digest the rules gate
+              // accepts once the person approves. The call cannot be parked
+              // without a digest to prove the approval, a message to attach
+              // it to, or a person's own context to resume as. The rule's
+              // refusal then stands.
+              if (
+                rule.approvalDigest === undefined ||
+                !ctx.messageId ||
+                !ctx.userId ||
+                ctx.apiKeyId ||
+                ctx.agentRun
+              ) {
+                throw err;
+              }
+              const approval = await runInTenantScope(
+                { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+                () =>
+                  createApprovalRequest({
+                    orgId: ctx.orgId,
+                    workspaceId: ctx.workspaceId,
+                    messageId: ctx.messageId!,
+                    runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
+                    capabilityName: cap.name,
+                    inputPreview: input,
+                    digestInput: digestInputFor(cap, input),
+                    riskLevel,
+                    resumeRequesterUserId: ctx.userId!,
+                    ruleIds: rule.ruleIds,
+                    ruleDigest: rule.approvalDigest,
+                  }),
+              );
+              const expiresAt = (
+                approval.expiresAt ?? new Date(Date.now() + APPROVAL_TTL_MS)
+              ).toISOString();
+              if (approval.resolution) {
+                return {
+                  approvalId: approval.approvalId,
+                  resolution: approval.resolution,
+                  execution: approval.resumeStatus,
+                };
+              }
+              opts.onApprovalRequired?.({
+                approvalId: approval.approvalId,
+                approvalPublicId: approval.approvalPublicId,
+                capability: cap.name,
+                inputPreview: input,
+                riskLevel,
+                expiresAt,
+              });
+              throw new ApprovalPendingError(
+                cap.name,
+                approval.approvalId,
+                expiresAt,
+                approval.approvalPublicId,
+              );
+            }
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
             try {
@@ -1050,7 +1175,13 @@ export async function materializeTools(
       ? null
       : { status: recorded.status === "granted" ? "granted" : "denied" };
   };
-  for (const contributor of getPluginTypeContributors()) {
+  // The in-app assistant's set is Oxagen's capability contracts and nothing
+  // else (ADR-053 §1, #4310). Skipping every contributor means no workspace
+  // MCP server is connected or listed, and no MCP credential is resolved.
+  const contributors = opts.capabilitiesOnly
+    ? []
+    : getPluginTypeContributors();
+  for (const contributor of contributors) {
     let contributed: ContributedRawTool[] = [];
     try {
       contributed = await contributor.contributeTools(ctx, {

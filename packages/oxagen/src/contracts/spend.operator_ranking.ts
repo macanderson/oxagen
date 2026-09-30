@@ -83,7 +83,7 @@ export const spendOperatorRanking = registerCapability({
   description:
     "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the operator's priced spend, its run count, and the runs behind it. Managers only. The operator totals and the unattributed total sum to the headline.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -94,6 +94,7 @@ export const spendOperatorRanking = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z.object({ period: dayRangeSchema }).strict(),
   output: z
     .object({

@@ -46,7 +46,7 @@ export const repositoryUnlink = registerCapability({
   description:
     "Unlink a linked repository from the workspace. A repository that workspace.toml lists is removed by a steering PR. The steering repository cannot be unlinked, and binding history is kept.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -57,6 +57,7 @@ export const repositoryUnlink = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "vcs" },
   input: z
     .object({
       bindingId: repositoryBindingIdSchema,

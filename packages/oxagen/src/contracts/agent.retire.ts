@@ -22,7 +22,7 @@ export const agentRetire = registerCapability({
   // The handler acts as the signed-in user or the API key's creator
   // (resolveActingUserId, assertOrgRole, INV-29). The write ships on the API
   // alone: no MCP tool is built for it.
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

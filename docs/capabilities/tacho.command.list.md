@@ -1,5 +1,7 @@
 # list_commands
 
+**Surfaces:** api, mcp, agent
+
 The delivery report for one run, or for the commands one broadcast queued (Mission Control spec §7.4, §7.6): every command addressed to the run, or every command the ids name, newest first, with its status in the closed nine-word vocabulary, the mode that was requested and the mode that was achieved, and `appliedAtSeq`, the frame that proves an `applied`. `applied` is the only success status; interfaces group `cancelled`, `expired` and `failed` as undelivered.
 
 The status shown is the recorded one, with one derivation: a `queued` command whose expiry has passed reads `expired`, which is what the host's next poll writes under the same predicate. A command the host holds (`sent`, `received`, `acknowledged`) reads as recorded until the host reports what the boundary did (`applied` with the frame, or `expired` with `expired before a boundary`), and carries `expiresAt`, from which an interface shows it as past expiry and awaiting the host. The status shown never contradicts the run's chain and is never one the host can overturn.
@@ -18,6 +20,7 @@ Each command names its run, the person who issued it, and, for a `steer` or a `m
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `list_commands`
 - Not billed (`noBillingGate: true`): a console read is never a governed action (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

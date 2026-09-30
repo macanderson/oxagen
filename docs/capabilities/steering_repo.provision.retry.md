@@ -8,7 +8,7 @@ a manual database edit. Retry flips the recorded state back to `provisioning`, c
 stored error, and re-sends the provision event with a fresh id, so the same job
 (`provisionSteeringRepo`) picks the run back up from the step that failed.
 
-**Surfaces:** api
+**Surfaces:** api, agent
 
 ## Mode
 
@@ -18,7 +18,7 @@ stored error, and re-sends the provision event with a fresh id, so the same job
 
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/repo/retry` with the body `{}` returns 200
 - MCP: none
-- Agent: none. Retry is the health banner's admin button, so the contract carries no agent metadata
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 - CLI: none
 - Authentication: org Owner or Admin, checked by the handler (INV-29)
 - Not billed (`noBillingGate: true`), IAM default-deny, high sensitivity

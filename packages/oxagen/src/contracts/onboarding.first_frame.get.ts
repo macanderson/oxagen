@@ -23,7 +23,7 @@ export const onboardingFirstFrameGet = registerCapability({
   description:
     "For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -34,6 +34,7 @@ export const onboardingFirstFrameGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   input: z
     .object({
       agentId: z.string().regex(/^agt_[0-9a-z]+$/),

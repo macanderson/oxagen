@@ -151,6 +151,13 @@ export class DecisionRuleUnavailableError extends Error {
 export interface DecisionGateArgs {
   requireFreshRules?: boolean;
   external?: { approvedDigest?: string };
+  /**
+   * A person's approval of this exact built-in call: the `approvalDigest` a
+   * `DecisionRuleApprovalRequiredError` carried when the call was parked
+   * (#4226). The kernel passes it from `InvokeOptions.approvedDigest`.
+   * External tools pass theirs in `external`.
+   */
+  approvedDigest?: string;
   capability: string;
   input: unknown;
   ctx: {
@@ -182,6 +189,7 @@ export function createDecisionRulesGate(
     principal,
     external,
     requireFreshRules,
+    approvedDigest,
   }) => {
     if (external && principal?.kind === "agent") {
       throw new ExternalToolAuthorityError(
@@ -197,6 +205,7 @@ export function createDecisionRulesGate(
       ctx,
       external,
       requireFreshRules,
+      approvedDigest,
     });
     // The mandate check binds an agent acting under delegated authority; a
     // person under their own role needs no mandate (spec §6.9 part 3), and
@@ -354,9 +363,15 @@ async function judgeRules(
     ctx,
     external,
     requireFreshRules,
+    approvedDigest,
   }: Pick<
     DecisionGateArgs,
-    "capability" | "input" | "ctx" | "external" | "requireFreshRules"
+    | "capability"
+    | "input"
+    | "ctx"
+    | "external"
+    | "requireFreshRules"
+    | "approvedDigest"
   >,
 ): Promise<AutoApprovalCommit> {
   let ruleSet: RuleSet | null;
@@ -458,6 +473,28 @@ async function judgeRules(
       required.approvalDigest = digest;
       throw required;
     }
+    // The same digest an external tool's approval carries, over the call and
+    // the rule set that judged it. A surface that parks this call seals the
+    // digest with the approval, and the resumed call hands it back (#4226).
+    // A value `inputDigest` cannot encode leaves the digest unset: the call
+    // can then be neither parked with proof nor released by one.
+    let digest: string | undefined;
+    try {
+      digest = inputDigest({
+        capability,
+        input,
+        rules: ruleSet.rules,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        orgId: ctx.orgId,
+      });
+    } catch {
+      digest = undefined;
+    }
+    // A person approved this exact call under these exact rules. A changed
+    // rule set, input, or requester changes the digest, and the person is
+    // asked again.
+    if (digest !== undefined && approvedDigest === digest) return undefined;
     const commit = await skipsThePerson(options, {
       capability,
       input,
@@ -466,7 +503,9 @@ async function judgeRules(
       verdict,
     });
     if (commit !== undefined) return commit;
-    throw new DecisionRuleApprovalRequiredError(verdict);
+    const required = new DecisionRuleApprovalRequiredError(verdict);
+    if (digest !== undefined) required.approvalDigest = digest;
+    throw required;
   }
   throw new DecisionRuleDeniedError(verdict);
 }

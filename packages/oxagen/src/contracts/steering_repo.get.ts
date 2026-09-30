@@ -92,7 +92,7 @@ export const steeringRepoGet = registerCapability({
   description:
     "Read the workspace's steering repo: its provisioning status and step, the repository, the published version, its settings health, and each setting that differs.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -109,6 +109,7 @@ export const steeringRepoGet = registerCapability({
       Compliance: "allow",
     },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z.object({}).strict(),
   output: steeringRepoView,
 });

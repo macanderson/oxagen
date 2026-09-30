@@ -2,7 +2,8 @@
 
 Read the latest verified steering manifest per run in the last 1 to 30 days. The default window is 7 days.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 POST `/v1/context/steering/deliveries` with `days` and `limit`. The response names included records, cut records, budget cuts, and the budget used for each run. It also lists records absent from every sampled manifest that considered them.
 

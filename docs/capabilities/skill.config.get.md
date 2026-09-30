@@ -4,7 +4,8 @@ Read the published configuration and its version history. `version` selects an e
 
 **Mode:** sync
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 - API: `POST /v1/:org_slug/:workspace_slug/skills/config`
 - MCP: `get_skill_config`

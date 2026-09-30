@@ -4,7 +4,7 @@
 **Domain:** toolbelt
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -48,3 +48,4 @@ The first call in a workspace inserts its All tools belt (`tools.toolbelts`, `ki
 
 - `POST /api/v1/{org}/{ws}/toolbelts`
 - MCP tool `list_toolbelts`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).

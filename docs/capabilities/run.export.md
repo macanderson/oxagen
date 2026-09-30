@@ -1,5 +1,7 @@
 # export_run
 
+**Surfaces:** api, agent
+
 The signed, offline-verifiable evidence bundle for one sealed run (Mission Control spec §13.4 "Exports produce a verifiable bundle: segments, attestations, key ids, and a verifier script"; App. E; ADR-058). The capability queues the job and answers its id. The durable function `evidence.run-export` builds the bundle and records it in `evidence.run_exports`. Read the export back, and get a download URL, with [`get_run_export`](run.export.get.md).
 
 ## Mode
@@ -13,7 +15,8 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 - CLI: `oxagen run export <run-id>`
 - Authentication: session or API key; org Owner or Admin, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `export_run`
-- `mutates: true`; `agent.requiresApproval: false`; not billed (`noBillingGate: true`). IAM default-deny; high sensitivity.
+- `mutates: true`; `agent.requiresApproval: true`; not billed (`noBillingGate: true`). IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. A person approves each call first (`riskLevel: medium`), because the bundle is high-sensitivity evidence.
 
 ## Input
 

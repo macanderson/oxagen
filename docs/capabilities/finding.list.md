@@ -8,7 +8,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 
 ## Surface
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/findings`
 - MCP: `list_findings`
@@ -16,6 +16,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_findings`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

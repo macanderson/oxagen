@@ -52,9 +52,9 @@ export function selectMaterializableMcpServers(
         // descriptor snapshots for replay.
         isNull(schema.mcpServers.deletedAt),
         // A steering row is for wrapped agents, which reach it through the
-        // gateway. The in-app agent keeps the servers connected the old way
-        // (M13, #4478). Filtering here keeps the contributor and
-        // get_agent_toolbelt in step, and no turn connects to a steering row.
+        // gateway. The in-app agent loads no MCP server at all (#4310).
+        // Filtering here keeps the contributor and get_agent_toolbelt in
+        // step, and no governed turn connects to a steering row.
         ne(schema.mcpServers.origin, "steering"),
         // "unknown" is the state the toggle/secret path leaves (only the OAuth
         // callback sets "healthy"); the live connect in the contributor is the

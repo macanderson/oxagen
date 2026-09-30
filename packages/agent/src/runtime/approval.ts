@@ -66,6 +66,21 @@ export interface CreateApprovalArgs {
    * other caller leaves it out and writes `approval`.
    */
   kind?: "approval" | "consent";
+  /**
+   * The decision rules that sent this call to a person, from
+   * `DecisionRuleApprovalRequiredError.ruleIds` (#4226). Written to
+   * `approval_requests.rule_ids`, so `list_approvals` can name the rule that
+   * parked the call. Omit it when the contract's own `requiresApproval`
+   * parked the call, and the row keeps the column's empty default.
+   */
+  ruleIds?: readonly string[];
+  /**
+   * The digest the rules gate put on `DecisionRuleApprovalRequiredError`
+   * (`approvalDigest`). A resumable approval seals it into its resume
+   * payload as `ruleDigest`, so the approved call can prove the approval to
+   * the gate when it runs (#4226).
+   */
+  ruleDigest?: string;
 }
 
 /** `agent_runs.id` is a uuid; anything else is a caller's sentinel, not a run. */
@@ -262,6 +277,7 @@ export async function createApprovalRequest(args: CreateApprovalArgs): Promise<{
         runPublicId: await resolveRunPublicId(tx, args),
         inputDigest: digest,
         expiresAt,
+        ...(args.ruleIds ? { ruleIds: [...args.ruleIds] } : {}),
       })
       .returning({
         id: schema.approvalRequests.id,
@@ -298,6 +314,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
     rawInput: args.inputPreview,
     validatedDigest: digest,
     riskLevel: args.riskLevel,
+    ...(args.ruleDigest ? { ruleDigest: args.ruleDigest } : {}),
   });
   return withTenantDb(async (tx) => {
     const message = await tx.query.messages.findFirst({
@@ -319,6 +336,10 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       }));
     if (!conversation)
       throw new ApprovalResumeError("requester_conversation_missing");
+    // A call a decision rule parked also keys on the rule digest (#4226).
+    // When the rules change, the digest changes, and the call gets a new row
+    // for the person to answer. Keyed on the input alone, it would keep
+    // finding the old row, whose resume the new rules refuse.
     const resumeKey = inputDigest({
       orgId: args.orgId,
       workspaceId: args.workspaceId,
@@ -326,6 +347,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       requesterUserId,
       capability: args.capabilityName,
       digest,
+      ...(args.ruleDigest ? { ruleDigest: args.ruleDigest } : {}),
     });
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${resumeKey}, 0))`,
@@ -363,6 +385,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
         resumeKey,
         resumePayload: payload,
         resumeStatus: "waiting",
+        ...(args.ruleIds ? { ruleIds: [...args.ruleIds] } : {}),
       })
       .returning({ approvalId: a.id, approvalPublicId: a.publicId });
     if (!row) throw new ApprovalResumeError("approval_not_recorded");

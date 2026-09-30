@@ -4,7 +4,7 @@ An org Owner or Admin turns the operator pseudonyms of the active workspace on o
 
 In the app, the switch sits beside the Operator ranking heading on Spend › Findings.
 
-**Surfaces:** api
+**Surfaces:** api, agent
 
 ## Mode
 
@@ -16,6 +16,7 @@ In the app, the switch sits beside the Operator ranking heading on Spend › Fin
 - Authentication: session (org Owner or Admin)
 - Capability name: `set_operator_pseudonyms`
 - Not billed (`noBillingGate: true`). IAM default-deny; high sensitivity. The handler asserts the role itself.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

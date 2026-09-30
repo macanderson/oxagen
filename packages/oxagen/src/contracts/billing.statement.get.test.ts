@@ -16,7 +16,7 @@ describe("get_billing_statement contract", () => {
     );
   });
   it.each([billingStatementGet, billingStatementExport])(
-    "$name is a billing read: mutates false, noBillingGate, scoped, Owner/Admin/Billing, api+mcp+cli",
+    "$name is a billing read: mutates false, noBillingGate, scoped, Owner/Admin/Billing, api+mcp+cli at least",
     (cap) => {
       expect(cap.mutates).toBe(false);
       expect(cap.noBillingGate).toBe(true);
@@ -26,10 +26,17 @@ describe("get_billing_statement contract", () => {
         org: { Owner: "allow", Admin: "allow", Billing: "allow" },
         workspace: {},
       });
-      expect(cap.surfaces).toEqual(["api", "mcp", "cli"]);
+      expect(cap.surfaces).toEqual(expect.arrayContaining(["api", "mcp", "cli"]));
       expect(cap.layers).not.toContain("e2e");
     },
   );
+
+  it("offers the export, the app action, to Stella, and keeps the read off the agent surface", () => {
+    // export_billing_statement carries the app layer, so it is on the agent
+    // surface with the rest of the app's actions (#4180).
+    expect(billingStatementExport.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
+    expect(billingStatementGet.surfaces).toEqual(["api", "mcp", "cli"]);
+  });
   it("takes a calendar period by anchor or a custom range, and defaults the breakdown size", () => {
     expect(
       billingStatementGet.input.parse({

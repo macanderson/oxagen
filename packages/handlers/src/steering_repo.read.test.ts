@@ -76,10 +76,10 @@ describe("get_steering_repo contract", () => {
     expect([...STEERING_REPO_STEP_NAMES]).toEqual([...STEERING_REPO_STEPS]);
   });
 
-  it("is a workspace read on api and mcp that takes nothing", () => {
+  it("is a workspace read on api, mcp and agent that takes nothing", () => {
     expect(steeringRepoGet.scoped).toBe(true);
     expect(steeringRepoGet.mutates).toBe(false);
-    expect(steeringRepoGet.surfaces).toEqual(["api", "mcp"]);
+    expect(steeringRepoGet.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(steeringRepoGet.input.safeParse({ workspaceId: "ws_1" }).success).toBe(
       false,
     );

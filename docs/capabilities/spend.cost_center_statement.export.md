@@ -8,7 +8,7 @@ The organization's monthly chargeback statement as CSV (ADR-142). The statement 
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/cost-center-statement/export`
 - MCP: `export_cost_center_statement`
@@ -16,6 +16,7 @@ The organization's monthly chargeback statement as CSV (ADR-142). The statement 
 - Capability name: `export_cost_center_statement`
 - Organization-level (`scoped: false`). The workspace in the path only routes the call.
 - Not billed (`noBillingGate: true`). IAM default-deny, medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

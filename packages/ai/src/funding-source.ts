@@ -131,6 +131,9 @@ export async function resolveModelFundingSource(
         digest: brought.digest,
         baseUrl: brought.baseUrl,
         modelMap: brought.modelMap,
+        // The client asserts native structured output only where the probe
+        // saw it honoured (#3314).
+        structuredOutputs: brought.structuredOutputs ?? null,
       },
       keyHint: brought.keyHint,
     };

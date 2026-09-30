@@ -4,7 +4,7 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org (the handler reads the org the caller's tenant scope names)
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`; ADR-052 exclusion 2, INV-27)
 
@@ -59,6 +59,7 @@ None. Read-only; audit-exempt (the kernel's `capability.invoke_*` audit records 
 - CLI `oxagen billing statement --period <p> --format csv|html [--out <file>]`, which follows the cursor to the last page
 - The app's Billing page, Statements section: Download CSV and Download HTML
 - Operators: `pnpm billing:statement` reads the same statement through `@oxagen/billing` directly
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

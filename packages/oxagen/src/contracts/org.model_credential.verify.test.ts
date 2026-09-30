@@ -17,7 +17,26 @@ describe("org.model_credential.verify capability", () => {
   it("exposes the base object so the MCP tool can read .shape", () => {
     expect(
       Object.keys(orgModelCredentialVerifyInputObject.shape).sort(),
-    ).toEqual(["apiKey", "baseUrl", "provider", "toolProbeModel"]);
+    ).toEqual(["apiKey", "baseUrl", "modelMap", "provider", "toolProbeModel"]);
+  });
+
+  it("takes a candidate's tier map so every mapped model is asked (#3314)", () => {
+    const parsed = orgModelCredentialVerify.input.parse({
+      provider: "openai",
+      apiKey: KEY,
+      modelMap: { fast: "gpt-5-mini", balanced: "gpt-5.2" },
+    });
+    expect(parsed.modelMap).toEqual({
+      fast: "gpt-5-mini",
+      balanced: "gpt-5.2",
+    });
+    expect(
+      orgModelCredentialVerify.input.safeParse({
+        provider: "openai",
+        apiKey: KEY,
+        modelMap: { balanced: "" },
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts a candidate: provider and apiKey together", () => {

@@ -4,7 +4,8 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 **Risk level:** low
 **Billing:** `noBillingGate: true` (a console read is outside the metering surface, ADR-052 exclusion 2)
 **Mutates:** no

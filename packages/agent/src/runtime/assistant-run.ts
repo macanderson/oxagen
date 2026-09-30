@@ -46,6 +46,7 @@ import {
   type PlatformSurface,
   type ResolvedEngineIdentity,
   type RunStore,
+  type SealedAttemptHandle,
   type ToolEngineCallOutcome,
 } from "@oxagen/run-ledger";
 import {
@@ -66,7 +67,7 @@ import {
   goalVerdictPayload,
   type TurnLedgerGoalVerdict,
 } from "./engine/goal";
-import type { HistorySummaryFrame } from "./history-summary";
+import type { HistorySummaryCall, HistorySummaryFrame } from "./history-summary";
 import { sendRunSealed } from "./run-sealed-event";
 import type {
   TurnLedger,
@@ -139,6 +140,29 @@ const GOAL_MAX_CHARS = 8192;
  * the `context.history_summarized` frame name it (`history-summary.ts`).
  */
 export const HISTORY_SUMMARY_PROVIDER = "conversation_history";
+
+/**
+ * The summary call's model, usage, and cost as the frame records them
+ * (#4228). The ledger refuses a payload outside its bounds, and a refused
+ * frame refuses the turn, so each figure is held to them: the model label to
+ * 128 characters, token counts to one million, and the cost to $1,000 in
+ * whole micro-dollars.
+ */
+function summaryCallPayload(call: HistorySummaryCall): {
+  summary_model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_micros: number;
+} {
+  const bounded = (n: number, max: number): number =>
+    Number.isFinite(n) ? Math.min(max, Math.max(0, Math.round(n))) : 0;
+  return {
+    summary_model: call.model.slice(0, 128) || "unknown",
+    input_tokens: bounded(call.inputTokens, 1_000_000),
+    output_tokens: bounded(call.outputTokens, 1_000_000),
+    cost_usd_micros: bounded(call.costUsd * 1_000_000, 1_000_000_000),
+  };
+}
 
 /**
  * The context the turn frames, as the spec names it. `engram` is the
@@ -1004,6 +1028,7 @@ class Recorder implements AssistantRunRecorder {
         window_message_count: frame.windowMessages,
         regenerated: frame.regenerated,
         ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
+        ...(frame.summaryCall ? summaryCallPayload(frame.summaryCall) : {}),
       },
       body: frame.text === null ? undefined : jsonBody(eventType, frame.text),
     });
@@ -1172,8 +1197,9 @@ class Recorder implements AssistantRunRecorder {
         : outcome.status === "aborted"
           ? "cancelled"
           : "failed";
-    await this.inScope(async () => {
-      await this.store.sealAttempt({
+    const sealedAt = this.now().toISOString();
+    const handle = await this.inScope(() =>
+      this.store.sealAttempt({
         attemptId: this.attemptId,
         terminalStatus,
         sealerId: ASSISTANT_PRINCIPAL_NAME,
@@ -1186,7 +1212,7 @@ class Recorder implements AssistantRunRecorder {
         terminalEvent: {
           attemptSeq,
           eventType: TERMINAL_EVENT_TYPE,
-          observedAt: this.now().toISOString(),
+          observedAt: sealedAt,
           payload: {
             terminal_status: terminalStatus,
             ...(outcome.status === "completed"
@@ -1209,8 +1235,9 @@ class Recorder implements AssistantRunRecorder {
                 }),
           },
         },
-      });
-    });
+      }),
+    );
+    this.warnIfSealedElsewhere(handle, terminalStatus, sealedAt);
     // After the commit, as every other seal path sends it: the rollup builds
     // the run's cost row now rather than at the nightly sweep (#4167).
     await sendRunSealed({
@@ -1222,6 +1249,39 @@ class Recorder implements AssistantRunRecorder {
       },
     });
     this.projectContext();
+  }
+
+  /**
+   * Log a seal that lost to another sealer (#4227). A sealed attempt stays
+   * sealed, so `sealAttempt` hands a late seal the handle already on the
+   * ledger and writes nothing. The abandoned-run sweep (ADR-173) and the idle
+   * close (ADR-180) each seal a silent run `abandoned`. A turn that ends after
+   * either one still answers the person, while the ledger says `abandoned`,
+   * and this line is the only record that the two disagree. `sealedAt` is
+   * when this turn tried to seal. The handle carries no time for the seal
+   * that won.
+   *
+   * A handle that does not say it was already sealed, or names no status, is
+   * read as agreement: only a stated disagreement is logged.
+   */
+  private warnIfSealedElsewhere(
+    handle: Partial<SealedAttemptHandle> | undefined,
+    attempted: string,
+    sealedAt: string,
+  ): void {
+    if (handle?.alreadySealed !== true) return;
+    const recorded = handle.terminalStatus;
+    if (typeof recorded !== "string" || recorded === attempted) return;
+    logger.warn(
+      {
+        runId: this.runPublicId,
+        attemptId: handle.attemptPublicId ?? null,
+        attemptedStatus: attempted,
+        recordedStatus: recorded,
+        sealedAt,
+      },
+      "assistant turn sealed late: the run was already sealed with another status",
+    );
   }
 
   /**

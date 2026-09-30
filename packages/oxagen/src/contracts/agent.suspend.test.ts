@@ -7,7 +7,7 @@ describe("suspend_agent contract", () => {
     expect(getCapability("suspend_agent")).toBe(agentSuspend);
     expect(agentSuspend.mutates).toBe(true);
     expect(agentSuspend.noBillingGate).toBe(true);
-    expect(agentSuspend.surfaces).toEqual(["api"]);
+    expect(agentSuspend.surfaces).toEqual(["api", "agent"]);
     expect(agentSuspend.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

@@ -35,7 +35,7 @@ export const runFrameBodyGet = registerCapability({
   description:
     "Read the redacted body of one frame of a run by its sequence, and by its chain for a subagent's frame: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -46,6 +46,7 @@ export const runFrameBodyGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z
     .object({
       runId: runPublicIdSchema,

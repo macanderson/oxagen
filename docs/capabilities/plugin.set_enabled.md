@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org / workspace (selected by the `scope` argument)
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** medium
 
 ## Intent
@@ -51,3 +51,4 @@ Org Owner, Org Admin, Workspace Owner, Workspace Admin.
 
 - `POST /api/v1/{org}/{ws}/plugin/set-enabled`
 - MCP tool `set_plugin_enabled`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

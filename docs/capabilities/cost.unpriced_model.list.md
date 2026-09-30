@@ -1,5 +1,7 @@
 # list_unpriced_models
 
+**Surfaces:** api, mcp, agent
+
 The models this organization is running that nobody has stated a price for (Mission Control spec §12.2, App. A.7; ADR-060 §1). A frame whose model the price book cannot price is recorded `unpriced` by the rollup — no cost, no basis, deliberately never a zero — so the run comes back with a blank cost and no explanation. This is the explanation: the model, how much of it has been run in the window, and exactly which token classes are missing a price.
 
 Two answers close a gap. An operator of the installation states the rate in the environment, and every organization gets it. An organization with a rate it negotiated itself states it as a `negotiated` row through `set_price_entry`, which wins over the list rate for that organization and nobody else.
@@ -15,6 +17,7 @@ Two answers close a gap. An operator of the installation states the rate in the 
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_unpriced_models`
 - Not billed (`noBillingGate: true`). IAM default-deny; low sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

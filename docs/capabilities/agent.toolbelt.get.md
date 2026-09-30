@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -13,6 +13,8 @@
 The belt an agent would be shown, computed and not executed (MC spec §6.6; #2956): the read behind the Agents detail page's toolbelt tab. For every capability on the agent surface and every discovered tool of the workspace's enabled MCP servers, the decision the runtime pipeline produced and the rule that decided it; how the belt was computed; what the model receives; and what the agent cannot see.
 
 The decision per tool is the runtime's own: the handler calls the same per-tool function `materializeTools` calls before it builds a tool (`packages/agent/src/runtime/toolbelt.ts`), over the same inputs — the registry, the agent ∩ human resolution the kernel memoizes per run, the org's plugin entitlements, the run's effective MCP rules and the agent-subject consent ledger, and the active emergency denies the kernel enforces at invoke time. The caller is the initiating human of the delegation ceiling, so the belt is the one a run they start would carry. A `deny` puts the tool in `cannotSee` with the rule that excluded it; `allow` and `require_approval` put it in `tools`. A suspended or retired principal anchors no run, so its belt is empty and every tool is out of sight with rule `principal_suspended`.
+
+An active emergency deny puts a capability in `cannotSee` with rule `kill_switch` when it reaches that capability's calls. The belt matches a deny on the same facts the tool gateway's per-turn gate uses: the capability id, the agent's principal and the caller's, and the scopes a run this caller starts would carry (the organization, the workspace, the agent, and the caller as operator). A `class` switch reaches a capability whose tool version carries that class. A `tool_server` or `connection` switch is checked per call on the external tools it names, not in this list.
 
 Every entry also carries the input schema the model is handed for that tool. A capability's is derived from the contract through the same conversion the runtime uses to advertise a tool, so the belt shows what the model receives rather than a second rendering of it. An MCP tool's comes from the registry version `import_tools` published, because a server's cached `tools/list` snapshot holds tool names and no schemas; a server whose tools were never imported reports no schema rather than a placeholder. The four schema fields are optional, so a reader written before them still parses the output.
 
@@ -52,6 +54,7 @@ None. Read-only; audit-exempt. A failed entitlement read excludes every plugin-c
 
 - `POST /api/v1/{org}/{ws}/agents/toolbelt`
 - MCP tool `get_agent_toolbelt`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

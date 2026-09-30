@@ -153,6 +153,17 @@ const killSwitchMocks = vi.hoisted(() => ({
   ),
   /** The acting agent each gate was created with (its third argument). */
   actingAgents: [] as unknown[],
+  /**
+   * The classification index the belt reads for a class switch (#4218). The
+   * real read joins `agent.tools` to `agent.tool_versions`, which this file's
+   * db double does not model.
+   */
+  readClassificationIndex: vi.fn(
+    async (
+      _tx: unknown,
+      _scope: { orgId: string; workspaceId: string },
+    ): Promise<ReadonlyMap<string, readonly string[]>> => new Map(),
+  ),
 }));
 vi.mock("./kill-switch-gate", async (importOriginal) => {
   const real = await importOriginal<typeof import("./kill-switch-gate")>();
@@ -166,6 +177,7 @@ vi.mock("./kill-switch-gate", async (importOriginal) => {
       killSwitchMocks.actingAgents.push(actingAgent);
       return { check: killSwitchMocks.check };
     },
+    readClassificationIndex: killSwitchMocks.readClassificationIndex,
   };
 });
 
@@ -368,14 +380,17 @@ vi.mock("@oxagen/iam", async () => {
     matchEmergencyDeny: live.matchEmergencyDeny,
     readActiveEmergencyDenies: iamMocks.readActiveEmergencyDenies,
     resourceScopeDigestOf: scopes.resourceScopeDigestOf,
+    implicitScopeDigests: scopes.implicitScopeDigests,
   };
 });
 
 import {
   materializeTools,
   digestInputFor,
+  type ApprovalRequiredEvent,
   type MaterializeOptions,
 } from "./materialize-tools";
+import { ApprovalPendingError } from "./approval-pending";
 import { decideCapabilityForBelt } from "./toolbelt";
 import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
@@ -1545,6 +1560,40 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(tools[toolAlias]).toBeDefined();
   });
 
+  // #4310: stella's belt is Oxagen's capability contracts alone (ADR-053 §1).
+  // A workspace with a healthy MCP server and a decision rule that denies
+  // every external call gives the same set as a workspace with neither. The
+  // server is never connected and never listed. The listing reads no
+  // decision rule for a capability (`decideCapabilityForBelt`), so the rule
+  // can only reach the MCP half, and that half is gone.
+  it("builds the set from capability contracts alone with capabilitiesOnly (#4310)", async () => {
+    externalRulesMock.mockRejectedValue(new Error("decision rule denied"));
+    vi.mocked(connectMcp).mockClear();
+    vi.mocked(listMcpToolDescriptors).mockClear();
+    const withServer = await materializeTools(CTX, { capabilitiesOnly: true });
+    expect(
+      Object.values(withServer.nameMap).filter((n) => n.startsWith("mcp.")),
+    ).toEqual([]);
+    expect(connectMcp).not.toHaveBeenCalled();
+    expect(listMcpToolDescriptors).not.toHaveBeenCalled();
+    expect(externalRulesFactory).not.toHaveBeenCalled();
+
+    dbMocks.rowsByTable.delete(dbMocks.schema.mcpServers);
+    externalRulesMock.mockReset().mockResolvedValue(undefined);
+    const empty = await materializeTools(CTX, { capabilitiesOnly: true });
+    expect(Object.values(withServer.nameMap).sort()).toEqual(
+      Object.values(empty.nameMap).sort(),
+    );
+
+    // The premise, not assumed: without the option the same workspace lists
+    // the server's tool.
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
+    const full = await materializeTools(CTX);
+    expect(Object.values(full.nameMap)).toContain(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+    );
+  });
+
   it("passes serverAllowlist through to contributeTools options", async () => {
     // Verify the threading: materializeTools propagates serverAllowlist to every
     // plugin-type contributor via the PluginContributeOptions argument.
@@ -2634,6 +2683,74 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     // carries none.
     expect(killSwitchMocks.actingAgents).toEqual([ASSISTANT, null]);
   });
+
+  // #4218: a workspace, org, operator, or class switch covers every call it
+  // names, and the per-call gate refuses each one (`callScopeDigests`). The
+  // belt matched on the acting agent's digest alone, so each of these left
+  // every tool on the list. It now matches on the digests the gate builds.
+  const scopeSwitch = (target: {
+    kind: string;
+    id: string;
+  }): ActiveEmergencyDeny => ({
+    publicId: `edn_${target.kind}`,
+    denyKind: "resource_scope",
+    capabilityId: null,
+    resourceScopeDigest: resourceScopeDigestOf(target),
+    principalId: null,
+    reason: "incident",
+  });
+  it.each([
+    ["workspace", { kind: "workspace", id: CTX.workspaceId }],
+    ["org", { kind: "org", id: CTX.orgId }],
+    ["operator", { kind: "operator", id: CTX.userId }],
+  ])("a %s switch leaves every capability out of a person's belt", async (_kind, target) => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch(target),
+    ]);
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools)).toEqual([]);
+  });
+
+  it("a workspace switch leaves every capability out of an agent run's belt", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "workspace", id: CTX.workspaceId }),
+    ]);
+    const run = makeAgentRun(createAgentRunResolution(contributorSnapshot()));
+    const { tools } = await materializeTools(ctxWith(run));
+    expect(Object.keys(tools)).toEqual([]);
+  });
+
+  it("a switch on another workspace or operator leaves the belt whole (negative)", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "workspace", id: "ws_other" }),
+      scopeSwitch({ kind: "operator", id: "u_other" }),
+    ]);
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+  });
+
+  it("a class switch leaves out only the capabilities whose version carries the class", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "class", id: "moves_money" }),
+    ]);
+    killSwitchMocks.readClassificationIndex.mockClear();
+    killSwitchMocks.readClassificationIndex.mockResolvedValueOnce(
+      new Map([["capB", ["moves_money"]]]),
+    );
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "fill_form"]);
+    expect(killSwitchMocks.readClassificationIndex).toHaveBeenCalledWith(
+      expect.anything(),
+      { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+    );
+  });
+
+  it("reads no classification index while only capability denies are on", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([killSwitch("capA")]);
+    killSwitchMocks.readClassificationIndex.mockClear();
+    await materializeTools(CTX);
+    expect(killSwitchMocks.readClassificationIndex).not.toHaveBeenCalled();
+  });
 });
 
 // ── Agent RBAC Phase 4a: MCP rule enforcement (spec §3.7) ────────────────────
@@ -3293,5 +3410,140 @@ describe("materializeTools role rule", () => {
     expect(belt).toContain("capA");
     expect(belt).not.toContain("install_plugin");
     expect(belt).not.toContain("get_rate_card");
+  });
+});
+
+// #4226: a workspace decision rule's `require_approval` on a built-in
+// capability. The kernel's rules gate throws it from invoke(). stella's turn
+// has an approval channel, so under park mode the call waits for a person
+// with the rule named, where it used to fail with the rule's error.
+describe("materializeTools — a call a decision rule sends to a person", () => {
+  const RULE_DIGEST = "a".repeat(64);
+  /**
+   * What the rules gate throws: `DecisionRuleApprovalRequiredError`. Null
+   * leaves the digest unset, as the gate does for input it cannot encode.
+   */
+  const ruleRequiresApproval = (digest: string | null) =>
+    Object.assign(
+      new Error(
+        'decision rule "approve-medium" requires approval: medium refunds need a person',
+      ),
+      {
+        name: "DecisionRuleApprovalRequiredError",
+        code: "decision_rule_approval_required",
+        ruleIds: ["approve-medium"],
+        approvalDigest: digest ?? undefined,
+      },
+    );
+  const PARK_CTX = { ...CTX, messageId: "msg_rule" };
+  const call = (tools: Record<string, unknown>, name: string) =>
+    (tools[name] as { execute: (i: unknown) => Promise<unknown> }).execute;
+
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset().mockResolvedValue({ ok: true });
+    mocks.createApprovalRequest.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([]);
+    killSwitchMocks.check.mockResolvedValue(null);
+  });
+
+  it("parks the call with the rule named on the row and its digest sealed", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(ruleRequiresApproval(RULE_DIGEST));
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_rule",
+      approvalPublicId: "apr_rule",
+    });
+    const events: ApprovalRequiredEvent[] = [];
+    const { tools } = await materializeTools(PARK_CTX, {
+      approvalMode: "park",
+      onApprovalRequired: (e) => events.push(e),
+    });
+    await expect(call(tools, "capA")({ x: "1" })).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApprovalPendingError &&
+        e.capability === "capA" &&
+        e.approvalPublicId === "apr_rule",
+    );
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+        messageId: "msg_rule",
+        capabilityName: "capA",
+        inputPreview: { x: "1" },
+        digestInput: { x: "1" },
+        resumeRequesterUserId: CTX.userId,
+        ruleIds: ["approve-medium"],
+        ruleDigest: RULE_DIGEST,
+      }),
+    );
+    // The turn collects the card from this event (assistant-turn.ts).
+    expect(events).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_rule",
+        approvalPublicId: "apr_rule",
+        capability: "capA",
+        expiresAt: expect.any(String),
+      }),
+    ]);
+    // A parked call is not a failure in `tool_invocations`.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability_name: "capA",
+        status: "parked",
+        error_class: null,
+      }),
+    );
+  });
+
+  const refusalCases: {
+    name: string;
+    opts: MaterializeOptions;
+    ctx: Parameters<typeof materializeTools>[0];
+    digest: string | null;
+  }[] = [
+    { name: "outside park mode", opts: {}, ctx: PARK_CTX, digest: RULE_DIGEST },
+    {
+      name: "with no digest to prove the approval",
+      opts: { approvalMode: "park" },
+      ctx: PARK_CTX,
+      digest: null,
+    },
+    {
+      name: "with no message to attach the row to",
+      opts: { approvalMode: "park" },
+      ctx: CTX,
+      digest: RULE_DIGEST,
+    },
+    {
+      name: "for an API key's call",
+      opts: { approvalMode: "park" },
+      ctx: { ...PARK_CTX, apiKeyId: "key_1" },
+      digest: RULE_DIGEST,
+    },
+  ];
+  it.each(refusalCases)(
+    "keeps the rule's refusal $name (negative)",
+    async ({ opts, ctx, digest }) => {
+      const refusal = ruleRequiresApproval(digest);
+      vi.mocked(invoke).mockRejectedValueOnce(refusal);
+      const { tools } = await materializeTools(ctx, opts);
+      await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(refusal);
+      expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves every other invoke error as it was (negative)", async () => {
+    const other = Object.assign(new Error("refused"), {
+      code: "decision_rule_denied",
+    });
+    vi.mocked(invoke).mockRejectedValueOnce(other);
+    const { tools } = await materializeTools(PARK_CTX, {
+      approvalMode: "park",
+    });
+    await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(other);
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });
 });

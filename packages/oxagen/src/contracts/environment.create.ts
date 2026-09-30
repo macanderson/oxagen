@@ -17,7 +17,7 @@ export const environmentCreate = registerCapability({
   description:
     "Create a workspace environment (e.g. production, development, preview) for scoping secrets and sandbox config.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

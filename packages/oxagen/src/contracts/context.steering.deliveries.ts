@@ -9,7 +9,7 @@ export const contextSteeringDeliveries = registerCapability({
   description:
     "Read included and cut steering records from the latest verified manifest of recent runs.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -26,6 +26,7 @@ export const contextSteeringDeliveries = registerCapability({
       Compliance: "allow",
     },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   input: z
     .object({
       days: z.number().int().min(1).max(30).default(7),

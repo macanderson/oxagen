@@ -439,6 +439,7 @@
       },
       "refused": {
         "denied": "You do not have permission to ask stella in this workspace.",
+        "killSwitch": "An operator switched stella off. An organization owner or admin can switch it back on in Agents, on the Off switches tab.",
         "invalid": "That question was refused. A question is 1 to 32,768 characters.",
         "attachment": "A file on this question was refused. Remove it, or attach a smaller file of a type stella reads.",
         "attachmentModel": "The model stella uses in this workspace cannot read one of these files. Remove the images or PDFs and ask again.",

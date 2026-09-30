@@ -47,7 +47,7 @@ export const repositoryTreeGet = registerCapability({
   description:
     "Read what one of the workspace's repositories holds under .oxagen/ and steering/ on its production branch: the head commit, every path, workspace.toml, the governance file and its mode, and any open init pull request.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -58,6 +58,7 @@ export const repositoryTreeGet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z
     .object({
       bindingId: repositoryBindingIdSchema,

@@ -7,7 +7,7 @@ export const pluginCatalogBrowse = registerCapability({
   description:
     "Search and filter the plugin marketplace by type, text, transport, and auth kind. Results are workspace-scoped — only registries enabled for the caller's org+workspace are queried.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

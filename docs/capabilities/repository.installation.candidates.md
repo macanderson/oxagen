@@ -8,7 +8,7 @@ The OAuth callback closes most of that itself — it lists the authorizing user'
 
 The ids in this output are not a handle anyone gains by reading it. Every row comes from `GET /user/installations` answered for this workspace's own stored token — GitHub showing a person their own installations — and the attach re-asks that same list before it persists anything. This is the one place an installation id is spoken out loud, and it is spoken only to the account that owns it. `get_main_repository` still withholds the ATTACHED id for the same reason it always did: nothing on screen needs it.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -22,6 +22,7 @@ The ids in this output are not a handle anyone gains by reading it. Every row co
 - Authentication: session; org Owner or Admin, checked by the handler (INV-29) — the pair that may attach and bind
 - Capability name: `list_github_installations`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

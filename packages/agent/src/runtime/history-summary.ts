@@ -55,6 +55,7 @@ import {
   type ModelFundingSource,
   type ModelMessage,
 } from "@oxagen/ai";
+import { providerCostUsd } from "@oxagen/billing/pricing";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
 import type { Surface } from "@oxagen/telemetry";
@@ -217,6 +218,25 @@ export interface HistorySummaryFrame {
   reasonCode?: HistorySummaryFallbackReason;
   /** The summary carried, recorded as the frame's body. */
   text: string | null;
+  /**
+   * The call that wrote the summary, set only when this turn wrote it
+   * (`regenerated`). The run records its cost on the
+   * `context.history_summarized` frame (#4228).
+   */
+  summaryCall?: HistorySummaryCall;
+}
+
+/**
+ * The one model call that wrote a history summary: which model, what it used,
+ * and what that cost on the model's own rate (#4228).
+ */
+export interface HistorySummaryCall {
+  /** The model id the call ran on, as `modelIdOf` returns it. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** The call's cost in USD, priced on `model`. */
+  costUsd: number;
 }
 
 export interface CompactedHistory {
@@ -224,6 +244,12 @@ export interface CompactedHistory {
   history: ModelMessage[];
   /** The run's frame, or null when every prior message fits the window. */
   frame: HistorySummaryFrame | null;
+  /**
+   * The call that wrote the summary, set only when this turn wrote it. The
+   * per-turn budget guard counts its cost before the engine's first step
+   * (`TurnBudgetGuardHooks.openingCostUsd`, #4228).
+   */
+  summaryCall?: HistorySummaryCall;
 }
 
 /** The summary took longer than the turn waits for it. */
@@ -443,7 +469,7 @@ export async function compactHistory(
     return carrying(plan.summary, loaded.window, "applied", false);
   }
 
-  let written: StoredHistorySummary;
+  let written: WrittenSummary;
   try {
     written = await withDeadline(
       (signal) => writeSummary(plan, args, signal),
@@ -487,8 +513,22 @@ export async function compactHistory(
     };
   }
 
-  await storeSummary(written, args);
-  return carrying(written, loaded.window, "applied", true);
+  await storeSummary(written.summary, args);
+  const compacted = carrying(written.summary, loaded.window, "applied", true);
+  // The call's cost rides the result for the turn's budget guard and the
+  // frame for the run's record (#4228). A carried or failed summary spent
+  // nothing this turn, so only this path sets it.
+  return {
+    ...compacted,
+    frame: compacted.frame && { ...compacted.frame, summaryCall: written.call },
+    summaryCall: written.call,
+  };
+}
+
+/** A summary this turn wrote, and the call that wrote it. */
+interface WrittenSummary {
+  summary: StoredHistorySummary;
+  call: HistorySummaryCall;
 }
 
 /** The summary at the head of the history, and the frame that records it. */
@@ -538,13 +578,14 @@ async function writeSummary(
   plan: Extract<HistorySummaryPlan, { kind: "refresh" }>,
   args: CompactHistoryArgs,
   signal: AbortSignal,
-): Promise<StoredHistorySummary> {
+): Promise<WrittenSummary> {
   // The key and the payer come from the funding source the turn resolved, so
   // the summary is paid exactly as the turn's own completions are (ADR-131).
   const selection = selectModelFromFunding(args.scope.orgId, args.funding, {
     tier: "fast",
   });
-  const { object } = await runInTenantScope(args.scope, () =>
+  const model = modelIdOf(selection.model);
+  const { object, usage } = await runInTenantScope(args.scope, () =>
     generateObjectFor({
       ...selection,
       // The summary is part of the assistant's turn, so it counts against the
@@ -568,14 +609,45 @@ async function writeSummary(
     throw new Error("the summariser returned an empty summary");
   }
   return {
-    version: 1,
-    text,
-    digest: digestJcs(text),
-    throughMessageId: plan.throughMessageId,
-    coveredMessages: (plan.previous?.coveredMessages ?? 0) + plan.span.length,
-    model: modelIdOf(selection.model),
-    generatedAt: (args.now ?? (() => new Date()))().toISOString(),
+    summary: {
+      version: 1,
+      text,
+      digest: digestJcs(text),
+      throughMessageId: plan.throughMessageId,
+      coveredMessages: (plan.previous?.coveredMessages ?? 0) + plan.span.length,
+      model,
+      generatedAt: (args.now ?? (() => new Date()))().toISOString(),
+    },
+    call: summaryCallOf(model, usage),
   };
+}
+
+/**
+ * The summary call's usage, priced on the summary's own model with the rate
+ * card the per-turn budget guard prices engine steps with (#4228).
+ *
+ * The usage carries no cached-token counts, so every input token is priced
+ * as fresh input, which errs high. The call does not opt into the response
+ * cache. If a later change makes it, a cache hit must count as zero, because
+ * `generateObjectFor` reports the stored usage on a hit without charging it.
+ */
+function summaryCallOf(
+  model: string,
+  usage: { promptTokens: number; completionTokens: number },
+): HistorySummaryCall {
+  const inputTokens = wholeTokens(usage.promptTokens);
+  const outputTokens = wholeTokens(usage.completionTokens);
+  return {
+    model,
+    inputTokens,
+    outputTokens,
+    costUsd: providerCostUsd({ model, inputTokens, outputTokens }),
+  };
+}
+
+/** A provider's token count as a whole number, with anything else as 0. */
+function wholeTokens(count: number): number {
+  return Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
 }
 
 /** The summariser's input: the summary so far, then the span. */

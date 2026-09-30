@@ -4,7 +4,7 @@
 **Domain:** tool
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; versioning the registry spends nothing)
 
@@ -43,6 +43,7 @@ Writes `agent.tools` and `agent.tool_versions`; stamps `mcp.mcp_servers.last_imp
 - `POST /v1/{org}/{ws}/tools/import`
 - MCP tool `import_tools` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 - App: **Tools → Registry → Import tools from an MCP server** at `/{org}/{ws}/tools`.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Errors
 

@@ -1,5 +1,7 @@
 # get_run_chain
 
+**Surfaces:** api, mcp, agent, cli
+
 What makes one run's record tamper-evident, and what it is missing (Mission Control spec §8.3, §8.4; the Run page's Chain-and-seal tab). It answers the rule the chain was built under, the Merkle root the seal committed to, the signed checkpoints along the way, the gaps the read can see, the seal itself, and the replay-grade ladder with the reason each rung is or is not reached.
 
 ## Mode
@@ -14,6 +16,7 @@ What makes one run's record tamper-evident, and what it is missing (Mission Cont
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_chain`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Why this is its own capability and not more of `get_run`
 

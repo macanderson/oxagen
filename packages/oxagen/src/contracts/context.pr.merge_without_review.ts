@@ -15,7 +15,7 @@ export const contextPrMergeWithoutReview = registerCapability({
   description:
     "Merge a proposal's Context PR without an approval and publish its record: refused unless the caller holds merge_pr_without_review, and refused on every other ground merge_context_pr refuses; the trailer and the ledger record that nobody reviewed it",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

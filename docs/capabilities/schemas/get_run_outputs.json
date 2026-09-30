@@ -4,10 +4,15 @@
   "description": "Read what one run produced, in the order it produced it: a file or media node per path a wrapped session wrote, a change, commit and pull-request node per receipt a ledger run recorded, a read node per path the run only looked at, and a gate node where a governed call stopped it.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

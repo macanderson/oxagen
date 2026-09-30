@@ -3,6 +3,13 @@ import { apiKeyCreate } from "./api.key.create";
 import { getCapability } from "../registry";
 
 describe("api.key.create capability", () => {
+  it("asks a person before Stella creates a key, as rotate_api_key does", () => {
+    // The call returns the raw key, so it carries the same gate as a rotation.
+    expect(apiKeyCreate.surfaces).toContain("agent");
+    expect(apiKeyCreate.agent?.requiresApproval).toBe(true);
+    expect(apiKeyCreate.agent?.riskLevel).toBe("high");
+  });
+
   it("parses a minimal valid input", () => {
     const parsed = apiKeyCreate.input.parse({ name: "CI deploy key" });
     expect(parsed.name).toBe("CI deploy key");

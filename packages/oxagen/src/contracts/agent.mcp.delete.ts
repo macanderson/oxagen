@@ -7,7 +7,8 @@ export const agentMcpDelete = registerCapability({
   description:
     "Soft-delete a registered external MCP server. Its tools stop registering immediately, but tool-descriptor snapshots are retained >= 365 days for replay durability before a retention job purges them. The change is audited.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
+  mutates: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "high",
@@ -16,6 +17,7 @@ export const agentMcpDelete = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "tools" },
   input: z.object({
     mcpServerId: z.string(),
   }),

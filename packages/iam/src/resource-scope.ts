@@ -32,7 +32,7 @@ export function resourceScopeDigestOf(target: ResourceScopeTarget): string {
  * `agt_…` id) and the initiating operator (their user id). A kill switch on
  * any of them is a `resource_scope` deny over the same `{kind, id}`.
  */
-interface ImplicitScopeArgs {
+export interface ImplicitScopeArgs {
   readonly orgId: string;
   readonly workspaceId: string | null;
   /** The agent's public id (`agt_…`), as `AgentRunIAMContext.agentId` carries it. */

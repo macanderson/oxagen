@@ -24,7 +24,7 @@ export const runtimeUpdate = registerCapability({
   description:
     "Rename a runtime or change whether every agent on it must run under the contained launcher. A field left out keeps its value. Hosts bound to the runtime carry the change on their next bundle fetch.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   // `app`: the Containment switch on a named runtime's page (apps/app features/runtimes).
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,

@@ -354,6 +354,59 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     expect(typeof call.fetch).toBe("function");
   });
 
+  describe("structured outputs on a customer endpoint (#3314)", () => {
+    const flags = () =>
+      mocks.createOpenAICompatible.mock.calls.map(
+        (c) =>
+          (c[0] as { supportsStructuredOutputs?: boolean })
+            .supportsStructuredOutputs,
+      );
+
+    it("does not assert JSON-schema support for an endpoint the probe never asked", () => {
+      selectModel({ tier: "balanced", credential: compat() });
+      selectModel({
+        tier: "balanced",
+        credential: compat({ digest: "d-2", structuredOutputs: null }),
+      });
+      expect(flags()).toEqual([false, false]);
+    });
+
+    it("asserts it only where the probe saw the endpoint honour a schema", () => {
+      selectModel({
+        tier: "balanced",
+        credential: compat({ structuredOutputs: true }),
+      });
+      selectModel({
+        tier: "balanced",
+        credential: compat({ digest: "d-2", structuredOutputs: false }),
+      });
+      expect(flags()).toEqual([true, false]);
+    });
+
+    it("builds a new client when a re-verify changes the answer, rather than reusing the old one", () => {
+      selectModel({ tier: "balanced", credential: compat() });
+      selectModel({ tier: "balanced", credential: compat() });
+      selectModel({
+        tier: "balanced",
+        credential: compat({ structuredOutputs: true }),
+      });
+      expect(flags()).toEqual([false, true]);
+    });
+
+    it("keeps native structured output for a named vendor's endpoint (negative)", () => {
+      selectModel({
+        tier: "balanced",
+        credential: {
+          provider: "openai",
+          apiKey: "sk-openai-0123456789",
+          digest: "d-openai-structured",
+          modelMap: { balanced: "gpt-5.2" },
+        },
+      });
+      expect(flags()).toEqual([true]);
+    });
+  });
+
   it("spells the endpoint for openai and anthropic, so the customer pastes only a key", () => {
     selectModel({
       tier: "balanced",

@@ -14,7 +14,7 @@ describe("get_onboarding_state contract", () => {
     expect(onboardingStateGet.mutates).toBe(false);
     expect(onboardingStateGet.noBillingGate).toBe(true);
     expect(onboardingStateGet.defaultEffect).toBe("allow");
-    expect(onboardingStateGet.surfaces).toEqual(["api", "mcp"]);
+    expect(onboardingStateGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("takes no input and refuses an unknown key", () => {

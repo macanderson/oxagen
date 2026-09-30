@@ -6,7 +6,7 @@ export const pluginRegistryList = registerCapability({
   domain: "plugin",
   description: "List MCP registries for the workspace.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

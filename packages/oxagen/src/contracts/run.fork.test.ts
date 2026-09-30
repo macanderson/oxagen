@@ -4,10 +4,12 @@ import { runFork } from "./run.fork";
 const RUN = "arun_5f0c2e9a1b7d4c3e8f6a02";
 
 describe("fork_run contract", () => {
-  it("is a write for org Owner, Admin and Member that needs no approval", () => {
+  it("is a write for org Owner, Admin and Member that an agent runs only with approval", () => {
     expect(runFork.mutates).toBe(true);
     expect(runFork.noBillingGate).toBe(true);
-    expect(runFork.agent?.requiresApproval).toBe(false);
+    // A fork starts a live run that spends money, so Stella's call waits
+    // for a person (#4180).
+    expect(runFork.agent?.requiresApproval).toBe(true);
     expect(runFork.defaultRoles?.org).toEqual({
       Owner: "allow",
       Admin: "allow",

@@ -20,7 +20,7 @@ const GOOD = body([
 describe("propose_skill contract", () => {
   it("declares an org Owner or Admin write on the API alone, outside the metering surface", () => {
     expect(skillPropose.name).toBe("propose_skill");
-    expect(skillPropose.surfaces).toEqual(["api"]);
+    expect(skillPropose.surfaces).toEqual(["api", "agent"]);
     expect(skillPropose.noBillingGate).toBe(true);
     expect(skillPropose.mutates).toBe(true);
     expect(skillPropose.layers).toContain("app");

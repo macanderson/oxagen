@@ -8,7 +8,7 @@ describe("update_toolbelt contract", () => {
   it("is a settings write on api and mcp", () => {
     expect(getCapability("update_toolbelt")).toBe(toolbeltUpdate);
     expect(toolbeltUpdate.mutates).toBe(true);
-    expect(toolbeltUpdate.surfaces).toEqual(["api", "mcp"]);
+    expect(toolbeltUpdate.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("defaults to no changes", () => {

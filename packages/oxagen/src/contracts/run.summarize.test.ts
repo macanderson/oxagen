@@ -15,6 +15,12 @@ describe("summarize_run contract", () => {
     });
   });
 
+  it("asks a person before Stella queues one, since its model call is paid outside the turn's budget", () => {
+    expect(runSummarize.surfaces).toContain("agent");
+    expect(runSummarize.agent?.requiresApproval).toBe(true);
+    expect(runSummarize.agent?.riskLevel).toBe("medium");
+  });
+
   it("takes a run id and answers queued (negative on any other status)", () => {
     expect(runSummarize.input.safeParse({ runId: RUN }).success).toBe(true);
     expect(runSummarize.input.safeParse({ runId: "x" }).success).toBe(false);

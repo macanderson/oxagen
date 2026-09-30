@@ -12,13 +12,15 @@ export const contextProposalDismiss = registerCapability({
   description:
     "Reject a record proposal with a reason. Refused once the proposal has merged.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
+  // It closes the proposal's Context PR and deletes the branch, so Stella
+  // asks a person first.
   agent: {
-    requiresApproval: false,
+    requiresApproval: true,
     riskLevel: "medium",
     category: "governance",
   },

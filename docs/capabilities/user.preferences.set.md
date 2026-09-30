@@ -1,5 +1,7 @@
 # set_preferences
 
+**Surfaces:** api, mcp, agent
+
 The Account dialog's Preferences tab (MC spec App. E). A partial write: only the fields sent change, and the answer is the whole set after the write, read back from the row. `get_user_preferences` reads the same set.
 
 It is the one writer of `auth.user_preferences` (ADR-075), so every field the read returns is settable here. `update_user_preferences` was folded into it and no longer exists. `locale` is the input name for the row's `language` column, which is the name the read answers with.
@@ -17,6 +19,7 @@ Preferences follow the person across organisations, so the capability is `scoped
 - Authentication: session; the caller must carry a person (`forbidden` otherwise)
 - Capability name: `set_preferences`
 - Not billed (`noBillingGate: true`): a settings write is never a governed action (ADR-052 exclusion 2).
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

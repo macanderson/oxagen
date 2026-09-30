@@ -37,11 +37,11 @@ const answer = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("get_run_context contract", () => {
-  it("is a console read keyed on a run public id, on the api, mcp and cli surfaces", () => {
+  it("is a console read keyed on a run public id, on the api, mcp, agent and cli surfaces", () => {
     expect(runContextGet.name).toBe("get_run_context");
     expect(runContextGet.noBillingGate).toBe(true);
     expect(runContextGet.mutates).toBe(false);
-    expect(runContextGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(runContextGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(runContextGet.layers).toContain("app");
     expect(runContextGet.input.safeParse({ runId: "run_1" }).success).toBe(
       false,

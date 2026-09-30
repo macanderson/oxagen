@@ -10,7 +10,7 @@ Agents are cleared in each workspace's own scope before the label and the worksp
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/cost-centers/delete`
 - MCP: `delete_cost_center`
@@ -18,6 +18,7 @@ Agents are cleared in each workspace's own scope before the label and the worksp
 - Capability name: `delete_cost_center`
 - Organization-level (`scoped: false`). The workspace in the path only routes the call.
 - Not billed (`noBillingGate: true`). IAM default-deny, medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Input
 

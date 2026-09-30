@@ -22,6 +22,7 @@ import type {
   CreateRunInput,
   RunStore,
   SealAttemptInput,
+  SealedAttemptHandle,
 } from "@oxagen/run-ledger";
 
 const mocks = vi.hoisted(() => ({
@@ -65,6 +66,19 @@ vi.mock("@oxagen/iam", async () => {
 });
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
+}));
+// The recorder's logger, so a test can read the late-seal warning (#4227).
+// Every level a module logs at is stubbed, or an unrelated path would throw.
+const pinoWarn = vi.hoisted(() => vi.fn());
+vi.mock("pino", () => ({
+  default: () => ({
+    warn: pinoWarn,
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+  }),
 }));
 
 import {
@@ -1325,6 +1339,116 @@ describe("the seal projects the run's context windows (ADR-200)", () => {
 
 // ── frame bodies ──────────────────────────────────────────────────────────────
 
+describe("a late seal that lost to the abandoned-run sweep is logged (#4227)", () => {
+  beforeEach(() => {
+    // Installed so the missing-sender warning stays out of the warnings read.
+    setRunSealedSender(async () => undefined);
+  });
+  afterEach(() => {
+    setRunSealedSender(null);
+  });
+
+  const LATE_SEAL = "assistant turn sealed late";
+  const lateSealWarnings = () =>
+    pinoWarn.mock.calls.filter(([, msg]) => String(msg).startsWith(LATE_SEAL));
+
+  /** The handle `sealAttempt` returns for an attempt another sealer closed. */
+  const sealedHandle = (
+    terminalStatus: string,
+    alreadySealed: boolean,
+  ): SealedAttemptHandle => ({
+    runId: "run-uuid",
+    attemptId: "attempt-uuid",
+    attemptPublicId: "arat_0123456789abcdef0123",
+    sealId: "seal-uuid",
+    terminalStatus,
+    grantId: "grant-uuid",
+    grantPublicId: "afg_0123456789abcdef0123",
+    submissionId: "afg_0123456789abcdef0123",
+    obligationId: "obligation-uuid",
+    eventCount: 3,
+    finalEventDigest: null,
+    eventStreamDigest: "sha256:" + "e".repeat(64),
+    alreadySealed,
+  });
+
+  async function openRun(ledger: ReturnType<typeof fakeStore>) {
+    setupRun();
+    return openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "why was that run refused?",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
+      store: ledger.store,
+    });
+  }
+
+  it("warns with the run, both statuses and the seal time when the ledger already holds abandoned", async () => {
+    const ledger = fakeStore();
+    const recorder = await openRun(ledger);
+    const seal = vi
+      .spyOn(ledger.store, "sealAttempt")
+      .mockResolvedValueOnce(sealedHandle("abandoned", true));
+
+    await recorder.seal({ status: "completed", text: "done" });
+
+    expect(seal).toHaveBeenCalledTimes(1);
+    const sealedAt = seal.mock.calls[0]![0].terminalEvent!.observedAt;
+    expect(lateSealWarnings()).toEqual([
+      [
+        {
+          runId: "arun_0123456789abcdef012345",
+          attemptId: "arat_0123456789abcdef0123",
+          attemptedStatus: "completed",
+          recordedStatus: "abandoned",
+          sealedAt,
+        },
+        expect.stringContaining(LATE_SEAL),
+      ],
+    ]);
+  });
+
+  it("warns for a failed turn the sweep closed first, too", async () => {
+    const ledger = fakeStore();
+    const recorder = await openRun(ledger);
+    vi.spyOn(ledger.store, "sealAttempt").mockResolvedValueOnce(
+      sealedHandle("abandoned", true),
+    );
+
+    await recorder.seal({ status: "failed", error: "engine unavailable" });
+
+    expect(lateSealWarnings()).toHaveLength(1);
+    expect(lateSealWarnings()[0]![0]).toMatchObject({
+      attemptedStatus: "failed",
+      recordedStatus: "abandoned",
+    });
+  });
+
+  it("stays quiet for a fresh seal, a duplicate that agrees, and a handle that states nothing (negative)", async () => {
+    const fresh = fakeStore();
+    vi.spyOn(fresh.store, "sealAttempt").mockResolvedValueOnce(
+      sealedHandle("completed", false),
+    );
+    await (await openRun(fresh)).seal({ status: "completed", text: "done" });
+
+    const agrees = fakeStore();
+    vi.spyOn(agrees.store, "sealAttempt").mockResolvedValueOnce(
+      sealedHandle("completed", true),
+    );
+    await (await openRun(agrees)).seal({ status: "completed", text: "done" });
+
+    // The fake store's own `sealAttempt` returns an empty handle.
+    const silent = fakeStore();
+    await (await openRun(silent)).seal({ status: "completed", text: "done" });
+    expect(silent.seals).toHaveLength(1);
+
+    expect(lateSealWarnings()).toEqual([]);
+  });
+});
+
 describe("the seal asks the cost rollup to build the run's row (#4167)", () => {
   afterEach(() => {
     setRunSealedSender(null);
@@ -1745,6 +1869,72 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     }
     expect(decode(frames[0]!.body)).toBe(JSON.stringify(text));
     expect(frames[1]!.body).toBeUndefined();
+  });
+
+  it("records what the summary call used and cost on the frame this turn wrote (#4228)", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "which cost centre?",
+      originMessageId: MESSAGE,
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    const text = "- The person's cost centre is CC-7741.";
+    const frame = {
+      outcome: "applied" as const,
+      digest: digestJcs(text),
+      chars: text.length,
+      coveredMessages: 80,
+      windowMessages: 40,
+      regenerated: true,
+      text,
+    };
+    await recorder.historySummary({
+      ...frame,
+      summaryCall: {
+        model: "anthropic/claude-haiku-4.5",
+        inputTokens: 900,
+        outputTokens: 40,
+        costUsd: 0.0011,
+      },
+    });
+    // Figures past the ledger's bounds are held to them, not refused: a
+    // refused frame would refuse the turn.
+    await recorder.historySummary({
+      ...frame,
+      summaryCall: {
+        model: "m".repeat(300),
+        inputTokens: 5_000_000,
+        outputTokens: Number.NaN,
+        costUsd: 5_000,
+      },
+    });
+    const frames = ledger.batches
+      .map((b) => b.events[0]!)
+      .filter((e) => e.eventType === "context.history_summarized");
+    expect(frames[0]!.payload).toMatchObject({
+      regenerated: true,
+      summary_model: "anthropic/claude-haiku-4.5",
+      input_tokens: 900,
+      output_tokens: 40,
+      cost_usd_micros: 1_100,
+    });
+    expect(frames[1]!.payload).toMatchObject({
+      summary_model: "m".repeat(128),
+      input_tokens: 1_000_000,
+      output_tokens: 0,
+      cost_usd_micros: 1_000_000_000,
+    });
+    for (const recorded of frames) {
+      expect(() =>
+        validateInlineEventPayload(recorded.eventType, recorded.payload),
+      ).not.toThrow();
+    }
   });
 });
 

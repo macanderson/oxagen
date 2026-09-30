@@ -64,7 +64,7 @@ export const privacyDataExportStatus = registerCapability({
   description:
     "Read the status of one of the calling user's own data exports. Answers a storage key rather than a URL: once ready, fetch the archive from GET /v1/{org}/{workspace}/privacy/export/{exportId}/download.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   mutates: false,
@@ -80,6 +80,7 @@ export const privacyDataExportStatus = registerCapability({
     },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "privacy" },
   input: z.object({ exportId: z.string().uuid() }).strict(),
   output: z
     .object({

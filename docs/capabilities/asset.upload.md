@@ -1,5 +1,7 @@
 # upload_asset
 
+**Surfaces:** api, mcp
+
 **Domain:** asset
 **Mode:** sync
 **Scope:** tenant
@@ -79,7 +81,7 @@ API-key-only principal is rejected — the row needs an owning `userId`).
 | ------- | --------------------------------------------------------------- |
 | API     | `POST /v1/:org_slug/:workspace_slug/assets/upload`             |
 | MCP     | Tool `asset.upload` (streamable HTTP at `/mcp`)                |
-| Agent   | Available to the in-app agent; `requiresApproval: false`       |
+| Agent   | None. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180). |
 
 ## Auth & roles
 

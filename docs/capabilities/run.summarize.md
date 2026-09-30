@@ -1,5 +1,7 @@
 # summarize_run
 
+**Surfaces:** api, agent
+
 The generated name and summary of a sealed run (Mission Control mockup 2821-2835; plan gap G14; ADR-058). A fast-tier model reads the run's transcript and writes what changed; the result is stored on the run with the model id and the instant it was produced, labelled generated wherever it renders, and never stands in for the record.
 
 ## Mode
@@ -13,7 +15,8 @@ The generated name and summary of a sealed run (Mission Control mockup 2821-2835
 - CLI: none
 - Authentication: session or API key; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `summarize_run`
-- `mutates: true`; `agent.requiresApproval: false`; not billed as a governed action (`noBillingGate: true`). The model call is metered through `@oxagen/ai` on the organisation's funding source (`consume_assistant_tokens` when platform-funded), like every other model call. IAM default-deny; medium sensitivity.
+- `mutates: true`; `agent.requiresApproval: true`; not billed as a governed action (`noBillingGate: true`). The model call is metered through `@oxagen/ai` on the organisation's funding source (`consume_assistant_tokens` when platform-funded), like every other model call. IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. A person approves each call first (`riskLevel: medium`), because the job's model call is paid outside Stella's per-turn budget.
 
 ## Input
 

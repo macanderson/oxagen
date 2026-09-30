@@ -141,6 +141,40 @@ export interface ToolExecution {
 }
 
 /**
+ * The stable codes a kernel gate refuses a call with. Each one is a gate's
+ * answer, not a fault, so the engine is told `refused_by_policy` and the
+ * ledger records the call `denied` (#4245):
+ *
+ * - `authz_denied`: IAM refused the call (`CapabilityError`).
+ * - `gau_exhausted`: the organisation has no governed action units left
+ *   (`GauExhaustedError`).
+ * - `budget_exceeded`: a spend budget's ceiling is reached
+ *   (`BudgetExceededError`).
+ * - `kill_switch`: an operator's kill switch covers the call
+ *   (`KillSwitchDeniedError`).
+ * - `pending_approval`: IAM opened a just-in-time access request
+ *   (`CapabilityError`). That is not the approval park, which is matched by
+ *   type before this set is read. No approval card waits on an access
+ *   request, so the call records `denied`, not `parked`.
+ *
+ * The codes are read off the error, not by class, so this module imports
+ * nothing from the packages that throw them.
+ */
+const REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "authz_denied",
+  "gau_exhausted",
+  "budget_exceeded",
+  "kill_switch",
+  "pending_approval",
+]);
+
+function isRefusalCode(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && REFUSAL_CODES.has(code);
+}
+
+/**
  * Answer one `tool_request` by running the host's real tool.
  *
  * A thrown tool becomes the `error` arm rather than a rejection, because tool
@@ -178,10 +212,13 @@ export async function executeToolRequest(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // Read by type, not by message: the park's message happens to say
-    // "refused", and that match is what used to record it as denied.
+    // "refused", and that match is what used to record it as denied. The
+    // park's code is `pending_approval` too, so this check stays first and
+    // apart from the code lookup, or a park would lose its `parked` marker.
     const parked = error instanceof ApprovalPendingError ? error : null;
     const refused =
       parked !== null ||
+      isRefusalCode(error) ||
       /approval (denied|expired)|blocked by|consent (denied|expired)|refused/i.test(
         message,
       );

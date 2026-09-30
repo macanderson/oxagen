@@ -4,7 +4,8 @@ Use `action: propose` with TOML `text` to open a pull request. Use `action: publ
 
 **Mode:** sync
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 - API: `POST /v1/:org_slug/:workspace_slug/skills/config/update`
 - MCP: `update_skill_config`

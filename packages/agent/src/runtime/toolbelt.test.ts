@@ -332,6 +332,74 @@ describe("decideCapabilityForBelt", () => {
     ).toBe("allow");
   });
 
+  // #4218: a scope switch matches on the digests the per-call gate builds,
+  // and a class switch on the tags of the capability's tool version.
+  it("a switch on a scope the turn carries, or a class the version carries, cuts the tool", () => {
+    const scopeDeny = (kind: string, id: string): ActiveEmergencyDeny => ({
+      publicId: `edn_${kind}`,
+      denyKind: "resource_scope",
+      capabilityId: null,
+      resourceScopeDigest: resourceScopeDigestOf({ kind, id }),
+      principalId: null,
+      reason: "incident",
+    });
+    const scopeDigests = [
+      resourceScopeDigestOf({ kind: "org", id: "org_1" }),
+      resourceScopeDigestOf({ kind: "workspace", id: "ws_1" }),
+      resourceScopeDigestOf({ kind: "operator", id: "user_1" }),
+    ];
+    for (const [kind, id] of [
+      ["org", "org_1"],
+      ["workspace", "ws_1"],
+      ["operator", "user_1"],
+    ]) {
+      const denies = [scopeDeny(kind!, id!)];
+      expect(
+        decideCapabilityForBelt(
+          READ,
+          env({ emergencyDenies: denies, scopeDigests }),
+        ),
+      ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+      // An agent run carries the same scopes.
+      const resolution = createAgentRunResolution(
+        snapshot([{ capabilityId: READ.name, effect: "allow" }]),
+      );
+      expect(
+        decideCapabilityForBelt(
+          READ,
+          env({
+            agentRun: agentRun(resolution),
+            resolution,
+            emergencyDenies: denies,
+            scopeDigests,
+          }),
+        ),
+      ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+    }
+    // Another workspace's switch reaches none of these calls.
+    expect(
+      decideCapabilityForBelt(
+        READ,
+        env({ emergencyDenies: [scopeDeny("workspace", "ws_2")], scopeDigests }),
+      ).outcome,
+    ).toBe("allow");
+
+    const classDeny = scopeDeny("class", "moves_money");
+    const classTags = new Map([[WRITE.name, ["moves_money"]]]);
+    expect(
+      decideCapabilityForBelt(
+        WRITE,
+        env({ emergencyDenies: [classDeny], classTags }),
+      ),
+    ).toMatchObject({ outcome: "deny", rule: "kill_switch" });
+    expect(
+      decideCapabilityForBelt(
+        READ,
+        env({ emergencyDenies: [classDeny], classTags }),
+      ).outcome,
+    ).toBe("allow");
+  });
+
   it("a plugin-claimed contract needs the plugin entitled, and an unavailable read fails closed", () => {
     pluginMocks.pluginForContract.mockReturnValue({ id: "plg_github" });
     expect(decideCapabilityForBelt(READ, env()).rule).toBe("entitlement");

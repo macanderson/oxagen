@@ -28,8 +28,8 @@ A wrapped run's subagents each record on a chain of their own, numbered from 0 (
 | `framesAfter` | string | no | a frame or page cursor from an earlier read; omitted reads from the start; a cursor this capability did not write, or one minted on another chain than the one read, is `invalid_input` |
 | `sessionUuid` | uuid | no | the subagent chain to page, from a frame's, a head's or a transcript entry's `sessionUuid`. Omitted, or the run's own session, the read pages the run's own chain. A chain Postgres does not list under this run's root is `not_found`, and so is any chain on a ledger run |
 | `chainsAfter` | string | no | `chains.cursor` from an earlier read, at most 64 characters. With `waitMs` set, the wait also ends once any subagent chain holds a readable frame past the heads that cursor digested. Without it, the heads are read once per invoke and never waited on |
-| `frameLimit` | integer | no | 1-500, default 200 |
-| `waitMs` | integer | no | 0-20000, default 0; the handler waits inside the tenant scope, re-reading the store every 500 ms, until a frame past the cursor lands or the budget runs out |
+| `frameLimit` | integer | no | 1-500, default 200. An `agent`-surface call reads at most 100 frames, and 50 when it names none or names 200 |
+| `waitMs` | integer | no | 0-20000, default 0; the handler waits inside the tenant scope, re-reading the store every 500 ms, until a frame past the cursor lands or the budget runs out. An `agent`-surface call never waits: the handler reads it as 0 whatever it sends |
 
 ## Output
 
@@ -78,6 +78,15 @@ A read that starts at the page cursor or at any frame's own cursor repeats nothi
 ## Poll budget
 
 Every invoke runs the IAM check and the audit and security emissions once, before the handler starts; the wait is inside the handler. With `waitMs: 20000` an idle Run page costs at most three invokes a minute.
+
+## Agent-surface bounds
+
+The in-app agent reads `get_run` on the `agent` surface, and the handler bounds that read more tightly than an `api` or `mcp` read (#4222). The kernel hands the handler the surface it checked the call on (`CheckedContext.invokeSurface`), so the bounds follow the call and not the caller's telemetry origin.
+
+- The read never waits. A long poll would hold the agent's turn, and the person waiting on it, for up to 20 seconds.
+- The page holds at most 100 frames (`AGENT_FRAME_LIMIT_MAX`), and 50 (`AGENT_FRAME_LIMIT_DEFAULT`) when the call names no `frameLimit`. Every frame the model reads is context the turn pays for. The schema fills an omitted `frameLimit` with 200 before the handler runs, so an agent call that names exactly 200 also gets 50.
+
+The Run page, its SSE stream, the API and MCP keep the bounds above. A call that names no surface keeps them too.
 
 ## Live: the run frame stream
 

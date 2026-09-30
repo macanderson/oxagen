@@ -40,7 +40,7 @@ export const costCenterSet = registerCapability({
   description:
     "Charge a workspace, named by its public id or else the active one, or one agent in the active workspace, back to a cost-center label from the organization's list, or clear the label. An agent's label wins over its workspace's.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -51,6 +51,7 @@ export const costCenterSet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: costCenterSetInputObject
     .refine((v) => v.target === "workspace" || v.agent !== undefined, {
       message: "an agent target names the agent's slug",

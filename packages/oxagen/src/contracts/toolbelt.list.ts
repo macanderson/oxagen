@@ -41,7 +41,7 @@ export const toolbeltList = registerCapability({
   description:
     "List the workspace's toolbelts, its All tools belt first, with each belt's tool, active tool, server and agent counts, and how many tools the workspace has made available.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   // `app`: the Toolbelts tab on Tools and the register form's toolbelt step.
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,

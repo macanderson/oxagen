@@ -35,6 +35,11 @@
 // jsonb left every declared-tag tool outside every class switch's reach while
 // `list_kill_switches` reported the switch on.
 //
+// The gate reads every active emergency deny, not only the kill switches
+// (#4218). A deny another writer leaves with no target, such as one that names
+// a principal, is matched on the same call facts after the switches, so the
+// belt (toolbelt.ts) and this gate answer from one set of rows.
+//
 // This gate reaches every principal kind that materializes tools through
 // `materializeTools` — the in-app agent's turn and the tool gateway. The
 // steering tools mcp.oxagen.sh serves check each call through it too
@@ -49,9 +54,14 @@
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { withRepeatableReadTenantDb } from "@oxagen/database/tenant";
 import {
+  callScopeDigests,
+  matchEmergencyDeny,
   matchKillSwitch,
+  readActiveEmergencyDenies,
   readActiveKillSwitches,
   readDenyGenerationVector,
+  type ActiveEmergencyDeny,
+  type KillSwitchCallFacts,
   type KillSwitchRow,
 } from "@oxagen/iam";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
@@ -74,13 +84,35 @@ interface ToolCallFacts {
 }
 
 /** The impacts of every classified active version, by capability id. */
-type ClassificationIndex = ReadonlyMap<string, readonly string[]>;
+export type ClassificationIndex = ReadonlyMap<string, readonly string[]>;
 
 export interface KillSwitchSnapshot {
   readonly generation: DenyGenerationVector;
   readonly switches: readonly KillSwitchRow[];
   readonly tags: ClassificationIndex;
+  /**
+   * Every active emergency deny in scope, kill switches and plain denies
+   * alike. A plain deny has no `target_kind`, so it cannot be a
+   * `KillSwitchRow`: `rowOf` throws on one. This is the row set the belt
+   * reads (`readActiveEmergencyDenies`), so the gate and the belt answer from
+   * one source (#4218). A snapshot without it is matched on `switches` alone.
+   */
+  readonly denies?: readonly ActiveEmergencyDeny[];
 }
+
+/**
+ * What stopped a call: a kill switch, or a plain emergency deny. A plain deny
+ * names no target, so it reports the `emergency_deny` kind and its own public
+ * id as the target.
+ */
+export type KillSwitchHit =
+  | KillSwitchRow
+  | {
+      readonly publicId: string;
+      readonly targetKind: "emergency_deny";
+      readonly targetId: string;
+      readonly reason: string;
+    };
 
 /** The reads the gate makes; injectable for tests. */
 export interface KillSwitchGateReads {
@@ -94,7 +126,12 @@ export interface KillSwitchGateReads {
   }): Promise<KillSwitchSnapshot>;
 }
 
-async function readClassificationIndex(
+/**
+ * The impacts of each active tool version in the workspace, keyed by
+ * capability id. Exported so the belt can cut by class with the same index the
+ * gate matches against (#4218).
+ */
+export async function readClassificationIndex(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
 ): Promise<ClassificationIndex> {
@@ -154,16 +191,22 @@ export const postgresKillSwitchReads: KillSwitchGateReads = {
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
       });
+      const denies = await readActiveEmergencyDenies(tx, {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+      });
       const tags = await readClassificationIndex(tx, scope);
-      return { generation, switches, tags };
+      return { generation, switches, denies, tags };
     }),
 };
 
 export class KillSwitchDeniedError extends Error {
   readonly code = "kill_switch";
-  constructor(readonly hit: KillSwitchRow) {
+  constructor(readonly hit: KillSwitchHit) {
     super(
-      `Tool blocked by kill switch (${hit.targetKind} ${hit.targetId}): ${hit.reason}`,
+      hit.targetKind === "emergency_deny"
+        ? `Tool blocked by emergency deny ${hit.publicId}: ${hit.reason}`
+        : `Tool blocked by kill switch (${hit.targetKind} ${hit.targetId}): ${hit.reason}`,
     );
     this.name = "KillSwitchDeniedError";
   }
@@ -186,11 +229,39 @@ export interface ActingAgent {
 
 export interface KillSwitchGate {
   /**
-   * The switch that stops this call, or null when it is open. A
+   * The switch or deny that stops this call, or null when it is open. A
    * non-read-only call re-reads the deny generation first; a moved generation
-   * reloads the switches and the classification index.
+   * reloads the switches, the denies and the classification index.
    */
-  check(facts: ToolCallFacts): Promise<KillSwitchRow | null>;
+  check(facts: ToolCallFacts): Promise<KillSwitchHit | null>;
+}
+
+/**
+ * The first plain deny that covers the call. The switches were matched first,
+ * in their recorded precedence, so a row that is also a switch is skipped
+ * here. Matched on the digests and principals the switches are matched on.
+ */
+function matchPlainDeny(
+  snapshot: KillSwitchSnapshot,
+  facts: KillSwitchCallFacts,
+): KillSwitchHit | null {
+  if (!snapshot.denies || snapshot.denies.length === 0) return null;
+  const switchIds = new Set(snapshot.switches.map((s) => s.publicId));
+  const plain = snapshot.denies.filter((d) => !switchIds.has(d.publicId));
+  const hit = matchEmergencyDeny(plain, {
+    capability: facts.capabilityId,
+    resourceScopeDigest: null,
+    scopeDigests: callScopeDigests(facts),
+    principalIds: facts.principalIds ?? [],
+  });
+  return hit === null
+    ? null
+    : {
+        publicId: hit.publicId,
+        targetKind: "emergency_deny",
+        targetId: hit.publicId,
+        reason: hit.reason,
+      };
 }
 
 function sameGeneration(a: DenyGenerationVector, b: DenyGenerationVector) {
@@ -240,10 +311,12 @@ export function createKillSwitchGate(
           current = await load();
         }
       }
-      if (current.switches.length === 0) return null;
+      if (current.switches.length === 0 && !current.denies?.length) {
+        return null;
+      }
       const agentRun =
         ctx.agentRun?.principalKind === "agent" ? ctx.agentRun : null;
-      return matchKillSwitch(current.switches, {
+      const callFacts: KillSwitchCallFacts = {
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         capabilityId: facts.capabilityId,
@@ -260,7 +333,11 @@ export function createKillSwitchGate(
           : actingAgent?.principalId
             ? [actingAgent.principalId]
             : [],
-      });
+      };
+      return (
+        matchKillSwitch(current.switches, callFacts) ??
+        matchPlainDeny(current, callFacts)
+      );
     },
   };
 }

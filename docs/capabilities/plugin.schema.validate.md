@@ -1,5 +1,7 @@
 # validate_plugin_schema
 
+**Surfaces:** api, mcp
+
 Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.
 
 ## Mode
@@ -8,7 +10,7 @@ Validate a connector plugin config object against its schema before install or c
 ## Surfaces
 - API: `POST /v1/plugin-schema/:pluginId/validate`
 - MCP: `plugin.schema.validate`
-- Agent: callable (no approval required, risk: low)
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 - CLI: not available
 
 ## Input

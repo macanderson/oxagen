@@ -26,7 +26,7 @@ describe("list_incidents contract", () => {
     expect(getCapability("list_incidents")).toBe(tachoIncidentList);
     expect(tachoIncidentList.mutates).toBe(false);
     expect(tachoIncidentList.noBillingGate).toBe(true);
-    expect(tachoIncidentList.surfaces).toEqual(["api", "mcp"]);
+    expect(tachoIncidentList.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(tachoIncidentList.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow", Member: "allow" },
       workspace: { Owner: "allow", Member: "allow" },

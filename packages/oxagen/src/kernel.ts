@@ -402,6 +402,12 @@ export type DecisionRulesKernelGateFn = (args: {
   };
   /** External tools have no declared measures or mandate settlement contract. */
   external?: { approvedDigest?: string };
+  /**
+   * A person's approval of this exact built-in call: the `approvalDigest` the
+   * gate put on the `DecisionRuleApprovalRequiredError` that parked it
+   * (#4226). External tools pass theirs in `external` instead.
+   */
+  approvedDigest?: string;
   /** The IAM-resolved acting principal, or null (the non-enterprise fast-path). */
   principal: ResolvedPrincipal | null;
 }) => Promise<void | DecisionSettlement>;
@@ -1058,6 +1064,14 @@ export interface InvokeOptions {
    * (#3153) reflects the run this specific call actually landed in.
    */
   runId?: string | null;
+  /**
+   * Internal approval resumption (#4226): the `approvalDigest` from the
+   * `DecisionRuleApprovalRequiredError` that parked this call, once a person
+   * approved it. The kernel hands it to the decision-rules gate as
+   * `approvedDigest`. Only the approval resume path sets it. A surface never
+   * copies it from request input.
+   */
+  approvedDigest?: string;
 }
 
 /**
@@ -1714,6 +1728,11 @@ async function _invokeCoreInner(
             // Agent RBAC calls fall back to ctx.agentRun?.runId.
             runId: opts?.runId ?? ctx.runId ?? ctx.agentRun?.runId ?? null,
           },
+          // A person's approval of this call, on the approval resume path
+          // only (#4226).
+          ...(opts?.approvedDigest !== undefined
+            ? { approvedDigest: opts.approvedDigest }
+            : {}),
           principal: resolvedPrincipal,
         });
         if (settlement) decisionSettlement = settlement;
@@ -1741,6 +1760,12 @@ async function _invokeCoreInner(
               idempotencyKey: lifecycleExecution.idempotencyKey,
               execution: lifecycleExecution,
             }
+          : {}),
+        // The surface this invoke named (#4222). A nested invoke that names
+        // none gets undefined over its caller's value, so a handler never
+        // reads a surface the kernel did not check for this call.
+        ...(opts?.surface !== undefined || "invokeSurface" in ctx
+          ? { invokeSurface: opts?.surface }
           : {}),
       };
       const attribution =

@@ -42,8 +42,10 @@ import {
   decideMcpToolForBelt,
   type BeltDecision,
 } from "@oxagen/agent/runtime/toolbelt";
+import { readClassificationIndex } from "@oxagen/agent/runtime/kill-switch-gate";
 import {
   fetchAgentRunAuthz,
+  implicitScopeDigests,
   readActiveEmergencyDenies,
   readDenyGenerationVector,
   resolveAgentRunAuthzContext,
@@ -317,6 +319,21 @@ export const agentToolbeltGetHandler: CapabilityHandler<
       workspaceId: scope.workspaceId,
     }),
   );
+  // What a `resource_scope` deny matches on, as the runtime builds it for a
+  // run this caller starts (#4218): the org, the workspace, the agent, and
+  // the caller as operator. A class switch matches on the tags of each tool
+  // version, read only while such a deny is on.
+  const scopeDigests = implicitScopeDigests({
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    agentId: identity.row.publicId,
+    operatorUserId: ctx.userId ?? null,
+  });
+  const classTags = emergencyDenies.some(
+    (deny) => deny.denyKind === "resource_scope",
+  )
+    ? await withTenantDb((tx) => readClassificationIndex(tx, scope))
+    : undefined;
 
   // Entitlements are read once, only when a plugin-claimed contract is on the
   // agent surface; a failed read excludes every plugin-claimed tool (fail
@@ -398,6 +415,8 @@ export const agentToolbeltGetHandler: CapabilityHandler<
         now,
         clientIp: ctx.clientIp ?? null,
         emergencyDenies,
+        scopeDigests,
+        ...(classTags ? { classTags } : {}),
         entitledPluginIds: entitled,
       }),
       // A declared tool is governed under its slug, the capability name.

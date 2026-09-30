@@ -7,7 +7,7 @@ export const pluginRegistryAdd = registerCapability({
   description:
     "Add an MCP registry source for the workspace (any registry implementing the MCP Registry OpenAPI).",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

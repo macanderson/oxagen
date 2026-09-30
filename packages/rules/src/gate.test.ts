@@ -97,6 +97,66 @@ describe("createDecisionRulesGate", () => {
     ).rejects.toThrow(DecisionRuleApprovalRequiredError);
   });
 
+  // #4226: a surface parks a built-in call a rule sends to a person, seals
+  // the digest the error carries, and hands it back once the person
+  // approves. The digest covers the call and the rules that judged it.
+  test("a person's approval of the exact call releases it, and nothing else does", async () => {
+    const autoApprove = vi.fn(async () => null);
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => RULES,
+      autoApprove,
+    });
+    const call = {
+      capability: "issue_refund",
+      input: { amount_usd: 100 },
+      ctx: { ...CTX, userId: "user-1" },
+    };
+    const parked = await gate(call).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(parked).toBeInstanceOf(DecisionRuleApprovalRequiredError);
+    const digest = (parked as DecisionRuleApprovalRequiredError).approvalDigest;
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+
+    autoApprove.mockClear();
+    await expect(
+      gate({ ...call, approvedDigest: digest }),
+    ).resolves.toBeUndefined();
+    // The person's approval is the receipt: no auto-approval is asked for.
+    expect(autoApprove).not.toHaveBeenCalled();
+
+    // A different input, a different requester, or a changed rule set is a
+    // different call, and the person is asked again.
+    await expect(
+      gate({ ...call, input: { amount_usd: 200 }, approvedDigest: digest }),
+    ).rejects.toThrow(DecisionRuleApprovalRequiredError);
+    await expect(
+      gate({
+        ...call,
+        ctx: { ...call.ctx, userId: "user-2" },
+        approvedDigest: digest,
+      }),
+    ).rejects.toThrow(DecisionRuleApprovalRequiredError);
+    const changed = createDecisionRulesGate({
+      loadRuleSet: async () => ({
+        ...RULES,
+        rules: RULES.rules.map((rule) =>
+          rule.id === "approve-medium"
+            ? { ...rule, description: "medium refunds need a manager" }
+            : rule,
+        ),
+      }),
+    });
+    await expect(changed({ ...call, approvedDigest: digest })).rejects.toThrow(
+      DecisionRuleApprovalRequiredError,
+    );
+    // An approval never overrides a deny.
+    await expect(
+      gate({ ...call, input: { amount_usd: 900 }, approvedDigest: digest }),
+    ).rejects.toThrow(DecisionRuleDeniedError);
+  });
+
   test("no rule set, empty rule set, or unmatched capability all proceed", async () => {
     for (const loadRuleSet of [
       async () => null,

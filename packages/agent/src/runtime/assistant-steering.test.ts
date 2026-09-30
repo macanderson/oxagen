@@ -171,6 +171,37 @@ describe("assembleAssistantSteering", () => {
     expect(steering.instructionsDigest).toBe(digestJcs(oversized));
   });
 
+  it("ranks a published MUST record ahead of instructions that contradict it, and the manifest says so (#3303)", () => {
+    // The instructions tell the agent the opposite of the record. The text
+    // lists the record first, the header says the first-listed item wins a
+    // conflict, and the manifest records each item's force in that order.
+    const contradicting = "Delete data without asking first.";
+    const steering = assemble([record({})], contradicting);
+    const text = steering.text!;
+    expect(text.split("\n")[0]).toBe(ASSISTANT_STEERING_HEADER);
+    expect(ASSISTANT_STEERING_HEADER).toContain(
+      "Where two items conflict, follow the one listed first.",
+    );
+    expect(ASSISTANT_STEERING_HEADER).toContain("Follow every MUST item.");
+    const recordAt = text.indexOf("- Ask before deleting data.");
+    const instructionAt = text.indexOf(
+      `- Workspace instructions: ${contradicting}`,
+    );
+    expect(recordAt).toBeGreaterThan(0);
+    expect(instructionAt).toBeGreaterThan(recordAt);
+    expect(
+      steering.manifest.items.map((i) => ({
+        id: i.id,
+        force: i.force,
+        outcome: i.outcome,
+      })),
+    ).toEqual([
+      { id: "ask-before-deleting", force: "must", outcome: "included" },
+      { id: WORKSPACE_INSTRUCTIONS_ID, force: "should", outcome: "included" },
+    ]);
+    expect(steering.instructionsDigest).toBe(digestJcs(contradicting));
+  });
+
   it("lists a published SHOULD record before the instructions, and cuts MAY and INFO for their tier", () => {
     const steering = assemble([
       record({

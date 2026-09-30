@@ -33,7 +33,10 @@ describe("set_auto_topup contract", () => {
     expect(billingAutoTopupSet.layers).toContain("app");
     // e2e stays off every contract: the suite is three specs, not a per-capability layer.
     expect(billingAutoTopupSet.layers).not.toContain("e2e");
-    expect(getSurfaces(billingAutoTopupSet)).toEqual(["api", "mcp"]);
+    // An app action is on the agent surface too, and each call waits for a
+    // person's approval because it spends money (#4180).
+    expect(getSurfaces(billingAutoTopupSet)).toEqual(["api", "mcp", "agent"]);
+    expect(billingAutoTopupSet.agent?.requiresApproval).toBe(true);
   });
 
   it("accepts a whole number of blocks in 1…100 and refuses anything else", () => {

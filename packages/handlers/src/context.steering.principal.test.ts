@@ -28,13 +28,16 @@ const API_KEY_CTX = ctx({ userId: null, apiKeyId: "key_1" });
 const NO_PRINCIPAL = { code: "forbidden", reason: "no_principal" };
 
 describe("the role-gated steering writes under an API key with no creator", () => {
-  it("declare the api surface only for the PR writes", () => {
+  // An API key reaches these writes only through the api surface: none is on
+  // MCP or the CLI. Stella calls them on the agent surface as the signed-in
+  // person, so the role gate has a principal there (#4180).
+  it("declare no MCP or CLI surface for the PR writes", () => {
     for (const contract of [
       contextPrOpen,
       contextPrMerge,
       contextProposalDismiss,
     ]) {
-      expect(contract.surfaces, contract.name).toEqual(["api"]);
+      expect(contract.surfaces, contract.name).toEqual(["api", "agent"]);
     }
   });
 

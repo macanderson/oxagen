@@ -113,11 +113,11 @@
     ],
     "ledger": [
       "model completed",
-      "tool search_graph failed",
+      "tool search_graph denied",
       "model completed",
       "seal completed"
     ],
-    "answers": ["error"],
+    "answers": ["refused_by_policy"],
     "refusals": ["gau_exhausted"],
     "invocations": ["search_graph failed GauExhaustedError"],
     "approvals": [],

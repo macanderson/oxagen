@@ -37,7 +37,7 @@ export const pluginVersionList = registerCapability({
   description:
     "List version history for a connector plugin including changelog entries and breaking-change flags. Used by org admins to review update impact before upgrading.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,

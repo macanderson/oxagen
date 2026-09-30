@@ -6,10 +6,15 @@
   "surfaces": [
     "api",
     "mcp",
+    "agent",
     "cli"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

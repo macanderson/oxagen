@@ -12,7 +12,7 @@ export const pluginSettingsSetAuthAlerts = registerCapability({
   description:
     "Update the org MCP auth-alert notification setting (which roles receive alerts and whether email is sent).",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
   // No "app" layer: the Governance → Policies page that set this is in
   // apps/app_deprecated, and apps/app/capability-ui-map.json has no binding.

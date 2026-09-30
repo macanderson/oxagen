@@ -21,7 +21,7 @@ export const toolbeltClone = registerCapability({
   description:
     "Copy a toolbelt into a new belt you can edit: every tool the source holds, each active as it is in the source. The slug is derived from the name unless one is given.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

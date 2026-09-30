@@ -45,7 +45,7 @@ export const repositoryInstallationCandidates = registerCapability({
   description:
     "The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -56,6 +56,7 @@ export const repositoryInstallationCandidates = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z.object({}).strict(),
   output: z
     .object({

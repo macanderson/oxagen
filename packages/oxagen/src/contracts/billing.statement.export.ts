@@ -58,7 +58,7 @@ export const billingStatementExport = registerCapability({
   description:
     "Export the organization's billing statement for a week, month, quarter, year or custom period longer than 48 hours, as CSV with every billed governed action (paged by cursor) or as a printable HTML document.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -69,6 +69,7 @@ export const billingStatementExport = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       ...statementPeriodInputShape,

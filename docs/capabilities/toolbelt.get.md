@@ -4,7 +4,7 @@
 **Domain:** toolbelt
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -42,6 +42,7 @@ None. Read-only; audit-exempt.
 
 - `POST /api/v1/{org}/{ws}/toolbelts/get`
 - MCP tool `get_toolbelt`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

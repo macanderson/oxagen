@@ -225,7 +225,7 @@ export const runChainGet = registerCapability({
   description:
     "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached. A wrapped run's subagent chains are answered one by one.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -236,6 +236,7 @@ export const runChainGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z
     .object({
       runId: runPublicIdSchema,

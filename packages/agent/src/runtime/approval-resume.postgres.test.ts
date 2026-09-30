@@ -139,5 +139,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await resumeApprovedCall({ ...ref, workspaceId: crypto.randomUUID() }),
       ).toBe("not_claimed");
     });
+
+    it("parks a rule's call again under a new row once the rules change (#4226)", async () => {
+      const ruled = (messageId: string, ruleDigest: string) => ({
+        ...args(messageId),
+        capabilityName: "rule_parked_fixture",
+        ruleIds: ["approve-medium"],
+        ruleDigest,
+      });
+      const before = await within(() =>
+        createApprovalRequest(ruled(messages[0]!, "a".repeat(64))),
+      );
+      // The same call under the same rules finds the row it already wrote.
+      const again = await within(() =>
+        createApprovalRequest(ruled(messages[1]!, "a".repeat(64))),
+      );
+      expect(again.approvalId).toBe(before.approvalId);
+      // Changed rules give the call a new digest and a new row to answer.
+      const after = await within(() =>
+        createApprovalRequest(ruled(messages[1]!, "b".repeat(64))),
+      );
+      expect(after.approvalId).not.toBe(before.approvalId);
+    });
   },
 );

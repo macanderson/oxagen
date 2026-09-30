@@ -8,7 +8,7 @@ The pull request carries five files: `.oxagen/workspace.toml` and `.oxagen/rules
 
 Idempotent: an init pull request already open for the repository is answered as it is (`reused: true`) and nothing is pushed.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -23,6 +23,7 @@ Idempotent: an init pull request already open for the repository is answered as 
 - Authentication: session or API key; org Owner or Admin, checked by the handler
 - Capability name: `open_init_pr`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

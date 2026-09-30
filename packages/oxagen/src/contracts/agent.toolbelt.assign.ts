@@ -20,7 +20,7 @@ export const agentToolbeltAssign = registerCapability({
   description:
     "Give an agent another toolbelt and keep its principal, roles and grants. Writes a new agent version.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

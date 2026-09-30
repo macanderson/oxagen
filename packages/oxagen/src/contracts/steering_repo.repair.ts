@@ -16,8 +16,9 @@ import { REPO_HEALTH_STATES } from "../steering-repo/health";
  * will not merge (conflict `steering_revert_refused`).
  *
  * Org Owners and Admins only. The handler checks the role itself (INV-29).
- * Repair is the health banner's admin button, so the contract is not on the
- * agent surface and carries no agent metadata.
+ * Repair is the health banner's admin button. Stella can run it too, and each
+ * call waits for a person's approval, because it rewrites the repo's settings
+ * (#4180).
  */
 export const steeringRepoRepair = registerCapability({
   name: "repair_steering_repo",
@@ -25,7 +26,7 @@ export const steeringRepoRepair = registerCapability({
   description:
     "Put every prescribed setting back on the workspace's steering repo, then read the settings again and answer the health that read finds.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -36,6 +37,7 @@ export const steeringRepoRepair = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "vcs" },
   input: z.object({}).strict(),
   output: z.object({ health: z.enum(REPO_HEALTH_STATES) }),
 });

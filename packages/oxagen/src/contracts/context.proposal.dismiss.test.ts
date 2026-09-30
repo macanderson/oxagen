@@ -11,8 +11,11 @@ describe("dismiss_proposal contract", () => {
       workspace: { Owner: "allow" },
     });
     // Dismissed from the operator console; the MCP tool is a lane of its own.
-    expect(contextProposalDismiss.surfaces).toEqual(["api"]);
+    expect(contextProposalDismiss.surfaces).toEqual(["api", "agent"]);
     expect(contextProposalDismiss.layers).not.toContain("mcp");
+    // A dismissal closes the Context PR and deletes its branch, so Stella
+    // asks a person first.
+    expect(contextProposalDismiss.agent?.requiresApproval).toBe(true);
     expect(
       contextProposalDismiss.input.safeParse({ proposalId: "prp_1" }).success,
     ).toBe(false);

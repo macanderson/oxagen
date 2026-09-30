@@ -1,6 +1,11 @@
 import type { TurnFunding } from "./funding-source";
 import { withOutputBudgetRetry } from "./output-budget";
-import { generateObject, type LanguageModel, type ModelMessage } from "ai";
+import {
+  asSchema,
+  generateObject,
+  type LanguageModel,
+  type ModelMessage,
+} from "ai";
 import { z } from "zod";
 import {
   hashPrompt,
@@ -268,6 +273,13 @@ export async function generateObjectFor<T>(
     args.telemetry.orgId,
     args.telemetry.workspaceId,
   );
+  // An endpoint whose client cannot take a JSON schema is sent JSON mode with
+  // no schema (`@ai-sdk/openai-compatible` sends `json_object` and warns), so
+  // the schema reaches the model in the prompt instead (#3314). The cache key
+  // above was built from the caller's own system prompt, so it is unchanged.
+  const system = lacksNativeStructuredOutputs(model)
+    ? await withSchemaInstruction(args.system, args.schema)
+    : args.system;
   let result;
   try {
     result = await withOutputBudgetRetry(
@@ -275,7 +287,7 @@ export async function generateObjectFor<T>(
         generateObject({
           model,
           schema: args.schema,
-          system: args.system,
+          system,
           temperature: args.temperature ?? 0,
           ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
           ...(args.maxRetries !== undefined
@@ -397,4 +409,33 @@ export async function generateObjectFor<T>(
       totalTokens: result.usage.totalTokens ?? 0,
     },
   };
+}
+
+/**
+ * True when the model's client says the endpoint cannot take a
+ * `response_format` JSON schema: an `openai_compatible` credential the probe
+ * never saw honour one (`compatibleClient` in `models.ts`, #3314). Only a
+ * client built by `@ai-sdk/openai-compatible` carries the flag. A gateway
+ * model carries none and is left alone.
+ */
+function lacksNativeStructuredOutputs(model: LanguageModel): boolean {
+  return (
+    typeof model === "object" &&
+    model !== null &&
+    (model as { supportsStructuredOutputs?: unknown })
+      .supportsStructuredOutputs === false
+  );
+}
+
+/** The caller's system prompt, then the schema the answer has to match. */
+async function withSchemaInstruction(
+  system: string | undefined,
+  schema: z.ZodType<unknown>,
+): Promise<string> {
+  const jsonSchema = await asSchema(schema).jsonSchema;
+  const instruction = [
+    "Answer with one JSON object and nothing else, with no prose around it and no code fence.",
+    `The object must match this JSON Schema: ${JSON.stringify(jsonSchema)}`,
+  ].join("\n");
+  return system ? `${system}\n\n${instruction}` : instruction;
 }

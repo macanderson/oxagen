@@ -27,7 +27,7 @@ describe("get_run_export contract", () => {
     expect(runExportGet.mutates).toBe(false);
     expect(runExportGet.noBillingGate).toBe(true);
     expect(runExportGet.sensitivity).toBe("high");
-    expect(runExportGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(runExportGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(runExportGet.defaultRoles?.org).toEqual({
       Owner: "allow",
       Admin: "allow",

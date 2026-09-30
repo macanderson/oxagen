@@ -266,6 +266,52 @@ describe("createTurnBudgetGuard", () => {
     expect(onTick).toHaveBeenCalledTimes(3);
   });
 
+  it("counts what the turn spent before the engine, read on each tick (#4228)", async () => {
+    // The history summary costs $4 on its own model. Engine steps worth $7.50
+    // fit a $10 budget alone, and the two together do not.
+    let opening = 0;
+    const onStop = vi.fn();
+    const onTick = vi.fn();
+    const guard = createTurnBudgetGuard(
+      policy({ mode: "enforce", limitUsd: 10 }),
+      "claude-opus-4-1",
+      { onStop, onTick, openingCostUsd: () => opening },
+    )!;
+    // The summary has not finished when the guard is built.
+    expect(await guard({ outputTokens: 100_000 })).toBe("continue");
+    expect(onTick).toHaveBeenLastCalledWith(7.5, 10);
+    opening = 4;
+    expect(await guard({ outputTokens: 100_000 })).toBe("stop");
+    expect(onTick).toHaveBeenLastCalledWith(11.5, 10);
+    expect(onStop.mock.calls[0]?.[0]).toMatchObject({
+      action: "stop",
+      costUsd: 11.5,
+      limitUsd: 10,
+    });
+  });
+
+  it("stops on the opening cost alone before any engine usage (#4228)", async () => {
+    const guard = createTurnBudgetGuard(
+      policy({ mode: "enforce", limitUsd: 1 }),
+      "claude-opus-4-1",
+      { openingCostUsd: () => 1.25 },
+    )!;
+    expect(await guard({})).toBe("stop");
+  });
+
+  it("reads an opening cost that is not a finite positive number as nothing (negative)", async () => {
+    for (const bad of [Number.NaN, -3, Number.POSITIVE_INFINITY]) {
+      const onTick = vi.fn();
+      const guard = createTurnBudgetGuard(
+        policy({ mode: "enforce", limitUsd: 10 }),
+        "claude-opus-4-1",
+        { onTick, openingCostUsd: () => bad },
+      )!;
+      expect(await guard({ outputTokens: 100_000 })).toBe("continue");
+      expect(onTick).toHaveBeenLastCalledWith(7.5, 10);
+    }
+  });
+
   it("grace: flags the grace window, then hard-stops past the cushion", async () => {
     const onWithinGrace = vi.fn();
     const onStop = vi.fn();

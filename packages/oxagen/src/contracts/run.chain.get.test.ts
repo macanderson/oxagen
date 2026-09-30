@@ -43,7 +43,7 @@ describe("get_run_chain contract", () => {
   });
 
   it("declares the cli surface and layer that `oxagen run chain` ships", () => {
-    expect(runChainGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(runChainGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(runChainGet.layers).toContain("cli");
   });
 

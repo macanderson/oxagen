@@ -46,7 +46,7 @@ export const repositoryList = registerCapability({
   description:
     "List the workspace's repositories — its one main repository and every linked one — with each one's role and approved default ref.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -57,6 +57,7 @@ export const repositoryList = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z.object({}).strict(),
   output: z
     .object({

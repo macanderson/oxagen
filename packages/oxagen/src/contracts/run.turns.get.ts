@@ -80,7 +80,7 @@ export const runTurnsGet = registerCapability({
   description:
     "Read one run's per-turn ledger over every frame it recorded: each turn's model and tool steps, frames, cost and the cost so far, and the input tokens its model calls reported, uncached and read from the cache. A subagent's frames count toward the turn that spawned it.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -91,6 +91,7 @@ export const runTurnsGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({ runId: runPublicIdSchema }).strict(),
   output: z
     .object({

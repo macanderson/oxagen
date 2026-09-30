@@ -18,7 +18,7 @@ export const pluginSettingsGetAuthAlerts = registerCapability({
   description:
     "Read the org MCP auth-alert notification setting — which org roles receive alerts and whether email is sent. Returns the default (email on, Owner + Admin) when unset.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

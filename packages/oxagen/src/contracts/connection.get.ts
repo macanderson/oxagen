@@ -6,7 +6,7 @@ export const connectionGet = registerCapability({
   domain: "connection",
   description: "Get details of a single data source connection.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

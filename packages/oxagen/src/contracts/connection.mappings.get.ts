@@ -7,7 +7,7 @@ export const connectionMappingsGet = registerCapability({
   description:
     "Get the current entity type mappings for a data source connection.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },

@@ -6,7 +6,7 @@ export const runIssueProvidersGet = registerCapability({
   description:
     "Read issue provider connections and optionally list authorized Linear teams.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -14,6 +14,7 @@ export const runIssueProvidersGet = registerCapability({
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z
     .object({
       linearConnectionId: z.string().min(1).optional(),

@@ -35,7 +35,7 @@ export const repositoryInstallationList = registerCapability({
   description:
     "The repositories the workspace's GitHub App installation can reach. The app's link picker offers these to link_repository.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -46,6 +46,7 @@ export const repositoryInstallationList = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z.object({}).strict(),
   output: z
     .object({

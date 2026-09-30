@@ -1,5 +1,7 @@
 # send_workspace_invite
 
+**Surfaces:** api, mcp, agent
+
 **Domain:** workspace
 **Mode:** sync
 **Scope:** tenant (org-scoped)
@@ -37,6 +39,7 @@ Send a workspace invitation to an email address. Creates a pending invitation ro
 | `no_auth`   | Request has no authenticated user context.               |
 
 ## Surfaces
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 The web app operates this at Organization › People › Invite
 (`apps/app/src/features/organization/invite-dialog.tsx`), bound in

@@ -6,7 +6,7 @@ The answer is read from GitHub through the workspace's own App installation at t
 
 A production branch GitHub no longer has answers `head: null` and an empty tree rather than a refusal. It is a fact the page must show, and the repair (`set_production_branch`) is on the same page.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -21,6 +21,7 @@ A production branch GitHub no longer has answers `head: null` and an empty tree 
 - Authentication: session or API key; org Owner or Admin, or a workspace Owner or Member
 - Capability name: `get_repository_tree`
 - Not billed (`noBillingGate: true`); IAM default-deny; low sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

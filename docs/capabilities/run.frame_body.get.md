@@ -1,5 +1,7 @@
 # get_run_frame_body
 
+**Surfaces:** api, mcp, agent
+
 The redacted body of one frame of a run (Mission Control spec §8.2, §8.4 `view`; ADR-058). `get_run` carries every frame's body reference and never its bytes; this capability reads one body on demand, inside the tenant scope, from the organisation's evidence store, and checks the bytes against the recorded digest before answering.
 
 ## Mode
@@ -14,6 +16,7 @@ The redacted body of one frame of a run (Mission Control spec §8.2, §8.4 `view
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_frame_body`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

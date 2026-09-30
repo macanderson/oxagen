@@ -8642,6 +8642,7 @@ type Messages = {
       };
       refused: {
         denied: string;
+        killSwitch: string;
         invalid: string;
         attachment: string;
         attachmentModel: string;

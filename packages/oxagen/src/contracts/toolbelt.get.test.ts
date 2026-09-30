@@ -6,7 +6,7 @@ describe("get_toolbelt contract", () => {
   it("is a console read on api and mcp", () => {
     expect(getCapability("get_toolbelt")).toBe(toolbeltGet);
     expect(toolbeltGet.mutates).toBe(false);
-    expect(toolbeltGet.surfaces).toEqual(["api", "mcp"]);
+    expect(toolbeltGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("takes a belt by public id only", () => {

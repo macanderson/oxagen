@@ -4,7 +4,8 @@
 **Domain:** org
 **Mode:** sync
 **Scope:** tenant (org or workspace, chosen by the input)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 **Risk level:** low
 **Billing:** `noBillingGate: true` — a console read is never a governed action (ADR-052 exclusion 2)
 **Mutates:** no

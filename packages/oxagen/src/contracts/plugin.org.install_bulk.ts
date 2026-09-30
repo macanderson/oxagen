@@ -32,7 +32,7 @@ export const pluginOrgInstallBulk = registerCapability({
   description:
     "Bulk install catalog or custom plugin servers to the org allow-list. Per-item errors are captured — not all-or-nothing.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: false,

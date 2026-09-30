@@ -74,7 +74,7 @@ export const conversationGet = registerCapability({
   description:
     "Read one of your conversations in this workspace with its messages, oldest first, or your most recently updated active conversation when no id is given",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Reading a transcript does not consume AI tokens, and an organization at

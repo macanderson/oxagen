@@ -323,6 +323,9 @@ const EMPTY_THREAD: Thread = {
  */
 type Refusal =
   | "denied"
+  // An operator switched stella off in this workspace (#4218). Told apart
+  // from `denied`, which sends the person to their role instead.
+  | "killSwitch"
   | "invalid"
   | "attachment"
   | "attachmentModel"
@@ -486,7 +489,9 @@ type Refused = AssistantRefusal;
 function refusalKey(result: Refused): Refusal {
   switch (result.reason) {
     case "denied":
-      return "denied";
+      // An operator switched stella off. The person's role is fine, so the
+      // role sentence would send them to the wrong place (#4218).
+      return result.code === "kill_switch" ? "killSwitch" : "denied";
     case "invalid":
       // A file on the message broke a rule. A model that cannot read the
       // file asks for a different change than a file that is too large.
@@ -531,6 +536,8 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
   switch (code) {
     case "denied":
       return <>{t("denied")}</>;
+    case "killSwitch":
+      return <>{t("killSwitch")}</>;
     case "invalid":
       return <>{t("invalid")}</>;
     case "attachment":

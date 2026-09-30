@@ -97,7 +97,7 @@ export const agentToolbeltGet = registerCapability({
   description:
     "Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, each tool's input schema and schema digest, how the belt was computed, what the model receives in full or searchable mode, and what the agent cannot see.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

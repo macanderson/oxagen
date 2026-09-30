@@ -36,6 +36,12 @@ Three levers, applied independently:
 | Drop `api` / `mcp` / `cli` from `surfaces[]` | Stops the capability being served on that surface. | Delete the route, the tool or the command |
 | Remove the registration from `packages/handlers/src/register.ts` | Takes the capability out of `invoke()` dispatch entirely. | Delete the handler |
 
+**Stella.** A feature this register retires is off the agent surface too, so
+Stella cannot call it. `packages/oxagen/src/contracts/agent-parity.test.ts`
+reads each table row below that names a registered name and a stem, and it
+fails on any whose contract still declares `agent`. It names the few
+exceptions, each with the open issue that holds it on (#4180).
+
 A de-registered feature reached through any of these keeps every file. The
 registration is one line; the capability behind it is thousands.
 

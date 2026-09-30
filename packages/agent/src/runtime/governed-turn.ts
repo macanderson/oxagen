@@ -1054,6 +1054,15 @@ function errorMessage(err: unknown): string {
  * The park is read first. The engine is answered `refused_by_policy` for it,
  * because its error vocabulary has no word for a wait, so reading the class
  * alone recorded every parked write as denied.
+ *
+ * An IAM, credit, or budget refusal also reads `denied` (#4245). Each is a
+ * gate saying no, which is what `denied` already means, and `denied` is in
+ * every consumer of this outcome: the tool receipt, the stream's tool call
+ * summary, and the `ask_assistant` output. A new outcome per gate would widen
+ * all of them to say what the refusal's code already says.
+ * `executeToolRequest` (engine/tools.ts) lists the codes. One of them,
+ * `pending_approval`, is also IAM's just-in-time access request. That call
+ * reads `denied`, not `parked`, because no approval card waits on it.
  */
 function toolOutcome(execution: {
   failed: boolean;

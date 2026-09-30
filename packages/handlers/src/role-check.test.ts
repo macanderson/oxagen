@@ -186,6 +186,9 @@ const AGENT_ROLE_CHECKED_CONTRACTS = [
   // checked nothing, and check-role-enforcement skipped it because the
   // handler lives here rather than in packages/handlers.
   "resolve_mcp_servers",
+  // Its contract grants org Owner/Admin and workspace Owner, and its handler
+  // checked nothing, so any member could add a server (#4180).
+  "register_mcp_server",
 ] as const;
 
 const SRC = join(__dirname);

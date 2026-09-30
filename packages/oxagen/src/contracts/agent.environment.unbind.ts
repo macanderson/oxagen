@@ -7,7 +7,7 @@ export const agentEnvironmentUnbind = registerCapability({
   description:
     "Remove an agent's binding to an environment. When the removed binding was primary, resolution falls back to the workspace default environment and its default template.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

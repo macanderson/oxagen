@@ -4,10 +4,15 @@
   "description": "Update the calling user's own display name and avatar, and return the persisted values.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "low",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "user"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

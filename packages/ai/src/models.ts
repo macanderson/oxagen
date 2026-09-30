@@ -5,6 +5,7 @@ import type { LanguageModel } from "ai";
 import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import { fetchWithoutRedirects } from "@oxagen/config/public-url";
+import { DIRECT_PROVIDER_BASE_URL } from "./direct-provider-urls";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 import type { ResolvedTierCatalog } from "./catalog";
 
@@ -102,6 +103,14 @@ export interface ModelCredential {
    * and a routed key ignores it.
    */
   modelMap?: Partial<Record<OxagenTier, string>> | null;
+  /**
+   * Whether the endpoint honoured a `response_format` JSON-schema request
+   * when the verification probe last asked (`model_credentials.structured_outputs`,
+   * #3314). `compatibleClient` reads it to set `supportsStructuredOutputs`,
+   * so an `openai_compatible` endpoint that was never asked is not assumed
+   * to support it. Null or absent when the probe never asked.
+   */
+  structuredOutputs?: boolean | null;
 }
 
 export interface ModelSelector {
@@ -409,8 +418,10 @@ function cachedCredentialClient(
   // same key has the same digest — keyed on the digest alone, it would keep
   // getting the client built on the OLD endpoint until the process restarted.
   // `modelMap` is deliberately absent: it picks the model id per call and is
-  // not baked into the client.
-  const key = `${credential.provider}:${credential.digest}:${credential.baseUrl ?? ""}`;
+  // not baked into the client. The structured-output answer is baked in
+  // (`supportsStructuredOutputs`), so a re-verify that changes it gets a new
+  // client rather than the one built on the old answer (#3314).
+  const key = `${credential.provider}:${credential.digest}:${credential.baseUrl ?? ""}:${structuredOutputsOf(credential)}`;
   const hit = credentialClients.get(key);
   if (hit) return hit;
   if (credentialClients.size >= CREDENTIAL_CLIENT_BOUND)
@@ -505,10 +516,7 @@ function languageProvider(
  * today has two working routes that both cache: an `openrouter` key or a
  * `gateway` key.
  */
-const PROVIDER_BASE_URL = {
-  openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
-} as const;
+const PROVIDER_BASE_URL = DIRECT_PROVIDER_BASE_URL;
 
 /**
  * The client for one customer's credential — the whole of BYOK's reach, in
@@ -558,9 +566,25 @@ function customerClient(credential: ModelCredential): LanguageProviderClient {
         fetch: fetchWithoutRedirects({
           refusing: "Refusing to call the model endpoint",
         }),
+        supportsStructuredOutputs: structuredOutputsOf(credential),
       });
     }
   }
+}
+
+/**
+ * Whether the client may send a `response_format` JSON schema on this key.
+ * A named vendor's endpoint takes one. A customer's `openai_compatible`
+ * endpoint takes one only when the verification probe saw it honoured
+ * (`model_credentials.structured_outputs`, #3314). An endpoint nobody asked
+ * is not assumed to: a Llama host or a self-hosted server that ignores the
+ * schema would fail every `generateObjectFor` call, and without the flag
+ * `generateObjectFor` puts the schema in the prompt instead.
+ */
+function structuredOutputsOf(credential: ModelCredential): boolean {
+  return credential.provider !== "openai_compatible"
+    ? true
+    : credential.structuredOutputs === true;
 }
 
 /** One OpenAI-compatible endpoint, on whichever key is paying. */
@@ -568,7 +592,7 @@ function compatibleClient(
   name: string,
   baseURL: string,
   apiKey: string,
-  options: { fetch?: typeof fetch } = {},
+  options: { fetch?: typeof fetch; supportsStructuredOutputs?: boolean } = {},
 ): LanguageProviderClient {
   return createOpenAICompatible({
     name,

@@ -29,12 +29,13 @@ export const runExport = registerCapability({
   description:
     "Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script.",
   mode: "async",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
+  // A high-sensitivity write, so Stella asks a person before it queues one.
+  agent: { requiresApproval: true, riskLevel: "medium", category: "run" },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {

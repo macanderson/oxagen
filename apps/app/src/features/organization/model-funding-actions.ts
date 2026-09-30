@@ -72,9 +72,9 @@ function modelMapOf(input: ModelKeyInput) {
 }
 
 /**
- * Asks the vendor whether the key works, without storing it. For an
- * OpenAI-compatible endpoint it also asks the balanced model for one forced
- * tool call, because the assistant cannot answer anything without tools.
+ * Asks the vendor whether the key works, without storing it. For a direct
+ * vendor it also asks each mapped model for one forced tool call, because the
+ * assistant runs on every tier and cannot answer anything without tools.
  */
 export async function testModelKey(
   org: string,
@@ -83,15 +83,15 @@ export async function testModelKey(
   const refused = precheck(input);
   if (refused) return refused;
   const ctx = await requireViewer(org);
+  const modelMap = modelMapOf(input);
   const result = await kernelWrite(ctx, orgModelCredentialVerify, {
     provider: input.provider,
     apiKey: input.apiKey.trim(),
     ...(needsBaseUrl(input.provider)
-      ? {
-          baseUrl: input.baseUrl.trim(),
-          toolProbeModel: input.balanced.trim(),
-        }
+      ? { baseUrl: input.baseUrl.trim() }
       : {}),
+    // Every tier the key maps is asked, as the stored key will be (#3314).
+    ...(modelMap ? { modelMap } : {}),
   });
   if (!result.ok) return result;
   return {
@@ -105,7 +105,16 @@ export async function testModelKey(
   };
 }
 
-/** Stores the key (replacing any key already stored) and returns the redacted view. */
+/**
+ * Stores the key (replacing any key already stored) and returns the redacted view.
+ *
+ * Storing a key resets its structured-output answer to unknown (#3314), and
+ * the answer the form's test got for the candidate is never stored. So for an
+ * `openai_compatible` endpoint, the only provider with such an answer, the
+ * stored key is verified once more. That verify records the answer the
+ * provider client reads. A verify that fails leaves the key stored and the
+ * answer unknown, and the client keeps the schema in the prompt.
+ */
 export async function saveModelKey(
   org: string,
   input: ModelKeyInput,
@@ -114,12 +123,16 @@ export async function saveModelKey(
   if (refused) return refused;
   const ctx = await requireViewer(org);
   const modelMap = modelMapOf(input);
-  return kernelWrite(ctx, orgModelCredentialSet, {
+  const saved = await kernelWrite(ctx, orgModelCredentialSet, {
     provider: input.provider,
     apiKey: input.apiKey.trim(),
     ...(needsBaseUrl(input.provider) ? { baseUrl: input.baseUrl.trim() } : {}),
     ...(modelMap === undefined ? {} : { modelMap }),
   });
+  if (saved.ok && input.provider === "openai_compatible") {
+    await kernelWrite(ctx, orgModelCredentialVerify, {});
+  }
+  return saved;
 }
 
 /** Removes the key; the organisation's next turn runs on Oxagen's key. */
