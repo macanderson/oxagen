@@ -145,8 +145,17 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // apart from every other trigger, before it ever calls the GitHub API.
   "GITHUB_EVENT_NAME",
   "GITHUB_REF",
+  // GitHub Actions runner directories. tools/scripts/fleet-capacity refuses
+  // them as output roots because the runner deletes both after the job.
+  "RUNNER_TEMP",
+  "GITHUB_WORKSPACE",
   // AWS SDK / CLI convention, read by boto3 and the aws CLI themselves
   "AWS_REGION",
+  // The app node's /opt/oxagen/bin/node.env, written by
+  // infra/tools/install-node-scripts.sh and sourced by the node's own deploy
+  // scripts (infra/tools/node/deploy-launcher.sh). No service reads them.
+  "DEPLOY_BUCKET",
+  "REGION",
   // Set by nightly.yml on the step that files the failure ticket, so the marker
   // names the job that actually failed rather than always saying "e2e"
   // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
