@@ -197,7 +197,9 @@ replays the spool (`SPOOLED_HOOK_EVENTS`).
 The daemon also seals a session when its harness process exits, within one
 sweep (30 s). Claude Code exports its pid as `CLAUDE_PID`. For Stella and
 Codex, `tacho-hook` walks up from its parent with `ps` to the harness process
-and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
+and passes it as `TACHO_HARNESS_PID`. The Stella walk reads `/proc` on Linux
+instead of `ps`, and takes `STELLA_PID` without a walk when Stella exports it
+(`docs/specs/tacho/spec.md` §10.1). An operator's `cancel` sends that pid
 `SIGTERM`. The Codex walk runs at `SessionStart` and at each prompt, stops
 after 500 ms, and takes only a process named `codex` or `codex-<target>`.
 A Codex hook carries no pid on Windows, or under a Codex process that serves
