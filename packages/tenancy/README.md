@@ -126,7 +126,7 @@ as a trusted operator across tenants. Every other access uses one of:
 |---|---|---|
 | `withTenantDb(fn)` | **Default.** Any code running inside a known tenant (kernel handlers; server actions / Inngest steps wrapped in `runInTenantScope`). | Opens a tx, sets `app.current_org_id` / `app.current_workspace_id` GUCs (and `app.rls_bypass` per the flag). RLS enforces. Requires an active scope. |
 | `withRepeatableReadTenantDb(fn)` | **One case only:** building the admission-time authorization snapshot. | Same as `withTenantDb`, at REPEATABLE READ so the grant ceiling and its deny-generation counters share one MVCC snapshot. Can fail with a serialization error (40001) the caller must retry. Import it from `@oxagen/database/tenant` — the barrel does not re-export it. |
-| `withSystemDb(fn)` | The **narrow** set of cross-/pre-scope cases (see below). | Opens a tx with `app.rls_bypass='on'`. No scope required. Audited, greppable. |
+| `withSystemDb(fn)` | The **narrow** set of cross-/pre-scope cases (see below). | Opens a tx with `app.rls_bypass='on'`. No scope required. Greppable. `pnpm check:system-db` fails a new call without a `// tenancy:` justification comment. |
 
 `withSystemDb` is the **explicit escape hatch** — use it only for:
 

@@ -7,7 +7,8 @@
 // for it, so this island decides only which rows the filter keeps. A row
 // whose status was not read is kept by "All" alone.
 import { useTranslations } from "next-intl";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useState } from "react";
+import { ListSelect } from "@/ui/list-select";
 import { type ListColumn, ListTable, listSelect } from "@/ui/list-table";
 
 /** The statuses the filter offers, in the order the design lists them. */
@@ -33,7 +34,6 @@ export function IssuesTable({
 }) {
   const t = useTranslations("run.issues");
   const list = useTranslations("ui.listTable");
-  const id = useId();
   const [status, setStatus] = useState<Status | "">("");
   const kept =
     status === "" ? rows : rows.filter((row) => row.status === status);
@@ -48,28 +48,24 @@ export function IssuesTable({
         data: { "data-testid": "run-issue" },
       }))}
       filters={
-        <span className="contents">
-          <label htmlFor={`${id}-status`} className="sr-only">
-            {t("statusFilter")}
-          </label>
-          <select
-            id={`${id}-status`}
-            data-touch-target=""
-            value={status}
-            onChange={(event) => {
-              const next = STATUSES.find((s) => s === event.target.value);
-              setStatus(next ?? "");
-            }}
-            className={listSelect}
-          >
-            <option value="">{list("facetAll", { column: t("status") })}</option>
-            {STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {t(`state.${value}`)}
-              </option>
-            ))}
-          </select>
-        </span>
+        <ListSelect
+          aria-label={t("statusFilter")}
+          items={[
+            { value: "", label: list("facetAll", { column: t("status") }) },
+            ...STATUSES.map((value) => ({
+              value,
+              label: t(`state.${value}`),
+            })),
+          ]}
+          value={status}
+          onValue={(value) => {
+            const next = STATUSES.find((s) => s === value);
+            setStatus(next ?? "");
+          }}
+          size="sm"
+          data-touch-target=""
+          className={listSelect}
+        />
       }
     />
   );

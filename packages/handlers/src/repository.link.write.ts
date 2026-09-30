@@ -171,7 +171,7 @@ export async function assertLinkAllowed(
       code: "conflict",
       reason: "main_repo_unbound",
       message:
-        "Connect this workspace's steering repository first. Its workspace.toml lists the linked repositories.",
+        "This workspace has no steering repository yet. Its workspace.toml lists the linked repositories, so a link waits for it. Oxagen creates the steering repository after the organization connects GitHub or GitLab.",
     });
   }
   const same = heads.filter(

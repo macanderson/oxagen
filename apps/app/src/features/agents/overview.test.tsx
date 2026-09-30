@@ -163,7 +163,7 @@ describe("Overview › cache TTL", () => {
     );
     expect(
       within(coaching).getByRole("link", { name: "Open the finding" }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend?finding=fnd_ttl");
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings?finding=fnd_ttl");
     // The TTL is proposed, so the note no longer says nothing is.
     expect(within(coaching).getByTestId("not-backed")).toHaveTextContent(
       "Other coaching is read off the token classes, and the record does not split input by class yet.",

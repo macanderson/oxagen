@@ -144,6 +144,22 @@ describe("routes", () => {
     expect(routes.billing("acme", { checkout: "cancel" })).toBe(
       "/acme/billing?checkout=cancel",
     );
+    // #4693: the invoice size rides before the cursor, and either may be absent.
+    expect(routes.billing("acme", { rows: "25", cursor: "c2" })).toBe(
+      "/acme/billing?rows=25&cursor=c2",
+    );
+    expect(routes.billing("acme", { rows: "25" })).toBe(
+      "/acme/billing?rows=25",
+    );
+    expect(routes.billing("acme", {})).toBe("/acme/billing");
+    // #4693: the size a page of the tab's list holds rides before its cursor.
+    expect(
+      routes.tools("acme", "core", {
+        tab: "providers",
+        rows: "25",
+        cursor: "g2",
+      }),
+    ).toBe("/acme/core/agents?tab=servers&rows=25&cursor=g2");
     expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
     expect(
       routes.steering("acme", "core", {
@@ -293,8 +309,86 @@ describe("routes", () => {
         cursor: "c2",
       }),
     ).toBe("/acme/core-platform/agents/release-bot/activity?cursor=c2");
+    expect(
+      routes.agent("acme", "core-platform", "release-bot", {
+        tab: "activity",
+        rows: "25",
+        cursor: "c2",
+      }),
+    ).toBe("/acme/core-platform/agents/release-bot/activity?rows=25&cursor=c2");
     expect(routes.run("acme", "core-platform", "../../evil")).toBe(
       "/acme/core-platform/runs/..%2F..%2Fevil",
+    );
+  });
+
+  it("names an Agents tab as ?tab=, left off for Agents itself, before the list's own values", () => {
+    expect(routes.agents("acme", "core-platform", { tab: "agents" })).toBe(
+      "/acme/core-platform/agents",
+    );
+    expect(routes.agents("acme", "core-platform", { tab: "servers" })).toBe(
+      "/acme/core-platform/agents?tab=servers",
+    );
+    expect(routes.agents("acme", "core-platform", { tab: "toolbelts" })).toBe(
+      "/acme/core-platform/agents?tab=toolbelts",
+    );
+    expect(
+      routes.agents("acme", "core-platform", {
+        cursor: "c2",
+        deregistered: true,
+        view: "operations",
+      }),
+    ).toBe("/acme/core-platform/agents?deregistered=show&cursor=c2&view=operations");
+    expect(
+      routes.agents("acme", "core-platform", { deregistered: false }),
+    ).toBe("/acme/core-platform/agents");
+  });
+
+  it("lands each view of the retired Tools page on the Agents tab that holds it", () => {
+    expect(routes.tools("acme", "core-platform")).toBe(
+      "/acme/core-platform/agents?tab=tools",
+    );
+    expect(routes.tools("acme", "core-platform", { tab: "toolbelts" })).toBe(
+      "/acme/core-platform/agents?tab=toolbelts",
+    );
+    expect(routes.tools("acme", "core-platform", { tab: "providers" })).toBe(
+      "/acme/core-platform/agents?tab=servers",
+    );
+    expect(routes.tools("acme", "core-platform", { tab: "policy" })).toBe(
+      "/acme/core-platform/agents?tab=policies",
+    );
+    expect(routes.tools("acme", "core-platform", { tab: "switches" })).toBe(
+      "/acme/core-platform/agents?tab=switches",
+    );
+  });
+
+  it("keeps the Tools views' query values after the tab, in order, and encodes them", () => {
+    expect(
+      routes.tools("acme", "core-platform", {
+        category: "moves_money",
+        provider: "mcs_01k5s1",
+        names: "api",
+        cursor: "c/2",
+      }),
+    ).toBe(
+      "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&names=api&cursor=c%2F2",
+    );
+    expect(
+      routes.tools("acme", "core-platform", {
+        tab: "toolbelts",
+        belt: "tbt_reviewbelt",
+      }),
+    ).toBe("/acme/core-platform/agents?tab=toolbelts&belt=tbt_reviewbelt");
+  });
+
+  it("puts the Runtimes list on its Agents tab, and keeps one runtime on its own path", () => {
+    expect(routes.runtimes("acme", "core-platform")).toBe(
+      "/acme/core-platform/agents?tab=runtimes",
+    );
+    expect(routes.runtimes("acme", "core platform")).toBe(
+      "/acme/core%20platform/agents?tab=runtimes",
+    );
+    expect(routes.runtime("acme", "core-platform", "rtm_buildbox")).toBe(
+      "/acme/core-platform/runtimes/rtm_buildbox",
     );
   });
 
@@ -327,6 +421,12 @@ describe("routes", () => {
     expect(routes.skills("acme", "core-platform", { cursor: "c 2&x" })).toBe(
       "/acme/core-platform/steering/skills?cursor=c+2%26x",
     );
+    expect(routes.skills("acme", "core-platform", { rows: "25" })).toBe(
+      "/acme/core-platform/steering/skills?rows=25",
+    );
+    expect(
+      routes.skills("acme", "core-platform", { cursor: "c2", rows: "10" }),
+    ).toBe("/acme/core-platform/steering/skills?rows=10&cursor=c2");
     expect(
       routes.spend("acme", "core-platform", {
         tab: "agent",
@@ -340,7 +440,13 @@ describe("routes", () => {
         tab: "findings",
         finding: "fnd_01k5rtgh",
       }),
-    ).toBe("/acme/core-platform/spend?finding=fnd_01k5rtgh");
+    ).toBe("/acme/core-platform/spend/findings?finding=fnd_01k5rtgh");
+    expect(routes.spend("acme", "core-platform", { tab: "month" })).toBe(
+      "/acme/core-platform/spend",
+    );
+    expect(
+      routes.spend("acme", "core-platform", { tab: "month", by: "mcp_server" }),
+    ).toBe("/acme/core-platform/spend?by=mcp_server");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
   });
 });

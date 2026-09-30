@@ -61,7 +61,7 @@ describe("Toolbelts › list", () => {
       within(review).getByRole("link", { name: "Open Review belt" }),
     ).toHaveAttribute(
       "href",
-      "/acme/core-platform/tools/toolbelts?belt=tbt_reviewbelt",
+      "/acme/core-platform/agents?tab=toolbelts&belt=tbt_reviewbelt",
     );
     expect(
       within(all)
@@ -157,7 +157,7 @@ describe("Toolbelts › open belt", () => {
     ).toBeVisible();
     expect(
       within(failure).getByRole("link", { name: "Close" }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/toolbelts");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=toolbelts");
     expect(screen.queryByTestId("tools-belt")).not.toBeInTheDocument();
   });
 });

@@ -97,6 +97,7 @@ async function Body({
         at,
         segment: view.segment ?? "candidates",
         offset: view.offset,
+        rows: view.rows,
         proposal: view.proposal,
         pr,
       });
@@ -120,6 +121,7 @@ async function Body({
                   ctx={ctx}
                   source={source}
                   cursor={view.cursor}
+                  rows={view.rows}
                   view={view.skillView}
                 />
               </Suspense>

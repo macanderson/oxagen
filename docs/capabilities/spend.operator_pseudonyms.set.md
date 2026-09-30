@@ -2,7 +2,7 @@
 
 An org Owner or Admin turns the operator pseudonyms of the active workspace on or off. With the setting on, [`get_operator_ranking`](spend.operator_ranking.md) shows a pseudonym in place of each operator's name. The ranks, the unproductive spend, and the share of the total stay. Each operator's unproductive share, run count, and runs are withheld, because each could match a pseudonym to a name on the operator rollup.
 
-In the app, the switch sits beside the Operator ranking heading on Spend › By operator.
+In the app, the switch sits beside the Operator ranking heading on Spend › Findings.
 
 **Surfaces:** api
 

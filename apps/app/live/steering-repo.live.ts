@@ -142,6 +142,9 @@ test("a steering PR merged through Oxagen raises the published version", async (
   const merged = await mergeSteeringPr(r.ox, r.settings, proposalId);
   expect(merged.record.lineageId).toBe(MERGE_LINEAGE);
   expect(merged.bundleVersion.after).toBe(merged.bundleVersion.before + 1);
+  // The merge answers the steering version it published. Provisioning
+  // published the first commit, so this merge takes the next number (#4732).
+  expect(merged.publishedVersion).toBe(beforeVersion + 1);
 
   const pull = await r.gh.getPr(fullName, checked.pr.number);
   expect(pull.merged).toBe(true);

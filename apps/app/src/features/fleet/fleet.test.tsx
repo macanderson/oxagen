@@ -21,6 +21,7 @@ import { STALE_REREAD_MS } from "@/data/contracts/runs";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { Toaster } from "@/ui/toast";
 import {
   agentPage,
@@ -757,9 +758,7 @@ describe("the Runs panel", () => {
     expect(status("arun_halted")).toHaveTextContent("halted");
     expect(status("arun_halted")).toHaveAttribute("title", "cancelled");
     expect(
-      within(screen.getByTestId("facet-status"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
+      await optionNames(userEvent.setup(), screen.getByTestId("facet-status")),
     ).toEqual([
       // The lifecycle words the record holds (#3837). Parked comes from the
       // approvals read, so the chips find it and the read cannot filter on it.
@@ -1692,7 +1691,7 @@ describe("list controls", () => {
     expect(push).toHaveBeenLastCalledWith("/acme/core-platform?q=arun_07");
     // The rows are the read's: typing filters nothing on this page.
     expect(rows()).toHaveLength(12);
-    await user.selectOptions(screen.getByTestId("facet-tier"), "gateway");
+    await pickOption(user, screen.getByTestId("facet-tier"), "gateway");
     expect(push).toHaveBeenLastCalledWith("/acme/core-platform?tier=gateway");
     await user.click(screen.getByRole("button", { name: "Sort by Cost" }));
     expect(push).toHaveBeenLastCalledWith(

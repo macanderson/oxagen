@@ -6,7 +6,8 @@
 // one at Connect; the filter over a long list, which hides a checked tool
 // without dropping it from the import; a tool list whose suggestions could not
 // be read, which still takes typed names; and the receipt that leaves the
-// confirm button inert. The
+// confirm button inert. Also Studio's two sources, From a definition and
+// Local command (#4678, item 1), and the discovery note after an import. The
 // auth config is secret material, so the tests also check it never comes
 // back into the dialog. axe checks the state each test ends in (INV-26).
 import {
@@ -36,6 +37,14 @@ const {
   searchRegistry: vi.fn(),
   startProviderAuthorization: vi.fn(),
 }));
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ importTools, registerServer }));
 vi.mock("./provider-auth-actions", () => ({
@@ -57,6 +66,8 @@ const ROSTER = [
 ];
 const failure = translator("tools.actions.failure");
 const t = translator("tools.import");
+const sources = translator("mcpStudio.addServer.sources");
+const local = translator("mcpStudio.addServer.local");
 
 function element(node: Element | null | undefined, what: string): HTMLElement {
   if (!(node instanceof HTMLElement)) throw new Error(`no ${what}`);
@@ -167,6 +178,58 @@ describe("ImportProvider › trigger", () => {
     expect(
       screen.queryByTestId("tools-import-source-existing"),
     ).not.toBeInTheDocument();
+    // Studio's two sources need no roster.
+    expect(screen.getByTestId("tools-import-source-definition")).toBeVisible();
+    expect(screen.getByTestId("tools-import-source-local")).toBeVisible();
+  });
+});
+
+describe("ImportProvider › Studio sources", () => {
+  it("offers From a definition and Local command beside the roster", () => {
+    open();
+    expect(screen.getByTestId("tools-import-source-existing")).toBeVisible();
+    expect(
+      screen.getByTestId("tools-import-source-definition"),
+    ).toHaveTextContent(sources("definition"));
+    expect(screen.getByTestId("tools-import-source-local")).toHaveTextContent(
+      sources("local"),
+    );
+  });
+
+  it("opens Studio's definition form with its own submit and no Connect", () => {
+    open();
+    fireEvent.click(screen.getByTestId("tools-import-source-definition"));
+    expect(screen.getByTestId("tools-import-source-definition")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.getByTestId("studio-add-definition")).toBeVisible();
+    expect(screen.getByTestId("studio-add-definition-submit")).toBeEnabled();
+    expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
+    expect(document.getElementById("tools-import-connect")).toBeNull();
+  });
+
+  it("draws the local command form disabled, naming #4756", () => {
+    open();
+    fireEvent.click(screen.getByTestId("tools-import-source-local"));
+    expect(screen.getByTestId("studio-add-local")).toBeVisible();
+    const submit = screen.getByTestId("studio-add-local-submit");
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAccessibleDescription(local("pending"));
+    const note = screen.getByTestId("studio-add-local-pending");
+    expect(note).toHaveAttribute("data-state", "not-available");
+    expect(note).toHaveAttribute("data-gap", "#4756");
+    expect(screen.getByLabelText(local("command"))).toBeDisabled();
+    expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
+  });
+
+  it("goes back to the custom form from a Studio source", () => {
+    open();
+    fireEvent.click(screen.getByTestId("tools-import-source-local"));
+    fireEvent.click(screen.getByTestId("tools-import-source-custom"));
+    expect(screen.queryByTestId("studio-add-local")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Endpoint URL")).toBeVisible();
+    expect(screen.getByTestId("tools-import-connect")).toBeVisible();
   });
 });
 
@@ -410,6 +473,14 @@ describe("ImportProvider › review and classify", () => {
     fireEvent.click(confirm);
     await screen.findByTestId("tools-import-done");
     expect(confirm).toHaveAttribute("aria-disabled", "true");
+    // Discovery progress follows the import, drawn as not available until
+    // get_studio_discovery merges (#4682).
+    const pending = screen.getByTestId("studio-discovery-pending");
+    expect(pending).toHaveAttribute("data-capability", "get_studio_discovery");
+    expect(pending).toHaveAttribute("data-gap", "#4682");
+    expect(
+      screen.queryByTestId("studio-discovery-start"),
+    ).not.toBeInTheDocument();
   });
 
   it("sends one import while the first is still answering", async () => {

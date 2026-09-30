@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import { type RelatedItem, RelatedList } from "./related-list";
 import { recordLink } from "./view";
 
@@ -110,9 +111,10 @@ describe("RelatedList", () => {
     expect(Array.from(statements).map((node) => node.textContent)).toEqual([
       "Aaa.",
     ]);
-    await user.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Sort" }),
-      "az",
+      "Label A–Z",
     );
     expect(labels()).toEqual(["Alpha", "Zeta"]);
     await user.type(

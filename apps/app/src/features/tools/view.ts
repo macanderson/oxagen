@@ -1,8 +1,12 @@
-// Which Tools view a request asks for: a tab, a category chip and a provider
-// chip on the Tools tab, the labels/API-names toggle and a cursor. The tab is
-// a path segment (`/tools/providers`), as the rev1 route names it (mockup
-// `tools.md`), and the rest are query values. A tab id that is no longer
-// served falls back to Tools, so an old link never renders an empty page:
+// Which Tools view a request asks for: a view, a category chip and a provider
+// chip on the registry, the labels/API-names toggle, a cursor and the rows a
+// page holds (#4693). The Tools page is gone: its views are tabs of the Agents
+// page, named by `?tab=` (`toolsTabOfAgentsTab`), and the rest are query
+// values.
+//
+// `parseToolsTab` reads the retired `/tools[/<tab>]` route, which now only
+// redirects. A tab id that is no longer served falls back to the registry, so
+// an old link never renders an empty page:
 //
 //   - `/tools/servers` is the Providers tab's name before rev1 and lands there;
 //   - the query tabs this page had before its tabs became segments
@@ -15,8 +19,18 @@ import type {
   McpServer,
   ToolVersion,
 } from "@/data/contracts/tools";
-import { firstParam, routes, type SafePath } from "@/shared/safe-path";
+import {
+  type AgentsPageTab,
+  firstParam,
+  routes,
+  type SafePath,
+} from "@/shared/safe-path";
 
+/**
+ * The Tools views, in the order the retired Tools page drew them.
+ *
+ * @internal Exported for its unit tests; nothing outside this module imports it.
+ */
 export const TOOLS_TABS = [
   "tools",
   "toolbelts",
@@ -61,6 +75,29 @@ export function parseToolsTab(
   return toolsTabOf(segments[0]);
 }
 
+/**
+ * The Tools view an Agents `?tab=` names: Tool servers is the providers list,
+ * with the registry (`tools`) and the toolbelts as its other two views,
+ * Policies is Policy, and Off switches is Kill switches. Null for the Agents
+ * and Runtimes tabs, which hold no Tools view.
+ */
+export function toolsTabOfAgentsTab(tab: AgentsPageTab): ToolsTab | null {
+  switch (tab) {
+    case "servers":
+      return "providers";
+    case "tools":
+    case "toolbelts":
+      return tab;
+    case "policies":
+      return "policy";
+    case "switches":
+      return "switches";
+    case "agents":
+    case "runtimes":
+      return null;
+  }
+}
+
 /** How a tool version is named in the tables: its human label, or its API name. */
 const TOOL_NAME_STYLES = ["labels", "api"] as const;
 export type ToolNameStyle = (typeof TOOL_NAME_STYLES)[number];
@@ -74,6 +111,8 @@ export type ToolsView = {
   names: ToolNameStyle;
   /** The `nextCursor` of an earlier page of the tab's own list. */
   cursor: string | null;
+  /** The rows a page of the tab's own list holds, one of `TOOLS_ROWS` (#4693). */
+  rows: number;
   /** Only on the Toolbelts tab: the `tbt_…` id of the belt open below the list (ADR-198). */
   belt: string | null;
 };
@@ -91,6 +130,23 @@ const CURSOR = /^[\w.:=+/-]{1,512}$/;
 const BELT = /^tbt_[0-9a-z]{1,64}$/;
 
 type Params = Readonly<Record<string, string | string[] | undefined>>;
+
+/** The sizes Rows offers under the tool versions and the credential grants (#4693). */
+export const TOOLS_ROWS = [10, 25, 50, 100] as const;
+/**
+ * The rows a page holds when the address names no size, the same 50
+ * `list_tool_versions` and `list_credential_grants` read by default.
+ */
+export const TOOLS_PAGE = 50;
+
+/**
+ * The rows a page holds, from `?rows=`. A size Rows does not offer reads as
+ * `TOOLS_PAGE`, so a hand-typed URL cannot ask for a size the list never draws.
+ */
+function toolsRowsOf(raw: string | undefined): number {
+  const rows = Number(raw);
+  return TOOLS_ROWS.find((size) => size === rows) ?? TOOLS_PAGE;
+}
 
 export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
   const rawCategory = firstParam(params.category);
@@ -111,6 +167,7 @@ export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
     names: TOOL_NAME_STYLES.find((n) => n === rawNames) ?? "labels",
     cursor:
       rawCursor !== undefined && CURSOR.test(rawCursor) ? rawCursor : null,
+    rows: toolsRowsOf(firstParam(params.rows)),
     belt:
       tab === "toolbelts" && rawBelt !== undefined && BELT.test(rawBelt)
         ? rawBelt
@@ -120,7 +177,7 @@ export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
 
 /**
  * The route for a view; the defaults (Tools, every category, every provider,
- * labels, page one, no belt open) are left off.
+ * labels, page one, `TOOLS_PAGE` rows, no belt open) are left off.
  */
 export function toolsLink(
   at: ToolsAt,
@@ -130,6 +187,7 @@ export function toolsLink(
     provider?: string | null;
     names?: ToolNameStyle;
     cursor?: string | null;
+    rows?: number;
     belt?: string | null;
   },
 ): SafePath {
@@ -138,6 +196,10 @@ export function toolsLink(
     category: to.category ?? undefined,
     provider: to.provider ?? undefined,
     names: to.names === "api" ? "api" : undefined,
+    rows:
+      to.rows === undefined || to.rows === TOOLS_PAGE
+        ? undefined
+        : String(to.rows),
     cursor: to.cursor ?? undefined,
     belt: to.tab === "toolbelts" ? (to.belt ?? undefined) : undefined,
   });

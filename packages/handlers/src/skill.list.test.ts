@@ -170,6 +170,56 @@ describe("list_skills handler", () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  it("reads, cuts and pages at the size the read names (#4693)", async () => {
+    const eleven = Array.from({ length: 11 }, (_, i) =>
+      skillRow(`skill-${String(i).padStart(2, "0")}`),
+    );
+    const read = vi.fn<SkillQueries["read"]>().mockResolvedValue({
+      totals: { sessions: 11, reported: 11 },
+      rows: eleven,
+    });
+    const { list } = handlerWith({ read });
+    const first = await list({ limit: 10 });
+    expect(read).toHaveBeenLastCalledWith(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      { from: new Date("2026-08-16T12:00:00.000Z"), to: NOW },
+      { after: null, limit: 10 },
+    );
+    expect(first.skills.map((s) => s.name)).toEqual(
+      eleven.slice(0, 10).map((s) => s.name),
+    );
+    expect(first.nextCursor).not.toBeNull();
+
+    // The cursor carries the window and the last name, never the size, so the
+    // next page reads at whatever size it names.
+    await list({ cursor: first.nextCursor, limit: 25 });
+    expect(read).toHaveBeenLastCalledWith(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      { from: new Date("2026-08-16T12:00:00.000Z"), to: NOW },
+      { after: "skill-09", limit: 25 },
+    );
+  });
+
+  it("ends the list when a page holds no more rows than the size it names", async () => {
+    const ten = Array.from({ length: 10 }, (_, i) => skillRow(`skill-${i}`));
+    const { list } = handlerWith({
+      read: vi.fn(async () => ({
+        totals: { sessions: 10, reported: 10 },
+        rows: ten,
+      })),
+    });
+    const out = await list({ limit: 10 });
+    expect(out.skills).toHaveLength(10);
+    expect(out.nextCursor).toBeNull();
+  });
+
+  it.each([0, 101, 2.5])(
+    "refuses a page size of %s before any read (negative)",
+    (limit) => {
+      expect(skillList.input.safeParse({ limit }).success).toBe(false);
+    },
+  );
+
   it("refuses a cursor it did not write as invalid_input before any read (negative)", async () => {
     const { queries, list } = handlerWith();
     for (const cursor of [

@@ -184,7 +184,7 @@ export function ProviderRow({
         <NotBackedValue gap="providers" />
       </td>
       <td className={cell}>
-        <span className="flex gap-1.5 max-md:flex-wrap">
+        <span data-actions="" className="flex gap-1.5 max-md:flex-wrap">
           <button
             type="button"
             data-testid={`provider-open-${server.id}`}

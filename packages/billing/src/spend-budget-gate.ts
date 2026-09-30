@@ -222,9 +222,14 @@ export async function assertWithinSpendBudget(
     budgets = await cachedBudgets(scopeKey(args.orgId, workspaceId), deps);
   } catch (err) {
     // A budget-config read failure must never block a turn — fail open.
+    // The alert field makes a gate stuck open visible, as in turn-credit-gate.
     logger.error(
-      { err: err instanceof Error ? err.message : String(err), ...args },
-      "billing: spend-budget gate — config load failed, failing open",
+      {
+        ...args,
+        alert: "billing_spend_budget_gate_failed_open",
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "billing: the spend-budget gate could not load the budgets and let the turn run",
     );
     return;
   }
@@ -245,10 +250,11 @@ export async function assertWithinSpendBudget(
       // open for THIS budget and continue to the next.
       logger.error(
         {
-          err: err instanceof Error ? err.message : String(err),
           budgetId: budget.id,
+          alert: "billing_spend_budget_gate_failed_open",
+          err: err instanceof Error ? err.message : String(err),
         },
-        "billing: spend-budget gate — spend read failed, failing open",
+        "billing: the spend-budget gate could not read the spend and skipped this budget",
       );
       continue;
     }

@@ -3,9 +3,16 @@
 // test in agent.test.tsx does not reach: runs, rollup, findings and incidents
 // that could not be read; a run with no cost; a rollup with no cost, basis,
 // ratio or cache; findings that belong to other agents; and the incident
-// panels of every severity, open and resolved, with their pager. Axe runs
-// after every test (INV-26).
-import { cleanup, render, screen, within } from "@testing-library/react";
+// panels of every severity, open and resolved, with their pager and its Rows
+// per page (#4693). Axe runs after every test (INV-26).
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -21,10 +28,16 @@ import {
   spendRow,
 } from "./agents.builders";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
+}));
+// Picking a size from Rows navigates through the router (#4693).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 const { ActivitySection } = await import("./activity");
@@ -43,6 +56,7 @@ function renderActivity(overrides: Partial<Props> = {}) {
     findings: spendFindings([{}]),
     incidents: incidentPage([incident()]),
     cursor: null,
+    rows: 50,
     agentKey: KEY,
     place: PLACE,
     ...overrides,
@@ -293,5 +307,64 @@ describe("Activity › incidents", () => {
     expect(
       screen.getByRole("link", { name: "Newest incidents" }),
     ).toBeVisible();
+    // The last page has no older one, so Older is a disabled button.
+    expect(
+      screen.getByRole("button", { name: "Older incidents" }),
+    ).toBeDisabled();
+  });
+
+  // #4693: Rows per page sets how many incidents a page holds, and both steps
+  // keep that size.
+  it("keeps the size on the Newest and Older steps", () => {
+    renderActivity({
+      cursor: "cur_2",
+      rows: 25,
+      incidents: incidentPage([incident()], "cur_3"),
+    });
+    const pager = screen.getByRole("navigation", { name: "Incident pages" });
+    expect(
+      within(pager).getByRole("link", { name: "Newest incidents" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents/release-bot/activity?rows=25",
+    );
+    expect(
+      within(pager).getByRole("link", { name: "Older incidents" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents/release-bot/activity?rows=25&cursor=cur_3",
+    );
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+  });
+
+  it("visits the newest page at the size picked from Rows", async () => {
+    push.mockReset();
+    renderActivity({
+      cursor: "cur_2",
+      incidents: incidentPage([incident()], "cur_3"),
+    });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(rows).toHaveTextContent("50");
+    const user = userEvent.setup();
+    await user.click(rows);
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    // A new size drops the cursor and starts over at the newest page.
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(
+        "/acme/core-platform/agents/release-bot/activity?rows=25",
+      );
+    });
+    expect(push).toHaveBeenCalledOnce();
+  });
+
+  it("draws no pager under an empty first page (negative)", () => {
+    renderActivity({ incidents: incidentPage([]) });
+    expect(screen.getByTestId("incidents-empty")).toBeVisible();
+    expect(
+      screen.queryByRole("navigation", { name: "Incident pages" }),
+    ).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Rows" })).toBeNull();
   });
 });

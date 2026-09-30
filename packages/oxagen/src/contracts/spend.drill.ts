@@ -12,26 +12,17 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
-  costSchema,
   daySchema,
   moneySchema,
   principalPublicIdSchema,
   ratioSchema,
   SPEND_RANGE_DAYS_MAX,
+  spendDaySchema,
   spendFigureSchema,
   unmeteredRunsSchema,
 } from "./spend.shared";
 
 export const drillKindSchema = z.enum(["operator", "agent", "tool"]);
-
-export const drillDaySchema = z
-  .object({
-    day: daySchema,
-    cost: costSchema.nullable(),
-    calls: z.number().int().nonnegative(),
-    runs: z.number().int().nonnegative(),
-  })
-  .strict();
 
 export const DRILL_DAYS_DEFAULT = 30;
 export const DRILL_DAYS_MAX = SPEND_RANGE_DAYS_MAX;
@@ -95,7 +86,7 @@ export const spendDrill = registerCapability({
       period: z.object({ from: daySchema, to: daySchema }).strict(),
       total: spendFigureSchema,
       /** One entry per day of the window, oldest first, days with no run included. */
-      series: z.array(drillDaySchema),
+      series: z.array(spendDaySchema),
       averages: z
         .object({
           perCall: moneySchema.nullable(),

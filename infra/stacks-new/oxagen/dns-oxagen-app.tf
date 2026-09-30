@@ -18,11 +18,13 @@
  * ALB has no IPv6 address, so the names lose their AAAA records, as
  * app.oxagen.sh never had any.
  *
- * Until the cutover, the ALB answers both names itself with a 302 to the same
- * path on app.oxagen.sh, which is the job the CloudFront redirect did. That
- * keeps this change independent of Caddyfile.alb, which reaches the node only
- * when someone installs it by hand. The cutover deletes the rule once Caddy
- * routes both names to the app.
+ * The ALB forwards both names to the node, and Caddyfile.alb routes them to the
+ * app. The app decides which host is canonical and sends a page visit on any
+ * other production host there (apps/app/src/shared/canonical-host.ts), so no
+ * rule here redirects. An interim listener rule answered both names with a 302
+ * to app.oxagen.sh until Caddy routed them. It was deleted in its own change,
+ * before the build that makes oxagen.app canonical, because that build's 308
+ * from app.oxagen.sh and the rule's 302 back to it would have looped (ADR-215).
  */
 
 resource "aws_route53_zone" "oxagen_app" {
@@ -124,38 +126,6 @@ resource "aws_lb_listener_certificate" "oxagen_app" {
 }
 
 # ---------------------------------------------------------------------------
-# Until the cutover
-# ---------------------------------------------------------------------------
-
-# The same path and query on app.oxagen.sh, as a 302, which a browser does not
-# cache. Delete this rule, and its entry in the records' `depends_on` below, in
-# the cutover PR (ADR-215, step 5). By then Caddy must route both names to the
-# app, which answers them itself.
-resource "aws_lb_listener_rule" "oxagen_app_until_cutover" {
-  listener_arn = aws_lb_listener.https.arn
-  priority     = 10
-
-  condition {
-    host_header {
-      values = ["oxagen.app", "www.oxagen.app"]
-    }
-  }
-
-  action {
-    type = "redirect"
-
-    redirect {
-      host        = "app.oxagen.sh"
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_302"
-    }
-  }
-
-  tags = { Brand = local.brand }
-}
-
-# ---------------------------------------------------------------------------
 # The ALB
 # ---------------------------------------------------------------------------
 
@@ -173,12 +143,9 @@ resource "aws_route53_record" "oxagen_app_alb" {
     evaluate_target_health = true
   }
 
-  # The records move to the ALB only after it holds the certificate and the
-  # redirect rule, so neither name reaches it before it can answer.
-  depends_on = [
-    aws_lb_listener_certificate.oxagen_app,
-    aws_lb_listener_rule.oxagen_app_until_cutover,
-  ]
+  # The records point at the ALB only after it holds the certificate, so
+  # neither name reaches it before it can answer.
+  depends_on = [aws_lb_listener_certificate.oxagen_app]
 }
 
 # ---------------------------------------------------------------------------

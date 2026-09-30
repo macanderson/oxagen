@@ -22,7 +22,11 @@ import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
-import { type ClaudeCodeContext, digestText } from "../claude-code/context";
+import {
+  type ClaudeCodeContext,
+  type DeliveredContext,
+  digestText,
+} from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type {
   ChainMark,
@@ -352,6 +356,11 @@ interface SpoolFile {
   payload: unknown;
   env?: Record<string, string | undefined>;
   evaluation?: HookReplay["evaluation"];
+  /**
+   * What a `SessionStart` answer handed the agent. A spool written before
+   * the field carries none, and its replay seals no context digest.
+   */
+  delivered_context?: DeliveredContext;
   harness?: HookEnvelope["harness"];
   agent?: HookEnvelope["agent"];
   hook_id?: HookEnvelope["hook_id"];
@@ -2028,6 +2037,9 @@ async function initializeDaemon(
     replay: {
       receivedAt: file.received_at,
       ...(file.evaluation !== undefined ? { evaluation: file.evaluation } : {}),
+      ...(file.delivered_context !== undefined
+        ? { deliveredContext: file.delivered_context }
+        : {}),
     },
   });
 

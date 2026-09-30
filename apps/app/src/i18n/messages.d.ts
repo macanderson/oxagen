@@ -27,7 +27,6 @@ type Messages = {
     agents: string;
     agent: string;
     mandate: string;
-    tools: string;
     record: string;
     steering: string;
     repositories: string;
@@ -74,7 +73,6 @@ type Messages = {
       retired: string;
     };
     list: {
-      description: string;
       tiles: {
         label: string;
         agentsHere: {
@@ -1285,6 +1283,19 @@ type Messages = {
       gateway: string;
       harness: string;
       observe: string;
+    };
+    area: {
+      description: string;
+      tabs: {
+        label: string;
+        agents: string;
+        servers: string;
+        policies: string;
+        runtimes: string;
+        switches: string;
+        switchesOn: string;
+        switchesOnAtLeast: string;
+      };
     };
   };
   audit: {
@@ -2988,7 +2999,6 @@ type Messages = {
         label: string;
         newer: string;
         older: string;
-        end: string;
       };
       emptyBodyEffective: string;
     };
@@ -3190,6 +3200,11 @@ type Messages = {
         meter: string;
         before: string;
       };
+      listed: {
+        counts: string;
+        search: string;
+        compileError: string;
+      };
     };
     panel: {
       classification: string;
@@ -3311,6 +3326,22 @@ type Messages = {
           service: string;
           operatorOauth: string;
         };
+        kind: string;
+        kinds: {
+          secret: string;
+          oauthClient: string;
+        };
+        name: string;
+        nameHint: string;
+        secret: string;
+        clientId: string;
+        clientSecret: string;
+        secretHint: string;
+        pending: string;
+        saving: string;
+        saved: string;
+        failed: string;
+        thrown: string;
       };
       machines: {
         title: string;
@@ -3429,21 +3460,167 @@ type Messages = {
         discard: string;
         readOnly: string;
         opened: string;
-        notBuilt: string;
         failed: string;
+        thrown: string;
         updated: string;
         conflict: string;
         conflictDropped: string;
+        kept: string;
         folderMissing: string;
         sourceMissing: string;
+        overBudgetBadge: string;
+        overBudget: string;
+        codes: {
+          denied: string;
+          invalid: string;
+          unavailable: string;
+          pending_approval: string;
+          exhausted: string;
+          too_large: string;
+          draft_not_found: string;
+          draft_unchanged: string;
+          draft_unreadable: string;
+          server_not_found: string;
+          server_toml_missing: string;
+          server_toml_invalid: string;
+          server_name_mismatch: string;
+          workspace_repository_missing: string;
+          production_branch_missing: string;
+          folder_invalid: string;
+          source_required: string;
+          source_invalid: string;
+          source_commit_missing: string;
+          definition_path_invalid: string;
+          importer_not_built: string;
+          tools_unclassified: string;
+          tool_not_found: string;
+          tool_not_offered: string;
+          tool_key_collision: string;
+          test_invalid: string;
+          test_holds_credential: string;
+        };
       };
       review: {
         title: string;
+        branch: string;
         imported: string;
         removed: string;
         reclassified: string;
         tokens: string;
         tokensValue: string;
+      };
+    };
+    addServer: {
+      sources: {
+        local: string;
+        definition: string;
+      };
+      fields: {
+        name: string;
+        nameHint: string;
+        label: string;
+        description: string;
+      };
+      definition: {
+        intro: string;
+        type: string;
+        types: {
+          openapi: string;
+          graphql: string;
+          grpc: string;
+        };
+        url: string;
+        urlHint: string;
+        files: string;
+        filesHint: {
+          openapi: string;
+          graphql: string;
+          grpc: string;
+        };
+        entry: string;
+        schedule: string;
+        schedules: {
+          manual: string;
+          daily: string;
+        };
+        submit: string;
+        retry: string;
+        saving: string;
+        reviewing: string;
+        opened: string;
+        exists: string;
+        moved: string;
+        tooLarge: string;
+        tomlInvalid: string;
+        sourceInvalid: string;
+        problems: {
+          name: string;
+          reserved: string;
+          label: string;
+          description: string;
+          url: string;
+          files: string;
+          empty: string;
+          duplicate: string;
+          unreadable: string;
+          entry: string;
+          graphqlOne: string;
+        };
+      };
+      local: {
+        intro: string;
+        command: string;
+        commandHint: string;
+        arguments: string;
+        argumentsHint: string;
+        machines: string;
+        machinesHint: string;
+        submit: string;
+        pending: string;
+      };
+      offer: {
+        remote: string;
+        package: string;
+        both: string;
+        pickPackage: string;
+        pickPackageNamed: string;
+      };
+      package: {
+        intro: string;
+        type: string;
+        arguments: string;
+        secretHint: string;
+        variables: string;
+        noPackages: string;
+        submit: string;
+        pending: string;
+      };
+      discovery: {
+        title: string;
+        notAvailable: string;
+        unnamed: string;
+        loading: string;
+        none: string;
+        statuses: {
+          queued: string;
+          running: string;
+          succeeded: string;
+          failed: string;
+        };
+        stalled: string;
+        outcomes: {
+          unchanged: string;
+          pr_opened: string;
+          pr_updated: string;
+          needs_digest: string;
+          skipped: string;
+        };
+        toolCount: string;
+        pr: string;
+        start: string;
+        starting: string;
+        failed: string;
+        thrown: string;
       };
     };
   };
@@ -3521,12 +3698,10 @@ type Messages = {
         lead: string;
         github: {
           heading: string;
-          steeringName: string;
-          steeringBody: string;
-          steeringInstall: string;
-          oxagenName: string;
-          oxagenBody: string;
-          oxagenInstall: string;
+          name: string;
+          body: string;
+          install: string;
+          authorize: string;
         };
         gitlab: {
           heading: string;
@@ -8014,9 +8189,7 @@ type Messages = {
     nav: {
       fleet: string;
       agents: string;
-      tools: string;
       steering: string;
-      runtimes: string;
       repositories: string;
       spend: string;
       organization: string;
@@ -8141,7 +8314,6 @@ type Messages = {
       slots: {
         fleet: string;
         agents: string;
-        tools: string;
         spend: string;
       };
       more: string;
@@ -8150,7 +8322,6 @@ type Messages = {
       tileWaiting: string;
       sub: {
         steering: string;
-        runtimes: string;
         repositories: string;
         organization: string;
         billing: string;
@@ -8615,7 +8786,11 @@ type Messages = {
       noneReported: string;
       notReported: string;
       list: string;
-      next: string;
+      pager: {
+        label: string;
+        first: string;
+        next: string;
+      };
     };
     row: {
       sessions: string;
@@ -8720,12 +8895,9 @@ type Messages = {
     };
     tabs: {
       label: string;
+      month: string;
       findings: string;
       tokens: string;
-      coaching: string;
-      operator: string;
-      agent: string;
-      model: string;
       tool: string;
       waste: string;
       budgets: string;
@@ -8879,23 +9051,9 @@ type Messages = {
       };
     };
     columns: {
-      operator: string;
-      role: string;
-      agents: string;
       runs: string;
       spend: string;
-      tokens: string;
-      cacheHit: string;
       savings: string;
-      budgetPosition: string;
-      agent: string;
-      perRun: string;
-      trend: string;
-      model: string;
-      providerKey: string;
-      modelCalls: string;
-      cacheHitRate: string;
-      basis: string;
       tool: string;
       server: string;
       calls: string;
@@ -8909,28 +9067,6 @@ type Messages = {
       shareOfSpend: string;
     };
     groups: {
-      operator: {
-        unnamed: string;
-        title: string;
-        empty: string;
-        note: string;
-        budgetMissing: string;
-      };
-      agent: {
-        title: string;
-        empty: string;
-        note: string;
-        trendMissing: string;
-      };
-      model: {
-        title: string;
-        note: string;
-        routes: string;
-        footer: string;
-        keyMissing: string;
-        total: string;
-        totalNote: string;
-      };
       tool: {
         title: string;
         empty: string;
@@ -9080,10 +9216,8 @@ type Messages = {
         anyRegion: string;
         platformPriced: string;
         scheduled: string;
-        pagination: string;
-        previous: string;
-        next: string;
-        page: string;
+        pages: string;
+        scheduledPages: string;
       };
       dialog: {
         open: string;
@@ -9398,29 +9532,6 @@ type Messages = {
         error: string;
       };
     };
-    coaching: {
-      title: string;
-      notBacked: string;
-      agents: string;
-      operators: string;
-      agentSignals: {
-        narrowBelt: string;
-        stablePrefix: string;
-        pageResults: string;
-        contextBudget: string;
-        lightModel: string;
-        retryStorms: string;
-        oneTurnCache: string;
-      };
-      operatorSignals: {
-        grants: string;
-        reRead: string;
-        onePrompt: string;
-        publishSteering: string;
-        resizeBudget: string;
-        selfReported: string;
-      };
-    };
     ranking: {
       title: string;
       note: string;
@@ -9459,12 +9570,6 @@ type Messages = {
         failed: string;
       };
     };
-    agentChart: {
-      title: string;
-      label: string;
-      footer: string;
-      otherCurrency: string;
-    };
     toolChart: {
       metric: {
         cumulative: string;
@@ -9476,6 +9581,57 @@ type Messages = {
       empty: string;
       footer: string;
       otherCurrency: string;
+    };
+    month: {
+      description: string;
+      span: string;
+      chart: string;
+      noPricedDay: string;
+      empty: string;
+      unnamedOperator: string;
+      other: {
+        label: string;
+        note: string;
+      };
+      moreRuns: string;
+      reported: string;
+      ungrouped: {
+        label: string;
+        note: {
+          agent: string;
+          operator: string;
+          model: string;
+        };
+      };
+      budget: {
+        label: string;
+        used: string;
+        position: string;
+        reached: string;
+        notEnforced: string;
+        none: string;
+      };
+      by: {
+        label: string;
+        options: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+        titles: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+      };
+      columns: {
+        runs: string;
+        share: string;
+        cost: string;
+        total: string;
+      };
     };
   };
   steering: {
@@ -10149,11 +10305,14 @@ type Messages = {
     };
   };
   tools: {
-    eyebrow: string;
-    lede: string;
     loading: string;
     notCarried: string;
-    nextPage: string;
+    pager: {
+      registry: string;
+      grants: string;
+      first: string;
+      next: string;
+    };
     roles: {
       owner: string;
       admin: string;
@@ -10161,17 +10320,6 @@ type Messages = {
       billing: string;
       compliance: string;
       viewer: string;
-    };
-    tabs: {
-      label: string;
-      tools: string;
-      toolbelts: string;
-      providers: string;
-      policy: string;
-      switches: string;
-      atLeast: string;
-      switchesOn: string;
-      switchesOnAtLeast: string;
     };
     gate: {
       open: string;
@@ -11315,6 +11463,13 @@ type Messages = {
       failedTitle: string;
       denied: string;
       failed: string;
+    };
+    views: {
+      label: string;
+      providers: string;
+      tools: string;
+      toolbelts: string;
+      atLeast: string;
     };
   };
   ui: {

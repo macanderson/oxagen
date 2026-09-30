@@ -10,7 +10,7 @@
 // installation, for the reason repository.github-connection.ts gives.
 //
 // A steering repository the provisioner created is the one exception. Its head
-// hangs from a `github_steering` connection, and only the Oxagen Steering app
+// hangs from a `github_steering` connection, and only the Oxagen GitHub App
 // can see it. A caller that names the head's connection gets a client minted
 // from that app's installation instead.
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
@@ -171,12 +171,12 @@ export function steeringInstallationMissing(fullName?: string): HandlerError {
   return new HandlerError({
     code: "conflict",
     reason: "steering_installation_missing",
-    message: `${what} hangs from an Oxagen Steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
+    message: `${what} hangs from a steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
   });
 }
 
 /**
- * The Oxagen Steering installation a live `github_steering` connection names,
+ * The Oxagen GitHub App installation a live `github_steering` connection names,
  * or null when the connection is any other kind, retired, or not in this
  * workspace. Refuses with `conflict: steering_installation_missing` when a
  * steering connection holds no usable installation id.

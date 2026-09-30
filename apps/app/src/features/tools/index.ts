@@ -1,8 +1,13 @@
-// The Tools page's public surface (mockup `tools.md`). The route imports from
-// here; nothing else reaches into the folder (eslint: `@/features/*/*` is
-// restricted).
-export { Tools, ToolsLoading } from "./tools";
-export { parseToolsTab } from "./view";
+// The Tools views' public surface (mockup `tools.md`). They are tabs of the
+// Agents page now; its route and the Agents lane import from here, and nothing
+// else reaches into the folder (eslint: `@/features/*/*` is restricted).
+export {
+  ToolsBody,
+  ToolsHeaderActions,
+  ToolsLoading,
+  toolsTabCounts,
+} from "./tools";
+export { parseToolsTab, toolsTabOfAgentsTab } from "./view";
 export { handleMcpOAuthCallback } from "./oauth-callback";
 // The pieces a Studio server page (`@/features/mcp-studio`) reuses, so a
 // server and its tools are turned off, a failed read is drawn, and a

@@ -76,6 +76,11 @@
         "used": "{used} of {budget} tokens",
         "meter": "{used} of {budget} definition tokens used",
         "before": "Before this draft: {before} tokens"
+      },
+      "listed": {
+        "counts": "{imported} imported of {offered} the last discovery listed",
+        "search": "These definitions would fit the budget better behind tool search.",
+        "compileError": "The server's tools.toml did not compile. Fix it in the steering repository."
       }
     },
     "panel": {
@@ -197,7 +202,23 @@
           "none": "None",
           "service": "Service credential",
           "operatorOauth": "Each operator signs in"
-        }
+        },
+        "kind": "Credential type",
+        "kinds": {
+          "secret": "Service secret",
+          "oauthClient": "OAuth client"
+        },
+        "name": "Credential name",
+        "nameHint": "Lowercase letters, digits and dashes. server.toml names the credential by this.",
+        "secret": "Secret",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "secretHint": "Sent once to the Oxagen vault. This page never shows it again.",
+        "pending": "Storing a credential from this page is not available yet.",
+        "saving": "Storing",
+        "saved": "Stored as {reference}",
+        "failed": "The credential was not stored. Oxagen answered {code}.",
+        "thrown": "The credential was not stored because the request failed before Oxagen answered. Try again."
       },
       "machines": {
         "title": "Machines",
@@ -292,7 +313,7 @@
       },
       "findings": {
         "title": "Findings",
-        "missing": "The tool checks have not run on this draft yet.",
+        "missing": "Findings are not available yet.",
         "none": "The tool checks found nothing.",
         "server": "Server",
         "columns": {
@@ -316,21 +337,167 @@
         "discard": "Discard draft",
         "readOnly": "Only an organization owner or admin can open a steering PR.",
         "opened": "Opened steering PR #{number}",
-        "notBuilt": "Opening a steering PR from Studio is not available yet.",
-        "failed": "The steering PR did not open: {message}",
+        "failed": "The steering PR did not open. Oxagen answered {code}.",
+        "thrown": "The steering PR did not open because the request failed before Oxagen answered. Try again.",
         "updated": "Updated steering PR #{number}",
         "conflict": "Someone saved this server's draft after you last did. Your edits are now staged on top of theirs. Check the edits, then open the steering PR again.",
         "conflictDropped": "{count, plural, one {# edit did not fit the saved draft and was left out.} other {# edits did not fit the saved draft and were left out.}}",
+        "kept": "Someone saved this server's draft after you last did, in a form this page cannot read. Your edits are unchanged, and Oxagen kept theirs. Reload the page to get a version that can read their edits, then open the steering PR again.",
         "folderMissing": "Oxagen has not recorded this server's steering folder yet, so a steering PR cannot be opened from here.",
-        "sourceMissing": "The steering PR needs the server's definition to go with this draft, and Oxagen has not recorded it yet."
+        "sourceMissing": "The steering PR needs the server's definition to go with this draft, and Oxagen has not recorded it yet.",
+        "overBudgetBadge": "Over budget",
+        "overBudget": "The imported tools come to {tokens} definition tokens, over this server's budget of {budget}. The steering PR will carry an over-budget warning.",
+        "codes": {
+          "denied": "Only an organization owner or admin, or a workspace owner, can open a steering PR.",
+          "invalid": "Oxagen could not read the draft this page sent. Reload the page, then open the steering PR again.",
+          "unavailable": "Oxagen could not open the steering PR just now. Try again in a minute.",
+          "pending_approval": "Opening this steering PR waits on an approval. Open it again once the request is approved.",
+          "exhausted": "This workspace has reached a usage limit. Open the steering PR again once the limit resets.",
+          "too_large": "This draft is over the 960 KiB this page can send in one request. Discard some edits, then open the steering PR again. The Oxagen API and MCP tools save drafts up to 8 MiB.",
+          "draft_not_found": "Oxagen holds no saved draft for this server. Open the steering PR again to save your edits.",
+          "draft_unchanged": "The steering PR already holds these edits.",
+          "draft_unreadable": "The saved draft no longer matches the draft format. Discard the draft, then make the edits again.",
+          "server_not_found": "Oxagen has no record of this server in this workspace.",
+          "server_toml_missing": "The server has no server.toml on the production branch. Set up its connection, then open the steering PR again.",
+          "server_toml_invalid": "The server's server.toml does not validate. Fix it in the steering repository, then open the steering PR again.",
+          "server_name_mismatch": "The server's server.toml names a different folder. Fix the name in the steering repository, then open the steering PR again.",
+          "workspace_repository_missing": "This workspace has no steering repository. Connect one, then open the steering PR again.",
+          "production_branch_missing": "The steering repository has no production branch. Push one, then open the steering PR again.",
+          "folder_invalid": "The server's steering folder does not compile with these edits. Check the edits, then open the steering PR again.",
+          "source_required": "The steering PR needs the server's definition to go with these edits. Import the server's tools again, then open the steering PR.",
+          "source_invalid": "The definition does not match the server's source. Import the server's tools again, then open the steering PR.",
+          "source_commit_missing": "The draft does not say which commit its definition came from. Import the definition again, then open the steering PR.",
+          "definition_path_invalid": "The definition names a file outside the server's folder. Import the definition again, then open the steering PR.",
+          "importer_not_built": "Oxagen cannot import this kind of definition yet.",
+          "tools_unclassified": "Every imported tool needs a risk, a side effect, and an egress. Classify each one, then open the steering PR again.",
+          "tool_not_found": "The draft changes a tool that neither tools.toml nor the source holds. Discard that edit, then open the steering PR again.",
+          "tool_not_offered": "The source no longer offers a tool this draft imports. Remove it from the draft, then open the steering PR again.",
+          "tool_key_collision": "Two tools in this draft share one key in tools.toml. Remove one of them, then open the steering PR again.",
+          "test_invalid": "A saved test cannot be recorded. Save the test again, then open the steering PR.",
+          "test_holds_credential": "A saved test carries a credential header. Remove the header, save the test again, then open the steering PR."
+        }
       },
       "review": {
         "title": "Steering PR summary",
+        "branch": "Branch",
         "imported": "Imported tools",
         "removed": "Removed tools",
         "reclassified": "Reclassified tools",
         "tokens": "Definition tokens",
         "tokensValue": "{definitions} of {budget}"
+      }
+    },
+    "addServer": {
+      "sources": {
+        "local": "Local command",
+        "definition": "From a definition"
+      },
+      "fields": {
+        "name": "Folder name",
+        "nameHint": "The server's folder under tools/servers/. Lowercase letters, digits and underscores, starting with a letter, at most 24.",
+        "label": "Display name",
+        "description": "Description"
+      },
+      "definition": {
+        "intro": "Upload an OpenAPI, GraphQL or gRPC definition. Oxagen saves it as a draft and opens a steering PR that adds the server's folder. A person merges the PR before agents see the server.",
+        "type": "Definition type",
+        "types": {
+          "openapi": "OpenAPI",
+          "graphql": "GraphQL",
+          "grpc": "gRPC"
+        },
+        "url": "Production URL",
+        "urlHint": "The address agents' calls go to. It must not carry a user name, a password or a key.",
+        "files": "Definition files",
+        "filesHint": {
+          "openapi": "The OpenAPI document, and any file it references.",
+          "graphql": "One schema file in SDL.",
+          "grpc": "The .proto files. Oxagen stores each one under proto/."
+        },
+        "entry": "Root document",
+        "schedule": "Sync",
+        "schedules": {
+          "manual": "When a person asks",
+          "daily": "Daily"
+        },
+        "submit": "Open steering PR",
+        "retry": "Try again",
+        "saving": "Saving",
+        "reviewing": "Opening",
+        "opened": "Opened steering PR #{number}",
+        "exists": "A draft named {name} is already saved. Open that server in Studio, or choose another folder name.",
+        "moved": "Someone saved the {name} draft after you did. Open that server in Studio to see their edits.",
+        "tooLarge": "These files are over the 960 KiB this page can send in one request. The Oxagen API and MCP tools accept definitions up to 25 MiB.",
+        "tomlInvalid": "Oxagen could not read the server settings this form wrote. Check the name, the URL and the description, then try again.",
+        "sourceInvalid": "Oxagen could not read the definition. Check the files and the definition type, then try again.",
+        "problems": {
+          "name": "Enter a folder name of lowercase letters, digits and underscores that starts with a letter, at most 24.",
+          "reserved": "The folder name builtin is reserved. Choose another.",
+          "label": "Enter a display name of at most 80 characters.",
+          "description": "Enter a description of at most 200 characters.",
+          "url": "Enter an http or https URL with no user name or password.",
+          "files": "Choose at least one definition file.",
+          "empty": "{file} is empty.",
+          "duplicate": "Two files are named {file}. Rename one of them.",
+          "unreadable": "{file} is not UTF-8 text.",
+          "entry": "Choose the root document from the uploaded files.",
+          "graphqlOne": "A GraphQL definition is one schema file."
+        }
+      },
+      "local": {
+        "intro": "A local command runs on enrolled machines through the local gateway. Oxagen sends it no credential.",
+        "command": "Command",
+        "commandHint": "The program the local gateway starts, such as npx.",
+        "arguments": "Arguments",
+        "argumentsHint": "One argument per line.",
+        "machines": "Machine groups",
+        "machinesHint": "One group per line. The local gateway runs the server on machines in these groups.",
+        "submit": "Open steering PR",
+        "pending": "Adding a local command is not available yet, because a new folder needs its tools listed before a steering PR can open."
+      },
+      "offer": {
+        "remote": "Remote",
+        "package": "Package",
+        "both": "Remote and package",
+        "pickPackage": "Run as a package",
+        "pickPackageNamed": "Run {name} as a package"
+      },
+      "package": {
+        "intro": "The local gateway runs this package on enrolled machines. Oxagen sends it no credential.",
+        "type": "Package type",
+        "arguments": "Required arguments",
+        "secretHint": "A secret argument takes its value from a variable set on each machine.",
+        "variables": "Required variables",
+        "noPackages": "The registry lists this server's packages, and Oxagen does not read them yet.",
+        "submit": "Open steering PR",
+        "pending": "Adding a registry package is not available yet."
+      },
+      "discovery": {
+        "title": "Discovery",
+        "notAvailable": "Discovery progress is not available yet.",
+        "unnamed": "Discovery starts once the server's folder merges. Its progress shows on the server's Tools tab.",
+        "loading": "Reading discovery",
+        "none": "Discovery has not run for this server yet.",
+        "statuses": {
+          "queued": "Queued",
+          "running": "Running",
+          "succeeded": "Finished",
+          "failed": "Failed"
+        },
+        "stalled": "This discovery has waited over an hour.",
+        "outcomes": {
+          "unchanged": "The server's tools have not changed.",
+          "pr_opened": "Discovery opened a steering PR with the server's tools.",
+          "pr_updated": "Discovery updated the server's steering PR.",
+          "needs_digest": "The package needs a pinned digest before discovery can move its version.",
+          "skipped": "Discovery skipped this server."
+        },
+        "toolCount": "{count, plural, one {# tool listed} other {# tools listed}}",
+        "pr": "Steering PR #{number}",
+        "start": "Run discovery",
+        "starting": "Starting",
+        "failed": "Discovery did not answer. Oxagen answered {code}.",
+        "thrown": "Discovery did not answer because the request failed before Oxagen answered. Try again."
       }
     }
   }

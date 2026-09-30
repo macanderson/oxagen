@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { bodyJson, fakeHttp, header, reply, streamed } from "../execute/__tests__/fake-http";
 import { TransportError, type HttpTransportRequest, type HttpTransportResponse } from "../execute/transport";
-import { SearchIndexError, httpEmbedder, type EmbedUsage, type HttpEmbedderOptions } from "./embedder";
+import { SearchIndexError, httpEmbedder, type EmbedMeter, type EmbedUsage, type HttpEmbedderOptions } from "./embedder";
 
 const KEY = "sk-never-in-a-message";
 
@@ -24,6 +24,26 @@ function only(requests: readonly HttpTransportRequest[]): HttpTransportRequest {
   const [request] = requests;
   if (request === undefined || requests.length !== 1) throw new Error("Expected one request.");
   return request;
+}
+
+/** A meter that pushes each call it gets onto `events`, in order. */
+function recordingMeter(events: string[]): { meter: () => Promise<EmbedMeter>; usages: EmbedUsage[] } {
+  const usages: EmbedUsage[] = [];
+  return {
+    usages,
+    meter: () => {
+      events.push("open");
+      return Promise.resolve({
+        used: (usage: EmbedUsage) => {
+          events.push("used");
+          usages.push(usage);
+        },
+        failed: () => {
+          events.push("failed");
+        },
+      });
+    },
+  };
 }
 
 async function failure(promise: Promise<unknown>): Promise<SearchIndexError> {
@@ -263,14 +283,22 @@ describe("httpEmbedder", () => {
     }
   });
 
-  it("reports each answered request's token count and duration to onUsage", async () => {
-    const usages: EmbedUsage[] = [];
-    const counted = fakeHttp(() => reply(200, { ...(data([[1], [2]]) as object), usage: { total_tokens: 17 } }));
-    await httpEmbedder(voyage({ transport: counted.transport, onUsage: (usage) => usages.push(usage) })).embed(["a", "b"], "document");
+  it("opens the meter before the request, then reports the token count and duration", async () => {
+    const events: string[] = [];
+    const counted = fakeHttp(() => {
+      events.push("request");
+      return reply(200, { ...(data([[1], [2]]) as object), usage: { total_tokens: 17 } });
+    });
+    const first = recordingMeter(events);
+    await httpEmbedder(voyage({ transport: counted.transport, meter: first.meter })).embed(["a", "b"], "document");
 
     const uncounted = fakeHttp(() => reply(200, { ...(data([[1]]) as object), usage: { total_tokens: "17" } }));
-    await httpEmbedder(voyage({ transport: uncounted.transport, onUsage: (usage) => usages.push(usage) })).embed(["q"], "query");
+    const second = recordingMeter([]);
+    await httpEmbedder(voyage({ transport: uncounted.transport, meter: second.meter })).embed(["q"], "query");
 
+    // The admission is on record before the endpoint spends anything.
+    expect(events).toEqual(["open", "request", "used"]);
+    const usages = [...first.usages, ...second.usages];
     expect(usages).toEqual([
       { texts: ["a", "b"], purpose: "document", tokens: 17, durationMs: expect.any(Number) },
       { texts: ["q"], purpose: "query", tokens: null, durationMs: expect.any(Number) },
@@ -278,14 +306,47 @@ describe("httpEmbedder", () => {
     for (const usage of usages) expect(usage.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("reports no usage for a request that fails", async () => {
-    const onUsage = vi.fn();
-    const refused = fakeHttp(() => reply(401));
-    await failure(httpEmbedder(voyage({ transport: refused.transport, onUsage })).embed(["a"], "query"));
+  it("closes the meter as failed, with no usage, for a request the endpoint refused or never answered", async () => {
+    const failing = [
+      fakeHttp(() => reply(401)),
+      fakeHttp(() => Promise.reject(new TransportError("timeout", "slow", true))),
+      fakeHttp(() => Promise.reject(new Error("socket hang up"))),
+    ];
+    for (const http of failing) {
+      const events: string[] = [];
+      const { meter, usages } = recordingMeter(events);
+      await failure(httpEmbedder(voyage({ transport: http.transport, meter })).embed(["a", "b"], "document"));
+      expect(events).toEqual(["open", "failed"]);
+      expect(usages).toEqual([]);
+    }
+  });
 
-    const short = fakeHttp(() => reply(200, { ...(data([[1]]) as object), usage: { total_tokens: 4 } }));
-    await failure(httpEmbedder(voyage({ transport: short.transport, onUsage })).embed(["a", "b"], "document"));
+  it("reports the usage of a 2xx answer whose vectors it refuses", async () => {
+    // The endpoint did the work, so its spend stays on record (#4760).
+    const refused: Array<[unknown, number | null]> = [
+      [{ ...(data([[1]]) as object), usage: { total_tokens: 4 } }, 4],
+      ["not json", null],
+    ];
+    for (const [body, tokens] of refused) {
+      const events: string[] = [];
+      const { meter, usages } = recordingMeter(events);
+      const http = fakeHttp(() => reply(200, body));
+      const error = await failure(httpEmbedder(voyage({ transport: http.transport, meter })).embed(["a", "b"], "document"));
+      expect(error.code).toBe("malformed");
+      expect(events).toEqual(["open", "used"]);
+      expect(usages).toEqual([{ texts: ["a", "b"], purpose: "document", tokens, durationMs: expect.any(Number) }]);
+    }
+  });
 
-    expect(onUsage).not.toHaveBeenCalled();
+  it("opens no meter when nothing is sent", async () => {
+    const events: string[] = [];
+    const { meter } = recordingMeter(events);
+    const http = fakeHttp(() => reply(200, data([[1]])));
+
+    await httpEmbedder(voyage({ transport: http.transport, meter })).embed([], "query");
+    await failure(httpEmbedder(voyage({ url: "not a url", transport: http.transport, meter })).embed(["a"], "query"));
+
+    expect(http.requests).toHaveLength(0);
+    expect(events).toEqual([]);
   });
 });

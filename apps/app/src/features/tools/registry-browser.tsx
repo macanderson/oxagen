@@ -8,9 +8,15 @@
 // A server Oxagen cannot reach (an `sse` remote, a `stdio` package that runs on
 // the agent's machine) is listed with the reason and no Select, so a search
 // never hides that a server exists.
+//
+// Each card also says whether the entry offers a remote, a package, or both
+// (#4678, item 3). An entry with a package offers Run as a package, which
+// opens Studio's package form in the dialog. Both come from
+// `@/features/mcp-studio/client`.
 import { useTranslations } from "next-intl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { RegistryServer } from "@/data/contracts/tools";
+import { RegistryOfferChip } from "@/features/mcp-studio/client";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
@@ -49,11 +55,19 @@ function AuthChip({ server }: { server: RegistryServer }) {
 function ResultCard({
   server,
   onPick,
+  onPickPackage,
 }: {
   server: RegistryServer;
   onPick: (server: RegistryServer) => void;
+  onPickPackage?: (server: RegistryServer) => void;
 }) {
   const t = useTranslations("tools.import.browse");
+  const tOffer = useTranslations("mcpStudio.addServer.offer");
+  // An entry with a stdio transport ships a package the local gateway can run.
+  const pickPackage =
+    onPickPackage !== undefined && server.transports.includes("stdio")
+      ? onPickPackage
+      : null;
   // Each link once: the docs are often the website, the source the docs.
   const seen = new Set<string>();
   const links = (
@@ -106,6 +120,7 @@ function ResultCard({
             </span>
           ))}
           <AuthChip server={server} />
+          <RegistryOfferChip server={server} />
           {server.version === null ? null : (
             <span className={`${mono} text-[11px] text-muted-foreground`}>
               {t("version", { version: server.version })}
@@ -127,18 +142,35 @@ function ResultCard({
           <p className="text-xs text-muted-foreground">{unreachable}</p>
         )}
       </div>
-      {server.connectable ? (
-        <button
-          type="button"
-          data-testid={`${TESTID}-pick-${server.registryRef}`}
-          aria-label={t("pickNamed", { name: server.name })}
-          className={`${buttonSecondary} self-center`}
-          onClick={() => {
-            onPick(server);
-          }}
-        >
-          {t("pick")}
-        </button>
+      {server.connectable || pickPackage !== null ? (
+        <div className="flex flex-col items-stretch gap-1.5 self-center">
+          {server.connectable ? (
+            <button
+              type="button"
+              data-testid={`${TESTID}-pick-${server.registryRef}`}
+              aria-label={t("pickNamed", { name: server.name })}
+              className={buttonSecondary}
+              onClick={() => {
+                onPick(server);
+              }}
+            >
+              {t("pick")}
+            </button>
+          ) : null}
+          {pickPackage === null ? null : (
+            <button
+              type="button"
+              data-testid={`${TESTID}-package-${server.registryRef}`}
+              aria-label={tOffer("pickPackageNamed", { name: server.name })}
+              className={buttonSecondary}
+              onClick={() => {
+                pickPackage(server);
+              }}
+            >
+              {tOffer("pickPackage")}
+            </button>
+          )}
+        </div>
       ) : null}
     </li>
   );
@@ -147,9 +179,12 @@ function ResultCard({
 export function RegistryBrowser({
   at,
   onPick,
+  onPickPackage,
 }: {
   at: ToolsAt;
   onPick: (server: RegistryServer) => void;
+  /** Run an entry's package through Studio's form. Absent, no entry offers it. */
+  onPickPackage?: (server: RegistryServer) => void;
 }) {
   const t = useTranslations("tools.import.browse");
   const failureText = useActionFailure();
@@ -260,6 +295,7 @@ export function RegistryBrowser({
               key={server.registryRef}
               server={server}
               onPick={onPick}
+              onPickPackage={onPickPackage}
             />
           ))}
         </ul>

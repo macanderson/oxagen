@@ -18,11 +18,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceList } from "@/data/contracts/org";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames } from "@/test/select";
 import { COPIED_MS } from "./copy-id";
 import { workspaceRow } from "./organization.builders";
 
@@ -285,13 +287,13 @@ describe("Workspaces", () => {
   });
 
   it("filters by the production branch the rows carry", async () => {
+    const user = userEvent.setup();
     await renderTab();
     const branch = screen.getByLabelText("Production branch");
-    expect(
-      within(branch)
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Production branch", "main"]);
+    expect(await optionNames(user, branch)).toEqual([
+      "All · Production branch",
+      "main",
+    ]);
   });
 
   it("opens a workspace the viewer belongs to, and offers Edit and Archive on a live one", async () => {
@@ -309,6 +311,23 @@ describe("Workspaces", () => {
     const other = row("wrk_1b2c3d4e5f6g7h8j9k0m1n");
     expect(within(other).queryByRole("link", { name: "Open" })).toBeNull();
     expect(within(other).getByRole("button", { name: "Edit" })).toBeTruthy();
+  });
+
+  // The table clips a body cell unless it holds `[data-actions]`, so every
+  // control in the row must sit inside that one marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderTab();
+    const mine = within(row("wrk_0a1b2c3d4e5f6g7h8j9k0m"));
+    const group = mine
+      .getByRole("button", { name: "Archive" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(mine.getByRole("link", { name: "Open" }));
+    expect(group).toContainElement(mine.getByRole("button", { name: "Edit" }));
+    expect(group).toContainElement(
+      mine.getByTestId("edit-workspace-avatar-wrk_0a1b2c3d4e5f6g7h8j9k0m"),
+    );
+    expect(group?.closest("td")).not.toBeNull();
   });
 
   it("marks an archived workspace and offers it no control but copying its id", async () => {

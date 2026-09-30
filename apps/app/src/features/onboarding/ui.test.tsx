@@ -321,7 +321,7 @@ describe("the name step", () => {
     );
     expect(screen.getByTestId("register-toolbelt-import")).toHaveAttribute(
       "href",
-      "/acme/core-platform/tools/providers",
+      "/acme/core-platform/agents?tab=servers",
     );
     expect(screen.queryByRole("radiogroup", { name: "Toolbelt" })).toBeNull();
     await user.type(screen.getByLabelText("Name"), "Perf watch");
@@ -340,7 +340,7 @@ describe("the name step", () => {
     expect(screen.queryByRole("radiogroup", { name: "Runtime" })).toBeNull();
     expect(screen.getByTestId("register-add-runtime")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
   });
 
