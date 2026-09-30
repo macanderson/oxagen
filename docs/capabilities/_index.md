@@ -628,6 +628,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [create_relay](tool.relay.create.md) | [tool.relay.create.ts](../../packages/oxagen/src/contracts/tool.relay.create.ts) | api |
 | [draft_studio_description](tool.studio.description.draft.md) | [tool.studio.description.draft.ts](../../packages/oxagen/src/contracts/tool.studio.description.draft.ts) | api, mcp |
 | [get_studio_discovery](tool.studio.discovery.get.md) | [tool.studio.discovery.get.ts](../../packages/oxagen/src/contracts/tool.studio.discovery.get.ts) | api, mcp |
+| [get_studio_listing](tool.studio.listing.get.md) | [tool.studio.listing.get.ts](../../packages/oxagen/src/contracts/tool.studio.listing.get.ts) | api, mcp |
 | [get_studio_draft](tool.studio.draft.get.md) | [tool.studio.draft.get.ts](../../packages/oxagen/src/contracts/tool.studio.draft.get.ts) | api, mcp |
 | [import_tools](tool.import.md) | [tool.import.ts](../../packages/oxagen/src/contracts/tool.import.ts) | api, mcp, agent |
 | [list_studio_findings](tool.studio.findings.list.md) | [tool.studio.findings.list.ts](../../packages/oxagen/src/contracts/tool.studio.findings.list.ts) | api, mcp |
@@ -643,6 +644,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp, agent |
 | [set_tool_state](tool.state.set.md) | [tool.state.set.ts](../../packages/oxagen/src/contracts/tool.state.set.ts) | api, mcp, agent |
 | [start_studio_discovery](tool.studio.discovery.start.md) | [tool.studio.discovery.start.ts](../../packages/oxagen/src/contracts/tool.studio.discovery.start.ts) | api, mcp |
+| [start_studio_listing](tool.studio.listing.start.md) | [tool.studio.listing.start.ts](../../packages/oxagen/src/contracts/tool.studio.listing.start.ts) | api, mcp |
 | [try_studio_tool](tool.studio.try.md) | [tool.studio.try.ts](../../packages/oxagen/src/contracts/tool.studio.try.ts) | api, mcp |
 
 ## Toolbelt

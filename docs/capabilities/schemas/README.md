@@ -541,6 +541,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - draft_studio_description
 - get_studio_discovery
 - get_studio_draft
+- get_studio_listing
 - get_studio_server
 - import_tools
 - list_studio_findings
@@ -555,6 +556,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - set_tool_classification
 - set_tool_state
 - start_studio_discovery
+- start_studio_listing
 - try_studio_tool
 
 ## toolbelt

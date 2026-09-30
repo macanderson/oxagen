@@ -1843,6 +1843,16 @@
     },
     {
       "domain": "tool",
+      "name": "get_studio_listing",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
       "name": "get_studio_server",
       "reads": [],
       "surfaces": [
@@ -4088,6 +4098,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "start_studio_listing",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "start_subscription_upgrade",
       "reads": [],
@@ -4867,6 +4887,7 @@
         "postgres:mcp.search_embeddings",
         "postgres:mcp.server_discoveries",
         "postgres:mcp.studio_drafts",
+        "postgres:mcp.studio_listings",
         "postgres:mcp.tool_snapshots"
       ]
     },
@@ -20299,6 +20320,125 @@
       "domain": "mcp",
       "id": "postgres:mcp.studio_drafts",
       "name": "studio_drafts",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "draft_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:mcp.studio_drafts",
+          "type": "uuid"
+        },
+        {
+          "name": "server_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "machine_groups",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        },
+        {
+          "name": "lock_source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "draft_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "requested_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "requested_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "claimed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "finished_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "machine",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tool_count",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "mcp",
+      "id": "postgres:mcp.studio_listings",
+      "name": "studio_listings",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
