@@ -953,6 +953,9 @@ async function initializeDaemon(
    *   are built outside any queue;
    * - the state file a deferred SessionEnd writes before it is answered;
    * - the state file the tick writes when hooks kept it waiting too long;
+   * - the gateway frame of a call no session has met yet, which waits for
+   *   the `PreToolUse` that will claim it and drains the spool (ADR-189
+   *   decision 7);
    * - `stop`'s seal of the host chain.
    *
    * Work that takes neither, and why it may:
@@ -3163,13 +3166,19 @@ async function initializeDaemon(
    * MCP servers. Claude Code names each call's `tool_use_id` in the request,
    * and when a live session's `PreToolUse` requested that call, the gateway's
    * frame lands on that session's chain as the call's one `tool_call`, so the
-   * `PostToolUse` for it seals nothing (ADR-189).
+   * `PostToolUse` for it seals nothing (ADR-189). That holds when the gateway
+   * answers before the daemon has handled the `PreToolUse`, as it does once
+   * `tacho-hook` gives up waiting and spools the hook: the frame waits for
+   * the hook (ADR-189 decision 7).
    */
   const connected = new Map<
     string,
     { calls: number; refused: number; lastSeenAt: string }
   >();
-  /** Tool use ids whose gateway frame waits on its session's queue. */
+  /**
+   * Tool use ids whose gateway frame waits on a hook queue: its session's
+   * queue, or the host queue for a call no session has met yet.
+   */
   const queuedGatewayCalls = new Set<string>();
 
   /**
@@ -3203,55 +3212,104 @@ async function initializeDaemon(
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
     const toolUseId = call.toolUseId;
-    // A second call naming an id whose first call is still queued is not the
-    // call the session waits on. It seals on the daemon's chain, as it would
-    // once the first had landed.
-    const target =
-      toolUseId === undefined || queuedGatewayCalls.has(toolUseId)
-        ? undefined
-        : sessionAwaiting(toolUseId);
-    if (toolUseId !== undefined && target !== undefined) {
-      // A session chain is written on its session's queue, where that
-      // session's hooks are handled too. Sealed off it, this frame could land
-      // while a queued hook stands between its chain mark and its write, and
-      // that hook's rollback after a failed write would take the chain back
-      // behind a frame the WAL already holds. The client's answer does not
-      // wait for the queue. The frame lands before the call's PostToolUse,
-      // because the queue runs in order and the harness sends that hook only
-      // once it has the answer. A failed write is logged, and the rollback
-      // leaves the call awaited, so the PostToolUse seals it instead.
-      //
-      // The session is chosen here, once. A task already on the session's
-      // queue (the tailer sealing a transcript it read, an OTel record) can
-      // seal a sighting of this call before the frame is written, and the
-      // family ledger judges the frame against it there: a body the chain
-      // lacks is sealed stamped as a duplicate, and a repeat seals nothing.
-      // Looked up again inside the task, the call found no session waiting
-      // and sealed a second identity on the daemon's chain.
-      queuedGatewayCalls.add(toolUseId);
-      queues
-        .session(target.harnessSessionId, async () => {
-          try {
-            if (!target.sealed && !target.pendingTerminal) {
-              sealGatewayFrame(call, target);
-              return;
-            }
-            log(
-              `mcp gateway recorded ${call.toolName} (${toolUseId}) on the daemon's chain: session ${target.harnessSessionId} closed before the frame was written`,
-            );
-            sealGatewayFrame(call, undefined);
-          } finally {
-            queuedGatewayCalls.delete(toolUseId);
-          }
-        })
-        .catch((error: unknown) =>
-          log(
-            `mcp gateway could not record ${call.toolName} (${toolUseId}): ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
+    // A call with no id has nothing to join on. A second call naming an id
+    // whose first call is still queued is not the call the session waits on.
+    // It seals on the daemon's chain, as it would once the first had landed.
+    if (toolUseId === undefined || queuedGatewayCalls.has(toolUseId)) {
+      sealGatewayFrame(call, undefined);
       return;
     }
-    sealGatewayFrame(call, undefined);
+    // So does a call naming an id a session has met and no longer awaits,
+    // because a frame already holds the call or the session closed.
+    const target = sessionAwaiting(toolUseId);
+    if (target === undefined && sessionKnowing(toolUseId) !== undefined) {
+      sealGatewayFrame(call, undefined);
+      return;
+    }
+    // What is left is a call a live session awaits, or one no session has
+    // met yet. The second can be a call whose `PreToolUse` the daemon has not
+    // handled: `tacho-hook` stopped waiting and spooled the hook, and Claude
+    // Code called the tool while the live request still waited on its
+    // session's queue, or while the daemon was down. Sealed on the daemon's
+    // chain now, the frame would be the call's second identity once that
+    // hook's `tool_call` seals on the session's chain, so it waits for the
+    // hook (ADR-189 decision 7). A call no hook ever claims, such as one from
+    // a session without hooks, still lands on the daemon's chain, from the
+    // task.
+    //
+    // A session chain is written on its session's queue, where that
+    // session's hooks are handled too. Sealed off it, this frame could land
+    // while a queued hook stands between its chain mark and its write, and
+    // that hook's rollback after a failed write would take the chain back
+    // behind a frame the WAL already holds. The client's answer does not
+    // wait for the queue. The frame lands before the call's PostToolUse,
+    // because the queue runs in order and the harness sends that hook only
+    // once it has the answer. A failed write is logged, and the rollback
+    // leaves the call awaited, so the PostToolUse seals it instead.
+    //
+    // A session that awaits the call is chosen here, once, and the frame
+    // goes on that session's queue. A task already on that queue (the tailer
+    // sealing a transcript it read, an OTel record) can seal a sighting of
+    // this call before the frame is written, and the family ledger judges
+    // the frame against it there: a body the chain lacks is sealed stamped
+    // as a duplicate, and a repeat seals nothing. Looked up again inside the
+    // task by `sessionAwaiting`, the call found no session waiting and
+    // sealed a second identity on the daemon's chain. A call no session has
+    // met is matched inside the task, to the session that claimed it since,
+    // by `claimantOf`, which that sighting does not hide.
+    //
+    // A call no session has met goes on the host queue (ADR-229). Nothing
+    // here says which session's `PreToolUse` will claim it, and a host task
+    // starts once every task queued before it has settled, so it runs after
+    // that hook on whichever session's queue the hook waits. It also drains
+    // the spool, which replays hooks of any session and so runs only on the
+    // host queue. Remembering the session each unhandled `PreToolUse` names
+    // would put the frame on that session's queue instead, but a hook the
+    // daemon has not received, the spooled one after a restart, would still
+    // need this path, so that map would add state and remove nothing. The
+    // cost is one barrier: a task queued after this one waits for the tasks
+    // queued before it. Only a call whose `PreToolUse` was spooled, or one
+    // from a session without hooks, pays it.
+    queuedGatewayCalls.add(toolUseId);
+    const seal = async (): Promise<void> => {
+      try {
+        const session = target ?? (await claimantOf(toolUseId));
+        if (session === undefined) {
+          // No hook claimed the call. A `PreToolUse` still in the spool (a
+          // replay that failed, or a daemon that is stopping) is replayed
+          // later, at this start or the next, and the call's `PostToolUse`
+          // then seals its `tool_call` on the session's chain. A frame here
+          // would be its second identity. A refusal is not a sighting of
+          // the call, and nothing else records it, so it still seals.
+          if (call.status !== "rejected" && spoolRequests(toolUseId)) {
+            log(
+              `mcp gateway left ${call.toolName} (${toolUseId}) to its hooks: its PreToolUse waits in the spool`,
+            );
+            return;
+          }
+          sealGatewayFrame(call, undefined);
+          return;
+        }
+        if (!session.sealed && !session.pendingTerminal) {
+          sealGatewayFrame(call, session);
+          return;
+        }
+        log(
+          `mcp gateway recorded ${call.toolName} (${toolUseId}) on the daemon's chain: session ${session.harnessSessionId} closed before the frame was written`,
+        );
+        sealGatewayFrame(call, undefined);
+      } finally {
+        queuedGatewayCalls.delete(toolUseId);
+      }
+    };
+    (target === undefined
+      ? queues.host(seal)
+      : queues.session(target.harnessSessionId, seal)
+    ).catch((error: unknown) =>
+      log(
+        `mcp gateway could not record ${call.toolName} (${toolUseId}): ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
   }
 
   /**
@@ -3306,6 +3364,68 @@ async function initializeDaemon(
           !candidate.pendingTerminal &&
           candidate.recorder.awaitsToolCall(toolUseId),
       );
+  }
+
+  /**
+   * The session whose family has claimed or sealed this call, closed or not,
+   * or undefined when no session has met it.
+   */
+  function sessionKnowing(toolUseId: string): SessionRecord | undefined {
+    return registry
+      .list()
+      .find((candidate) => candidate.recorder.knowsToolCall(toolUseId));
+  }
+
+  /**
+   * The session that claimed a call the gateway answered before any session
+   * had met it (ADR-189 decision 7). Runs on the host queue. The call's
+   * `PreToolUse` is on a session's queue ahead of this task, which the host
+   * queue waits for, or in the spool, so the spool is drained first. A
+   * stopping daemon drains nothing, the way `handleHook` refuses a hook
+   * then, and the next start replays the spool.
+   *
+   * It matches on the claim, not on `awaitsToolCall`: a tick between the hook
+   * and this task can seal the transcript's sighting of the call, and the
+   * family ledger then judges the gateway's frame against it.
+   */
+  async function claimantOf(
+    toolUseId: string,
+  ): Promise<SessionRecord | undefined> {
+    if (!stopped) await drainSpool();
+    return sessionKnowing(toolUseId);
+  }
+
+  /**
+   * Whether the spool holds a `PreToolUse` for this call: the file
+   * `tacho-hook` writes when the daemon does not answer it in time. Its
+   * replay claims the call for its session, at this start or the next. A
+   * file that cannot be read names no call.
+   */
+  function spoolRequests(toolUseId: string): boolean {
+    let names: string[];
+    try {
+      names = readdirSync(paths.spool);
+    } catch {
+      return false;
+    }
+    return names.some((name) => {
+      if (!name.endsWith(".json")) return false;
+      try {
+        const file = JSON.parse(
+          readFileSync(join(paths.spool, name), "utf8"),
+        ) as SpoolFile;
+        const payload = file.payload as
+          | { hook_event_name?: unknown; tool_use_id?: unknown }
+          | null
+          | undefined;
+        return (
+          payload?.hook_event_name === "PreToolUse" &&
+          payload.tool_use_id === toolUseId
+        );
+      } catch {
+        return false;
+      }
+    });
   }
 
   /** The frame one gateway call seals, on whichever chain it lands. */

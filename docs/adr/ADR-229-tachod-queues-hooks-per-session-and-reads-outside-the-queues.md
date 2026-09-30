@@ -60,7 +60,16 @@ that chain in between is rolled back with it if the write fails.
    - The host queue: the spool drain, a journaled SessionEnd's seal and flush
      (`settleEnding`), the state file a deferred SessionEnd writes before it is
      answered, the state file the tick writes when hooks kept it waiting past
-     five seconds, and `stop`'s seal of the host chain.
+     five seconds, the gateway frame of a call no session has met yet
+     (ADR-189 decision 7), and `stop`'s seal of the host chain.
+   - The gateway frame of a call no session has met waits for the
+     `PreToolUse` that will claim it, and nothing names that hook's session
+     before it is handled. The host queue runs the frame after every task
+     queued before it, the hook's live request among them, and lets it drain
+     the spool, where the hook sits after a restart. Remembering the session
+     each unhandled `PreToolUse` names would put the frame on that session's
+     queue, but the spooled hook would still need the host queue, so the map
+     would add state and remove no path.
    - Neither: the sweep and the checkpoint seal in one synchronous stretch and
      pass over a session whose queue is running a task, and every session
      while a host task runs. The tick writes the state file itself when no
@@ -118,7 +127,10 @@ that chain in between is rolled back with it if the write fails.
 - A body index build holds no hook. ADR-190's Limits line saying hooks wait
   behind the build is removed.
 - A host task still waits for every running hook. The host queue carries work
-  that happens once per session end, once per spooled backlog, and at `stop`.
+  that happens once per session end, once per spooled backlog, once per
+  gateway call no session has met, and at `stop`. A gateway call from a
+  hooked session is met by its `PreToolUse` first, so only a call whose hook
+  was spooled, or one from a session without hooks, takes the host queue.
   The state file is written through it only after five seconds of hooks
   running without a pause, so under that load a hook can wait once every five
   seconds for the slowest hook running then.
@@ -176,3 +188,7 @@ that chain in between is rolled back with it if the write fails.
   index is stale on both awaited attempts".
 - `packages/tacho/src/collector/daemon-git.test.ts`, "seals the host chain
   inside its budget while a hook holds the queue".
+- `packages/tacho/src/collector/daemon-bodies.test.ts`, "seals one tool_call
+  on the session's chain for a gateway call whose PreToolUse was spooled": the
+  frame of a call no session has met waits on the host queue behind the
+  hook's live request, and lands on neither chain until the hook runs.
