@@ -36,6 +36,7 @@ import {
   type RegistryCatalog,
   type SteeringCheckout,
 } from "./seams";
+import type { RegistryDigests } from "./digests";
 import {
   discover,
   NeedsDigest,
@@ -1242,6 +1243,50 @@ const ACME_LOCK: McpLockSource = {
   args: ["-y", "@acme/files-mcp@1.3.0"],
 };
 
+/** The digest the registry publishes for @acme/files-mcp 1.4.0. */
+const DIGEST_NEXT = `sha256:${"b2".repeat(32)}`;
+
+/** The lock source discovery pins for acme 1.4.0, as registryLaunch builds it. */
+const ACME_NEXT_LOCK: McpLockSource = {
+  type: "registry",
+  registry: REGISTRY,
+  server: ACME_NAME,
+  version: "1.4.0",
+  package: {
+    name: "@acme/files-mcp",
+    version: "1.4.0",
+    digest: DIGEST_NEXT,
+    registry_type: "npm",
+  },
+  command: "npx",
+  args: ["--yes", "@acme/files-mcp@1.4.0"],
+};
+
+/** A catalog entry at `version` that lists acme's npm package. */
+function acmePackageEntry(version: string): RegistryEntry {
+  return {
+    server: {
+      ...acmeEntry(version).server,
+      packages: [
+        {
+          registryType: "npm",
+          identifier: "@acme/files-mcp",
+          version,
+          transport: { type: "stdio" },
+        },
+      ],
+    },
+  };
+}
+
+/** A digest reader that answers `digest`, or rejects with `error`. */
+function digestReader(digest: string, error?: Error) {
+  const read = vi.fn<RegistryDigests["digest"]>(() =>
+    error === undefined ? Promise.resolve(digest) : Promise.reject(error),
+  );
+  return { read, digests: { digest: read } };
+}
+
 function acmeEntry(version: string): RegistryEntry {
   return {
     server: {
@@ -1319,11 +1364,76 @@ describe("discover a registry package on machines", () => {
     expect(found.version).toBeUndefined();
   });
 
-  it("stops at needs_digest when the catalog moved on", async () => {
+  it("pins the new version at the digest its registry publishes and lists it on a machine", async () => {
+    const { report, local } = reporter();
+    const { read, digests } = digestReader(DIGEST_NEXT);
+    const { ctx } = acmeServer(
+      { trigger: "schedule", seams: { local, digests } },
+      acmePackageEntry("1.4.0"),
+    );
+    const found = await discover(ctx);
+
+    expect(read).toHaveBeenCalledWith(
+      { name: "@acme/files-mcp", version: "1.4.0", registry_type: "npm" },
+      { command: "npx", args: ["--yes", "@acme/files-mcp@1.4.0"] },
+      ctx.signal,
+    );
+    expect(report).toHaveBeenCalledWith({
+      scope: SCOPE,
+      server: "acme-files",
+      source: { ...ACME, version: "1.4.0" },
+      lockSource: ACME_NEXT_LOCK,
+      signal: ctx.signal,
+    });
+    expect(found).toMatchObject({
+      offered: offered(TOOLS),
+      lockSource: { ...ACME_NEXT_LOCK, server_version: "2026.9.0" },
+      version: "1.4.0",
+      latestVersion: "1.4.0",
+      machine: "mac-ada-01",
+      origin: `${ACME_NAME} 1.4.0 is in the catalog`,
+    });
+  });
+
+  it("refuses, for a retry, when the registry does not answer the digest", async () => {
+    const { report, local } = reporter();
+    const { digests } = digestReader(
+      DIGEST_NEXT,
+      new Error("the registry answered 503"),
+    );
+    const { ctx } = acmeServer(
+      { trigger: "schedule", seams: { local, digests } },
+      acmePackageEntry("1.4.0"),
+    );
+    const error = await refusal(discover(ctx));
+
+    expect(error).toMatchObject({ code: "source", retriable: true });
+    expect(error.message).toBe(
+      "Oxagen could not read the digest of @acme/files-mcp@1.4.0: the registry answered 503",
+    );
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("refuses a new version whose entry lists no package of its type", async () => {
+    const { report, local } = reporter();
+    const { digests, read } = digestReader(DIGEST_NEXT);
+    const { ctx } = acmeServer(
+      { trigger: "schedule", seams: { local, digests } },
+      acmeEntry("1.4.0"),
+    );
+    const error = await refusal(discover(ctx));
+
+    expect(error.code).toBe("source");
+    expect(error.message).toMatch(/^io\.github\.acme\/files 1\.4\.0 cannot run on a machine: /);
+    expect(read).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("stops at needs_digest when no digest reader is installed", async () => {
     const { report, local } = reporter();
     const { ctx } = acmeServer(
       { trigger: "schedule", seams: { local } },
-      acmeEntry("1.4.0"),
+      acmePackageEntry("1.4.0"),
     );
     const error = await refusal(discover(ctx));
 
