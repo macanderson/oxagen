@@ -221,11 +221,16 @@ function discoveryRow(status: DiscoveryRow["status"]): DiscoveryRow {
     outcome: status === "failed" ? null : "unchanged",
     toolCount: 2,
     machine: null,
+    sourceKind: "remote",
+    sourceRepo: null,
+    sourcePath: null,
+    sourceRef: null,
+    schedule: "daily",
     upstreamDigest: null,
     latestVersion: null,
     pr: null,
     withheld: [],
-  } as DiscoveryRow;
+  };
 }
 
 function storeDouble(row: DiscoveryRow | null = discoveryRow("succeeded")) {

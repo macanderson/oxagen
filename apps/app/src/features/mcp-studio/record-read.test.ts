@@ -12,7 +12,7 @@ vi.mock("./actions", () => actions);
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
-const { readStudioRecord, toStudioRecord } = await import("./record-read");
+const { readStudioRecord } = await import("./record-read");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 
@@ -118,9 +118,15 @@ beforeEach(() => {
   actions.getStudioServerAction.mockReset();
 });
 
-describe("toStudioRecord", () => {
-  it("maps the folder, with each imported tool joined to its shaping", () => {
-    const record = toStudioRecord(OUTPUT);
+describe("readStudioRecord's mapping", () => {
+  it("maps the folder, with each imported tool joined to its shaping", async () => {
+    actions.getStudioServerAction.mockResolvedValue({ ok: true, value: OUTPUT });
+    const found = await readStudioRecord(ctx, {
+      ...studioServer(STRIPE),
+      steeringName: "stripe",
+    });
+    if (found === null) throw new Error("expected a record");
+    const record = found;
     expect(record).toMatchObject({
       folder: "tools/servers/stripe",
       source: OUTPUT.source,

@@ -27,7 +27,7 @@ function hintsOf(annotations: Readonly<Record<string, unknown>> | null): string[
 }
 
 /** get_studio_server's output as the server page's record. */
-export function toStudioRecord(out: ServerOutput): StudioRecord {
+function toStudioRecord(out: ServerOutput): StudioRecord {
   const shaping = new Map(out.shaping.map((entry) => [entry.tool, entry]));
   return {
     folder: out.folder,
