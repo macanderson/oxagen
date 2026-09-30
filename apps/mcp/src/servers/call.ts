@@ -31,6 +31,7 @@ import {
   type MeterKind,
   type MeterOutcome,
   type ServedAgent,
+  type ServedCallProblem,
   type ServedPorts,
   type ServedRoute,
   type ServedTransport,
@@ -39,6 +40,8 @@ import {
 interface Answer {
   result: CallToolResult;
   outcome: MeterOutcome;
+  /** Set when the tool is why the call failed. Agent feedback counts it (ADR-234). */
+  problem?: ServedCallProblem;
 }
 
 function text(message: string): CallToolResult {
@@ -86,6 +89,35 @@ async function meter(
       kind,
       tool,
       outcome,
+      error: errorName(error),
+    });
+  }
+}
+
+/**
+ * Record one call to a tool for MCP Studio's agent feedback (ADR-234). Like
+ * the meter, a failure to record is logged and never changes the answer.
+ */
+async function recordCall(
+  view: ServedView,
+  ports: ServedPorts,
+  tool: string,
+  server: string,
+  answer: Answer,
+): Promise<void> {
+  try {
+    await ports.recordCall({
+      server,
+      tool,
+      outcome: answer.outcome,
+      problem: answer.problem ?? null,
+      run: view.run,
+      at: new Date(clock(ports)),
+    });
+  } catch (error) {
+    ports.log.warn("Oxagen could not record a served call for agent feedback. The call's result stands.", {
+      tool,
+      outcome: answer.outcome,
       error: errorName(error),
     });
   }
@@ -345,10 +377,15 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     approved = { request, id: approval.id, approvers: approval.approvers };
   }
   if (verdict.errors.length > 0) {
-    return refusal(
-      `Oxagen could not decide ${tool.name}: ${verdict.errors.join(" ")} Check the arguments against the tool's input schema, then call it again.`,
-      "denied",
-    );
+    // Cedar could not read the arguments, so the input schema is the fix.
+    // Agent feedback counts it as a schema rejection (ADR-234).
+    return {
+      ...refusal(
+        `Oxagen could not decide ${tool.name}: ${verdict.errors.join(" ")} Check the arguments against the tool's input schema, then call it again.`,
+        "denied",
+      ),
+      problem: "schema_rejected",
+    };
   }
   if (verdict.decision !== "allow") return refusal(denial(agent, tool.name, verdict), "denied");
 
@@ -357,7 +394,7 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
   // nothing, so it leaves the approval for the retry instead of spending it.
   // It sits after the decision, so a policy denial is still reported as one.
   const badArguments = inputRefusal(tool.definition.inputSchema, args);
-  if (badArguments !== null) return refusal(badArguments, "failed");
+  if (badArguments !== null) return { ...refusal(badArguments, "failed"), problem: "schema_rejected" };
 
   if (environment === null) {
     return refusal(
@@ -448,7 +485,9 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     transport,
     { senders: ports.senders, signal: ports.signal, now: ports.now },
   );
-  return { result, outcome: result.isError === true ? "failed" : "allowed" };
+  return result.isError === true
+    ? { result, outcome: "failed", problem: "error_result" }
+    : { result, outcome: "allowed" };
 }
 
 function describeTool(entry: ServedTool): CallToolResult {
@@ -546,6 +585,7 @@ export async function callServed(
     const { entry } = resolved;
     const answer = await governed(view, ports, entry, args);
     await meter(view, ports, "call", entry.tool.name, entry.server.name, answer.outcome);
+    await recordCall(view, ports, entry.tool.name, entry.server.name, answer);
     return answer.result;
   }
 
@@ -571,9 +611,13 @@ export async function callServed(
     else if (entry === null) message = `${server.name} serves no tool named ${toolName}. Call ${server.name}__search to find one.`;
     const answer = refusal(message, "failed");
     await meter(view, ports, "call", entry?.tool.name ?? `${server.name}__call`, server.name, answer.outcome);
+    // A named tool whose arguments are not an object: its input schema could
+    // not take them. A call that names no tool says nothing about any tool.
+    if (entry !== null) await recordCall(view, ports, entry.tool.name, server.name, { ...answer, problem: "schema_rejected" });
     return answer.result;
   }
   const answer = await governed(view, ports, entry, inner);
   await meter(view, ports, "call", entry.tool.name, server.name, answer.outcome);
+  await recordCall(view, ports, entry.tool.name, server.name, answer);
   return answer.result;
 }

@@ -361,3 +361,23 @@ CREATE TABLE IF NOT EXISTS assistant_reply_feedback (
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (org_id, workspace_id, run_public_id, user_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
+-- Served tool calls (migration 0037, ADR-234). One append-only row per call a
+-- wrapped agent makes to a published server's tool: the server, the full tool
+-- name, the tacho session it belongs to, the metered outcome, and the problem
+-- when the tool is the reason the call failed. MCP Studio's agent feedback
+-- reads it. Tenant-scoped (chInsert/chSelect), 180-day TTL. See the migration
+-- file for the full column rationale.
+CREATE TABLE IF NOT EXISTS served_tool_calls (
+  org_id UUID,
+  workspace_id UUID,
+  server LowCardinality(String),
+  tool String,
+  run_public_id String DEFAULT '',
+  outcome LowCardinality(String),
+  problem LowCardinality(String) DEFAULT '',
+  created_at DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, workspace_id, server, tool, created_at)
+TTL toDateTime(created_at) + INTERVAL 180 DAY;

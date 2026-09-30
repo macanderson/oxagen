@@ -78,6 +78,7 @@ const CLICKHOUSE_DOMAIN_OVERRIDES: Record<string, string> = {
   sandbox_log_events: "agent", // durable code-agent sandbox command output
   router_outcomes: "billing", // verified-outcome market router cost/accuracy
   assistant_reply_feedback: "chat", // a person's verdict on an assistant reply
+  served_tool_calls: "mcp", // a wrapped agent's calls to served tools, for MCP Studio feedback
 };
 
 /**

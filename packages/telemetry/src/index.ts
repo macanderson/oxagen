@@ -42,6 +42,7 @@ export {
 export * from "./eval-item-results";
 export * from "./router-outcomes";
 export * from "./reply-feedback";
+export * from "./served-tool-calls";
 export {
   initTracer,
   shutdownTracer,

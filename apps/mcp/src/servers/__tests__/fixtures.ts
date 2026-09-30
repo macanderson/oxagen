@@ -34,6 +34,7 @@ import type {
   MeterEvent,
   PublishedTools,
   ServedAgent,
+  ServedCallRecord,
   ServedPorts,
   ServedRoute,
   ServedRun,
@@ -346,6 +347,8 @@ export interface Recorded {
   /** The runs billing was asked to admit an action for. */
   admitted: ServedRun[];
   meter: MeterEvent[];
+  /** The calls recorded for MCP Studio's agent feedback (ADR-234). */
+  calls: ServedCallRecord[];
   logs: LogLine[];
   approvals: ApprovalRequest[];
   /** The calls that asked for one more approval. */
@@ -377,6 +380,7 @@ export interface PortOptions {
   local?: (call: LocalCall) => Promise<CallToolResult>;
   answer?: (kind: RequestKind) => SendResult;
   meter?: (event: MeterEvent) => Promise<void>;
+  recordCall?: (call: ServedCallRecord) => Promise<void>;
   cedar?: () => Promise<CedarRuntime | null>;
 }
 
@@ -393,6 +397,7 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
   const recorded: Recorded = {
     admitted: [],
     meter: [],
+    calls: [],
     logs: [],
     approvals: [],
     requested: [],
@@ -461,6 +466,10 @@ export function fakePorts(options: PortOptions = {}): { ports: ServedPorts; reco
     meter: (event) => {
       recorded.meter.push(event);
       return options.meter?.(event) ?? Promise.resolve();
+    },
+    recordCall: (call) => {
+      recorded.calls.push(call);
+      return options.recordCall?.(call) ?? Promise.resolve();
     },
     cedar: options.cedar ?? requireCedarRuntime,
     log: {

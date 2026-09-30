@@ -119,6 +119,17 @@ finds every file that calls `insertToolInvocation` and fails on a bare
 `execution_step_id: null`. `src/tool-invocation-execution-join.integration.test.ts`
 runs the join against a live ClickHouse.
 
+## Served tool calls
+
+`served_tool_calls` (migration 0037) holds one row per call a wrapped agent
+makes to a published server's tool (ADR-234). The served tools in
+`apps/mcp/src/servers/call.ts` write it through `recordServedToolCall`,
+beside the governed-action meter. MCP Studio's tool panel reads
+`readServedToolFeedback` for one server: calls, schema rejections, error
+results, and retries per tool. The run is the tacho session's `tse_` id, or
+empty when the request named none. It is not a `tool_invocations` row,
+because a served call has no message id and no UUID server key.
+
 ## Tests
 
 ```bash

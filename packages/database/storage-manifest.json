@@ -4873,9 +4873,11 @@
     {
       "name": "mcp",
       "stores": [
+        "clickhouse",
         "postgres"
       ],
       "tables": [
+        "clickhouse:served_tool_calls",
         "postgres:mcp.catalog_servers",
         "postgres:mcp.consents",
         "postgres:mcp.credential_grants",
@@ -5117,6 +5119,7 @@
         "billing",
         "chat",
         "eval",
+        "mcp",
         "telemetry"
       ],
       "kind": "clickhouse",
@@ -6099,6 +6102,69 @@
         "ttl": "toDateTime(ts) + INTERVAL 14 DAY"
       },
       "name": "sandbox_log_events",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "server",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "tool",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "problem",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "mcp",
+      "id": "clickhouse:served_tool_calls",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, workspace_id, server, tool, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 180 DAY"
+      },
+      "name": "served_tool_calls",
       "store": "clickhouse",
       "tenantScoped": true
     },
