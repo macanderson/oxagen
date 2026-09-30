@@ -1990,6 +1990,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_server",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_subscription",
       "domain": "billing",
       "surfaces": [
