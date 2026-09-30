@@ -24,7 +24,7 @@ import { useActionFailure } from "./action-failure";
 export type OAuthFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 /** The codes that have their own sentence under `tools.import.oauth.failure`. */
-export const OAUTH_FAILURE_CODES = [
+const OAUTH_FAILURE_CODES = [
   "access_denied",
   "authorization_expired",
   "authorization_failed",
@@ -40,7 +40,7 @@ export const OAUTH_FAILURE_CODES = [
 type OAuthFailureCode = (typeof OAUTH_FAILURE_CODES)[number];
 
 function isOAuthFailureCode(code: string): code is OAuthFailureCode {
-  return (OAUTH_FAILURE_CODES as readonly string[]).includes(code);
+  return OAUTH_FAILURE_CODES.some((known) => known === code);
 }
 
 /** A failure known only by its code, as the callback page or the flow names it. */

@@ -21,7 +21,7 @@ import {
 /** How long an authorization server may cache the document. */
 const CACHE_SECONDS = 3600;
 
-export function mcpOAuthClientMetadata(origin: string) {
+function mcpOAuthClientMetadata(origin: string) {
   return {
     client_id: new URL(MCP_OAUTH_CLIENT_METADATA_PATH, origin).toString(),
     client_name: "Oxagen",
@@ -43,7 +43,7 @@ export function handleMcpOAuthClientMetadata(
       status: 200,
       headers: {
         "content-type": "application/json",
-        "cache-control": `public, max-age=${CACHE_SECONDS}`,
+        "cache-control": `public, max-age=${String(CACHE_SECONDS)}`,
         "access-control-allow-origin": "*",
       },
     }),
