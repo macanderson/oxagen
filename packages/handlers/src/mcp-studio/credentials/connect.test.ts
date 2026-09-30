@@ -12,6 +12,7 @@ import {
   ConnectError,
   disconnect,
   finishConnect,
+  mcpStudioAppOrigin,
   mcpStudioConnectLink,
   workspaceCredentialSource,
 } from "./connect";
@@ -34,7 +35,7 @@ const SCOPE = { orgId: randomUUID(), workspaceId: randomUUID() };
 const USER = randomUUID();
 const TARGET = { ...SCOPE, userId: USER, server: "billing", environment: "sandbox" };
 const KEY = { userId: USER, server: "billing", environment: "sandbox" };
-const REDIRECT = "https://api.example.com/oauth/mcp-studio/callback";
+const REDIRECT = "https://app.example.com/api/v1/acme/tools/mcp-studio/oauth/callback";
 const SERVER_URL = "https://billing.example.com/mcp";
 const RESOURCE_METADATA = "https://billing.example.com/.well-known/oauth-protected-resource/mcp";
 const ISSUER_METADATA = "https://auth.example.com/.well-known/oauth-authorization-server";
@@ -231,6 +232,29 @@ describe("beginConnect and finishConnect with a registered client", () => {
     const error = await refusal(finishConnect({ state: started.state, code: "code-1" }, deps(fetch)));
     expect([error.status, error.code]).toEqual([400, "state"]);
     expect(sentTo(fetch, TOKEN_URL)).toHaveLength(0);
+  });
+
+  it.each([
+    ["another operator", { userId: randomUUID() }],
+    ["in another workspace", { workspaceId: randomUUID() }],
+  ])("refuses a callback whose signed-in caller is %s, before any token request", async (_label, change) => {
+    const fetch = authServer();
+    const started = await beginConnect({ ...TARGET, redirectUri: REDIRECT }, deps(fetch));
+    const caller = { orgId: TARGET.orgId, workspaceId: TARGET.workspaceId, userId: TARGET.userId, ...change };
+    const error = await refusal(finishConnect({ state: started.state, code: "code-1", caller }, deps(fetch)));
+    expect([error.status, error.code]).toEqual([403, "not_operator"]);
+    expect(sentTo(fetch, TOKEN_URL)).toHaveLength(0);
+    expect(store.tokenFor(KEY)).toBeUndefined();
+  });
+
+  it("finishes a callback whose signed-in caller started the connect", async () => {
+    const fetch = authServer();
+    const started = await beginConnect({ ...TARGET, redirectUri: REDIRECT }, deps(fetch));
+    const caller = { orgId: TARGET.orgId, workspaceId: TARGET.workspaceId, userId: TARGET.userId };
+    await expect(finishConnect({ state: started.state, code: "code-1", caller }, deps(fetch))).resolves.toEqual({
+      ...TARGET,
+      label: "Billing API",
+    });
   });
 
   it("stores the scopes the operator asked for when the token names none", async () => {
@@ -486,22 +510,48 @@ describe("disconnect", () => {
   });
 });
 
+describe("the app origin", () => {
+  it("reads APP_URL first, the variable the api and mcp services carry", () => {
+    expect(
+      mcpStudioAppOrigin({ APP_URL: "https://oxagen.example/", NEXT_PUBLIC_APP_URL: "https://other.example" }),
+    ).toBe("https://oxagen.example");
+  });
+
+  it("falls back to NEXT_PUBLIC_APP_URL, then to production", () => {
+    expect(mcpStudioAppOrigin({ APP_URL: "not a url", NEXT_PUBLIC_APP_URL: "http://localhost:3000/x" })).toBe(
+      "http://localhost:3000",
+    );
+    expect(mcpStudioAppOrigin({})).toBe("https://app.oxagen.sh");
+  });
+
+  it("never reads the API's origin, where the browser sends no session cookie", () => {
+    expect(mcpStudioAppOrigin({ NEXT_PUBLIC_API_URL: "https://api.oxagen.sh" })).toBe("https://app.oxagen.sh");
+  });
+});
+
 describe("the connect link", () => {
-  it("points at the API's connect route with the server and environment", () => {
+  it("points at the connect route through the app's /api/v1 proxy", () => {
     expect(
       mcpStudioConnectLink({
-        apiBaseUrl: "https://api.example.com/",
+        appBaseUrl: "https://app.example.com/",
         orgSlug: "acme co",
         workspaceSlug: "tools",
         server: "billing",
         environment: "sandbox",
       }),
-    ).toBe("https://api.example.com/v1/acme%20co/tools/mcp-studio/oauth/connect?server=billing&environment=sandbox");
+    ).toBe(
+      "https://app.example.com/api/v1/acme%20co/tools/mcp-studio/oauth/connect?server=billing&environment=sandbox",
+    );
   });
 
   it("is what a workspace's credential source answers for an operator with no token", async () => {
     const source = await workspaceCredentialSource(
-      { ...SCOPE, apiBaseUrl: "https://api.example.com", orgSlug: "acme", workspaceSlug: "tools" },
+      {
+        ...SCOPE,
+        appBaseUrl: "https://app.example.com",
+        orgSlug: "acme",
+        workspaceSlug: "tools",
+      },
       { store: () => store, servers: () => Promise.resolve(servers), fetch: authServer(), now: () => clock, kms },
     );
     const resolved = await source.resolve(
@@ -511,7 +561,8 @@ describe("the connect link", () => {
     expect(resolved).toEqual({
       type: "missing",
       message: "Connect your Billing API account in Oxagen, then retry.",
-      connect_url: "https://api.example.com/v1/acme/tools/mcp-studio/oauth/connect?server=billing&environment=sandbox",
+      connect_url:
+        "https://app.example.com/api/v1/acme/tools/mcp-studio/oauth/connect?server=billing&environment=sandbox",
     });
   });
 });
