@@ -9,8 +9,8 @@
   ],
   "sensitivity": "high",
   "agent": {
-    "requiresApproval": false,
-    "riskLevel": "low",
+    "requiresApproval": true,
+    "riskLevel": "medium",
     "category": "run"
   },
   "chain": {
