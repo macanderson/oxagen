@@ -644,13 +644,19 @@ async function mergeGovernanceProposal(
       "merge_context_pr: a governance merge needs the governanceCheck and publisher seams",
     );
   }
+  // A merge the host already holds is read at its merge commit: the branch
+  // is gone after the squash. Any other merge reads the head that merges.
   const setting = await governanceModeAt(
     deps,
     repo,
     recorded,
     path,
-    recorded.headSha,
+    pr.merged && pr.mergeCommitSha ? pr.mergeCommitSha : recorded.headSha,
   );
+  // The mode in force when the PR opened. On a resume the production branch
+  // already holds the new mode, so the layout cannot say what it replaced.
+  const previousMode =
+    (recorded.governanceMode as GovernanceMode | null) ?? null;
   let approvedBy: string[] = [];
   const approve = async (heads: readonly string[]) => {
     const approval = await input.approve(heads);
@@ -785,7 +791,7 @@ async function mergeGovernanceProposal(
     detail: {
       fullName: repo.fullName,
       productionBranch: repo.defaultBranch,
-      previousMode: layout.mode,
+      previousMode,
       mode: setting,
       commitSha,
       overrodeReview: false,
@@ -799,7 +805,7 @@ async function mergeGovernanceProposal(
       proposalId: row.publicId,
       pr: row.prUrl,
       commit: commitSha,
-      previousMode: layout.mode,
+      previousMode,
       mode: setting,
       approvedBy,
       publishedVersion,
