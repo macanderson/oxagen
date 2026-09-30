@@ -680,6 +680,15 @@ async function mergeGovernanceProposal(
     }
     commitSha = pr.mergeCommitSha;
     mergedAt = requireMergedAt(pr.mergedAt, recorded.prUrl);
+    // The earlier call may have published the merge before its record
+    // failed. The version store says so, as it does for a record's resume, so
+    // null keeps meaning that the merge did not go live.
+    const publisher = publisherFor(scope, deps.github);
+    const stored = await publisher.store.versionAt(
+      publisher.repository(repo),
+      commitSha,
+    );
+    publishedVersion = stored?.published ? stored.version : null;
     await deps.github.deleteBranch(repo, recorded.branch);
   } else {
     const checks: GovernanceCheckContext = {

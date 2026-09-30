@@ -167,6 +167,7 @@ export function ContextPrPanel({
   }
   const { value } = read;
   const { pr, merged, onMerge, governanceMode, status } = value;
+  const governance = value.kind === "governance";
   const url = pr === null ? null : parsePullRequestUrl(pr.url);
   const mode =
     governanceMode === null ? t("modeUnread") : t(`modes.${governanceMode}`);
@@ -343,7 +344,9 @@ export function ContextPrPanel({
             proposalId={value.proposalId}
             blocked={status !== "checks_passed"}
           />
-          {reviewed && canMergeWithoutReview && unapproved ? (
+          {/* merge_pr_without_review refuses a governance change: it lands
+              only for an approver (ADR-232). */}
+          {reviewed && canMergeWithoutReview && unapproved && !governance ? (
             <MergeWithoutReview
               org={at.org}
               ws={at.ws}
@@ -356,6 +359,7 @@ export function ContextPrPanel({
             ws={at.ws}
             proposalId={value.proposalId}
             status={status}
+            governance={governance}
           />
         </div>
       ) : null}

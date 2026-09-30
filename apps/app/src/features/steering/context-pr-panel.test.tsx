@@ -293,6 +293,19 @@ describe("the review each governance mode asks for", () => {
     expect(mergeWithoutReview()).toBeNull();
     expect(approve()).toBeEnabled();
   });
+
+  it("offers a governance change only Approve, Merge, and Dismiss, which its server paths accept (#4795)", () => {
+    renderPanel(readOk(contextPr("checks_passed", { kind: "governance" })), {
+      approvals: 0,
+      canMergeWithoutReview: true,
+    });
+    // merge_pr_without_review and open_context_pr refuse a governance change.
+    expect(mergeWithoutReview()).toBeNull();
+    expect(screen.queryByTestId("open-context-pr")).toBeNull();
+    expect(approve()).toBeEnabled();
+    expect(merge()).toBeEnabled();
+    expect(screen.getByTestId("dismiss-proposal")).toBeInTheDocument();
+  });
 });
 
 describe("a drifted managed block", () => {

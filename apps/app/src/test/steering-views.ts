@@ -175,6 +175,7 @@ export function contextPr(
   return {
     proposalId: PROPOSAL_ID,
     lineage: LINEAGE,
+    kind: "rule",
     status,
     governanceMode: opened ? "team" : null,
     pr: opened

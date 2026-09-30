@@ -110,6 +110,7 @@ export function contextPrView(
   return {
     proposalId: row.publicId,
     lineageId: row.lineageId,
+    kind: row.kind as ProposalKind,
     status: row.status as ProposalStatus,
     governanceMode: mode,
     pr:

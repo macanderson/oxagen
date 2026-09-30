@@ -42,6 +42,18 @@
       "lineageId": {
         "type": "string"
       },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "rule",
+          "constraint",
+          "procedure",
+          "fact",
+          "memory",
+          "preference",
+          "governance"
+        ]
+      },
       "status": {
         "type": "string",
         "enum": [
@@ -393,6 +405,7 @@
     "required": [
       "proposalId",
       "lineageId",
+      "kind",
       "status",
       "governanceMode",
       "pr",
