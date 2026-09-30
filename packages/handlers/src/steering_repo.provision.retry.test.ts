@@ -12,6 +12,7 @@ import {
   type RetrySteeringRepoProvisionDeps,
 } from "./steering_repo.provision.retry";
 import type {
+  SteeringConnection,
   SteeringRepoProvisionRequest,
   SteeringRepoScope,
   SteeringRepoState,
@@ -39,6 +40,7 @@ function failedState(overrides: Partial<SteeringRepoState> = {}): SteeringRepoSt
     commit_sha: "abc123",
     deployment_id: 9,
     binding_id: "rpb_1",
+    connection_choices: [],
     updated_at: "2026-09-28T00:00:00.000Z",
     ...overrides,
   };
@@ -51,6 +53,7 @@ interface Harness {
   states: Map<string, SteeringRepoState | null>;
   saves: Array<{ scope: SteeringRepoScope; state: SteeringRepoState }>;
   sends: Array<{ data: SteeringRepoProvisionRequest; eventId: string }>;
+  connections: Array<{ orgId: string; connection: SteeringConnection }>;
   setSendImpl: (fn: SendImpl) => void;
 }
 
@@ -58,6 +61,7 @@ function harness(initial: SteeringRepoState | null): Harness {
   const states = new Map<string, SteeringRepoState | null>([["ws_1", initial]]);
   const saves: Harness["saves"] = [];
   const sends: Harness["sends"] = [];
+  const connections: Harness["connections"] = [];
   let sendImpl: SendImpl = async () => {};
   const deps: RetrySteeringRepoProvisionDeps = {
     loadState: async (scope) => {
@@ -69,13 +73,23 @@ function harness(initial: SteeringRepoState | null): Harness {
       states.set(key, state);
       saves.push({ scope, state });
     },
+    saveConnection: async (orgId, connection) => {
+      connections.push({ orgId, connection });
+    },
     send: async (data, eventId) => {
       sends.push({ data, eventId });
       await sendImpl(data, eventId);
     },
     now: () => NOW,
   };
-  return { deps, states, saves, sends, setSendImpl: (fn) => (sendImpl = fn) };
+  return {
+    deps,
+    states,
+    saves,
+    sends,
+    connections,
+    setSendImpl: (fn) => (sendImpl = fn),
+  };
 }
 
 beforeEach(() => {
@@ -240,5 +254,56 @@ describe("retry_steering_repo_provision handler", () => {
     await expect(
       handler(steeringRepoProvisionRetry.input.parse({}), TEST_CTX),
     ).resolves.toEqual({ status: "failed" });
+  });
+
+  describe("with a connection to choose", () => {
+    const CHOICES: SteeringConnection[] = [
+      { provider: "github", installation_id: 11, account_login: "acme" },
+      { provider: "github", installation_id: 12, account_login: "acme-old" },
+    ];
+    const choosing = () =>
+      failedState({
+        status: "blocked",
+        step: null,
+        failed_step: "pick_connection",
+        error: { code: "choose_connection", message: "Choose one." },
+        provider: null,
+        repository: null,
+        connection_choices: CHOICES,
+      });
+    const retry = (h: Harness, input: unknown) =>
+      createRetrySteeringRepoProvisionHandler(h.deps)(
+        steeringRepoProvisionRetry.input.parse(input),
+        TEST_CTX,
+      );
+
+    it("stores the picked connection, then re-sends the job", async () => {
+      const h = harness(choosing());
+      await expect(
+        retry(h, { connection: { provider: "github", id: 12 } }),
+      ).resolves.toEqual({ status: "provisioning" });
+      expect(h.connections).toEqual([
+        { orgId: "org_1", connection: CHOICES[1] },
+      ]);
+      expect(h.states.get("ws_1")).toMatchObject({
+        status: "provisioning",
+        error: null,
+        connection_choices: [],
+      });
+      expect(h.sends).toHaveLength(1);
+    });
+
+    it("refuses a connection the setup did not find, and changes nothing", async () => {
+      const h = harness(choosing());
+      await expect(
+        retry(h, { connection: { provider: "github", id: 99 } }),
+      ).rejects.toMatchObject({ code: "invalid_input", reason: "unknown_connection" });
+      await expect(
+        retry(h, { connection: { provider: "gitlab", id: 11 } }),
+      ).rejects.toBeInstanceOf(HandlerError);
+      expect(h.connections).toEqual([]);
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
+    });
   });
 });

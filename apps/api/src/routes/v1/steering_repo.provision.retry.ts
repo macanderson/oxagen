@@ -7,8 +7,10 @@ import type { AppEnv } from "../../app";
 
 /**
  * Re-send a failed or blocked steering repo setup so it runs again
- * (`retry_steering_repo_provision`, #4750). The body is `{}`. Org Owners and
- * Admins only. Mounted on the org-scoped router.
+ * (`retry_steering_repo_provision`, #4750). The body is `{}`, or
+ * `{ connection: { provider, id } }` for a setup that stopped with
+ * `choose_connection` (#4875). Org Owners and Admins only. Mounted on the
+ * org-scoped router.
  */
 export const steeringRepoProvisionRetryRoute = new Hono<AppEnv>();
 

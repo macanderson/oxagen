@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     }),
   ),
   deps: vi.fn((options: unknown) => ({ deps: options })),
+  pick: vi.fn(async (_scope: unknown, _pick: unknown): Promise<void> => {}),
 }));
 
 vi.mock("./lib/capability-role-guard", () => ({
@@ -24,6 +25,9 @@ vi.mock("./steering-repo/import-run", () => ({
 }));
 vi.mock("./steering-repo/import-deps", () => ({
   steeringImportDeps: mocks.deps,
+}));
+vi.mock("./steering-repo/connection-pick", () => ({
+  applyWorkspaceConnectionPick: mocks.pick,
 }));
 
 import { importWorkspaceSteeringHandler } from "./steering_repo.import";
@@ -39,6 +43,8 @@ beforeEach(() => {
   mocks.actor.mockResolvedValue("u_1");
   mocks.run.mockReset();
   mocks.run.mockResolvedValue({ outcome: "imported" });
+  mocks.pick.mockReset();
+  mocks.pick.mockResolvedValue(undefined);
 });
 
 describe("import_workspace_steering handler", () => {
@@ -54,6 +60,35 @@ describe("import_workspace_steering handler", () => {
     expect(mocks.role.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.run.mock.invocationCallOrder[0] as number,
     );
+  });
+
+  it("stores a picked connection before the run, and none without one", async () => {
+    await run({ connection: { provider: "github", id: 11 } });
+    expect(mocks.pick).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      { provider: "github", id: 11 },
+    );
+    expect(mocks.run).toHaveBeenCalledWith(
+      { orgId: "org_1", workspaceId: "ws_1" },
+      {},
+      { deps: { actorUserId: "u_1" } },
+    );
+    expect(mocks.pick.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.run.mock.invocationCallOrder[0] as number,
+    );
+    mocks.pick.mockClear();
+    await run();
+    expect(mocks.pick).not.toHaveBeenCalled();
+  });
+
+  it("runs nothing when the picked connection is refused", async () => {
+    mocks.pick.mockRejectedValue(
+      new HandlerError({ code: "invalid_input", reason: "unknown_connection" }),
+    );
+    await expect(
+      run({ connection: { provider: "github", id: 99 } }),
+    ).rejects.toMatchObject({ reason: "unknown_connection" });
+    expect(mocks.run).not.toHaveBeenCalled();
   });
 
   it("passes the rule kinds and constraint effects the caller chose", async () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { steeringConnectionPick } from "./steering_repo.get";
 
 /**
  * retry_steering_repo_provision: re-send a failed or blocked steering repo
@@ -14,6 +15,12 @@ import { registerCapability } from "../registry";
  * starts over. It refuses a scope with no steering repo state to retry
  * (not_found `no_steering_repo_state`) and is a no-op, answering the current
  * status, when that status is not already `failed` or `blocked`.
+ *
+ * A setup that stopped with `choose_connection` takes `connection`: one of the
+ * GitHub organizations or GitLab groups `get_steering_repo` lists in
+ * `connectionChoices`. The handler stores it as the organization's steering
+ * connection before it re-sends the job, and refuses one that is not on the
+ * list (invalid_input `unknown_connection`).
  *
  * Org Owners and Admins only, the same as `repair_steering_repo`. Retry is
  * the health banner's other admin button. Stella can run it too, and each
@@ -37,7 +44,15 @@ export const steeringRepoProvisionRetry = registerCapability({
     workspace: {},
   },
   agent: { requiresApproval: true, riskLevel: "medium", category: "vcs" },
-  input: z.object({}).strict(),
+  input: z
+    .object({
+      connection: steeringConnectionPick
+        .describe(
+          "The GitHub organization or GitLab group to create steering repos in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices.",
+        )
+        .optional(),
+    })
+    .strict(),
   output: z.object({
     status: z.enum(["provisioning", "ready", "failed", "blocked"]),
   }),

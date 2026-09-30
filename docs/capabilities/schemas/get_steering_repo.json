@@ -33,6 +33,7 @@
       "status": {
         "type": "string",
         "enum": [
+          "not_started",
           "provisioning",
           "ready",
           "failed",
@@ -215,6 +216,61 @@
           ],
           "additionalProperties": false
         }
+      },
+      "legacySource": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "fullName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "fullName",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "connectionChoices": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ]
+            },
+            "id": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The GitHub organization's login or the GitLab group's path."
+            }
+          },
+          "required": [
+            "provider",
+            "id",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "description": "The GitHub organizations and GitLab groups to choose from when setup stopped with choose_connection. Empty otherwise."
       }
     },
     "required": [
@@ -226,7 +282,9 @@
       "repository",
       "publishedVersion",
       "health",
-      "differences"
+      "differences",
+      "legacySource",
+      "connectionChoices"
     ],
     "additionalProperties": false
   }

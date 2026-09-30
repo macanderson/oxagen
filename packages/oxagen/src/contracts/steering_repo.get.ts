@@ -22,6 +22,42 @@ export const STEERING_REPO_STEP_NAMES = [
 
 export const steeringRepoStep = z.enum(STEERING_REPO_STEP_NAMES);
 
+/**
+ * What the read answers for provisioning: the job's own states, plus
+ * `not_started` for a workspace that never recorded one. `create_workspace`
+ * answers the job's states alone, so this enum stays separate from
+ * `steeringRepoProvisionStatus`.
+ */
+export const steeringRepoReadStatus = z.enum([
+  "not_started",
+  ...steeringRepoProvisionStatus.options,
+]);
+
+/**
+ * A GitHub organization or a GitLab group the owner's tokens reach, which
+ * setup could create steering repos in. `id` is the GitHub installation id or
+ * the GitLab group id.
+ */
+export const steeringConnectionChoice = z.object({
+  provider: z.enum(["github", "gitlab"]),
+  id: z.number().int().positive(),
+  name: z
+    .string()
+    .min(1)
+    .describe("The GitHub organization's login or the GitLab group's path."),
+});
+
+/**
+ * The connection a person picks when setup stopped with `choose_connection`.
+ * It must be one of the choices `get_steering_repo` lists.
+ */
+export const steeringConnectionPick = z
+  .object({
+    provider: z.enum(["github", "gitlab"]),
+    id: z.number().int().positive(),
+  })
+  .strict();
+
 /** One prescribed setting that differs, with both values rendered as text. */
 export const steeringRepoDifference = z.object({
   setting: z
@@ -41,7 +77,7 @@ export const steeringRepoDifference = z.object({
 });
 
 export const steeringRepoView = z.object({
-  status: steeringRepoProvisionStatus,
+  status: steeringRepoReadStatus,
   step: steeringRepoStep
     .nullable()
     .describe("The last provisioning step that finished, or null before the first."),
@@ -70,6 +106,17 @@ export const steeringRepoView = z.object({
     .nullable()
     .describe("The settings health, or null before the first health read."),
   differences: z.array(steeringRepoDifference),
+  legacySource: z
+    .object({ fullName: z.string(), url: z.string().url() })
+    .nullable()
+    .describe(
+      "The code repository that still steers the workspace through its .oxagen/ tree, or null. import_workspace_steering moves it to a steering repo.",
+    ),
+  connectionChoices: z
+    .array(steeringConnectionChoice)
+    .describe(
+      "The GitHub organizations and GitLab groups to choose from when setup stopped with choose_connection. Empty otherwise.",
+    ),
 });
 
 /**
@@ -83,8 +130,10 @@ export const steeringRepoView = z.object({
  * and the differing settings come from the last health read.
  *
  * A workspace whose provisioning has not recorded any state answers
- * `provisioning` with every other field null and no differences, so every
- * page that shows the banner keeps rendering.
+ * `not_started` with every other provisioning field null and no differences,
+ * so every page that shows the banner keeps rendering and no page draws a
+ * step as running that no job runs. `legacySource` names the code repository
+ * that still steers a workspace made before steering repos existed.
  */
 export const steeringRepoGet = registerCapability({
   name: "get_steering_repo",

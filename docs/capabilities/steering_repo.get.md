@@ -27,7 +27,7 @@ None. The org and workspace come from the capability context.
 
 | Field | Type | Description |
 |---|---|---|
-| `status` | `provisioning`, `ready`, `failed`, or `blocked` | the provisioning status |
+| `status` | `not_started`, `provisioning`, `ready`, `failed`, or `blocked` | the provisioning status. `not_started` means the workspace never recorded a setup |
 | `step` | step or null | the last provisioning step that finished |
 | `failedStep` | step or null | the step that failed or stopped |
 | `error` | `{ code, message }` or null | why the step failed or stopped. `steering_reauthorize` asks an organization owner to authorize the Oxagen GitHub App again |
@@ -36,6 +36,8 @@ None. The org and workspace come from the capability context.
 | `publishedVersion` | positive integer or null | the published steering version |
 | `health` | `healthy`, `drifted`, `disconnected`, `diverged`, or null | the settings health from the last health read, null before the first |
 | `differences` | array | each prescribed setting that differs: `setting`, `expected`, `actual`, `changedBy`, and `changedAt` |
+| `legacySource` | `{ fullName, url }` or null | the code repository that still steers the workspace through its `.oxagen/` tree. [import_workspace_steering](steering_repo.import.md) moves that steering to a steering repo |
+| `connectionChoices` | array | the GitHub organizations and GitLab groups to choose from when setup stopped with `choose_connection`: `provider`, `id` (the installation id or the group id), and `name`. Empty otherwise |
 
 The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `register_webhook`, `publish_version`, and `bind_repository`.
 
@@ -49,7 +51,13 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 
 ## No provisioning state
 
-A workspace with no `steering_repo` state answers `status: "provisioning"` with every other field null and no differences. The read does not fail, because the banner that calls it sits on every page of the workspace.
+A workspace with no `steering_repo` state answers `status: "not_started"` with every other provisioning field null and no differences (#4875). Before #4875 it answered `provisioning`, which read the same as a setup whose job was queued. The read does not fail, because the banner that calls it sits on every page of the workspace.
+
+A workspace made before steering repos existed has no state, and its old main repository still steers it. `legacySource` names that repository. Setup for such a workspace runs through [import_workspace_steering](steering_repo.import.md), because provisioning stops with `steering_import_required` while a code repository holds the workspace's steering head.
+
+## Choosing a connection
+
+When the owner's tokens reach more than one GitHub organization or GitLab group, setup stops at `pick_connection` with `choose_connection` and lists them in `connectionChoices`. Pass one as `connection` to [retry_steering_repo_provision](steering_repo.provision.retry.md), or to `import_workspace_steering` for a workspace with a `legacySource`.
 
 ## Retry
 
