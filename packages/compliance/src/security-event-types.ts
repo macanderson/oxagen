@@ -420,6 +420,12 @@ export interface GovernanceChangeDetail {
   proposalId?: string;
   /** The pull request that carried the change. */
   pullRequest?: string | null;
+  /**
+   * True when the repository sync found the change on the production branch
+   * with no Oxagen merge behind it: a pull request merged on the host, or a
+   * direct push (#4795). The actor is null, because no Oxagen user made it.
+   */
+  landedOutsideOxagen?: boolean;
 }
 
 /**

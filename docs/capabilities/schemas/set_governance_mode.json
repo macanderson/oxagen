@@ -149,6 +149,17 @@
       },
       "overrodeReview": {
         "type": "boolean"
+      },
+      "proposalId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
@@ -161,7 +172,8 @@
       "path",
       "commitSha",
       "pullRequest",
-      "overrodeReview"
+      "overrodeReview",
+      "proposalId"
     ],
     "additionalProperties": false
   }

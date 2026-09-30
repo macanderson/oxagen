@@ -177,13 +177,24 @@ export const checkResultSchema = z
 export type CheckResult = z.infer<typeof checkResultSchema>;
 
 /** A lineage id: the file stem under .oxagen/rules/. Shared with handlers that read an id from input. */
+/**
+ * A record's lineage id, with `governance` held back. Every governance
+ * proposal holds that lineage, and the open-PR index keys on it, so a record
+ * on it would share the one governance PR slot (#4795). The lookahead keeps
+ * the rule in the one pattern, so the field keeps a plain string schema and
+ * its description.
+ */
+const RECORD_LINEAGE_ID = new RegExp(
+  `^(?!${GOVERNANCE_LINEAGE}$)${CONTEXT_RECORD_LINEAGE.source.replace(/^\^/, "")}`,
+);
+
 export const lineageIdSchema = z
   .string()
   .min(1)
   .max(200)
   .regex(
-    CONTEXT_RECORD_LINEAGE,
-    "a lineage id is lowercase letters, digits, dots and hyphens (e.g. ctx.release.notes-format)",
+    RECORD_LINEAGE_ID,
+    `a lineage id is lowercase letters, digits, dots and hyphens (e.g. ctx.release.notes-format). The id ${GOVERNANCE_LINEAGE} is reserved for governance changes`,
   );
 
 /** The record a proposal asks to publish. */

@@ -26,20 +26,44 @@
 //      repository the sync cannot link, is a warning.
 //   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset. A
-//      proposal a merge from Oxagen has claimed is left to that merge.
+//      proposal a merge from Oxagen has claimed is left to that merge. A
+//      merged governance PR publishes no record, so its row reads merged with
+//      its merge commit and nothing else (#4795).
 //   7. The sync state, and a check on the head commit naming every problem.
+//      Then the governance change, when the head moved: a governance mode in
+//      steering/governance.toml that differs from the last synced head's, on
+//      a commit Oxagen's records do not hold, landed outside Oxagen. The sync
+//      records it as `steering.governance_changed`, and as
+//      `steering.governance_overridden` when the mode it replaced asked for
+//      review. Every Oxagen merge writes an `Oxagen-Version` trailer, stores
+//      that version, and records its own event, so the sync records only the
+//      changes nobody else does. A trailer with no record behind it counts as
+//      outside, because anyone who can push can write one.
 //   8. The workspace's steering repository published as its next steering
-//      version (#4447), when a publisher is wired. The publisher reads that
-//      repository's head itself, since the head above is the main code
-//      repository's. A publish that fails is a warning: the registry already
-//      matches the branch, and the next sync tries again.
+//      version (#4447), when a publisher is wired. The publisher resolves the
+//      steering head and reads it again under its own lock. A publish that
+//      fails is a warning: the registry already matches the branch, and the
+//      next sync tries again.
+import { emitSecurityEvent } from "@oxagen/database/security";
 import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
   type CheckResult,
+  type GovernanceMode,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
-import type { FileIssue } from "@oxagen/oxagen/steering-repo/files";
-import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
+import {
+  type FileIssue,
+  readTomlFile,
+} from "@oxagen/oxagen/steering-repo/files";
+import {
+  governanceSchema,
+  resolveGovernance,
+} from "@oxagen/oxagen/steering-repo/governance";
+import {
+  GOVERNANCE_TOML_PATH,
+  WORKSPACE_TOML_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
+import type { SecurityEventInput } from "@oxagen/telemetry";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -73,8 +97,13 @@ import {
   readWorkspaceToml,
 } from "./repository.workspace-toml";
 import { withToolProjection } from "./mcp-studio/publish-deps";
+import { versionTrailer } from "./steering-repo/diverged";
 import { readSteeringHealth } from "./steering-repo/health.read";
-import { steeringSyncPublish } from "./steering-repo/publisher";
+import {
+  steeringRepositoryKey,
+  steeringSyncPublish,
+} from "./steering-repo/publisher";
+import { postgresVersionStore } from "./steering-repo/version-store";
 
 /** What one publish of the workspace's steering repository did. */
 export interface SyncPublished {
@@ -93,9 +122,8 @@ export interface SyncPublished {
  * Publishes the head of the workspace's steering repository as its next
  * steering version (@oxagen/steering-bundle `publish`). It takes only the
  * sync's scope. The port resolves the steering repository and reads its
- * production head itself, because this sync reads the main code repository
- * (ADR-184), and a code repository's head is never a steering head. It
- * answers null when the workspace has no steering repository to publish.
+ * production head itself, under the publisher's lock. It answers null when
+ * the repository is in the legacy layout and has no bundle to publish.
  * `steeringSyncPublish` (./steering-repo/publisher) builds it.
  */
 export type SyncPublish = (scope: {
@@ -120,6 +148,22 @@ export interface SyncDeps {
    * (ADR-212). Unset, the sync leaves every head alone.
    */
   reconcileLinks?: ReconcileLinks;
+  /**
+   * Records a governance change that landed outside Oxagen (#4795). Unset,
+   * the sync still finds the change and answers it in the outcome.
+   */
+  emit?: (event: SecurityEventInput) => void;
+  /**
+   * The steering version Oxagen stored at a commit of the workspace's
+   * steering repository, or null. A merge Oxagen made stores its version, so
+   * this backs the commit's `Oxagen-Version` trailer (#4795). Unset, only a
+   * governance proposal Oxagen merged backs it.
+   */
+  steeringVersionAt?: (
+    scope: { orgId: string; workspaceId: string },
+    repo: SteeringRepository,
+    commitSha: string,
+  ) => Promise<{ version: number } | null>;
 }
 
 export function syncDeps(): SyncDeps {
@@ -130,6 +174,9 @@ export function syncDeps(): SyncDeps {
     steering: postgresSteeringStore,
     now: () => new Date(),
     reconcileLinks: reconcileWorkspaceLinks,
+    emit: emitSecurityEvent,
+    steeringVersionAt: (scope, repo, commitSha) =>
+      postgresVersionStore(scope).versionAt(steeringRepositoryKey(repo), commitSha),
     // The same publisher merge_context_pr calls, over the same host, so a
     // merge made on the host reaches the same version sequence.
     // The publish refuses while the steering repo is not healthy (S2).
@@ -159,6 +206,22 @@ export interface SyncOutcome {
   retryAfterSeconds: number | null;
   /** What publishing the steering repository did, or null when nothing published it. */
   published?: SyncPublished | null;
+  /**
+   * The governance change this sync found on the production branch with no
+   * Oxagen merge behind it, or null.
+   */
+  governanceChange: GovernanceChange | null;
+}
+
+/** A governance mode that changed on the production branch outside Oxagen. */
+interface GovernanceChange {
+  previousMode: GovernanceMode;
+  mode: GovernanceMode;
+  /** The commit that last changed steering/governance.toml. */
+  commitSha: string;
+  /** The governance proposal whose PR merged as that commit, or null for a push. */
+  proposalId: string | null;
+  pullRequest: string | null;
 }
 
 /** How long a merge Oxagen made is left to `merge_context_pr` to publish. */
@@ -392,6 +455,7 @@ export async function syncWorkspaceSteering(
     proposals: { merged: 0, rejected: 0, stale: 0 },
     findings: [],
     retryAfterSeconds: null,
+    governanceChange: null,
   };
 
   let repo: SteeringRepository;
@@ -609,9 +673,20 @@ export async function syncWorkspaceSteering(
     }
     for (const { row, pr } of merged) {
       // A governance PR publishes no record, so there is none to link. The
-      // row stays open until the sync's governance branch records the merge
-      // (#4795).
-      if (row.kind === "governance") continue;
+      // row reads merged with its commit, and no approver, because nobody
+      // approved it in Oxagen (#4795).
+      if (row.kind === "governance") {
+        const linked = await deps.store.linkMergedGovernance(scope, row.id, {
+          mergedCommit: pr.mergeCommitSha ?? head,
+          mergedAt: pr.mergedAt ?? now,
+          noClaimSince,
+        });
+        if (linked) {
+          outcome.proposals.merged += 1;
+          await dropBranch(deps, repo, row);
+        }
+        continue;
+      }
       // A file the sync refused did not publish, so the record still holds
       // its last good version. Linking the proposal to that version would
       // report the merge as published when it was not.
@@ -702,6 +777,20 @@ export async function syncWorkspaceSteering(
           ? "synced"
           : "current";
     outcome.retryAfterSeconds = defer.size > 0 ? MERGE_GRACE_SECONDS : null;
+    // The governance change, once the state names this head. A sync that
+    // failed before here reads the same two heads again on its next run, so
+    // the change is recorded once.
+    if (headMoved && prior?.headSha) {
+      outcome.governanceChange = await governanceChangeOutside(
+        deps,
+        scope,
+        repo,
+        { from: prior.headSha, to: head },
+        pulls,
+      );
+      if (outcome.governanceChange)
+        recordGovernanceChange(deps, scope, repo, outcome.governanceChange);
+    }
     outcome.published = await publishSteering(deps, scope);
     logger.info(
       {
@@ -722,6 +811,122 @@ export async function syncWorkspaceSteering(
     await recordFailure(deps, scope, prior, err, repo);
     throw err;
   }
+}
+
+/** The governance mode steering/governance.toml declares at `ref`, or null. */
+async function governanceModeAt(
+  github: SteeringHost,
+  repo: SteeringRepository,
+  ref: string,
+): Promise<GovernanceMode | null> {
+  const text = await github.readFile(repo, GOVERNANCE_TOML_PATH, ref);
+  if (text === null) return null;
+  const read = readTomlFile(text, "governance/v1", governanceSchema);
+  return read.ok ? resolveGovernance(read.value).mode : null;
+}
+
+/**
+ * The governance change between two synced heads that no Oxagen merge made,
+ * or null. It compares the modes, not the files, so a comment or an unrelated
+ * setting changes nothing here. A file missing or unreadable at either head is
+ * a layout change or a file problem, which the checks and health report, and
+ * not a mode change. A change whose commit carries `Oxagen-Version` came
+ * through landSteeringPr, which merge_context_pr and set_governance_mode both
+ * use, and each of them records its own event. Anyone who can push can write
+ * that trailer too, so it counts only when Oxagen's records hold the commit
+ * (oxagenMerged).
+ */
+async function governanceChangeOutside(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  heads: { from: string; to: string },
+  pulls: readonly { row: ProposalRow; pr: PullState }[],
+): Promise<GovernanceChange | null> {
+  const { github } = deps;
+  const mode = await governanceModeAt(github, repo, heads.to);
+  if (mode === null) return null;
+  const previousMode = await governanceModeAt(github, repo, heads.from);
+  if (previousMode === null || previousMode === mode) return null;
+  const commit = await github.lastCommitForPath(
+    repo,
+    GOVERNANCE_TOML_PATH,
+    heads.to,
+  );
+  if (commit === null) return null;
+  const trailer = versionTrailer(commit.message);
+  if (trailer !== null && (await oxagenMerged(deps, scope, repo, commit.sha, trailer)))
+    return null;
+  const carried = pulls.find(
+    ({ row, pr }) =>
+      row.kind === "governance" && pr.merged && pr.mergeCommitSha === commit.sha,
+  );
+  return {
+    previousMode,
+    mode,
+    commitSha: commit.sha,
+    proposalId: carried?.row.publicId ?? null,
+    pullRequest: carried?.row.prUrl ?? null,
+  };
+}
+
+/**
+ * Whether Oxagen merged `commitSha`: a governance proposal it merged names
+ * the commit, or the steering version store holds the commit at the version
+ * its trailer names. The trailer alone proves nothing, because anyone who can
+ * push to the production branch can write it (#4795).
+ */
+async function oxagenMerged(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  commitSha: string,
+  trailer: number,
+): Promise<boolean> {
+  if (await deps.store.governanceMergedAt(scope, commitSha)) return true;
+  const stored = await deps.steeringVersionAt?.(scope, repo, commitSha);
+  return stored?.version === trailer;
+}
+
+/**
+ * Record a governance change that landed outside Oxagen. Nobody in Oxagen
+ * made it, so the actor is null. It skipped the review route whenever the mode
+ * it replaced asked for one, so it records `steering.governance_overridden`
+ * then too, as set_governance_mode does for Apply now.
+ */
+function recordGovernanceChange(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  change: GovernanceChange,
+): void {
+  if (!deps.emit) return;
+  const overrodeReview = change.previousMode !== "solo";
+  const base = {
+    actorUserId: null,
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    capability: null,
+    outcome: "success" as const,
+    ip: null,
+    userAgent: null,
+    requestId: null,
+    detail: {
+      fullName: repo.fullName,
+      productionBranch: repo.defaultBranch,
+      previousMode: change.previousMode,
+      mode: change.mode,
+      commitSha: change.commitSha,
+      overrodeReview,
+      landedOutsideOxagen: true,
+      ...(change.proposalId !== null
+        ? { proposalId: change.proposalId, pullRequest: change.pullRequest }
+        : {}),
+    },
+  };
+  deps.emit({ ...base, eventType: "steering.governance_changed" });
+  if (overrodeReview)
+    deps.emit({ ...base, eventType: "steering.governance_overridden" });
 }
 
 /**

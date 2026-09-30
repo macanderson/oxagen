@@ -3,6 +3,7 @@ import {
   CHECK_NAMES,
   checkResultSchema,
   constraintEffectSchema,
+  GOVERNANCE_LINEAGE,
   proposalStatusSchema,
   proposedRecordSchema,
 } from "./context.steering.shared";
@@ -50,6 +51,19 @@ describe("steering vocabulary", () => {
       proposedRecordSchema.safeParse({ ...base, lineageId: "Ctx.Upper" })
         .success,
     ).toBe(false);
+  });
+
+  it("reserves the governance lineage for governance changes", () => {
+    const r = proposedRecordSchema.safeParse({
+      ...base,
+      lineageId: GOVERNANCE_LINEAGE,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0]?.path).toEqual(["lineageId"]);
+    expect(
+      proposedRecordSchema.safeParse({ ...base, lineageId: "ctx.governance" })
+        .success,
+    ).toBe(true);
   });
 
   it("trims a title and refuses a blank one", () => {

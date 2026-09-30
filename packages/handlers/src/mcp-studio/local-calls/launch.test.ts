@@ -63,6 +63,35 @@ describe("launchSpecFor", () => {
     expect(launchSpecFor("files", lockSource, source)).toEqual(FILES_LAUNCH);
   });
 
+  it("leaves a PyPI lock's file out of the launch, which the machine's strict schema takes (ADR-233)", () => {
+    const source = filesSource();
+    if (source.type !== "registry") throw new Error("the files fixture is a registry server");
+    const wheel = "https://files.pythonhosted.org/packages/ab/cd/acme_files-1.4.0-py3-none-any.whl";
+    const lockSource: McpLockSource = {
+      type: "registry",
+      registry: source.registry,
+      server: source.server,
+      version: source.version,
+      package: {
+        name: "acme-files",
+        version: "1.4.0",
+        digest: FILES_DIGEST,
+        registry_type: "pypi",
+        file: { name: "acme_files-1.4.0-py3-none-any.whl", url: wheel },
+      },
+      command: "uvx",
+      args: ["--from", wheel, "acme-files", "${WORK_DIR}"],
+    };
+    const launch = launchSpecFor("files", lockSource, source);
+    expect(launch?.package).toStrictEqual({
+      name: "acme-files",
+      version: "1.4.0",
+      digest: FILES_DIGEST,
+      registry_type: "pypi",
+    });
+    expect(launchSpecSchema.safeParse(launch).success).toBe(true);
+  });
+
   it("keeps each ${NAME} in args for the machine to fill", () => {
     expect(launchSpecFor("files", filesLock(), filesSource())?.args).toContain("${WORK_DIR}");
   });
