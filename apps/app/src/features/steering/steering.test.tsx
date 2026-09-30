@@ -1560,6 +1560,9 @@ describe("Assignments, the delivery report", () => {
 
   it("reads only delivery counts and distinguishes missing manifests from zero delivery", async () => {
     const calls = await renderSteering("/assignments", { agents });
+    expect(
+      document.querySelector("[data-harness-badge] [data-harness-mark]"),
+    ).toHaveAttribute("data-harness-mark", "claude-code");
     expect(calls.deliveries).toEqual([[ctx]]);
     // The hub's count, then the whole list for the Scope panel.
     expect(calls.records).toEqual([

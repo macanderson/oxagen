@@ -27,6 +27,7 @@ function harness(
     runs?: ReturnType<typeof run>[];
     unmetered?: UnmeteredRuns;
     names?: Record<string, string>;
+    harnesses?: Record<string, string>;
   } = {},
 ) {
   const readDailyTotals = vi.fn(async () => over.daily ?? []);
@@ -44,11 +45,15 @@ function harness(
         ]),
       ),
   );
+  const readRunHarnesses = vi.fn(
+    async () => new Map(Object.entries(over.harnesses ?? {})),
+  );
   const handler = createSpendGetHandler({
     readDailyTotals,
     readRunTotals,
     readUnmeteredRuns,
     readRunNames,
+    readRunHarnesses,
   });
   return {
     handler,
@@ -56,6 +61,7 @@ function harness(
     readRunTotals,
     readUnmeteredRuns,
     readRunNames,
+    readRunHarnesses,
   };
 }
 
@@ -433,6 +439,7 @@ describe("get_spend day series and top runs", () => {
       daily: [daily({ groupKind: "agent", groupKey: "acme.core.cc" })],
       runs,
       names: { [costliest.runId]: "Fix the billing test" },
+      harnesses: { [costliest.runId]: "codex" },
     });
     const out = await h.handler({ period: PERIOD, groupBy: "agent" }, ctx());
     const top = out.rows[0]?.topRuns ?? [];
@@ -450,11 +457,17 @@ describe("get_spend day series and top runs", () => {
     expect(top[0]).toMatchObject({
       runId: costliest.runId,
       name: "Fix the billing test",
+      harness: "codex",
       agentKey: "acme.core.cc",
       operatorKey: OPERATOR,
       startedAt: "2026-09-10T12:00:00.000Z",
     });
+    expect(top[1]?.harness).toBeNull();
     expect(h.readRunNames).toHaveBeenCalledTimes(1);
+    expect(h.readRunHarnesses).toHaveBeenCalledWith(
+      SCOPE,
+      top.map((entry) => entry.runId),
+    );
     expect(() => spendGet.output.parse(out)).not.toThrow();
   });
 

@@ -70,6 +70,7 @@ export function toSpendReport(
         name: run.name,
         startedAt: run.startedAt,
         agentKey: run.agentKey,
+        harness: run.harness ?? null,
         operatorKey: run.operatorKey,
         cost: run.cost,
         calls: run.calls,
