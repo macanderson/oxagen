@@ -136,7 +136,11 @@ const RETIRED_ROW = /^\| `([a-z_]+)` \| `[a-z_.]+` \|/gm;
 
 /** The registered names `DEREGISTERED.md` retires. */
 function retiredNames(markdown: string): ReadonlySet<string> {
-  return new Set([...markdown.matchAll(RETIRED_ROW)].map((m) => m[1]));
+  return new Set(
+    [...markdown.matchAll(RETIRED_ROW)].flatMap((m) =>
+      m[1] === undefined ? [] : [m[1]],
+    ),
+  );
 }
 
 const onAgent = (cap: CapabilityDeclaration): boolean =>
