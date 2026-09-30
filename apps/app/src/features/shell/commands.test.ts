@@ -24,15 +24,13 @@ describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
   const inGroup = (g: string) => commands.filter((c) => c.group === g);
 
-  it("goes to every page, the five that carry ⌘1 to ⌘5 first", () => {
+  it("goes to every page, the four that carry ⌘1 to ⌘4 first", () => {
     const go = inGroup("go");
     expect(hrefs(go)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
-      "/acme/core-platform/tools",
       "/acme/core-platform/steering",
       "/acme/core-platform/spend",
-      "/acme/core-platform/runtimes",
       "/acme/core-platform/repositories",
       "/acme",
       "/acme/roles",
@@ -43,7 +41,7 @@ describe("buildCommands", () => {
     expect(go.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(
       go.map((c) => ("shortcut" in c ? (c.shortcut ?? null) : null)),
-    ).toEqual([1, 2, 3, 4, 5, null, null, null, null, null, null, null]);
+    ).toEqual([1, 2, 3, 4, null, null, null, null, null, null]);
   });
 
   it("offers no Model funding or Single sign-on page: neither is a route in the design (negative)", () => {
@@ -53,6 +51,11 @@ describe("buildCommands", () => {
 
   it("offers no Skills page: Skills is a tab of Steering (negative)", () => {
     expect(commands.find((c) => c.id === "go:skills")).toBeUndefined();
+  });
+
+  it("offers no Tools or Runtimes page: both are tabs of Agents, which ⌘2 opens (negative)", () => {
+    expect(commands.find((c) => c.id === "go:tools")).toBeUndefined();
+    expect(commands.find((c) => c.id === "go:runtimes")).toBeUndefined();
   });
 
   it("opens the assistant, drafts a question without sending it, and mints a model key on Model funding", () => {
@@ -118,9 +121,10 @@ describe("buildCommands", () => {
       null,
       "/acme/core-platform",
       "/acme/core-platform/register/name",
-      "/acme/core-platform/tools",
+      // Granting a mandate is on Policies, where the mandates ledger sits.
+      "/acme/core-platform/agents?tab=policies",
       "/acme/roles",
-      "/acme/core-platform/tools/switches",
+      "/acme/core-platform/agents?tab=switches",
       "/acme/core-platform",
       "/acme/api-keys",
     ]);
@@ -181,7 +185,7 @@ describe("fromSearchRows", () => {
       "/acme/core-platform/runs/arun_1",
       "/acme/core-platform/agents/agt_1",
       null,
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents?tab=tools",
     ]);
     expect(rows[2] && "approvals" in rows[2]).toBe(true);
     expect(rows[0]?.detail).toBe("live");
@@ -209,11 +213,12 @@ describe("shortcutCommand", () => {
 
   it("finds the page a digit opens", () => {
     expect(shortcutCommand(commands, 1)?.id).toBe("go:fleet");
-    expect(shortcutCommand(commands, 5)?.id).toBe("go:spend");
+    expect(shortcutCommand(commands, 2)?.id).toBe("go:agents");
+    expect(shortcutCommand(commands, 4)?.id).toBe("go:spend");
   });
 
   it("finds nothing for a digit no page carries, or without a workspace (negative)", () => {
-    expect(shortcutCommand(commands, 6)).toBeNull();
+    expect(shortcutCommand(commands, 5)).toBeNull();
     expect(
       shortcutCommand(buildCommands({ org: "acme", ws: null }, labels), 1),
     ).toBeNull();
@@ -228,8 +233,8 @@ describe("filterCommands", () => {
   });
 
   it("matches every term, case- and accent-insensitively, against the label", () => {
-    expect(filterCommands(commands, "NAV:TOOLS").map((c) => c.id)).toEqual([
-      "go:tools",
+    expect(filterCommands(commands, "NAV:STEERING").map((c) => c.id)).toEqual([
+      "go:steering",
     ]);
     const accented: Command[] = [
       { id: "x", label: "Politique générale", group: "go", href: pathOf("x") },

@@ -52,8 +52,7 @@ const setRuntimeContainment = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
   unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
   createRuntime: (...args: unknown[]) => createRuntime(...args),
-  setRuntimeContainment: (...args: unknown[]) =>
-    setRuntimeContainment(...args),
+  setRuntimeContainment: (...args: unknown[]) => setRuntimeContainment(...args),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -63,6 +62,7 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const { Runtimes } = await import("./runtimes");
 const { Runtime } = await import("./runtime");
 const { RuntimesLoading } = await import("./loading");
+const { AddRuntime } = await import("./controls");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -110,6 +110,17 @@ async function renderDetail(
   return calls;
 }
 
+/** Add a runtime, as the Agents page header draws it for an Owner or Admin. */
+async function openAddRuntime() {
+  render(
+    <IntlProvider>
+      <AddRuntime org="acme" ws="core-platform" gold={false} />
+    </IntlProvider>,
+  );
+  fireEvent.click(screen.getByTestId("runtimes-add"));
+  return screen.findByTestId("runtimes-add-dialog");
+}
+
 /** One host's row on the list, by its enrollment id. */
 const hostRow = (id: string): HTMLElement => {
   const found = document.querySelector<HTMLElement>(`[data-runtime="${id}"]`);
@@ -136,7 +147,7 @@ afterEach(async () => {
 });
 
 describe("Runtimes, loaded", () => {
-  it("draws the header, the four tiles, the hosts table and the ladder in the spec's order", async () => {
+  it("draws the four tiles, the hosts table and the ladder in the spec's order, under no header of its own", async () => {
     await renderList({
       list: runtimeList([
         enrollment(),
@@ -162,19 +173,11 @@ describe("Runtimes, loaded", () => {
         }),
       ]),
     });
-    expect(screen.getByText("Core platform")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Runtimes" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "The hosts your agents run on and the tier each host earns.",
-      ),
-    ).toBeInTheDocument();
-    const add = screen.getByTestId("runtimes-add");
-    expect(add).toHaveTextContent("Add a runtime");
-    expect(add).toHaveAttribute("aria-haspopup", "dialog");
-    expect(goldButtons()).toEqual([add]);
+    // The list is the Runtimes tab of the Agents page, whose header carries
+    // the title and Add a runtime (features/agents/area.tsx).
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("runtimes-add")).toBeNull();
+    expect(goldButtons()).toEqual([]);
 
     const tiles = screen.getByTestId("runtimes-tiles");
     expect(
@@ -535,7 +538,7 @@ describe("Runtimes, loaded", () => {
 });
 
 describe("Runtimes, not loaded", () => {
-  it("shows the empty state with the spec's copy, one gold action and the CLI path", async () => {
+  it("shows the empty state with the spec's copy, Add a runtime in the default style and the CLI path", async () => {
     await renderList({ list: runtimeList([]) });
     const empty = screen.getByTestId("runtimes-empty");
     expect(
@@ -544,10 +547,13 @@ describe("Runtimes, not loaded", () => {
     expect(empty).toHaveTextContent(
       "Until a host enrolls, an agent has an identity and a toolbelt but no installed hook. Its runs are graded observe.",
     );
-    // The header keeps Add a runtime; the empty state's copy of it is the gold one.
-    const adds = screen.getAllByTestId("runtimes-add");
-    expect(adds).toHaveLength(2);
-    expect(goldButtons()).toEqual([nth(adds, 1, "add button")]);
+    // The Agents page header keeps its own Add a runtime and Connect an agent,
+    // the page's one gold action, so the empty state's copy is not gold.
+    const add = within(empty).getByTestId("runtimes-add");
+    expect(add).toHaveTextContent("Add a runtime");
+    expect(add).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.getAllByTestId("runtimes-add")).toEqual([add]);
+    expect(goldButtons()).toEqual([]);
     fireEvent.click(
       within(empty).getByRole("button", { name: "Enroll from the CLI" }),
     );
@@ -678,7 +684,7 @@ describe("One runtime", () => {
     );
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const host = screen.getByRole("region", { name: "mbell-mbp-16" });
     const subtitle = screen.getByTestId("runtime-subtitle");
@@ -1174,9 +1180,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("fills the slug from the name, dropping apostrophes, until the slug is edited", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1200,9 +1204,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_macslaptop",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "Mac's Laptop" },
     });
@@ -1224,9 +1226,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
       reason: "conflict",
       code: "runtime_slug_taken",
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1253,9 +1253,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
         register: "/acme/core-platform/register/name?runtime=rtm_gpubox",
       },
     });
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.change(within(dialog).getByLabelText("Name"), {
       target: { value: "GPU box" },
     });
@@ -1298,9 +1296,7 @@ describe("Named runtimes and Add a runtime (ADR-198)", () => {
   });
 
   it("refuses an empty name without calling the write (negative)", async () => {
-    await renderList({ list: runtimeList([enrollment()]) });
-    fireEvent.click(screen.getByTestId("runtimes-add"));
-    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    const dialog = await openAddRuntime();
     fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
     expect(await within(dialog).findByText("Name the runtime.")).toBeVisible();
     expect(createRuntime).not.toHaveBeenCalled();
@@ -1375,7 +1371,7 @@ describe("A named runtime's page and its containment (ADR-204)", () => {
     await renderNamed();
     expect(screen.getByTestId("runtime-back")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes",
+      "/acme/core-platform/agents?tab=runtimes",
     );
     const facts = screen.getByRole("region", { name: "Mac's laptop" });
     expect(

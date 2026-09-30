@@ -77,7 +77,7 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const SWITCHES = "/acme/core-platform/tools/switches";
+const SWITCHES = "/acme/core-platform/agents?tab=switches";
 const GENERATION = { org: 12, workspace: 4 };
 /** The operator level's picker (#3147): one member, so its option is unambiguous. */
 const MEMBERS = [
