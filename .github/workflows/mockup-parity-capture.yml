@@ -1,0 +1,398 @@
+# The mockup parity capture (#4818): builds the app at a ref, seeds it with
+# the audit's personas, and screenshots every state the page registry names,
+# as each persona, in the dark and light themes and at phone width. The
+# /mockup-parity-audit skill in macanderson/oxagen-roadmap dispatches it twice:
+# label before at main, and label after at the audit's fix pull request.
+#
+# It runs only in CI. Nothing in this repository is built or served on the
+# maintainer's machine (CLAUDE.md, Local execution), so this job is where the
+# app's captures are taken.
+#
+#   dispatch       ref: the commit or branch to capture
+#                  label: before or after, which names the artifact
+#                  pages: page slugs, comma-separated, or empty for every page
+#                  registry_ref: the oxagen-roadmap ref to read the registry at
+#   pull request   that changes this workflow or apps/app/scripts/mockup-parity:
+#                  every page at the pull request's merge commit, so a broken
+#                  capture fails before it merges
+#
+# The artifact mockup-parity-<label> (mockup-parity-pr on a pull request)
+# holds <slug>/<state>.<theme>.<viewport>.png and manifest.json. The manifest
+# names each file's final URL and HTTP status, and each state it skipped or
+# failed with the reason (apps/app/scripts/mockup-parity/capture.ts).
+name: mockup parity capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The commit or branch of this repository to capture"
+        required: true
+      label:
+        description: "before (main) or after (the fix pull request); names the artifact"
+        required: true
+        type: choice
+        options:
+          - before
+          - after
+      pages:
+        description: "Page slugs, comma-separated; empty for every page"
+        required: false
+        default: ""
+      registry_ref:
+        description: "The oxagen-roadmap ref to read mockups/pages/pages.json at"
+        required: false
+        default: main
+  pull_request:
+    paths:
+      - ".github/workflows/mockup-parity-capture.yml"
+      - "apps/app/scripts/mockup-parity/**"
+
+concurrency:
+  # A dispatch is one capture and is never cancelled by another. A pull request
+  # groups by ref, so a new push supersedes the run before it.
+  group: mockup-parity-capture-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The same environment as pipeline.yml's top-level env, which the e2e job
+# runs under: the service URLs inside the job's network and the placeholder
+# credentials the production build needs to boot.
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+  DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USERNAME: default
+  CLICKHOUSE_PASSWORD: ""
+  CLICKHOUSE_DATABASE: oxagen
+  NEO4J_URI: bolt://neo4j:7687
+  NEO4J_USERNAME: neo4j
+  NEO4J_PASSWORD: oxagen-dev
+  BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-x
+  BETTER_AUTH_URL: http://localhost:3000
+  STRIPE_SECRET_KEY: sk_test_ci
+  STRIPE_PUBLISHABLE_KEY: pk_test_ci
+  STRIPE_WEBHOOK_SECRET: whsec_test_ci
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_API_URL: http://localhost:4000
+  INNGEST_EVENT_KEY: ci_inngest_event
+  INNGEST_SIGNING_KEY: signkey-test-ci0000000000000000000000000000000000000000000000000000000000
+  AUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.AUTH_TOKEN_ENCRYPTION_KEY }}
+  GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
+  GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
+  GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+  GITHUB_APP_SLUG: ci-github-app-slug
+  GITHUB_LOGIN_CLIENT_ID: ci-github-login-client-id
+  GITHUB_LOGIN_CLIENT_SECRET: ci-github-login-client-secret
+  GOOGLE_LOGIN_CLIENT_ID: ci-google-login-client-id
+  GOOGLE_LOGIN_CLIENT_SECRET: ci-google-login-client-secret
+  INGESTION_CRYPTO_PROVIDER: env
+  INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    # The container, services, job env, and the setup steps down to Seed e2e
+    # are copied from pipeline.yml's e2e job, which is their source. Keep them
+    # in step with it.
+    container:
+      image: ghcr.io/macanderson/oxagen-ci-e2e:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      # next start sets NODE_ENV=production; VERCEL_ENV marks the process as
+      # not a real production runtime (the e2e job says why).
+      VERCEL_ENV: preview
+      STORAGE_DRIVER: fs
+      STORAGE_FS_ROOT: /tmp/oxagen-storage
+    defaults:
+      run:
+        shell: bash
+    # Every page in three variants is about 1,500 screenshots.
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: oxagen
+          POSTGRES_PASSWORD: oxagen
+          POSTGRES_DB: oxagen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oxagen -d oxagen"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8-alpine
+        env:
+          CLICKHOUSE_DB: oxagen
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+        ports:
+          - 8123:8123
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client -q 'SELECT 1' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/oxagen-dev
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      # The inputs reach the shell through env and are checked here, before
+      # any of them names a checkout, a URL, or a file.
+      - name: Check the inputs
+        id: inputs
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref }}
+          LABEL: ${{ inputs.label }}
+          PAGES: ${{ inputs.pages }}
+          REGISTRY_REF: ${{ inputs.registry_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          is_ref() {
+            printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$' &&
+              ! printf '%s' "$1" | grep -q '\.\.'
+          }
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if ! is_ref "$REF"; then
+              echo "::error::ref must be a branch name or a commit SHA"; exit 1
+            fi
+            if ! printf '%s' "$LABEL" | grep -Eq '^(before|after)$'; then
+              echo "::error::label must be before or after"; exit 1
+            fi
+            label="$LABEL"
+            capture_ref="$REF"
+          else
+            label="pr"
+            capture_ref="$HEAD_REF"
+          fi
+          if ! printf '%s' "$PAGES" | grep -Eq '^[a-z0-9,-]*$'; then
+            echo "::error::pages must be page slugs separated by commas"; exit 1
+          fi
+          if [ -n "$REGISTRY_REF" ] && ! is_ref "$REGISTRY_REF"; then
+            echo "::error::registry_ref must be a branch name or a commit SHA"; exit 1
+          fi
+          # A pull request's branch name is only a registry candidate, so a
+          # name this pattern refuses drops out rather than failing the run.
+          head_ref=""
+          if [ -n "$HEAD_REF" ] && is_ref "$HEAD_REF"; then head_ref="$HEAD_REF"; fi
+          if [ -n "$capture_ref" ] && ! is_ref "$capture_ref"; then capture_ref=""; fi
+          {
+            echo "label=$label"
+            echo "capture_ref=$capture_ref"
+            echo "head_ref=$head_ref"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+        with:
+          # Empty on a pull request, which checks out its merge commit.
+          ref: ${{ inputs.ref }}
+
+      # The capture reads its tooling from the ref it builds. A ref older than
+      # the tooling has none.
+      - name: Capture tooling present
+        run: |
+          if [ ! -f apps/app/scripts/mockup-parity/capture.ts ]; then
+            echo "::error::This ref has no apps/app/scripts/mockup-parity/capture.ts (#4818). Capture a later commit."
+            exit 1
+          fi
+          echo "COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      # The billing page reads the Stripe test account when the repository has
+      # its key, as the e2e job's page-load test does. Unlike there, a missing
+      # key is not an error: no capture starts a payment, and the page then
+      # shows what it shows for the placeholder key.
+      - name: Use the Stripe test key when there is one
+        env:
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: |
+          if [ -n "$STRIPE_TEST_SECRET_KEY" ]; then
+            echo "STRIPE_SECRET_KEY=$STRIPE_TEST_SECRET_KEY" >> "$GITHUB_ENV"
+          else
+            echo "::notice::No Stripe test key, so the app runs with the placeholder key."
+          fi
+
+      - name: Bootstrap Postgres extensions
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
+      - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
+
+      - name: Migrate Postgres (Atlas)
+        working-directory: packages/database
+        run: atlas migrate apply --env ci
+
+      - name: Migrate ClickHouse and Neo4j
+        run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+
+      - name: Seed platform defaults
+        run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
+
+      # Always @oxagen/app, with no affected-package filter: the capture needs
+      # the app whatever the diff touched.
+      - name: Build
+        run: pnpm turbo run build --filter=@oxagen/app
+
+      - name: Install Playwright browser (fast-path)
+        run: pnpm --filter @oxagen/app exec playwright install chromium
+
+      - name: Seed e2e
+        run: pnpm --filter @oxagen/app seed:e2e
+
+      # The personas, the empty workspace, the outsider's organization, and
+      # the ids the capture paths name (apps/app/scripts/mockup-parity).
+      - name: Seed the audit personas
+        run: pnpm --filter @oxagen/app seed:audit
+
+      # The first ref that answers 200: registry_ref when given, then on a pull
+      # request the roadmap branch with this branch's name, then main.
+      - name: Download the page registry
+        id: registry
+        env:
+          REGISTRY_REF: ${{ inputs.registry_ref }}
+          HEAD_REF: ${{ steps.inputs.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/pages.json"
+          candidates=()
+          if [ -n "$REGISTRY_REF" ]; then candidates+=("$REGISTRY_REF"); fi
+          if [ -n "$HEAD_REF" ]; then candidates+=("$HEAD_REF"); fi
+          candidates+=("main")
+          for ref in "${candidates[@]}"; do
+            url="https://raw.githubusercontent.com/macanderson/oxagen-roadmap/$ref/mockups/pages/pages.json"
+            # curl prints 000 when it reaches nothing; `|| true` keeps that.
+            code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 30 --retry 2 "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "The registry is oxagen-roadmap's mockups/pages/pages.json at $ref."
+              echo "Registry: oxagen-roadmap at \`$ref\`." >> "$GITHUB_STEP_SUMMARY"
+              echo "ref=$ref" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "oxagen-roadmap at $ref answered $code."
+          done
+          echo "::error::No candidate ref of oxagen-roadmap has mockups/pages/pages.json: ${candidates[*]}"
+          exit 1
+
+      # `next start` on the build above, in the background: this is CI, where a
+      # server is allowed. The environment reaches it whole because pnpm runs
+      # it directly, not through turbo, so turbo's env lists do not apply.
+      # E2E_TEST=true is the harness relaxation the e2e webServer runs with:
+      # the personas' unverified accounts can sign in, and cookies are not
+      # secure off Vercel.
+      - name: Start the app
+        env:
+          E2E_TEST: "true"
+        run: |
+          mkdir -p mockup-parity-logs
+          setsid nohup pnpm --filter @oxagen/app start \
+            > mockup-parity-logs/app.log 2>&1 < /dev/null &
+          for _ in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3000/login || true)
+            case "$code" in
+              [234]??)
+                echo "The app answered /login with $code."
+                exit 0
+                ;;
+            esac
+            sleep 2
+          done
+          echo "::error::The app did not answer /login within two minutes."
+          tail -n 100 mockup-parity-logs/app.log
+          exit 1
+
+      # A second server on the same build for the error states. Its ClickHouse
+      # and Neo4j URLs point at closed ports, so every read of either store is
+      # refused at once. The telemetry and ontology clients read both names from
+      # the environment when they first connect (requireEnv in
+      # packages/telemetry/src/clickhouse.ts and packages/ontology/src/client.ts),
+      # and instrumentation.ts opens neither at boot, so the server starts. A
+      # session cookie on localhost is sent to every port, so the personas'
+      # sessions from port 3000 serve here too. When it does not answer, the
+      # capture skips the error states and says so.
+      - name: Start the fault server
+        id: fault
+        env:
+          E2E_TEST: "true"
+          CLICKHOUSE_URL: http://127.0.0.1:9
+          NEO4J_URI: bolt://127.0.0.1:9
+        run: |
+          setsid nohup pnpm --filter @oxagen/app exec next start --port 3001 \
+            > mockup-parity-logs/fault.log 2>&1 < /dev/null &
+          for _ in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3001/login || true)
+            case "$code" in
+              [234]??)
+                echo "The fault server answered /login with $code."
+                echo "up=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+            sleep 2
+          done
+          echo "::warning::The fault server did not answer /login, so the error states are skipped."
+          tail -n 50 mockup-parity-logs/fault.log
+          echo "up=false" >> "$GITHUB_OUTPUT"
+
+      - name: Capture
+        id: capture
+        timeout-minutes: 200
+        env:
+          PAGES: ${{ inputs.pages }}
+          CAPTURE_REF: ${{ steps.inputs.outputs.capture_ref }}
+          REGISTRY_USED: ${{ steps.registry.outputs.ref }}
+          FAULT_UP: ${{ steps.fault.outputs.up }}
+        run: |
+          set -euo pipefail
+          args=(
+            --registry "$RUNNER_TEMP/pages.json"
+            --out "$GITHUB_WORKSPACE/mockup-parity-out"
+            --base-url http://localhost:3000
+            --concurrency 3
+            --commit "$COMMIT"
+            --registry-ref "$REGISTRY_USED"
+          )
+          if [ -n "$CAPTURE_REF" ]; then args+=(--ref "$CAPTURE_REF"); fi
+          if [ -n "$PAGES" ]; then args+=(--pages "$PAGES"); fi
+          if [ "$FAULT_UP" = "true" ]; then args+=(--fault-url http://localhost:3001); fi
+          pnpm --filter @oxagen/app exec tsx scripts/mockup-parity/capture.ts "${args[@]}"
+
+      # A relative path: in a container job the runner.temp and
+      # github.workspace expressions name host paths the container cannot see.
+      - name: Keep the captures
+        if: ${{ !cancelled() && steps.capture.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mockup-parity-${{ steps.inputs.outputs.label }}
+          path: mockup-parity-out/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Keep the server logs
+        if: ${{ failure() && steps.inputs.outputs.label != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mockup-parity-${{ steps.inputs.outputs.label }}-server-logs
+          path: mockup-parity-logs/
+          retention-days: 30
+          if-no-files-found: ignore
