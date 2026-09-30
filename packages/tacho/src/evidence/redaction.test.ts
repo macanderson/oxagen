@@ -130,8 +130,8 @@ describe("redactBytes on credential-heavy content", () => {
   it("stays linear in the number of matches", () => {
     // Re-encoding the whole prefix for every match made this quadratic, and
     // it runs on the blocking hook path for every turn. The loopback hook
-    // endpoint accepts 8 MiB, and hook handling is serialised, so a pasted
-    // token log would hold the daemon and every hook queued behind it. At
+    // endpoint accepts 8 MiB, and redaction runs on the event loop, so a
+    // pasted token log would hold the daemon and every hook waiting on it. At
     // this size the old shape took 5.7s and this one takes about 0.13s; the
     // bound sits between, with room for a slow runner.
     const parts: string[] = [];
