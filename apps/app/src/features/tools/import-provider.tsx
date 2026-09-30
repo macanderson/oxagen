@@ -1233,7 +1233,7 @@ export function ImportProvider({
                       unchanged: done.unchanged,
                     })}
                   </p>
-                  <DiscoveryProgress server={null} canStart={false} />
+                  <DiscoveryProgress at={at} server={null} canStart={false} />
                   {/* Several providers in one sitting: back to Connect, dialog open. */}
                   <button
                     type="button"

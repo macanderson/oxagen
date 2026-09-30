@@ -19,7 +19,9 @@ const args = {
   toMs: Date.parse("2026-09-22T00:00:00Z"),
   limit: 50,
 };
-beforeEach(() => select.mockReset());
+beforeEach(() => {
+  select.mockReset();
+});
 describe("steering delivery counts", () => {
   it("counts included records and budget cuts in the bounded tenant query", async () => {
     select.mockResolvedValue({ data: [row()] });
