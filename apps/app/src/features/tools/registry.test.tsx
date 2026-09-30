@@ -49,7 +49,7 @@ const { mcpServerListOutput, toolVersionListOutput } = await import(
 );
 
 const at = { org: "acme", ws: "core-platform" };
-const TOOLS = "/acme/core-platform/tools";
+const TOOLS = "/acme/core-platform/agents?tab=tools";
 const t = translator("tools.registry");
 
 type VersionRow = ReturnType<typeof toolVersionListOutput>["items"][number];
@@ -285,7 +285,7 @@ describe("Registry › category chips", () => {
   it("narrows to a tag when its chip is pressed", () => {
     renderRegistry();
     fireEvent.click(chip("moves_money"));
-    expect(router.push).toHaveBeenCalledWith(`${TOOLS}?category=moves_money`);
+    expect(router.push).toHaveBeenCalledWith(`${TOOLS}&category=moves_money`);
   });
 });
 
@@ -373,7 +373,7 @@ describe("Registry › provider chips", () => {
     renderRegistry({ category: "moves_money", cursor: "cur_2" });
     fireEvent.click(providerChip(GITHUB));
     expect(router.push).toHaveBeenCalledWith(
-      `${TOOLS}?category=moves_money&provider=${GITHUB}`,
+      `${TOOLS}&category=moves_money&provider=${GITHUB}`,
     );
   });
 
@@ -387,11 +387,11 @@ describe("Registry › provider chips", () => {
     expect(providerChip("all")).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(providerChip(STRIPE));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?category=moves_money`,
+      `${TOOLS}&category=moves_money`,
     );
     fireEvent.click(providerChip("all"));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?category=moves_money`,
+      `${TOOLS}&category=moves_money`,
     );
   });
 
@@ -413,17 +413,17 @@ describe("Registry › provider chips", () => {
     });
     fireEvent.click(chip("moves_money"));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?category=moves_money&provider=${STRIPE}`,
+      `${TOOLS}&category=moves_money&provider=${STRIPE}`,
     );
     fireEvent.click(chip("all"));
-    expect(router.push).toHaveBeenLastCalledWith(`${TOOLS}?provider=${STRIPE}`);
+    expect(router.push).toHaveBeenLastCalledWith(`${TOOLS}&provider=${STRIPE}`);
     fireEvent.click(screen.getByRole("button", { name: "API names" }));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?provider=${STRIPE}&names=api`,
+      `${TOOLS}&provider=${STRIPE}&names=api`,
     );
     expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
       "href",
-      `${TOOLS}?provider=${STRIPE}&cursor=cur_2`,
+      `${TOOLS}&provider=${STRIPE}&cursor=cur_2`,
     );
   });
 

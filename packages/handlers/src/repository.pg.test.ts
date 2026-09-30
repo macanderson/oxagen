@@ -1267,11 +1267,19 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
 
     // ── the provision event the backfill sends runs every step ───────────
     // The real dependencies read and write Postgres. A fake GitHub holds the
-    // Oxagen Steering installation on `acme`.
+    // Oxagen Steering installation on `acme`. The production first publish
+    // reads the repository through the real host, which mints a token from
+    // the Oxagen GitHub App's environment and never reaches the fake. This
+    // test proves the steps up to the bind, and the provision and
+    // first-version tests prove the publish, so it drops that port.
     const app = { symbol: OXAGEN_STEERING_APP, id: 9001, slug: "oxagen-steering-test" };
     const hub = new FakeGithub({ org: "acme", app });
+    const { publishFirst: _unused, ...production } = steeringRepoProvisionDeps({
+      actorUserId: userId,
+      env: {},
+    });
     const deps: ProvisionDeps = {
-      ...steeringRepoProvisionDeps({ actorUserId: userId, env: {} }),
+      ...production,
       github: () => ({
         app,
         installation: () => Promise.resolve(hub.appRest()),

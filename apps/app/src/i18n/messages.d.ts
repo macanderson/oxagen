@@ -27,7 +27,6 @@ type Messages = {
     agents: string;
     agent: string;
     mandate: string;
-    tools: string;
     record: string;
     steering: string;
     repositories: string;
@@ -74,7 +73,6 @@ type Messages = {
       retired: string;
     };
     list: {
-      description: string;
       tiles: {
         label: string;
         agentsHere: {
@@ -1285,6 +1283,19 @@ type Messages = {
       gateway: string;
       harness: string;
       observe: string;
+    };
+    area: {
+      description: string;
+      tabs: {
+        label: string;
+        agents: string;
+        servers: string;
+        policies: string;
+        runtimes: string;
+        switches: string;
+        switchesOn: string;
+        switchesOnAtLeast: string;
+      };
     };
   };
   audit: {
@@ -8179,9 +8190,7 @@ type Messages = {
     nav: {
       fleet: string;
       agents: string;
-      tools: string;
       steering: string;
-      runtimes: string;
       repositories: string;
       spend: string;
       organization: string;
@@ -8306,7 +8315,6 @@ type Messages = {
       slots: {
         fleet: string;
         agents: string;
-        tools: string;
         spend: string;
       };
       more: string;
@@ -8315,7 +8323,6 @@ type Messages = {
       tileWaiting: string;
       sub: {
         steering: string;
-        runtimes: string;
         repositories: string;
         organization: string;
         billing: string;
@@ -8885,12 +8892,9 @@ type Messages = {
     };
     tabs: {
       label: string;
+      month: string;
       findings: string;
       tokens: string;
-      coaching: string;
-      operator: string;
-      agent: string;
-      model: string;
       tool: string;
       waste: string;
       budgets: string;
@@ -9044,23 +9048,9 @@ type Messages = {
       };
     };
     columns: {
-      operator: string;
-      role: string;
-      agents: string;
       runs: string;
       spend: string;
-      tokens: string;
-      cacheHit: string;
       savings: string;
-      budgetPosition: string;
-      agent: string;
-      perRun: string;
-      trend: string;
-      model: string;
-      providerKey: string;
-      modelCalls: string;
-      cacheHitRate: string;
-      basis: string;
       tool: string;
       server: string;
       calls: string;
@@ -9074,28 +9064,6 @@ type Messages = {
       shareOfSpend: string;
     };
     groups: {
-      operator: {
-        unnamed: string;
-        title: string;
-        empty: string;
-        note: string;
-        budgetMissing: string;
-      };
-      agent: {
-        title: string;
-        empty: string;
-        note: string;
-        trendMissing: string;
-      };
-      model: {
-        title: string;
-        note: string;
-        routes: string;
-        footer: string;
-        keyMissing: string;
-        total: string;
-        totalNote: string;
-      };
       tool: {
         title: string;
         empty: string;
@@ -9563,29 +9531,6 @@ type Messages = {
         error: string;
       };
     };
-    coaching: {
-      title: string;
-      notBacked: string;
-      agents: string;
-      operators: string;
-      agentSignals: {
-        narrowBelt: string;
-        stablePrefix: string;
-        pageResults: string;
-        contextBudget: string;
-        lightModel: string;
-        retryStorms: string;
-        oneTurnCache: string;
-      };
-      operatorSignals: {
-        grants: string;
-        reRead: string;
-        onePrompt: string;
-        publishSteering: string;
-        resizeBudget: string;
-        selfReported: string;
-      };
-    };
     ranking: {
       title: string;
       note: string;
@@ -9624,12 +9569,6 @@ type Messages = {
         failed: string;
       };
     };
-    agentChart: {
-      title: string;
-      label: string;
-      footer: string;
-      otherCurrency: string;
-    };
     toolChart: {
       metric: {
         cumulative: string;
@@ -9641,6 +9580,57 @@ type Messages = {
       empty: string;
       footer: string;
       otherCurrency: string;
+    };
+    month: {
+      description: string;
+      span: string;
+      chart: string;
+      noPricedDay: string;
+      empty: string;
+      unnamedOperator: string;
+      other: {
+        label: string;
+        note: string;
+      };
+      moreRuns: string;
+      reported: string;
+      ungrouped: {
+        label: string;
+        note: {
+          agent: string;
+          operator: string;
+          model: string;
+        };
+      };
+      budget: {
+        label: string;
+        used: string;
+        position: string;
+        reached: string;
+        notEnforced: string;
+        none: string;
+      };
+      by: {
+        label: string;
+        options: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+        titles: {
+          agent: string;
+          operator: string;
+          model: string;
+          mcp_server: string;
+        };
+      };
+      columns: {
+        runs: string;
+        share: string;
+        cost: string;
+        total: string;
+      };
     };
   };
   steering: {
@@ -10314,8 +10304,6 @@ type Messages = {
     };
   };
   tools: {
-    eyebrow: string;
-    lede: string;
     loading: string;
     notCarried: string;
     nextPage: string;
@@ -10326,17 +10314,6 @@ type Messages = {
       billing: string;
       compliance: string;
       viewer: string;
-    };
-    tabs: {
-      label: string;
-      tools: string;
-      toolbelts: string;
-      providers: string;
-      policy: string;
-      switches: string;
-      atLeast: string;
-      switchesOn: string;
-      switchesOnAtLeast: string;
     };
     gate: {
       open: string;
@@ -11480,6 +11457,13 @@ type Messages = {
       failedTitle: string;
       denied: string;
       failed: string;
+    };
+    views: {
+      label: string;
+      providers: string;
+      tools: string;
+      toolbelts: string;
+      atLeast: string;
     };
   };
   ui: {

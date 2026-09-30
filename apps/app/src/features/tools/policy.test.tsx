@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The Policy tab (mockup `tools.md`): the policy versions the page states are
-// not recorded yet, the auto-approval rules with their one gold action, the
+// not recorded yet, the auto-approval rules and their Create rule, the
 // mandates ledger, and the three panels that describe where a version lives.
 // The ledger and the rules were tabs of their own before the tabs became path
 // segments; their suites carried over whole and now render the Policy tab.
@@ -65,7 +65,8 @@ const loaded = (options: { value: string; label: string }[]) => ({
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { Tools } = await import("./tools");
+const { ToolsBody } = await import("./tools");
+const { buttonSecondary } = await import("@/ui/control-styles");
 const { agentPage, agentPageRow, approvalRuleSet, toolsSource } = await import(
   "./tools.builders"
 );
@@ -93,7 +94,7 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const cardOf = (selector: string) =>
   element(document.querySelector(selector), selector);
 
-/** The Policy tab, as the viewer given, on reads that default to their fixtures. */
+/** The Policies tab's body, as the viewer given, on reads that default to their fixtures. */
 async function renderPolicy(
   reads: Parameters<typeof toolsSource>[0],
   ctx = owner,
@@ -101,7 +102,7 @@ async function renderPolicy(
   const { source, calls } = toolsSource(reads);
   const view = render(
     <IntlProvider>
-      {await Tools({ ctx, source, tab: "policy", searchParams: {} })}
+      {await ToolsBody({ ctx, source, tab: "policy", searchParams: {} })}
     </IntlProvider>,
   );
   return { ...view, calls };
@@ -132,23 +133,18 @@ afterEach(async () => {
 });
 
 describe("Tools › policy", () => {
-  it("is the tab that is selected, with the rules as its one gold action", async () => {
+  it("draws Create rule in the default style and no gold, because Connect an agent is the Agents page's one gold action", async () => {
     await renderPolicy({});
-    const tabs = screen.getByRole("tablist", { name: "Tools sections" });
-    expect(within(tabs).getByRole("tab", { name: "Policy" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    // New tool yields the gold on a tab that carries its own primary.
-    expect(screen.getByTestId("tools-new-tool-open").className).not.toContain(
-      "bg-button-primary-bg",
-    );
-    expect(screen.getByTestId("rule-create-open").className).toContain(
-      "bg-button-primary-bg",
+    expect(screen.getByTestId("rule-create-open").className).toBe(
+      buttonSecondary,
     );
     expect(
       document.querySelectorAll('[class*="bg-button-primary-bg"]'),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+    // Policies is no view of Tool servers, so the views row is not drawn.
+    expect(
+      screen.queryByRole("navigation", { name: "Tool server views" }),
+    ).not.toBeInTheDocument();
   });
 
   it("says policy versions are not recorded, names the store, and keeps Draft a version as a stub", async () => {
@@ -205,16 +201,11 @@ describe("Tools › policy", () => {
 });
 
 describe("Tools › mandates ledger", () => {
-  it("sits on the Policy tab and reads every mandate in the workspace, not one agent's", async () => {
+  it("sits on the Policies tab and reads every mandate in the workspace, not one agent's", async () => {
     const { calls } = await renderLedger(mandateList([mandateRow()]));
     const ctx = viewer("billing");
     expect(calls.mandates).toEqual([[ctx, { agentId: null }]]);
-    expect(
-      within(screen.getByRole("tablist", { name: "Tools sections" })).getByRole(
-        "tab",
-        { name: "Policy" },
-      ),
-    ).toHaveAttribute("aria-selected", "true");
+    expect(ledger()).toBeVisible();
   });
 
   it("prints the grant and what the ledger has settled, reserved and left", async () => {
@@ -816,7 +807,7 @@ describe("Tools › auto-approvals", () => {
       within(screen.getByTestId("tools-error")).getByRole("link", {
         name: "Try again",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/policy");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=policies");
   });
 
   it("names the access request while one is waiting", async () => {

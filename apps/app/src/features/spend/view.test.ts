@@ -1,45 +1,82 @@
-// Which view a Spend path opens: the bare path is Findings, a known tab
-// segment is that tab, a drill segment only where get_spend_drill would accept
-// its key, and one finding's evidence only where the finding contracts would
-// accept its id. Anything else is a 404 (null).
+// Which view a Spend path opens: the bare path is Month, grouped by agent
+// unless the query names another grouping, a known tab segment is that tab, a
+// drill segment only where get_spend_drill would accept its key, and one
+// finding's evidence only where the finding contracts would accept its id.
+// Anything else is a 404 (null).
 import { describe, expect, it } from "vitest";
-import { dayOf, monthToDate, parseSpendView, SPEND_TABS } from "./view";
+import {
+  dayOf,
+  monthToDate,
+  parseSpendView,
+  SPEND_MONTH_BY,
+  SPEND_TABS,
+} from "./view";
 
 describe("parseSpendView", () => {
-  it("opens the findings tab with nothing selected on the bare path", () => {
-    expect(parseSpendView(undefined)).toEqual({
-      tab: "findings",
+  it("opens the Month tab grouped by agent on the bare path", () => {
+    const month = { tab: "month", drill: null, finding: null, by: "agent" };
+    expect(parseSpendView(undefined)).toEqual(month);
+    expect(parseSpendView([])).toEqual(month);
+    expect(parseSpendView(["month"])).toEqual(month);
+  });
+
+  it.each(SPEND_MONTH_BY)("groups the Month tab by %s from the query", (by) => {
+    expect(parseSpendView(undefined, undefined, by)).toEqual({
+      tab: "month",
       drill: null,
       finding: null,
+      by,
     });
-    expect(parseSpendView([])).toEqual({
+    expect(parseSpendView(["month"], undefined, [by, "agent"])).toEqual({
+      tab: "month",
+      drill: null,
+      finding: null,
+      by,
+    });
+  });
+
+  it.each([
+    ["a grouping the tab does not offer", "tool"],
+    ["an empty grouping", ""],
+    ["a grouping in another case", "Operator"],
+  ])("groups by agent for %s (negative)", (_case, by) => {
+    expect(parseSpendView(undefined, undefined, by)).toEqual({
+      tab: "month",
+      drill: null,
+      finding: null,
+      by: "agent",
+    });
+  });
+
+  it("does not carry a grouping onto another tab (negative)", () => {
+    expect(parseSpendView(["findings"], undefined, "model")).toEqual({
       tab: "findings",
       drill: null,
       finding: null,
     });
   });
 
-  it("lists the design's nine tabs first, in the design's order", () => {
-    expect(SPEND_TABS.slice(0, 9)).toEqual([
+  it("lists Month first, then the earlier design's five tabs it keeps in its order", () => {
+    expect(SPEND_TABS.slice(0, 6)).toEqual([
+      "month",
       "findings",
       "tokens",
-      "coaching",
-      "operator",
-      "agent",
-      "model",
       "tool",
       "waste",
       "budgets",
     ]);
   });
 
-  it.each(SPEND_TABS)("opens the %s tab from its segment", (tab) => {
-    expect(parseSpendView([tab])).toEqual({
-      tab,
-      drill: null,
-      finding: null,
-    });
-  });
+  it.each(SPEND_TABS.filter((tab) => tab !== "month"))(
+    "opens the %s tab from its segment",
+    (tab) => {
+      expect(parseSpendView([tab])).toEqual({
+        tab,
+        drill: null,
+        finding: null,
+      });
+    },
+  );
 
   it("opens an operator's, an agent's or a tool's drill", () => {
     expect(parseSpendView(["operator", "prn_marcusbell"])).toEqual({
@@ -60,7 +97,7 @@ describe("parseSpendView", () => {
   });
 
   it("opens one finding's evidence on the findings tab, reading the first of a repeated value", () => {
-    expect(parseSpendView(undefined, "fnd_01k5rtgh")).toEqual({
+    expect(parseSpendView(["findings"], "fnd_01k5rtgh")).toEqual({
       tab: "findings",
       drill: null,
       finding: "fnd_01k5rtgh",
@@ -80,7 +117,7 @@ describe("parseSpendView", () => {
   ])(
     "ignores %s, opening the findings tab with none (negative)",
     (_case, finding) => {
-      expect(parseSpendView(undefined, finding)).toEqual({
+      expect(parseSpendView(["findings"], finding)).toEqual({
         tab: "findings",
         drill: null,
         finding: null,
@@ -96,10 +133,32 @@ describe("parseSpendView", () => {
     });
   });
 
+  it("opens a finding saved on the bare path on the findings tab, from when Findings was the landing tab", () => {
+    expect(parseSpendView(undefined, "fnd_01k5rtgh")).toEqual({
+      tab: "findings",
+      drill: null,
+      finding: "fnd_01k5rtgh",
+    });
+  });
+
+  it("opens Month on the bare path when its finding is not a finding's id (negative)", () => {
+    expect(parseSpendView(undefined, "arun_01k5rtgh")).toEqual({
+      tab: "month",
+      drill: null,
+      finding: null,
+      by: "agent",
+    });
+  });
+
   it.each([
     ["an unknown tab", ["reconciliation"]],
     ["a drill on a tab that has none", ["waste", "x"]],
+    ["a drill on the Month tab", ["month", "acme.core.triage"]],
     ["a drill on the model tab", ["model", "claude-opus-5"]],
+    ["the Coaching tab, which Month replaced", ["coaching"]],
+    ["the By operator tab, which Month replaced", ["operator"]],
+    ["the By agent tab, which Month replaced", ["agent"]],
+    ["the By model tab, which Month replaced", ["model"]],
     ["an operator key that is not a principal id", ["operator", "marcus"]],
     ["an empty key", ["agent", ""]],
     ["a key longer than the contract takes", ["tool", "t".repeat(257)]],

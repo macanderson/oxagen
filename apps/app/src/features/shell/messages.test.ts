@@ -31,7 +31,9 @@ describe("messages/shell.json", () => {
     for (const key of [...WORKSPACE_NAV, ...ORG_NAV, ...ORG_PAGE_NAV])
       expect(messages.nav).toHaveProperty(key);
     expect(messages.nav.agents).toBe("Agents");
-    expect(messages.nav.runtimes).toBe("Runtimes");
+    // Tools and Runtimes are tabs of Agents, so neither is a nav item.
+    expect(messages.nav).not.toHaveProperty("tools");
+    expect(messages.nav).not.toHaveProperty("runtimes");
     expect(Object.keys(messages.mobileNav.slots)).toEqual([...THUMB_SLOTS]);
   });
 

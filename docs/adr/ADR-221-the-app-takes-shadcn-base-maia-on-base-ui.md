@@ -46,7 +46,10 @@ tokens and fonts.
    of its surface token, with a `backdrop-blur-2xl backdrop-saturate-150`
    layer behind it and a `ring-1 ring-foreground/5` edge. The blur sits on a
    `before:` layer so it does not become the containing block for the
-   popup's own positioned children.
+   popup's own positioned children. Amended 2026-09-29: the light theme fills
+   at 55% over `backdrop-blur-lg` (16px), because 70% white over a 40px blur
+   of a white page reads as solid. The dark theme keeps 70% and
+   `backdrop-blur-2xl`.
 4. **Colour.** Every colour is an Oxagen token. A component never uses
    shadcn's `primary`, which `design-record.test.ts` keeps out of component
    files (INV-32). The gold appears only on `Button`'s `default` variant, the
