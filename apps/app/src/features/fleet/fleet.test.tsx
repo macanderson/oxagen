@@ -285,7 +285,10 @@ describe("Fleet reads", () => {
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     // The open questions, for the waiting tile (#3839).
     expect(calls.interjections).toEqual([[ctx, { runId: null }]]);
-    expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
+    // Retired agents come too, for their old runs' harness badge.
+    expect(calls.agents).toEqual([
+      [ctx, { cursor: null, includeRetired: true }],
+    ]);
   });
 
   it("reads every page of the workspace's agents, so Steer lists all of them", async () => {
@@ -305,8 +308,8 @@ describe("Fleet reads", () => {
       agents: (cursor) => pages[cursor ?? "first"] ?? readError("x", 500),
     });
     expect(calls.agents).toEqual([
-      [ctx, { cursor: null }],
-      [ctx, { cursor: "a2" }],
+      [ctx, { cursor: null, includeRetired: true }],
+      [ctx, { cursor: "a2", includeRetired: true }],
     ]);
     const user = userEvent.setup();
     await user.click(screen.getByTestId("fleet-steer"));
@@ -696,6 +699,27 @@ describe("the Runs panel", () => {
     expect(
       row("arun_stranger").querySelector("[data-harness-badge]"),
     ).toBeNull();
+  });
+
+  it("badges a retired agent's old run with the harness it registered", async () => {
+    const page = pageValue(
+      ["acme.core.release-bot", "acme.core.gone"],
+      1,
+      null,
+    );
+    const retired = page.agents.map((agent) =>
+      agent.agentKey === "acme.core.gone"
+        ? { ...agent, status: "retired" as const, harness: "codex" as const }
+        : agent,
+    );
+    await renderFleet({
+      runs: runPage([runRow({ id: "arun_old", agentKey: "acme.core.gone" })]),
+      approvals: NO_APPROVALS,
+      agents: { ok: true, value: { ...page, agents: retired } },
+    });
+    expect(
+      row("arun_old").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "codex");
   });
 
   it("draws the operator's avatar when they set one, and their initials when they did not", async () => {

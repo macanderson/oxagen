@@ -164,16 +164,22 @@ function NamedHosts({ count }: { count: number }) {
 }
 
 /**
- * The agent on a host row, its avatar badged with the harness it runs in. An
- * enrollment is one agent on one machine, so when the daemon reported one
- * harness it is the agent's. A host that reported several names no badge
- * rather than guess among them.
+ * The agent on a host row, its avatar badged with the harness the agent
+ * registered (`runtimes.agents`, the read the runtime drawer makes). The
+ * daemon's detected harnesses are the machine's, not the agent's: an agent
+ * registered as `custom` can enroll from a host that detected Claude Code. An
+ * agent the read did not return names no badge.
  */
-function HostAgent({ host }: { host: RuntimeEnrollment }) {
+function HostAgent({
+  host,
+  harness,
+}: {
+  host: RuntimeEnrollment;
+  harness: string | null;
+}) {
   const t = useTranslations("runtimes.named");
   if (host.agentKey === "")
     return <span className="text-muted-foreground">{t("noAgent")}</span>;
-  const only = host.harnesses.length === 1 ? host.harnesses[0] : null;
   return (
     <span className="flex min-w-0 items-center gap-2">
       <AgentAvatar
@@ -181,7 +187,7 @@ function HostAgent({ host }: { host: RuntimeEnrollment }) {
         initials={(host.agentKey.split(".").at(-1) ?? "")
           .slice(0, 2)
           .toUpperCase()}
-        harness={only}
+        harness={harness}
         size={24}
       />
       <span className={`${mono} block min-w-0 md:truncate`}>
@@ -231,7 +237,12 @@ function namedRow(
 
 function hostRow(
   host: RuntimeEnrollment,
-  at: { org: string; ws: string; now: number },
+  at: {
+    org: string;
+    ws: string;
+    now: number;
+    harnesses: ReadonlyMap<string, string>;
+  },
 ): ListRow {
   return {
     key: host.id,
@@ -251,7 +262,11 @@ function hostRow(
       </span>,
       <NotBacked key="kind" gap="host" />,
       <HostHealth key="health" host={host} now={at.now} />,
-      <HostAgent key="agents" host={host} />,
+      <HostAgent
+        key="agents"
+        host={host}
+        harness={at.harnesses.get(host.agentKey) ?? null}
+      />,
       <LastSeen key="seen" at={host.lastSeenAt} />,
     ],
   };
@@ -272,6 +287,7 @@ function idleCount(
 function RuntimesLoaded({
   list,
   named,
+  harnesses,
   org,
   ws,
   now,
@@ -279,6 +295,8 @@ function RuntimesLoaded({
 }: {
   list: RuntimeList;
   named: Read<NamedRuntimeList>;
+  /** Each host row's agent's registered harness, by agent key. */
+  harnesses: ReadonlyMap<string, string>;
   org: string;
   ws: string;
   now: number;
@@ -288,7 +306,7 @@ function RuntimesLoaded({
   const locale = useLocale();
   const runtimes = named.ok ? named.value.runtimes : [];
   const idle = idleCount(runtimes, list.enrollments);
-  const at = { org, ws, now, canRegister: canAdd };
+  const at = { org, ws, now, canRegister: canAdd, harnesses };
   return (
     <>
       {idle === 0 && !canAdd ? null : (
@@ -341,6 +359,31 @@ function RuntimesLoaded({
   );
 }
 
+/**
+ * The registered harness of each agent a host row names. A failed read
+ * leaves every row unbadged and the table standing.
+ */
+async function readHostHarnesses(
+  ctx: WsCtx,
+  source: DataSource,
+  list: RuntimeList,
+): Promise<ReadonlyMap<string, string>> {
+  const keys = [
+    ...new Set(
+      list.enrollments.map((host) => host.agentKey).filter((key) => key !== ""),
+    ),
+  ];
+  if (keys.length === 0) return new Map();
+  const read = await source.runtimes.agents(ctx, keys);
+  if (!read.ok) return new Map();
+  return new Map(
+    read.value.agents.map((agent): [string, string] => [
+      agent.agentKey,
+      agent.harness,
+    ]),
+  );
+}
+
 async function readRuntimes(ctx: WsCtx, source: DataSource) {
   const [read, named] = await Promise.all([
     source.runtimes.list(ctx),
@@ -383,10 +426,12 @@ export async function Runtimes({
   const nothingNamed = named.ok && named.value.runtimes.length === 0;
   if (read.value.enrollments.length === 0 && nothingNamed)
     return <RuntimesEmpty org={org} ws={ws} canAdd={canAdd} />;
+  const harnesses = await readHostHarnesses(ctx, source, read.value);
   return (
     <RuntimesLoaded
       list={read.value}
       named={named}
+      harnesses={harnesses}
       org={org}
       ws={ws}
       now={now}
