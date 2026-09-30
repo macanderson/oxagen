@@ -74,6 +74,12 @@ export interface StdioSessionOptions {
   /** Aborted when the local gateway stops. */
   signal?: AbortSignal;
   maxLineChars?: number;
+  /**
+   * Called when the server sends notifications/tools/list_changed during the
+   * session. The local gateway tells Oxagen, which discovers the server's
+   * tools again (#4772).
+   */
+  onToolsChanged?: () => void;
 }
 
 export interface ListedTools {
@@ -150,7 +156,10 @@ async function withSession<T>(options: StdioSessionOptions, work: (session: Sess
     if (typeof message.method === "string") {
       // A notification needs no answer. The client answers a ping and
       // refuses every other request, since it offers the server nothing.
-      if (!("id" in message)) return;
+      if (!("id" in message)) {
+        if (message.method === "notifications/tools/list_changed") options.onToolsChanged?.();
+        return;
+      }
       send(
         message.method === "ping"
           ? { id: message.id, result: {} }

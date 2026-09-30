@@ -60,6 +60,37 @@ async function claimForPoll(poll: { machine: string; scope: { orgId: string; wor
   }
 }
 
+/** The servers this process is discovering again after a tools change, by machine and name. */
+const rediscovering = new Set<string>();
+
+/**
+ * Discovers a server again through the machine whose call reported its tools
+ * changed (#4772). One run per machine and server at a time.
+ */
+async function rediscoverForChange(change: {
+  machine: string;
+  scope: { orgId: string; workspaceId: string };
+  server: string;
+}): Promise<void> {
+  const key = `${change.machine}:${change.scope.workspaceId}:${change.server}`;
+  if (rediscovering.has(key)) return;
+  rediscovering.add(key);
+  try {
+    const [{ rediscoverOnMachine }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
+      import("@oxagen/handlers/mcp-studio/discovery/claim"),
+      import("@oxagen/handlers/mcp-studio/discovery/seams"),
+      import("@oxagen/handlers/tools.pr.open"),
+    ]);
+    await rediscoverOnMachine(change, {
+      broker: localGatewayBroker(),
+      reader: postgresMachineGroupReader,
+      seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
+    });
+  } finally {
+    rediscovering.delete(key);
+  }
+}
+
 /** Serves GET /v1/local-servers/next and POST /v1/local-servers/replies. */
 export const localServersRoute = createLocalServersRoute({
   authenticate: createMachineAuth({
@@ -70,6 +101,7 @@ export const localServersRoute = createLocalServersRoute({
   }),
   broker: localGatewayBroker,
   onPoll: claimForPoll,
+  onToolsChanged: rediscoverForChange,
   log: (event, fields) => console.warn(JSON.stringify({ event, ...fields })),
 });
 

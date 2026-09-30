@@ -48,7 +48,16 @@ export interface DispatchOptions {
 /** Why the broker refused a reply. The route answers 409 for each. */
 export type ReplyRefusal = "invalid" | "wrong_machine" | "unknown_id" | "wrong_kind";
 
-export type ReplyOutcome = { accepted: true } | { accepted: false; reason: ReplyRefusal };
+export type ReplyOutcome =
+  | {
+      accepted: true;
+      /**
+       * The server whose call reported notifications/tools/list_changed, so
+       * the caller asks for its discovery (#4772). Absent otherwise.
+       */
+      toolsChanged?: { server: string };
+    }
+  | { accepted: false; reason: ReplyRefusal };
 
 export interface LocalGatewayBroker {
   /** True while the machine's local gateway polls, or within PRESENCE_MS of its last poll. */
@@ -257,7 +266,9 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Lon
     }
     if (!kindFits(entry.delivery, answer)) return { accepted: false, reason: "wrong_kind" };
     entry.settle({ reply: answer });
-    return { accepted: true };
+    return answer.kind === "result" && answer.tools_changed === true
+      ? { accepted: true, toolsChanged: { server: entry.delivery.launch.server } }
+      : { accepted: true };
   }
 
   function release(machine: string, delivery: Delivery): boolean {

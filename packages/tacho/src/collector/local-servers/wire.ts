@@ -182,6 +182,11 @@ export const resultReplySchema = z
     result: callToolResultSchema,
     /** How many values the screen replaced with a redaction marker. */
     redactions: z.number().int().min(0),
+    /**
+     * Present when the server sent notifications/tools/list_changed during
+     * the call. Oxagen then discovers the server's tools again (#4772).
+     */
+    tools_changed: z.literal(true).optional(),
   })
   .strict();
 
