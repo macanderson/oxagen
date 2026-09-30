@@ -1,5 +1,4 @@
 import type { XmcpConfig } from "xmcp";
-import path from "node:path";
 
 const config: XmcpConfig = {
   http: {
@@ -22,14 +21,15 @@ const config: XmcpConfig = {
     config.resolve = config.resolve ?? {};
     // Use the pinned framework's Express adapter under an owned HTTP edge.
     // The default server parses every body before application middleware.
+    // xmcp's config evaluator rejects Node builtin imports.
     config.entry = {
       ...(config.entry as Record<string, string>),
-      http: path.resolve("src/http.ts"),
+      http: `${process.cwd()}/src/http.ts`,
     };
     config.resolve.alias = {
       ...config.resolve.alias,
-      "xmcp-adapter-runtime": path.resolve("node_modules/xmcp/dist/runtime/adapter-express.js"),
-      "xmcp-home-template": path.resolve("node_modules/xmcp/src/runtime/templates/home.ts"),
+      "xmcp-adapter-runtime": `${process.cwd()}/node_modules/xmcp/dist/runtime/adapter-express.js`,
+      "xmcp-home-template": `${process.cwd()}/node_modules/xmcp/src/runtime/templates/home.ts`,
     };
 
     // xmcp force-aliases `zod` (and `zod/v3`, `zod/v4-mini`) to this app's
