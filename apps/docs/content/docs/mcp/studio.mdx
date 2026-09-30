@@ -146,6 +146,21 @@ A PyPI release holds one file per host, so its pin names one file: the release's
 
 `list_studio_tools` suggests a classification for each available tool from what the snapshot keeps: the name, the description, the input schema, and the MCP hints. A snapshot keeps no request template, so an OpenAPI, GraphQL, or gRPC tool's suggestion falls back to `fail_safe` until you classify it. An available tool's token count is an estimate that leaves out the title and the output schema.
 
+## Read agent feedback
+
+Open a tool on the server page. Its panel shows how agents used the tool over the last 30 days.
+
+| Figure | What it counts |
+|---|---|
+| Calls | Calls that reached the tool check. A call denied by policy or parked for approval is left out. |
+| Schema rejections | Calls the tool's input schema refused, or whose arguments Oxagen could not read. |
+| Error results | Calls the tool ran and answered with an error. |
+| Retries | Later calls to the tool in the same session, after one of the above. |
+
+Below the figures, the panel lists what agents' reflections said about the tool, newest first. A high count of schema rejections or retries usually means the tool's description or input schema confuses agents. Draft a new description, and Review opens a steering PR for a person to check.
+
+Oxagen counts only calls made through its served tools, from the day the count started. When the call store does not answer, the panel shows the feedback as not recorded.
+
 ## Other writers of the folder
 
 Oxagen's MCP server discovery also opens steering PRs under `tools/`. It uses the same writer as Review, so every tools steering PR follows the same branch rule, file limit, labels, and `Oxagen steering` check. ADR-224 (`docs/adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md` in the repository) records the design.

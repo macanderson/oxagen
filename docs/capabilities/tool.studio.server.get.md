@@ -34,6 +34,7 @@ Every field of [list_studio_tools](tool.studio.tools.list.md#output), and these.
 | `environments` | object[] | each `[environments.<name>]` table: `{ name, sandbox, url, network, credential }`, in the order `server.toml` lists them |
 | `sync` | object | `{ schedule, lastAt }`: `on-change`, `daily`, or `manual`, and when the last discovery finished. `lastAt` is null when that discovery failed or none ran |
 | `shaping` | object[] | each `tools.toml` key's shaping: `{ tool, hide, fixed, select, selection }`. Each fixed value is JSON text |
+| `feedback` | object | `{ windowDays, tools }`: each `tools.toml` key's agent feedback over the last 30 days. See below |
 
 `source` takes one of four shapes.
 
@@ -44,6 +45,16 @@ Every field of [list_studio_tools](tool.studio.tools.list.md#output), and these.
 | `local` | `command`, `args`, `env`, `machines` |
 | `openapi`, `graphql`, `grpc` | `from`, `repo`, `path`, `ref`, `url`, `network` |
 
+Each entry of `feedback.tools` is `{ tool, counts, notes }`, in the order `tools.toml` lists the keys (ADR-234).
+
+| Field | Description |
+|---|---|
+| `tool` | the `tools.toml` key |
+| `counts` | `{ calls, schemaRejections, errorResults, retries }` from the served tools' calls, or null when ClickHouse did not answer. A key no agent called reads zeros |
+| `notes` | what reflections' `tool_feedback` said about the tool, newest first, at most five, with repeats dropped |
+
+A call counts when it reached the tool check. A schema rejection is a call the tool's input schema refused, or whose arguments Cedar could not read. An error result is a call the tool answered with an error. A retry is a later call to the same tool in a run that already had one of those. A call denied by policy or parked for approval is not counted.
+
 A credential appears only as its vault reference (`oxagen:credential/<name>`), and `env` lists variable names, never values. A registry source's `arguments` are left out, because a value there may be a literal.
 
 ## Roles
@@ -52,7 +63,7 @@ Org Owner or Admin, or workspace Owner, Member, or Viewer. The handler checks th
 
 ## Side effects
 
-None. The handler reads the folder's three files at the production branch's head, the server's `mcp.server_discoveries` row, the newest `mcp.tool_snapshots` row of each tool the last discovery offered, and the server's registry row.
+None. The handler reads the folder's three files at the production branch's head, the server's `mcp.server_discoveries` row, the newest `mcp.tool_snapshots` row of each tool the last discovery offered, and the server's registry row. For feedback it reads ClickHouse `served_tool_calls` and the newest 200 `agent.memory_reflections` rows with tool feedback in the window.
 
 ## Surfaces
 

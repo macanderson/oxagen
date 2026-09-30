@@ -76,6 +76,28 @@ const studioShapingSchema = z.object({
   selection: z.string().nullable(),
 });
 
+/** The gateway's counts for one tool over the feedback window (ADR-234). */
+const studioToolCountsSchema = z.object({
+  /** Calls that reached the tool check. */
+  calls: z.number().int().nonnegative(),
+  /** Calls the tool's input schema refused, or Cedar could not read. */
+  schemaRejections: z.number().int().nonnegative(),
+  /** Calls the tool ran and answered with an error result. */
+  errorResults: z.number().int().nonnegative(),
+  /** Later calls to the tool in a run that already had one of the above. */
+  retries: z.number().int().nonnegative(),
+});
+
+/** What agents said and did with one tools.toml key (mcp-studio-spec, Feedback). */
+const studioToolFeedbackSchema = z.object({
+  /** The tools.toml key. */
+  tool: z.string(),
+  /** Null when the call store did not answer. Zeros when it answered and no agent called the tool. */
+  counts: studioToolCountsSchema.nullable(),
+  /** What reflections' `tool_feedback` said about the tool, newest first. */
+  notes: z.array(z.string()),
+});
+
 /**
  * One server folder as Studio's server page reads it (#4678): list_studio_tools'
  * catalog, and the rest of the folder beside it.
@@ -105,13 +127,22 @@ export const studioServerOutputSchema = studioToolsListOutputSchema.extend({
   }),
   /** Each tools.toml key's shaping, in the order tools.toml lists the keys. */
   shaping: z.array(studioShapingSchema),
+  /**
+   * Agent feedback for each tools.toml key over the window, in the order
+   * tools.toml lists the keys. A key agents cannot call has zeros and no notes.
+   */
+  feedback: z.object({
+    windowDays: z.number().int().positive(),
+    tools: z.array(studioToolFeedbackSchema),
+  }),
 });
 
 /**
  * Read one server folder for Studio's server page (#4678): its server.toml
  * source, auth, environments, exposure and sync schedule, each tools.toml
  * key's shaping, and the same tool catalog `list_studio_tools` returns, all
- * from one read of the production branch.
+ * from one read of the production branch. Beside them, each key's agent
+ * feedback: the gateway's counts (ADR-234) and reflections' notes.
  *
  * `list_studio_tools` returns the catalog alone, and `get_studio_draft`
  * returns only the edits Studio staged.
@@ -120,7 +151,7 @@ export const toolStudioServerGet = registerCapability({
   name: "get_studio_server",
   domain: "tool",
   description:
-    "Read one server folder on the steering repo's production branch: its source, auth mode, environments, exposure, sync schedule and last discovery, each tools.toml key's shaping, and the tool catalog list_studio_tools returns. A credential appears only as its vault reference.",
+    "Read one server folder on the steering repo's production branch: its source, auth mode, environments, exposure, sync schedule and last discovery, each tools.toml key's shaping, the tool catalog list_studio_tools returns, and each key's agent feedback over the last 30 days: calls, schema rejections, error results, retries, and reflection notes. A credential appears only as its vault reference.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

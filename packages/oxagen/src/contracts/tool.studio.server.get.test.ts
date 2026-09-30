@@ -55,6 +55,16 @@ const output = {
       selection: null,
     },
   ],
+  feedback: {
+    windowDays: 30,
+    tools: [
+      {
+        tool: "search",
+        counts: { calls: 12, schemaRejections: 2, errorResults: 1, retries: 2 },
+        notes: ["Agents sent the amount in dollars, not cents."],
+      },
+    ],
+  },
 } as const;
 
 describe("get_studio_server is registered as declared", () => {
@@ -127,6 +137,24 @@ describe("get_studio_server", () => {
     expect(
       toolStudioServerGet.output.safeParse({ ...output, source }).success,
     ).toBe(true);
+  });
+
+  it("takes feedback whose counts the call store did not answer", () => {
+    const feedback = { windowDays: 30, tools: [{ tool: "search", counts: null, notes: [] }] };
+    expect(toolStudioServerGet.output.safeParse({ ...output, feedback }).success).toBe(true);
+  });
+
+  it("refuses negative counts and a window of zero days", () => {
+    const counts = { calls: -1, schemaRejections: 0, errorResults: 0, retries: 0 };
+    expect(
+      toolStudioServerGet.output.safeParse({
+        ...output,
+        feedback: { windowDays: 30, tools: [{ tool: "search", counts, notes: [] }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      toolStudioServerGet.output.safeParse({ ...output, feedback: { windowDays: 0, tools: [] } }).success,
+    ).toBe(false);
   });
 
   it("refuses the catalog alone, an unknown auth mode, or an unknown schedule", () => {

@@ -7,9 +7,10 @@
 // value only the record holds as not recorded.
 //
 // Each tool comes from the capability's catalog: a tools.toml key, or a tool
-// the last discovery found that no key imports, joined to the key's shaping.
-// What agents' calls said about a tool is not recorded yet, so feedback is
-// null.
+// the last discovery found that no key imports, joined to the key's shaping
+// and its agent feedback (ADR-234). A tool no key imports has no feedback,
+// because agents cannot call it. When the call store did not answer, the
+// counts are null and the panel draws the feedback as not recorded.
 import type { ToolStudioServerGetOutput } from "@oxagen/oxagen/contracts/tool.studio.server.get";
 import type { McpServer } from "@/data/contracts/tools";
 import type { WsCtx } from "@/server/viewer";
@@ -26,9 +27,16 @@ function hintsOf(annotations: Readonly<Record<string, unknown>> | null): string[
     .map(([name]) => name);
 }
 
+/** One key's agent feedback, or null when the counts were not read. */
+function feedbackOf(entry: ServerOutput["feedback"]["tools"][number] | undefined) {
+  if (entry === undefined || entry.counts === null) return null;
+  return { ...entry.counts, notes: entry.notes };
+}
+
 /** get_studio_server's output as the server page's record. */
 function toStudioRecord(out: ServerOutput): StudioRecord {
   const shaping = new Map(out.shaping.map((entry) => [entry.tool, entry]));
+  const feedback = new Map(out.feedback.tools.map((entry) => [entry.tool, entry]));
   return {
     folder: out.folder,
     // The contract's source shapes are the page's, key for key.
@@ -70,7 +78,7 @@ function toStudioRecord(out: ServerOutput): StudioRecord {
                 select: shape.select,
                 selection: shape.selection,
               },
-        feedback: null,
+        feedback: tool.key === null ? null : feedbackOf(feedback.get(tool.key)),
       };
     }),
   };
