@@ -9594,6 +9594,7 @@ type Messages = {
         note: string;
       };
       moreRuns: string;
+      showRuns: string;
       reported: string;
       ungrouped: {
         label: string;
