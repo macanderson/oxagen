@@ -47,21 +47,29 @@ export default defineConfig({
     ],
     // Architecture probes are inputs to src/test/arch, never suites of their own.
     exclude: [...configDefaults.exclude, "src/test/arch/probes/**"],
-    // A second, distinct way this job has failed for no fault in the code
-    // (#3431), not explained by the worker timeouts above. On 2026-09-19 the
-    // report counted about 80 files from the retired app's
-    // `[orgSlug]/[workspaceSlug]` routes at 0% and failed the 90% floor while
-    // all 4641 tests passed. Neither the timeouts nor a shared raw directory
-    // explains it: @vitest/coverage-v8 writes this package's raw data under
-    // `<reportsDirectory>/.tmp`, resolved from this package's root, and
-    // `allowExternal` is off, so another package's files cannot enter the
-    // report through the config. CI now runs this package in its own `unit`
-    // lane as well. The channel was not reproduced. The guard is
-    // `tools/scripts/check-coverage-scope.mjs`, which fails when this report
-    // names a file outside `src` or a file that is not on disk. It reads the
-    // `json` reporter's `coverage/coverage-final.json`, so the reporters and
-    // directory are pinned here, and `reportOnFailure` writes the report even
-    // when a test fails, so the guard always has one to read.
+    // #3431 reported a second cause beside the worker timeouts above (#3327):
+    // on 2026-09-19 this report seemed to count about 80 retired-app files
+    // under `[orgSlug]/[workspaceSlug]` at 0% and fail the 90% floor at
+    // 76.69% while all 4641 tests passed. The report did not do that. In that
+    // run (Actions run 35423736904) this package failed two real tests,
+    // passed 3289 of 3291, and printed no coverage table, because
+    // `reportOnFailure` was off. The 76.69% table, the 411 files, the 4641
+    // tests, and the `[orgSlug]` paths all came from @oxagen/app-deprecated's
+    // own run, which met its own 57% floor. Turbo printed that run's output
+    // next, directly above the line `Failed: @oxagen/app#test:coverage`, and
+    // it was read as this package's. No coverage crossed between the
+    // packages. Each vitest keeps raw data in `<reportsDirectory>/.tmp` under
+    // its own root, reads back only the files its own workers wrote, and
+    // drops files outside its root while `allowExternal` is off. A scratch
+    // run of both suites in one turbo invocation on 2026-09-29 (run
+    // 36663611315) found no foreign file in either report or raw directory.
+    // CI now runs each app in its own `unit` lane, so their output no longer
+    // shares a log. `tools/scripts/check-coverage-scope.mjs` still fails if
+    // this report ever names a file outside `src` or one not on disk. It
+    // reads the `json` reporter's `coverage/coverage-final.json`, so the
+    // reporters and directory are pinned here. `reportOnFailure` writes the
+    // report even when a test fails, which gives the guard a report to read
+    // and puts this package's own table in the log of a failed run.
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "clover", "json"],

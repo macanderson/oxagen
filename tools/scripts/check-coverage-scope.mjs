@@ -4,13 +4,16 @@
  *
  *   node tools/scripts/check-coverage-scope.mjs apps/app
  *
- * On 2026-09-19 `@oxagen/app#test:coverage` failed its 90% floor at 76.69%
- * while all 4641 tests passed. The report counted about 80 files at 0% that
- * did not exist in `apps/app` at that commit. Their paths used
- * `[orgSlug]/[workspaceSlug]`, the retired app's route convention (#3431).
- * A report like that fails a PR for a reason that is not true, and the
- * tempting fix, lowering the threshold, would be permanent damage from a
- * transient cause.
+ * #3431 reported that on 2026-09-19 `@oxagen/app`'s coverage report counted
+ * about 80 retired-app files at 0% and failed its 90% floor. The run's log
+ * shows otherwise: `@oxagen/app` failed two real tests and printed no table,
+ * and the 76.69% table with the `[orgSlug]/[workspaceSlug]` paths was
+ * `@oxagen/app-deprecated`'s own report, printed just above turbo's failure
+ * line for `@oxagen/app`. A scratch run of both suites in one turbo
+ * invocation (run 36663611315) found no file crossing between them. This
+ * guard stays because a report that names another package's files would
+ * fail a PR for a reason that is not true, and the tempting fix, lowering
+ * the threshold, would be permanent damage from a transient cause.
  *
  * This reads `<pkg>/coverage/coverage-final.json` (Vitest's `json` reporter,
  * which `apps/app/vitest.config.ts` pins) and fails when the report:

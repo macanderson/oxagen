@@ -1,8 +1,8 @@
 /**
- * #3431: `@oxagen/app`'s coverage report counted about 80 files from the
- * retired app at 0% and failed its floor while every test passed. The guard
- * must fail on a report like that, and must not pass when there is no report
- * to read.
+ * #3431: a coverage report that names another package's files, or files not
+ * on disk, fails a PR for a reason that is not true. The 2026-09-19 case
+ * turned out to be a misread log, not such a report, but the guard must
+ * still fail on one, and must not pass when there is no report to read.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -73,7 +73,7 @@ describe("checkPackage", () => {
     expect(result.message).toContain("names 2 files, all under apps/app/src");
   });
 
-  it("fails on the retired app's files, the 2026-09-19 report", () => {
+  it("fails on another package's files", () => {
     // The witness: a file from apps/app_deprecated in apps/app's report.
     const foreign = `${CWD}/apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/page.tsx`;
     const result = checkPackage("apps/app", io({ ...clean, [foreign]: entry }));
@@ -84,7 +84,6 @@ describe("checkPackage", () => {
   });
 
   it("fails on a file under src that is not on disk", () => {
-    // The reported paths did not exist at the commit that was tested.
     const ghost = `${APP}/src/app/[orgSlug]/[workspaceSlug]/settings/page.tsx`;
     const result = checkPackage("apps/app", io({ ...clean, [ghost]: entry }));
     expect(result.code).toBe(1);
