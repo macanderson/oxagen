@@ -10,6 +10,11 @@
  *
  * The test counts the bytes read from body files on the synchronous path,
  * as `wal-index.test.ts` does, rather than timing anything.
+ *
+ * The build ran inside the daemon's one hook queue, so every hook on the host
+ * waited for it (#4361). The daemon now builds it before the flush takes the
+ * host queue. The second test holds the build's first awaited read of the
+ * body file and answers a hook while it is held.
  */
 import {
   appendFileSync,
@@ -38,6 +43,30 @@ import { parseRegistryState } from "./registry";
 /** Bytes read from any body file on the synchronous path. */
 const syncReads = vi.hoisted(() => ({ fds: new Set<number>(), bytes: 0 }));
 
+/**
+ * An awaited open of one body file, held until the test lets it go. The
+ * body index build opens the file this way (`readLinesFromAsync`).
+ */
+const heldOpen = vi.hoisted(() => ({
+  path: undefined as string | undefined,
+  reached: undefined as (() => void) | undefined,
+  gate: undefined as Promise<void> | undefined,
+}));
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const fsp = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...fsp,
+    open: (async (path, ...rest) => {
+      if (heldOpen.path !== undefined && String(path) === heldOpen.path) {
+        heldOpen.reached?.();
+        await heldOpen.gate;
+      }
+      return fsp.open(path, ...rest);
+    }) as typeof fsp.open,
+  };
+});
+
 vi.mock("node:fs", async (importOriginal) => {
   const fs = await importOriginal<typeof import("node:fs")>();
   return {
@@ -60,11 +89,13 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
+/** Another session, whose hooks are answered while the build runs. */
+const OTHER = "99999999-8888-7777-6666-555555555555";
 const STORED_BODIES = 20_000;
 
-function hook(name: string) {
+function hook(name: string, sessionId = SESSION) {
   return {
-    payload: { session_id: SESSION, hook_event_name: name, cwd: "/repo" },
+    payload: { session_id: sessionId, hook_event_name: name, cwd: "/repo" },
     env: {},
   };
 }
@@ -108,7 +139,13 @@ describe("a journaled session end over a long body file", () => {
     return handle;
   }
 
-  it("builds the body index off the synchronous path before it flushes", async () => {
+  /**
+   * A session recorded before the index existed, 20,000 stored bodies long
+   * with no sidecar, and the SessionEnd the daemon journaled before it
+   * stopped. Answers the paths, the session's chain uuid, its body file, and
+   * the terminal's `agent_stop`.
+   */
+  async function journaledEnd() {
     const paths = scratchPaths();
     const first = await boot(paths, () => 1_000);
     await first.api.handleHook(hook("SessionStart"));
@@ -202,7 +239,11 @@ describe("a journaled session end over a long body file", () => {
         ],
       ]),
     );
+    return { paths, uuid, bodyPath, stop };
+  }
 
+  it("builds the body index off the synchronous path before it flushes", async () => {
+    const { paths, uuid, bodyPath, stop } = await journaledEnd();
     const second = await boot(paths, () => 2_000);
     // Startup reads the tail of each body file to cut crash orphans. That
     // read is bounded by one line and is not what this counts.
@@ -222,5 +263,44 @@ describe("a journaled session end over a long body file", () => {
     // Reading the body file end to end costs every byte of it. A flush over
     // a built index reads nothing on the synchronous path beyond the batch.
     expect(syncReads.bytes).toBeLessThan(statSync(bodyPath).size / 100);
+  }, 60_000);
+
+  it("answers a hook while the index is still being built", async () => {
+    const { paths, uuid, bodyPath, stop } = await journaledEnd();
+    const second = await boot(paths, () => 2_000);
+    let release = (): void => undefined;
+    heldOpen.gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const reached = new Promise<void>((resolve) => {
+      heldOpen.reached = resolve;
+    });
+    heldOpen.path = bodyPath;
+    try {
+      // The journaled end's final read is due at startup, and the lane
+      // settles it: the index build, then the flush on the host queue.
+      const settling = second.flushGitReads();
+      await reached;
+      // Another session's hook, answered while the build waits on its read.
+      let answered = false;
+      const hooked = second.api
+        .handleHook(hook("SessionStart", OTHER))
+        .then(() => {
+          answered = true;
+        });
+      const deadline = Date.now() + 2_000;
+      while (!answered && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(answered).toBe(true);
+      release();
+      await hooked;
+      await settling;
+    } finally {
+      heldOpen.path = undefined;
+      heldOpen.reached = undefined;
+      release();
+    }
+    expect(second.registry.get(SESSION)?.sealed).toBe(true);
+    expect(second.wal.read(uuid).at(-1)).toEqual(stop);
   }, 60_000);
 });

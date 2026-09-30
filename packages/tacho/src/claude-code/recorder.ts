@@ -919,6 +919,15 @@ export class SessionRecorder {
   }
 
   /**
+   * Whether this session or one of its subagents has claimed or sealed a tool
+   * call. A call the MCP gateway answers before its `PreToolUse` is handled is
+   * known to no session yet (ADR-189 decision 7).
+   */
+  knowsToolCall(toolUseId: string): boolean {
+    return this.toolCallLedger.knows(toolUseId);
+  }
+
+  /**
    * Seal a call the local MCP gateway served for this session, which the
    * harness named by its `tool_use_id` (ADR-189). It lands on the chain whose
    * hook requested the call, a subagent's when a subagent made it. A

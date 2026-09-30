@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
-import { PRIOR_MEMBER, RequestPrefixMemory } from "./request-prefix";
+import {
+  type PrefixFold,
+  PRIOR_MEMBER,
+  RequestPrefixMemory,
+} from "./request-prefix";
 
 const SYSTEM = [
   {
@@ -23,11 +27,26 @@ function request(messages: unknown[], over: Record<string, unknown> = {}) {
   });
 }
 
+/**
+ * Fold a call and remember it, as the proxy does for a call whose frame
+ * reached the WAL before the next call was sent.
+ */
+function landed<T>(
+  memory: RequestPrefixMemory<T>,
+  sessionKey: string,
+  text: string,
+  payload?: T,
+): PrefixFold<T> {
+  const fold = memory.fold(sessionKey, text);
+  memory.remember(sessionKey, fold, payload);
+  return fold;
+}
+
 describe("RequestPrefixMemory", () => {
   it("stores the first call of a session in full", () => {
     const memory = new RequestPrefixMemory();
     const text = request([user("hello")]);
-    const fold = memory.fold("s1", text);
+    const fold = landed(memory, "s1", text);
     expect(fold.text).toBe(text);
     expect(fold.prior).toBeUndefined();
     expect(fold.storedBytes).toBe(fold.fullBytes);
@@ -37,9 +56,9 @@ describe("RequestPrefixMemory", () => {
   it("cuts the messages and fixed fields the previous call already holds", () => {
     const memory = new RequestPrefixMemory();
     const first = request([user("hello")]);
-    memory.fold("s1", first);
+    landed(memory, "s1", first);
     const second = request([user("hello"), assistant("hi"), user("read it")]);
-    const fold = memory.fold("s1", second);
+    const fold = landed(memory, "s1", second);
     expect(fold.prior).toEqual({
       unchanged_from: digestBytes(first),
       messages: 1,
@@ -60,16 +79,21 @@ describe("RequestPrefixMemory", () => {
       assistant("done"),
       user("now write"),
     ]);
-    const again = memory.fold("s1", third);
+    const again = landed(memory, "s1", third);
     expect(again.prior?.unchanged_from).toBe(digestBytes(second));
     expect(again.prior?.messages).toBe(3);
   });
 
   it("stops the fold at the first message that differs (negative)", () => {
     const memory = new RequestPrefixMemory();
-    memory.fold("s1", request([user("hello"), assistant("hi"), user("a")]));
+    landed(
+      memory,
+      "s1",
+      request([user("hello"), assistant("hi"), user("a")]),
+    );
     // Compaction rewrote the second message; nothing past it is shared.
-    const fold = memory.fold(
+    const fold = landed(
+      memory,
       "s1",
       request([user("hello"), assistant("summary of hi"), user("a")]),
     );
@@ -80,8 +104,9 @@ describe("RequestPrefixMemory", () => {
 
   it("keeps a fixed field that changed, and folds the ones that did not", () => {
     const memory = new RequestPrefixMemory();
-    memory.fold("s1", request([user("hello")]));
-    const fold = memory.fold(
+    landed(memory, "s1", request([user("hello")]));
+    const fold = landed(
+      memory,
       "s1",
       request([user("hello"), user("more")], {
         tools: [...TOOLS, { name: "Write", input_schema: {} }],
@@ -97,8 +122,8 @@ describe("RequestPrefixMemory", () => {
     const memory = new RequestPrefixMemory();
     const tiny = (messages: unknown[]) =>
       JSON.stringify({ model: "m", messages });
-    memory.fold("s1", tiny([user("a")]));
-    const fold = memory.fold("s1", tiny([user("a"), user("b")]));
+    landed(memory, "s1", tiny([user("a")]));
+    const fold = landed(memory, "s1", tiny([user("a"), user("b")]));
     expect(fold.prior).toBeUndefined();
     expect(fold.text).toBe(tiny([user("a"), user("b")]));
     expect(fold.storedBytes).toBe(fold.fullBytes);
@@ -106,30 +131,31 @@ describe("RequestPrefixMemory", () => {
 
   it("stores a request in full when nothing is shared, or when the shape is unknown (negative)", () => {
     const memory = new RequestPrefixMemory();
-    memory.fold("s1", request([user("hello")]));
+    landed(memory, "s1", request([user("hello")]));
     const other = JSON.stringify({
       model: "x",
       system: "different",
       messages: [user("new")],
     });
-    const fold = memory.fold("s1", other);
+    const fold = landed(memory, "s1", other);
     expect(fold.text).toBe(other);
     expect(fold.prior).toBeUndefined();
     // Not an object at all: stored as it came, and the session's memory is
     // dropped so the next call does not fold against a stale prior.
-    const raw = memory.fold("s1", "not json");
+    const raw = landed(memory, "s1", "not json");
     expect(raw.text).toBe("not json");
+    expect(raw.shape).toBeUndefined();
     const after = memory.fold("s1", request([user("hello")]));
     expect(after.prior).toBeUndefined();
   });
 
   it("keeps sessions apart, and forgets one on request", () => {
     const memory = new RequestPrefixMemory();
-    memory.fold("s1", request([user("hello")]));
-    const other = memory.fold("s2", request([user("hello"), user("x")]));
+    landed(memory, "s1", request([user("hello")]));
+    const other = landed(memory, "s2", request([user("hello"), user("x")]));
     expect(other.prior).toBeUndefined();
     memory.forget("s1");
-    const again = memory.fold("s1", request([user("hello"), user("y")]));
+    const again = landed(memory, "s1", request([user("hello"), user("y")]));
     expect(again.prior).toBeUndefined();
   });
 
@@ -141,8 +167,9 @@ describe("RequestPrefixMemory", () => {
       instructions,
       input: [{ role: "user", content: "hello" }],
     });
-    memory.fold("s1", first);
-    const fold = memory.fold(
+    landed(memory, "s1", first);
+    const fold = landed(
+      memory,
       "s1",
       JSON.stringify({
         model: "gpt-5",
@@ -158,5 +185,62 @@ describe("RequestPrefixMemory", () => {
       messages: 1,
       fields: ["instructions"],
     });
+  });
+});
+
+describe("RequestPrefixMemory folding before a call lands (#4348)", () => {
+  it("changes nothing on a fold: a call is a prior only once it is remembered", () => {
+    const memory = new RequestPrefixMemory();
+    const first = request([user("hello")]);
+    const a = memory.fold("s1", first);
+    // A's body has not landed, so B has nothing to fold against.
+    const b = memory.fold("s1", request([user("hello"), user("more")]));
+    expect(b.prior).toBeUndefined();
+    memory.remember("s1", a);
+    const c = memory.fold("s1", request([user("hello"), user("again")]));
+    expect(c.prior?.unchanged_from).toBe(digestBytes(first));
+  });
+
+  it("folds two overlapping calls against the last call that landed, never against each other", () => {
+    const memory = new RequestPrefixMemory();
+    const landedFirst = request([user("hello")]);
+    landed(memory, "s1", landedFirst);
+    const aText = request([user("hello"), assistant("hi"), user("a")]);
+    const bText = request([
+      user("hello"),
+      assistant("hi"),
+      user("a"),
+      assistant("ok"),
+      user("b"),
+    ]);
+    const a = memory.fold("s1", aText);
+    const b = memory.fold("s1", bText);
+    expect(a.prior?.unchanged_from).toBe(digestBytes(landedFirst));
+    expect(b.prior?.unchanged_from).toBe(digestBytes(landedFirst));
+    // B lands first. A's frame never does, so A is never remembered, and
+    // the next call folds against B.
+    memory.remember("s1", b);
+    const next = memory.fold("s1", request([user("hello"), user("c")]));
+    expect(next.prior?.unchanged_from).toBe(digestBytes(bText));
+    expect(next.prior?.unchanged_from).not.toBe(digestBytes(aText));
+  });
+
+  it("hands a fold the payload remembered with the call it cut against", () => {
+    const memory = new RequestPrefixMemory<string>();
+    landed(memory, "s1", request([user("hello")]), "context of the first");
+    const fold = memory.fold("s1", request([user("hello"), user("more")]));
+    expect(fold.prior).toBeDefined();
+    expect(fold.priorPayload).toBe("context of the first");
+    // A fold that cut nothing carries no payload (negative).
+    const whole = memory.fold(
+      "s1",
+      JSON.stringify({ model: "x", system: "other", messages: [] }),
+    );
+    expect(whole.prior).toBeUndefined();
+    expect(whole.priorPayload).toBeUndefined();
+    // Each session keeps its own.
+    expect(memory.fold("s2", request([user("hello")])).priorPayload).toBe(
+      undefined,
+    );
   });
 });

@@ -13,7 +13,8 @@ import {
   recordOutput,
   recordsOutput,
 } from "@/test/steering-outputs";
-import { toContextPr, toProposalPage, toRecordPage } from "./steering";
+import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { toContextPr, toOxagenTree, toProposalPage, toRecordPage } from "./steering";
 
 describe("toRecordPage", () => {
   it("keeps each record's classification, commit and file, and the total", () => {
@@ -176,6 +177,76 @@ describe("toContextPr", () => {
       pr: null,
       body: null,
       checks: [],
+    });
+  });
+});
+
+describe("toOxagenTree", () => {
+  const base = {
+    bindingId: "rpb_0a1b2c",
+    role: "main",
+    fullName: "acme/platform",
+    productionBranch: "main",
+    githubDefaultBranch: "main",
+    head: "4d5e6f7a8b9c",
+    workspaceToml: null,
+    governanceToml: 'mode = "solo"\n',
+    governanceMode: "solo",
+    initPullRequest: null,
+    readAt: "2026-09-30T07:00:00.000Z",
+  } as const;
+
+  it("lists a steering repository's steering/ tree, relative to it (#4821)", () => {
+    const tree = toOxagenTree(
+      repositoryTreeGet.output.parse({
+        ...base,
+        oxagen: { present: true, files: [".oxagen/workspace.toml"] },
+        steering: {
+          present: true,
+          files: ["steering/governance.toml", "steering/constraints/a.md"],
+        },
+        governancePath: "steering/governance.toml",
+      }),
+    );
+    expect(tree).toMatchObject({
+      state: "read",
+      root: "steering",
+      files: ["governance.toml", "constraints/a.md"],
+      governancePath: "steering/governance.toml",
+      mode: "solo",
+    });
+  });
+
+  it("lists a legacy repository's .oxagen/ tree beside an unrelated steering/ folder", () => {
+    const tree = toOxagenTree(
+      repositoryTreeGet.output.parse({
+        ...base,
+        oxagen: { present: true, files: [".oxagen/workspace.toml"] },
+        steering: { present: true, files: ["steering/notes.md"] },
+        governancePath: ".oxagen/rules/governance.toml",
+      }),
+    );
+    expect(tree).toMatchObject({
+      root: ".oxagen",
+      files: ["workspace.toml"],
+      governancePath: ".oxagen/rules/governance.toml",
+    });
+  });
+
+  it("lists a legacy repository's .oxagen/ tree", () => {
+    const tree = toOxagenTree(
+      repositoryTreeGet.output.parse({
+        ...base,
+        oxagen: {
+          present: true,
+          files: [".oxagen/rules/governance.toml", ".oxagen/workspace.toml"],
+        },
+      }),
+    );
+    expect(tree).toMatchObject({
+      root: ".oxagen",
+      files: ["rules/governance.toml", "workspace.toml"],
+      governancePath: ".oxagen/rules/governance.toml",
     });
   });
 });

@@ -42,7 +42,6 @@ A failed cut-back is reported through the body failure sink and left for startup
 ## Limits
 
 - `appendRecovered` writes the cursor again after `append` returns, and that write can still throw with the events on disk. The daemon calls it only to flush a journaled SessionEnd terminal, and the journal keeps the terminal until a flush succeeds. The retry finds the events already durable, writes nothing twice (ADR-139), and writes the cursor again.
-- A terminal flush builds its body indexes with awaited reads (#4299), so the event loop keeps answering `/status` and the model proxy. The build still runs inside the daemon's serial queue, so hooks wait behind it. A hook that waits past its deadline is spooled.
 
 ## Evidence
 

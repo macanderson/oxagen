@@ -427,11 +427,11 @@ describe("tachod", () => {
 
   it("answers a hook while a gateway forward is still in flight", async () => {
     // The regression this guards: every gateway call used to sit on the same
-    // serial queue as PreToolUse hooks, OTel ingestion and spool draining, and
-    // the queued task wrapped the whole remote fetch with its 30-second
-    // timeout. One connected app's slow tool call therefore stalled every
-    // wrapped agent on the machine past its 5-10 second decision budget. Put
-    // the line back on `serial.run` and this test hangs until the test timeout.
+    // queue as PreToolUse hooks, OTel ingestion and spool draining, and the
+    // queued task wrapped the whole remote fetch with its 30-second timeout.
+    // One connected app's slow tool call therefore stalled every wrapped agent
+    // on the machine past its 5-10 second decision budget. Put the forward on
+    // a hook queue and this test hangs until the test timeout.
     const plane = fakeControlPlane("etag-3");
     let releaseForward: (() => void) | undefined;
     const held = new Promise<void>((resolve) => {

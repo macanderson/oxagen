@@ -1,7 +1,7 @@
 {
   "name": "get_repository_tree",
   "domain": "repository",
-  "description": "Read what one of the workspace's repositories holds under .oxagen/ on its production branch: the head commit, every path, workspace.toml, governance.toml and its mode, and any open init pull request.",
+  "description": "Read what one of the workspace's repositories holds under .oxagen/ and steering/ on its production branch: the head commit, every path, workspace.toml, the governance file and its mode, and any open init pull request.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -85,6 +85,30 @@
         ],
         "additionalProperties": false
       },
+      "steering": {
+        "type": "object",
+        "properties": {
+          "present": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "present",
+          "files"
+        ],
+        "additionalProperties": false,
+        "default": {
+          "present": false,
+          "files": []
+        }
+      },
       "workspaceToml": {
         "anyOf": [
           {
@@ -94,6 +118,11 @@
             "type": "null"
           }
         ]
+      },
+      "governancePath": {
+        "type": "string",
+        "minLength": 1,
+        "default": ".oxagen/rules/governance.toml"
       },
       "governanceToml": {
         "anyOf": [

@@ -107,7 +107,11 @@ export interface RepositoryTreeResult {
   githubDefaultBranch: string;
   head: string | null;
   oxagen: { present: boolean; files: string[] };
+  /** Every path under `steering/`, in a steering repository (#4821). */
+  steering?: { present: boolean; files: string[] };
   workspaceToml: string | null;
+  /** The governance file the mode was read from. */
+  governancePath?: string;
   governanceToml: string | null;
   governanceMode: "solo" | "team" | "regulated" | "absent" | "invalid";
   initPullRequest: { number: number; htmlUrl: string } | null;
@@ -352,7 +356,10 @@ export async function repoTree(
       `GitHub's default branch is ${result.githubDefaultBranch}. The production branch stays ${result.productionBranch} until you change it with \`oxagen repo branch\`.`,
     );
   }
-  if (!result.oxagen.present) {
+  // A steering repository keeps its files under steering/, and conversion
+  // removes most of .oxagen/, so it is not a repository that needs init.
+  const steering = result.steering?.present === true;
+  if (!steering && !result.oxagen.present) {
     writer.write(
       result.initPullRequest === null
         ? "No .oxagen/ on the production branch. Add it with `oxagen repo init`."
@@ -361,7 +368,10 @@ export async function repoTree(
     return;
   }
   writer.write(`governance mode: ${result.governanceMode}`);
-  for (const file of result.oxagen.files) writer.write(`  ${file}`);
+  const files = steering
+    ? (result.steering?.files ?? [])
+    : result.oxagen.files;
+  for (const file of files) writer.write(`  ${file}`);
 }
 
 // ── repo branch ──────────────────────────────────────────────────────────────

@@ -1075,15 +1075,14 @@ describe("the daemon's git seam", () => {
     const started = Date.now();
     await handle.stop();
     expect(Date.now() - started).toBeLessThan(1_000);
-    // The seal lands as soon as the push hook finishes, and the hook queued
-    // behind the push is refused, so tacho-hook spools it.
+    // The push probe gave up its read when `stop` began (#4366), so the
+    // push hook finished, the hook queued behind it was refused, and the
+    // host chain's `agent_stop` is on disk before the stuck read is let go.
+    const hostChain = () => handle.wal.read(handle.hostRecorder.sessionUuid);
+    expect(hostChain().at(-1)?.kind).toBe("agent_stop");
+    await expect(queued).rejects.toThrow("stopping");
     release();
     await pushing;
-    await expect(queued).rejects.toThrow("stopping");
-    const hostChain = () => handle.wal.read(handle.hostRecorder.sessionUuid);
-    const sealing = Date.now() + 2_000;
-    while (hostChain().at(-1)?.kind !== "agent_stop" && Date.now() < sealing)
-      await new Promise((resolve) => setTimeout(resolve, 1));
     expect(hostChain().at(-1)?.kind).toBe("agent_stop");
   });
 

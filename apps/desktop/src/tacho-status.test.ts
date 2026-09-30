@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   gatewayText,
@@ -406,28 +408,80 @@ describe("the Gateway line", () => {
 });
 
 describe("the Policy line", () => {
-  it("says observe records a permission rule match and lets the call go ahead", () => {
-    expect(policyText("observe")).toBe(
-      "observe: a matching permission rule is recorded and the call goes ahead",
-    );
+  const OBSERVE =
+    "observe: Oxagen records what the policy would decide on a governed call and lets it go ahead. Budget and model limits still apply to model calls routed through Oxagen.";
+  const ENFORCE =
+    "enforce: the policy can deny a governed call or ask first. Budget and model limits also apply to model calls routed through Oxagen.";
+
+  it("says observe records what the policy would decide and lets the call go ahead", () => {
+    expect(policyText("observe")).toBe(OBSERVE);
   });
 
   it("says enforce can deny a governed call or ask first", () => {
-    expect(policyText("enforce")).toBe(
-      "enforce: a matching permission rule can deny a governed call or ask first",
-    );
+    expect(policyText("enforce")).toBe(ENFORCE);
   });
 
-  // The model proxy refuses on its model allowlist and an enforced budget in
-  // either mode, so the observe line must not say nothing is enforced.
-  it("scopes both modes to permission rules", () => {
-    expect(policyText("observe")).toContain("permission rule");
-    expect(policyText("enforce")).toContain("permission rule");
-    expect(policyText("observe")).not.toContain("not enforced");
+  // The mode also decides the contained-tier check and the stale-bundle
+  // check (`evaluatePreToolUse`), so a line scoped to permission rules told
+  // the reader those did not depend on it. The model proxy refuses on its
+  // model allowlist and an enforced budget in either mode, so the observe
+  // line must not say nothing is enforced.
+  it("describes the whole evaluation, not permission rules alone", () => {
+    for (const text of [policyText("observe"), policyText("enforce")]) {
+      expect(text).not.toContain("permission rule");
+      expect(text).toContain("Budget and model limits");
+      expect(text).not.toContain("not enforced");
+    }
   });
 
   it("never names the gateway, whose tier is a separate line", () => {
     expect(policyText("observe")).not.toContain("gateway");
     expect(policyText("enforce")).not.toContain("gateway");
+  });
+
+  // #4570: `read_host` forwards `bundle.mode` from host.json unchecked, and
+  // this line used to read every value but `enforce` as observe.
+  it("says a missing mode is not set, instead of reading it as observe", () => {
+    expect(policyText(undefined)).toBe("unknown policy mode: not set");
+    // Serde writes a member host.json lacks as null.
+    expect(policyText(null)).toBe("unknown policy mode: not set");
+  });
+
+  it("names a mode it does not recognize", () => {
+    expect(policyText("shadow")).toBe("unknown policy mode: shadow");
+    expect(policyText("Enforce")).toBe("unknown policy mode: Enforce");
+    expect(policyText("")).toBe('unknown policy mode: ""');
+    expect(policyText(" observe")).toBe('unknown policy mode: " observe"');
+    expect(policyText(3)).toBe("unknown policy mode: 3");
+    expect(policyText({ mode: "enforce" })).toBe(
+      'unknown policy mode: {"mode":"enforce"}',
+    );
+    // JSON cannot write a symbol, so it falls back to its string form.
+    expect(policyText(Symbol("x"))).toBe("unknown policy mode: Symbol(x)");
+    expect(policyText("x".repeat(500))).toBe(
+      `unknown policy mode: ${"x".repeat(64)}...`,
+    );
+  });
+
+  // The CLI prints the same sentences on `tacho status` and at the end of
+  // `tacho enroll`, from packages/tacho/src/cli/policy-mode.ts. The app shares
+  // no runtime code with the CLI, so this test reads that copy, and the CLI's
+  // test reads this one.
+  it("matches the sentences the tacho CLI prints", () => {
+    const cli = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../packages/tacho/src/cli/policy-mode.ts",
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    );
+    expect(cli).toContain(JSON.stringify(OBSERVE));
+    expect(cli).toContain(JSON.stringify(ENFORCE));
+    expect(cli).toContain("`unknown policy mode: ${");
+    expect(cli).toContain('"not set"');
+    expect(cli).toContain("/^[!-~]+$/");
+    expect(cli).toContain("RAW_MODE_MAX = 64");
   });
 });

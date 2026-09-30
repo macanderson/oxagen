@@ -26,7 +26,9 @@
  * turn an observability outage into an unusable Cursor. `tacho-hook` is built
  * never to exit non-zero and never to print nothing (`runHookProcess`), so
  * what `failClosed` actually covers is the process dying or running past its
- * timeout.
+ * timeout. An executable that is not installed at all is not among them: on
+ * macOS and Linux the command looks for it first and answers an allow when
+ * it is gone (`hook-guard.ts`, ADR-230).
  *
  * **User hooks run with cwd `~/.cursor/`.** Cursor documents project hooks as
  * running from the project root and user hooks from `~/.cursor/`, and a
@@ -65,6 +67,7 @@ import {
   CURSOR_HOOK_EVENTS,
   CURSOR_TO_CLAUDE_EVENT,
   type CursorHookEventName,
+  cursorAnswer,
 } from "../claude-code/cursor-adapter";
 import {
   COMMAND_HOOK_TIMEOUTS_S,
@@ -196,13 +199,25 @@ export function cursorHookTimeoutS(event: CursorHookEventName): number {
   return TELEMETRY_TIMEOUT_S;
 }
 
-/** The entries Tacho installs into `hooks.json`, by Cursor event name. */
+/**
+ * The entries Tacho installs into `hooks.json`, by Cursor event name. Each
+ * command answers the collector's own allow for its event (`cursorAnswer`
+ * with nothing to refuse) when the collector's executable is not installed,
+ * so `failClosed` blocks for a collector that is there and cannot answer,
+ * and not for one that is gone (ADR-230).
+ */
 export function cursorHookEntries(
   config: HookInstallConfig,
 ): Record<CursorHookEventName, HookEntry[]> {
   const out = {} as Record<CursorHookEventName, HookEntry[]>;
   for (const event of CURSOR_HOOK_EVENTS) {
-    const base = commandHookEntry(config, cursorHookTimeoutS(event), "cursor");
+    const absent = cursorAnswer({}, CURSOR_TO_CLAUDE_EVENT[event]).trimEnd();
+    const base = commandHookEntry(
+      config,
+      cursorHookTimeoutS(event),
+      "cursor",
+      absent,
+    );
     out[event] = [
       { ...base, failClosed: CURSOR_ENFORCEMENT_EVENTS.includes(event) },
     ];
