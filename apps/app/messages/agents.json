@@ -16,7 +16,6 @@
       "retired": "retired"
     },
     "list": {
-      "description": "Every actor in this workspace and what it is made of.",
       "tiles": {
         "label": "Agents summary",
         "agentsHere": {

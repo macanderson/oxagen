@@ -26,6 +26,11 @@ import {
   type SafePath,
 } from "@/shared/safe-path";
 
+/**
+ * The Tools views, in the order the retired Tools page drew them.
+ *
+ * @internal Exported for its unit tests; nothing outside this module imports it.
+ */
 export const TOOLS_TABS = [
   "tools",
   "toolbelts",

@@ -62,7 +62,7 @@ const { mcpServerListOutput, toolVersionListOutput } = await import(
 );
 
 const at = { org: "acme", ws: "core-platform" };
-const PROVIDERS = "/acme/core-platform/tools/providers";
+const PROVIDERS = "/acme/core-platform/agents?tab=servers";
 const failure = translator("tools.actions.failure");
 const drill = translator("tools.providers.drill");
 const providers = translator("tools.providers");

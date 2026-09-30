@@ -73,7 +73,6 @@ type Messages = {
       retired: string;
     };
     list: {
-      description: string;
       tiles: {
         label: string;
         agentsHere: {

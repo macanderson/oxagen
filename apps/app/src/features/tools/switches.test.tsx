@@ -125,7 +125,7 @@ describe("Switches › not loaded", () => {
     expect(error).toHaveTextContent("tool_registry_unavailable");
     expect(
       within(error).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/switches");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=switches");
   });
 });
 

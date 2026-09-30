@@ -1,5 +1,6 @@
-// Which Tools view a request asks for, and the link back to it: the tab path
-// segment and its aliases (`/tools/servers`, the pre-rev1 `?tab=` values), a
+// Which Tools view a request asks for, and the link back to it: the retired
+// `/tools` path segment and its aliases (`/tools/servers`, the pre-rev1
+// `?tab=` values), the Agents `?tab=` each view now lives on, a
 // tab id no longer served, the category chip only on the Tools tab,
 // the names toggle, the rows a page holds (#4693), and a cursor whose shape is
 // checked before it goes back to the kernel. Also the `measure = value` lines the auto-approval dialog
@@ -20,6 +21,7 @@ import {
   TOOLS_TABS,
   toolsLink,
   toolsTabOf,
+  toolsTabOfAgentsTab,
   weekdayKey,
 } from "./view";
 
@@ -155,14 +157,16 @@ describe("parseToolsView", () => {
 });
 
 describe("toolsLink", () => {
-  it("leaves every default off the path and the query", () => {
-    expect(toolsLink(at, { tab: "tools" })).toBe("/acme/core-platform/tools");
+  it("names the registry ?tab=tools on the Agents page, and leaves every other default off the query", () => {
+    expect(toolsLink(at, { tab: "tools" })).toBe(
+      "/acme/core-platform/agents?tab=tools",
+    );
     expect(toolsLink(at, { tab: "tools", names: "labels" })).toBe(
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents?tab=tools",
     );
   });
 
-  it("puts the tab in the path and the category, toggle and cursor in the query", () => {
+  it("puts the Agents tab first in the query, then the category, toggle and cursor", () => {
     expect(
       toolsLink(at, {
         tab: "tools",
@@ -171,13 +175,13 @@ describe("toolsLink", () => {
         cursor: "c2",
       }),
     ).toBe(
-      "/acme/core-platform/tools?category=moves_money&names=api&cursor=c2",
+      "/acme/core-platform/agents?tab=tools&category=moves_money&names=api&cursor=c2",
     );
     expect(toolsLink(at, { tab: "switches" })).toBe(
-      "/acme/core-platform/tools/switches",
+      "/acme/core-platform/agents?tab=switches",
     );
     expect(toolsLink(at, { tab: "policy" })).toBe(
-      "/acme/core-platform/tools/policy",
+      "/acme/core-platform/agents?tab=policies",
     );
   });
 
@@ -191,10 +195,10 @@ describe("toolsLink", () => {
         cursor: "c2",
       }),
     ).toBe(
-      "/acme/core-platform/tools?category=moves_money&provider=mcs_01k5s1&names=api&cursor=c2",
+      "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&names=api&cursor=c2",
     );
     expect(toolsLink(at, { tab: "tools", provider: null })).toBe(
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents?tab=tools",
     );
   });
 
@@ -210,10 +214,10 @@ describe("toolsLink", () => {
   // before the cursor.
   it("leaves the default size off and puts any other size before the cursor", () => {
     expect(toolsLink(at, { tab: "tools", rows: TOOLS_PAGE })).toBe(
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents?tab=tools",
     );
     expect(toolsLink(at, { tab: "tools", rows: 25, cursor: "c2" })).toBe(
-      "/acme/core-platform/tools?rows=25&cursor=c2",
+      "/acme/core-platform/agents?tab=tools&rows=25&cursor=c2",
     );
     expect(
       toolsLink(at, {
@@ -224,16 +228,16 @@ describe("toolsLink", () => {
         rows: 100,
       }),
     ).toBe(
-      "/acme/core-platform/tools?category=moves_money&provider=mcs_01k5s1&names=api&rows=100",
+      "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&names=api&rows=100",
     );
   });
 
-  it("round-trips through parseToolsTab and parseToolsView", () => {
+  it("round-trips through the Agents ?tab= and parseToolsView", () => {
     const link = toolsLink(at, { tab: "providers", rows: 10, cursor: "c9" });
     const url = new URL(link, "https://mission-control.invalid");
-    const segments = url.pathname.split("/").slice(4);
-    const tab = parseToolsTab(segments, undefined);
-    expect(tab).toBe("providers");
+    expect(url.pathname).toBe("/acme/core-platform/agents");
+    expect(url.searchParams.get("tab")).toBe("servers");
+    expect(toolsTabOfAgentsTab("servers")).toBe("providers");
     expect(
       parseToolsView("providers", Object.fromEntries(url.searchParams)),
     ).toEqual({
@@ -249,14 +253,52 @@ describe("toolsLink", () => {
 
   it("puts an open belt in the query on the Toolbelts tab alone, and round-trips it", () => {
     const link = toolsLink(at, { tab: "toolbelts", belt: "tbt_01k5s1" });
-    expect(link).toBe("/acme/core-platform/tools/toolbelts?belt=tbt_01k5s1");
+    expect(link).toBe(
+      "/acme/core-platform/agents?tab=toolbelts&belt=tbt_01k5s1",
+    );
     expect(toolsLink(at, { tab: "tools", belt: "tbt_01k5s1" })).toBe(
-      "/acme/core-platform/tools",
+      "/acme/core-platform/agents?tab=tools",
     );
     const url = new URL(link, "https://mission-control.invalid");
     expect(
       parseToolsView("toolbelts", Object.fromEntries(url.searchParams)).belt,
     ).toBe("tbt_01k5s1");
+  });
+});
+
+describe("toolsTabOfAgentsTab", () => {
+  it.each([
+    ["servers", "providers"],
+    ["tools", "tools"],
+    ["toolbelts", "toolbelts"],
+    ["policies", "policy"],
+    ["switches", "switches"],
+  ] as const)("reads the Agents %s tab as the %s view", (tab, view) => {
+    expect(toolsTabOfAgentsTab(tab)).toBe(view);
+  });
+
+  it.each(["agents", "runtimes"] as const)(
+    "holds no Tools view on the %s tab (negative)",
+    (tab) => {
+      expect(toolsTabOfAgentsTab(tab)).toBeNull();
+    },
+  );
+
+  it("is the inverse of the Agents tab each view's link names", () => {
+    const tabs = TOOLS_TABS.map((tab) =>
+      new URL(
+        toolsLink(at, { tab }),
+        "https://mission-control.invalid",
+      ).searchParams.get("tab"),
+    );
+    // TOOLS_TABS is tools, toolbelts, providers, policy, switches.
+    expect(tabs).toEqual([
+      "tools",
+      "toolbelts",
+      "servers",
+      "policies",
+      "switches",
+    ]);
   });
 });
 
