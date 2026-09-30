@@ -12,6 +12,9 @@
 //   - list_studio_findings: the Changes tab's findings (#4742).
 //   - set_mcp_credential: the Connection tab's service secret and OAuth
 //     client forms (#4742). Org Owner and Admin only.
+//   - start_studio_listing and get_studio_listing: Add server's Local command
+//     and registry package forms (ADR-233, #4756). A machine lists a new
+//     server's tools before Review, and the dialog classifies them.
 //   - registryPackagesOf: a registry entry's packages, with the arguments
 //     each takes, from search_mcp_registry.
 //
@@ -31,14 +34,20 @@ import type {
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
+import type {
+  StudioListedTool,
+  StudioListing,
+} from "@oxagen/oxagen/contracts/tool.studio.listing.get";
 import type { ActionResult } from "@/server/kernel";
 import {
   draftStudioDescriptionAction,
   getStudioDiscoveryAction,
+  getStudioListingAction,
   listStudioFindingsAction,
   listStudioToolsAction,
   setMcpCredentialAction,
   startStudioDiscoveryAction,
+  startStudioListingAction,
   tryStudioToolAction,
 } from "./actions";
 import { codeOf, type Refused } from "./review-calls";
@@ -49,6 +58,8 @@ import type { StudioFinding } from "./seams";
 type StudioCapability =
   | "start_studio_discovery"
   | "get_studio_discovery"
+  | "start_studio_listing"
+  | "get_studio_listing"
   | "list_studio_tools"
   | "try_studio_tool"
   | "draft_studio_description"
@@ -244,6 +255,54 @@ export const getStudioDiscovery: StudioCall<
     answer(await getStudioDiscoveryAction(at.org, at.ws, server)),
 };
 
+// ---- Listing (ADR-233, #4756) ---------------------------------------------
+
+export type { StudioListedTool, StudioListing };
+
+/** A local command's pin: the version it runs and its executable's SHA-256. */
+export type StudioListingPin = {
+  version: string;
+  /** `sha256:` and 64 lowercase hex characters. */
+  digest: string;
+};
+
+type ListingInput = {
+  /** The folder name under tools/servers/. */
+  server: string;
+  /** The draft revision the person sees. */
+  revision: number;
+  /** A local command's pin. A registry package sends none. */
+  pin?: StudioListingPin;
+};
+
+/**
+ * Ask a machine in the draft's source.machines to list its tools. Org Owner
+ * and Admin, and workspace Owner.
+ */
+export const startStudioListing: StudioCall<
+  "start_studio_listing",
+  ListingInput,
+  Answer<{ listing: StudioListing }>
+> = {
+  name: "start_studio_listing",
+  call: async (at, input) =>
+    answer(await startStudioListingAction(at.org, at.ws, input)),
+};
+
+/** One draft's listing, or null when it has none. */
+export const getStudioListing: StudioCall<
+  "get_studio_listing",
+  ServerInput,
+  Answer<{ listing: StudioListing | null }>
+> = {
+  name: "get_studio_listing",
+  call: async (at, { server }) =>
+    answer(await getStudioListingAction(at.org, at.ws, server)),
+};
+
+export type StartStudioListing = typeof startStudioListing;
+export type GetStudioListing = typeof getStudioListing;
+
 /**
  * One server's tools: its tools.toml keys, then the snapshot tools no key
  * imports. Workspace Viewers may read it too.
@@ -410,13 +469,7 @@ export type SetMcpCredential = typeof setMcpCredential;
 
 // ---- Registry packages (#4678) --------------------------------------------
 
-export type {
-  RegistryPackage,
-  RegistryPackageArgument,
-} from "@/data/contracts/tools";
-
-/** The package types the local gateway runs (source.registry_type). */
-export const REGISTRY_PACKAGE_TYPES = ["npm", "pypi", "oci", "nuget"] as const;
+export type { RegistryPackage } from "@/data/contracts/tools";
 
 /**
  * A registry entry's packages, as search_mcp_registry carries them. An entry

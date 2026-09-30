@@ -126,11 +126,23 @@ const LOCAL = server({
   publisher: "github.com/someone",
   publisherVerified: false,
   source: "registry",
+  version: "1.0.0",
   endpointUrl: null,
   transports: ["stdio"],
   auth: "none",
   oauthRegistration: null,
   connectable: false,
+  packages: [
+    {
+      registryType: "npm",
+      identifier: "@someone/local-files",
+      version: "1.0.0",
+      transport: "stdio",
+      runtimeHint: "npx",
+      packageArguments: [],
+      environmentVariables: [],
+    },
+  ],
 });
 
 function page(
@@ -700,7 +712,7 @@ describe("Add a provider › registry and OAuth", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens Studio's package form for a package, disabled until #4756, and Change goes back", async () => {
+  it("opens Studio's package form for a package, and Change goes back", async () => {
     openWizard();
     search("acme");
     fireEvent.click(
@@ -711,15 +723,12 @@ describe("Add a provider › registry and OAuth", () => {
     const picked = screen.getByTestId("tools-import-package-picked");
     expect(within(picked).getByText("Local files")).toBeVisible();
     expect(within(picked).getByText("github.com/someone")).toBeVisible();
-    // search_mcp_registry carries the entry's packages (#4742). The form
-    // waits on the first-run listing for a machine-run server (#4756).
+    // search_mcp_registry carries the entry's packages (#4742). A machine
+    // lists the package's tools before Review (ADR-233, #4756).
     expect(screen.getByTestId("studio-add-package")).toBeVisible();
-    expect(screen.getByLabelText(pkg("type"))).toBeDisabled();
-    expect(screen.getByTestId("studio-add-package-submit")).toBeDisabled();
-    const note = screen.getByTestId("studio-add-package-pending");
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-gap", "#4756");
-    expect(note).toHaveTextContent(pkg("pending"));
+    expect(screen.getByLabelText(pkg("type"))).toHaveValue("npm");
+    expect(screen.getByTestId("studio-add-package-submit")).toBeEnabled();
+    expect(screen.queryByTestId("studio-add-package-pending")).not.toBeInTheDocument();
     // A package never takes the remote Connect.
     expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
     fireEvent.click(

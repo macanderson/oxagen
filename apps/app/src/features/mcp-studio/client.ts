@@ -7,13 +7,13 @@
 //
 // The Tools page's Add a provider dialog renders Add server's Studio sources
 // (#4678, items 1 to 3): From a definition, Local command, a registry entry's
-// offer and package form, and discovery progress. The five components live in
-// add-server.tsx, and nothing they reach imports `@/features/tools`, so the
-// two lanes never import each other in a cycle.
+// offer and package form, and discovery progress. Local command and the
+// package form live in machine-fields.tsx, and the rest in add-server.tsx.
+// Nothing they reach imports `@/features/tools`, so the two lanes never
+// import each other in a cycle.
 export {
   DefinitionFields,
   DiscoveryProgress,
-  LocalCommandFields,
   RegistryOfferChip,
-  RegistryPackageFields,
 } from "./add-server";
+export { LocalCommandFields, RegistryPackageFields } from "./machine-fields";

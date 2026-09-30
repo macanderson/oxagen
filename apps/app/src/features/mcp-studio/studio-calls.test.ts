@@ -9,10 +9,12 @@ import { STUDIO_AT } from "./studio.builders";
 import {
   draftStudioDescription,
   getStudioDiscovery,
+  getStudioListing,
   listStudioFindings,
   listStudioTools,
   setMcpCredential,
   startStudioDiscovery,
+  startStudioListing,
   tryStudioTool,
 } from "./studio-calls";
 
@@ -23,6 +25,8 @@ const actions = vi.hoisted(() => ({
   openStudioReviewAction: vi.fn(),
   startStudioDiscoveryAction: vi.fn(),
   getStudioDiscoveryAction: vi.fn(),
+  startStudioListingAction: vi.fn(),
+  getStudioListingAction: vi.fn(),
   listStudioToolsAction: vi.fn(),
   tryStudioToolAction: vi.fn(),
   draftStudioDescriptionAction: vi.fn(),
@@ -73,6 +77,12 @@ describe("the server reads", () => {
       value: { discovery: null },
     },
     {
+      name: "get_studio_listing",
+      call: () => getStudioListing.call(STUDIO_AT, { server: "billing" }),
+      action: actions.getStudioListingAction,
+      value: { listing: null },
+    },
+    {
       name: "list_studio_tools",
       call: () => listStudioTools.call(STUDIO_AT, { server: "billing" }),
       action: actions.listStudioToolsAction,
@@ -109,6 +119,44 @@ describe("the server reads", () => {
     expect(
       await getStudioDiscovery.call(STUDIO_AT, { server: "billing" }),
     ).toEqual(expected);
+  });
+});
+
+describe("start_studio_listing", () => {
+  const input = {
+    server: "notes",
+    revision: 1,
+    pin: { version: "0.9.2", digest: `sha256:${"c3".repeat(32)}` },
+  };
+
+  it("sends the draft revision and the pin, and answers the waiting listing", async () => {
+    const listing = { server: "notes", status: "waiting_for_machine" };
+    actions.startStudioListingAction.mockResolvedValue({
+      ok: true,
+      value: { listing },
+    });
+    expect(await startStudioListing.call(STUDIO_AT, input)).toEqual({
+      ok: true,
+      listing,
+    });
+    expect(actions.startStudioListingAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      input,
+    );
+  });
+
+  it("reads the pin refusal as the handler's reason", async () => {
+    actions.startStudioListingAction.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "needs_digest",
+    });
+    expect(await startStudioListing.call(STUDIO_AT, input)).toEqual({
+      ok: false,
+      reason: "failed",
+      code: "needs_digest",
+    });
   });
 });
 

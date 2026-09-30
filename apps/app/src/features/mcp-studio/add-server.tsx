@@ -9,13 +9,10 @@
 //     refuses after the save, the dialog names the refusal, keeps the folder
 //     name, and a retry saves again at the revision the save returned. It
 //     never starts over at revision 0.
-//   - Local command renders its form with the submit disabled. Review needs
-//     the server's tools, and only discovery lists them, which needs the
-//     folder (#4756).
+//   - Local command and a registry entry's package form live in
+//     machine-fields.tsx: a machine lists the new server's tools before
+//     Review (ADR-233, #4756).
 //   - A registry entry shows whether it offers a remote, a package or both.
-//     The package form asks for machine groups, the package type and the
-//     required arguments the registry lists (registryPackagesOf). Its submit
-//     waits on #4756, as Local command's does.
 //   - Discovery progress follows the server's discovery until it finishes,
 //     through get_studio_discovery and start_studio_discovery (lane M10,
 //     #4682, bound in studio-calls.ts).
@@ -40,7 +37,6 @@ import {
   buttonSecondary,
   inputBase,
   mono,
-  textareaBase,
 } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
@@ -54,14 +50,9 @@ import {
   definitionType,
   newDefinitionServer,
 } from "./new-server";
-import { PendingNote } from "./pending-note";
 import {
   getStudioDiscovery,
-  REGISTRY_PACKAGE_TYPES,
-  type RegistryPackage,
-  type RegistryPackageArgument,
   registryOffer,
-  registryPackagesOf,
   type StudioDiscovery,
   startStudioDiscovery,
 } from "./studio-calls";
@@ -78,7 +69,7 @@ import type { OpenStudioReview, StudioReview } from "./seams";
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 /** A label, a control and an optional hint the control names. */
-function Field({
+export function Field({
   id,
   label,
   hint,
@@ -105,7 +96,7 @@ function Field({
 }
 
 /** A field's value off the form at submit, or "" when the form has none. */
-function textOf(form: HTMLFormElement, name: string): string {
+export function textOf(form: HTMLFormElement, name: string): string {
   const field = form.elements.namedItem(name);
   return field instanceof HTMLInputElement ||
     field instanceof HTMLTextAreaElement ||
@@ -447,93 +438,6 @@ export function DefinitionFields({
   );
 }
 
-/**
- * Local command: the form a local server's server.toml needs, with its
- * submit disabled until #4756 lets Review open a steering PR without the
- * tools only discovery lists.
- */
-export function LocalCommandFields() {
-  const t = useTranslations("mcpStudio.addServer.local");
-  const tFields = useTranslations("mcpStudio.addServer.fields");
-  const id = useId();
-  return (
-    <form
-      data-testid="studio-add-local"
-      aria-describedby={`${id}-pending`}
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-      }}
-    >
-      <p className="text-[13px] text-muted-foreground">{t("intro")}</p>
-      <fieldset disabled className="flex min-w-0 flex-col gap-3">
-        <Field
-          id={`${id}-name`}
-          label={tFields("name")}
-          hint={tFields("nameHint")}
-        >
-          <input
-            id={`${id}-name`}
-            name="name"
-            aria-describedby={`${id}-name-hint`}
-            className={`${inputBase} ${mono}`}
-          />
-        </Field>
-        <Field id={`${id}-command`} label={t("command")} hint={t("commandHint")}>
-          <input
-            id={`${id}-command`}
-            name="command"
-            aria-describedby={`${id}-command-hint`}
-            className={`${inputBase} ${mono}`}
-          />
-        </Field>
-        <Field
-          id={`${id}-arguments`}
-          label={t("arguments")}
-          hint={t("argumentsHint")}
-        >
-          <textarea
-            id={`${id}-arguments`}
-            name="arguments"
-            rows={3}
-            aria-describedby={`${id}-arguments-hint`}
-            className={`${textareaBase} ${mono}`}
-          />
-        </Field>
-        <Field
-          id={`${id}-machines`}
-          label={t("machines")}
-          hint={t("machinesHint")}
-        >
-          <textarea
-            id={`${id}-machines`}
-            name="machines"
-            rows={2}
-            aria-describedby={`${id}-machines-hint`}
-            className={`${textareaBase} ${mono}`}
-          />
-        </Field>
-      </fieldset>
-      <button
-        type="submit"
-        disabled
-        data-testid="studio-add-local-submit"
-        aria-describedby={`${id}-pending`}
-        className={`${buttonPrimary} self-start`}
-      >
-        {t("submit")}
-      </button>
-      <PendingNote
-        id={`${id}-pending`}
-        gap="localCommand"
-        testId="studio-add-local-pending"
-      >
-        {t("pending")}
-      </PendingNote>
-    </form>
-  );
-}
-
 /** Whether a registry entry offers a remote, a package, or both. */
 export function RegistryOfferChip({ server }: { server: RegistryServer }) {
   const t = useTranslations("mcpStudio.addServer.offer");
@@ -546,165 +450,6 @@ export function RegistryOfferChip({ server }: { server: RegistryServer }) {
     >
       {t(offer)}
     </span>
-  );
-}
-
-/** A required argument's name: a named argument's flag, else its hint. */
-function argumentName(argument: RegistryPackageArgument): string {
-  return argument.name ?? argument.valueHint ?? "";
-}
-
-/**
- * The package path of a registry entry: machine groups, the package type and
- * the required arguments the registry lists. The submit waits on #4756, as
- * Local command's does: a new folder for a server the local gateway runs
- * needs its tools listed before Review can open a steering PR.
- */
-export function RegistryPackageFields({
-  server,
-  packages = registryPackagesOf(server),
-}: {
-  server: RegistryServer;
-  /** The entry's packages, as search_mcp_registry lists them. */
-  packages?: readonly RegistryPackage[];
-}) {
-  const t = useTranslations("mcpStudio.addServer.package");
-  const tLocal = useTranslations("mcpStudio.addServer.local");
-  const id = useId();
-  const runnable = packages.filter((pkg) =>
-    REGISTRY_PACKAGE_TYPES.some((type) => type === pkg.registryType),
-  );
-  const [type, setType] = useState<string>(
-    runnable[0]?.registryType ?? REGISTRY_PACKAGE_TYPES[0],
-  );
-  const chosen = runnable.find((pkg) => pkg.registryType === type) ?? null;
-  // A fixed value is the registry's to set, so the form asks for the rest.
-  const required =
-    chosen?.packageArguments.filter(
-      (argument) => argument.isRequired && argument.value === null,
-    ) ?? [];
-  const variables =
-    chosen?.environmentVariables.filter((variable) => variable.isRequired) ??
-    [];
-  return (
-    <form
-      data-testid="studio-add-package"
-      aria-describedby={`${id}-pending`}
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-      }}
-    >
-      <p className="text-[13px] text-muted-foreground">{t("intro")}</p>
-      <fieldset disabled className="flex min-w-0 flex-col gap-3">
-        <Field
-          id={`${id}-machines`}
-          label={tLocal("machines")}
-          hint={tLocal("machinesHint")}
-        >
-          <textarea
-            id={`${id}-machines`}
-            name="machines"
-            rows={2}
-            aria-describedby={`${id}-machines-hint`}
-            className={`${textareaBase} ${mono}`}
-          />
-        </Field>
-        <Field id={`${id}-type`} label={t("type")}>
-          <select
-            id={`${id}-type`}
-            name="type"
-            value={type}
-            onChange={(event) => {
-              setType(event.currentTarget.value);
-            }}
-            className={`${inputBase} ${mono}`}
-          >
-            {REGISTRY_PACKAGE_TYPES.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {required.length === 0 ? null : (
-          <div
-            role="group"
-            aria-labelledby={`${id}-arguments`}
-            className="flex flex-col gap-2"
-            data-testid="studio-add-package-arguments"
-          >
-            <p
-              id={`${id}-arguments`}
-              className="text-sm font-medium text-foreground"
-            >
-              {t("arguments")}
-            </p>
-            {required.map((argument, index) => {
-              const name = argumentName(argument);
-              const fieldId = `${id}-argument-${String(index)}`;
-              return (
-                <Field
-                  key={fieldId}
-                  id={fieldId}
-                  label={name}
-                  hint={argument.isSecret ? t("secretHint") : undefined}
-                >
-                  <input
-                    id={fieldId}
-                    name={`argument:${name}`}
-                    defaultValue={argument.default ?? ""}
-                    aria-describedby={
-                      argument.isSecret ? `${fieldId}-hint` : undefined
-                    }
-                    className={`${inputBase} ${mono}`}
-                  />
-                </Field>
-              );
-            })}
-          </div>
-        )}
-        {variables.length === 0 ? null : (
-          <div className="flex flex-col gap-1.5">
-            <p
-              id={`${id}-variables`}
-              className="text-sm font-medium text-foreground"
-            >
-              {t("variables")}
-            </p>
-            <ul
-              aria-labelledby={`${id}-variables`}
-              className="flex flex-wrap gap-1.5"
-            >
-              {variables.map((variable) => (
-                <li
-                  key={variable.name}
-                  className={`${mono} rounded border border-border px-1.5 py-0.5 text-[11px] text-foreground`}
-                >
-                  {variable.name}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </fieldset>
-      <button
-        type="submit"
-        disabled
-        data-testid="studio-add-package-submit"
-        aria-describedby={`${id}-pending`}
-        className={`${buttonPrimary} self-start`}
-      >
-        {t("submit")}
-      </button>
-      <PendingNote
-        id={`${id}-pending`}
-        gap="localCommand"
-        testId="studio-add-package-pending"
-      >
-        {t("pending")}
-      </PendingNote>
-    </form>
   );
 }
 

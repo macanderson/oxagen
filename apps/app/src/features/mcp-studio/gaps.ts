@@ -11,14 +11,6 @@ const STUDIO_GAPS = {
    * issue carries the record.
    */
   record: 4678,
-  /**
-   * Adding a server the local gateway runs, by local command or as a
-   * registry package. Review refuses a new local server with
-   * `source_required`, because its draft carries no source and its folder has
-   * no tools.lock.json yet, and only discovery, which needs the folder, can
-   * list its tools (packages/handlers/src/mcp-studio/import/build.ts).
-   */
-  localCommand: 4756,
 } as const;
 
 export type StudioGap = keyof typeof STUDIO_GAPS;
