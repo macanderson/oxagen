@@ -90,12 +90,20 @@ force at once, because every call reads it from the production head.
 
 Added on 2026-09-30. When the production head moves, the sync reads the mode in
 `steering/governance.toml` at the last synced head and at the new one. A
-different mode, on a commit with no `Oxagen-Version` trailer, landed outside
-Oxagen. The trailer is the test health's history judge already uses (`diverged.ts`),
-so the two agree on which commits Oxagen made. `landSteeringPr` writes it on
-every merge, and `set_governance_mode` and `merge_context_pr` land every
-governance change through it and record their own events. So the sync records
-only the changes nobody else records.
+different mode on a commit Oxagen did not merge landed outside Oxagen.
+`landSteeringPr` writes an `Oxagen-Version` trailer on every merge, and
+`set_governance_mode` and `merge_context_pr` land every governance change
+through it and record their own events. Anyone who can push can write that
+trailer too, so the sync counts it only when Oxagen's records hold the commit:
+a governance proposal Oxagen merged names it, or the steering version store
+holds it at the trailer's version. So the sync records only the changes
+nobody else records, and a forged trailer does not hide one.
+
+A governance PR someone merges on the host is not finished by
+`merge_context_pr`. It resumes a merged PR only when an earlier call's merge
+claim shows Oxagen started the merge. Otherwise it refuses
+`merged_outside_oxagen` and asks for the sync, which records the change with
+no approver.
 
 - A governance PR merged on the host reads `merged` with its merge commit and
   no approver, and the sync deletes its branch.
