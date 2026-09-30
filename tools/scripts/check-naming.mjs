@@ -105,6 +105,10 @@ const ACTIONS = new Set([
   "try",
   "deploy",
   "resume",
+  // retry_steering_repo_provision (#4750): re-sends a failed or blocked job.
+  // Not "resume": resume continues a suspended run; retry restarts one that
+  // already stopped on an error, from its first step.
+  "retry",
   "suspend", // pairs with "resume": suspend_agent (MC spec App. E, ADR-057)
   "retire", // retire_agent: an identity is retired, never deleted (ADR-057)
   // seal_run: an operator closes a wrapped run's record for good (ADR-168).

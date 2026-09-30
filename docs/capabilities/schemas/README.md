@@ -387,6 +387,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - open_init_pr
 - record_working_copy
 - repair_steering_repo
+- retry_steering_repo_provision
 - set_production_branch
 - unlink_repository
 
