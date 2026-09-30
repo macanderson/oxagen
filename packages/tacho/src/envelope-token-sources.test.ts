@@ -6,7 +6,8 @@
  * ClickHouse stores a missing `Nullable` column as null.
  */
 import { describe, expect, it } from "vitest";
-import { flattenEvent } from "./columns";
+import { hashEvent } from "./chain";
+import { flattenEvent, unflattenEvent } from "./columns";
 import {
   type BodyOf,
   parseTachoEvent,
@@ -190,6 +191,26 @@ describe("the token source columns", () => {
     // An unmeasured source sends no column, which the store reads as null.
     expect(row).not.toHaveProperty("context_frame_tokens");
     expect(row).not.toHaveProperty("context_frame_tokens_basis");
+  });
+
+  // Ingest accepted an unpaired count until the pair rule (#4508 item 5), so
+  // a stored row can hold one. Reading the row back must not apply a rule the
+  // row was sealed before.
+  it("reads back a stored row whose count has no basis", () => {
+    const paired = llmCall({
+      tool_definition_tokens: 120,
+      tool_definition_tokens_basis: "reported",
+    });
+    const { tool_definition_tokens_basis: _dropped, ...body } =
+      paired.body as Record<string, unknown>;
+    const unhashed = { ...paired, body } as Record<string, unknown>;
+    const stored = { ...unhashed, hash: hashEvent(unhashed) } as TachoEvent;
+    expect(() => parseTachoEvent(wire(stored))).toThrow();
+    const rebuilt = unflattenEvent(flattenEvent(stored));
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt?.hash).toBe(stored.hash);
+    expect(rebuilt?.body).toMatchObject({ tool_definition_tokens: 120 });
+    expect(rebuilt?.body).not.toHaveProperty("tool_definition_tokens_basis");
   });
 
   it("flattens a frame from an older recorder with none of the columns", () => {

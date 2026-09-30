@@ -1123,21 +1123,31 @@ const TOKEN_SOURCE_KINDS: ReadonlySet<TachoKind> = new Set(
 );
 
 /**
+ * One envelope, discriminated on `kind`, with no rule across a body's
+ * members. `unflattenEvent` reads a stored row back through this, not
+ * through {@link tachoEventSchema}: a row ingest accepted before the token
+ * source pair rule existed (#4508) can carry a count with no basis, and a
+ * stored row has to stay readable under every rule added after it was
+ * sealed. New events go through `tachoEventSchema`.
+ */
+export const tachoRecordedEventSchema = z.discriminatedUnion("kind", members);
+
+/**
  * The wire schema: one envelope, discriminated on `kind`. A body that
  * carries a token source count carries its basis too, and the reverse
  * ({@link refineTokenSourcePairs}). The pair is checked here rather than on
  * each body, which must stay a plain object for `KIND_BODIES[kind].shape`.
  */
-export const tachoEventSchema = z
-  .discriminatedUnion("kind", members)
-  .superRefine((event, ctx) => {
+export const tachoEventSchema = tachoRecordedEventSchema.superRefine(
+  (event, ctx) => {
     if (TOKEN_SOURCE_KINDS.has(event.kind))
       refineTokenSourcePairs(
         event.body as Readonly<Record<string, unknown>>,
         ctx,
         ["body"],
       );
-  });
+  },
+);
 
 export type TachoEvent = z.infer<typeof tachoEventSchema>;
 export type TachoEventInput = z.input<typeof tachoEventSchema>;
