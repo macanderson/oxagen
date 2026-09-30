@@ -59,18 +59,31 @@ const PROCESS_START_TIMEOUT_MS = 2_000;
  */
 const PS_ENV = { ...process.env, TZ: "UTC", LC_ALL: "C", LANG: "C" };
 
-function psExec(command: string, args: string[]): ReturnType<Exec> {
+function psExec(
+  command: string,
+  args: string[],
+  timeoutMs = PROCESS_START_TIMEOUT_MS,
+): ReturnType<Exec> {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     env: PS_ENV,
     stdio: ["ignore", "pipe", "ignore"],
-    timeout: PROCESS_START_TIMEOUT_MS,
+    timeout: timeoutMs,
   });
   return {
     status: result.status,
     stdout: typeof result.stdout === "string" ? result.stdout : "",
     stderr: "",
   };
+}
+
+/**
+ * The `ps` that `readProcessStarts` runs by default, with its own timeout.
+ * `tacho-hook` shares one short budget across its `ps` calls, so it passes
+ * what is left of that budget here.
+ */
+export function psExecWithin(timeoutMs: number): Exec {
+  return (command, args) => psExec(command, args, timeoutMs);
 }
 
 /** `psExec` without holding the event loop while `ps` runs. */
@@ -118,6 +131,45 @@ export function procStartTicks(stat: string): string | undefined {
     .trim()
     .split(/\s+/)[19];
   return ticks !== undefined && /^\d+$/.test(ticks) ? ticks : undefined;
+}
+
+/** What `/proc/<pid>/stat` says about a process's parent. */
+export interface ProcParent {
+  ppid: number;
+  /** The command name (field 2), which the kernel cuts to 15 bytes. */
+  comm: string;
+}
+
+/**
+ * The command name (field 2) and parent pid (field 4) in `/proc/<pid>/stat`.
+ * The name sits in parentheses and may hold parentheses itself, so it runs
+ * from the first `(` to the last `)`, and the fields after it are counted
+ * from there.
+ */
+export function procParent(stat: string): ProcParent | undefined {
+  const open = stat.indexOf("(");
+  const close = stat.lastIndexOf(")");
+  if (open < 0 || close < open) return undefined;
+  // Field 3 is the state, so field 4 is the second after the name.
+  const ppid = stat
+    .slice(close + 1)
+    .trim()
+    .split(/\s+/)[1];
+  if (ppid === undefined || !/^\d+$/.test(ppid)) return undefined;
+  return { ppid: Number(ppid), comm: stat.slice(open + 1, close) };
+}
+
+/**
+ * A process's parent pid and command name, from `/proc` on Linux. Undefined
+ * where there is no `/proc` (macOS, Windows) or no such process. Reading the
+ * file spawns nothing and cannot hang, where `ps` can do both.
+ */
+export function readProcParent(
+  pid: number,
+  read: ReadText = readText,
+): ProcParent | undefined {
+  const stat = read(`/proc/${pid}/stat`);
+  return stat === undefined ? undefined : procParent(stat);
 }
 
 /**
@@ -213,6 +265,30 @@ export async function readProcessStartsAsync(
   if (platform === "win32" || pids.length === 0) return undefined;
   if (platform === "linux") return readProcStarts(pids, read);
   return parsePsStarts(pids, await exec("ps", PS_START_ARGS(pids)));
+}
+
+/**
+ * `readProcessStarts` answered at once where it spawns nothing (`/proc` on
+ * Linux, nothing on Windows), and as a promise where it runs `ps`. The
+ * registry reads a pid's start time this way when a live hook first names
+ * the pid, so on macOS that hook does not hold the event loop, and with it
+ * every other hook and the model proxy's streams, while `ps` runs (#4366).
+ */
+export function readProcessStartsNoWait(
+  pids: readonly number[],
+  exec: ExecAsync = psExecAsync,
+  platform: NodeJS.Platform = process.platform,
+  read: ReadText = readText,
+):
+  | Map<number, string>
+  | undefined
+  | Promise<Map<number, string> | undefined> {
+  if (platform === "win32" || pids.length === 0) return undefined;
+  if (platform === "linux") return readProcStarts(pids, read);
+  return exec("ps", PS_START_ARGS(pids)).then(
+    (result) => parsePsStarts(pids, result),
+    () => undefined,
+  );
 }
 
 export function isProcessAlive(pid: number): boolean {

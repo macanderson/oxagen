@@ -87,6 +87,7 @@ import {
   listClaudeProcesses,
   readProcessStarts,
   readProcessStartsAsync,
+  readProcessStartsNoWait,
 } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
 import {
@@ -623,6 +624,14 @@ async function initializeDaemon(
       : options.exec !== undefined
         ? readProcessStarts(pids, options.exec, platform)
         : readProcessStartsAsync(pids, undefined, platform);
+  // The hook path's read, when a live hook first names a pid. Where it runs
+  // `ps` it answers with a promise and the registry records the start time
+  // when it lands, so the hook, and every hook queued behind it, is not held
+  // while `ps` runs (#4366).
+  const hookProcessStarts =
+    injectedStarts ??
+    ((pids: readonly number[]) =>
+      readProcessStartsNoWait(pids, execAsync, platform));
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
@@ -725,7 +734,7 @@ async function initializeDaemon(
     context,
     scope: sessionScopeOf(host),
     now,
-    processStarts,
+    processStarts: hookProcessStarts,
   });
   // Read before anything in this startup touches the file, so it names the
   // previous process's last write — the moment its record of a live session

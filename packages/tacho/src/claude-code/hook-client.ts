@@ -68,11 +68,14 @@ import type { BuiltinAction } from "../policy/builtins";
 import { type CedarRuntime, loadCedarRuntime } from "../policy/runtime";
 import { hookInputSchema } from "./hooks";
 import {
+  type ProcessInfo,
+  processStartInstance,
   type PsLookup,
-  psStartInstance,
   resolveStellaIdentity,
+  STELLA_PID_ENV,
   type StellaIdentity,
   stellaAnswer,
+  stellaExportedPid,
   stellaHarnessPid,
   translateStellaPayload,
   tryParseAnswerBody,
@@ -295,14 +298,15 @@ export interface HookRunDeps {
    */
   harnessInstance?: (pid: number) => string | undefined;
   /**
-   * The two `ps` reads behind a Stella identity when neither override above
-   * is given: the parent's parent and name, and a process's start time. The
-   * identity is cached under `TACHO_HOME` (`resolveStellaIdentity`), so most
-   * hooks call neither. A test injects them to count the calls or to fail
-   * one.
+   * The reads behind a Stella identity when neither override above is given:
+   * the parent's parent and name from `ps` and from `/proc`, and a process's
+   * start time. The identity is cached under `TACHO_HOME`
+   * (`resolveStellaIdentity`), so most hooks make none of them. A test
+   * injects them to count the calls or to fail one.
    */
   stellaPs?: {
     lookup?: PsLookup;
+    procLookup?: (pid: number) => ProcessInfo | undefined;
     startInstance?: (pid: number) => string | undefined;
   };
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
@@ -999,11 +1003,11 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     if (deps.harnessPid !== undefined || deps.harnessInstance !== undefined) {
       const pid =
         deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
-      // Windows has no `ps`, so there the id stays the bare pid form.
+      // Windows has no start time to read, so there the id stays the bare
+      // pid form.
       const instance = (
         deps.harnessInstance ??
-        ((pid: number) =>
-          platform === "win32" ? undefined : psStartInstance(pid))
+        ((pid: number) => processStartInstance(pid, undefined, platform))
       )(pid);
       identity = { pid, ...(instance !== undefined ? { instance } : {}) };
     } else if (host === undefined && hostReadError === undefined) {
@@ -1016,14 +1020,22 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         typeof (raw as Record<string, unknown>)["event"] === "string"
           ? ((raw as Record<string, unknown>)["event"] as string)
           : undefined;
+      // A Stella that names its own pid is taken at its word, so a forking
+      // shell cannot stand in for it when `ps` fails (#4358). Stella does not
+      // export it yet.
+      const exportedPid = stellaExportedPid(deps.env[STELLA_PID_ENV]);
       identity = resolveStellaIdentity({
         parentPid: process.ppid,
         platform,
         cacheDir: deps.paths.stellaIdentity,
         now: now(),
+        ...(exportedPid !== undefined ? { exportedPid } : {}),
         ...(stellaEvent !== undefined ? { event: stellaEvent } : {}),
         ...(deps.stellaPs?.lookup !== undefined
           ? { lookup: deps.stellaPs.lookup }
+          : {}),
+        ...(deps.stellaPs?.procLookup !== undefined
+          ? { procLookup: deps.stellaPs.procLookup }
           : {}),
         ...(deps.stellaPs?.startInstance !== undefined
           ? { startInstance: deps.stellaPs.startInstance }

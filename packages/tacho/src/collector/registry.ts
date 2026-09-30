@@ -527,11 +527,24 @@ export interface RegistryOptions {
   now: () => number;
   /**
    * The start time of each of these pids, as `readProcessStarts` reads it.
-   * Absent, or answering undefined, records no `pidInstance`.
+   * Absent, or answering undefined, records no `pidInstance`. A reader that
+   * runs `ps` answers with a promise (`readProcessStartsNoWait`), and the
+   * start time is recorded when it lands (`notePid`).
    */
   processStarts?: (
     pids: readonly number[],
-  ) => ReadonlyMap<number, string> | undefined;
+  ) =>
+    | ReadonlyMap<number, string>
+    | undefined
+    | PromiseLike<ReadonlyMap<number, string> | undefined>;
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
 }
 
 /**
@@ -565,8 +578,14 @@ export class SessionRegistry {
    * boundary delivered them, waiting for the daemon to send them.
    */
   private readonly expiredOnSeal: CommandAcknowledgement[] = [];
-  /** The pid each record's start time was last read for, read or not. */
-  private readonly startReadFor = new WeakMap<SessionRecord, number>();
+  /**
+   * The start-time read each record last began, whether or not it answered.
+   * A read that lands after another one began for the record is stale.
+   */
+  private readonly startReadFor = new WeakMap<
+    SessionRecord,
+    { pid: number }
+  >();
   /**
    * Sealed records `releaseSealedState` has emptied, with their state as the
    * sealed-state file holds it. A record leaves this map when anything
@@ -866,6 +885,12 @@ export class SessionRegistry {
    * down, and its pid may name another process by now, so it reads nothing
    * and the next live hook does. One read per pid, not one per hook: `ps` is
    * a process spawn.
+   *
+   * Where the read runs `ps` (macOS), it answers later and this returns
+   * first, so the hook is answered while `ps` runs rather than after it
+   * (#4366). Until the read lands the record has no `pidInstance`, which
+   * every reader of it already treats as a start time it could not read:
+   * the sweep and the kill path fall back to the bare pid.
    */
   private notePid(record: SessionRecord, pid: number, live: boolean): void {
     if (record.pid !== pid) {
@@ -874,10 +899,36 @@ export class SessionRegistry {
     }
     if (!live || record.pidInstance !== undefined) return;
     if (isInternalSession(record.harnessSessionId)) return;
-    if (this.startReadFor.get(record) === pid) return;
-    this.startReadFor.set(record, pid);
-    const started = this.options.processStarts?.([pid])?.get(pid);
-    if (started !== undefined) record.pidInstance = started;
+    if (this.startReadFor.get(record)?.pid === pid) return;
+    const read = { pid };
+    this.startReadFor.set(record, read);
+    const started = this.options.processStarts?.([pid]);
+    if (isPromiseLike<ReadonlyMap<number, string> | undefined>(started)) {
+      started.then(
+        (starts) => this.landStart(record, read, starts?.get(pid)),
+        () => undefined,
+      );
+      return;
+    }
+    const instance = started?.get(pid);
+    if (instance !== undefined) record.pidInstance = instance;
+  }
+
+  /**
+   * Record a start time that answered after the hook that asked for it. It
+   * lands only while this is still the record's latest read: a resume or a
+   * new pid since then began another one, and this answer may name the
+   * process that held the pid before.
+   */
+  private landStart(
+    record: SessionRecord,
+    read: { pid: number },
+    instance: string | undefined,
+  ): void {
+    if (instance === undefined || this.startReadFor.get(record) !== read)
+      return;
+    if (record.pid !== read.pid || record.pidInstance !== undefined) return;
+    record.pidInstance = instance;
   }
 
   /**
