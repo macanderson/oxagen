@@ -9679,6 +9679,7 @@ type Messages = {
       applied: string;
       unchanged: string;
       openPr: string;
+      review: string;
       failure: {
         denied: string;
         noRepository: string;
