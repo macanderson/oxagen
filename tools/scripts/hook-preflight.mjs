@@ -15,16 +15,19 @@
  *
  * This walks the named root script the way `tools/scripts/lib/script-deps.mjs`
  * reads it: every `node` or `tsx` entry, every package those files import at
- * run time, and `tsx` itself when the script uses it. If one is not installed
- * where Node would look for it, it prints which one, says the check did not
- * run, and exits 3. Exit 3 means "could not run", never "ran and failed"; the
- * checks themselves exit 1.
+ * run time, and `tsx` itself when the script uses it. When one of those is a
+ * workspace package, it also checks the packages that workspace package
+ * declares, from the package's own directory, since a filtered install can
+ * link a workspace package without installing its dependencies. If one is
+ * not installed where Node would look for it, it prints which one, says the
+ * check did not run, and exits 3. Exit 3 means "could not run", never "ran
+ * and failed"; the checks themselves exit 1.
  *
  * It checks presence, not versions, and it reads files only, so it adds a few
  * tens of milliseconds to a push.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   entriesOf,
@@ -64,10 +67,14 @@ export function commandFor(target, scripts) {
  *   read: (p: string) => string,
  *   exists: (p: string) => boolean,
  *   loadTs: () => Promise<typeof import("typescript")>,
+ *   realpath?: (p: string) => string,
  * }} io
  * @returns {Promise<{ missing: { name: string, neededBy: string }[], unknownScript: boolean }>}
  */
-export async function preflight(name, { repoRoot, read, exists, loadTs }) {
+export async function preflight(
+  name,
+  { repoRoot, read, exists, loadTs, realpath = (p) => p },
+) {
   const { scripts = {} } = JSON.parse(read(join(repoRoot, "package.json")));
   const { command, label } = commandFor(name, scripts);
   const isFile = !label.startsWith("pnpm ");
@@ -76,9 +83,41 @@ export async function preflight(name, { repoRoot, read, exists, loadTs }) {
   }
 
   const missing = [];
+  const walked = new Set();
   const need = (pkg, neededBy, fromDir = repoRoot) => {
-    if (!installedPackageDir(pkg, fromDir, repoRoot, exists)) {
-      missing.push({ name: pkg, neededBy });
+    const dir = installedPackageDir(pkg, fromDir, repoRoot, exists);
+    if (!dir) {
+      if (!missing.some((m) => m.name === pkg)) {
+        missing.push({ name: pkg, neededBy });
+      }
+      return;
+    }
+    // A workspace package is a link to its own directory in the tree. Its
+    // code runs from there and resolves its own imports from there, so the
+    // packages it declares must be installed there too. `pnpm install
+    // --filter @oxagen/tacho...` links `@oxagen/oxagen` at the root and
+    // installs none of its dependencies, so `docs:schemas --check` died on
+    // "Cannot find package 'zod'" after this preflight had passed (scratch
+    // run 36664757916). npm packages are not walked: pnpm installs a
+    // package's own dependencies with it.
+    const real = realpath(dir);
+    const rel = relative(repoRoot, real);
+    const inTree =
+      rel !== "" &&
+      !rel.startsWith("..") &&
+      !isAbsolute(rel) &&
+      !rel.split(/[\\/]/).includes("node_modules");
+    if (!inTree || walked.has(real)) return;
+    walked.add(real);
+    let dependencies = {};
+    try {
+      ({ dependencies = {} } = JSON.parse(read(join(real, "package.json"))));
+    } catch {
+      return;
+    }
+    const manifest = relative(repoRoot, join(real, "package.json"));
+    for (const dep of Object.keys(dependencies)) {
+      need(dep, `${pkg}, declared in ${manifest}`, real);
     }
   };
 
@@ -107,11 +146,18 @@ export async function preflight(name, { repoRoot, read, exists, loadTs }) {
 /**
  * The message a person reads when the check cannot run.
  *
+ * It gives two ways out. A full `pnpm install` always works. A filtered
+ * install works too once it adds the root package's own dependency graph
+ * (`--filter <root>...`), which installs every workspace package the root
+ * scripts run, such as `@oxagen/oxagen` and its `zod` (scratch run
+ * 36665719175, step F5).
+ *
  * @param {string} name
  * @param {{ missing: { name: string, neededBy: string }[], unknownScript: boolean }} result
+ * @param {string} [rootPackage] the root package.json `name`
  * @returns {string}
  */
-export function report(name, result) {
+export function report(name, result, rootPackage = "oxagen-monorepo") {
   const { label } = commandFor(name, {});
   if (result.unknownScript) {
     return label.startsWith("pnpm ")
@@ -125,6 +171,7 @@ export function report(name, result) {
     ),
     "This checkout is missing packages, which usually means it was installed with `pnpm install --filter`.",
     "Run `pnpm install` at the repository root, then try again.",
+    `To keep a filtered install, add the root's dependencies to it: \`pnpm install --filter <your package>... --filter ${rootPackage}...\`.`,
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -143,9 +190,13 @@ if (isEntrypoint(import.meta.url)) {
     read: (p) => readFileSync(p, "utf8"),
     exists: existsSync,
     loadTs: async () => (await import("typescript")).default,
+    realpath: realpathSync,
   });
   if (result.unknownScript || result.missing.length > 0) {
-    process.stderr.write(report(name, result));
+    const { name: rootPackage } = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    );
+    process.stderr.write(report(name, result, rootPackage));
     process.exit(CANNOT_RUN);
   }
 }

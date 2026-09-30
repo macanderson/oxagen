@@ -4,13 +4,16 @@
  *
  *   node tools/scripts/check-coverage-scope.mjs apps/app
  *
- * On 2026-09-19 `@oxagen/app#test:coverage` failed its 90% floor at 76.69%
- * while all 4641 tests passed. The report counted about 80 files at 0% that
- * did not exist in `apps/app` at that commit. Their paths used
- * `[orgSlug]/[workspaceSlug]`, the retired app's route convention (#3431).
- * A report like that fails a PR for a reason that is not true, and the
- * tempting fix, lowering the threshold, would be permanent damage from a
- * transient cause.
+ * #3431 reported that on 2026-09-19 `@oxagen/app`'s coverage report counted
+ * about 80 retired-app files at 0% and failed its 90% floor. The run's log
+ * shows otherwise: `@oxagen/app` failed two real tests and printed no table,
+ * and the 76.69% table with the `[orgSlug]/[workspaceSlug]` paths was
+ * `@oxagen/app-deprecated`'s own report, printed just above turbo's failure
+ * line for `@oxagen/app`. A scratch run of both suites in one turbo
+ * invocation (run 36663611315) found no file crossing between them. This
+ * guard stays because a report that names another package's files would
+ * fail a PR for a reason that is not true, and the tempting fix, lowering
+ * the threshold, would be permanent damage from a transient cause.
  *
  * This reads `<pkg>/coverage/coverage-final.json` (Vitest's `json` reporter,
  * which `apps/app/vitest.config.ts` pins) and fails when the report:
@@ -23,7 +26,7 @@
  * Exit 0 when every file is in scope, 1 otherwise. It reads files only.
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 /** Where Vitest's `json` coverage reporter writes, relative to the package. */
@@ -36,14 +39,23 @@ export const REPORT = join("coverage", "coverage-final.json");
  * @param {string[]} srcRoots absolute spellings of `<pkg>/src` (as resolved
  *   and as realpath'd, since a report may use either)
  * @param {(p: string) => boolean} exists
+ * @param {string} [pkgDir] the package directory a relative key is read
+ *   against. Vitest writes absolute keys, which this leaves unchanged. A
+ *   relative key belongs to the package, never to whatever directory the
+ *   process started in (#4664 item 10).
  * @returns {{ outside: string[], missing: string[], total: number }}
  */
-export function offenders(report, srcRoots, exists) {
+export function offenders(
+  report,
+  srcRoots,
+  exists,
+  pkgDir = dirname(srcRoots[0] ?? "."),
+) {
   const outside = [];
   const missing = [];
   const files = Object.keys(report);
   for (const file of files) {
-    const abs = resolve(file);
+    const abs = resolve(pkgDir, file);
     const inside = srcRoots.some((root) => {
       const rel = relative(root, abs);
       return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
@@ -91,7 +103,7 @@ export function checkPackage(pkgDir, { cwd, read, exists, realpath }) {
     const real = realpath(src);
     if (real !== src) roots.push(real);
   }
-  const { outside, missing, total } = offenders(report, roots, exists);
+  const { outside, missing, total } = offenders(report, roots, exists, dir);
   if (total === 0) {
     return {
       code: 1,
