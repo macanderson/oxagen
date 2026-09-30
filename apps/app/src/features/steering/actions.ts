@@ -96,6 +96,8 @@ export type GovernanceChanged = {
   mode: "solo" | "team" | "regulated";
   repository: string;
   branch: string;
+  /** The governance file the mode lives in for the repository's layout. */
+  path: string;
   pullRequest: { number: number; htmlUrl: string } | null;
 };
 
@@ -134,8 +136,14 @@ export async function setGovernanceMode(
     applyImmediately: false,
   });
   if (!result.ok) return result;
-  const { outcome, requestedMode, fullName, productionBranch, pullRequest } =
-    result.value;
+  const {
+    outcome,
+    requestedMode,
+    fullName,
+    productionBranch,
+    path,
+    pullRequest,
+  } = result.value;
   return {
     ok: true,
     value: {
@@ -143,6 +151,7 @@ export async function setGovernanceMode(
       mode: requestedMode,
       repository: fullName,
       branch: productionBranch,
+      path,
       pullRequest:
         pullRequest === null
           ? null

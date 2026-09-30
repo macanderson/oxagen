@@ -28,9 +28,12 @@ vi.mock("./actions", () => ({ setGovernanceMode }));
 
 const { GovernanceChip, governanceToml } = await import("./governance");
 
+const LEGACY_GOVERNANCE = ".oxagen/rules/governance.toml";
+
 const TEAM: SteeringHub["governance"] = {
   state: "read",
   repository: "acme/platform",
+  path: LEGACY_GOVERNANCE,
   mode: "team",
 };
 
@@ -75,12 +78,36 @@ describe("the governance chip", () => {
   });
 
   it("reads a missing file as team and says the file is missing", () => {
-    renderChip({ state: "read", repository: "acme/platform", mode: "absent" });
+    renderChip({
+      state: "read",
+      repository: "acme/platform",
+      path: LEGACY_GOVERNANCE,
+      mode: "absent",
+    });
     const chip = screen.getByTestId("governance-chip");
     expect(chip).toHaveTextContent("Governance: team");
     expect(chip).toHaveAttribute(
       "title",
       "acme/platform has no .oxagen/rules/governance.toml. A missing file means team.",
+    );
+  });
+
+  it("names steering/governance.toml in a steering repository (#4821)", () => {
+    renderChip({
+      state: "read",
+      repository: "acme/platform",
+      path: "steering/governance.toml",
+      mode: "solo",
+    });
+    expect(screen.getByTestId("governance-chip")).toHaveAttribute(
+      "data-mode",
+      "solo",
+    );
+    const dialog = openDialog();
+    expect(dialog).toHaveTextContent("steering/governance.toml on acme/platform");
+    expect(dialog).not.toHaveTextContent(".oxagen/rules/governance.toml");
+    expect(screen.getByTestId("governance-toml")).toHaveTextContent(
+      "# steering/governance.toml: read on the production branch",
     );
   });
 
@@ -92,7 +119,7 @@ describe("the governance chip", () => {
     const dialog = openDialog();
     expect(dialog).not.toHaveTextContent("(current)");
     expect(dialog).toHaveTextContent(
-      ".oxagen/rules/governance.toml on the main repository",
+      "the governance file on the main repository",
     );
   });
 });
@@ -164,6 +191,7 @@ describe("the governance dialog", () => {
         mode: "regulated",
         repository: "acme/platform",
         branch: "main",
+        path: LEGACY_GOVERNANCE,
         pullRequest: {
           number: 42,
           htmlUrl: "https://github.com/acme/platform/pull/42",
@@ -216,10 +244,16 @@ describe("the governance dialog", () => {
         mode: "team",
         repository: "acme/platform",
         branch: "main",
+        path: LEGACY_GOVERNANCE,
         pullRequest: null,
       },
     });
-    renderChip({ state: "read", repository: "acme/platform", mode: "solo" });
+    renderChip({
+      state: "read",
+      repository: "acme/platform",
+      path: LEGACY_GOVERNANCE,
+      mode: "solo",
+    });
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: /^team/ }));
     // Under solo the change is a commit, and the button says so.
@@ -231,7 +265,7 @@ describe("the governance dialog", () => {
     );
     await waitFor(() => {
       expect(within(dialog).getByRole("status")).toHaveTextContent(
-        "Committed to main on acme/platform: .oxagen/rules/governance.toml sets mode = team. It is in force now.",
+        ".oxagen/rules/governance.toml on main of acme/platform now sets mode = team. It is in force now.",
       );
     });
     expect(router.refresh).toHaveBeenCalledOnce();
