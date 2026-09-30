@@ -23,8 +23,8 @@ const TOOLS_GAPS = {
   switches: 3922,
   /** The tool version and agent behind each credential grant. */
   grants: 3923,
-  /** The tool creation wizard: describe, recommend, manifest or import, code, pull request. */
-  toolWizard: 3924,
+  /** Import the MCP servers the harness configs on enrolled runtimes name. */
+  harnessImport: 4810,
   /** A person refused a page asks for the role from the page. */
   requestAccess: 3820,
   /** A failed page opens an incident and names its trace. */

@@ -2,12 +2,15 @@
 // The Agents page (roadmap mockups `agents`), which absorbed the Tools page
 // and the Runtimes list, over a fake DataSource: which tab a `?tab=` names,
 // the five tabs in order with their hrefs and the counts the record can stand
-// behind, the one header over every tab with Connect an agent last and the
-// only gold action, and the body each tab draws. The header and the strip stay
-// when a tab's body cannot be read. Each tab's body has its own suite
-// (agents.test.tsx, features/tools/*.test.tsx, features/runtimes). The page
-// holds async Server Components below its Suspense boundary, so it is
-// prerendered rather than mounted, and axe checks every state (INV-26).
+// behind, the one header over every tab with the mockup's Import, Add server
+// and Connect an agent, Connect an agent last and the only gold action, the
+// body each tab draws, and the runtime drawer over Runtimes. The header and
+// the strip stay when a tab's body cannot be read. Each tab's body has its own
+// suite (agents.test.tsx, features/tools/*.test.tsx, features/runtimes). The
+// page holds async Server Components below its Suspense boundary, so it is
+// prerendered rather than mounted, and axe checks every state (INV-26). The
+// drawer renders in a portal, which a prerender leaves empty, so its body is
+// runtimes.test.tsx's; here the reads it makes show that it opened.
 import { screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +21,8 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { renderPage } from "@/test/render-page";
 import {
   enrollment,
+  namedRuntime,
+  namedRuntimeList,
   runtimeList,
   runtimesSource,
 } from "../runtimes/runtimes.builders";
@@ -119,21 +124,24 @@ type Reads = Parameters<typeof toolsSource>[0];
 
 /**
  * The Agents page on one tab: the Tools reads default to their fixtures, the
- * agents read to one agent, and the runtimes read to one enrolled host.
+ * agents read to one agent, and the runtimes read to one enrolled host. The
+ * Tools and agents calls come back, with the runtimes calls as `runtimes`.
  */
 async function renderArea(
   tab: AgentsPageTab = "agents",
   reads: Reads = {},
   ctx = owner,
   searchParams: Record<string, string> = {},
+  runtimeReads: Parameters<typeof runtimesSource>[0] = {
+    list: runtimeList([enrollment()]),
+  },
 ) {
   const { source, calls } = toolsSource({
     agents: agentPage([agentRow()]),
     ...reads,
   });
-  source.runtimes = runtimesSource({
-    list: runtimeList([enrollment()]),
-  }).source.runtimes;
+  const runtimes = runtimesSource(runtimeReads);
+  source.runtimes = runtimes.source.runtimes;
   await renderPage(
     await AgentsArea({
       ctx,
@@ -143,8 +151,11 @@ async function renderArea(
       viewerName: "Marcus Bell",
     }),
   );
-  return calls;
+  return { ...calls, runtimes: runtimes.calls };
 }
+
+/** The count read the strip makes for the Agents tab: live agents, first page. */
+const countRead = [owner, { cursor: null, includeRetired: false }];
 
 /** The element or a failure naming what was missing: the tests assert, they never cast. */
 function element(node: Element | null | undefined, what: string): HTMLElement {
@@ -232,14 +243,9 @@ describe("Agents page › header", () => {
     expect(document.querySelectorAll("h1")).toHaveLength(1);
   });
 
-  it("draws the Tools actions, then Add a runtime, then Connect an agent last as the one gold action", async () => {
+  it("draws Import, Add server, then Connect an agent last as the one gold action", async () => {
     await renderArea();
-    expect(actions()).toEqual([
-      "Import a provider",
-      "New tool",
-      "Add a runtime",
-      "Connect an agent",
-    ]);
+    expect(actions()).toEqual(["Import", "Add server", "Connect an agent"]);
     const connect = within(header()).getByRole("link", {
       name: "Connect an agent",
     });
@@ -250,29 +256,41 @@ describe("Agents page › header", () => {
     expect(golds()).toEqual([connect]);
   });
 
-  it("adds Flip a kill switch on Off switches alone, before Add a runtime", async () => {
-    await renderArea("switches");
-    expect(actions()).toEqual([
-      "Import a provider",
-      "New tool",
-      "Flip a kill switch",
-      "Add a runtime",
-      "Connect an agent",
-    ]);
-    expect(golds().map((node) => node.textContent)).toEqual([
-      "Connect an agent",
-    ]);
-  });
-
-  it.each(["agents", "servers", "tools", "toolbelts", "policies", "runtimes"] as const)(
-    "carries no Flip a kill switch on the %s tab",
+  it.each([
+    "agents",
+    "servers",
+    "tools",
+    "toolbelts",
+    "policies",
+    "runtimes",
+    "switches",
+  ] as const)(
+    "draws the same three actions on the %s tab, and nothing only one tab writes",
     async (tab) => {
       await renderArea(tab);
+      expect(actions()).toEqual(["Import", "Add server", "Connect an agent"]);
+      expect(golds().map((node) => node.textContent)).toEqual([
+        "Connect an agent",
+      ]);
+      // Flip a kill switch lives on Off switches, Add a runtime on Runtimes.
       expect(
         within(header()).queryByTestId("tools-flip-open"),
       ).not.toBeInTheDocument();
+      expect(
+        within(header()).queryByTestId("runtimes-add"),
+      ).not.toBeInTheDocument();
     },
   );
+
+  it("says what Import would do, since nothing reads the harness configs yet", async () => {
+    await renderArea();
+    const open = within(header()).getByTestId("tools-harness-import-open");
+    expect(open).toHaveTextContent("Import");
+    // The header's Add server is the import dialog's trigger.
+    expect(within(header()).getByTestId("tools-import-open")).toHaveTextContent(
+      "Add server",
+    );
+  });
 
   it.each(["member", "billing", "compliance"] as const)(
     "offers an org %s only Connect an agent (negative)",
@@ -287,13 +305,7 @@ describe("Agents page › header", () => {
 
   it("offers an org Admin every action an Owner has", async () => {
     await renderArea("switches", {}, viewer("admin"));
-    expect(actions()).toEqual([
-      "Import a provider",
-      "New tool",
-      "Flip a kill switch",
-      "Add a runtime",
-      "Connect an agent",
-    ]);
+    expect(actions()).toEqual(["Import", "Add server", "Connect an agent"]);
   });
 });
 
@@ -351,10 +363,14 @@ describe("Agents page › tabs", () => {
     },
   );
 
-  it("counts the providers on Tool servers and the switches denying on Off switches, and nothing on the other three", async () => {
+  it("counts the live agents, the providers, the runtimes and the switches denying, and nothing on Policies", async () => {
     await renderArea();
     const [agents, servers, policies, runtimes, switches] = tabs();
+    // The agents read's workspace total, not the rows on its first page.
+    expect(agents).toHaveTextContent(/^Agents7$/);
     expect(servers).toHaveTextContent(/^Tool servers2$/);
+    // No runtime named, one host enrolled.
+    expect(runtimes).toHaveTextContent(/^Runtimes1$/);
     const on = element(
       switches?.querySelector('[data-count="switches"]'),
       "switch count",
@@ -362,8 +378,19 @@ describe("Agents page › tabs", () => {
     expect(on).toHaveTextContent("1 on");
     // A switch denying waits on a person, so its count is drawn in the error ink.
     expect(on).toHaveClass("text-error-ink");
-    for (const plain of [agents, policies, runtimes])
-      expect(element(plain, "tab").children).toHaveLength(0);
+    // The Cedar policy files the mockup counts are not what Policies reads.
+    expect(element(policies, "tab").children).toHaveLength(0);
+  });
+
+  it("counts the named runtimes beside the enrolled hosts", async () => {
+    await renderArea("agents", {}, owner, {}, {
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList([
+        namedRuntime(),
+        namedRuntime({ id: "rtm_gpubox", name: "GPU box", slug: "gpu-box" }),
+      ]),
+    });
+    expect(tabs()[3]).toHaveTextContent(/^Runtimes3$/);
   });
 
   it("draws no error ink when no switch is denying", async () => {
@@ -388,12 +415,25 @@ describe("Agents page › tabs", () => {
   });
 
   it("prints no count a read did not answer, rather than a zero (negative)", async () => {
-    await renderArea("agents", {
-      mcpServers: readError("tool_registry_unavailable", 503),
-      killSwitches: readError("tool_registry_unavailable", 503),
-    });
-    const [, servers, , , switches] = tabs();
+    await renderArea(
+      "servers",
+      {
+        agents: readError("iam_principals_unavailable", 503),
+        mcpServers: readError("tool_registry_unavailable", 503),
+        killSwitches: readError("tool_registry_unavailable", 503),
+      },
+      owner,
+      {},
+      {
+        list: runtimeList([enrollment()]),
+        named: readError("runtimes_unavailable", 503),
+      },
+    );
+    const [agents, servers, , runtimes, switches] = tabs();
+    expect(agents).toHaveTextContent(/^Agents$/);
     expect(servers).toHaveTextContent(/^Tool servers$/);
+    // One of the two runtimes reads failed, so no partial count is printed.
+    expect(runtimes).toHaveTextContent(/^Runtimes$/);
     expect(switches).toHaveTextContent(/^Off switches$/);
     expect(document.querySelector('[data-count="switches"]')).toBeNull();
   });
@@ -405,7 +445,9 @@ describe("Agents page › bodies", () => {
     expect(
       screen.getByRole("table", { name: "Agents registered in Core platform" }),
     ).toBeInTheDocument();
+    // The strip's count reads the first page; the body reads the URL's.
     expect(calls.agents).toEqual([
+      countRead,
       [owner, { cursor: "c2", includeRetired: false }],
     ]);
   });
@@ -415,6 +457,7 @@ describe("Agents page › bodies", () => {
       deregistered: "show",
     });
     expect(calls.agents).toEqual([
+      countRead,
       [owner, { cursor: null, includeRetired: true }],
     ]);
   });
@@ -446,11 +489,36 @@ describe("Agents page › bodies", () => {
     ).toBeNull();
   });
 
-  it("draws the hosts on Runtimes, and reads no agents", async () => {
+  it("draws the runtimes table on Runtimes, and reads the agents only for the tab's count", async () => {
     const calls = await renderArea("runtimes");
-    expect(screen.getByTestId("runtimes-tiles")).toBeInTheDocument();
-    expect(calls.agents).toEqual([]);
+    expect(screen.getByRole("table", { name: "Runtimes" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("runtime-row")).toHaveLength(1);
+    expect(screen.queryByTestId("runtimes-tiles")).toBeNull();
+    // Add a runtime sits in the tab's body, beside the table.
+    expect(screen.getByTestId("runtimes-add")).toHaveTextContent(
+      "Add a runtime",
+    );
+    expect(calls.agents).toEqual([countRead]);
   });
+
+  it("opens the runtime a Runtimes URL names in the drawer, which reads its agents", async () => {
+    const calls = await renderArea("runtimes", {}, owner, {
+      runtime: enrollment().id,
+    });
+    // The table stays behind the drawer.
+    expect(screen.getByRole("table", { name: "Runtimes" })).toBeInTheDocument();
+    expect(calls.runtimes.agents).toEqual([["acme.core.release-manager"]]);
+  });
+
+  it.each(["agents", "servers", "switches"] as const)(
+    "opens no drawer on the %s tab, whatever the URL carries (negative)",
+    async (tab) => {
+      const calls = await renderArea(tab, {}, owner, {
+        runtime: enrollment().id,
+      });
+      expect(calls.runtimes.agents).toEqual([]);
+    },
+  );
 
   it("draws the switch board on Off switches", async () => {
     await renderArea("switches");

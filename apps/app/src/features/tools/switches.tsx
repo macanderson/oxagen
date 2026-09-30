@@ -1,6 +1,6 @@
 // Kill switches (mockup `tools.md`, Kill switches tab; spec §6.11, ADR-071):
 // the class switches with the deny generation, then the scoped switches with
-// Create a switch. Each card carries its toggle, what it stops, when it takes
+// Flip a kill switch and Create a switch. Each card carries its toggle, what it stops, when it takes
 // effect, who flipped it and why.
 //
 // The organization switch, the workspace switch and the three class switches
@@ -446,7 +446,17 @@ export function Switches({
           >
             {t("scopedHeading")}
           </h2>
-          {canFlip ? <CreateSwitch agents={agents} members={members} /> : null}
+          {canFlip ? (
+            <span className="flex flex-wrap gap-2">
+              <FlipControls
+                at={at}
+                denyGeneration={denyGeneration}
+                existing={null}
+                members={members}
+              />
+              <CreateSwitch agents={agents} members={members} />
+            </span>
+          ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Card

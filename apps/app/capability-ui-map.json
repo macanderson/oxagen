@@ -666,7 +666,7 @@
     "import_tools": {
       "route": "/[org]/[ws]/agents?tab=tools",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents header, the Tools view and Tool servers: “Import a provider” and “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
+      "entry": "Agents header “Add server”, the Tools view's “Import a provider” and Tool servers' “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -962,7 +962,6 @@
       "proof": "apps/app/src/features/run/actions-tab.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
-
       "also": [
         {
           "route": "/[org]",
@@ -1019,16 +1018,16 @@
     "list_tacho_hosts": {
       "route": "/[org]/[ws]/agents?tab=runtimes",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "/[org]/[ws]/runtimes \u2014 the Enrolled hosts table, the stat tiles and one runtime's host panel (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
+      "entry": "Agents › Runtimes: the host rows of the runtimes table, and one host's panel in the runtime drawer (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/runtime.tsx)",
       "testid": "runtime-row",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01Hrw12deH1TbfC8FY9cKSre runtimes lane",
       "also": [
         {
-          "route": "/[org]/[ws]/runtimes/[runtime]",
-          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
-          "entry": "/[org]/[ws]/runtimes/[runtime] \u2014 the host panel of one enrollment (features/runtimes/runtime.tsx)",
+          "route": "/[org]/[ws]/agents?tab=runtimes&runtime=[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+          "entry": "Agents › Runtimes › a host's drawer: the host panel of one enrollment (features/runtimes/runtime.tsx)",
           "testid": "fact-collector",
           "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
         }
@@ -1202,7 +1201,7 @@
     "register_mcp_server": {
       "route": "/[org]/[ws]/agents?tab=servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: “Add a provider” (and “Import a provider” in the header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
+      "entry": "Agents › Tool servers: “Add a provider” (and “Add server” in the Agents header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
       "testid": "tools-import-open",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -1295,7 +1294,6 @@
       "proof": "apps/app/src/features/fleet/approval-decision.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn",
-
       "also": [
         {
           "route": "/[org]",
@@ -1395,9 +1393,9 @@
       "verifiedBy": "mc-3-enrollment",
       "also": [
         {
-          "route": "/[org]/[ws]/runtimes/[runtime]",
-          "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
-          "entry": "/[org]/[ws]/runtimes/[runtime] \u2014 Unenroll on the Rollback panel, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+          "route": "/[org]/[ws]/agents?tab=runtimes&runtime=[runtime]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+          "entry": "Agents › Runtimes › a host's drawer › Rollback: Unenroll, confirmed in a dialog naming the host and the agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
           "testid": "runtime-unenroll",
           "proof": "apps/app/src/features/runtimes/runtimes.test.tsx"
         }
@@ -1483,7 +1481,7 @@
     "set_kill_switch": {
       "route": "/[org]/[ws]/agents?tab=switches",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents header on Off switches “Flip a kill switch”, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
+      "entry": "Agents › Off switches: “Flip a kill switch” beside Create a switch, and the toggle on each switch card (features/tools/switch-controls.tsx FlipControls, flipKillSwitch in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1914,16 +1912,16 @@
     "create_runtime": {
       "route": "/[org]/[ws]/agents?tab=runtimes",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Runtimes › Add a runtime: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "entry": "Agents › Runtimes › Add a runtime above the table: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
       "testid": "runtimes-add",
       "proof": "apps/app/src/features/runtimes/actions.test.ts",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-containment (#4372)"
     },
     "update_runtime": {
-      "route": "/[org]/[ws]/runtimes/[runtime]",
-      "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
-      "entry": "Runtime › Containment: an Owner or Admin requires the contained launcher on a named runtime's page, others read it (features/runtimes/runtime.tsx, features/runtimes/controls.tsx ContainmentSwitch, features/runtimes/actions.ts)",
+      "route": "/[org]/[ws]/agents?tab=runtimes&runtime=[runtime]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agents › Runtimes › a named runtime's drawer › Containment: an Owner or Admin requires the contained launcher, others read it (features/runtimes/runtime.tsx, features/runtimes/controls.tsx ContainmentSwitch, features/runtimes/actions.ts)",
       "testid": "runtime-containment-switch",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
       "verifiedAt": "2026-09-26",
@@ -1932,7 +1930,7 @@
     "list_runtimes": {
       "route": "/[org]/[ws]/agents?tab=runtimes",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Runtimes › the Runtimes panel: each named runtime with its agents by harness (data/live/runtimes.ts, features/runtimes/named.tsx)",
+      "entry": "Agents › Runtimes: the named runtime rows of the runtimes table, each with its agents by harness (data/live/runtimes.ts, features/runtimes/runtimes.tsx, features/runtimes/named.tsx)",
       "testid": "named-runtime",
       "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
       "verifiedAt": "2026-09-26",

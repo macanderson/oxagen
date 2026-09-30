@@ -1,6 +1,6 @@
-// The Runtimes pages' public surface. The routes import from here; nothing else
-// reaches into the folder (eslint: `@/features/*/*` is restricted).
+// The Runtimes tab's public surface. The routes and the Agents page import
+// from here; nothing else reaches into the folder (eslint: `@/features/*/*` is
+// restricted).
 export { RuntimesLoading } from "./loading";
-export { Runtime } from "./runtime";
-export { AddRuntime } from "./controls";
-export { mayAddRuntime, Runtimes } from "./runtimes";
+export { RuntimeInDrawer } from "./runtime";
+export { Runtimes, runtimesCount } from "./runtimes";
