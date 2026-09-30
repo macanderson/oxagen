@@ -306,7 +306,7 @@ describe("the review each governance mode asks for", () => {
     expect(screen.queryByTestId("open-context-pr")).toBeNull();
     expect(approve()).toBeEnabled();
     expect(merge()).toBeEnabled();
-    expect(screen.getByTestId("dismiss-proposal")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeEnabled();
   });
 
   it("lists what merging a governance change does, and no record or promotion event (#4795)", () => {
