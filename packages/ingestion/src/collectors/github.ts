@@ -19,7 +19,8 @@
 // listChangedSince. listChangedSince reads every repository the connection
 // reaches, and the doorbell and fetchById take an issue from any of them.
 // githubItemInScope says whether an item sits in the repositories a collector
-// file names. The caller applies it.
+// file names. toWorkItem gets the config, so it applies it and answers null
+// for an issue outside them, which the pipeline counts as skipped.
 //
 // Outside text. People outside the workspace write issue titles, bodies, and
 // comments. toWorkItem marks subject and description tainted, and nothing in
@@ -349,8 +350,8 @@ function repositoryOf(repositoryUrl: string): string | null {
 
 /**
  * True when the item sits in one of the repositories the collector file
- * names. The contract gives listChangedSince and fetchById no config, so the
- * caller applies this before it stores a work item.
+ * names. The contract gives listChangedSince and fetchById no config, so
+ * toWorkItem applies this before anything is stored.
  */
 export function githubItemInScope(item: ProviderItem, config: GitHubCollectorConfig): boolean {
   const parsed = recordSchema.safeParse(item.record);
@@ -712,8 +713,11 @@ async function listChangedSince(cursor: Cursor, conn: Connection): Promise<Page<
 // Map
 // ---------------------------------------------------------------------------
 
-function toWorkItem(item: ProviderItem, _config: GitHubCollectorConfig): WorkItemInput {
+function toWorkItem(item: ProviderItem, config: GitHubCollectorConfig): WorkItemInput | null {
   const { issue, lastActor } = recordSchema.parse(item.record);
+  // The connection can read repositories the collector file does not name,
+  // and its reads and doorbells reach them all. Those issues are not stored.
+  if (!githubItemInScope(item, config)) return null;
   const githubLabels = labelNames(issue);
   const priority = priorityOf(githubLabels);
   const mapped = [
