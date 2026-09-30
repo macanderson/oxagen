@@ -64,6 +64,61 @@ async function claimForPoll(poll: { machine: string; scope: { orgId: string; wor
   }
 }
 
+type ToolsChange = {
+  machine: string;
+  scope: { orgId: string; workspaceId: string };
+  server: string;
+};
+
+/**
+ * The servers this process is discovering again after a tools change, keyed
+ * by workspace and server, whichever machine reported it. `next` holds a
+ * change that arrived during the run, so one more pass follows it.
+ */
+const rediscovering = new Map<string, { next: ToolsChange | null }>();
+
+/** One discovery of the server, through the machine that reported the change. */
+async function rediscoverOnce(change: ToolsChange): Promise<void> {
+  const [{ rediscoverOnMachine }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
+    import("@oxagen/handlers/mcp-studio/discovery/claim"),
+    import("@oxagen/handlers/mcp-studio/discovery/seams"),
+    import("@oxagen/handlers/tools.pr.open"),
+  ]);
+  await rediscoverOnMachine(change, {
+    broker: localGatewayBroker(),
+    reader: postgresMachineGroupReader,
+    seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
+  });
+}
+
+/**
+ * Discovers a server again through the machine whose call reported its tools
+ * changed (#4772). One run per workspace and server at a time, so two
+ * machines that report the same change do not race for one sync PR. A change
+ * reported during a run marks the server, and one more run follows, through
+ * the machine that reported last, so the newer tools list is never dropped.
+ */
+async function rediscoverForChange(change: ToolsChange): Promise<void> {
+  const key = `${change.scope.orgId}:${change.scope.workspaceId}:${change.server}`;
+  const active = rediscovering.get(key);
+  if (active !== undefined) {
+    active.next = change;
+    return;
+  }
+  const entry = { next: null as ToolsChange | null };
+  rediscovering.set(key, entry);
+  try {
+    let current: ToolsChange | null = change;
+    while (current !== null) {
+      entry.next = null;
+      await rediscoverOnce(current);
+      current = entry.next;
+    }
+  } finally {
+    rediscovering.delete(key);
+  }
+}
+
 /** Serves GET /v1/local-servers/next and POST /v1/local-servers/replies. */
 export const localServersRoute = createLocalServersRoute({
   authenticate: createMachineAuth({
@@ -74,6 +129,7 @@ export const localServersRoute = createLocalServersRoute({
   }),
   broker: localGatewayBroker,
   onPoll: claimForPoll,
+  onToolsChanged: rediscoverForChange,
   log: (event, fields) => console.warn(JSON.stringify({ event, ...fields })),
 });
 

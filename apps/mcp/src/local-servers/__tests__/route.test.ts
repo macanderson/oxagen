@@ -317,6 +317,38 @@ describe("createLocalServersRoute", () => {
     expect(onPoll).not.toHaveBeenCalled();
   });
 
+  it("asks for the server's discovery after a reply that says its tools changed (#4772)", async () => {
+    const onToolsChanged = vi.fn(() => Promise.resolve());
+    const { route } = routeWith({
+      broker: () => brokerWith({ reply: () => ({ accepted: true, toolsChanged: { server: "files" } }) }),
+      onToolsChanged,
+    });
+    await expect(serve(route, reply({}))).resolves.toMatchObject({ status: 204 });
+    expect(onToolsChanged).toHaveBeenCalledWith({ machine: MACHINE, scope: SCOPE, server: "files" });
+  });
+
+  it("answers the reply and logs when the rediscovery fails", async () => {
+    const onToolsChanged = vi.fn(() => Promise.reject(new Error("no seams")));
+    const { route, deps } = routeWith({
+      broker: () => brokerWith({ reply: () => ({ accepted: true, toolsChanged: { server: "files" } }) }),
+      onToolsChanged,
+    });
+    await expect(serve(route, reply({}))).resolves.toMatchObject({ status: 204 });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(deps.log).toHaveBeenCalledWith("local_servers.tools_changed_failed", {
+      machine: MACHINE,
+      server: "files",
+      error: "no seams",
+    });
+  });
+
+  it("asks for no discovery after a reply that reports no change", async () => {
+    const onToolsChanged = vi.fn(() => Promise.resolve());
+    const { route } = routeWith({ onToolsChanged });
+    await serve(route, reply({}));
+    expect(onToolsChanged).not.toHaveBeenCalled();
+  });
+
   it("runs without a log", async () => {
     const route = createLocalServersRoute({
       authenticate: () => Promise.resolve(ALLOWED),

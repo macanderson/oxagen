@@ -141,6 +141,32 @@ describe("dispatch", () => {
     await expect(call).resolves.toEqual(answer);
   });
 
+  it("names the server whose call reported its tools changed (#4772)", async () => {
+    const poll = broker.next(MACHINE, live());
+    const delivery = callDelivery();
+    const call = broker.dispatch(MACHINE, delivery, options());
+    await poll;
+    const answer = { ...resultReply(idOf(delivery)), tools_changed: true };
+    expect(broker.reply(MACHINE, answer)).toEqual({
+      accepted: true,
+      toolsChanged: { server: FILES_LAUNCH.server },
+    });
+    await expect(call).resolves.toEqual(answer);
+  });
+
+  it("names the server when a refused call reports its tools changed (#4772)", async () => {
+    const poll = broker.next(MACHINE, live());
+    const delivery = callDelivery();
+    const call = broker.dispatch(MACHINE, delivery, options());
+    await poll;
+    const answer = { ...refusedReply(idOf(delivery)), tools_changed: true };
+    expect(broker.reply(MACHINE, answer)).toEqual({
+      accepted: true,
+      toolsChanged: { server: FILES_LAUNCH.server },
+    });
+    await Promise.allSettled([call]);
+  });
+
   it("queues the delivery for a machine seen within PRESENCE_MS, and the next poll takes it", async () => {
     await markPresent(broker);
     const delivery = callDelivery();

@@ -116,13 +116,14 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
   const inFlight = new Set<Promise<void>>();
   let running: { controller: AbortController; loop: Promise<void> } | undefined;
 
-  function refused(id: string, refusal: LocalServerRefusal): Reply {
+  function refused(id: string, refusal: LocalServerRefusal, toolsChanged = false): Reply {
     options.log(`The local gateway refused ${id}. ${refusalText(refusal)}`);
     return {
       kind: "refused",
       id,
       machine: options.machine,
       refusal: { ...refusal, message: refusal.message.slice(0, REFUSAL_MESSAGE_CHARS) },
+      ...(toolsChanged ? { tools_changed: true as const } : {}),
     };
   }
 
@@ -135,7 +136,11 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
     return prepared.launch;
   }
 
-  async function runCall(delivery: CallDelivery, signal: AbortSignal | undefined): Promise<Reply> {
+  async function runCall(
+    delivery: CallDelivery,
+    signal: AbortSignal | undefined,
+    notice: { toolsChanged: boolean },
+  ): Promise<Reply> {
     const { envelope } = delivery;
     const check = verifyCallDelivery(delivery, {
       machine: options.machine,
@@ -147,7 +152,15 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
     if (!check.ok) return refused(envelope.nonce, check.refusal);
     const launch = await launchFor(delivery.launch, signal);
     const result = await callTool(
-      { spawn: options.spawn, launch, deadlineMs: envelope.deadline_ms ?? DEFAULT_DEADLINE_MS, signal },
+      {
+        spawn: options.spawn,
+        launch,
+        deadlineMs: envelope.deadline_ms ?? DEFAULT_DEADLINE_MS,
+        signal,
+        onToolsChanged: () => {
+          notice.toolsChanged = true;
+        },
+      },
       envelope.upstream,
       delivery.arguments,
     );
@@ -158,6 +171,7 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
       machine: options.machine,
       result: screened.result,
       redactions: screened.redactions,
+      ...(notice.toolsChanged ? { tools_changed: true as const } : {}),
     };
   }
 
@@ -177,13 +191,19 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
 
   async function handle(delivery: Delivery, signal?: AbortSignal): Promise<Reply> {
     const id = deliveryId(delivery);
+    // A server can change its tools and then fail the call, as a call to a
+    // tool it just removed does. The notice outlives the failure (#4772).
+    const notice = { toolsChanged: false };
     try {
-      return delivery.kind === "call" ? await runCall(delivery, signal) : await runDiscover(delivery, signal);
+      return delivery.kind === "call"
+        ? await runCall(delivery, signal, notice)
+        : await runDiscover(delivery, signal);
     } catch (error) {
-      if (error instanceof LocalServerError) return refused(id, error.refusal());
+      if (error instanceof LocalServerError) return refused(id, error.refusal(), notice.toolsChanged);
       return refused(
         id,
         serverFailed(delivery.launch.server, `the local gateway hit an unexpected error (${errorText(error)})`),
+        notice.toolsChanged,
       );
     }
   }

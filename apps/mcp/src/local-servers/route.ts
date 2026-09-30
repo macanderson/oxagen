@@ -46,6 +46,15 @@ export interface LocalServersRouteDeps {
    * failure is logged.
    */
   onPoll?(poll: { machine: string; scope: { orgId: string; workspaceId: string } }): Promise<void>;
+  /**
+   * Runs after a reply whose call reported the server's tools changed
+   * (#4772). The reply's answer never waits on it, and a failure is logged.
+   */
+  onToolsChanged?(change: {
+    machine: string;
+    scope: { orgId: string; workspaceId: string };
+    server: string;
+  }): Promise<void>;
   log?(event: string, fields: Record<string, unknown>): void;
 }
 
@@ -101,10 +110,30 @@ async function servePoll(
   send(res, 200, delivery);
 }
 
-function serveReply(machine: string, body: unknown, res: LocalServersResponse, deps: LocalServersRouteDeps): void {
+function serveReply(
+  machine: string,
+  scope: { orgId: string; workspaceId: string },
+  body: unknown,
+  res: LocalServersResponse,
+  deps: LocalServersRouteDeps,
+): void {
   const outcome = deps.broker().reply(machine, body);
   if (outcome.accepted) {
     send(res, 204);
+    const changed = outcome.toolsChanged;
+    const onToolsChanged = deps.onToolsChanged;
+    if (changed !== undefined && onToolsChanged !== undefined) {
+      // The reply is answered already. The rediscovery runs under the
+      // process's request admission, so its reservation lasts until it
+      // settles rather than ending with this response.
+      trackRequestWork(() => onToolsChanged({ machine, scope, server: changed.server })).catch((error: unknown) => {
+        deps.log?.("local_servers.tools_changed_failed", {
+          machine,
+          server: changed.server,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
     return;
   }
   deps.log?.("local_servers.reply_refused", { machine, reason: outcome.reason });
@@ -154,7 +183,7 @@ export function createLocalServersRoute(deps: LocalServersRouteDeps): LocalServe
         }
         await servePoll(auth.machine, hangup, res, deps);
       }
-      else serveReply(auth.machine, req.body, res, deps);
+      else serveReply(auth.machine, auth.scope, req.body, res, deps);
     }).catch((error: unknown) => {
       deps.log?.("local_servers.route_failed", { path, error: error instanceof Error ? error.message : String(error) });
       send(res, 500, { error: { code: "internal_error", message: "The local-server route failed. The machine retries." } });
