@@ -83,6 +83,7 @@ import {
 import { restoreGithubRepositories } from "./github";
 import { agentDeps } from "./agent-deps";
 import { daemonServiceSpec } from "./daemon-service";
+import { policyModeText } from "./policy-mode";
 import { shippingHealth, type ShippingHealth } from "./status";
 import {
   disarmGateway,
@@ -1708,8 +1709,11 @@ async function enrollSteps(
     // The policy mode and the tier are two facts (ADR-095). "(observe mode)"
     // on the end of this line read as "not routed through the gateway", so
     // the line names it as the policy and points at where the tier is shown.
+    // The sentence is the Policy line of `tacho status` and of the desktop
+    // app (policy-mode.ts). `host.bundle` passed the bundle schema, so its
+    // mode is one of the two the sentence names, and each ends in a period.
     deps.out(
-      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy is in ${host.bundle.mode === "enforce" ? "enforce mode: a matching permission rule can deny a governed call or ask first" : "observe mode: a matching permission rule is recorded and the call goes ahead"}. \`tacho status\` shows each agent's tier.`,
+      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy mode is ${policyModeText(host.bundle.mode)} \`tacho status\` shows each agent's tier.`,
     );
   }
   return {

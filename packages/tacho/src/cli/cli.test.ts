@@ -562,7 +562,11 @@ describe("enroll → status → unenroll", () => {
       "http://127.0.0.1:47123",
     );
     expect(d.lines.some((l) => l.includes("tachod healthy"))).toBe(true);
-    expect(d.lines.at(-1)).toContain("observe mode");
+    // The policy sentence is the one `tacho status` and the desktop app
+    // print (policy-mode.ts), so the whole of it is asserted here.
+    expect(d.lines.at(-1)).toContain(
+      "Policy mode is observe: Oxagen records what the policy would decide on a governed call and lets it go ahead. Budget and model limits still apply to model calls routed through Oxagen. `tacho status` shows each agent's tier.",
+    );
     // Idempotent: a second run re-applies without another enrollment call.
     const again = await enroll({}, d);
     expect(again.ok).toBe(true);
@@ -670,7 +674,9 @@ describe("enroll → status → unenroll", () => {
     expect(reached.lines.some((l) => l.includes("tachod reached Oxagen"))).toBe(
       true,
     );
-    expect(reached.lines.at(-1)).toContain("observe mode");
+    expect(reached.lines.at(-1)).toContain(
+      "Policy mode is observe: Oxagen records what the policy would decide on a governed call and lets it go ahead.",
+    );
   });
 
   it("writes TACHO_MCP_ENDPOINT into host.json, because the service unit will not carry it", async () => {
