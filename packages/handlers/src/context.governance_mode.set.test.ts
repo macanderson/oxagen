@@ -11,8 +11,9 @@
 // one event-type filter.
 //
 // A steering repository keeps `steering/governance.toml`. Every route there
-// opens a steering PR. Solo and Apply now land it through the merge queue; the
-// review route leaves it open and changes nothing yet (ADR-229, #4795).
+// opens a steering PR. Solo and Apply now land it through the merge queue. The
+// review route leaves it open, records it as a governance proposal, and
+// merge_context_pr lands it for an approver (ADR-232, #4795).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
@@ -73,18 +74,27 @@ import {
   type PromotionLine,
 } from "@oxagen/oxagen/steering-repo/promotion";
 import type { CheckReport } from "@oxagen/steering-check";
+import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { makeSetGovernanceModeHandler } from "./context.governance_mode.set";
+import { createGetContextPrHandler } from "./context.pr.get";
+import {
+  createMergeContextPrHandler,
+  type MergeSeams,
+} from "./context.pr.merge";
+import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import {
   AUTHOR,
   ctx,
   harness,
   REPO,
+  REVIEWER,
   type Harness,
 } from "./context.steering.test-support";
 import {
   STEERING_GOVERNANCE_PR_BODY,
   type SteeringGovernanceSeams,
 } from "./steering-repo/governance-mode";
+import type { SteeringPublisher } from "./steering-repo/publisher";
 
 const GOVERNANCE = ".oxagen/rules/governance.toml";
 
@@ -398,14 +408,24 @@ interface Doubles extends SteeringGovernanceSeams {
   published: string[];
 }
 
-/** Seams for a healthy repository whose publisher is at version 20. */
-function doubles(report: CheckReport = passed()): Doubles {
-  const checked: { head: string; base: string }[] = [];
-  const published: string[] = [];
+/** A publisher at version 20 that records each commit it publishes. */
+function fakePublisher(published: string[]): SteeringPublisher {
   const held = async (commit: string) => {
     published.push(commit);
     return { status: "current" as const, version: 21, commit };
   };
+  return {
+    repository: (repo) => repo.fullName,
+    store: { highestVersion: async () => 20, versionAt: async () => null },
+    publish: async (_repo, commit) => held(commit),
+    withLock: (_repo, fn) => fn(held),
+  };
+}
+
+/** Seams for a healthy repository whose publisher is at version 20. */
+function doubles(report: CheckReport = passed()): Doubles {
+  const checked: { head: string; base: string }[] = [];
+  const published: string[] = [];
   return {
     checked,
     published,
@@ -414,12 +434,7 @@ function doubles(report: CheckReport = passed()): Doubles {
       return report;
     },
     readHealth: async () => "healthy",
-    publisher: async () => ({
-      repository: (repo) => repo.fullName,
-      store: { highestVersion: async () => 20, versionAt: async () => null },
-      publish: async (_repo, commit) => held(commit),
-      withLock: (_repo, fn) => fn(held),
-    }),
+    publisher: async () => fakePublisher(published),
   };
 }
 
@@ -565,6 +580,117 @@ describe("set_governance_mode in a steering repository", () => {
     ).toBe(before.replace('mode = "team"', 'mode = "solo"'));
     // A proposal records no governance change and no override.
     expect(deps.events).toEqual([]);
+    // The PR is recorded as a governance proposal, for merge_context_pr to
+    // land for an approver (#4795).
+    expect(deps.store.proposals).toEqual([
+      expect.objectContaining({
+        lineageId: "governance",
+        kind: "governance",
+        force: "info",
+        status: "checks_passed",
+        governanceMode: "team",
+        branch: STEERING_BRANCH,
+        path: STEERING_FILE,
+        prNumber: out.pullRequest?.number,
+        headSha: head,
+        checks: [],
+        createdById: AUTHOR,
+        statement: "Change the steering governance mode from team to solo.",
+      }),
+    ]);
+  });
+
+  it("records a governance proposal whose checks failed, for the page to show", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles(failed()));
+    expect(deps.store.proposals).toEqual([
+      expect.objectContaining({ kind: "governance", status: "checks_failed" }),
+    ]);
+  });
+
+  it("sets aside the open governance proposal when the mode is set again", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    const again = await run(deps, { mode: "solo" }, doubles());
+    expect(again.pullRequest).toMatchObject({ reused: true });
+    expect(deps.store.proposals.map((p) => p.status)).toEqual([
+      "rejected",
+      "checks_passed",
+    ]);
+    // The open proposal names the PR's current head.
+    expect(deps.store.proposals[1]?.headSha).toBe(
+      await deps.github.branchHead(REPO, STEERING_BRANCH),
+    );
+    expect(deps.store.proposals[0]?.dismissedReason).toBe(
+      "Replaced by a newer governance change on the same pull request",
+    );
+  });
+
+  it("withdraws the open governance proposal and closes its PR when the mode in force is picked again", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    const pr = deps.github.pulls[0]!;
+
+    const out = await run(deps, { mode: "team" }, doubles());
+
+    expect(out).toMatchObject({ outcome: "unchanged", effectiveMode: "team" });
+    // A reviewer can no longer land a mode nobody asked for now.
+    expect(deps.store.proposals).toEqual([
+      expect.objectContaining({
+        kind: "governance",
+        status: "rejected",
+        dismissedReason: "Withdrawn: the mode it proposed was set back to the mode in force",
+        updatedById: AUTHOR,
+      }),
+    ]);
+    expect(pr.state).toBe("closed");
+    expect(deps.github.deletedBranches).toContain(STEERING_BRANCH);
+    expect(deps.events).toEqual([]);
+  });
+
+  it("replaces the open governance proposal with one that waits for its checks when the checker is down (negative)", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    const seams: SteeringGovernanceSeams = {
+      ...doubles(),
+      check: async () => {
+        throw new Error("the steering checker is down");
+      },
+    };
+
+    // A checker that does not answer reports a missing check on the PR, and
+    // the call still records the change it pushed.
+    const out = await run(deps, { mode: "solo" }, seams);
+    expect(out.outcome).toBe("proposed");
+    // The reused PR now carries the new head, so the old proposal no longer
+    // names what would land. The replacement cannot land until its checks pass.
+    expect(deps.store.proposals.at(-1)?.status).toBe("checks_failed");
+    expect(
+      deps.store.proposals.filter((p) => p.status === "checks_passed"),
+    ).toHaveLength(0);
+  });
+
+  it("keeps the open governance proposal when a later call is refused (negative)", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    // The production branch turns on auto_merge, which only solo allows, so
+    // team to regulated can no longer be written.
+    const current = await productionText(deps);
+    deps.github.commit(
+      REPO.defaultBranch,
+      STEERING_FILE,
+      current.replace('mode = "team"', 'mode = "solo"').replace(
+        "auto_merge = false",
+        "auto_merge = true",
+      ),
+    );
+
+    await expect(
+      run(deps, { mode: "team" }, doubles()),
+    ).rejects.toMatchObject({ reason: "governance_invalid" });
+    expect(deps.store.proposals.map((p) => p.status)).toEqual([
+      "checks_passed",
+    ]);
   });
 
   it("reuses the open steering PR when the mode is set again", async () => {
@@ -687,5 +813,269 @@ describe("set_governance_mode in a steering repository", () => {
     expect(deps.github.commits).toEqual([]);
     expect(deps.github.pulls).toEqual([]);
     expect(deps.events).toEqual([]);
+  });
+});
+
+// ── merge_context_pr on a governance proposal (#4795) ───────────────────────
+
+/** The merge seams for a healthy steering repository, over `seams`' checks. */
+function mergeSeams(
+  seams: Doubles,
+  over: Partial<MergeSeams> = {},
+): MergeSeams {
+  return {
+    readHealth: async () => "healthy",
+    governanceCheck: seams.check,
+    publisher: () => fakePublisher(seams.published),
+    ...over,
+  };
+}
+
+/** Set team to solo through the review route, and answer its proposal id. */
+async function proposeSolo(deps: Harness): Promise<string> {
+  const out = await run(deps, { mode: "solo" }, doubles());
+  expect(out.outcome).toBe("proposed");
+  const row = deps.store.proposals.find((p) => p.status === "checks_passed");
+  if (!row) throw new Error("no open governance proposal");
+  return row.publicId;
+}
+
+describe("merge_context_pr on a governance proposal", () => {
+  it("lands the reviewed change for an approver and refuses its author", async () => {
+    const deps = steeringMode("team");
+    const before = await productionText(deps);
+    const proposalId = await proposeSolo(deps);
+    const seams = doubles();
+    const merge = createMergeContextPrHandler(deps, mergeSeams(seams));
+
+    await expect(
+      merge({ proposalId }, ctx({ userId: AUTHOR })),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    expect(deps.github.merges).toEqual([]);
+
+    const out = await merge({ proposalId }, ctx({ userId: REVIEWER }));
+
+    expect(out).toEqual({
+      proposalId,
+      status: "merged",
+      kind: "governance",
+      governance: { mode: "solo", path: STEERING_FILE },
+      mergedCommit: deps.github.pulls[0]?.mergeCommitSha,
+      bundleVersion: { before: 0, after: 0 },
+      publishedVersion: 21,
+    });
+    expect(() => contextPrMerge.output.parse(out)).not.toThrow();
+    expect(deps.github.merges).toHaveLength(1);
+    expect(deps.github.merges[0]?.commitTitle).toBe(
+      `steering: set governance mode to solo (#${deps.github.pulls[0]?.number})`,
+    );
+    expect(await productionText(deps)).toBe(
+      before.replace('mode = "team"', 'mode = "solo"'),
+    );
+    // The ledger line names the approver, and nobody skipped review.
+    expect(await lastLedgerLine(deps)).toMatchObject({
+      approved_by: [REVIEWER],
+      merged_by: REVIEWER,
+      without_review: false,
+    });
+    // The merge publishes no record and appends no promotion event.
+    expect(deps.store.records).toEqual([]);
+    expect(deps.store.ledger).toEqual([]);
+    expect(deps.store.proposals[0]).toMatchObject({
+      status: "merged",
+      mergedCommit: out.mergedCommit,
+      mergedByUserId: REVIEWER,
+      publishedRecordId: null,
+      promotionEventId: null,
+      mergeClaimedAt: null,
+    });
+    expect(seams.published).toEqual([out.mergedCommit]);
+    expect(deps.github.deletedBranches).toContain(STEERING_BRANCH);
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+    ]);
+    expect(deps.events[0]).toMatchObject({
+      actorUserId: REVIEWER,
+      capability: "merge_context_pr",
+      detail: {
+        previousMode: "team",
+        mode: "solo",
+        commitSha: out.mergedCommit,
+        overrodeReview: false,
+        approvedBy: [REVIEWER],
+        proposalId,
+      },
+    });
+
+    // The PR view says merged, with no promotion event and no record.
+    const view = await createGetContextPrHandler(deps)(
+      { proposalId },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(view).toMatchObject({
+      status: "merged",
+      record: null,
+      body: STEERING_GOVERNANCE_PR_BODY,
+      onMerge: { bundleVersion: { current: 0, afterMerge: 0 } },
+      merged: {
+        commit: out.mergedCommit,
+        byUserId: REVIEWER,
+        promotionEventId: null,
+        recordId: null,
+      },
+    });
+  });
+
+  it("answers the version an earlier call published when it resumes a merged PR", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    // An earlier call claimed the row, merged and published the PR, then
+    // failed before its record landed.
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
+    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const seams = doubles();
+    const published: SteeringPublisher = {
+      ...fakePublisher(seams.published),
+      store: {
+        highestVersion: async () => 21,
+        versionAt: async (_repository, commit) =>
+          commit === mergeSha ? { version: 21, published: true } : null,
+      },
+    };
+
+    const out = await createMergeContextPrHandler(
+      deps,
+      mergeSeams(seams, { publisher: () => published }),
+    )({ proposalId }, ctx({ userId: REVIEWER }));
+
+    expect(out).toMatchObject({
+      kind: "governance",
+      governance: { mode: "solo" },
+      mergedCommit: mergeSha,
+      publishedVersion: 21,
+    });
+    // The resume merges nothing twice.
+    expect(deps.github.merges).toEqual([]);
+  });
+
+  it("refuses to finish a PR someone merged on the host, and leaves it to the sync (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    deps.requestSync = vi.fn(async () => undefined);
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(doubles()))({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "conflict", reason: "merged_outside_oxagen" });
+    // Nobody is credited with the merge, and no governance event claims a
+    // review. The sync records it as a change made outside Oxagen.
+    expect(deps.store.proposals[0]).toMatchObject({ status: "checks_passed", mergedByUserId: null });
+    expect(deps.events).toEqual([]);
+    expect(deps.requestSync).toHaveBeenCalledOnce();
+  });
+
+  it("brings a branch that fell behind up to date and runs the steering checks again", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    const main = deps.github.commit(
+      REPO.defaultBranch,
+      "steering/platform/release-notes.md",
+      "Every release has notes.\n",
+    );
+    const seams = doubles();
+
+    const out = await createMergeContextPrHandler(deps, mergeSeams(seams))(
+      { proposalId },
+      ctx({ userId: REVIEWER }),
+    );
+
+    expect(out.kind).toBe("governance");
+    expect(deps.github.updates).toEqual([
+      expect.objectContaining({ branch: STEERING_BRANCH }),
+    ]);
+    // Once on the head the proposal holds, once on the updated head against
+    // the production head it now holds.
+    expect(seams.checked.map((c) => c.base)).toEqual([main, main]);
+    expect(seams.checked[1]?.head).not.toBe(seams.checked[0]?.head);
+    expect(deps.store.proposals[0]?.status).toBe("merged");
+    expect(await lastLedgerLine(deps)).toMatchObject({
+      approved_by: [REVIEWER],
+      without_review: false,
+    });
+  });
+
+  it("refuses a governance.toml that is not governance/v1, and merges nothing (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    const text =
+      (await deps.github.readFile(REPO, STEERING_FILE, STEERING_BRANCH)) ?? "";
+    // auto_merge is allowed in solo mode only.
+    const bad = deps.github.commit(
+      STEERING_BRANCH,
+      STEERING_FILE,
+      text
+        .replace('mode = "solo"', 'mode = "team"')
+        .replace("auto_merge = false", "auto_merge = true"),
+    );
+    deps.store.proposals[0]!.headSha = bad;
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(doubles()))(
+        { proposalId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ reason: "governance_invalid" });
+    expect(deps.github.merges).toEqual([]);
+    expect(deps.store.proposals[0]?.status).toBe("checks_passed");
+    expect(deps.events).toEqual([]);
+  });
+
+  it("refuses when the steering checks fail on the head, and marks the proposal (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(doubles(failed())))(
+        { proposalId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ reason: "checks_failed" });
+    expect(deps.github.merges).toEqual([]);
+    expect(deps.store.proposals[0]?.status).toBe("checks_failed");
+  });
+
+  it("refuses to land without an approval, even for a merger who may skip review (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.github.approvals = [];
+
+    await expect(
+      createMergeContextPrHandler(
+        deps,
+        mergeSeams(doubles(), { holdsMergeWithoutReview: async () => true }),
+      )({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ reason: "review_required" });
+    expect(deps.github.merges).toEqual([]);
+    expect(deps.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergeClaimedAt: null,
+    });
+    expect(deps.events.map((e) => e.eventType)).not.toContain(
+      "steering.governance_overridden",
+    );
+  });
+
+  it("refuses merge_pr_without_review on a governance proposal (negative)", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+
+    await expect(
+      createMergeContextPrHandler(
+        deps,
+        mergeSeams(doubles()),
+        contextPrMergeWithoutReview.name,
+      )({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ reason: "review_required" });
+    expect(deps.github.merges).toEqual([]);
   });
 });
