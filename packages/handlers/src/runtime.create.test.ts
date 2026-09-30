@@ -464,6 +464,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
           containmentRequired: false,
         });
         expect(open.mandate.containment).toBeUndefined();
+
+        // The backfill's SQL test (`->> 'required' = 'true'`) also matches
+        // the string, so the carry counts it too, and the two cannot disagree
+        // about one version.
+        const quoted = await unplaced("quoted-claude", {
+          containment: { required: "true" },
+        });
+        const boxed = await enroll(quoted, "Quoted-Box.local", 9);
+        expect(await runtimeOf(boxed.host.runtimeId)).toEqual({
+          slug: "quoted-box",
+          containmentRequired: true,
+        });
       } finally {
         vi.unstubAllEnvs();
       }

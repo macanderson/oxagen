@@ -50,7 +50,7 @@ oxagen agent status
 
 The token identifies the organization, workspace, and registered agent. It expires after 30 minutes and can be used once. Enrollment installs the collector and the selected harness hooks. See [Wrap an agent](/docs/cli/wrap-an-agent) for the recording boundary and custom agents.
 
-Run a task in the wrapped harness. Open Fleet to inspect the record that arrived. Observe mode records activity without enforcing it. Hook checks depend on the installed wrapper, and calls outside the routed boundary are not governed by Oxagen.
+Run a task in the wrapped harness. Open Fleet to inspect the record that arrived. Observe mode records what the policy would decide on a governed call and lets the call go ahead. Operator controls, and the budget and model limits on model calls routed through Oxagen, still apply. Hook checks depend on the installed wrapper, and calls outside the routed boundary are not governed by Oxagen.
 
 ## Use the CLI, API, or MCP
 
