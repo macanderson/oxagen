@@ -2,12 +2,22 @@
 // fetches it anonymously and trusts the callback it lists, so the document's
 // `client_id` must equal the URL it is served from and its one callback must be
 // the app's own, whatever host the request claims.
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appOriginOf } from "./app-origin";
 import { handleMcpOAuthClientMetadata } from "./oauth-client-metadata";
 
 const APP = "https://app.oxagen.sh";
 const DOCUMENT = `${APP}/api/v1/mcp/oauth/client-metadata`;
+
+// CI runs with NEXT_PUBLIC_APP_URL set to http://localhost:3000. These tests
+// pin the configured origin to the production one, so the fallback for a host
+// the app does not own is the app's real origin.
+beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", APP);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function request(headers: Record<string, string>): Request {
   return new Request(DOCUMENT, { headers });
