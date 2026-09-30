@@ -1567,8 +1567,25 @@ fn remove_created(roots: &Roots) -> Vec<String> {
             removed.push(item.clone());
         }
     }
+    // The per-user copy's directory and the ones above it that an install
+    // made stay recorded while they could not go. They hold the sidecars
+    // every launch copies there (ADR-230), not the user's files, so a "Remove
+    // links" that dropped them left Uninstall nothing to remove them by
+    // (#4298). Uninstall removes the copy first, and then they empty.
+    let durable = roots.durable_bin_dir();
+    let kept: Vec<Value> = created
+        .into_iter()
+        .filter(|item| !removed.contains(item) && durable.starts_with(Path::new(item)))
+        .map(Value::String)
+        .collect();
     let mut config = read_json_object(&roots.desktop_config_path());
-    if config.remove("created").is_some() {
+    let changed = if kept.is_empty() {
+        config.remove("created").is_some()
+    } else {
+        config.insert("created".to_string(), Value::Array(kept));
+        true
+    };
+    if changed {
         let _ = write_desktop_config(roots, &config);
     }
     removed

@@ -3281,7 +3281,10 @@ async function initializeDaemon(
           // then seals its `tool_call` on the session's chain. A frame here
           // would be its second identity. A refusal is not a sighting of
           // the call, and nothing else records it, so it still seals.
-          if (call.status !== "rejected" && spoolRequests(toolUseId)) {
+          if (
+            call.status !== "rejected" &&
+            (await spoolRequests(toolUseId))
+          ) {
             log(
               `mcp gateway left ${call.toolName} (${toolUseId}) to its hooks: its PreToolUse waits in the spool`,
             );
@@ -3396,36 +3399,58 @@ async function initializeDaemon(
   }
 
   /**
+   * The tool-use id of the `PreToolUse` each spool file holds, keyed by file
+   * name: undefined for any other hook and for a file that does not parse. A
+   * spool file never changes once written, so each is read once.
+   */
+  const spooledToolUses = new Map<string, string | undefined>();
+
+  /**
    * Whether the spool holds a `PreToolUse` for this call: the file
    * `tacho-hook` writes when the daemon does not answer it in time. Its
    * replay claims the call for its session, at this start or the next. A
    * file that cannot be read names no call.
+   *
+   * It runs in a host task, after the drain in `claimantOf`, so it reads only
+   * what that drain left. Its reads are awaited and remembered by file name,
+   * because a spool left long by an outage would otherwise hold the event
+   * loop, and with it every hook and the model proxy's streams, on each such
+   * gateway call.
    */
-  function spoolRequests(toolUseId: string): boolean {
+  async function spoolRequests(toolUseId: string): Promise<boolean> {
     let names: string[];
     try {
-      names = readdirSync(paths.spool);
+      names = spoolFileNames();
     } catch {
       return false;
     }
-    return names.some((name) => {
-      if (!name.endsWith(".json")) return false;
-      try {
-        const file = JSON.parse(
-          readFileSync(join(paths.spool, name), "utf8"),
-        ) as SpoolFile;
-        const payload = file.payload as
-          | { hook_event_name?: unknown; tool_use_id?: unknown }
-          | null
-          | undefined;
-        return (
-          payload?.hook_event_name === "PreToolUse" &&
-          payload.tool_use_id === toolUseId
-        );
-      } catch {
-        return false;
+    const listed = new Set(names);
+    for (const name of [...spooledToolUses.keys()])
+      if (!listed.has(name)) spooledToolUses.delete(name);
+    for (const name of names) {
+      if (!spooledToolUses.has(name)) {
+        let requested: string | undefined;
+        try {
+          const file = JSON.parse(
+            await readFile(join(paths.spool, name), "utf8"),
+          ) as SpoolFile;
+          const payload = file.payload as
+            | { hook_event_name?: unknown; tool_use_id?: unknown }
+            | null
+            | undefined;
+          requested =
+            payload?.hook_event_name === "PreToolUse" &&
+            typeof payload.tool_use_id === "string"
+              ? payload.tool_use_id
+              : undefined;
+        } catch {
+          requested = undefined;
+        }
+        spooledToolUses.set(name, requested);
       }
-    });
+      if (spooledToolUses.get(name) === toolUseId) return true;
+    }
+    return false;
   }
 
   /** The frame one gateway call seals, on whichever chain it lands. */

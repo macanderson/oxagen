@@ -348,6 +348,23 @@ fn remove_links_without_a_link_changes_nothing_and_an_opted_out_launch_only_keep
     );
 }
 
+/// #4298: "Remove links" cannot remove the per-user copy's directories,
+/// because every launch fills them with the sidecars. It keeps them recorded,
+/// so Uninstall, which removes the copy, then removes them too.
+#[cfg(unix)]
+#[test]
+fn uninstall_after_remove_links_leaves_the_home_as_it_was() {
+    let env = env_for(scratch_roots("unlinked", "/bin/zsh"), false);
+    put(&env.roots.home.join(".zprofile"), USER_ZPROFILE.as_bytes());
+    let before = snapshot(&env.roots.home);
+    assert_eq!(link_cli_in(&env, &CliInstallState::default()).unwrap().state, "linked");
+    unlink_cli_in(&env);
+    assert!(env.kept_dir().join("tacho").is_file());
+    remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(!env.roots.durable_bin_dir().exists());
+    assert_eq!(snapshot(&env.roots.home), before);
+}
+
 #[cfg(unix)]
 #[test]
 fn a_stale_link_into_an_older_app_is_replaced_and_a_foreign_one_is_not() {

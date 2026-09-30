@@ -531,7 +531,15 @@ export class TranscriptTailer {
         exclusive === undefined
           ? Promise.resolve().then(apply)
           : exclusive(session, apply),
-      current,
+      // The tick took `session` before it read, and its seal waits in the
+      // session's queue behind any host task. A host task can replace the
+      // record (the registry's restore builds new ones), and a seal through
+      // the old recorder would write past the chain the new one holds, so
+      // every later seal on that chain is refused. A replaced record seals
+      // nothing and the cursor stays put: the next tick reads the same lines
+      // through the record the registry lists then.
+      current: () =>
+        current() && this.options.sessions().includes(session),
     };
   }
 
