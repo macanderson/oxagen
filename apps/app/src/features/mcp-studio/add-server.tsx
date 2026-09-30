@@ -14,8 +14,8 @@
 //     folder (#4756).
 //   - A registry entry shows whether it offers a remote, a package or both.
 //     The package form asks for machine groups, the package type and the
-//     required arguments, and its submit waits on the app's RegistryServer
-//     carrying the registry's packages[] (registryPackagesOf, #4678).
+//     required arguments the registry lists (registryPackagesOf). Its submit
+//     waits on #4756, as Local command's does.
 //   - Discovery progress follows the server's discovery until it finishes,
 //     through get_studio_discovery and start_studio_discovery (lane M10,
 //     #4682, bound in studio-calls.ts).
@@ -556,21 +556,22 @@ function argumentName(argument: RegistryPackageArgument): string {
 
 /**
  * The package path of a registry entry: machine groups, the package type and
- * the required arguments. The submit waits on #4742, which keeps the
- * registry's packages[] and so the arguments to ask for.
+ * the required arguments the registry lists. The submit waits on #4756, as
+ * Local command's does: a new folder for a server the local gateway runs
+ * needs its tools listed before Review can open a steering PR.
  */
 export function RegistryPackageFields({
   server,
   packages = registryPackagesOf(server),
 }: {
   server: RegistryServer;
-  /** The entry's packages, or null while search_mcp_registry drops them. */
-  packages?: readonly RegistryPackage[] | null;
+  /** The entry's packages, as search_mcp_registry lists them. */
+  packages?: readonly RegistryPackage[];
 }) {
   const t = useTranslations("mcpStudio.addServer.package");
   const tLocal = useTranslations("mcpStudio.addServer.local");
   const id = useId();
-  const runnable = (packages ?? []).filter((pkg) =>
+  const runnable = packages.filter((pkg) =>
     REGISTRY_PACKAGE_TYPES.some((type) => type === pkg.registryType),
   );
   const [type, setType] = useState<string>(
@@ -595,14 +596,6 @@ export function RegistryPackageFields({
       }}
     >
       <p className="text-[13px] text-muted-foreground">{t("intro")}</p>
-      {packages === null ? (
-        <p
-          data-testid="studio-add-package-unknown"
-          className="text-[13px] text-muted-foreground"
-        >
-          {t("noPackages")}
-        </p>
-      ) : null}
       <fieldset disabled className="flex min-w-0 flex-col gap-3">
         <Field
           id={`${id}-machines`}
@@ -706,7 +699,7 @@ export function RegistryPackageFields({
       </button>
       <PendingNote
         id={`${id}-pending`}
-        gap="packages"
+        gap="localCommand"
         testId="studio-add-package-pending"
       >
         {t("pending")}

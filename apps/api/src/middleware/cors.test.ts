@@ -100,6 +100,24 @@ describe("corsMiddleware marketing-origin twinning", () => {
     );
   });
 
+  it("trusts both production app hosts in production whatever APP_URL names", async () => {
+    process.env.APP_URL = "https://app.oxagen.sh";
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.oxagen.sh";
+    expect(await preflight("https://oxagen.app")).toBe("https://oxagen.app");
+    process.env.APP_URL = "https://oxagen.app";
+    process.env.NEXT_PUBLIC_APP_URL = "https://oxagen.app";
+    expect(await preflight("https://app.oxagen.sh")).toBe(
+      "https://app.oxagen.sh",
+    );
+    expect(await preflight("https://www.oxagen.app")).toBeNull();
+  });
+
+  it("does not trust the production app hosts outside production", async () => {
+    runtime.production = false;
+    expect(await preflight("https://oxagen.app")).toBeNull();
+    expect(await preflight("https://app.oxagen.sh")).toBeNull();
+  });
+
   it("falls back to localhost:8080 outside production when MARKETING_URL is unset", async () => {
     runtime.production = false;
     expect(await preflight("http://localhost:8080")).toBe(

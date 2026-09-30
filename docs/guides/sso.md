@@ -16,12 +16,14 @@ Pick a provider id before you begin. It is a slug of 2 to 63 lowercase letters, 
 
 One email domain belongs to one organization. A second organization cannot register a provider for a domain that already has one.
 
-The redirect URLs below use `https://app.oxagen.sh`. The page in the app shows the exact URLs for your provider, each with a copy button.
+The redirect URLs below use `https://oxagen.app`. The page in the app shows the exact URLs for your provider, each with a copy button.
+
+The app moved to `oxagen.app` from `app.oxagen.sh` (ADR-215). If you set up an OIDC application while the app was at `app.oxagen.sh`, add `https://oxagen.app/api/auth/sso/callback/<providerId>` to its redirect URIs beside the old one, or sign-in fails. A SCIM client keeps working on its `app.oxagen.sh` base URL.
 
 ## Register an OIDC provider
 
 1. In your IdP, create an OIDC web application.
-2. Set its sign-in redirect URI to `https://app.oxagen.sh/api/auth/sso/callback/<providerId>`.
+2. Set its sign-in redirect URI to `https://oxagen.app/api/auth/sso/callback/<providerId>`.
 3. Configure the IdP to send a groups claim in the ID token or the userinfo response.
 4. Copy the issuer URL, the client ID, and the client secret from the IdP.
 5. In Oxagen, open **Organization › Single sign-on** (`/{org}/sso`).
@@ -40,8 +42,8 @@ After you save, the page shows whether a client secret is set. It never shows th
 ## Register a SAML provider
 
 1. In your IdP, create a SAML 2.0 application.
-2. Set the assertion consumer service (ACS) URL to `https://app.oxagen.sh/api/auth/sso/saml2/sp/acs/<providerId>`.
-3. Set the audience, or SP entity ID, to `https://app.oxagen.sh/api/auth/sso/saml2/sp/metadata?providerId=<providerId>`.
+2. Set the assertion consumer service (ACS) URL to `https://oxagen.app/api/auth/sso/saml2/sp/acs/<providerId>`.
+3. Set the audience, or SP entity ID, to `https://oxagen.app/api/auth/sso/saml2/sp/metadata?providerId=<providerId>`.
 4. Add an attribute statement named `groups` that carries the person's groups.
 5. Copy the IdP entity ID, the IdP single sign-on URL, and the IdP signing certificate.
 6. In Oxagen, open **Organization › Single sign-on** (`/{org}/sso`).
@@ -133,7 +135,7 @@ Removing someone from a group is not a deprovisioning. It recomputes their role,
 ### Generate the SCIM token
 
 1. Open **Organization › Single sign-on** (`/{org}/sso`).
-2. In **SCIM provisioning**, copy the **SCIM base URL**. It is `https://app.oxagen.sh/api/scim/v2`.
+2. In **SCIM provisioning**, copy the **SCIM base URL**. It is `https://oxagen.app/api/scim/v2`.
 3. Choose **Generate token**.
 4. Copy the token. Oxagen stores only its hash and cannot show it again.
 

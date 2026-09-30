@@ -10,7 +10,7 @@ import type { AppEnv } from "../app";
 
 /**
  * SCIM 2.0 (RFC 7644) for one organization, mounted at `/api/scim/v2` (#3734).
- * The app proxies `https://app.oxagen.sh/api/scim/v2/*` here, which is the
+ * The app proxies `https://oxagen.app/api/scim/v2/*` here, which is the
  * base URL the Single sign-on page gives an identity provider.
  *
  * The bearer token is the boundary. It is minted on Organization › Single

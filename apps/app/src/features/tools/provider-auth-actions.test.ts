@@ -101,7 +101,7 @@ describe("searchRegistry", () => {
     expect(out).toEqual({
       ok: true,
       value: {
-        servers: [{ registryRef: id, ...rest }],
+        servers: [{ registryRef: id, ...rest, packages: [] }],
         nextCursor: "c",
         registryReachable: true,
       },

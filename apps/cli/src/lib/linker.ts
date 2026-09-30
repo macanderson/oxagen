@@ -117,7 +117,7 @@ export async function resolveOrg(opts: {
 
   if (organizations.length === 0) {
     throw new Error(
-      "You have no organizations. Create one at https://app.oxagen.sh, " +
+      "You have no organizations. Create one at https://oxagen.app, " +
         "then run `oxagen login` again.",
     );
   }
@@ -175,7 +175,7 @@ export async function resolveWorkspace(opts: {
   if (workspaces.length === 0) {
     throw new Error(
       `Organization "${opts.orgSlug}" has no workspaces. ` +
-        `Create one at https://app.oxagen.sh.`,
+        `Create one at https://oxagen.app.`,
     );
   }
 

@@ -5,7 +5,7 @@ import type { BetterAuthPlugin } from "better-auth";
  * OAuth Proxy configuration for multi-environment social login.
  *
  * A GitHub OAuth App (and a Google OAuth client) allows only ONE callback host.
- * A single login OAuth app is shared across production (app.oxagen.sh) and every
+ * A single login OAuth app is shared across production (oxagen.app) and every
  * preview deployment, so a naive setup can satisfy only ONE host — the other
  * 403s with GitHub's "The redirect_uri is not associated with this application".
  *
@@ -20,7 +20,7 @@ import type { BetterAuthPlugin } from "better-auth";
  */
 
 /** Canonical production origin used when OAUTH_PROXY_PRODUCTION_URL is unset. */
-export const DEFAULT_OAUTH_PROXY_PRODUCTION_URL = "https://app.oxagen.sh";
+export const DEFAULT_OAUTH_PROXY_PRODUCTION_URL = "https://oxagen.app";
 
 export interface OAuthProxyConfigInputs {
   /** True in local dev / test (and Vercel "development"); disables the proxy. */
