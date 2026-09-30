@@ -41,7 +41,9 @@ A production branch GitHub no longer has answers `head: null` and an empty tree 
 | `oxagen.present` | boolean | whether any path under `.oxagen/` exists at `head` |
 | `oxagen.files` | string[] | every path under `.oxagen/` at `head`, sorted |
 | `workspaceToml` | string or null | `.oxagen/workspace.toml` in full, when it exists |
-| `governanceToml` | string or null | `.oxagen/rules/governance.toml` in full, when it exists |
+| `steering` | object | `{ present, files }`: every path under `steering/` at `head`, sorted. Empty in a legacy repository |
+| `governancePath` | string | the governance file read: `steering/governance.toml` when the tree holds one, else `.oxagen/rules/governance.toml` (#4821) |
+| `governanceToml` | string or null | the governance file in full, when it exists |
 | `governanceMode` | `solo`, `team`, `regulated`, `absent`, `invalid` | the mode the file declares; `absent` reads as `team`, `invalid` refuses both open and merge |
 | `initPullRequest` | object or null | `{ number, htmlUrl }` of an open `oxagen/init` pull request |
 | `readAt` | string | RFC 3339 |

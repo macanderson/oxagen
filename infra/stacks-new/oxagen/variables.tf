@@ -28,6 +28,7 @@ variable "legacy_subdomains" {
   type        = map(string)
   default = {
     arena = "cname.vercel-dns-016.com"
+    sdlc  = "cname.vercel-dns-016.com"
   }
 }
 

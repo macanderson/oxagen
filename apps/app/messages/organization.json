@@ -123,7 +123,7 @@
       },
       "governance": {
         "heading": "Governance mode",
-        "about": "Written to .oxagen/rules/governance.toml on the main repository through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
+        "about": "Written to the main repository’s governance file through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
         "unchanged": "Leave unchanged",
         "solo": "solo (the author may merge their own)",
         "team": "team (a code owner must review)",

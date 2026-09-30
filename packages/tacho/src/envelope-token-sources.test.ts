@@ -6,14 +6,17 @@
  * ClickHouse stores a missing `Nullable` column as null.
  */
 import { describe, expect, it } from "vitest";
-import { flattenEvent } from "./columns";
+import { hashEvent } from "./chain";
+import { flattenEvent, unflattenEvent } from "./columns";
 import {
   type BodyOf,
   parseTachoEvent,
   SYSTEM_CONTEXT_PARTS_MAX,
   type TachoEvent,
+  TOKEN_SOURCE_COUNTS,
 } from "./envelope";
 import { minimalSession, sealAll, unsealed } from "./test-helpers";
+import { tachoEventWireSchema } from "./wire";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -112,6 +115,59 @@ describe("the token source members at ingest", () => {
     }
   });
 
+  // #4508 item 5. A count with no basis cannot say whether it was reported
+  // or estimated, and a basis with no count names nothing.
+  it("refuses a count without its basis and a basis without its count, for each source", () => {
+    const base = wire(llmCall({}));
+    const baseBody = base["body"] as Record<string, unknown>;
+    for (const count of TOKEN_SOURCE_COUNTS) {
+      const basis = `${count}_basis`;
+      const cases: Array<[Record<string, unknown>, string]> = [
+        [{ [count]: 120 }, basis],
+        [{ [basis]: "estimated" }, count],
+      ];
+      for (const [bad, missing] of cases) {
+        const event = { ...base, body: { ...baseBody, ...bad } };
+        const parsed = tachoEventWireSchema.safeParse(event);
+        expect(parsed.success).toBe(false);
+        const paths = parsed.error?.issues.map((issue) => issue.path.join("."));
+        expect(paths).toEqual([`body.${missing}`]);
+        expect(() => parseTachoEvent(event)).toThrow();
+      }
+      // Both together, and neither, still parse.
+      const paired = {
+        ...base,
+        body: { ...baseBody, [count]: 120, [basis]: "reported" },
+      };
+      expect(tachoEventWireSchema.safeParse(paired).success).toBe(true);
+    }
+    expect(tachoEventWireSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("holds the pair on every kind whose body carries the sources, and on no other", () => {
+    const [error, manifest] = sealAll([
+      unsealed("error", { model: "claude-opus-4-5" }),
+      unsealed("steering.manifest", { items: [] }),
+    ]);
+    const unpaired = { steering_tokens: 40 };
+    const refuse = wire(error!);
+    expect(
+      tachoEventWireSchema.safeParse({
+        ...refuse,
+        body: { ...(refuse["body"] as Record<string, unknown>), ...unpaired },
+      }).success,
+    ).toBe(false);
+    // A steering manifest's body is opaque on the wire, and a member of that
+    // name there is not a token source.
+    const opaque = wire(manifest!);
+    expect(
+      tachoEventWireSchema.safeParse({
+        ...opaque,
+        body: { ...(opaque["body"] as Record<string, unknown>), ...unpaired },
+      }).success,
+    ).toBe(true);
+  });
+
   it("parses a frame from a recorder that predates the members, as before", () => {
     const calls = minimalSession().filter((event) => event.kind === "llm_call");
     expect(calls.length).toBeGreaterThan(0);
@@ -135,6 +191,26 @@ describe("the token source columns", () => {
     // An unmeasured source sends no column, which the store reads as null.
     expect(row).not.toHaveProperty("context_frame_tokens");
     expect(row).not.toHaveProperty("context_frame_tokens_basis");
+  });
+
+  // Ingest accepted an unpaired count until the pair rule (#4508 item 5), so
+  // a stored row can hold one. Reading the row back must not apply a rule the
+  // row was sealed before.
+  it("reads back a stored row whose count has no basis", () => {
+    const paired = llmCall({
+      tool_definition_tokens: 120,
+      tool_definition_tokens_basis: "reported",
+    });
+    const { tool_definition_tokens_basis: _dropped, ...body } =
+      paired.body as Record<string, unknown>;
+    const unhashed = { ...paired, body } as Record<string, unknown>;
+    const stored = { ...unhashed, hash: hashEvent(unhashed) } as TachoEvent;
+    expect(() => parseTachoEvent(wire(stored))).toThrow();
+    const rebuilt = unflattenEvent(flattenEvent(stored));
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt?.hash).toBe(stored.hash);
+    expect(rebuilt?.body).toMatchObject({ tool_definition_tokens: 120 });
+    expect(rebuilt?.body).not.toHaveProperty("tool_definition_tokens_basis");
   });
 
   it("flattens a frame from an older recorder with none of the columns", () => {

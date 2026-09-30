@@ -5,6 +5,7 @@ export * from "./credential-store";
 export * from "./cursor-writer";
 export * from "./device-key";
 export * from "./fs";
+export * from "./hook-guard";
 export * from "./host-file";
 export * from "./key-id";
 export * from "./model-base-url";

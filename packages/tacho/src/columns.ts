@@ -11,7 +11,7 @@ import { eventHashHolds } from "./chain";
 import {
   BODY_MEMBER_NAMES,
   type TachoEvent,
-  tachoEventSchema,
+  tachoRecordedEventSchema,
 } from "./envelope";
 
 export const ENVELOPE_COLUMNS = [
@@ -627,7 +627,7 @@ export function unflattenEventReading(
     if (!eventHashHolds(candidate, hash)) return null;
     // The hash matched the reading; parsing it is the schema's word that the
     // reading is an event, and parsing must not change what was hashed.
-    const parsed = tachoEventSchema.safeParse(candidate);
+    const parsed = tachoRecordedEventSchema.safeParse(candidate);
     if (
       !parsed.success ||
       !eventHashHolds(parsed.data as unknown as Record<string, unknown>, hash)
