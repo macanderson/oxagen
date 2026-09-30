@@ -35,9 +35,19 @@ export function testSigner(): LocalCallSigner {
   return localCallSignerFromPem(privateKey.export({ type: "pkcs8", format: "pem" }).toString());
 }
 
-/** A reader that puts each machine in the listed groups. */
-export function readerOf(groups: Record<string, readonly string[]>): MachineGroupReader {
-  return { groupsOf: (_scope, machine) => Promise.resolve(groups[machine] ?? []) };
+/**
+ * A reader that puts each machine in the listed groups. A machine in
+ * `suspended` is in none, as the Postgres reader answers (#4554).
+ */
+export function readerOf(
+  groups: Record<string, readonly string[]>,
+  suspended: readonly string[] = [],
+): MachineGroupReader {
+  const isSuspended = (machine: string): boolean => suspended.includes(machine);
+  return {
+    groupsOf: (_scope, machine) => Promise.resolve(isSuspended(machine) ? [] : (groups[machine] ?? [])),
+    isSuspended: (_scope, machine) => Promise.resolve(isSuspended(machine)),
+  };
 }
 
 /** A delivery as a machine's cloud link reads it off the wire, parsed by tacho's own schema. */

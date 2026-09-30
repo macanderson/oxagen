@@ -10,7 +10,7 @@ The machine starts every exchange. Oxagen opens no connection to it, so the mach
 ## How a call reaches the machine
 
 1. The agent calls a tool on a local server through Oxagen's MCP endpoint.
-2. Oxagen checks that the machine is in a group the server's `source.machines` names, signs a call envelope for that machine, and holds it.
+2. Oxagen checks that the machine is not suspended and is in a group the server's `source.machines` names. It then signs a call envelope for that machine and holds it.
 3. The machine's collector is already waiting on `GET /v1/local-servers/next`. It receives the envelope, checks the signature, and runs the call on the local server.
 4. The machine posts the result to `POST /v1/local-servers/replies`, and Oxagen hands it to the agent.
 
@@ -60,3 +60,5 @@ A server can also say its tools changed. When it sends `notifications/tools/list
 | `405` | `method_not_allowed` | The poll was not a `GET`, or the reply was not a `POST`. |
 
 A revoked or suspended machine gets no calls. Enroll it again, or ask an admin to lift the suspension.
+
+The agent reads a refused call as a tool error with a code. A call to a suspended machine fails with `machine_suspended` before Oxagen signs it. A call to a machine outside the server's groups fails with `not_in_group`.
