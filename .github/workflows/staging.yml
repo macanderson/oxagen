@@ -112,7 +112,8 @@ jobs:
           aws ssm get-parameters-by-path --path "$PARAMETER_PREFIX" --recursive --with-decryption \
             --query 'Parameters[].{Name:Name,Value:Value}' --output json \
           | pnpm exec tsx tools/scripts/build-env.ts --service "$SERVICE" --env preview --without-oauth \
-              --prefix "$PARAMETER_PREFIX" --out "$RUNNER_TEMP/build-env"
+              --prefix "$PARAMETER_PREFIX" --out "$RUNNER_TEMP/build-env" \
+              --runtime-out "$RUNNER_TEMP/runtime-env.json"
       - name: Package the staging service
         env:
           SERVICE: ${{ matrix.service }}
@@ -122,6 +123,9 @@ jobs:
             set -a
             . "$RUNNER_TEMP/build-env"
             set +a
+          fi
+          if [ -f "$RUNNER_TEMP/runtime-env.json" ]; then
+            export RUNTIME_ENV_FILE="$RUNNER_TEMP/runtime-env.json"
           fi
           tools/scripts/package-for-node.sh "$SERVICE"
       - uses: ./.github/actions/ship-to-node

@@ -109,6 +109,12 @@ engine_version() {
 # `OXAGEN_REGION` is the region a page's error line prints beside the trace
 # id (#3841). Every deployed node runs in us-east-1 (deploy-node-site.sh), so
 # that is the default; the environment can name another.
+# `RUNTIME_ENV_FILE` names the JSON object `build-env.ts --runtime-out` wrote:
+# the registry's static, non-secret values that Parameter Store does not hold.
+# The node starts a container with Parameter Store alone, so these reach the
+# running process only through this manifest. Production's APP_URL is the one
+# that was missing: the registry set it, the build saw it, and the Slack and
+# Linear connect flows, which read it at request time, stayed off.
 write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
@@ -122,6 +128,18 @@ write_manifest() {
     command_json=$(printf '%s\n' "$@" | jq -R . | jq -sc .)
   fi
 
+  local runtime_env='{}'
+  if [[ -n ${RUNTIME_ENV_FILE:-} ]]; then
+    [[ -f $RUNTIME_ENV_FILE ]] || fail "RUNTIME_ENV_FILE names a missing file: $RUNTIME_ENV_FILE"
+    runtime_env=$(jq -ce '
+        if type == "object"
+           and all(to_entries[]; (.key | test("^[A-Za-z_][A-Za-z0-9_]*$"))
+                                 and (.value | type == "string"))
+        then . else error("not an object of string values") end' \
+      "$RUNTIME_ENV_FILE") \
+      || fail "RUNTIME_ENV_FILE must hold a JSON object of string values: $RUNTIME_ENV_FILE"
+  fi
+
   jq -n \
     --argjson port "$port" \
     --arg image "${WRITE_MANIFEST_IMAGE:-node:24.21.0-alpine}" \
@@ -130,13 +148,14 @@ write_manifest() {
     --arg health "$health" \
     --arg config "$config" \
     --arg region "${OXAGEN_REGION:-us-east-1}" \
+    --argjson runtime "$runtime_env" \
     '{
        port: $port,
        image: $image,
        command: $command,
        memory: $memory,
        health_path: $health,
-       env: { NEXT_TELEMETRY_DISABLED: "1", OXAGEN_REGION: $region }
+       env: ($runtime + { NEXT_TELEMETRY_DISABLED: "1", OXAGEN_REGION: $region })
      }
      + (if $config == "" then {} else { config_prefix: $config } end)' \
     > "$OUT/oxagen-run.json"
