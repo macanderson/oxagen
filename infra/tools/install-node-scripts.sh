@@ -193,6 +193,12 @@ chmod 0755 /opt/oxagen/bin/*.sh
 bash -n /opt/oxagen/bin/deploy-service.sh
 ls -l /opt/oxagen/bin
 
+# Use the same lock as service deployment while changing a container budget.
+(
+  flock -x -w 120 201 || { echo "Node memory budget is busy" >&2; exit 1; }
+  python3 /opt/oxagen/bin/ensure-caddy-memory.py
+) 201>/opt/oxagen/service-deploy.lock
+
 # Caddy is the single point every public request passes through, so the new
 # config is validated before it is installed and the running one is left alone
 # if it does not parse. `caddy reload` would refuse a bad config too, but by
