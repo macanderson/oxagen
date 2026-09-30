@@ -3,7 +3,8 @@
 **Domain:** org
 **Mode:** sync
 **Scope:** organisation (`scoped: false` — requires an orgId, no workspace)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Risk level:** high · **Requires approval:** yes · **Billing gate:** none
 

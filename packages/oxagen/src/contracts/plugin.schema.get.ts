@@ -162,7 +162,7 @@ export const pluginSchemaGet = registerCapability({
   description:
     "Fetch the typed config schema for a connector plugin, used to drive dynamic form rendering during install and configure flows.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,

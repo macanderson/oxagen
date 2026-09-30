@@ -1,5 +1,7 @@
 # get_run_outputs
 
+**Surfaces:** api, agent
+
 What one run produced, in the order it produced it (macanderson/oxagen#3609). This is the Run page's spine: it sits between the run header and the tabs, not behind one of them, because the first question anyone brings to a run is what came of it.
 
 One node per thing the run produced. A node carries a kind, a name, where it landed, the disposition the store recorded, a one-line note, a diff stat where the recorder counted lines, and the frame sequence the `fr N` chip opens. A path the run only read comes back as a `read` node, so the surface can draw it as a mark and never as a change.
@@ -15,6 +17,7 @@ One node per thing the run produced. A node carries a kind, a name, where it lan
 - Authentication: a signed-in session (org Owner, Admin or Member; workspace Owner or Member).
 - Capability name: `get_run_outputs`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

@@ -4,7 +4,7 @@
 **Domain:** api_key
 **Mode:** sync
 **Scope:** org + workspace (the tenant scope the caller enters)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`; a console read is never a governed action, ADR-052 exclusion 2)
 
@@ -45,6 +45,7 @@ None. Read-only; audit-exempt (the lifecycle writes `create_api_key`, `revoke_ap
 
 - `GET /api/v1/{org}/{ws}/api-keys`
 - MCP tool `list_api_keys`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

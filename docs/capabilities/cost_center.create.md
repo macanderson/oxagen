@@ -8,7 +8,7 @@ Add a label to the organization's cost-center list, so agents and workspaces can
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/cost-centers/create`
 - MCP: `create_cost_center`
@@ -16,6 +16,7 @@ Add a label to the organization's cost-center list, so agents and workspaces can
 - Capability name: `create_cost_center`
 - Organization-level (`scoped: false`). The workspace in the path only routes the call.
 - Not billed (`noBillingGate: true`). IAM default-deny, medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

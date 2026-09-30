@@ -11,7 +11,7 @@ export const configurationCloneGet = registerCapability({
   mode: "sync",
   description:
     "Read a configuration into an editable clone draft with a new suggested name and slug. Copies no identity-bound access and changes nothing.",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,
@@ -19,6 +19,7 @@ export const configurationCloneGet = registerCapability({
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  agent: { requiresApproval: false, riskLevel: "low", category: "configuration" },
   input: z
     .object({
       kind: configurationKindSchema,

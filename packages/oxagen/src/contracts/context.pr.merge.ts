@@ -16,7 +16,7 @@ export const contextPrMerge = registerCapability({
   description:
     "Merge a proposal's Context PR (a GitHub pull request or a GitLab merge request) and publish its record: refused until every check passed and unless the caller is a reviewer the governance mode allows; writes the promotion event to the ledger, bumps the steering version and emits steering.published",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

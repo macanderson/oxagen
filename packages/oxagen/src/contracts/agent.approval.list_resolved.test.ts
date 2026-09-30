@@ -33,7 +33,7 @@ describe("list_resolved_approvals contract", () => {
     });
     expect(agentApprovalListResolved.layers).not.toContain("e2e");
     expect(agentApprovalListResolved.layers).toContain("app");
-    expect(agentApprovalListResolved.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(agentApprovalListResolved.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
   });
 
   it("defaults the page size, accepts a run filter, a resolved-at range and a cursor, and refuses the rest", () => {

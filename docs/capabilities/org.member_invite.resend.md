@@ -3,7 +3,8 @@
 **Domain:** org
 **Mode:** sync
 **Scope:** organization
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 Renews the same pending invitation for seven days and waits for the mail transport to accept its recipient. A failed send leaves the renewed invitation pending and returns `delivery: "failed"` with its new expiry. Retry uses the same invitation. `delivery: "accepted"` means the mail transport accepted the recipient.
 

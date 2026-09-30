@@ -19,8 +19,10 @@ describe("dispatch_command contract", () => {
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow", Member: "allow" },
     });
+    // A cancel can stop every live run in the workspace, so Stella's call
+    // waits for a person (#4180).
     expect(tachoCommandDispatch.agent).toEqual({
-      requiresApproval: false,
+      requiresApproval: true,
       riskLevel: "medium",
       category: "control",
     });

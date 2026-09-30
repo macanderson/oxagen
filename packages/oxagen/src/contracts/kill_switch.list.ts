@@ -31,7 +31,7 @@ export const killSwitchList = registerCapability({
   description:
     "List the kill switches reaching this workspace — org-wide class and organisation switches and the workspace's own — newest first, with the current deny generation.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

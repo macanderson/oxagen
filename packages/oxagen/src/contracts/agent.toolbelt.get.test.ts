@@ -22,7 +22,7 @@ describe("get_agent_toolbelt contract", () => {
     expect(getCapability("get_agent_toolbelt")).toBe(agentToolbeltGet);
     expect(agentToolbeltGet.mutates).toBe(false);
     expect(agentToolbeltGet.noBillingGate).toBe(true);
-    expect(agentToolbeltGet.surfaces).toEqual(["api", "mcp"]);
+    expect(agentToolbeltGet.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(agentToolbeltGet.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow", Member: "allow" },
       workspace: { Owner: "allow", Member: "allow" },

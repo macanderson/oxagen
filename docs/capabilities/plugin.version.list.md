@@ -1,5 +1,7 @@
 # list_plugin_versions
 
+**Surfaces:** api, mcp
+
 List version history for a connector plugin, including changelog entries and breaking-change flags. Used by org admins to review update impact before upgrading.
 
 ## Mode
@@ -8,7 +10,7 @@ List version history for a connector plugin, including changelog entries and bre
 ## Surfaces
 - API: `GET /v1/plugin-versions/:pluginId`
 - MCP: `plugin.version.list`
-- Agent: callable (no approval required, risk: low)
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 - CLI: not available
 
 ## Input

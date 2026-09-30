@@ -53,7 +53,7 @@ export const costPriceEntryList = registerCapability({
   description:
     "List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -64,6 +64,7 @@ export const costPriceEntryList = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       /** RFC 3339; the read instant when omitted. */

@@ -24,7 +24,7 @@ const server = {
 describe("search_mcp_registry contract", () => {
   it("is a read-only, billing-free search on api and mcp", () => {
     expect(agentMcpRegistrySearch.name).toBe("search_mcp_registry");
-    expect(agentMcpRegistrySearch.surfaces).toEqual(["api", "mcp"]);
+    expect(agentMcpRegistrySearch.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(agentMcpRegistrySearch.mutates).toBe(false);
     expect(agentMcpRegistrySearch.noBillingGate).toBe(true);
   });

@@ -3,7 +3,7 @@
 **Domain:** privacy
 **Mode:** sync
 **Scope:** the calling user's own export requests
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent
@@ -90,6 +90,7 @@ refused rather than released on a check that may be asking the wrong
 workspace.
 
 ## Surfaces
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 The MCP `get_export_status` tool completes the polling path for `export_data`.
 It uses the same handler and user and organization authorization as the API.

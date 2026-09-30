@@ -102,6 +102,7 @@ import { secretImportEnvHandler } from "./secret.import_env";
 import { secretKeyDeleteHandler } from "./secret.key.delete";
 import { secretKeyUpsertHandler } from "./secret.key.upsert";
 import { agentMcpDeleteHandler } from "@oxagen/agent/handlers/agent.mcp.delete";
+import { agentMcpRegisterHandler } from "@oxagen/agent/handlers/agent.mcp.register";
 
 const ctx: CapabilityContext = {
   orgId: "11111111-1111-4111-8111-111111111111",
@@ -183,6 +184,20 @@ const cases = [
     name: "delete_mcp_server",
     handler: agentMcpDeleteHandler,
     input: {},
+    workspace: ["Owner"],
+  },
+  // Its handler checked no role until #4180, so any member of an org below
+  // Enterprise could add a server. A stdio server skips the network probe,
+  // so an admitted caller reaches the insert.
+  {
+    name: "register_mcp_server",
+    handler: agentMcpRegisterHandler,
+    input: {
+      name: "role-regression",
+      transportType: "stdio",
+      endpointUrl: "stdio://role-regression",
+      authStrategy: "none",
+    },
     workspace: ["Owner"],
   },
 ];

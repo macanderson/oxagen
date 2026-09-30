@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** destructive
 
 ## Intent
@@ -37,3 +37,4 @@ Org Owner, Org Admin.
 
 - `POST /api/v1/{org}/{ws}/plugins/org/uninstall`
 - MCP tool `plugin_org_uninstall`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

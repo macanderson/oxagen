@@ -64,7 +64,7 @@ export const toolbeltUpdate = registerCapability({
   description:
     "Rename a custom toolbelt and edit its tools: remove or add a server, or turn a server or a single tool on or off in the belt. The All tools belt cannot be edited.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

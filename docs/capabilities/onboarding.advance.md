@@ -1,5 +1,7 @@
 # advance_onboarding
 
+**Surfaces:** api, agent
+
 The onboarding gate's operator-driven transitions (#2967): `wrap` ("I have already installed it — continue") and `run` (Back). `unlocked` is accepted by the schema and refused by the handler with `conflict: first_frame_required`: the run step completes only when `ingest_tacho_events` accepts the organization's first frame, never on a click and never on a timer. A gate that is already open refuses every transition with `conflict: already_unlocked`; a workspace that is not the gate's has no gate to move (`not_found: gate_not_found`). Moving to the step the gate is already on changes nothing and answers the row's last change.
 
 ## Mode
@@ -13,6 +15,7 @@ The onboarding gate's operator-driven transitions (#2967): `wrap` ("I have alrea
 - Authentication: session; org Owner or Admin, checked by the handler (INV-29)
 - Capability name: `advance_onboarding`
 - Not billed (`noBillingGate: true`); IAM default-deny; medium sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

@@ -1,5 +1,7 @@
 # get_plugin_schema
 
+**Surfaces:** api, mcp
+
 Fetch the typed config schema for a connector plugin, used to drive dynamic form rendering during install and configure flows.
 
 ## Mode
@@ -8,7 +10,7 @@ Fetch the typed config schema for a connector plugin, used to drive dynamic form
 ## Surfaces
 - API: `GET /v1/plugin-schema/:pluginId`
 - MCP: `plugin.schema.get`
-- Agent: callable (no approval required, risk: low)
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 - CLI: not available
 
 ## Input

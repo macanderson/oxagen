@@ -4,7 +4,7 @@
 **Domain:** credential
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -50,6 +50,7 @@ None. Read-only; audit-exempt.
 - `POST /v1/{org}/{ws}/credential-grants`
 - MCP tool `list_credential_grants` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 - App: **Tools → Providers** at `/{org}/{ws}/tools/providers`: the credential grants log under the providers table.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

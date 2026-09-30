@@ -32,7 +32,7 @@ describe("get_steering_repo contract", () => {
     expect(steeringRepoGet.mutates).toBe(false);
     expect(steeringRepoGet.noBillingGate).toBe(true);
     expect(steeringRepoGet.sensitivity).toBe("low");
-    expect(steeringRepoGet.surfaces).toEqual(["api", "mcp"]);
+    expect(steeringRepoGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("lets every workspace role read it", () => {

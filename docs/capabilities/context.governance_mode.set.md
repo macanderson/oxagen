@@ -8,7 +8,7 @@ The mode is not a column. ADR-061 decision 1 puts it in `.oxagen/rules/governanc
 
 **`applyImmediately` skips the review and is recorded.** Every role that can call this capability at all already holds the override, and any of them could commit the same file on GitHub by hand, so the review route is a default rather than a gate. What the override buys is a record: it emits `steering.governance_overridden` naming the caller, the mode it left and the mode it set. Under `solo` it changes nothing.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -23,6 +23,7 @@ The mode is not a column. ADR-061 decision 1 puts it in `.oxagen/rules/governanc
 - Authentication: session or API key. An org Owner or Admin for any workspace of the organization; an Owner or Admin of the scoped workspace for that workspace alone. Checked by the handler
 - Capability name: `set_governance_mode`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity; agent calls require approval
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

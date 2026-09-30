@@ -14,8 +14,8 @@ describe("environment.set_default contract", () => {
   it("registers with the correct name", () => {
     expect(environmentSetDefault.name).toBe("set_default_environment");
   });
-  it("exposes the api, mcp, and agent surfaces", () => {
-    expect(environmentSetDefault.surfaces).toEqual(["api", "mcp", "agent"]);
+  it("exposes the api and mcp surfaces and is off the agent surface, retired (#4180)", () => {
+    expect(environmentSetDefault.surfaces).toEqual(["api", "mcp"]);
   });
   it("accepts a valid input", () => {
     expect(() =>

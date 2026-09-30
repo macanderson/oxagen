@@ -31,7 +31,7 @@ export const findingList = registerCapability({
   description:
     "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -42,6 +42,7 @@ export const findingList = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   input: z
     .object({
       status: findingStatusSchema.default("open"),

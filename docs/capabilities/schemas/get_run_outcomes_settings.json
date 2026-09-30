@@ -4,10 +4,15 @@
   "description": "Read organization consent and platform suspension for metered run follow-through.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

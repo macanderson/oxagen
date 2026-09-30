@@ -4,10 +4,15 @@
   "description": "Revoke a Tacho host enrollment: retire its API key and deny every session on the host at its next boundary.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
-  "agent": null,
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "identity"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

@@ -6,7 +6,7 @@ describe("assign_agent_toolbelt contract", () => {
   it("is an identity write on api and mcp for org Owner/Admin", () => {
     expect(getCapability("assign_agent_toolbelt")).toBe(agentToolbeltAssign);
     expect(agentToolbeltAssign.mutates).toBe(true);
-    expect(agentToolbeltAssign.surfaces).toEqual(["api", "mcp"]);
+    expect(agentToolbeltAssign.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(agentToolbeltAssign.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

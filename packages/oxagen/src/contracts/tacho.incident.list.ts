@@ -69,7 +69,7 @@ export const tachoIncidentList = registerCapability({
   description:
     "List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

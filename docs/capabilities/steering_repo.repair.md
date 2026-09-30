@@ -4,7 +4,7 @@ Put every prescribed setting back on the workspace's steering repo, then read th
 
 The health banner's Repair settings button calls this when the steering repo is not healthy. While health is not `healthy`, Oxagen merges nothing and publishes nothing, and runs keep the last published version.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -14,7 +14,7 @@ The health banner's Repair settings button calls this when the steering repo is 
 
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/repo/repair` with the body `{}` returns 200
 - MCP: `repair_steering_repo`
-- Agent: none. Repair is the health banner's admin button, so the contract carries no agent metadata
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 - CLI: none
 - Authentication: org Owner or Admin, checked by the handler (INV-29). A call that carries only an API key names no user, so the role check refuses it (`no_principal`) on every surface
 - Not billed (`noBillingGate: true`), IAM default-deny, high sensitivity

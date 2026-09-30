@@ -1,5 +1,7 @@
 # get_auth_alerts
 
+**Surfaces:** api, mcp
+
 Read the org's MCP auth-alert notification setting — which org roles receive alerts and whether email is sent in addition to in-app notification. Returns the documented default (`{ sendEmail: true, roles: ["Owner", "Admin"] }` with `isDefault: true`) when the org has never customised the setting. Read counterpart of [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md); powers the org Governance → Policies alerts panel.
 
 ## Mode
@@ -8,7 +10,7 @@ Read the org's MCP auth-alert notification setting — which org roles receive a
 ## Surfaces
 - API: `GET /v1/plugin/settings/auth-alerts`
 - MCP: `get_auth_alerts`
-- Agent: callable (no approval required, risk: low)
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 - App: org → Governance → Policies
 
 ## Access

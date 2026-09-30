@@ -4,7 +4,7 @@
 **Domain:** skill
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api
+**Surfaces:** api, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; a skill write, ARCHITECTURE.md §1.5)
 
@@ -59,6 +59,7 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. An A
 
 - `POST /api/v1/{org}/{ws}/skills/propose`
 - App: the skill wizard's last step (`apps/app/src/features/create`), opened from Steering · Skills **Add a skill** and from ⌘K **Create**.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Errors
 

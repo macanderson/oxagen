@@ -17,7 +17,7 @@ export const pluginSetEnabled = registerCapability({
   description:
     "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing. Once the workspace's tools live in its steering repo, enabling a remote plugin the repo does not hold opens a steering PR instead, and the server stays off until that PR merges.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

@@ -53,7 +53,7 @@ export const runtimeList = registerCapability({
   description:
     "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher. Pass `id` to read one runtime.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   // `app`: the Runtimes page and the register form's runtime picker.
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,

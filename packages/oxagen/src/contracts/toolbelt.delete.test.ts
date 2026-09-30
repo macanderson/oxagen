@@ -6,7 +6,7 @@ describe("delete_toolbelt contract", () => {
   it("is a settings write on api and mcp", () => {
     expect(getCapability("delete_toolbelt")).toBe(toolbeltDelete);
     expect(toolbeltDelete.mutates).toBe(true);
-    expect(toolbeltDelete.surfaces).toEqual(["api", "mcp"]);
+    expect(toolbeltDelete.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("takes a belt by public id and answers that it is deleted", () => {

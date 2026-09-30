@@ -113,7 +113,7 @@ export const agentMcpRegistrySearch = registerCapability({
   description:
     "Search the official MCP Registry and Oxagen's verified first-party servers for MCP servers a workspace can add as a tool provider",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -124,6 +124,7 @@ export const agentMcpRegistrySearch = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "tools" },
   input: z.object({
     /** Free text matched against name, title and description. Empty lists verified servers first. */
     query: z.string().max(120).default(""),

@@ -4,7 +4,7 @@
 **Domain:** toolbelt
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; a settings write)
 
@@ -40,6 +40,7 @@ Org Owner or Admin, or the workspace Owner, checked by the handler (INV-29).
 
 - `POST /api/v1/{org}/{ws}/toolbelts/delete`
 - MCP tool `delete_toolbelt`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Errors
 

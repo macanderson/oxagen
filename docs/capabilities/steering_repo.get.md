@@ -4,7 +4,7 @@ Read the workspace's steering repo: its provisioning status and step, the reposi
 
 The Repositories card, the health banner in the workspace layout, and onboarding read this. The banner renders on every workspace page, so the read answers for every workspace, including one made before provisioning existed.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -17,6 +17,7 @@ The Repositories card, the health banner in the workspace layout, and onboarding
 - CLI: none
 - Authentication: every workspace role and the org Owner, Admin, and Compliance roles
 - Not billed (`noBillingGate: true`), IAM default-deny, low sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

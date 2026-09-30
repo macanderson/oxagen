@@ -7,7 +7,7 @@ export const environmentList = registerCapability({
   domain: "environment",
   description: "List the environments configured in the active workspace.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "low",

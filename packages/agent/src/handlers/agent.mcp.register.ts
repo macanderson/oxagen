@@ -5,6 +5,7 @@ import {
 } from "@oxagen/config/public-url";
 import { and, eq } from "drizzle-orm";
 import pino from "pino";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
@@ -62,6 +63,15 @@ export async function agentMcpRegisterHandler(
   input: AgentMcpRegisterInput,
   ctx: CapabilityContext,
 ): Promise<AgentMcpRegisterOutput> {
+  // The contract grants org Owner and Admin and the workspace Owner. checkIAM
+  // allows every caller in an org below Enterprise, so the handler asks for
+  // the role itself, as delete_mcp_server does. Before this check any member
+  // could add a server whose tools reach every agent in the workspace.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"], workspace: ["Owner"] },
+  );
+
   // Validate the endpoint for every transport, before the probe and before
   // the insert (#3720). The streamable-http probe below connects with auth
   // secrets attached, so that address must be a public http(s) URL. A stdio

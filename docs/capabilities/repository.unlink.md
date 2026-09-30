@@ -11,7 +11,7 @@ Either way, every binding version stays: `ingestion.repository_bindings` is immu
 
 The steering repository is never removed by this write. A workspace always has one steering repository, so a steering head refuses with `conflict: main_repo_unlink_refused`.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -25,6 +25,7 @@ The steering repository is never removed by this write. A workspace always has o
 - Authentication: session or API key. The handler admits an org Owner or Admin, or the workspace's Owner (INV-29).
 - Capability name: `unlink_repository`
 - Not billed (`noBillingGate: true`). IAM default-deny. Medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Input
 

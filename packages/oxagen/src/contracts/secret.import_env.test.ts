@@ -25,8 +25,8 @@ describe("secret.import_env contract", () => {
   it("registers with the correct name", () => {
     expect(secretImportEnv.name).toBe("import_env_secrets");
   });
-  it("exposes the api, mcp, and agent surfaces", () => {
-    expect(secretImportEnv.surfaces).toEqual(["api", "mcp", "agent"]);
+  it("exposes the api and mcp surfaces and is off the agent surface, retired (#4180)", () => {
+    expect(secretImportEnv.surfaces).toEqual(["api", "mcp"]);
   });
   it("waits for a person's approval on the agent surface", () => {
     expect(secretImportEnv.agent).toEqual({

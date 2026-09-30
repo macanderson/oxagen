@@ -4,7 +4,7 @@ Lists the directories the CLI linked to this workspace (MC spec §10.1), most re
 
 Each row is what `record_working_copy` last received for one machine and directory. Nothing here reads a working tree, so a row describes its directory as of its `lastSeenAt` and no later. The reporter is the person whose session sent the latest report, with the display name their account carries. A report sent with an API key has no reporter.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -18,6 +18,7 @@ Each row is what `record_working_copy` last received for one machine and directo
 - Authentication: session or API key; org Owner or Admin, or a workspace Owner, Admin, Member, or Viewer
 - Capability name: `list_working_copies`
 - Not billed (`noBillingGate: true`); IAM default-deny; low sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

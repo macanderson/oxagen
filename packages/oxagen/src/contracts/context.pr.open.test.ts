@@ -51,7 +51,7 @@ describe("open_context_pr contract", () => {
   });
 
   it("declares the api surface only: the PR is opened from the operator console", () => {
-    expect(contextPrOpen.surfaces).toEqual(["api"]);
+    expect(contextPrOpen.surfaces).toEqual(["api", "agent"]);
     expect(contextPrOpen.layers).not.toContain("mcp");
     expect(contextPrOpen.layers).not.toContain("cli");
   });

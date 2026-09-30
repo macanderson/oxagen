@@ -4,7 +4,7 @@
 **Domain:** billing
 **Mode:** sync
 **Scope:** org (the handler writes the org the caller's tenant scope names)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; changing a billing setting is never a governed action, ADR-052 exclusion 2, INV-27)
 
@@ -46,6 +46,7 @@ One upsert on `billing.org_billing_settings`, keyed on `org_id` — an organizat
 
 - `PUT /v1/{org}/{ws}/billing/auto-topup`
 - MCP tool `set_auto_topup`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 No `app` layer: WL-50 binds the control on the Billing page.
 

@@ -189,7 +189,7 @@ export const skillPropose = registerCapability({
   description:
     "Add or replace a governed skill as a pull request: cut skills/<name> from the main repository's production branch, commit .oxagen/skills/<name>/SKILL.md and any bundle files, and open the pull request. Six checks (frontmatter, version, digest, grants, secret and PII scan, load cost against the search budget) run first, and a failed check writes nothing. The skill exists on merge.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

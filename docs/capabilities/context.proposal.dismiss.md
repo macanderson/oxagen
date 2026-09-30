@@ -4,8 +4,9 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api
-**Why api only:** Proposals are dismissed from the operator console, so the MCP surface is not declared. Adding the MCP tool is a lane of its own.
+**Surfaces:** api, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: medium`).
+**Why no MCP:** Proposals are dismissed from the operator console, so the MCP surface is not declared. Adding the MCP tool is a lane of its own.
 **Risk level:** medium
 **Billing:** `noBillingGate: true`
 **Mutates:** yes

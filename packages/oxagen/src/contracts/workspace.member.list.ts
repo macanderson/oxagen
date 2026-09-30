@@ -61,7 +61,7 @@ export const listMembers = registerCapability({
   description:
     "List the members of the organization with its pending invitations, or the members of the current workspace.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,

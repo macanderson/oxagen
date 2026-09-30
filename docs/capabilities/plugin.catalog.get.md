@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -43,3 +43,4 @@ Any authenticated org member (read-only).
 
 - `GET /api/v1/plugin/catalog/get?catalogId={id}`
 - MCP tool `plugin_catalog_get`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

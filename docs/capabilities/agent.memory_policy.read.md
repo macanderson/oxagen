@@ -3,7 +3,8 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
+**Agent:** none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 **Risk level:** low
 
 ## Intent

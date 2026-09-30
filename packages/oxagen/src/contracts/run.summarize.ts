@@ -31,7 +31,7 @@ export const runSummarize = registerCapability({
   description:
     "Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording.",
   mode: "async",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

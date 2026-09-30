@@ -41,7 +41,7 @@ export const runExportGet = registerCapability({
   description:
     "Read one run export: its status, the bundle's digest and size once it is built, the error if the job failed, and a download URL that expires.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

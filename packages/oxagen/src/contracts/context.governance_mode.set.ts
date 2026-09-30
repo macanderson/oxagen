@@ -118,7 +118,7 @@ export const contextGovernanceModeSet = registerCapability({
   description:
     "Set the steering governance mode of a workspace by writing its governance file: the mode key of steering/governance.toml in a steering repository, or .oxagen/rules/governance.toml in a legacy one. Under solo the change lands at once; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. In a steering repository the change always travels as a checked pull request, and landing at once merges it through the steering merge queue. The active workspace unless workspaceId names another one in the organization.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

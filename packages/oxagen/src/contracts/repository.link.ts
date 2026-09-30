@@ -67,7 +67,7 @@ export const repositoryLink = registerCapability({
   description:
     "Open a steering PR that links a GitHub repository to the workspace. The link takes effect when the PR merges.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -78,6 +78,7 @@ export const repositoryLink = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "vcs" },
   input: z
     .object({
       provider: z.literal("github").default("github"),

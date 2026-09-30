@@ -9,7 +9,7 @@ export const tachoHostList = registerCapability({
   description:
     "List the machines enrolled as Tacho hosts in this workspace with their status, liveness, and counters.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   // `app`: the Runtimes page lists these rows (apps/app features/runtimes),
   // bound in apps/app/capability-ui-map.json.
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -27,6 +27,7 @@ export const tachoHostList = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   input: z
     .object({
       status: tachoHostStatusSchema.optional(),

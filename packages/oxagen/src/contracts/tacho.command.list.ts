@@ -92,7 +92,7 @@ export const tachoCommandList = registerCapability({
   description:
     "The delivery report for one run, or for the commands one broadcast queued: every command, newest first, with its run (or its agent, for a steer held for an idle agent's next run), its issuer, its text, its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: false,

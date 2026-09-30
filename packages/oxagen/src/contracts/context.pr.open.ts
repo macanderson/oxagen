@@ -107,7 +107,7 @@ export const contextPrOpen = registerCapability({
   description:
     "Open the Context PR for a proposal: a branch from the production branch, the single record file, the PR body with rationale, supporting records and evidence, then the six checks one at a time as GitHub check runs or GitLab commit statuses. In a legacy repository the file is .oxagen/rules/<lineage>.toml on steering/<lineage>. In a steering repository it is a steering record at steering/<kind folder>/<lineage>.md on steering/<lineage>, or for a memory steering/memory/workspace/general/<lineage>.md on memory/<lineage>. A revision is written where the record lives now. A repository-scoped proposal in a steering repository is refused repository_scope_needs_repo unless the record it revises lists its repos. On GitLab the PR is a merge request. Re-runs the checks when the PR is already open.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

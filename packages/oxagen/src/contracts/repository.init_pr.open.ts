@@ -47,7 +47,7 @@ export const repositoryInitPrOpen = registerCapability({
   description:
     "Add Oxagen to one of the workspace's repositories: open a pull request from oxagen/init that adds the .oxagen/ tree with the reviewed workspace.toml and governance.toml. Never writes to the production branch.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -58,6 +58,7 @@ export const repositoryInitPrOpen = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "vcs" },
   input: z
     .object({
       bindingId: repositoryBindingIdSchema,

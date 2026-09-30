@@ -35,7 +35,7 @@ export const billingAutoTopupSet = registerCapability({
   description:
     "Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -46,6 +46,7 @@ export const billingAutoTopupSet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "billing" },
   input: z
     .object({
       enabled: z.boolean(),

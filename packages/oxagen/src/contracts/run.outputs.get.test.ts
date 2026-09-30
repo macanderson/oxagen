@@ -37,7 +37,7 @@ describe("get_run_outputs contract", () => {
   it("is an unbilled read on the API alone, never an MCP tool", () => {
     expect(runOutputsGet.noBillingGate).toBe(true);
     expect(runOutputsGet.mutates).toBe(false);
-    expect(runOutputsGet.surfaces).toEqual(["api"]);
+    expect(runOutputsGet.surfaces).toEqual(["api", "agent"]);
     expect(runOutputsGet.defaultEffect).toBe("deny");
   });
 

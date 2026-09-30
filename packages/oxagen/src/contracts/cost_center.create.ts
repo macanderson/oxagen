@@ -14,7 +14,7 @@ export const costCenterCreate = registerCapability({
   description:
     "Add a cost-center label to this organization's list, so agents and workspaces can be charged back to it. Restores a label that was deleted.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   noBillingGate: true,
@@ -25,6 +25,7 @@ export const costCenterCreate = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       label: costCenterLabelSchema,

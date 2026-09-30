@@ -25,7 +25,7 @@ describe("list_runtimes contract", () => {
     expect(getCapability("list_runtimes")).toBe(runtimeList);
     expect(runtimeList.mutates).toBe(false);
     expect(runtimeList.noBillingGate).toBe(true);
-    expect(runtimeList.surfaces).toEqual(["api", "mcp"]);
+    expect(runtimeList.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(runtimeList.defaultRoles.workspace).toEqual({
       Owner: "allow",
       Member: "allow",

@@ -54,7 +54,7 @@ export const repositoryMainGet = registerCapability({
   description:
     "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to connect GitHub or to change which repositories the installation reaches.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -65,6 +65,7 @@ export const repositoryMainGet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z.object({}).strict(),
   output: z
     .object({

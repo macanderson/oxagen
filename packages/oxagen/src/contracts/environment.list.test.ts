@@ -14,8 +14,8 @@ describe("environment.list contract", () => {
   it("registers with the correct name", () => {
     expect(environmentList.name).toBe("list_environments");
   });
-  it("exposes the api, mcp, and agent surfaces", () => {
-    expect(environmentList.surfaces).toEqual(["api", "mcp", "agent"]);
+  it("exposes the api and mcp surfaces and is off the agent surface, retired (#4180)", () => {
+    expect(environmentList.surfaces).toEqual(["api", "mcp"]);
   });
   it("accepts an empty input object", () => {
     expect(() => environmentList.input.parse({})).not.toThrow();

@@ -32,7 +32,7 @@ export const runSeal = registerCapability({
   description:
     "Seal a live or idle-closed wrapped run now, and queue a kill for its agent on the host it runs on when that host can collect a command.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,

@@ -4,10 +4,15 @@
   "description": "Move the onboarding gate between the wrap and run steps. The run step completes only on the first frame, so unlocked is never a target.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

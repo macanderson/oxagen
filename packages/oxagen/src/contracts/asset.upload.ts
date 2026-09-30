@@ -11,7 +11,7 @@ export const assetUpload = registerCapability({
   description:
     "Ingest a binary asset from a source URL into object storage and return its stored URL and key.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
   agent: {

@@ -30,19 +30,22 @@ export const onboardingStateGet = registerCapability({
   description:
     "Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, and the first frame once one arrived.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   noBillingGate: true,
   mutates: false,
   sensitivity: "low",
   // Every member may read the gate; a caller with no organization reads
-  // `organization` and nothing else.
+  // `organization` and nothing else. The workspace grant says the same for a
+  // workspace Member, which the agent surface requires a contract to state
+  // (tools/scripts/check-role-enforcement.mjs rule 2).
   defaultEffect: "allow",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
-    workspace: {},
+    workspace: { Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   input: z.object({}).strict(),
   output: z
     .object({

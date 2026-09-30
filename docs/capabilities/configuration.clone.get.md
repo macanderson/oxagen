@@ -4,7 +4,8 @@ Read a published skill or steering configuration into an editable clone draft. A
 
 **Mode:** sync
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 Organization Owners and Admins may use this capability on every plan. API keys act as their recorded creator. The source must belong to the workspace's approved repository binding. Reads pin one production commit. Submission rejects a source that changed after the draft opened.
 

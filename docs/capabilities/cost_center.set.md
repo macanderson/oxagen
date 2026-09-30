@@ -8,7 +8,7 @@ Charge a workspace, or one agent in the active workspace, back to a cost-center 
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/cost-centers/set`
 - MCP: `set_cost_center`
@@ -16,6 +16,7 @@ Charge a workspace, or one agent in the active workspace, back to a cost-center 
 - Capability name: `set_cost_center`
 - Workspace-scoped (`scoped: true`). A workspace target writes the workspace `workspaceId` names, which can be any workspace in the organization, so an org Owner, Admin, or Billing member who is not in it can still label it. Without `workspaceId` it writes the workspace in the path. An agent target writes an agent in the workspace in the path.
 - Not billed (`noBillingGate: true`). IAM default-deny, medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

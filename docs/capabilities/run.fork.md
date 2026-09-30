@@ -1,5 +1,7 @@
 # fork_run
 
+**Surfaces:** api, agent
+
 A new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there (Mission Control spec §8.4 `fork`; ADR-058 decision 3). Frames 0–N replay from the recording; the next model call runs live; tool results after N are served from the recorded cassette when the input digest matches and denied otherwise.
 
 Oxagen mints the attempt and records its provenance; the harness that consumes the cassette is the engine that admitted the run (ADR-043), which resumes the attempt through evidence ingress.
@@ -16,6 +18,7 @@ Oxagen mints the attempt and records its provenance; the harness that consumes t
 - Authentication: session or API key; org Owner, Admin or Member, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `fork_run`
 - `mutates: true`; `agent.requiresApproval: false`; not billed (`noBillingGate: true`): minting the attempt is not a governed action, the actions the fork takes are metered as they happen. IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Input
 

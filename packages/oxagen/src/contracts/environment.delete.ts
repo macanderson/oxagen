@@ -7,7 +7,7 @@ export const environmentDelete = registerCapability({
   description:
     "Soft-delete a workspace environment. The default environment cannot be deleted — promote another first.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

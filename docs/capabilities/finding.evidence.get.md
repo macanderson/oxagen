@@ -1,5 +1,7 @@
 # get_finding_evidence
 
+**Surfaces:** api, mcp, agent
+
 The evidence behind one finding: the arithmetic the findings job wrote with it (Mission Control spec §12.8; ADR-062). Nothing is re-estimated on read.
 
 ## Mode
@@ -13,6 +15,7 @@ The evidence behind one finding: the arithmetic the findings job wrote with it (
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `get_finding_evidence`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

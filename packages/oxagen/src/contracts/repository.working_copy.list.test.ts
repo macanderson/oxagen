@@ -23,7 +23,7 @@ describe("list_working_copies contract", () => {
     expect(workingCopyList.scoped).toBe(true);
     expect(workingCopyList.mutates).toBe(false);
     expect(workingCopyList.noBillingGate).toBe(true);
-    expect(workingCopyList.surfaces).toEqual(["api", "mcp"]);
+    expect(workingCopyList.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(workingCopyList.defaultRoles.workspace).toMatchObject({
       Viewer: "allow",
     });

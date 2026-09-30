@@ -3,7 +3,8 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 **Risk level:** high
 
 ## Intent

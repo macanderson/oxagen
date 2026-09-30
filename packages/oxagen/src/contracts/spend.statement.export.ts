@@ -34,7 +34,7 @@ export const spendStatementExport = registerCapability({
   description:
     "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool, task and cost center (spend with no cost center on its own line) with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -45,6 +45,7 @@ export const spendStatementExport = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       month: monthSchema,

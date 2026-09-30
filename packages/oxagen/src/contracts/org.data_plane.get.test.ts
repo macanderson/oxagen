@@ -72,6 +72,6 @@ describe("org.data_plane.get capability", () => {
       riskLevel: "high",
       category: "configuration",
     });
-    expect(orgDataPlaneGet.surfaces).toEqual(["api", "mcp"]);
+    expect(orgDataPlaneGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 });

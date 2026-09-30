@@ -31,7 +31,7 @@ export const orgSettingsRead = registerCapability({
   description:
     "Read the active organization's profile settings: name, slug, avatar, website, industry, employee size, and type.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: {

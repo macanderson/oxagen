@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** medium
 
 ## Intent
@@ -37,3 +37,4 @@ Org Owner, Org Admin, Workspace Owner.
 
 - `POST /api/v1/{org}/{ws}/plugins/credential/set-secret`
 - MCP tool `plugin_credential_set_secret`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

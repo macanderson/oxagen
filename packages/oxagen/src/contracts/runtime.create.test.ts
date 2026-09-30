@@ -8,7 +8,7 @@ describe("create_runtime contract", () => {
     expect(runtimeCreate.mutates).toBe(true);
     expect(runtimeCreate.noBillingGate).toBe(true);
     expect(runtimeCreate.scoped).toBe(true);
-    expect(runtimeCreate.surfaces).toEqual(["api", "mcp"]);
+    expect(runtimeCreate.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(runtimeCreate.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

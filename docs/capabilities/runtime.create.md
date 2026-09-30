@@ -4,7 +4,7 @@
 **Domain:** runtime
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; a settings write)
 
@@ -45,6 +45,7 @@ Org Owner or Admin, checked by the handler (`assertOrgRole` over the contract's 
 
 - `POST /api/v1/{org}/{ws}/runtimes/create`
 - MCP tool `create_runtime`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Errors
 

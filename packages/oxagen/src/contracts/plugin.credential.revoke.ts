@@ -7,7 +7,7 @@ export const pluginCredentialRevoke = registerCapability({
   description:
     "Revoke and delete the stored credential (OAuth tokens or secret) for an installed plugin server in this workspace, so the workspace must re-authenticate before the server can be used again.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "medium", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

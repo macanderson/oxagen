@@ -9,7 +9,7 @@ describe("set_tool_state contract", () => {
     expect(getCapability("set_tool_state")).toBe(toolStateSet);
     expect(toolStateSet.mutates).toBe(true);
     expect(toolStateSet.sensitivity).toBe("high");
-    expect(toolStateSet.surfaces).toEqual(["api", "mcp"]);
+    expect(toolStateSet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("targets a list of tools or one server, the declared tools as null", () => {

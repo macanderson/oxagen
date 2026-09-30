@@ -29,7 +29,7 @@ export const contextRecordRevise = registerCapability({
   // The handler acts as the signed-in user (resolveActingUserId,
   // assertOrgRole, INV-29), like every other steering write. The API alone:
   // an agent that wants a record changed writes a `record_proposal` append.
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

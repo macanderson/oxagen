@@ -170,7 +170,7 @@ export const runOutputsGet = registerCapability({
   description:
     "Read what one run produced, in the order it produced it: a file or media node per path a wrapped session wrote, a change, commit and pull-request node per receipt a ledger run recorded, a read node per path the run only looked at, and a gate node where a governed call stopped it.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -181,6 +181,7 @@ export const runOutputsGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({ runId: runPublicIdSchema }).strict(),
   output: z
     .object({
