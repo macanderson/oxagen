@@ -34,7 +34,7 @@ describe("readRunHarnesses", () => {
       );
       if (fn === undefined)
         throw new Error(
-          `withTenantDb received no callback: ${args.map((arg) => typeof arg).join(", ")}`,
+          `withTenantDb received no callback (${String(args.length)} args: ${args.map((arg) => typeof arg).join(", ")}) from\n${new Error("call site").stack ?? "no stack"}`,
         );
       const query = fn(db) as { toSQL(): { sql: string; params: unknown[] } };
       captured.push(query.toSQL());
