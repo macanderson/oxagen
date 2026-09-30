@@ -325,3 +325,61 @@ describe("the web art palette", () => {
     );
   });
 });
+
+// #3074: check:brand ran only in the local gate, so CI checked no vendored
+// brand file. The checks job now checks out the kit and runs the check. Mac
+// decided on 2026-09-29 that the checkout follows the kit's main branch, with
+// no pin, tag, or sha.
+describe("the checks job runs the brand check", () => {
+  const pipeline = readFileSync(
+    join(REPO_ROOT, ".github/workflows/pipeline.yml"),
+    "utf8",
+  );
+  const start = pipeline.indexOf("\n  checks:\n");
+  const end = pipeline.indexOf("\n  build:\n", start);
+  const checks = pipeline.slice(start, end);
+  /** The text of the step named `name`, up to the next step. */
+  const step = (name: string) => {
+    const at = checks.indexOf(`- name: ${name}\n`);
+    if (at < 0) return "";
+    const next = checks.indexOf("\n      - ", at + 1);
+    return checks.slice(at, next < 0 ? undefined : next);
+  };
+
+  it("finds the checks job", () => {
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+  });
+
+  it("checks out the kit at main into .brand-kit", () => {
+    const checkout = step("Check out the brand kit");
+    expect(checkout).toContain("uses: actions/checkout@");
+    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toContain("path: .brand-kit");
+    expect(checkout).toMatch(/\n\s+ref: main\n/);
+  });
+
+  it("runs pnpm check:brand against that checkout, after it", () => {
+    const check = step("Brand assets match the house kit");
+    expect(check).toContain("OXAGEN_BRAND_KIT: .brand-kit");
+    expect(check).toContain("run: pnpm check:brand");
+    const checkoutAt = checks.indexOf("- name: Check out the brand kit");
+    const checkAt = checks.indexOf("- name: Brand assets match the house kit");
+    expect(checkAt).toBeGreaterThan(checkoutAt);
+  });
+
+  it("runs both steps after an earlier check fails", () => {
+    const guard = "if: ${{ !cancelled() && steps.install.outcome == 'success' }}";
+    expect(step("Check out the brand kit")).toContain(guard);
+    expect(step("Brand assets match the house kit")).toContain(guard);
+  });
+
+  it("runs the script's --check through the root script", () => {
+    const { scripts } = JSON.parse(
+      readFileSync(join(REPO_ROOT, "package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    expect(scripts["check:brand"]).toBe(
+      "node tools/scripts/sync-brand-assets.mjs --check",
+    );
+  });
+});

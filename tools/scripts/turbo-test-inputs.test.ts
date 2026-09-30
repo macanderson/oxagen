@@ -67,7 +67,11 @@ const OUTSIDE_READS: Record<string, Record<string, string[]>> = {
     "check-closing-keywords.test.ts": [".github/workflows/dod-check.yml"],
     "inngest-verify.test.ts": [".github/workflows/pipeline.yml"],
     "release-artifacts.test.ts": [".github/workflows/desktop.yml"],
-    "sync-brand-assets.test.ts": ["apps/web/scripts/lib/theme.mjs"],
+    "sync-brand-assets.test.ts": [
+      "apps/web/scripts/lib/theme.mjs",
+      ".github/workflows/pipeline.yml",
+      "package.json",
+    ],
     "gen-capability-schemas.test.ts": [
       "docs/capabilities/schemas/set_price_entry.json",
     ],
