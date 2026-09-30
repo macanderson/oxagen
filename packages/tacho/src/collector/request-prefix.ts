@@ -108,7 +108,7 @@ export type PrefixFold<T = unknown> = {
 
 /**
  * Each session's prior, and what the caller kept beside it. `T` is that
- * payload's type; a memory that keeps none leaves it `never`.
+ * payload's type. A memory that keeps no payload leaves it `never`.
  */
 export class RequestPrefixMemory<T = never> {
   private readonly priors = new Map<string, Remembered<T>>();

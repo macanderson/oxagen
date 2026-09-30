@@ -467,7 +467,7 @@ export interface ChainTombstone {
 export const TOMBSTONE_RETAIN_MS = 30 * 24 * 60 * 60_000;
 
 /**
- * The most tombstones kept; the oldest is dropped first. The transcript
+ * The most tombstones kept. The oldest is dropped first. The transcript
  * tailer keeps at most this many forgotten cursors, by the same rule.
  */
 export const MAX_TOMBSTONES = 512;

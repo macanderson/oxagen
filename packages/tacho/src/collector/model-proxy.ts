@@ -1436,11 +1436,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // call already holds cut out. The fold changes no memory: this call
     // becomes the prior only once its own frame lands (`settle`), so a call
     // that overlaps it never points at it. Folding runs on the full decoded
-    // text, whatever its size: a request over the cap usually folds down to
-    // the few messages that are new, and checking the raw bytes here —
-    // before the fold had a chance to make that saving — used to throw it
-    // away and ship no request half at all for a call whose folded delta
-    // would have been a few KB.
+    // text, whatever its size. A request over the cap usually folds down to
+    // the few messages that are new. Checking the raw bytes here, before the
+    // fold could make that saving, used to throw it away and ship no request
+    // half at all for a call whose folded delta would have been a few KB.
     // Only `fold.text`, what would actually be stored, is checked against
     // the cap, below.
     const requestText = sent !== undefined ? sent.toString("utf8") : undefined;

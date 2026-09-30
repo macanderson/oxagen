@@ -12,8 +12,8 @@
  *
  * The tailer keeps one byte cursor per session transcript and advances it on
  * the daemon's tick. One tick reads at most `budgetBytes` from each file and
- * starts no further file once it has read `tickBudgetBytes` in all; the rest
- * is picked up next tick. A new install can find hundreds of transcripts it
+ * starts no further file once it has read `tickBudgetBytes` in all. The next
+ * tick picks up the rest. A new install can find hundreds of transcripts it
  * has never read, and one tick used to read all of them (#4394).
  *
  * The tick reads a transcript's bytes outside the daemon's hook queues and
