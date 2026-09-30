@@ -1,0 +1,30 @@
+{
+  "schema": "fleet-capacity/v1",
+  "target": "https://api.staging.oxagen.sh",
+  "orgSlug": "capacity",
+  "workspaceSlug": "capacity",
+  "orgId": "00000000-0000-4000-8000-000000000001",
+  "workspaceId": "00000000-0000-4000-8000-000000000002",
+  "machines": 500,
+  "baseline": {
+    "measured": false,
+    "sourceKind": "produced",
+    "source": "Replace with the numeric busy-hour and full-day measurement reference.",
+    "sessionsPerSecond": 0.001,
+    "samples": [{ "turns": 1, "bodyBytes": 1024, "weight": 1 }]
+  },
+  "phases": [
+    { "seconds": 60, "multiplier": 1 },
+    { "seconds": 60, "multiplier": 30 },
+    { "seconds": 60, "multiplier": 300 },
+    { "seconds": 60, "multiplier": 3000 },
+    { "seconds": 86400, "multiplier": 15000 }
+  ],
+  "drainSeconds": 1800,
+  "maxQueueBytes": 268435456,
+  "concurrency": 16,
+  "ackP99Ms": 2000,
+  "controlP99Ms": 1000,
+  "ceilings": { "sessions": 2000000, "events": 20000000, "bodyBytes": 3000000000,
+    "requests": 2500000, "networkBytes": 6000000000000 }
+}
