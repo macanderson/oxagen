@@ -16,8 +16,8 @@
  *     browser's own install dialog.
  *   - iPhone and iPad Safari: Safari has no install API, so the card says where
  *     the command is: Share, then Add to Home Screen.
- *   - Never on a device with a mouse, never inside the installed app, and never
- *     once the cookie below is set.
+ *   - Never on a device with a mouse, never inside the installed app, never
+ *     inside a frame, and never once the cookie below is set.
  *
  * The cookie is the only memory. Closing the card, answering the browser's
  * install dialog either way, or installing sets `ox_install_prompt` for a year.
@@ -84,9 +84,21 @@
     return /Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1;
   }
 
+  /**
+   * True inside an iframe. A page that frames others (the roadmap site does)
+   * loads this script in each frame too, and only the top page may offer.
+   */
+  function framed(win) {
+    try {
+      return !!win.top && win.top !== win;
+    } catch (e) {
+      return true; // a cross-origin top refuses the read: still a frame
+    }
+  }
+
   /** Whether this visit may see the card at all, before any browser event. */
   function eligible(win, doc) {
-    return !dismissed(doc) && !standalone(win) && touchDevice(win);
+    return !framed(win) && !dismissed(doc) && !standalone(win) && touchDevice(win);
   }
 
   function text(script) {
@@ -217,6 +229,7 @@
     standalone: standalone,
     touchDevice: touchDevice,
     ios: ios,
+    framed: framed,
     eligible: eligible,
     render: render,
     start: start,
