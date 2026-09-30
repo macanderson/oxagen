@@ -12,6 +12,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
+import { pickOption } from "@/test/select";
 import {
   ListBar,
   type ListFilter,
@@ -62,7 +63,7 @@ function Harness() {
         sortLabel="Sort"
         sorts={SORTS}
         filters={FILTERS}
-        allLabel={(column) => `All · ${column}`}
+        allLabel={(column) => `All (${column})`}
       />
       <ul data-testid="rows">
         {list.shown.map((row) => (
@@ -130,18 +131,26 @@ describe("the list controls", () => {
     await user.type(screen.getByLabelText("Search this list"), "repo-3");
     expect(shown()).toEqual(["repo-30"]);
     await user.clear(screen.getByLabelText("Search this list"));
-    await user.selectOptions(screen.getByLabelText("All · Role"), "main");
+    const role = screen.getByRole("combobox", { name: "All (Role)" });
+    await pickOption(user, role, "main");
     expect(shown()).toEqual(["repo-01"]);
-    await user.selectOptions(screen.getByLabelText("All · Role"), "");
-    await user.selectOptions(screen.getByLabelText("Sort"), "za");
+    await pickOption(user, role, "All (Role)");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Name Z–A",
+    );
     expect(shown()[0]).toBe("repo-30");
   });
 
   it("puts Rows per page in the pager, not the bar", async () => {
     const user = userEvent.setup();
     const { container } = render(<Harness />);
-    const bar = container.querySelector("[data-list-bar]");
-    expect(bar?.querySelector('[role="combobox"]')).toBeNull();
+    const bar = container.querySelector<HTMLElement>("[data-list-bar]");
+    if (bar === null) throw new Error("the list has no bar");
+    expect(
+      within(bar).queryByRole("combobox", { name: "Rows per page" }),
+    ).toBeNull();
     const pager = container.querySelector<HTMLElement>("[data-rows-pager]");
     if (pager === null) throw new Error("the list has no pager");
     const rows = within(pager).getByRole("combobox", {

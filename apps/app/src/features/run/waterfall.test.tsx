@@ -157,7 +157,7 @@ describe("WaterfallPanel", () => {
     // The run recorded more than its turns carry: both figures stand.
     expect(total.children[5]).toHaveTextContent("of $4.13 recorded");
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "2 turns · $4.13 gateway_observed",
+      "2 turns ($4.13 gateway_observed)",
     );
   });
 
@@ -228,7 +228,7 @@ describe("WaterfallPanel", () => {
       overrides: { cost: { micros: "4130000", currency: "USD", basis: null } },
     });
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
-      "1 turn · $4.13 basis not recorded",
+      "1 turn ($4.13 basis not recorded)",
     );
   });
 
@@ -289,7 +289,7 @@ describe("WaterfallPanel", () => {
     expect(svg).toHaveTextContent(/partial$/);
     expect(svg).not.toHaveTextContent(/total$/);
     expect(screen.getByTestId("waterfall-caption")).toHaveTextContent(
-      "The dashed line is cost accumulating to $1.20 over the first 2 turns, not the whole run.",
+      "The dashed line is cost accumulating to $1.20 over the first 2 turns.",
     );
     const total = screen.getByTestId("waterfall-total");
     expect(total.children[0]).toHaveTextContent(/^first 2 turns$/);

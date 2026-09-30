@@ -16,6 +16,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import { type ListRow, ListTable } from "./faceted-list-table";
 
 const COLUMNS = [
@@ -73,18 +74,18 @@ describe("faceted ListTable", () => {
     const bar = container.querySelector<HTMLElement>("[data-list-tools]");
     if (bar === null) throw new Error("the list has no tool bar");
     // The search and the one filter; Rows is in the pager, not the bar.
-    const controls = [...bar.querySelectorAll<HTMLElement>("input, select")];
-    expect(controls).toHaveLength(2);
-    for (const control of controls) {
+    const search = within(bar).getByRole("searchbox");
+    const filters = within(bar).getAllByRole("combobox");
+    expect(filters).toHaveLength(1);
+    for (const control of [search, ...filters]) {
       expect(control.className).not.toMatch(/\bw-full\b/);
       expect(control.className).not.toMatch(/\bblock\b/);
     }
-    expect(screen.getByRole("searchbox").className).toContain(
-      "flex-[1_1_14rem]",
-    );
-    for (const select of within(bar).getAllByRole("combobox")) {
-      expect(select.className).toContain("appearance-none");
-      expect(select.parentElement?.className).toContain("shrink-0");
+    expect(search.className).toContain("flex-[1_1_14rem]");
+    // Each filter is the app's Select, and it keeps its width in the row.
+    for (const filter of filters) {
+      expect(filter).toHaveAttribute("data-slot", "select-trigger");
+      expect(filter.className).toContain("shrink-0");
     }
     await expectNoAxe(container);
   });
@@ -99,13 +100,10 @@ describe("faceted ListTable", () => {
     expect(bodyRows()).toHaveLength(4);
     await user.clear(screen.getByRole("searchbox"));
 
-    const scope = container.querySelector<HTMLSelectElement>(
-      '[data-filter="scope"]',
-    );
-    expect(scope).not.toBeNull();
-    if (scope !== null) await user.selectOptions(scope, "org");
+    const scope = screen.getByRole("combobox", { name: "Filter by Scope" });
+    await pickOption(user, scope, "org");
     expect(bodyRows()).toHaveLength(6);
-    if (scope !== null) await user.selectOptions(scope, "");
+    await pickOption(user, scope, "All (Scope)");
 
     await user.click(screen.getByRole("button", { name: "Tokens" }));
     expect(bodyRows()[0]).toHaveTextContent("Record 12");

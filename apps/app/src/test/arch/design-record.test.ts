@@ -125,6 +125,26 @@ describe("design record: the recipes carry the mockup's rules", () => {
     expect(td).toMatch(/max-width:\s*var\(--cell-max,/);
   });
 
+  it("a cell of row actions shows every button, and a marked message wraps (#4674)", () => {
+    // The ellipsis hid buttons with nothing to reveal them, and cut a form
+    // error mid-sentence. `data-actions` lifts the cap and the clip from its
+    // cell; `data-wrap` takes a message out of the no-wrap rule.
+    const css = read("src/app/globals.css");
+    const actions = css.match(
+      /table tbody :is\(td, th\):not\(\[colspan\]\):has\(\[data-actions\]\) \{[^}]*\}/,
+    )?.[0];
+    expect(actions).toBeDefined();
+    expect(actions).toMatch(/max-width:\s*none/);
+    expect(actions).toMatch(/overflow:\s*visible/);
+    expect(css).toMatch(
+      /:not\(textarea, pre, pre \*, \[data-wrap\], \[data-wrap\] \*\) \{\s*flex-wrap:\s*nowrap;\s*white-space:\s*nowrap;/,
+    );
+    const wrap = css.match(
+      /table tbody :is\(td, th\):not\(\[colspan\]\) \[data-wrap\] \{[^}]*\}/,
+    )?.[0];
+    expect(wrap).toMatch(/white-space:\s*normal/);
+  });
+
   it("the dark theme's page body is the ink, and the panel grey stays on panels", () => {
     const css = read("src/app/globals.css");
     // The `.dark` block and the no-JS `prefers-color-scheme` copy of it.
@@ -314,6 +334,36 @@ function scanned(): string[] {
   );
 }
 
+/**
+ * A reference to Space Grotesk: the kit's display token, the wordmark token,
+ * or the family by name. Mac set the rule on 2026-09-29: every heading and
+ * every line of text is Geist, and Space Grotesk sets the wordmark only.
+ */
+const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
+
+describe("design record: one face for every heading and every line", () => {
+  it("the heading token is Geist, and Space Grotesk is left to the wordmark", () => {
+    const shared = readFileSync(
+      path.join(APP_DIR, "../../packages/ui/src/styles/globals.css"),
+      "utf8",
+    );
+    expect(shared).toMatch(/--font-display:\s*var\(--ox-font\);/);
+    expect(shared).toMatch(/--font-sans:\s*var\(--ox-font\);/);
+    expect(shared).toMatch(/--font-wordmark:\s*var\(--ox-font-display\);/);
+  });
+
+  it(
+    "no file under src/ sets Space Grotesk; the wordmark reaches it through `.ox-wordmark`",
+    () => {
+      const files = [...scanned(), "src/app/globals.css"];
+      expect(
+        hits(files, SPACE_GROTESK, "space-grotesk", { skipComments: true }),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+});
+
 describe("design record: no page draws around the recipes", () => {
   it(
     "no file under src/ paints with the kit's ink primary",
@@ -431,7 +481,13 @@ describe("design record: no page draws around the recipes", () => {
       `${RULE} ${raw}:14 raw-font`,
       `${RULE} ${raw}:15 raw-font`,
     ]);
+    expect(hits([raw], SPACE_GROTESK, "space-grotesk", scan)).toEqual([
+      `${RULE} ${raw}:16 space-grotesk`,
+      `${RULE} ${raw}:17 space-grotesk`,
+      `${RULE} ${raw}:18 space-grotesk`,
+    ]);
     expect(hits([clean], RAW_COLOUR, "raw-colour", scan)).toEqual([]);
     expect(hits([clean], RAW_FONT, "raw-font", scan)).toEqual([]);
+    expect(hits([clean], SPACE_GROTESK, "space-grotesk", scan)).toEqual([]);
   });
 });

@@ -22,9 +22,7 @@
     "nav": {
       "fleet": "Fleet",
       "agents": "Agents",
-      "tools": "Tools",
       "steering": "Steering",
-      "runtimes": "Runtimes",
       "repositories": "Repositories",
       "spend": "Spend",
       "organization": "Organization",
@@ -43,7 +41,7 @@
       "unavailable": "This list could not be loaded. Reload the page to try again.",
       "searchOrgs": "Search organizations",
       "noMatch": "Nothing matches “{query}”.",
-      "orgNote": "An organization owns a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane. You belong to {count} here.",
+      "orgNote": "{count, plural, one {You belong to # organization.} other {You belong to # organizations.}}",
       "orgMetaNotBacked": "The plan and the agent count of each organization are not recorded with this list yet.",
       "wsMetaNotBacked": "The main repository, its branch and the agent count of each workspace are not recorded with this list yet.",
       "createWorkspace": "Create a workspace"
@@ -86,7 +84,7 @@
         "open": "open",
         "escape": "esc",
         "close": "close",
-        "governed": "<code>search_tools</code> · this search is itself a governed call, recorded in the audit record",
+        "governed": "<code>search_tools</code> records this search in the audit record.",
         "orgOnly": "Runs, agents and tools are searched inside a workspace."
       },
       "groups": {
@@ -116,7 +114,7 @@
         },
         "tools": {
           "label": "Tools on the belt",
-          "note": "Risk and side effect, the same trailer the model sees."
+          "note": "Each tool shows the risk and side effect the model sees."
         }
       },
       "shortcut": "⌘{n}",
@@ -126,7 +124,7 @@
         "askTamperedDraft": "Why did a run in this workspace come back tampered, and what does its record show?",
         "askCost": "Ask what an agent cost this month",
         "askCostDraft": "What did each agent in this workspace cost this month, and on what basis?",
-        "mintKey": "Mint a model key for this organization"
+        "mintKey": "Create a model key for this organization"
       },
       "actions": {
         "pauseAll": "Pause every live run in this workspace",
@@ -149,7 +147,6 @@
       "slots": {
         "fleet": "Fleet",
         "agents": "Agents",
-        "tools": "Tools",
         "spend": "Spend"
       },
       "more": "More",
@@ -157,14 +154,13 @@
       "incidents": ", {count, plural, one {# critical incident open} other {# critical incidents open}}",
       "tileWaiting": "{count} waiting",
       "sub": {
-        "steering": "library, assignments, gates, proposals, compiler",
-        "runtimes": "hosts, harnesses, hooks, tiers",
-        "repositories": "bindings, working copies, changes",
-        "organization": "people, workspaces, funding",
-        "billing": "plan, meters, invoices",
-        "audit": "events, incidents, holds"
+        "steering": "library and assignments",
+        "repositories": "bindings and changes",
+        "organization": "people and workspaces",
+        "billing": "plan and invoices",
+        "audit": "events and incidents"
       },
-      "assistantSub": "about runs, agents, and spend",
+      "assistantSub": "questions about this workspace",
       "search": "Search",
       "searchSub": "or run an action",
       "notifications": "Notifications",
@@ -193,7 +189,7 @@
       "editAvatar": "Edit avatar",
       "roles": "Roles",
       "principal": "user ID",
-      "rolesHint": "A role is changed on the Organization page by someone who holds <code>set_member_role</code>, never here. This is where you see what you hold.",
+      "rolesHint": "Someone who holds <code>set_member_role</code> changes roles on the Organization page.",
       "invalid": "That display name was refused. A name is 1 to 120 characters.",
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
@@ -203,7 +199,7 @@
         "failed": "That could not be done. Try again.",
         "locale": "Locale",
         "localeName": "{code, select, en {English} other {{code}}}",
-        "localeHint": "Dates, numbers, and currencies format to this. Machine-readable fields in records, receipts, and exports are never translated.",
+        "localeHint": "Oxagen formats dates and numbers in this locale.",
         "timezone": "Time zone",
         "timezoneHint": "Every date and time in Oxagen is shown in this zone. New accounts start on Pacific time.",
         "theme": "Theme",
@@ -229,7 +225,7 @@
         "verified": "verified",
         "unverified": "not verified",
         "twoFactor": "Two-factor",
-        "twoFactorOn": "on, authenticator app",
+        "twoFactorOn": "on (authenticator app)",
         "twoFactorOff": "not set up",
         "authenticator": "Authenticator app",
         "authenticatorOn": "TOTP. Recovery codes let you in when the app is not to hand.",
@@ -256,7 +252,7 @@
         "revoking": "Revoking",
         "revokeFailed": "This sign-in could not be ended. Try again.",
         "revoked": "Sign-in ended. The device stops at its next request.",
-        "sessionsHint": "Ending a sign-in stops that device at its next request. It does not touch an agent credential or a run token. Those are revoked on the Agents page, and that is what makes a halt stick.",
+        "sessionsHint": "Ending a sign-in stops that device at its next request. Agent credentials and run tokens are revoked on the Agents page.",
         "codesBlockedByOther": "New codes cannot be issued yet. An earlier sign-in on this page left recovery codes that were never saved, and issuing now would destroy them. Reload the page to continue.",
         "codesBlockedElsewhere": "Another tab is issuing recovery codes, or holds a set not yet saved. Finish there first. Issuing here would make that set stop working."
       },
@@ -274,7 +270,7 @@
         "deniedOrg": "An organization export needs an owner or admin.",
         "failed": "That export could not be queued. Try again.",
         "erasure": "Erasure",
-        "erasureHint": "Erasure of your data runs as <code>erase_data</code> on the API, with explicit confirmation. It ends every sign-in at once and schedules the hard delete. It is not a button here."
+        "erasureHint": "Erasure of your data runs as <code>erase_data</code> on the API, with explicit confirmation. It ends every sign-in at once and schedules the hard delete."
       },
       "orgRole": "org.{role}"
     },
@@ -300,7 +296,7 @@
       "stopped": "Stopped",
       "parked": "{count, plural, one {This turn parked # write for a person to decide} other {This turn parked # writes for a person to decide}}. Approve or deny each one here or on Fleet.",
       "parkedCard": {
-        "list": "Writes this turn parked",
+        "list": "Parked writes",
         "checking": "Reading this approval…",
         "waiting": "Waits for a decision until {time}.",
         "expired": "This approval expired before anyone decided, so the call did not run. Ask again to park a new one.",
@@ -411,8 +407,8 @@
         "send": "Send",
         "stop": "Stop",
         "stopFailed": "stella could not stop this turn, so it is still running. Try Stop again.",
-        "sendHintEnter": "Enter to send, Shift+Enter for a new line",
-        "sendHintModEnter": "Cmd+Enter or Ctrl+Enter to send, Enter for a new line",
+        "sendHintEnter": "Enter sends. Shift+Enter adds a line.",
+        "sendHintModEnter": "Cmd+Enter or Ctrl+Enter sends. Enter adds a line.",
         "draftTooLong": "This request would exceed the message limit. Your existing draft is unchanged. Send or shorten it, then open the recommendation again."
       },
       "attachments": {
@@ -485,7 +481,7 @@
         "label": "Rate this reply",
         "useful": "Useful",
         "wrong": "Wrong",
-        "noteLabel": "What was wrong? Optional.",
+        "noteLabel": "Details (optional)",
         "notePlaceholder": "The run, number, or step it got wrong",
         "noteHint": "Up to {max} characters.",
         "send": "Record as wrong",
@@ -519,7 +515,7 @@
       "gone": "That approval is no longer listed.",
       "empty": "Nothing is waiting on a human.",
       "emptyRead": "Nothing is waiting in the workspaces Oxagen could read.",
-      "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
+      "emptyDetail": "A call parks here when policy returns <code>approve</code>. A denial ends the call at no cost.",
       "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
       "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
@@ -528,14 +524,14 @@
         "paused": "{agent} is paused",
         "pausedUnknown": "An agent is paused",
         "openRun": "Open run",
-        "openRunLabel": "Open run {run}, paused on this question"
+        "openRunLabel": "Open paused run {run}"
       },
       "resolvedCard": {
         "chain": "Chain",
-        "who": "Who asked",
-        "agent": "Which agent",
-        "action": "Which action",
-        "rule": "Which rule",
+        "who": "Requester",
+        "agent": "Agent",
+        "action": "Action",
+        "rule": "Rule",
         "resolution": "Resolution",
         "resolvedAt": "Resolved at",
         "resolvedBy": "Resolved by",
@@ -545,14 +541,14 @@
     },
     "notifications": {
       "title": "Notifications",
-      "footer": "<code>list_notifications</code> · {count} unread · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "footer": "{count} unread from <code>list_notifications</code>",
       "markAll": "Mark all read",
       "markDenied": "You do not have permission to mark these notifications.",
       "markFailed": "The notifications could not be marked. Try again.",
       "empty": "No notifications.",
       "noWorkspace": "Notifications are read in a workspace, and this organization has none you can open.",
       "unread": "Unread.",
-      "footerUnknown": "<code>list_notifications</code> · unread count not recorded · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "footerUnknown": "Unread count from <code>list_notifications</code> not recorded",
       "marked": "Marked {count} read. Reading a notification is itself recorded, so the audit record shows who saw what.",
       "markedLeft": "{count} older unread notifications are not listed here and stay unread."
     },
@@ -563,7 +559,7 @@
     },
     "choices": {
       "tool": {
-        "context": "{vendor} · {versions}",
+        "context": "{vendor} ({versions})",
         "everyVersion": "every version",
         "oneVersion": "version {version} only",
         "pinnedLabel": "{title} v{version}",
@@ -590,7 +586,7 @@
     "pauseWorkspace": {
       "title": "Pause every live run in this workspace",
       "body": "Oxagen queues a pause for every live run in this workspace whose host can take it, observe-tier runs included. Each run stops at the next boundary its agent reaches after its host collects the command.",
-      "skippedNote": "A live run no host can reach is skipped, and the receipt says why.",
+      "skippedNote": "Oxagen skips a live run that no host can reach and records why in the receipt.",
       "ledger": "Ledger runs are not paused. Pause one from its row on Fleet.",
       "reasonLabel": "Reason",
       "reasonHelp": "Recorded on every command and on the audit event. Each run reads it when it resumes.",

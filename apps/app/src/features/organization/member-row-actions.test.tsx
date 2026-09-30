@@ -82,7 +82,7 @@ describe("change role", () => {
         .getAllByRole("button")
         .map((button) => button.textContent)
         .slice(-2),
-    ).toEqual(["Cancel", "Change it"]);
+    ).toEqual(["Cancel", "Change role"]);
     // The design's Person field, the header close, and its note.
     expect(within(dialog).getByLabelText("Person")).toHaveValue("Marcus Bell");
     expect(within(dialog).getByLabelText("Person")).toBeDisabled();
@@ -90,13 +90,13 @@ describe("change role", () => {
       "Close",
     );
     expect(dialog).toHaveTextContent(
-      "A grant is a governed action, not a settings change.",
+      "A grant is a governed action that writes an audit record.",
     );
     const picker = within(dialog).getByLabelText("Role");
     expect(picker).toHaveValue("billing");
     await userEvent.selectOptions(picker, "admin");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Change it" }),
+      within(dialog).getByRole("button", { name: "Change role" }),
     );
     expect(changeMemberRole).toHaveBeenCalledWith("acme", member.id, "admin");
     expect(router.replace).toHaveBeenCalledWith(HERE);
@@ -264,7 +264,7 @@ describe("a refused write", () => {
     renderActions();
     const dialog = await openDialog("Change role", "change-member-role");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Change it" }),
+      within(dialog).getByRole("button", { name: "Change role" }),
     );
     expect(
       await screen.findByTestId("change-member-role-failure"),
@@ -313,5 +313,34 @@ describe("a role that may not write membership", () => {
     );
     expect(screen.queryByRole("button", { name: "Change role" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+  });
+});
+
+// The member table clips a body cell unless the cell holds `[data-actions]`.
+// Both branches must mark the group that holds their controls. This file
+// renders the row actions alone, so it checks the mark and leaves the cell to
+// the table.
+describe("the row actions", () => {
+  it("marks the row actions so the cell shows every button (#4674)", () => {
+    renderActions({}, true, "Org role facts");
+    const group = screen
+      .getByRole("button", { name: "Remove" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Open" }),
+    );
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Change role" }),
+    );
+  });
+
+  it("marks the row actions for a role that may not write membership (#4674)", () => {
+    renderActions({}, false, "Org role facts");
+    const group = screen
+      .getByRole("button", { name: "Open" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(screen.getByTestId("member-actions-denied"));
   });
 });

@@ -51,7 +51,12 @@ import {
   type StellaHookEventName,
   stellaHookTimeoutMs,
 } from "../host/stella-writer";
-import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
+import {
+  DEFAULT_SECRET_ENV_PATTERN,
+  type DeliveredContext,
+  deliveredContext,
+  snapshotEnv,
+} from "./context";
 import {
   cursorAnswer,
   CURSOR_TO_CLAUDE_EVENT,
@@ -630,6 +635,8 @@ export function decideLocally(
 ): {
   response: Record<string, unknown>;
   evaluation?: Evaluation;
+  /** The steering text a `SessionStart` answer handed the agent. */
+  delivered?: DeliveredContext;
   note: string;
 } {
   // A bundle with Cedar policies is decided with them. A caller that loaded
@@ -670,9 +677,12 @@ export function decideLocally(
     (input as Record<string, unknown>)["tool_read_only"] === true;
   switch (input.hook_event_name) {
     case "SessionStart":
+      // The spool records what this answer handed the agent, so the replay
+      // seals that text and not the bundle the daemon holds by then.
       if (block !== undefined)
         return {
           response: { continue: false, stopReason: block },
+          delivered: deliveredContext(null, host.bundle.etag),
           note: "blocked by host status",
         };
       return {
@@ -685,6 +695,10 @@ export function decideLocally(
                 },
               }
             : {},
+        delivered: deliveredContext(
+          host.bundle.context.system,
+          host.bundle.etag,
+        ),
         note: "daemon down; recorded for replay",
       };
     case "UserPromptSubmit":
@@ -1305,6 +1319,9 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
           ...label,
           ...(local.evaluation !== undefined
             ? { evaluation: local.evaluation }
+            : {}),
+          ...(local.delivered !== undefined
+            ? { delivered_context: local.delivered }
             : {}),
         }),
       );

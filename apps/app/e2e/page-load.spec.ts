@@ -27,8 +27,10 @@ async function loadsAndTitlesItself(page: Page, row: RouteRow): Promise<void> {
 
   // The surface must not bounce to the sign-in page: that would be a 200 with
   // the login title, which the title assertion below also catches, but this
-  // names the failure.
-  expect(new URL(page.url()).pathname, `${row.path} must not redirect`).toBe(
+  // names the failure. The query counts too: an Agents tab is `?tab=`, and a
+  // redirect that dropped it would land on the Agents tab instead.
+  const landed = new URL(page.url());
+  expect(landed.pathname + landed.search, `${row.path} must not redirect`).toBe(
     row.path,
   );
   await expect(page).toHaveTitle(expectedTitle(row), { timeout: 15_000 });
@@ -40,9 +42,17 @@ for (const row of SIGNED_IN_ROUTES) {
     page,
   }) => {
     await loadsAndTitlesItself(page, row);
-    // A route with a loading.tsx streams its page into a hidden node beside
-    // the skeleton's own main#main before React swaps them, so wait for the
-    // one main the settled page keeps.
+    // Under the organization shell, the frame's main#main is in the document
+    // from the first byte, and a page streaming into a hidden node beside its
+    // skeleton brings no second one (ADR-227, #4053). One target holds at any
+    // moment, so this count does not retry: a second main fails it at once.
+    if ((await page.getByTestId("shell").count()) > 0) {
+      expect(
+        await page.locator("main#main").count(),
+        `${row.path} must hold one main#main while it streams`,
+      ).toBe(1);
+    }
+    // The onboarding gate's step owns its main, so wait for the settled step.
     await expect(page.locator("main#main")).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator("main#main")).toBeVisible();
     const desktopPath = test.info().outputPath("desktop.png");

@@ -2,7 +2,7 @@
 // leaves. The design's policy versions (G2) have no store: nothing holds a
 // version, its rules or its tests, so the panel keeps its heading, the store
 // name and Draft a version, and says the versions are not recorded (#3920).
-// Where a version lives, the conditions a rule may test and the sequence rule
+// Version storage, the conditions a rule may test and the sequence rule
 // describe that store as it is specified, and say so in one line.
 //
 // Two decision records do exist, and they sit here beside the versions they
@@ -10,7 +10,8 @@
 // sent to a person skip them; a receipt cites one as `policy:<id>`. The
 // mandates ledger is the financial authority the gate draws on. Both were tabs
 // of their own before the tabs became path segments, and their old links land
-// here. Create rule is this tab's one gold action.
+// here. Create rule is drawn in the default style, because Connect an agent is
+// the Agents page's one gold action.
 import { useTranslations } from "next-intl";
 import type { ApprovalRuleSet } from "@/data/contracts/tools";
 import type { MandateList } from "@/data/contracts/mandates";

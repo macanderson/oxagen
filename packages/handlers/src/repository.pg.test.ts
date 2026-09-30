@@ -16,6 +16,8 @@
 //     while a linked head sits beside it.
 //   - A repository linked anywhere cannot become a steering repository.
 //   - A workspace with GitHub attached and no steering head cannot link.
+//   - A headless workspace that the backfill lists (#4683) reaches a
+//     steering head through the provision steps, and then links.
 //   - The store's trigger refuses, by constraint name, the writes the
 //     handlers refuse by sentence.
 //
@@ -53,8 +55,15 @@ import {
   withSystemDb,
   withTenantDb,
 } from "@oxagen/database";
+import { FakeGithub } from "@oxagen/github/provision/testing";
+import {
+  type HeadlessWorkspace,
+  headlessWorkspaceFilter,
+  listHeadlessWorkspaces,
+} from "@oxagen/inngest-functions/steering-repo-backfill";
+import { OXAGEN_STEERING_APP } from "@oxagen/oxagen/steering-repo";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   readGitHubConnection,
   type SteeringRepository,
@@ -76,6 +85,12 @@ import {
 import { createLinkReconciler } from "./repository.link.reconcile";
 import { linkRepositoryHead } from "./repository.link.write";
 import { repositoryListHandler } from "./repository.list";
+import {
+  provisionSteeringRepo,
+  readSteeringRepoState,
+  steeringRepoProvisionDeps,
+  type ProvisionDeps,
+} from "./steering_repo.provision";
 import { createMainRepositoryGetHandler } from "./repository.main.get";
 import { createRepositoryUnlinkHandler } from "./repository.unlink";
 import {
@@ -303,7 +318,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
   /**
    * The steering head the steering repo job's bind step writes (ADR-212). The
    * workspace gets its own `github_steering` connection, created connected
-   * with the Oxagen Steering installation, and a head with role `steering`
+   * with the Oxagen GitHub App installation, and a head with role `steering`
    * written under the workspace lock. The repository comes from the same
    * fixture the link handler reads, so the store's cross-workspace rules see
    * one id for it. A write the store refuses rolls back the connection too.
@@ -1175,6 +1190,150 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     });
     expect(await headsFor(steersId, "steers")).toEqual([
       { role: "steering", providerRepositoryId: repoId("acme", "steers") },
+    ]);
+  });
+
+  it("gives a headless workspace a steering head through the backfill's provision run, and then links a repository", async () => {
+    // ── a workspace from before the steering repo job ────────────────────
+    // `create_workspace` now records a queued state. A workspace created
+    // before lane S1 carries none, so the test removes it.
+    const legacyId = await internalId((await create("headless-legacy")).publicId);
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.workspaces)
+        .set({ settings: sql`${schema.workspaces.settings} - 'steering_repo'` })
+        .where(eq(schema.workspaces.id, legacyId)),
+    );
+    // A workspace whose event was sent and whose job never ran.
+    const queuedId = await internalId((await create("headless-queued")).publicId);
+    const steered = await createWithSteering("headless-steered", "headless-steers");
+    await attachGithub(legacyId);
+
+    // It cannot link while it has no steering head.
+    await expect(
+      refusal(propose(legacyId, "headless-api")),
+    ).resolves.toEqual({ code: "conflict", reason: "main_repo_unbound" });
+
+    // ── the backfill's read lists it ─────────────────────────────────────
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const inAMinute = new Date(Date.now() + 60 * 1000);
+    const headlessHere = async (queuedBefore: Date) =>
+      (
+        await withSystemDb((tx) =>
+          tx
+            .select({ id: schema.workspaces.id })
+            .from(schema.workspaces)
+            .innerJoin(
+              schema.organizations,
+              eq(schema.organizations.id, schema.workspaces.orgId),
+            )
+            .where(
+              and(
+                eq(schema.workspaces.orgId, orgId),
+                headlessWorkspaceFilter({ after: null, queuedBefore }),
+              ),
+            ),
+        )
+      ).map((r) => r.id);
+    const listed = await headlessHere(hourAgo);
+    expect(listed).toContain(legacyId);
+    // A queued job gets an hour to run its first step.
+    expect(listed).not.toContain(queuedId);
+    expect(await headlessHere(inAMinute)).toContain(queuedId);
+    // A workspace with a steering head is never listed (negative).
+    expect(listed).not.toContain(steered.id);
+
+    // The job's own read pages over every organization, so page until the
+    // workspace shows up.
+    const findListed = async (workspaceId: string) => {
+      for (let after: string | null = null; ; ) {
+        const page = await listHeadlessWorkspaces({
+          after,
+          queuedBefore: hourAgo,
+          limit: 500,
+        });
+        const hit = page.find((w) => w.workspaceId === workspaceId);
+        const last: HeadlessWorkspace | undefined = page.at(-1);
+        if (hit !== undefined || last === undefined || page.length < 500)
+          return hit ?? null;
+        after = last.workspaceId;
+      }
+    };
+    await expect(findListed(legacyId)).resolves.toEqual({
+      orgId,
+      workspaceId: legacyId,
+      actorUserId: userId,
+    });
+
+    // ── the provision event the backfill sends runs every step ───────────
+    // The real dependencies read and write Postgres. A fake GitHub holds the
+    // Oxagen Steering installation on `acme`. The production first publish
+    // reads the repository through the real host, which mints a token from
+    // the Oxagen GitHub App's environment and never reaches the fake. This
+    // test proves the steps up to the bind, and the provision and
+    // first-version tests prove the publish, so it drops that port.
+    const app = { symbol: OXAGEN_STEERING_APP, id: 9001, slug: "oxagen-steering-test" };
+    const hub = new FakeGithub({ org: "acme", app });
+    const { publishFirst: _unused, ...production } = steeringRepoProvisionDeps({
+      actorUserId: userId,
+      env: {},
+    });
+    const deps: ProvisionDeps = {
+      ...production,
+      github: () => ({
+        app,
+        installation: () => Promise.resolve(hub.appRest()),
+        user: () => Promise.resolve(hub.userRest()),
+      }),
+      gitlab: () => ({
+        groups: () => Promise.resolve([]),
+        group: () => Promise.resolve(null),
+      }),
+      notifyReauthorize: () =>
+        Promise.reject(new Error("the provision run asked to re-authorize")),
+      steeringHook: () => {
+        throw new Error("a GitHub steering repo takes no GitLab hook");
+      },
+    };
+    await expect(
+      provisionSteeringRepo(deps, {
+        kind: "workspace",
+        orgId,
+        workspaceId: legacyId,
+      }),
+    ).resolves.toBe("ready");
+
+    const [row] = await withSystemDb((tx) =>
+      tx
+        .select({ settings: schema.workspaces.settings })
+        .from(schema.workspaces)
+        .where(eq(schema.workspaces.id, legacyId)),
+    );
+    const state = readSteeringRepoState(row?.settings);
+    expect(state).toMatchObject({
+      status: "ready",
+      step: "bind_repository",
+      repository: { full_name: "acme/oxagen-headless-legacy" },
+    });
+    expect(await headsOf(legacyId)).toEqual([
+      {
+        role: "steering",
+        providerRepositoryId: String(state?.repository?.id),
+      },
+    ]);
+    // It left the backfill's read, so the next run sends nothing for it.
+    expect(await headlessHere(hourAgo)).not.toContain(legacyId);
+    await expect(findListed(legacyId)).resolves.toBeNull();
+
+    // ── now it links ─────────────────────────────────────────────────────
+    const linked = await link(legacyId, "headless-api");
+    expect(linked.role).toBe("linked");
+    expect(await headsOf(legacyId)).toEqual([
+      { role: "linked", providerRepositoryId: repoId("acme", "headless-api") },
+      {
+        role: "steering",
+        providerRepositoryId: String(state?.repository?.id),
+      },
     ]);
   });
 });

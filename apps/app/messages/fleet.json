@@ -1,21 +1,21 @@
 {
   "fleet": {
-    "subtitle": "Every run in this workspace, live and recent.",
+    "subtitle": "Live and recent runs in this workspace.",
     "loading": "Loading the fleet",
     "actions": {
-      "steer": "Steer",
-      "register": "Register Agent"
+      "steer": "Steer the fleet",
+      "register": "Register an agent"
     },
     "steer": {
       "title": "Steer the fleet",
-      "agents": "Agents · {selected} of {total} selected",
-      "all": "All",
-      "none": "None",
+      "agents": "Agents ({selected} of {total} selected)",
+      "all": "Select all",
+      "none": "Select none",
       "search": "Pick an agent by its key",
       "inFlight": "{state, select, parked {parked for approval} other {in flight}} · {run} · turn {turn} · {task}",
       "inFlightNoTurn": "{state, select, parked {parked for approval} other {in flight}} · {run} · {task}",
       "idle": "no run in flight",
-      "hint": "Every agent in {workspace}, selected by default. Steering the fleet is a grant you hold by role, not a default.",
+      "hint": "Every agent in {workspace} starts selected. Steering the fleet needs a role that grants it.",
       "noAgents": "No agent in this workspace carries a key yet, so there is nobody to steer.",
       "agentsUnread": "The workspace's agents could not be read, so there is nobody to pick.",
       "keyless": "{count, plural, one {# agent carries no key, so a steer cannot reach it.} other {# agents carry no key, so a steer cannot reach them.}}",
@@ -32,10 +32,10 @@
       "interruptNoRun": "No selected agent has a wrapped run in flight to interrupt.",
       "interruptHint": "Interrupt cuts the call in flight at the proxy on the <mono>gateway</mono> and <mono>contained</mono> tiers. On the <mono>harness</mono> tier a steer lands at the next hook boundary.",
       "recorded": "Recorded per run as a <mono>control.steer</mono> frame attributed to you.",
-      "note": "Oxagen never executes steering as an instruction; it enters as evidence at the steering position with operator authority.",
+      "note": "Steering enters each run as evidence at the steering position with operator authority.",
       "footer": "{agents, plural, one {# agent} other {# agents}} · {live} in flight · {mode, select, interrupt {interrupt} other {at the boundary}}",
       "send": "Steer",
-      "sendInterrupt": "Send & Interrupt",
+      "sendInterrupt": "Steer and interrupt",
       "sending": "Steering",
       "cancel": "Cancel",
       "queued": "{count, plural, =0 {Nothing took this steer.} one {Steer queued as # command.} other {Steer queued as # commands.}}",
@@ -91,8 +91,8 @@
       "parked": "{count} parked",
       "more": "{count}+",
       "empty": "Nothing is waiting on a human.",
-      "emptyDetail": "A call parks here when policy returns approve. Denials never park: they end the call.",
-      "timesOut": "Times out in <clock></clock>, then the call ends",
+      "emptyDetail": "A call parks here when policy returns approve. A denial ends the call.",
+      "timesOut": "The call ends unanswered in <clock></clock>",
       "notRecorded": "not recorded",
       "openRun": "Open run",
       "mandateUnread": "Drew on mandate {mandate}. Its remaining authority was not read, so none is shown.",
@@ -100,10 +100,10 @@
       "mandatePerCallOnly": "Mandate {mandate} limits these per call only, so there is no period to count them against:",
       "chain": {
         "title": "Chain",
-        "who": "Who asked",
-        "agent": "Which agent",
-        "action": "Which action",
-        "rule": "Which rule",
+        "who": "Requester",
+        "agent": "Agent",
+        "action": "Action",
+        "rule": "Rule",
         "underMandate": "under mandate {mandate}"
       },
       "eligibility": {
@@ -111,7 +111,7 @@
         "ok": "Rule {rule} would have released this call. A mandate asked for a person anyway.",
         "blocked": "Rule {rule} did not release this call.",
         "floor": "At least one of these is a floor no rule can lift.",
-        "recorded": "Recorded when the call was parked. A rule edited since is a different rule.",
+        "recorded": "Recorded when the call was parked. A later edit to the rule does not change it.",
         "reasons": {
           "tool_not_declared": "No enabled declared tool backs this capability, so it carries no classification.",
           "tainted_input": "The arguments derive from untrusted input.",
@@ -132,7 +132,7 @@
         "title": "Decide on {tool}",
         "body": "Approving resumes the call. Denying ends it. Either way Oxagen records the decision, the reason, and who made it.",
         "note": "Reason",
-        "noteHint": "Required to deny, optional to approve. It goes on the record.",
+        "noteHint": "Required to deny and optional to approve. It goes on the record.",
         "approve": "Approve",
         "deny": "Deny",
         "approving": "Approving",
@@ -167,7 +167,7 @@
         "sealed": "sealed"
       },
       "searchRuns": "Search runs",
-      "facetAll": "All · {facet}",
+      "facetAll": "All ({facet})",
       "facetLabel": "Filter by {facet}",
       "rows": "Runs per page",
       "sortBy": "Sort by {column}",
@@ -234,7 +234,7 @@
         "noneWithout": "Every run on this page has a pull request. Older runs may not."
       },
       "columnsPicker": {
-        "open": "Columns",
+        "open": "Choose columns",
         "title": "Choose columns",
         "subtitle": "Show or hide columns in the runs table.",
         "legend": "Columns shown",
@@ -248,8 +248,8 @@
         "onRunPage": "on the run page",
         "ledgerHint": "This run's pull requests come from its evidence. Open the run to see them.",
         "unread": "Oxagen could not read this page's pull requests. The other columns are current. Reload to try again.",
-        "openedNoLink": "{count, plural, one {# opened, link not recorded} other {# opened, links not recorded}}",
-        "noLinkHint": "The agent opened a pull request, and its output named no link Oxagen could read.",
+        "openedNoLink": "{count, plural, one {# opened with no link recorded} other {# opened with no links recorded}}",
+        "noLinkHint": "The agent's output named no pull request link Oxagen could read.",
         "more": "+{count} more",
         "unnamed": "Pull request",
         "stateUnknown": "status unknown",
@@ -269,8 +269,8 @@
         "uncommitted": "uncommitted",
         "spoken": "{added} lines added, {removed} removed",
         "basis": {
-          "harness_reported": "Lines added and removed, as the harness reported at the end of the session.",
-          "git_observed": "Uncommitted lines git reported at the last check. Committed work is not counted."
+          "harness_reported": "Lines added and removed as the harness reported them at the end of the session.",
+          "git_observed": "Uncommitted lines git reported at the last check."
         }
       },
       "paused": "paused",
@@ -287,16 +287,16 @@
     "pause": {
       "title": "Pause this run",
       "ledgerTitle": "Evidence ingress",
-      "body": "Takes effect at the next boundary: the model call or tool call now in flight completes, and nothing new is dispatched. The run keeps its token and its budget reservation; pending approvals keep their clocks.",
+      "body": "Takes effect at the next boundary: the model call or tool call now in flight completes, and nothing new is dispatched. The run keeps its token and its budget reservation. Pending approvals keep their clocks.",
       "run": "Run",
       "position": "Position",
       "positionValue": "turn {turn} · step {steps} · frame {frames}",
       "positionNoTurn": "step {steps} · frame {frames}",
       "recordedAs": "Recorded as",
-      "recordedValue": "<mono>control.pause</mono> frame · operator authority",
-      "ledgerRecordedValue": "command receipt · operator authority",
-      "reason": "Reason — the model reads this on resume, so write it for the agent",
-      "note": "Pause is not cancel. Nothing is revoked, and the run resumes exactly where it stopped; the gap is visible in the chain and the receipts.",
+      "recordedValue": "<mono>control.pause</mono> frame under operator authority",
+      "ledgerRecordedValue": "command receipt under operator authority",
+      "reason": "Reason",
+      "note": "The agent reads this reason when the run resumes where it stopped.",
       "footer": "Recorded as a <mono>control.pause</mono> frame under <mono>run.pause</mono>.",
       "confirm": "Pause at the next boundary",
       "pending": "Queueing",
@@ -308,8 +308,8 @@
     },
     "empty": {
       "title": "No runs yet in {workspace}",
-      "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
-      "register": "Register Agent",
+      "body": "Nothing has reached Oxagen from this workspace. A run appears when a registered agent makes its first model call.",
+      "register": "Register an agent",
       "agents": "Open Agents",
       "enroll": "To record an agent that already runs on a machine, run <code>oxagen agent enroll</code> on that machine."
     },
@@ -325,14 +325,14 @@
     },
     "denied": {
       "title": "You cannot see this workspace",
-      "body": "Your roles on <b>{org}</b> do not include <c>{permission} on {ws}</c>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "body": "Your roles on <b>{org}</b> do not include <c>{permission} on {ws}</c>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
       "back": "Back to Fleet",
       "signedIn": "Signed in as",
       "signedInValue": "{name} · <c>workspace.{wsRole}</c> · {ws}",
       "needed": "Needed",
       "neededValue": "{permission} on {ws}",
       "decidedBy": "Decided by",
-      "decidedByValue": "policy not recorded · deny wins over every allow",
+      "decidedByValue": "policy not recorded",
       "decidedByIam": "IAM rule <c>{rule}</c>",
       "decidedByRule": "decision rule <c>{rule}</c>",
       "bodyRule": "A decision rule on <b>{org}</b> refused this read. Your roles include <c>{permission} on {ws}</c>. A workspace admin can change the rule, and the change lands in the audit record."
@@ -344,23 +344,23 @@
     "requestAccess": {
       "title": "Request access",
       "role": "Role requested",
-      "why": "Why",
+      "why": "Reason",
       "note": "Granting a role is a governed action. It will appear in the audit record with the granter’s name, your name, and this reason.",
       "send": "Send the request",
       "cancel": "Cancel",
-      "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}; the grant lands in the audit record."
+      "unbacked": "Oxagen records no access request yet, so this cannot be sent. Ask an organization owner to grant {permission} on {ws}. The grant lands in the audit record."
     },
     "incident": {
       "title": "Open an incident",
       "subject": "Subject",
       "severity": "Severity",
       "severities": {
-        "critical": "critical — money moved that Oxagen did not govern",
+        "critical": "critical (money moved that Oxagen did not govern)",
         "warning": "warning",
         "info": "info"
       },
-      "attach": "Attach",
-      "raise": "Raise it",
+      "attach": "Attachments",
+      "raise": "Open incident",
       "cancel": "Cancel",
       "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment.",
       "traceItem": "trace {id}",

@@ -12,7 +12,7 @@
       "segments": "Proposals or pull requests"
     },
     "hub": {
-      "description": "Everything that can steer an agent in this workspace competes in one assembler."
+      "description": "One assembler ranks every item that steers an agent in this workspace."
     },
     "shelves": {
       "label": "Library shelves",
@@ -36,26 +36,26 @@
         "unbound": "unbound",
         "unread": "not read"
       },
-      "title": "Governance mode \u00b7 {workspace}",
+      "title": "Governance mode for {workspace}",
       "subtitle": ".oxagen/rules/governance.toml on {repository}",
       "mainRepository": "the main repository",
       "pick": "Governance mode",
-      "now": "\u00b7 now",
+      "now": "(current)",
       "modes": {
         "solo": {
           "summary": "The author may merge their own.",
-          "hint": "One person, or a repository nobody else reviews."
+          "hint": "For a repository nobody else reviews."
         },
         "team": {
           "summary": "A code-owner review is required.",
-          "hint": "What a missing governance.toml means, and what most repositories want."
+          "hint": "The mode a missing governance.toml means."
         },
         "regulated": {
           "summary": "A named approver from a role must approve, and the promotion ledger is hash-chained.",
-          "hint": "Separation of duties: the author of a record may never be its approver."
+          "hint": "The author of a record cannot approve it."
         }
       },
-      "tomlHeader": "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
+      "tomlHeader": "# .oxagen/rules/governance.toml: read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
       "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
       "cancel": "Cancel",
       "close": "Close",
@@ -78,19 +78,19 @@
     },
     "library": {
       "items": "Items",
-      "itemsNote": "everything that can steer an agent here",
+      "itemsNote": "in force in this workspace",
       "byKind": "By kind",
-      "byKindNote": "one shape, every kind",
+      "byKindNote": "count per kind",
       "compiledSize": "Compiled size",
-      "compiledSizeNote": "if every item were rendered at once, which no run does",
-      "grants": "Carry a grant",
-      "grantsNote": "these compile to a gate as well as to text",
+      "compiledSizeNote": "all items rendered together",
+      "grants": "Enforcement grants",
+      "grantsNote": "items that also compile to a gate",
       "notRecorded": "not recorded",
       "kindRecord": "record",
-      "lead": "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
-      "planes": "Steering is what the model reads: advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked. The Library, Assignments, and the Compiler are the text plane. Gates is the gate plane.",
-      "title": "Everything written down",
-      "receives": "Who receives it",
+      "lead": "The assembler reads these items in this order and picks the ones each run receives.",
+      "planes": "The Library, Assignments, and the Compiler show the text the model reads. Gates shows the calls Oxagen refuses.",
+      "title": "All items",
+      "receives": "Open the assignments",
       "columns": {
         "item": "Item",
         "kind": "Kind",
@@ -112,7 +112,7 @@
       "loading": "Loading steering",
       "empty": {
         "title": "Nothing steers this workspace yet",
-        "body": "Published records live in <code>.oxagen/rules/</code> on {repository}. A record becomes published by being merged, never by being saved here.",
+        "body": "Published records live in <code>.oxagen/rules/</code> on {repository}. A record is published when its pull request merges.",
         "repository": "the main repository"
       },
       "error": {
@@ -122,24 +122,24 @@
         "retry": "Try again",
         "incident": "Open an incident",
         "incidentNote": "Oxagen records no incidents yet. Report the line below to your operator.",
-        "trace": "{status} {code} \u00b7 {at}"
+        "trace": "{status} {code} · {at}"
       },
       "denied": {
-        "title": "You cannot see this workspace\u2019s steering",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "title": "You cannot see this workspace’s steering",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
-        "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization \u203a Roles.",
+        "requestNote": "Oxagen records no access requests yet. An organization owner grants {permission} on Organization › Roles.",
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
-        "signedInValue": "workspace.{role} \u00b7 {workspace}",
-        "signedInNamed": "<person>{name}</person> \u00b7 <mono>workspace.{role} \u00b7 {workspace}</mono>",
+        "signedInValue": "workspace.{role} · {workspace}",
+        "signedInNamed": "<person>{name}</person> · <mono>workspace.{role} · {workspace}</mono>",
         "needed": "Needed",
         "neededValue": "{permission} on {workspace}",
         "decidedBy": "Decided by",
-        "decidedByValue": "policy not recorded (#{issue}) \u00b7 deny wins over every allow"
+        "decidedByValue": "policy not recorded (#{issue})"
       },
       "pending": {
-        "title": "Your access to this workspace\u2019s steering is waiting for approval",
+        "title": "Your access to this workspace’s steering is waiting for approval",
         "body": "Access request {request}"
       }
     },
@@ -148,8 +148,8 @@
       "issue": "Tracked in #{number}",
       "assignments": {
         "what": "which agent receives which item, per agent, with its delivery, gates, stable prefix, volatile selection, cuts, and skills. It needs the assembler's registry port (Phase 1).",
-        "lead": "Nobody assigns a record to an agent. An item reaches an agent when its scope matches the run, and it is delivered when a hook is installed on the runtime. An agent on the <code>observe</code> tier is still assembled for, and receives nothing.",
-        "receivesTitle": "What each agent receives",
+        "lead": "An item reaches an agent when its scope matches the run and a hook on the agent's runtime delivers it.",
+        "receivesTitle": "Assignments by agent",
         "agentsBadge": "{count, plural, one {# agent} other {# agents}}",
         "openLibrary": "Open the library",
         "openCompiler": "Open the compiler",
@@ -166,7 +166,7 @@
           "action": "Compiler"
         },
         "truncated": "Showing the first {read} enrolled agents. The registry holds more.",
-        "panelNote": "Each row is one assembly, for the prompt that agent is usually given. Change the prompt and the volatile selection changes with it. The gates and the stable prefix do not.",
+        "panelNote": "Each row shows one assembly for the agent's usual prompt. A different prompt changes only the volatile selection.",
         "scopeTitle": "Scope",
         "itemsBadge": "{count, plural, one {# item} other {# items}}",
         "scopeColumns": {
@@ -181,7 +181,7 @@
           "agent": "Only the agent named on the item."
         },
         "scopeWhat": "the scope of instructions, skills, memory, and ontology notes. Only records carry a scope today, so this panel counts records.",
-        "closing": "A repository record may narrow what a workspace record allows. It may never widen it, and the checks enforce that before a merge.",
+        "closing": "The checks refuse a repository record that allows more than its workspace record.",
         "empty": {
           "title": "No agent receives steering here",
           "body": "Steering reaches an agent through a hook on its runtime. No agent in this workspace is enrolled, so nothing is delivered.",
@@ -191,11 +191,11 @@
       "gates": {
         "what": "the gates that reach this workspace and the gate notice each puts back into steering. The workspace's freshness gates are below.",
         "textTitle": "Text compilation",
-        "textBody": "Every item compiles to text the model reads. Text is advisory: it is ranked, budgeted, and may be dropped. The library is this plane.",
+        "textBody": "Every item compiles to text that the assembler ranks and may cut for budget.",
         "gateTitle": "Gate compilation",
-        "gateBody": "An item with an enforcement grant also compiles to a gate. A gate is deterministic, never budgeted, and never ranked, and it answers when the index is down. This tab is that plane.",
+        "gateBody": "An item with an enforcement grant also compiles to a gate that refuses matching calls, even when the index is down.",
         "noticesTitle": "Gate notices",
-        "closing": "A gate notice is one line, so the agent does not spend turns walking into a denial. The assembler puts every notice that applies at the head of the stable prefix and never drops one. Gates are edited where they always were: decision rules and kill switches on Tools, a mandate on its own page. Nothing is edited here.",
+        "closing": "The assembler puts every gate notice that applies at the start of the stable prefix and keeps all of them. Edit decision rules and kill switches on Tools, and a mandate on its own page.",
         "tiers": "What a gate can refuse depends on the tier. For actions routed through Oxagen, the server refuses the call. On the <code>harness</code> tier the four blocking hook events refuse a harness-native call: client-attested and fail-open.",
         "editSwitches": "Open the kill switches tab",
         "outcomes": {
@@ -235,31 +235,31 @@
         "prompt": "Prompt",
         "placeholder": "Type what the operator would type",
         "noAgent": "No agent in this workspace is set up for preview.",
-        "option": "{name} \u00b7 {harness}",
+        "option": "{name} ({harness})",
         "hint": "The agent's tier and repository are not recorded yet. Tracked in #{issue}.",
         "chips": "Pick a prompt",
-        "prefixMeter": "Stable prefix \u00b7 SessionStart additional context",
-        "volatileMeter": "Volatile selection \u00b7 token budget",
+        "prefixMeter": "Stable prefix",
+        "volatileMeter": "Volatile selection",
         "parts": {
           "prefix": {
-            "title": "1 \u00b7 Stable prefix",
-            "tally": "SessionStart additional context \u00b7 capped at 16 KiB",
-            "sub": "Gate notices first, then <code>must</code>, then <code>should</code>. Cached in the signed bundle, so it still arrives when the machine is offline. Never ranked."
+            "title": "Stable prefix",
+            "tally": "SessionStart hook",
+            "sub": "Gate notices first, then <code>must</code> and <code>should</code> items, up to 16 KiB."
           },
           "volatile": {
-            "title": "2 \u00b7 Volatile selection",
-            "tally": "UserPromptSubmit additional context \u00b7 token budget",
-            "sub": "<code>may</code> and <code>info</code> items, ranked against this prompt and packed until the budget is spent."
+            "title": "Volatile selection",
+            "tally": "UserPromptSubmit hook",
+            "sub": "<code>may</code> and <code>info</code> items ranked against this prompt until the token budget is spent."
           },
           "skills": {
-            "title": "3 \u00b7 Skills",
-            "tally": "files in the checkout",
-            "sub": "Loaded by the harness's own progressive disclosure, not by the assembler. Only a skill's description line competes above."
+            "title": "Skills",
+            "tally": "Files in the checkout",
+            "sub": "The harness loads skill files itself, so only each description line competes for the budget."
           }
         },
         "cutsTitle": "Manifest cuts",
         "cutsBadge": "recorded on a run as a <code>steering.manifest</code> frame",
-        "closing": "Two injection points are not on this page. MCP tool results carry their own text, call by call. The model request itself is written at the proxy on the <code>gateway</code> and <code>contained</code> tiers, and the Context tab of a run shows what it carried."
+        "closing": "This page leaves out MCP tool results and the model request the proxy writes on the <code>gateway</code> and <code>contained</code> tiers. A run's Context tab shows that request."
       },
       "memory": {
         "empty": {
@@ -276,9 +276,9 @@
           "recalled": "Recalled 30d",
           "recalledNote": "the recall counter is not recorded yet",
           "byClass": "By class",
-          "byClassNote": "a rule is proposed as a record instead"
+          "byClassNote": "count per class"
         },
-        "lead": "<b>A published must beats recalled memory.</b> Memory is what an agent's own runs left behind. It is recalled, never published, so it competes only in the volatile selection, as <code>may</code> or <code>info</code>, and it gives way wherever a published record says otherwise. To make a memory binding, promote it: a proposal, a pull request, a merge.",
+        "lead": "Memories come from agents' own runs and compete only in the volatile selection, where a published record overrides them.",
         "forgotten": "Forgot {ref}. The assembler stops selecting it. Every run that carried it is untouched.",
         "title": "Recalled memory",
         "columns": {
@@ -288,23 +288,23 @@
           "scope": "Scope",
           "lastRecalled": "Last recalled",
           "tokens": "Token cost",
-          "assembler": "In the assembler"
+          "assembler": "Assembler position"
         },
         "open": "Open {ref}",
-        "provenance": "{ref} \u00b7 {source} \u00b7 {who, select, person {a person wrote it} agent {an agent wrote it} other {the system wrote it}}",
-        "tokensTitle": "The assembler's budget unit over the line this memory is delivered as",
+        "provenance": "{ref} · {source} · {who, select, person {a person wrote it} agent {an agent wrote it} other {the system wrote it}}",
+        "tokensTitle": "Tokens this memory's line spends in the assembled context",
         "tokens": "{count} tok",
         "compiler": "Open the compiler",
         "compilerNote": "Recall reaches only the in-app agent today, capped at six items.",
         "truncated": "Showing the newest {read} of {total} memories.",
         "dialog": {
-          "subtitle": "A memory, recalled and never published",
+          "subtitle": "Recalled memory",
           "forget": "Forget",
           "promote": "Promote to a record",
           "class": "Class",
           "forceNotRecorded": "force not recorded",
           "scope": "Scope",
-          "origin": "Where it came from",
+          "origin": "Origin",
           "recalled": "Recalled",
           "cost": "Cost",
           "costValue": "{count} tokens every time it is selected",
@@ -313,15 +313,15 @@
         },
         "forget": {
           "title": "Forget this memory?",
-          "keep": "Keep it",
-          "pending": "Forgetting\u2026",
-          "confirm": "Forget it",
+          "keep": "Keep memory",
+          "pending": "Forgetting…",
+          "confirm": "Forget memory",
           "body": "The assembler stops selecting it, and every agent in scope stops being told it. The runs it was folded from are untouched: every frame stays, and every run that carried it keeps naming the hash it carried.",
-          "other": "Promote is the other answer. If the memory is right, a record makes it binding instead of leaving it to compete."
+          "other": "To make a correct memory binding, promote it to a record instead."
         }
       },
       "ontology": {
-        "lead": "An ontology note defines one entity or one term the way this workspace uses it. It compiles to text like any other item, enters the volatile selection as <code>info</code>, and grants nothing. A note is a file somebody wrote and somebody merged, under <code>.oxagen/ontology/</code> on {repository}, so writing, changing, and retiring one each open a pull request.",
+        "lead": "An ontology note under <code>.oxagen/ontology/</code> on {repository} defines one entity or term and enters the volatile selection as <code>info</code>.",
         "repository": "the main repository",
         "title": "Definitions",
         "columns": {
@@ -345,8 +345,8 @@
             "body": "Phase 3 adds the notes to the graph, so a note links the repositories, records, and skills it is about. Delivery never waits for the graph."
           },
           "notHere": {
-            "term": "Not here",
-            "body": "Entity extraction and data ingestion. The scope review of 2026-09-14 cut them, and this shelf does not bring them back."
+            "term": "Out of scope",
+            "body": "Entity extraction and data ingestion, cut by the scope review of 2026-09-14."
           }
         }
       },
@@ -371,16 +371,16 @@
     },
     "freshness": {
       "title": "Steering freshness",
-      "lead": "An agent reads the records in the checkout it is running in. These two switches decide what happens when that checkout is behind the production branch.",
+      "lead": "Both switches act on a machine where oxagen steering hooks install has run.",
       "version": "Steering version",
       "repository": "Repository",
       "published": "Newest record",
       "unbound": "No repository is bound, so steering is off for this workspace.",
       "gatesLegend": "Steering freshness gates",
       "autoSync": "Sync .oxagen/ automatically",
-      "autoSyncHint": "Take the records merged on the production branch into the developer's checkout before the prompt runs. It never runs while .oxagen/ holds uncommitted work or records the branch is still authoring.",
+      "autoSyncHint": "Pulls merged records into the checkout before each prompt unless .oxagen/ has uncommitted work.",
       "blockStaleRuns": "Refuse prompts on stale steering",
-      "blockStaleRunsHint": "Stop a prompt while the checkout is missing records that are in force. The developer is warned either way. Run oxagen steering hooks install on each machine for this to reach the prompt.",
+      "blockStaleRunsHint": "Stops a prompt when the checkout lacks a record in force.",
       "sync": "Repository sync",
       "syncSynced": "Matches {commit}",
       "syncPending": "Reading a new push or merge from the repository",
@@ -408,46 +408,46 @@
       "sort": "Sort",
       "sorts": {
         "shown": "Shown order",
-        "asc": "Label A\u2013Z",
-        "desc": "Label Z\u2013A"
+        "asc": "Label A–Z",
+        "desc": "Label Z–A"
       },
       "forceTitle": "Steering force",
       "effectTitle": "Constraint effect",
-      "tokensTitle": "What the record costs in the assembler: the tokens of the line the signed bundle carries for it",
+      "tokensTitle": "Tokens this record's line spends in the signed bundle",
       "tokens": "{count} tok",
       "compilesTitle": "Whether this record also compiles to a gate is not recorded yet. Tracked in #{issue}.",
       "compilesNotRecorded": "compilation not recorded",
       "newTitle": "The last merge published this record",
-      "new": "new \u00b7 bundle v{version}",
+      "new": "New in v{version}",
       "published": "published",
       "openLabel": "Open {lineage}",
       "cloneLabel": "Clone {lineage}",
       "effectLineTitle": "Rendered, cited, and violated counts are not recorded yet. Tracked in #{issue}.",
       "effectNotRecorded": "effect not recorded",
       "truncated": "Showing the first {read} of {total} records in force.",
-      "note": "Every record compiles to text. A record with an enforcement grant also compiles to a gate, which is listed on Gates with the notice it puts back into steering. A record can never grant authority: the checks enforce <code>{effects}</code>, and a repository record may narrow what a workspace record allows, never widen it.",
+      "note": "A record with an enforcement grant also compiles to a gate, listed on Gates. The checks allow only <code>{effects}</code> and refuse a repository record that allows more than its workspace record.",
       "disk": {
         "title": "On disk",
         "failed": "The .oxagen/ tree could not be read: {code}.",
         "unbound": "No main repository is bound to this workspace, so there is no .oxagen/ tree to read.",
         "absent": "{branch} on {repository} has no <code>.oxagen/</code> directory.",
-        "at": "{repository} @ {branch} \u00b7 {head}",
+        "at": "{repository} @ {branch} · {head}",
         "noHead": "no head commit",
-        "note": "stella symlinks into this directory rather than copying it, so its loader and its CI validation work unchanged on the same files with no second copy that could drift. Oxagen reads <code>.oxagen/</code> and nothing else.",
+        "note": "stella links to this directory, so stella and Oxagen read the same files.",
         "comments": {
           "workspace": "linked repos, providers, budgets",
           "governance": "{mode, select, absent {no mode declared} invalid {mode unreadable} other {mode = {mode}}}",
           "promotions": "hash-chained ledger (regulated mode)",
           "skills": "governed files, delivered by sync",
           "ontology": "entity and term definitions",
-          "proposals": "candidates, which steer nothing",
+          "proposals": "proposed records",
           "agents": "one per agent"
         }
       },
       "injection": {
         "title": "Injection points",
-        "badge": "five points",
-        "lead": "The harness owns the context window. Oxagen competes for its own slice of it, at exactly these points, and every delivery is recorded.",
+        "badge": "5 points",
+        "lead": "Oxagen delivers steering at these five points and records every delivery.",
         "points": {
           "1": {
             "head": "SessionStart additional context",
@@ -474,7 +474,7 @@
     },
     "proposals": {
       "title": "Proposals",
-      "lead": "A proposal steers nothing. It publishes only when its Context PR passes every check and merges.",
+      "lead": "A proposal publishes when its Context PR passes every check and merges.",
       "emptyTitle": "No proposals in this workspace",
       "empty": "Agents propose records through context/append, and a person proposes one with oxagen context propose. Each proposal waits here for a person to open its Context PR or dismiss it.",
       "checks": "{passed} of {total} checks pass",
@@ -489,7 +489,7 @@
     },
     "prs": {
       "title": "Context PRs",
-      "lead": "One concern, one pull request. The six checks run the same rules as stella context validate.",
+      "lead": "Each Context PR runs the six checks that stella context validate runs.",
       "empty": "No proposal on this page has a Context PR.",
       "number": "#{number} on {repository}",
       "columns": {
@@ -541,11 +541,11 @@
       },
       "body": "Pull request body",
       "onMerge": {
-        "title": "What merge will do",
+        "title": "On merge",
         "publishes": "Publish {path} as a record in force",
-        "version": "Move this workspace from steering version {current} to {next}",
+        "version": "Take the workspace's promotion ledger from {current} entries to {next}",
         "promotion": "Write the promotion event to the ledger and a steering_published audit event",
-        "review": "Who merges, under governance mode {review}"
+        "review": "Merge rule: {review}"
       },
       "merged": {
         "title": "Merged",
@@ -594,7 +594,7 @@
         "separationOfDuties": "Under this governance mode the author does not merge their own proposal. Another reviewer merges it.",
         "proposalNotFound": "This proposal is not in this workspace.",
         "proposalMoved": "This proposal changed after the page loaded. Reload the page to see where it is.",
-        "lineagePrOpen": "Another pull request is already open for this lineage. One concern, one pull request.",
+        "lineagePrOpen": "Another pull request is already open for this lineage. Merge or close it first.",
         "governanceUnreadable": "The workspace repository has a .oxagen/rules/governance.toml that could not be read, so nothing was opened or merged.",
         "repositoryMissing": "This workspace has no connected repository to open the pull request on.",
         "checksNotPassed": "Merge is blocked until every check passes.",

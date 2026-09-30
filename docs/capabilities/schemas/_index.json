@@ -863,6 +863,17 @@
       "consumes": []
     },
     {
+      "name": "draft_studio_description",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "enroll_host",
       "domain": "tacho",
       "surfaces": [
@@ -1945,6 +1956,17 @@
       "consumes": []
     },
     {
+      "name": "get_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_studio_draft",
       "domain": "tool",
       "surfaces": [
@@ -2897,6 +2919,28 @@
       "consumes": []
     },
     {
+      "name": "list_studio_findings",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_studio_tools",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_tacho_hosts",
       "domain": "tacho",
       "surfaces": [
@@ -3640,6 +3684,16 @@
       "consumes": []
     },
     {
+      "name": "retry_steering_repo_provision",
+      "domain": "repository",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reveal_secret",
       "domain": "secret",
       "surfaces": [
@@ -4062,6 +4116,17 @@
       "consumes": []
     },
     {
+      "name": "set_mcp_credential",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_mcp_enabled",
       "domain": "agent",
       "surfaces": [
@@ -4322,6 +4387,17 @@
       "consumes": []
     },
     {
+      "name": "start_studio_discovery",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "start_subscription_upgrade",
       "domain": "billing",
       "surfaces": [
@@ -4442,6 +4518,17 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "try_studio_tool",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

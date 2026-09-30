@@ -1,0 +1,159 @@
+{
+  "name": "try_studio_tool",
+  "domain": "tool",
+  "description": "Send one call to one tool in a Studio server folder, against one of its environments, after the workspace's policies and kill switches allow it. Returns the request with credentials removed, the upstream's raw answer, and the result the agent would see.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "tool": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "environment": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "arguments": {
+        "type": "object",
+        "additionalProperties": {},
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "agent": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "required": [
+      "server",
+      "tool",
+      "environment",
+      "arguments"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "server": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "raw": {
+            "type": "string",
+            "maxLength": 262144
+          },
+          "shaped": {
+            "type": "string",
+            "maxLength": 262144
+          },
+          "exchanges": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cut": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "request",
+                "raw",
+                "shaped"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "server",
+          "tool",
+          "environment",
+          "agent",
+          "request",
+          "raw",
+          "shaped",
+          "exchanges",
+          "cut"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "denied",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "raw": {
+            "type": "string",
+            "maxLength": 262144
+          }
+        },
+        "required": [
+          "ok",
+          "reason",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

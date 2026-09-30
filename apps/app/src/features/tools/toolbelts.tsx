@@ -130,7 +130,7 @@ export function Toolbelts({
               at={at}
               source={allTools}
               label={t("new")}
-              gold
+              isNew
               testId="tools-belt-new"
             />
           ) : null}

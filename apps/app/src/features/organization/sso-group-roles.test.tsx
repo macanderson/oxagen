@@ -5,7 +5,7 @@
 //   - rows are added and removed here, and Save sends the whole table,
 //     because `set_sso_group_roles` keeps exactly the rows it is sent;
 //   - the role select never offers owner;
-//   - a refused row is named on that row;
+//   - a refused row is named on that row, in a message that wraps;
 //   - a viewer who cannot write sees the rows with no control.
 import {
   cleanup,
@@ -65,9 +65,9 @@ describe("SsoGroupRoles", () => {
   it("shows each mapped group with its role", async () => {
     const { container } = renderEditor();
     expect(
-      screen.getByRole("textbox", { name: "Group name, row 1" }),
+      screen.getByRole("textbox", { name: "Group name for row 1" }),
     ).toHaveValue("oxagen-admins");
-    expect(screen.getByRole("combobox", { name: "Role, row 2" })).toHaveValue(
+    expect(screen.getByRole("combobox", { name: "Role for row 2" })).toHaveValue(
       "billing",
     );
     await expectNoAxe(container);
@@ -75,7 +75,7 @@ describe("SsoGroupRoles", () => {
 
   it("offers admin, compliance, billing and member, and never owner (negative)", () => {
     renderEditor();
-    const select = screen.getByRole("combobox", { name: "Role, row 1" });
+    const select = screen.getByRole("combobox", { name: "Role for row 1" });
     const values = within(select)
       .getAllByRole("option")
       .map((o) => o.getAttribute("value"));
@@ -87,11 +87,11 @@ describe("SsoGroupRoles", () => {
     renderEditor();
     await userEvent.click(screen.getByRole("button", { name: "Add row" }));
     await userEvent.type(
-      screen.getByRole("textbox", { name: "Group name, row 3" }),
+      screen.getByRole("textbox", { name: "Group name for row 3" }),
       "auditors",
     );
     await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Role, row 3" }),
+      screen.getByRole("combobox", { name: "Role for row 3" }),
       "compliance",
     );
     await save();
@@ -139,18 +139,19 @@ describe("SsoGroupRoles", () => {
     renderEditor();
     await save();
     const row2 = await screen.findByRole("textbox", {
-      name: "Group name, row 2",
+      name: "Group name for row 2",
     });
     await waitFor(() => {
       expect(row2).toHaveAttribute("aria-invalid", "true");
     });
+    const message = screen.getByText(
+      "This group already has a row. Give each group one role.",
+    );
+    // The cell keeps text on one line. The refusal wraps (#4674).
+    expect(message).toHaveAttribute("data-wrap");
+    expect(message).not.toHaveClass("md:truncate");
     expect(
-      screen.getByText(
-        "This group already has a row. Give each group one role.",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("textbox", { name: "Group name, row 1" }),
+      screen.getByRole("textbox", { name: "Group name for row 1" }),
     ).not.toHaveAttribute("aria-invalid");
   });
 

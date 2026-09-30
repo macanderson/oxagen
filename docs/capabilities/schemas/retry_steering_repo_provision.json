@@ -1,0 +1,42 @@
+{
+  "name": "retry_steering_repo_provision",
+  "domain": "repository",
+  "description": "Re-send a failed or blocked steering repo setup so the job runs again from its first step.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "provisioning",
+          "ready",
+          "failed",
+          "blocked"
+        ]
+      }
+    },
+    "required": [
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -5,13 +5,15 @@
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
-// (#2962); the three Agents routes hand theirs, with the agent, the tab and the
-// cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); the Skills route moves a
+// (#2962); the three Agents routes hand theirs, with the agent, the tab, the
+// cursor and the rows the URL names, to the Agents feature (#2956, #4693), and
+// the Agents page hands the tab its `?tab=` names and the whole query to the
+// Agents area, which absorbed Tools and the Runtimes list (#4806); Spend hands
+// its viewer, the data source and the query to its body (#2962); the Skills route moves a
 // member to the Skills tab of Steering with its cursor; Steering hands its viewer,
-// the data source and the query to the Steering feature (#2961); Tools hands
-// theirs, with the tab and the chips the URL names, to the Tools feature
-// (#2958); Billing hands
+// the data source and the query to the Steering feature (#2961); the Tools and
+// Runtimes routes move a member to the Agents tab that absorbed each, with the
+// tab and the chips the URL names (#4806); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
 // the Billing feature (WL-38); Organization, Roles and API keys hand their
 // viewer, the data source and the tab or the keys' workspace to the
@@ -36,7 +38,7 @@ const {
   Billing,
   Fleet,
   Run,
-  Agents,
+  AgentsArea,
   Agent,
   Steering,
   Spend,
@@ -47,9 +49,6 @@ const {
   OnboardingGate,
   Skills,
   SkillsLoading,
-  Tools,
-  ToolsLoading,
-  Runtimes,
   workspaces,
   source,
   cookieJar,
@@ -71,9 +70,14 @@ const {
         {props.banners}
       </>
     )),
-    // Agents draws the page header only when it has agents to list, so the
-    // stub draws the header it is handed.
-    Agents: vi.fn((props: { header?: ReactNode }) => <>{props.header}</>),
+    // The Agents area draws the page header over every tab, so the stand-in
+    // draws its h1 and the tab it was handed.
+    AgentsArea: vi.fn((props: { tab: string }) => (
+      <>
+        <h1>Agents</h1>
+        <p data-testid="agents-area" data-tab={props.tab} />
+      </>
+    )),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
     Steering: vi.fn(
       (props: {
@@ -104,13 +108,6 @@ const {
       <p data-testid="skills-body" />
     )),
     SkillsLoading: vi.fn(() => null),
-    Tools: vi.fn((props: { tab: string }) => (
-      <p data-testid="tools-body" data-tab={props.tab} />
-    )),
-    ToolsLoading: vi.fn(() => null),
-    // Runtimes draws its own header (its error and access-denied states
-    // replace the body with the header included), so the stand-in draws it.
-    Runtimes: vi.fn((_props: Record<string, unknown>) => <h1>Runtimes</h1>),
     workspaces,
     source: { org: { workspaces } },
     cookieJar: new Map<string, string>(),
@@ -167,16 +164,25 @@ vi.mock("next/headers", () => ({
     }),
 }));
 vi.mock("@/features/run", () => ({ Run }));
+// The Agents area's own imports; its tests (features/agents/area.test.tsx)
+// render the Runtimes tab for real.
 vi.mock("@/features/runtimes", () => ({
-  Runtimes,
+  AddRuntime: () => null,
+  mayAddRuntime: () => false,
   Runtime: () => null,
+  Runtimes: () => null,
   RuntimesLoading: () => null,
 }));
-vi.mock("@/features/agents", () => ({
-  Agents,
+// The tab parser stays real: which tab a `?tab=` names is the route's answer.
+vi.mock("@/features/agents", async () => ({
+  AgentsArea,
   AgentsLoading: () => null,
   Agent,
-  AgentsCreate: () => null,
+  parseAgentsPageTab: (
+    await vi.importActual<typeof import("@/features/agents/area")>(
+      "@/features/agents/area",
+    )
+  ).parseAgentsPageTab,
 }));
 // The view parser and link builder stay real: the route redirects a legacy
 // `?tab=` URL to its path segment with them.
@@ -204,11 +210,6 @@ vi.mock("@/features/organization", async (importOriginal) => ({
 }));
 vi.mock("@/features/onboarding", () => ({ OnboardingGate }));
 vi.mock("@/features/skills", () => ({ Skills, SkillsLoading }));
-vi.mock("@/features/tools", async (load) => ({
-  ...(await load<typeof import("@/features/tools")>()),
-  Tools,
-  ToolsLoading,
-}));
 vi.mock("@/data/source", () => ({ dataSource: () => source }));
 vi.mock("next-intl/server", () => ({
   getTranslations: (namespace: string) =>
@@ -283,7 +284,8 @@ const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 /** The agent page with its tab as a path segment; its params carry `tab`. */
 const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
-const RUNTIMES: Load = () => import("./[ws]/runtimes/page");
+/** A redirect with no title of its own, so not a `Load`. */
+const RUNTIMES = () => import("./[ws]/runtimes/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
@@ -292,68 +294,74 @@ const BILLING: Load = () => import("./billing/page");
 const AUDIT: Load = () => import("./audit/page");
 const AUDIT_TAB = () => import("./audit/[tab]/page");
 
-describe("the Tools page", () => {
-  it("resolves the workspace viewer and hands the viewer, the data source, the tab the path names and the query to Tools", async () => {
-    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
+describe("the Tools route", () => {
+  const viewer = { orgSlug: "acme", wsSlug: "core-platform" };
+  beforeEach(() => {
     requireViewer.mockResolvedValue(viewer);
+  });
+
+  /** Where the route sends a member for this path and query. */
+  async function moved(
+    tab: string[] | undefined,
+    query: Record<string, string> = {},
+  ) {
     const page = await TOOLS();
-    await renderPage(
-      await page.default({
-        params: Promise.resolve({ ...SEGMENTS, tab: ["switches"] }),
-        searchParams: Promise.resolve({ names: "api" }),
+    return Promise.resolve(
+      page.default({
+        params: Promise.resolve({ ...SEGMENTS, tab }),
+        searchParams: Promise.resolve(query),
       }),
+    );
+  }
+
+  it("resolves the workspace viewer, then moves a member to the Agents tab the path names with the query it carries", async () => {
+    await expect(moved(["switches"], { names: "api" })).rejects.toThrow(
+      "REDIRECT /acme/core-platform/agents?tab=switches&names=api",
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Tools).toHaveBeenCalledOnce();
-    expect(Tools.mock.calls[0]?.[0]).toEqual({
-      ctx: viewer,
-      source,
-      tab: "switches",
-      searchParams: { names: "api" },
-    });
-    expect(screen.getByTestId("tools-body")).toHaveAttribute(
-      "data-tab",
-      "switches",
-    );
-    // Tools has a page, so the UNRECORDED row it used to render is gone (§3.6).
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("names itself pages.tools in the document title", async () => {
+  it.each<[string[] | undefined, Record<string, string>, string]>([
+    [undefined, {}, "/acme/core-platform/agents?tab=tools"],
+    [
+      undefined,
+      { category: "moves_money", provider: "mcs_01k5s1", cursor: "c2" },
+      "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&cursor=c2",
+    ],
+    [["providers"], {}, "/acme/core-platform/agents?tab=servers"],
+    // #4693: an old link keeps the size its page held.
+    [
+      ["providers"],
+      { rows: "25", cursor: "g2" },
+      "/acme/core-platform/agents?tab=servers&rows=25&cursor=g2",
+    ],
+    // `/tools/servers` is the Providers tab's name before rev1.
+    [["servers"], {}, "/acme/core-platform/agents?tab=servers"],
+    [["policy"], {}, "/acme/core-platform/agents?tab=policies"],
+    [
+      ["toolbelts"],
+      { belt: "tbt_reviewbelt" },
+      "/acme/core-platform/agents?tab=toolbelts&belt=tbt_reviewbelt",
+    ],
+    // A pre-rev1 `?tab=` lands on the tab that absorbed it.
+    [
+      undefined,
+      { tab: "autoapprovals" },
+      "/acme/core-platform/agents?tab=policies",
+    ],
+  ])("moves %j with %j to %s", async (tab, query, target) => {
+    await expect(moved(tab, query)).rejects.toThrow(`REDIRECT ${target}`);
+  });
+
+  it("names every page it still renders by the MCP Studio title", async () => {
     const page = await TOOLS();
     expect(await page.generateMetadata(routeProps(SEGMENTS))).toEqual({
-      title: title("tools"),
+      title: translator("mcpStudio")("title"),
     });
-  });
-
-  it("lands the old servers tab and a pre-rev1 ?tab= on the tab that absorbed each", async () => {
-    const page = await TOOLS();
-    await renderPage(
-      await page.default({
-        params: Promise.resolve({ ...SEGMENTS, tab: ["servers"] }),
-        searchParams: Promise.resolve({}),
-      }),
-    );
-    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "providers" });
-    await renderPage(
-      await page.default({
-        params: Promise.resolve(SEGMENTS),
-        searchParams: Promise.resolve({ tab: "autoapprovals" }),
-      }),
-    );
-    expect(Tools.mock.calls.at(-1)?.[0]).toMatchObject({ tab: "policy" });
   });
 
   it("answers a path deeper than one tab with a 404 before resolving anyone (negative)", async () => {
-    const page = await TOOLS();
-    await expect(
-      Promise.resolve(
-        page.default({
-          params: Promise.resolve({ ...SEGMENTS, tab: ["providers", "x"] }),
-          searchParams: Promise.resolve({}),
-        }),
-      ),
-    ).rejects.toThrow();
+    await expect(moved(["providers", "x"])).rejects.toThrow("NEXT_NOT_FOUND");
     expect(requireViewer).not.toHaveBeenCalled();
   });
 });
@@ -376,7 +384,7 @@ describe("the Audit page", () => {
       searchParams: { outcome: "deny", offset: "50" },
     });
     expect(page).toHaveTextContent(
-      "What happened, who allowed it, under what authority, and what it cost.",
+      "The governed actions in this organization with their actors, authority, and cost.",
     );
     expect(screen.getByTestId("audit-retention-line")).toBeInTheDocument();
     expect(screen.getByTestId("audit-header-action")).toHaveTextContent("acme");
@@ -415,12 +423,12 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome, the invoices cursor and the page size to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await BILLING(),
-      routeProps(SEGMENTS, { checkout: "success", cursor: "c2" }),
+      routeProps(SEGMENTS, { checkout: "success", cursor: "c2", rows: "25" }),
       title("billing"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
@@ -434,6 +442,7 @@ describe("the Billing page", () => {
       viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
+      rows: "25",
     });
   });
 
@@ -446,6 +455,7 @@ describe("the Billing page", () => {
     expect(Billing.mock.calls[0]?.[0]).toMatchObject({
       checkout: null,
       cursor: null,
+      rows: null,
     });
   });
 });
@@ -473,7 +483,7 @@ describe("the Steering page", () => {
     // The eyebrow is the workspace name and the subtext the design's sentence.
     expect(page.textContent).toContain("Core platform");
     expect(page.textContent).toContain(
-      "Everything that can steer an agent in this workspace competes in one assembler.",
+      "One assembler ranks every item that steers an agent in this workspace.",
     );
     expect(screen.getByTestId("steering-actions")).toBeInTheDocument();
     expect(screen.queryByTestId("not-recorded")).toBeNull();
@@ -553,14 +563,27 @@ describe("the Spend page", () => {
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("opens one finding's evidence from the query on the bare path", async () => {
+  it("opens one finding's evidence from the query on the Findings tab", async () => {
     requireViewer.mockResolvedValue({ wsSlug: "core-platform" });
     const page = await SPEND();
     await renderPage(
-      await page.default(routeProps(SEGMENTS, { finding: "fnd_01k5rtgh" })),
+      await page.default(
+        routeProps({ ...SEGMENTS, tab: ["findings"] }, { finding: "fnd_01k5rtgh" }),
+      ),
     );
     expect(Spend.mock.calls.at(-1)?.[0]).toMatchObject({
       view: { tab: "findings", drill: null, finding: "fnd_01k5rtgh" },
+    });
+  });
+
+  it("opens the Month tab on the bare path, grouped the way the query asks", async () => {
+    requireViewer.mockResolvedValue({ wsSlug: "core-platform" });
+    const page = await SPEND();
+    await renderPage(
+      await page.default(routeProps(SEGMENTS, { by: "mcp_server" })),
+    );
+    expect(Spend.mock.calls.at(-1)?.[0]).toMatchObject({
+      view: { tab: "month", drill: null, finding: null, by: "mcp_server" },
     });
   });
 
@@ -575,24 +598,16 @@ describe("the Spend page", () => {
   });
 });
 
-describe("the Runtimes page", () => {
-  it("resolves the workspace viewer, names the page once and hands Runtimes the viewer, the data source, the slugs and the signed-in name", async () => {
-    const viewer = { orgSlug: "acme", wsSlug: "core-platform" };
-    requireViewer.mockResolvedValue(viewer);
-    await expectPageTitle(
-      await RUNTIMES(),
-      routeProps(SEGMENTS),
-      title("runtimes"),
-    );
-    expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Runtimes).toHaveBeenCalledOnce();
-    expect(Runtimes.mock.calls[0]?.[0]).toEqual({
-      ctx: viewer,
-      source,
-      org: "acme",
-      ws: "core-platform",
-      viewerName: "Marcus Bell",
+describe("the Runtimes route", () => {
+  it("resolves the workspace viewer, then moves a member to the Runtimes tab of the Agents page", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
     });
+    await expect(
+      Promise.resolve((await RUNTIMES()).default(routeProps(SEGMENTS))),
+    ).rejects.toThrow("REDIRECT /acme/core-platform/agents?tab=runtimes");
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
   });
 });
 
@@ -611,6 +626,22 @@ describe("the Skills route", () => {
     expect(Skills).not.toHaveBeenCalled();
   });
 
+  it("keeps the page size the URL named on the way to the tab (#4693)", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await SKILLS()).default(
+          routeProps(SEGMENTS, { cursor: "c2", rows: "25" }),
+        ),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering/skills?rows=25&cursor=c2",
+    );
+  });
+
   it.each<[string[], Record<string, string>, string]>([
     [["search"], {}, "/acme/core-platform/steering/skills?view=search"],
     [["versions"], {}, "/acme/core-platform/steering/skills?view=versions"],
@@ -618,6 +649,16 @@ describe("the Skills route", () => {
       ["catalog"],
       { cursor: "c2" },
       "/acme/core-platform/steering/skills?cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { cursor: "c2", rows: "25" },
+      "/acme/core-platform/steering/skills?rows=25&cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { rows: "7" },
+      "/acme/core-platform/steering/skills",
     ],
     [
       ["a-intel.release-notes", "source"],
@@ -753,44 +794,55 @@ describe("the Agents pages", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  it("the agents page hands the workspace viewer, the data source, the cursor and its header to Agents", async () => {
+  it("the agents page hands the workspace viewer, the data source, the Agents tab, the query and the signed-in name to the Agents area", async () => {
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS, { cursor: "c2" }),
       title("agents"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(AgentsArea.mock.calls.at(-1)?.[0]).toEqual({
       ctx,
       source,
-      cursor: "c2",
+      tab: "agents",
+      searchParams: { cursor: "c2" },
+      viewerName: "Marcus Bell",
     });
-    expect(Object.keys(Agents.mock.calls.at(-1)?.[0] ?? {}).sort()).toEqual([
-      "ctx",
-      "cursor",
-      "header",
-      "showRetired",
-      "source",
-      "viewerName",
-    ]);
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ showRetired: false });
+    expect(screen.getByTestId("agents-area")).toHaveAttribute(
+      "data-tab",
+      "agents",
+    );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 
-  it("the agents page ignores a view in the URL: the column set is the table's session state", async () => {
+  it.each([
+    ["servers", "servers"],
+    ["tools", "tools"],
+    ["toolbelts", "toolbelts"],
+    ["policies", "policies"],
+    ["runtimes", "runtimes"],
+    ["switches", "switches"],
+    // The Tools page's own tab ids land on the tab that holds them.
+    ["providers", "servers"],
+    ["policy", "policies"],
+    // A tab the page does not serve is the Agents tab (negative).
+    ["registry", "agents"],
+  ])("the agents page opens ?tab=%s on the %s tab", async (raw, tab) => {
     await expectPageTitle(
       await AGENTS(),
-      routeProps(SEGMENTS, { view: "operations" }),
+      routeProps(SEGMENTS, { tab: raw }),
       title("agents"),
     );
-    expect(Agents.mock.calls.at(-1)?.[0]).not.toHaveProperty("view");
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
+    expect(AgentsArea.mock.calls.at(-1)?.[0]).toMatchObject({
+      tab,
+      searchParams: { tab: raw },
+    });
   });
 
-  it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
+  it("the agent page hands the agent, the tab, the cursor and the rows the URL names to Agent", async () => {
     await expectBodyTitled(
       await AGENT(),
-      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
+      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3", rows: "25" }),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -800,25 +852,33 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "incidents",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(await AGENT(), routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
+      rows: null,
     });
     await expectPageTitle(
       await AGENTS(),
       routeProps(SEGMENTS),
       title("agents"),
     );
-    expect(Agents.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
+    expect(AgentsArea.mock.calls.at(-1)?.[0]).toMatchObject({
+      tab: "agents",
+      searchParams: {},
+    });
   });
 
-  it("the agent tab page hands the tab its path names, and the cursor, to Agent", async () => {
+  it("the agent tab page hands the tab its path names, the cursor and the rows to Agent", async () => {
     const page = await AGENT_TAB();
     await expectBodyTitled(
       page,
-      routeProps({ ...SEGMENTS, tab: "activity" }, { cursor: "c3" }),
+      routeProps(
+        { ...SEGMENTS, tab: "activity" },
+        { cursor: "c3", rows: "25" },
+      ),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -828,6 +888,7 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "activity",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(
       page,
@@ -837,6 +898,7 @@ describe("the Agents pages", () => {
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: "identity",
       cursor: null,
+      rows: null,
     });
   });
 });
@@ -918,7 +980,8 @@ async function expectOrganizationRoute<P extends object>(
   expect(metadata.title).toBe(name);
   const container = await renderPage(await page.default(props));
   expect(container.querySelectorAll("h1")).toHaveLength(0);
-  expect(container.querySelector("main#main")).not.toBeNull();
+  // The shell frame holds main#main; the route adds no landmark (ADR-227).
+  expect(container.querySelector("main")).toBeNull();
 }
 
 describe("Organization", () => {

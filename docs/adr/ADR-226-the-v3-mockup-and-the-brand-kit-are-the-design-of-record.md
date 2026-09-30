@@ -49,16 +49,27 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-macanderson/oxagen-roadmap @ 8a4c0a45e6e2a816c3e1475687b0b2a440dce8b2, path mockups/
+macanderson/oxagen-roadmap @ 41cb720584b4829f213eb5910f634452ea21f53a, path mockups/
 ```
 
-This is the last `main` commit that touched `mockups/` when this ADR was
-written (roadmap #261, 2026-09-29 01:41 UTC). Every other file that sends an
-agent to the mockup points here instead of repeating the SHA.
+This is the last `main` commit that touched `mockups/` (roadmap #273,
+2026-09-29 23:11 UTC). Every other file that sends an agent to the mockup
+points here instead of repeating the SHA.
+
+Amended 2026-09-29: the pin moves from roadmap #261 (`8a4c0a45`) to roadmap
+#267. The new commit fills light-theme popups at 55% over a 16px blur, as
+ADR-221 §3 now states. The dark theme keeps 70% over 40px.
+
+Amended 2026-09-29 (later): the pin moves from roadmap #267 (`ce2f80de`) to
+roadmap #273 (`41cb7205`). The new commit folds the Tools area into Agents:
+one Agents header over five tabs (Agents, Tool servers, Policies, Runtimes,
+Off switches), with Connect an agent as its one primary action, and a server
+page at `agents/<server>`. It also carries the Agent work phase pages of
+roadmap #269 and #270.
 
 To read a file at the pin, run
-`git -C ../oxagen-roadmap show 8a4c0a45e6e2a816c3e1475687b0b2a440dce8b2:mockups/README.md`,
-or open `https://github.com/macanderson/oxagen-roadmap/tree/8a4c0a45e6e2a816c3e1475687b0b2a440dce8b2/mockups`.
+`git -C ../oxagen-roadmap show 41cb720584b4829f213eb5910f634452ea21f53a:mockups/README.md`,
+or open `https://github.com/macanderson/oxagen-roadmap/tree/41cb720584b4829f213eb5910f634452ea21f53a/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit
@@ -69,9 +80,15 @@ brings. It needs no new ADR.
 The kit wins on tokens, type, and marks. The mockup wins on layout and
 behavior.
 
-- **Type.** The app keeps the kit's faces (Space Grotesk, Geist, Monaspace
-  Neon) until the kit adopts Aeonik. A slice ports the mockup's type roles
-  (which text is display, body, or mono) and draws them with the kit's fonts.
+- **Type.** The app keeps the kit's faces until the kit adopts Aeonik. Geist
+  sets every heading and every line of text, and Monaspace Neon sets code.
+  Space Grotesk sets only the Oxagen and stella wordmarks. A slice ports the
+  mockup's type roles (which text is body or mono) and draws a display role in
+  Geist. The amendment of 2026-09-29 below has the reason.
+- **Copy.** The mockup sets layout and behavior, not wording. A heading,
+  button, caption, or hint ported from the mockup follows `CLAUDE.md` under
+  Labels and headings, and a label that breaks that rule is renamed in the
+  port.
 - **Colour.** A mockup hex that the kit has no token for is not copied. The
   slice uses the nearest kit token, or asks the kit for a new one.
 - **Radius and control sizes.** ADR-221's `base-maia` scale stays. The mockup
@@ -165,3 +182,23 @@ the same line.
   `font-family` written in the app, so the kit has to ship it first.
 - ADR-130, ADR-132, and ADR-170 are superseded. Their rules that still hold are
   restated above.
+
+## Amendment of 2026-09-29: one face and plain labels
+
+Mac set two rules on 2026-09-29 after the Steering page shipped two headings
+in Space Grotesk and two labels ported from the mockup, "Everything written
+down" and "Who receives it".
+
+- **One face.** Space Grotesk is banned everywhere except the Oxagen wordmark,
+  the stella wordmark in the assistant launcher, and line 1 of the oxagen.sh
+  hero. Geist sets every other heading and every line of text in every app.
+  The kit still maps h1 to h3 to Space Grotesk in `house-tailwind.css`, which
+  the sync keeps byte-identical. `packages/ui/src/styles/globals.css` therefore
+  sets `--font-display` to Geist in an `@theme` block after the kit's import,
+  and keeps Space Grotesk under `--font-wordmark` for the marks alone. INV-32
+  fails when a file under `apps/app/src` names `--ox-font-display`,
+  `--font-wordmark`, or Space Grotesk outside a comment. The kit should adopt
+  the same rule. Until it does, this override is the app's record.
+- **Plain labels.** The mockup's wording is not the design of record. The rule
+  in `CLAUDE.md` under Labels and headings governs every heading, button,
+  caption, and hint, including one a slice ports from the mockup.

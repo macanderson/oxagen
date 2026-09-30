@@ -3,7 +3,7 @@
 // over every page and action in the mockup's groups, and, inside a workspace,
 // what `search_tools` answers for the query (runs, agents, approvals and the
 // tools on the belt). The search is a governed read through the kernel, and
-// the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘5 open the five
+// the footer says so. Arrow keys move, Enter opens, ⌘1 to ⌘4 open the four
 // pages that carry them, Esc closes. On a phone it rises from the bottom edge
 // as a sheet (src/ui/phone.css).
 //
@@ -53,8 +53,8 @@ import { SheetHandle } from "@/ui/sheet-dialog";
 // saturated copy of the page, the 4xl corner and the faint ring the menus
 // wear. On a phone phone.css turns it into a sheet and keeps the top corners.
 const commandSurface =
-  "isolate overflow-hidden rounded-4xl bg-dialog-bg/70 text-dialog-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
-  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "isolate overflow-hidden rounded-4xl bg-dialog-bg/55 dark:bg-dialog-bg/70 text-dialog-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /** How long typing rests before the query goes to `search_tools`. */
 const SEARCH_DEBOUNCE_MS = 150;
@@ -206,7 +206,10 @@ function CommandPalette({
       <SheetHandle />
       <Dialog.Title className="sr-only">{t("commands.title")}</Dialog.Title>
       <div className="flex items-center gap-2.5 border-b border-foreground/5 px-4 py-3">
-        <MagnifyingGlassIcon aria-hidden="true" className="size-4 text-muted-foreground" />
+        <MagnifyingGlassIcon
+          aria-hidden="true"
+          className="size-4 text-muted-foreground"
+        />
         <input
           ref={inputRef}
           role="combobox"
@@ -279,9 +282,7 @@ function CommandPalette({
               >
                 <span>{t(`commands.groups.${group}.label`)}</span>
                 {notes[group] === undefined ? null : (
-                  <span className="font-normal">
-                    {notes[group]}
-                  </span>
+                  <span className="font-normal">{notes[group]}</span>
                 )}
               </div>
               {items.map((c) => {

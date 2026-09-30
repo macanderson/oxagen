@@ -460,7 +460,7 @@ function request(m: Model): Section {
   return {
     id: "request",
     title: "Request path",
-    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a tenant table without the four GUCs set, except through the audited withSystemDb bypass, and nothing reaches a handler without passing the kernel's gates.",
+    lede: "Identity → tenant scope → capability → row-level security. Nothing reaches a tenant table without the four GUCs set, except through the deliberate withSystemDb bypass, and nothing reaches a handler without passing the kernel's gates.",
     body:
       flowsIn("request") +
       `<h3>Auth tiers in apps/api</h3><p>Middleware registered per sub-router in <code>apps/api/src/app.ts</code>, in the order Hono runs it.</p>` +
@@ -1020,10 +1020,10 @@ export function renderSite(m: Model): SitePage {
   const head = `<title>Oxagen Architecture Atlas</title>
 <meta name="description" content="Generated architecture atlas of the Oxagen monorepo: datastores, schemas, request paths, kernel gates, evidence ledger, billing, deployment.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Space+Grotesk:wght@600&display=swap">
 <style>${CSS}</style>`;
   const body = `<div class="shell">
-<nav class="rail" aria-label="Sections"><div class="brand"><span class="mark" aria-hidden="true"></span><span>Oxagen</span><small>architecture atlas</small></div>${nav}<div class="railfoot">Generated from the tree · <a href="#about">how</a></div></nav>
+<nav class="rail" aria-label="Sections"><div class="brand"><span class="mark" aria-hidden="true"></span><span class="wordmark">Oxagen</span><small>architecture atlas</small></div>${nav}<div class="railfoot">Generated from the tree · <a href="#about">how</a></div></nav>
 <main>
 <header class="hero"><p class="eyebrow">Internal engineering docs</p><h1>Oxagen Architecture Atlas</h1><p class="herosub">What the monorepo is made of and how a request, a run, a governed action and a record move through it. Every figure is either generated from a manifest or cites the source it depicts.</p></header>
 ${main}
@@ -1039,7 +1039,7 @@ const CSS = `
 :root[data-theme="dark"]{--ground:#10100F;--panel:#181715;--raised:#201F1C;--line:#292722;--rule:#34322D;--ink:#F2EEE5;--ink-2:#D9D4C8;--muted:#9B958A;--faint:#6B665C;--accent:#D6962C;--accent-ink:#F1C364;--fig-ground:#10100F;--fig-panel:#151412;--fig-head:rgba(214,150,44,.14);--fig-group:rgba(214,150,44,.05);--fig-note:rgba(214,150,44,.10);--pill:#242220;--heat:214,150,44;color-scheme:dark}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:16px}
-body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 "Space Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.55 "Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 a{color:var(--accent-ink)}
 code,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;font-size:.86em}
@@ -1050,6 +1050,7 @@ code{background:var(--panel);padding:.08em .35em;border-radius:4px;color:var(--i
 .rail a:hover,.rail a.on{background:var(--panel);color:var(--ink)}
 .rail a.on{box-shadow:inset 3px 0 0 var(--accent)}
 .brand{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center;margin:0 8px 18px;font-weight:600;letter-spacing:.01em}
+.brand .wordmark{font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif}
 .brand small{grid-column:2;font-weight:400;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
 .mark{width:14px;height:14px;border-radius:3px;background:var(--accent);transform:rotate(45deg) scale(.8)}
 .railfoot{margin-top:auto;padding:14px 8px 0;font-size:12px;color:var(--muted)}
@@ -1072,7 +1073,7 @@ p{max-width:70ch}
 .figure{margin:22px 0 30px}
 .figure h3{margin:0 0 10px}
 .figwrap{overflow-x:auto;padding:14px 10px;border:1px solid var(--line);border-radius:10px;background:var(--fig-ground)}
-.fig{display:block;width:100%;max-width:100%;height:auto;color:var(--ink);font-family:"Space Grotesk",ui-sans-serif,system-ui,sans-serif}
+.fig{display:block;width:100%;max-width:100%;height:auto;color:var(--ink);font-family:"Geist",ui-sans-serif,system-ui,sans-serif}
 .fig .sub,.fig .ctype,.fig .detail,.fig .group-label,.fig .num,.fig .exit,.fig .ext,.fig .badge{fill:var(--muted)}
 .fig .elabel{fill:var(--ink-2)}
 .fig .pk{font-weight:600}

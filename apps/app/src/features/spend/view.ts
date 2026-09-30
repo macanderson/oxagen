@@ -1,27 +1,30 @@
 // Which Spend view a request asks for (#2962, #2963): a tab, and with it
-// either one key's drill on the operator, agent and tool tabs or one finding's
-// evidence on the Findings tab. The tab and the drill are path segments
-// (`/spend/<tab>/<drill>`, the mockup's route); the evidence is a dialog over
-// the Findings tab, so the finding is a query value. A segment the page does
-// not know is a 404 rather than a page that guesses.
+// either one operator's, agent's, or tool's drill, one finding's evidence on
+// the Findings tab, or the grouping on the Month tab. The tab and the drill
+// are path segments (`/spend/<tab>/<drill>`, the mockup's route).
+// The evidence is a dialog over the Findings tab and the grouping is a choice
+// within the Month tab, so both are query values. A segment the page does not
+// know is a 404 rather than a page that guesses.
 import { type DayRange, SpendDrillKind } from "@/data/contracts/spend";
 import { firstParam } from "@/shared/safe-path";
 import { isFindingId } from "./forms";
 
 /**
- * The tabs in the mockup's order, Findings to Budgets. The three after them
- * are this build's own and are not in the design: By task and By cost center
- * (ADR-142), and Pricing, the book every figure above was priced against with
- * the models it cannot price, which is why some of those figures read "not
- * recorded".
+ * Month first, the v3 design's landing tab (ADR-226), then the earlier
+ * design's tabs that Month does not replace, Findings to Budgets. Month groups
+ * by operator, agent, and model, so those three tabs and Coaching are gone
+ * (#2962). A drill still opens for one operator, agent, or tool: a Month row
+ * grouped by agent or operator links its drill, as does the operator ranking
+ * on Findings, and By tool links a tool's. The three after
+ * Budgets are this build's own and are not in either design: By task and By
+ * cost center (ADR-142), and Pricing, the book every figure above was priced
+ * against with the models it cannot price, which is why some of those figures
+ * read "not recorded".
  */
 export const SPEND_TABS = [
+  "month",
   "findings",
   "tokens",
-  "coaching",
-  "operator",
-  "agent",
-  "model",
   "tool",
   "waste",
   "budgets",
@@ -31,10 +34,28 @@ export const SPEND_TABS = [
 ] as const;
 export type SpendTab = (typeof SPEND_TABS)[number];
 
+/**
+ * The groupings the Month tab offers, the first one the default. The design's
+ * By work item is not here: no run records the work item it served (#2962).
+ */
+export const SPEND_MONTH_BY = [
+  "agent",
+  "operator",
+  "model",
+  "mcp_server",
+] as const;
+export type SpendMonthBy = (typeof SPEND_MONTH_BY)[number];
+
 export type SpendView =
+  /** The month's spend, grouped one way. */
+  | { tab: "month"; drill: null; finding: null; by: SpendMonthBy }
   /** The Findings section, with one finding's evidence open or none. */
   | { tab: "findings"; drill: null; finding: string | null }
-  | { tab: Exclude<SpendTab, "findings">; drill: null; finding: null }
+  | {
+      tab: Exclude<SpendTab, "month" | "findings">;
+      drill: null;
+      finding: null;
+    }
   | { tab: SpendDrillKind; drill: string; finding: null };
 
 /** The workspace a link on the page points into. */
@@ -61,21 +82,28 @@ function isTab(value: string | undefined): value is SpendTab {
   return SPEND_TABS.some((tab) => tab === value);
 }
 
+function monthBy(value: string | undefined): SpendMonthBy {
+  return SPEND_MONTH_BY.find((by) => by === value) ?? "agent";
+}
+
 /**
  * The view the path segments after `/spend` name, or null for a path that
  * names none (the route answers 404). `finding` is the query value that opens
- * one finding's evidence over the Findings tab.
+ * one finding's evidence over the Findings tab, and `by` the Month tab's
+ * grouping; a grouping the tab does not offer reads as the default.
+ *
+ * A drill is its kind and a key whether or not the kind is still a tab, so a
+ * link to one key's drill outlives the tab it was first reached from.
  */
 export function parseSpendView(
   segments: readonly string[] | undefined,
   finding?: string | string[],
+  by?: string | string[],
 ): SpendView | null {
   const [raw, drill, ...rest] = segments ?? [];
   if (rest.length > 0) return null;
-  const tab = raw === undefined ? "findings" : raw;
-  if (!isTab(tab)) return null;
   if (drill !== undefined) {
-    const kind = SpendDrillKind.safeParse(tab);
+    const kind = SpendDrillKind.safeParse(raw);
     if (
       !kind.success ||
       drill.length === 0 ||
@@ -86,12 +114,29 @@ export function parseSpendView(
     }
     return { tab: kind.data, drill, finding: null };
   }
-  if (tab === "findings") {
-    const id = firstParam(finding);
+  // A bare path with a finding is a link saved when Findings was the landing
+  // tab, so it still opens that finding's evidence.
+  const saved = firstParam(finding);
+  const tab =
+    raw !== undefined
+      ? raw
+      : saved !== undefined && isFindingId(saved)
+        ? "findings"
+        : "month";
+  if (!isTab(tab)) return null;
+  if (tab === "month") {
     return {
       tab,
       drill: null,
-      finding: id !== undefined && isFindingId(id) ? id : null,
+      finding: null,
+      by: monthBy(firstParam(by)),
+    };
+  }
+  if (tab === "findings") {
+    return {
+      tab,
+      drill: null,
+      finding: saved !== undefined && isFindingId(saved) ? saved : null,
     };
   }
   return { tab, drill: null, finding: null };

@@ -23,6 +23,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 import { runIssue, runIssues } from "./issues.builders";
 import {
   runDetail,
@@ -299,20 +300,23 @@ describe("the Issues panel", () => {
         }),
       ),
     });
+    const user = userEvent.setup();
     const filter = screen.getByRole("combobox", { name: "Filter by status" });
-    expect(
-      within(filter)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["All · Status", "open", "closed", "in progress", "blocked"]);
-    await userEvent.selectOptions(filter, "closed");
+    expect(await optionNames(user, filter)).toEqual([
+      "All (Status)",
+      "open",
+      "closed",
+      "in progress",
+      "blocked",
+    ]);
+    await pickOption(user, filter, "closed");
     expect(visible()).toEqual(["a-intel/platform#490"]);
-    await userEvent.selectOptions(filter, "open");
+    await pickOption(user, filter, "open");
     expect(visible()).toEqual(["a-intel/platform#482", "a-intel/platform#480"]);
-    await userEvent.selectOptions(filter, "blocked");
+    await pickOption(user, filter, "blocked");
     expect(screen.queryAllByTestId("run-issue")).toHaveLength(0);
     expect(screen.getByText("No issue has this status.")).toBeTruthy();
-    await userEvent.selectOptions(filter, "");
+    await pickOption(user, filter, "All (Status)");
     expect(visible()).toHaveLength(4);
   });
 
@@ -566,6 +570,16 @@ describe("Linked work", () => {
     if (captured === undefined) throw new Error("a captured diff");
     expect(within(captured).getByText("patch retained")).toBeTruthy();
     expect(within(captured).getByRole("link", { name: "fr 31" })).toBeTruthy();
+    // The short digest carries the whole one for its hover card (#4692). The
+    // pull request's patch has a digest of its own, so the test names the
+    // captured diff's digest rather than any sha256.
+    const [diff] = runWork().diffs;
+    if (diff?.digest == null) throw new Error("a captured diff's digest");
+    const digest = captured.querySelector("code");
+    expect(digest).toHaveAttribute("data-truncate", diff.digest);
+    expect(digest).toHaveTextContent(`sha256:${"9".repeat(12)}…`);
+    expect(digest?.textContent).not.toContain(diff.digest);
+    expect(digest).not.toHaveAttribute("title");
   });
 
   it("counts the inferred rows against the total, and none is inferred", async () => {
@@ -666,7 +680,7 @@ describe("Linked work", () => {
     const [repo] = await screen.findAllByTestId("run-linked-repository");
     if (repo === undefined) throw new Error("a repository");
     expect(
-      within(repo).getByText("named by a pull request, no checkout recorded"),
+      within(repo).getByText("named by a pull request with no checkout recorded"),
     ).toBeTruthy();
     expect(within(repo).getByText("commit match")).toBeTruthy();
     expect(within(repo).queryByText("observed")).toBeNull();
@@ -833,7 +847,7 @@ describe("Linked work", () => {
     expect(files.queryByText(/as the recorder reported them/)).toBeNull();
     const [captured] = files.getAllByTestId("run-linked-captured");
     if (captured === undefined) throw new Error("a captured diff");
-    expect(captured).toHaveTextContent("digest recorded, bytes not retained");
+    expect(captured).toHaveTextContent("digest recorded without bytes");
     expect(captured).toHaveTextContent("binary files skipped, over 1 MB");
     // No digest was recorded, so no digest is printed.
     expect(captured.querySelector("code")).toBeNull();

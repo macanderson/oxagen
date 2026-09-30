@@ -1161,6 +1161,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repairSteeringRepoHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "retry_steering_repo_provision",
+    async () =>
+      (await import("./steering_repo.provision.retry"))
+        .retrySteeringRepoProvisionHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "import_workspace_steering",
     async () =>
       (await import("./steering_repo.import"))
@@ -1575,6 +1581,25 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/import/review.open"))
         .openStudioReviewHandler as CapabilityHandlerFn,
   );
+  // Studio's discovery progress and Tools tab (lane M10, #4682).
+  registerHandler(
+    "start_studio_discovery",
+    async () =>
+      (await import("./mcp-studio/discovery/discovery.start"))
+        .startStudioDiscoveryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_studio_discovery",
+    async () =>
+      (await import("./mcp-studio/discovery/discovery.get"))
+        .getStudioDiscoveryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_studio_tools",
+    async () =>
+      (await import("./mcp-studio/discovery/tools.list"))
+        .listStudioToolsHandler as CapabilityHandlerFn,
+  );
   // M12 (#4685): relays for servers and APIs in a private network.
   registerHandler(
     "create_relay",
@@ -1587,6 +1612,30 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./mcp-studio/relays/revoke"))
         .toolRelayRevokeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_mcp_credential",
+    async () =>
+      (await import("./mcp-studio/credentials/set"))
+        .setMcpCredentialHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_studio_findings",
+    async () =>
+      (await import("./mcp-studio/import/findings.list"))
+        .listStudioFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "draft_studio_description",
+    async () =>
+      (await import("./mcp-studio/import/description.draft"))
+        .draftStudioDescriptionHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "try_studio_tool",
+    async () =>
+      (await import("./mcp-studio/import/tool.try.ports"))
+        .tryStudioToolHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "fetch_commands",

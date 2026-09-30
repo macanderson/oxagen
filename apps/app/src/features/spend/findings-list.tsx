@@ -12,8 +12,9 @@ import { useState } from "react";
 import { byMicrosDescending } from "@/data/contracts/money";
 import type { SpendFinding } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, inputBase, mono, panel } from "@/ui/control-styles";
+import { buttonSecondary, mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { ListSelect } from "@/ui/list-select";
 import { Money } from "@/ui/money";
 import {
   formatCount,
@@ -37,7 +38,8 @@ type Sort = (typeof SORTS)[number];
 
 type Ranked = { finding: SpendFinding; rank: number; share: number | null };
 
-function Select<T extends string | number>({
+// A filter is the shared list select (`ui/list-select.tsx`).
+function Filter<T extends string>({
   id,
   label,
   value,
@@ -51,29 +53,21 @@ function Select<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <label
-      htmlFor={id}
-      className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
-    >
-      {label}
-      <select
-        id={id}
-        value={String(value)}
-        onChange={(event) => {
-          const next = options.find(
-            (option) => String(option.value) === event.target.value,
-          );
-          if (next !== undefined) onChange(next.value);
+    <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+      <span id={`${id}-label`}>{label}</span>
+      <ListSelect
+        items={options}
+        value={value}
+        onValue={(next) => {
+          const picked = options.find((option) => option.value === next);
+          if (picked !== undefined) onChange(picked.value);
         }}
-        className={`${inputBase} w-auto py-1`}
-      >
-        {options.map((option) => (
-          <option key={String(option.value)} value={String(option.value)}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+        id={id}
+        aria-labelledby={`${id}-label`}
+        size="sm"
+        className="text-[12px] max-md:min-h-11 max-md:text-base"
+      />
+    </span>
   );
 }
 
@@ -257,7 +251,7 @@ export function FindingsList({
         aria-label={t("filters.label")}
         className={`${panel} flex flex-wrap items-center gap-3 px-3 py-2.5`}
       >
-        <Select<Level>
+        <Filter<Level>
           id="spend-findings-level"
           label={t("filters.level")}
           value={level}
@@ -267,7 +261,7 @@ export function FindingsList({
           }))}
           onChange={reset(setLevel)}
         />
-        <Select<Confidence>
+        <Filter<Confidence>
           id="spend-findings-confidence"
           label={t("filters.confidence")}
           value={confidence}
@@ -278,7 +272,7 @@ export function FindingsList({
           }))}
           onChange={reset(setConfidence)}
         />
-        <Select<Sort>
+        <Filter<Sort>
           id="spend-findings-sort"
           label={t("filters.sort")}
           value={sort}

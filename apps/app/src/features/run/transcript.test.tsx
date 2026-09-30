@@ -365,21 +365,32 @@ describe("the rows", () => {
     expect(you).not.toHaveTextContent("first prompt");
     fireEvent.click(within(you).getByRole("button", { name: "Show in full" }));
     expect(you).toHaveTextContent(
-      "Marcus Bell · operatortask a-intel/platform#482first prompt",
+      "Marcus Bell (operator)task a-intel/platform#482first prompt",
     );
   });
 
   it("leads each call with the tool's short name and its arguments on the first line", () => {
     renderSection();
     const list = toolRow("github__list_pull_requests");
-    expect(within(list).getByTestId("tx-tool-arg")).toHaveTextContent(
+    const arg = within(list).getByTestId("tx-tool-arg");
+    expect(arg).toHaveTextContent("a-intel/platform · state closed · base main");
+    // A cut argument shows whole in the hover card, to focus too (#4692).
+    // This one shortens no path, so the card holds the line the row prints
+    // and opens only on overflow.
+    expect(arg).toHaveAttribute(
+      "data-truncate",
       "a-intel/platform · state closed · base main",
     );
+    expect(arg).not.toHaveAttribute("title");
     expect(list).toHaveTextContent("1.1 s");
     expect(list).toHaveTextContent("7 lines");
-    expect(
-      within(toolRow("Read")).getByTestId("tx-tool-arg"),
-    ).toHaveTextContent("…/platform/CHANGELOG.md");
+    const read = within(toolRow("Read")).getByTestId("tx-tool-arg");
+    // The row shortens the path, and the card shows it in full.
+    expect(read).toHaveTextContent("…/platform/CHANGELOG.md");
+    expect(read).toHaveAttribute(
+      "data-truncate",
+      "/Users/mbell/src/platform/CHANGELOG.md",
+    );
     // No row reads as the model frame that carried the call.
     const names = screen
       .getAllByTestId("tx-tool-name")
@@ -694,7 +705,7 @@ describe("the rows", () => {
     fireEvent.click(screen.getByRole("button", { name: "collapse thinking" }));
     expect(thought()?.tagName).toBe("SPAN");
     // Its own fold opens the one thought.
-    fireEvent.click(screen.getByRole("button", { name: "thinking · 2 lines" }));
+    fireEvent.click(screen.getByRole("button", { name: "2 lines of thinking" }));
     expect(thought()?.tagName).toBe("DIV");
   });
 
@@ -950,10 +961,12 @@ describe("event rows", () => {
     // The skin draws the call's glyph; only a failure's ✗ is in the text.
     expect(notice).not.toHaveTextContent("✗");
     expect(within(notice).getByText("notification")).toBeTruthy();
-    expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
-      "title",
+    const eventLine = within(notice).getByTestId("tx-event-line");
+    expect(eventLine).toHaveAttribute(
+      "data-truncate",
       "Build finished all 42 tests passed",
     );
+    expect(eventLine).not.toHaveAttribute("title");
     expect(notice.querySelector("pre")).toBeNull();
     const fold = within(notice).getByRole("button", { name: "Show in full" });
     expect(fold).toHaveAttribute("aria-expanded", "false");

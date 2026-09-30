@@ -124,13 +124,20 @@ Never put `--` before the filename. Each build module has a co-located
   it clones a page. `vercel.json` redirects the human-facing
   `/research/deterministic-systems-optimizations-for-ai-agents` path to
   `/read?e=page-flip-reader`; there is no `index.html` at that path.
-- `fonts/`: Space Grotesk at 400/500/600/700 (the house typeface, vendored
-  from the brand kit by `node tools/scripts/sync-brand-assets.mjs`), plus
-  Literata variable serif (normal + italic, latin subset) which only the book
-  reader offers as a long-form reading option, all cached immutable for a
-  year. The Aeonik binaries this replaced were removed with the house system;
-  Space Grotesk is what the wordmarks are cut from, so the running text and the
-  logo are the same design.
+- `fonts/`: the house faces (Geist, Monaspace Neon, and Space Grotesk at
+  400/500/600/700), vendored from the brand kit by
+  `node tools/scripts/sync-brand-assets.mjs`, plus Literata variable serif
+  (normal and italic, latin subset), which only the book reader offers as a
+  long-form reading option. All of them are cached immutable for a year. The
+  Aeonik binaries they replaced were removed with the house system.
+  Geist sets every heading and all running text. Monaspace Neon sets code.
+  Space Grotesk sets two things only: the wordmark when it is text rather
+  than an SVG, and the first line of a hero headline. Mac set that rule on
+  2026-09-29. Mark hero line 1 with the `hero-line-1` class. In a two-line
+  hero it goes on a span before the `<br>`, so line 2 stays in Geist. In a
+  one-line hero it goes on the `<h1>`. A page preloads only the Space Grotesk
+  weight its hero line or text wordmark uses, and a page with neither
+  preloads none.
 - `favicon.svg`: the house `Ox` lettermark: the word's own first two letters
   in Space Grotesk, ONE colour, adaptive to the tab's colour scheme. It is
   never the wordmark and never a lockup, and it never carries the gold. The
@@ -153,7 +160,7 @@ Never put `--` before the filename. Each build module has a co-located
 - `assets/blog.css`: the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- `scripts/fonts/`: Space Grotesk, the variable file the house kit ships
+- `scripts/fonts/`: Geist, the variable file Google Fonts ships
   (OFL), used only at build time to set the text on generated images as
   outlines. Not published.
 

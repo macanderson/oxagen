@@ -76,7 +76,10 @@ describe("the spine", () => {
       ),
     );
     const spine = screen.getByTestId("run-outputs");
-    expect(within(spine).getByText("src/cut.ts")).toBeTruthy();
+    // A long name ends in an ellipsis and shows whole in the hover card (#4692).
+    const name = within(spine).getByText("src/cut.ts");
+    expect(name).toHaveAttribute("data-truncate", "");
+    expect(name).not.toHaveAttribute("title");
     expect(within(spine).getByText("9f3c1de")).toBeTruthy();
     expect(within(spine).getByText("created")).toBeTruthy();
     expect(within(spine).getByText("pushed")).toBeTruthy();
@@ -300,7 +303,7 @@ describe("the spine", () => {
     renderSpine(readError("frame_store_unreachable", 502));
     expect(screen.queryByTestId("run-outputs")).toBeNull();
     expect(screen.getByText(/frame_store_unreachable/).textContent).toContain(
-      "What this run produced",
+      "Run outputs",
     );
   });
 });

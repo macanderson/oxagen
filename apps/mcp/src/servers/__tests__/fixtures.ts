@@ -37,6 +37,7 @@ import type {
   ServedPorts,
   ServedRoute,
   ServedRun,
+  ServedTransport,
 } from "../types";
 
 export const HASH = `sha256:${"a".repeat(64)}`;
@@ -371,8 +372,8 @@ export interface PortOptions {
   /** The kill switch that stops a call. Defaults to none. */
   emergencyDeny?: (call: EmergencyCall) => Promise<EmergencyDeny | null>;
   credential?: (request: CredentialRequest) => Promise<ResolvedCredential>;
-  /** Replaces the Transport lookup, such as to throw for a route. */
-  transport?: (route: ServedRoute) => Transport;
+  /** Replaces the Transport lookup, such as to throw for a route or to refuse a call before the claim. */
+  transport?: (route: ServedRoute) => ServedTransport;
   local?: (call: LocalCall) => Promise<CallToolResult>;
   answer?: (kind: RequestKind) => SendResult;
   meter?: (event: MeterEvent) => Promise<void>;

@@ -139,7 +139,7 @@ describe("create", () => {
     expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
       SECRET,
     );
-    expect(panel).toHaveTextContent("CI runner · begins ox_3fa85f6457");
+    expect(panel).toHaveTextContent("CI runner (begins ox_3fa85f6457)");
     expect(panel).toHaveTextContent("This is the only time Oxagen shows it.");
     expect(router.replace).not.toHaveBeenCalled();
   });
@@ -445,6 +445,22 @@ describe("a key that may not be rotated", () => {
       "This key expired while the page was open. Rotating it would copy the expiry that ended it onto the replacement, so nothing was changed. Create a new key instead.",
     );
     expect(screen.queryByTestId("api-key-secret")).toBeNull();
+  });
+});
+
+// The key table clips a body cell unless the cell holds `[data-actions]`, so
+// Rotate and Revoke must share that one marked group. This file renders the
+// row actions alone, so it checks the mark and leaves the cell to the table.
+describe("the row actions", () => {
+  it("marks the row actions so the cell shows every button (#4674)", () => {
+    renderRow();
+    const group = screen
+      .getByRole("button", { name: "Rotate" })
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByRole("button", { name: "Revoke" }),
+    );
   });
 });
 

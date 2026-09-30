@@ -170,8 +170,9 @@ const proposalLine = (publicId: string) => `Proposal \`${publicId}\``;
 
 /**
  * Whether a PR body names this proposal. Every proposal on a lineage shares
- * the branch `context/<lineage>`, so an open PR found on it belongs to a
- * proposal only when the body open_context_pr wrote for that proposal says so.
+ * one branch, `steering/<lineage>` or `memory/<lineage>` for a memory, so an
+ * open PR found on it belongs to a proposal only when the body
+ * open_context_pr wrote for that proposal says so.
  */
 export function bodyNamesProposal(body: string, publicId: string): boolean {
   return body.includes(proposalLine(publicId));

@@ -1,7 +1,7 @@
 // test-support.ts: shared builders for the local-calls tests. Nothing in
 // production imports this file.
 import { generateKeyPairSync } from "node:crypto";
-import type { LaunchSpec } from "@oxagen/tacho/local-servers";
+import { deliverySchema, type Delivery, type LaunchSpec } from "@oxagen/tacho/local-servers";
 import type { MachineGroupReader, MachineScope } from "./machines";
 import { localCallSignerFromPem, type LocalCallSigner } from "./signer";
 
@@ -38,4 +38,9 @@ export function testSigner(): LocalCallSigner {
 /** A reader that puts each machine in the listed groups. */
 export function readerOf(groups: Record<string, readonly string[]>): MachineGroupReader {
   return { groupsOf: (_scope, machine) => Promise.resolve(groups[machine] ?? []) };
+}
+
+/** A delivery as a machine's cloud link reads it off the wire, parsed by tacho's own schema. */
+export function deliveryOffTheWire(text: string): Delivery {
+  return deliverySchema.parse(JSON.parse(text));
 }

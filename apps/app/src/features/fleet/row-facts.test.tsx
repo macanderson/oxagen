@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames } from "@/test/select";
 import {
   agentPage,
   approvalQueue,
@@ -239,9 +240,8 @@ describe("paused and compacted rows (#3835)", () => {
   // so the parked and sealed chips find them, not the facet.
   it("offers the record's statuses in the Status facet, not paused or compacted", async () => {
     await renderFleet(runs);
-    const options = within(screen.getByTestId("facet-status"))
-      .getAllByRole("option")
-      .map((o) => o.textContent);
+    const user = userEvent.setup();
+    const options = await optionNames(user, screen.getByTestId("facet-status"));
     expect(options).not.toContain("paused");
     expect(options).not.toContain("compacted");
     expect(options).toEqual(

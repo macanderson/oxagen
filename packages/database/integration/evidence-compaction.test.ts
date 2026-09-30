@@ -186,8 +186,15 @@ describe("agent.compact_sealed_attempt_events()", () => {
     const role = await sql<{ exists: boolean }[]>`
       SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') AS exists
     `;
+    // A superuser call would pass whether or not the grant and the definer
+    // body are right, so the proof needs the real role.
+    if (!role[0]?.exists) {
+      throw new Error(
+        "Frame compaction proof requires the migrated oxagen_app role",
+      );
+    }
     await sql.begin(async (tx) => {
-      if (role[0]?.exists) await tx.unsafe(`SET LOCAL ROLE oxagen_app`);
+      await tx.unsafe(`SET LOCAL ROLE oxagen_app`);
       await tx`SELECT agent.compact_sealed_attempt_events()`;
     });
 

@@ -896,7 +896,7 @@ describe("the workspace's main repository", () => {
   });
 
   // The steering repo provisioner binds its repository through a
-  // `github_steering` connection, and only the Oxagen Steering app can reach
+  // `github_steering` connection, and only the Oxagen GitHub App can reach
   // that repository. The read carries the installation id so the seam can
   // mint that app's token.
   describe("a steering head the provisioner bound", () => {
@@ -908,7 +908,7 @@ describe("the workspace's main repository", () => {
       connectorId: "github_steering",
     };
 
-    it("carries the Oxagen Steering installation id", async () => {
+    it("carries the Oxagen GitHub App installation id", async () => {
       db({
         bound: [
           {
@@ -975,7 +975,7 @@ describe("the GitHub seam's token for a provisioned steering repository", () => 
     steeringInstallationId: 4242,
   };
 
-  it("mints the Oxagen Steering token and never asks for the workspace's", async () => {
+  it("mints the Oxagen GitHub App token and never asks for the workspace's", async () => {
     const resolveToken = vi.fn(async () => "workspace-tok");
     const steeringToken = vi.fn(async () => "steering-tok");
     const client = vi.fn(() => fakeClient());
@@ -1007,10 +1007,10 @@ describe("the GitHub seam's token for a provisioned steering repository", () => 
     expect(client).toHaveBeenCalledWith("workspace-tok");
   });
 
-  it("refuses by default when the deployment has no Oxagen Steering app", async () => {
-    vi.stubEnv("OXAGEN_STEERING_APP_ID", "");
-    vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "");
-    vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "");
+  it("refuses by default when the deployment has no Oxagen GitHub App", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "");
+    vi.stubEnv("GITHUB_APP_SLUG", "");
     try {
       const resolveToken = vi.fn(async () => "workspace-tok");
       const gh = createSteeringGitHub({

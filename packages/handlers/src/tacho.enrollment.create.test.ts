@@ -1,5 +1,6 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { BUNDLE_FEATURE_STEERING_MANIFEST } from "@oxagen/tacho";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -29,7 +30,10 @@ vi.mock("./logger", () => ({
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
-import { clearSteeringCacheForTests } from "./lib/tacho-steering";
+import {
+  clearSteeringCacheForTests,
+  type SteeringRow,
+} from "./lib/tacho-steering";
 import {
   deviceKeyFingerprint,
   resolveAllowedEndpoints,
@@ -62,11 +66,67 @@ const PEM = generateKeyPairSync("ed25519")
   .privateKey.export({ type: "pkcs8", format: "pem" })
   .toString();
 
+/**
+ * Three active records, each joined to its pinned version as the steering
+ * read selects them: one `must`, one `should`, and one `info`. The assembler
+ * delivers `must` and `should`, and cuts `info` for its tier.
+ */
+const RECORDS: SteeringRow[] = [
+  {
+    slug: "no-force-push",
+    activatedAt: "2026-09-02T00:00:00.000Z",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    versionKind: "constraint",
+    versionForce: "must",
+    versionConstraintEffect: "forbid",
+    versionStatement: "Never force-push to the production branch.",
+    recordKind: "constraint",
+    recordForce: "must",
+    recordConstraintEffect: "forbid",
+    recordStatement: "Never force-push to the production branch.",
+  },
+  {
+    slug: "pr-for-main",
+    activatedAt: "2026-09-03T00:00:00.000Z",
+    createdAt: "2026-09-03T00:00:00.000Z",
+    versionKind: "rule",
+    versionForce: "should",
+    versionConstraintEffect: null,
+    versionStatement: "Open a pull request for every change to main.",
+    recordKind: "rule",
+    recordForce: "should",
+    recordConstraintEffect: null,
+    recordStatement: "Open a pull request for every change to main.",
+  },
+  {
+    slug: "deploy-region",
+    activatedAt: "2026-09-04T00:00:00.000Z",
+    createdAt: "2026-09-04T00:00:00.000Z",
+    versionKind: "fact",
+    versionForce: "info",
+    versionConstraintEffect: null,
+    versionStatement: "Production runs in us-east-1.",
+    recordKind: "fact",
+    recordForce: "info",
+    recordConstraintEffect: null,
+    recordStatement: "Production runs in us-east-1.",
+  },
+];
+const MUST_LINE =
+  "- Never force-push to the production branch. (constraint, forbid; no-force-push)";
+const SHOULD_LINE =
+  "- Open a pull request for every change to main. (rule; pr-for-main)";
+
+/** `sha256:<hex>` of the text's UTF-8 bytes, the form `text_digest` takes. */
+function sha256Digest(text: string): string {
+  return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
+}
+
 let inserted: Array<{ table: string; values: Record<string, unknown> }> = [];
 /** The API key a bearer request presented, as the operator lookup reads it. */
 let keyRow: Record<string, unknown> | undefined;
 
-function happyDb(clash = false): void {
+function happyDb(clash = false, records: SteeringRow[] = []): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -95,8 +155,11 @@ function happyDb(clash = false): void {
             findFirst: async () => ({ containmentRequired: false }),
           },
         },
-        // The steering read: a workspace with an empty ledger and no records,
-        // so the first bundle carries no `context.system`. The runtime reads
+        // The steering read: the ledger count over `context_promotions`
+        // (awaited straight off `.where()`) and `records` joined to their
+        // pinned versions (`.leftJoin().where()`). The fake counts one
+        // promotion per record, since a merge appends one. With no records
+        // the first bundle carries no `context.system`. The runtime reads
         // (ADR-198) go on to `.orderBy()` / `.limit()` and find no runtime,
         // so the operator path creates the one the hostname names.
         select: () => ({
@@ -114,12 +177,11 @@ function happyDb(clash = false): void {
               where: () => chain,
               orderBy: () => chain,
               limit: async () => [],
-              leftJoin: () => ({ where: async () => [] }),
+              leftJoin: () => ({ where: async () => records }),
               then: (resolve, reject) =>
-                Promise.resolve([{ ledger: 0, steering: 0 }]).then(
-                  resolve,
-                  reject,
-                ),
+                Promise.resolve([
+                  { ledger: records.length, steering: records.length },
+                ]).then(resolve, reject),
             };
             return chain;
           },
@@ -244,6 +306,52 @@ describe("create_tacho_enrollment", () => {
     expect(inserted.find((row) => row.table === "hosts")?.values).toMatchObject(
       { bundleFeatures: [] },
     );
+  });
+
+  // The witness for #2592 at enrollment (ADR-091): the host runs on the
+  // bundle signed here until its first poll, so a merged record has to be in
+  // this one too.
+  it("signs the workspace's must and should records into the first bundle's context.system, and leaves the info record out", async () => {
+    happyDb(false, RECORDS);
+    const output = await tachoEnrollmentCreateHandler(INPUT, CONTEXT);
+    expect(verifyBundle(output.policyBundle, output.bundlePublicKeyPem)).toBe(
+      true,
+    );
+    const { system, manifest } = output.policyBundle.context;
+    expect(system).toEqual(expect.any(String));
+    expect(system).toContain(MUST_LINE);
+    expect(system).toContain(SHOULD_LINE);
+    expect(system).not.toContain("us-east-1");
+    // This client advertised no manifest, and its parser is strict.
+    expect(manifest).toBeUndefined();
+  });
+
+  it("signs a null context.system when the workspace has no steering records", async () => {
+    happyDb();
+    const output = await tachoEnrollmentCreateHandler(
+      { ...INPUT, bundleFeatures: [BUNDLE_FEATURE_STEERING_MANIFEST] },
+      CONTEXT,
+    );
+    expect(output.policyBundle.context.system).toBeNull();
+    expect(output.policyBundle.context.manifest).toMatchObject({
+      included: 0,
+      text_digest: null,
+    });
+  });
+
+  it("signs a manifest whose text_digest is the digest of context.system, for a host that reads the manifest", async () => {
+    happyDb(false, RECORDS);
+    const output = await tachoEnrollmentCreateHandler(
+      { ...INPUT, bundleFeatures: [BUNDLE_FEATURE_STEERING_MANIFEST] },
+      CONTEXT,
+    );
+    const { system, manifest } = output.policyBundle.context;
+    expect(system).toEqual(expect.any(String));
+    expect(manifest?.text_digest).toBe(sha256Digest(system ?? ""));
+    expect(manifest).toMatchObject({ included: 2, cut: 1 });
+    expect(
+      manifest?.items.find((item) => item.id === "deploy-region"),
+    ).toMatchObject({ outcome: "cut", reason: "tier" });
   });
 
   it("suffixes the agent key when the hostname slug is taken", async () => {

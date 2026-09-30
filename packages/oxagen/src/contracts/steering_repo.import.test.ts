@@ -47,6 +47,15 @@ describe("import_workspace_steering contract", () => {
     expect(steeringRepoImport.input.parse(choices)).toEqual(choices);
   });
 
+  it("takes startFresh for a workspace on a legacy sources connection", () => {
+    expect(steeringRepoImport.input.parse({ startFresh: true })).toEqual({
+      startFresh: true,
+    });
+    expect(
+      steeringRepoImport.input.safeParse({ startFresh: "yes" }).success,
+    ).toBe(false);
+  });
+
   it("refuses an unknown kind, an unknown effect, and an unknown field", () => {
     expect(
       steeringRepoImport.input.safeParse({ ruleKinds: { a: "rule" } }).success,

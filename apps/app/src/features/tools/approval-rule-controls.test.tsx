@@ -54,7 +54,7 @@ function element(node: Element | null | undefined, what: string): HTMLElement {
 const formOf = (node: HTMLElement) => element(node.closest("form"), "form");
 
 const at = { org: "acme", ws: "core-platform" };
-const TAB = "/acme/core-platform/tools/policy";
+const TAB = "/acme/core-platform/agents?tab=policies";
 
 /** The fixture's rules by id: `small-refunds` is on with hours, `repeat-deploys` off with a standing window. */
 function rule(id: string) {
@@ -177,7 +177,7 @@ describe("RuleEditor › create", () => {
     expect(submittedTools()).toBe("deploy__release\nstaging__*");
     fill("Ceilings", "amount = 5000000");
     fill("Allow lists", "environment = staging, dev");
-    fill("Standing approval window, in minutes", "30");
+    fill("Standing approval window (minutes)", "30");
     fireEvent.click(screen.getByLabelText("Only during business hours"));
     fill("Time zone", "Europe/London");
     // The hours default to Monday to Friday; add Saturday.
@@ -461,12 +461,12 @@ describe("RuleEditor › edit", () => {
     withIntl(<RuleEditor at={at} existing={rule("repeat-deploys")} />);
     const dialog = await openEditor("rule-edit-repeat-deploys");
     expect(
-      screen.getByLabelText("Standing approval window, in minutes"),
+      screen.getByLabelText("Standing approval window (minutes)"),
     ).toHaveValue(60);
     expect(
       screen.getByLabelText("Only during business hours"),
     ).not.toBeChecked();
-    fill("Standing approval window, in minutes", "90");
+    fill("Standing approval window (minutes)", "90");
     fireEvent.submit(formOf(within(dialog).getByText("Save rule")));
     await waitFor(() => {
       expect(saveApprovalRule).toHaveBeenCalledWith(

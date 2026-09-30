@@ -124,7 +124,7 @@ describe("InvitationBody", () => {
     const card = screen.getByTestId("invite-card");
     expect(card).toHaveTextContent("Priya Natarajan");
     expect(card).toHaveTextContent(
-      "organization owner · invited you on 11 Sep 2026",
+      "Invited you as organization owner on 11 Sep 2026",
     );
     expect(screen.getByText("PN")).toHaveAttribute("aria-hidden", "true");
     const terms = [...card.querySelectorAll("dt")].map((dt) => dt.textContent);
@@ -191,7 +191,9 @@ describe("InvitationBody", () => {
         />,
       );
       const card = screen.getByTestId("invite-card");
-      expect(card).toHaveTextContent("invited you on 10 Sep 2026");
+      expect(card).toHaveTextContent(
+        "Invited you as organization owner on 10 Sep 2026",
+      );
       expect(card).toHaveTextContent("11 Sep 2026");
       expect(card).not.toHaveTextContent("12 Sep 2026");
     },

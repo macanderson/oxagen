@@ -399,7 +399,7 @@ export function MemberRowActions({
     );
   if (!allowed) {
     return (
-      <div className="flex items-center gap-2 max-md:flex-wrap">
+      <div data-actions="" className="flex items-center gap-2 max-md:flex-wrap">
         {open}
         <p
           data-testid="member-actions-denied"
@@ -411,7 +411,7 @@ export function MemberRowActions({
     );
   }
   return (
-    <div className="flex gap-2 max-md:flex-wrap">
+    <div data-actions="" className="flex gap-2 max-md:flex-wrap">
       {open}
       <ChangeRole
         org={org}

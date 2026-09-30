@@ -15,8 +15,9 @@
 // name the source offered on the last read, so Studio can show the current
 // tools from mcp.tool_snapshots without the ones the source dropped. The row
 // also keeps the source fields the push webhook needs to find the servers a
-// push to a definition repository touches. A stored error never carries a
-// credential.
+// push to a definition repository touches, and the registry name and version
+// the hourly sweep compares with the synced catalog. A stored error never
+// carries a credential.
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -96,6 +97,13 @@ export const mcpServerDiscoveries = mcpSchema.table(
     upstreamDigest: text("upstream_digest"),
     /** The newest version the registry lists, for a registry server. */
     latestVersion: text("latest_version"),
+    /**
+     * A registry server's `source.server`, the name the catalog lists it by.
+     * The hourly sweep matches it against mcp.catalog_servers.
+     */
+    sourceRegistryName: text("source_registry_name"),
+    /** A registry server's `source.version` on the steering repository's main. */
+    sourceVersion: text("source_version"),
     prNumber: integer("pr_number"),
     prUrl: text("pr_url"),
     prBranch: text("pr_branch"),

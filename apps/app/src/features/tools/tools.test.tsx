@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-// The Tools page (mockup `tools.md`) on a fake DataSource: the header and its
-// one gold action, the five tabs as path segments with the counts the record
-// can stand behind, the page's not-loaded states replacing the whole body, and
-// the Tools, Toolbelts, Providers and Kill switches tabs. The Policy tab has
-// its own suite (policy.test.tsx). Every element with no store behind it is
-// asserted to say so and to carry the issue that owns the store. axe checks
-// the state each test ends in (INV-26).
+// The Tools views (mockup `tools.md`), now tabs of the Agents page, on a fake
+// DataSource: the header actions they add to the Agents header, the counts
+// they hand its tab strip, the Tool servers views row with the counts the
+// record can stand behind, a body's not-loaded states replacing that body, and
+// the registry, Toolbelts, Tool servers and Off switches bodies. The Policies
+// body has its own suite (policy.test.tsx), and the Agents page's header and
+// strip theirs (features/agents/area.test.tsx). Every element with no store
+// behind it is asserted to say so and to carry the issue that owns the store.
+// axe checks the state each test ends in (INV-26).
 import {
   cleanup,
   fireEvent,
@@ -43,6 +45,14 @@ const { choices } = vi.hoisted(() => {
     },
   };
 });
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("@/features/shell/client", () => ({
   ...choices,
   openApprovals: vi.fn(),
@@ -83,7 +93,9 @@ vi.mock("./provider-auth-actions", () => ({
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { Tools, ToolsLoading } = await import("./tools");
+const { ToolsBody, ToolsHeaderActions, ToolsLoading, toolsTabCounts } =
+  await import("./tools");
+const { ServerViews } = await import("./tabs");
 const {
   credentialGrantPage,
   killSwitchBoard,
@@ -91,7 +103,7 @@ const {
   toolsSource,
   toolVersionPage,
 } = await import("./tools.builders");
-const { TOOLS_TABS } = await import("./view");
+const { TOOLS_TABS, toolsLink } = await import("./view");
 
 type Tab = (typeof TOOLS_TABS)[number];
 
@@ -135,9 +147,29 @@ async function renderTools(
   ctx = owner,
 ) {
   const { source, calls } = toolsSource(reads);
-  const view = withIntl(await Tools({ ctx, source, tab, searchParams: query }));
+  const view = withIntl(
+    await ToolsBody({ ctx, source, tab, searchParams: query }),
+  );
   return { ...view, calls };
 }
+
+/** The Tools actions the Agents header carries on this view's tab. */
+async function renderActions(
+  reads: Parameters<typeof toolsSource>[0] = {},
+  tab: Tab | null = "tools",
+  ctx = owner,
+) {
+  const { source, calls } = toolsSource(reads);
+  const view = withIntl(
+    <header>{await ToolsHeaderActions({ ctx, source, tab })}</header>,
+  );
+  return { ...view, calls };
+}
+
+const at = { org: "acme", ws: "core-platform" };
+/** The Tool servers views row, drawn above the registry, providers and toolbelts. */
+const viewsRow = () =>
+  screen.queryByRole("navigation", { name: "Tool server views" });
 
 /** Every gold (`.btn.primary`) control on the screen. */
 const golds = () => [
@@ -157,41 +189,55 @@ afterEach(async () => {
   }
 });
 
-describe("Tools › header", () => {
-  it("names the workspace over the h1 with the design's subtext, and its three actions in order", async () => {
-    await renderTools();
+describe("Tools › header actions", () => {
+  it("adds Import a provider and New tool to the Agents header, neither gold, off the Off switches tab", async () => {
+    const { calls } = await renderActions({}, "providers");
     const header = element(document.querySelector("header"), "header");
-    expect(within(header).getByText("Core platform")).toBeVisible();
     expect(
-      within(header).getByRole("heading", { level: 1, name: "Tools" }),
-    ).toBeVisible();
-    expect(
-      within(header).getByText(
-        "The registry is the only source of tools an agent can see.",
-      ),
-    ).toBeVisible();
+      within(header)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Import a provider", "New tool"]);
+    expect(golds()).toEqual([]);
+    // Only the roster is read: the switch board and the org roster feed Flip.
+    expect(calls.mcpServers).toHaveLength(1);
+    expect(calls.killSwitches).toHaveLength(0);
+    expect(calls.members).toHaveLength(0);
+  });
+
+  it("adds Flip a kill switch on the Off switches tab, the tab whose record it writes", async () => {
+    const { calls } = await renderActions({}, "switches");
+    const header = element(document.querySelector("header"), "header");
     expect(
       within(header)
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Import a provider", "New tool", "Flip a kill switch"]);
+    expect(golds()).toEqual([]);
+    expect(calls.killSwitches).toEqual([[owner]]);
+    expect(calls.members).toEqual([[owner]]);
   });
 
-  it.each([
-    ["tools", "New tool"],
-    ["switches", "New tool"],
-    ["toolbelts", "New toolbelt"],
-    ["providers", "Add a provider"],
-  ] as const)(
-    "draws exactly one gold action on %s, and it is %s",
-    async (tab, gold) => {
-      await renderTools({}, tab);
-      expect(golds().map((node) => node.textContent)).toEqual([gold]);
-    },
-  );
+  it("still offers Flip when the board and the roster did not answer", async () => {
+    await renderActions(
+      {
+        killSwitches: readError("tool_registry_unavailable", 503),
+        members: readError("org_unavailable", 503),
+        mcpServers: readError("tool_registry_unavailable", 503),
+      },
+      "switches",
+    );
+    expect(screen.getByTestId("tools-flip-open")).toBeVisible();
+  });
+
+  it("adds the two tool actions on the Agents and Runtimes tabs, which hold no Tools view", async () => {
+    await renderActions({}, null);
+    expect(screen.queryByTestId("tools-flip-open")).not.toBeInTheDocument();
+    expect(screen.getByTestId("tools-new-tool-open")).toBeVisible();
+  });
 
   it("opens the tool wizard's stub, which says what it would do and saves nothing", async () => {
-    await renderTools();
+    await renderActions();
     fireEvent.click(screen.getByTestId("tools-new-tool-open"));
     const dialog = await screen.findByTestId("tools-new-tool");
     expect(
@@ -201,51 +247,94 @@ describe("Tools › header", () => {
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
   });
 
-  it("offers a member none of the header's actions", async () => {
-    await renderTools({}, "tools", {}, member);
-    const header = element(document.querySelector("header"), "header");
-    expect(within(header).queryAllByRole("button")).toHaveLength(0);
+  it.each(["member", "billing", "compliance"] as const)(
+    "offers an org %s none of them, and reads nothing for them (negative)",
+    async (role) => {
+      const { calls } = await renderActions({}, "switches", viewer(role));
+      const header = element(document.querySelector("header"), "header");
+      expect(within(header).queryAllByRole("button")).toHaveLength(0);
+      expect(calls.mcpServers).toHaveLength(0);
+    },
+  );
+});
+
+describe("Tools › tab counts", () => {
+  it("counts the providers and the switches denying", async () => {
+    const { source } = toolsSource({});
+    expect(await toolsTabCounts(owner, source)).toEqual({
+      servers: 2,
+      switchesOn: 1,
+      switchesOnIsFloor: false,
+    });
+  });
+
+  it("marks the switch count as a floor when the board came back full", async () => {
+    const { source } = toolsSource({
+      killSwitches: readOk(killSwitchBoard({}, 3)),
+    });
+    expect(await toolsTabCounts(owner, source)).toMatchObject({
+      switchesOn: 1,
+      switchesOnIsFloor: true,
+    });
+  });
+
+  it("counts nothing a read did not answer, rather than a zero (negative)", async () => {
+    const { source } = toolsSource({
+      mcpServers: readError("tool_registry_unavailable", 503),
+      killSwitches: readError("tool_registry_unavailable", 503),
+    });
+    expect(await toolsTabCounts(owner, source)).toEqual({
+      servers: null,
+      switchesOn: null,
+      switchesOnIsFloor: false,
+    });
   });
 });
 
-describe("Tools › tabs", () => {
-  it("draws the five tabs as a tablist of path segments, the current one selected", async () => {
-    await renderTools({}, "providers");
-    const tabs = within(
-      screen.getByRole("tablist", { name: "Tools sections" }),
-    );
-    const all = tabs.getAllByRole("tab");
-    expect(all.map((tab) => tab.getAttribute("data-tab"))).toEqual([
-      "tools",
-      "toolbelts",
-      "providers",
-      "policy",
-      "switches",
-    ]);
-    expect(all.map((tab) => tab.getAttribute("href"))).toEqual([
-      "/acme/core-platform/tools",
-      "/acme/core-platform/tools/toolbelts",
-      "/acme/core-platform/tools/providers",
-      "/acme/core-platform/tools/policy",
-      "/acme/core-platform/tools/switches",
-    ]);
-    const current = tabs.getByRole("tab", { selected: true });
-    expect(current).toHaveAttribute("data-tab", "providers");
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "aria-labelledby",
-      current.id,
-    );
-  });
+describe("Tools › server views", () => {
+  it.each([
+    ["providers", "servers"],
+    ["tools", "tools"],
+    ["toolbelts", "toolbelts"],
+  ] as const)(
+    "draws Servers, Tools and Toolbelts above the %s view, that one current",
+    async (tab, agentsTab) => {
+      await renderTools({}, tab);
+      const row = element(viewsRow(), "views row");
+      const links = within(row).getAllByRole("link");
+      expect(links.map((link) => link.getAttribute("data-view"))).toEqual([
+        "providers",
+        "tools",
+        "toolbelts",
+      ]);
+      expect(links.map((link) => link.getAttribute("href"))).toEqual([
+        "/acme/core-platform/agents?tab=servers",
+        "/acme/core-platform/agents?tab=tools",
+        "/acme/core-platform/agents?tab=toolbelts",
+      ]);
+      expect(
+        links
+          .filter((link) => link.getAttribute("aria-current") === "page")
+          .map((link) => link.getAttribute("href")),
+      ).toEqual([`/acme/core-platform/agents?tab=${agentsTab}`]);
+    },
+  );
 
-  it("counts the registry's versions, the providers and the switches denying, and nothing for Toolbelts or Policy", async () => {
+  it.each(["policy", "switches"] as const)(
+    "draws no views row on the %s body, which is no view of Tool servers",
+    async (tab) => {
+      await renderTools({}, tab);
+      expect(viewsRow()).toBeNull();
+    },
+  );
+
+  it("counts the registry's versions and the providers, and nothing for Toolbelts", async () => {
     await renderTools();
-    const count = (tab: string) =>
-      document.querySelector(`[data-count="${tab}"]`)?.textContent ?? null;
+    const count = (view: string) =>
+      document.querySelector(`[data-count="${view}"]`)?.textContent ?? null;
     expect(count("tools")).toBe("2");
     expect(count("providers")).toBe("2");
-    expect(count("switches")).toBe("1 on");
     expect(count("toolbelts")).toBeNull();
-    expect(count("policy")).toBeNull();
   });
 
   it("marks the versions count as a floor while the registry has a later page", async () => {
@@ -254,13 +343,6 @@ describe("Tools › tabs", () => {
     });
     expect(document.querySelector('[data-count="tools"]')?.textContent).toBe(
       "2+",
-    );
-  });
-
-  it("marks the switch count as a floor when the board came back full", async () => {
-    await renderTools({ killSwitches: readOk(killSwitchBoard({}, 3)) });
-    expect(document.querySelector('[data-count="switches"]')?.textContent).toBe(
-      "1 or more on",
     );
   });
 
@@ -284,22 +366,41 @@ describe("Tools › tabs", () => {
     });
     // Nothing says the workspace has no provider: the roster could not say.
     expect(screen.queryByTestId("tools-empty")).not.toBeInTheDocument();
-    expect(screen.getByRole("tablist")).toBeVisible();
+    expect(viewsRow()).toBeVisible();
     expect(document.querySelector('[data-count="providers"]')).toBeNull();
   });
 
-  it("shows no switch count when the board did not answer", async () => {
-    await renderTools({
-      killSwitches: readError("tool_registry_unavailable", 503),
-    });
-    expect(document.querySelector('[data-count="switches"]')).toBeNull();
+  it("prints no versions count when it is handed none", () => {
+    withIntl(
+      <ServerViews at={at} current="toolbelts" versions={null} providers={3} />,
+    );
+    expect(document.querySelector('[data-count="tools"]')).toBeNull();
+    expect(
+      document.querySelector('[data-count="providers"]')?.textContent,
+    ).toBe("3");
   });
 
   it.each(TOOLS_TABS.map((tab) => [tab]))(
-    "renders a body behind the %s tab",
+    "renders a body for the %s view",
     async (tab) => {
-      await renderTools({}, tab);
-      expect(screen.getByRole("tabpanel").childElementCount).toBeGreaterThan(0);
+      const { container } = await renderTools({}, tab);
+      expect(container.childElementCount).toBeGreaterThan(0);
+      expect(container.textContent).not.toBe("");
+    },
+  );
+
+  it.each([
+    ["providers", "servers"],
+    ["tools", "tools"],
+    ["toolbelts", "toolbelts"],
+    ["policy", "policies"],
+    ["switches", "switches"],
+  ] as const)(
+    "links the %s view to ?tab=%s on the Agents page",
+    (tab, agentsTab) => {
+      expect(toolsLink(at, { tab })).toBe(
+        `/acme/core-platform/agents?tab=${agentsTab}`,
+      );
     },
   );
 });
@@ -312,7 +413,7 @@ describe("Tools › not loaded", () => {
     const panel = within(screen.getByTestId("tools-denied"));
     expect(panel.getByText("You cannot see the tool registry")).toBeVisible();
     expect(screen.getByTestId("tools-denied").textContent).toContain(
-      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(panel.getByText("Signed in as")).toBeVisible();
     expect(panel.getAllByText("tools.read on core-platform")).toHaveLength(2);
@@ -325,8 +426,9 @@ describe("Tools › not loaded", () => {
       "href",
       "/acme/core-platform",
     );
-    // The body is replaced: no header, no tabs.
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    // The body is replaced, views row included; the Agents header and its
+    // strip are drawn around it (area.test.tsx).
+    expect(viewsRow()).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 
     fireEvent.click(panel.getByRole("button", { name: "Request access" }));
@@ -339,7 +441,7 @@ describe("Tools › not loaded", () => {
     ).toHaveAttribute("data-gap", "#3820");
   });
 
-  it("names the code, says nothing was changed, and offers Try again on this tab and Open an incident", async () => {
+  it("names the code, says nothing was changed, and offers Try again on this Agents tab and Open an incident", async () => {
     await renderTools(
       { versions: readError("tool_registry_unavailable", 503) },
       "switches",
@@ -351,13 +453,13 @@ describe("Tools › not loaded", () => {
     );
     expect(
       within(panel).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/switches");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=switches");
     fireEvent.click(
       within(panel).getByRole("button", { name: "Open an incident" }),
     );
     const dialog = await screen.findByTestId("tools-incident");
     expect(within(dialog).getByTestId("tools-incident-confirm")).toBeDisabled();
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(viewsRow()).toBeNull();
     // The design's error glyph in the failed tone, not the denied lock.
     expect(panel.querySelector("[data-state-icon]")).toHaveAttribute(
       "data-state-icon",
@@ -388,14 +490,50 @@ describe("Tools › not loaded", () => {
     expect(panel.textContent).toContain(
       "Until a provider is imported, no agent in this workspace has a toolbelt, and every call by name is unknown_tool. Importing a provider pulls its tool list, versions each tool, and stores both schemas.",
     );
-    expect(golds().map((node) => node.textContent)).toEqual([
-      "Import a provider",
-    ]);
+    // Import a provider is drawn in the default style: the Agents header's
+    // Connect an agent is the page's one gold action.
+    expect(
+      within(panel).getByRole("button", { name: "Import a provider" }),
+    ).toBeVisible();
+    expect(golds()).toEqual([]);
     expect(
       within(panel).getByRole("button", { name: "Add a connection" }),
     ).toBeVisible();
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(viewsRow()).toBeNull();
   });
+
+  it.each(["toolbelts", "providers"] as const)(
+    "is the empty state on the %s view too",
+    async (tab) => {
+      await renderTools(
+        {
+          versions: readOk(toolVersionPage({ items: [], nextCursor: null })),
+          mcpServers: readOk(mcpServerList({ servers: [] })),
+        },
+        tab,
+      );
+      expect(screen.getByTestId("tools-empty")).toBeVisible();
+    },
+  );
+
+  it.each(["policy", "switches"] as const)(
+    "draws the %s body, not the empty state, when no provider is registered: neither hangs on one",
+    async (tab) => {
+      await renderTools(
+        {
+          versions: readOk(toolVersionPage({ items: [], nextCursor: null })),
+          mcpServers: readOk(mcpServerList({ servers: [] })),
+        },
+        tab,
+      );
+      expect(screen.queryByTestId("tools-empty")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("region", {
+          name: tab === "policy" ? "Policy versions" : /Class switches/,
+        }),
+      ).toBeVisible();
+    },
+  );
 
   it("offers a member the empty state's words and none of its writes", async () => {
     await renderTools(
@@ -427,7 +565,7 @@ describe("ToolsLoading", () => {
   });
 });
 
-describe("Tools › tools tab", () => {
+describe("Tools › registry view", () => {
   it("draws the design's columns in order", async () => {
     await renderTools();
     const table = screen.getByRole("table", { name: "Tools" });
@@ -496,7 +634,9 @@ describe("Tools › tools tab", () => {
       "true",
     );
     fireEvent.click(toggle.getByRole("button", { name: "Labels" }));
-    expect(router.push).toHaveBeenCalledWith("/acme/core-platform/tools");
+    expect(router.push).toHaveBeenCalledWith(
+      "/acme/core-platform/agents?tab=tools",
+    );
   });
 
   it("asks the kernel for the tag a chip picks, and a pressed chip clears it", async () => {
@@ -513,7 +653,9 @@ describe("Tools › tools tab", () => {
     const picked = chips.getByRole("button", { name: /moves_money/ });
     expect(picked).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(picked);
-    expect(router.push).toHaveBeenCalledWith("/acme/core-platform/tools");
+    expect(router.push).toHaveBeenCalledWith(
+      "/acme/core-platform/agents?tab=tools",
+    );
   });
 
   it("asks the kernel for the provider a chip picks, and counts against the unfiltered registry", async () => {
@@ -557,17 +699,41 @@ describe("Tools › tools tab", () => {
     await renderTools({
       versions: readOk(toolVersionPage({ nextCursor: "c2" })),
     });
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/tools?cursor=c2",
-    );
+    const pages = screen.getByRole("navigation", {
+      name: "Tool version pages",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=tools&cursor=c2");
+  });
+
+  it("asks the kernel for the size Rows names, and for its default of 50 by leaving it off (#4693)", async () => {
+    const sized = await renderTools({}, "tools", { rows: "25" });
+    expect(sized.calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: null, limit: 25 },
+    ]);
+    cleanup();
+    // The default read carries no size, so the page's read is the same read
+    // the header and the registry count make.
+    for (const rows of [undefined, "50", "7"]) {
+      const { calls } = await renderTools({}, "tools", { rows });
+      expect(calls.versions.length).toBeGreaterThan(0);
+      for (const call of calls.versions) {
+        expect(call).toEqual([
+          owner,
+          { category: null, cursor: null, serverId: null },
+        ]);
+      }
+      cleanup();
+    }
   });
 
   it("closes on the gate note, naming the order the record decides in", async () => {
     await renderTools();
     expect(
       screen.getByText(
-        "The gate shown is today’s: the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents are shown the tool; the gate decides whether the call survives. Open a provider on any row to see what it imported and the connection it is reached with.",
+        "Gate today reads the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents see a tool, and the gate decides whether a call goes through. Open a provider on any row to see what it imported and the connection that reaches it.",
       ),
     ).toBeVisible();
   });
@@ -579,7 +745,7 @@ describe("Tools › tools tab", () => {
     expect(within(dialog).getByText("moves_money")).toBeVisible();
     expect(
       within(dialog).getByText(
-        /Category is a registry attribute, not a policy/,
+        /A rule may reference a category/,
       ),
     ).toBeVisible();
   });
@@ -610,7 +776,7 @@ describe("Tools › tools tab", () => {
   });
 });
 
-describe("Tools › toolbelts tab", () => {
+describe("Tools › toolbelts view", () => {
   it("lists the workspace's belts from list_toolbelts, All tools first, and opens none", async () => {
     const { calls } = await renderTools({}, "toolbelts");
     expect(calls.toolbelts).toHaveLength(1);
@@ -651,7 +817,7 @@ describe("Tools › toolbelts tab", () => {
   });
 });
 
-describe("Tools › providers tab", () => {
+describe("Tools › tool servers view", () => {
   it("captions the roster with counts read off the rows, and draws the design's columns", async () => {
     await renderTools({}, "providers");
     expect(screen.getByTestId("tools-providers-caption")).toHaveTextContent(
@@ -705,6 +871,24 @@ describe("Tools › providers tab", () => {
     expect(document.body.textContent).not.toMatch(/MCP servers?|Tool server/);
   });
 
+  // The providers table clips a body cell unless the cell holds
+  // `[data-actions]`, so Open, the Studio link and Remove must share that one
+  // marked group.
+  it("marks the row actions so the cell shows every button (#4674)", async () => {
+    await renderTools({}, "providers");
+    const group = screen
+      .getByTestId("provider-open-mcs_01k5s1")
+      .closest("[data-actions]");
+    expect(group).not.toBeNull();
+    expect(group).toContainElement(
+      screen.getByTestId("provider-studio-mcs_01k5s1"),
+    );
+    expect(group).toContainElement(
+      screen.getByTestId("provider-remove-open-mcs_01k5s1"),
+    );
+    expect(group?.closest("td")).not.toBeNull();
+  });
+
   it("counts the providers needing attention, and keeps the transport note", async () => {
     await renderTools({}, "providers");
     // GitHub has never been health checked: yellow, not green.
@@ -712,7 +896,7 @@ describe("Tools › providers tab", () => {
       "1 provider needs a look.",
     );
     expect(
-      screen.getByText(/MCP is one transport among several/),
+      screen.getByText(/is imported, versioned, and decided the same way/),
     ).toBeVisible();
   });
 
@@ -785,7 +969,7 @@ describe("Tools › providers tab", () => {
     fireEvent.click(dialog.getByTestId("provider-remove-confirm"));
     await vi.waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/tools/providers",
+        "/acme/core-platform/agents?tab=servers",
       );
     });
     expect(actions.removeProvider).toHaveBeenCalledWith(
@@ -899,10 +1083,26 @@ describe("Tools › providers tab", () => {
       { grants: readOk(credentialGrantPage({ nextCursor: "g2" })) },
       "providers",
     );
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/tools/providers?cursor=g2",
-    );
+    const pages = screen.getByRole("navigation", {
+      name: "Credential grant pages",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers&cursor=g2");
+  });
+
+  it("asks the kernel for as many grants as Rows names, and leaves the default off (#4693)", async () => {
+    const sized = await renderTools({}, "providers", {
+      rows: "100",
+      cursor: "g2",
+    });
+    expect(sized.calls.grants).toEqual([[owner, { cursor: "g2", limit: 100 }]]);
+    cleanup();
+    for (const rows of [undefined, "50", "250"]) {
+      const { calls } = await renderTools({}, "providers", { rows });
+      expect(calls.grants).toEqual([[owner, { cursor: null }]]);
+      cleanup();
+    }
   });
 
   it("offers a member no provider write", async () => {
@@ -914,7 +1114,7 @@ describe("Tools › providers tab", () => {
   });
 });
 
-describe("Tools › kill switches tab", () => {
+describe("Tools › off switches tab", () => {
   it("draws the class switches with the deny generation, and the two the contract cannot write as not recorded", async () => {
     await renderTools({}, "switches");
     const classes = screen.getByRole("region", { name: /Class switches/ });
@@ -1102,10 +1302,22 @@ function enforceablyGrants(
     .includes(ctx.orgRole);
 }
 
-/** Which of the three write controls the page offers this viewer. */
+/**
+ * Which of the three write controls the page offers this viewer: the Agents
+ * header's Tools actions as the Off switches tab draws them, where Flip sits,
+ * beside the registry's body, where a version is reclassified.
+ */
 async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
-  await renderTools({}, "tools", {}, ctx);
-  // The header and the Tools panel each carry the import control.
+  const { source } = toolsSource({});
+  withIntl(
+    <>
+      <header>
+        {await ToolsHeaderActions({ ctx, source, tab: "switches" })}
+      </header>
+      {await ToolsBody({ ctx, source, tab: "tools", searchParams: {} })}
+    </>,
+  );
+  // The header and the registry panel each carry the import control.
   const importOffered = screen.queryAllByTestId("tools-import-open").length > 0;
   const flipOffered = screen.queryByTestId("tools-flip-open") !== null;
   fireEvent.click(screen.getByText("Create payment"));

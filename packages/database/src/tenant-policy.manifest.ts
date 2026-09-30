@@ -30,22 +30,23 @@ export interface PolicyEntry {
 // keys on those columns. Postgres RLS is not transitive through a foreign key.
 // A query that names a child table evaluates only that table's policies, so a
 // policied parent protects nothing on its own. The absent tables fall into
-// three groups:
+// two groups:
 //   - Children with their own EXISTS-against-parent policy. The ingestion
 //     credential tables (auth_credentials, oauth_tokens, webhook_subscriptions)
 //     pass a row only when its ingestion.source_connections parent is visible.
 //     20260910120000_ingestion_credential_rls.sql adds those policies and
 //     integration/ingestion-credential-rls.test.ts holds them in place.
-//   - Children with NO RLS at all. agent.agent_versions (FK to agent.agents)
-//     has no policy in any migration. A tenant-scoped session can read every
-//     org's rows from it, so callers must reach it through a join on the
-//     policied parent. Issue #2156 tracks this.
+//     agent.agent_versions passes a row only when its agent.agents parent is
+//     in the current org and workspace, or in the current org under an
+//     org-wide read. 20260929124500_agent_versions_rls.sql adds those
+//     policies and integration/agent-versions-rls.test.ts holds them in place.
 //   - Shared or system catalogs (billing.plans, billing.stripe_events,
 //     mcp.catalog_servers, ingestion.connector_schemas, Better Auth).
 export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // ── agent.* (orgScopeMixin: org_id + workspace_id NOT NULL) ──────────────
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
-  // It has no RLS policy, so the agents policy does not cover it (#2156).
+  // It carries its own EXISTS-against-agents policy instead
+  // (20260929124500_agent_versions_rls.sql).
   { table: "agent.agents", policyClass: "standard" },
   // The named runtimes agents run on (ADR-198).
   { table: "agent.runtimes", policyClass: "standard" },

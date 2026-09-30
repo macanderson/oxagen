@@ -8,36 +8,29 @@ import {
   StudioLoading,
   StudioServer,
 } from "@/features/mcp-studio";
-import { parseToolsTab, Tools, ToolsLoading } from "@/features/tools";
+import { parseToolsTab } from "@/features/tools";
 import { requireViewer } from "@/server/viewer";
+import { permanentRedirectTo } from "@/shared/navigation";
+import { firstParam, routes } from "@/shared/safe-path";
 
-export async function generateMetadata({
-  params,
-}: PageProps<"/[org]/[ws]/tools/[[...tab]]">): Promise<Metadata> {
-  const { tab: segments } = await params;
-  const studio = parseStudioRoute(segments);
-  if (studio !== null && studio !== undefined) {
-    const t = await getTranslations("mcpStudio");
-    return { title: t("title") };
-  }
-  const t = await getTranslations("pages");
-  return { title: t("tools") };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("mcpStudio");
+  return { title: t("title") };
 }
 
-// Tools (mockup `tools.md`, route `tools[/<tab>]`): the five tabs are path
-// segments on this one route. `/tools/servers` and the `?tab=` links written
-// before the tabs became segments land on the tab that absorbed them; a path
-// deeper than one segment names no page and is a 404.
+// The Tools page is gone: its tabs are tabs of the Agents page (roadmap
+// mockups `agents?tab=servers|policies|switches`). This route keeps two jobs.
 //
-// The one deeper path is MCP Studio (#4678): `/tools/servers/<mcs_id>[/<tab>]`
-// is one server's page, inside the same frame and fallback shape as Tools.
-// parseStudioRoute answers first, and a Studio path that names no page (a
-// bad id, an unknown tab) is a 404 too.
+// MCP Studio (#4678) still lives here: `/tools/servers/<mcs_id>[/<tab>]` is one
+// server's page. It stays off `/agents/<segment>`, which is one agent's page.
+// A Studio path that names no page (a bad id, an unknown tab) is a 404.
 //
-// The page renders no PageHeader of its own: the header belongs to the body,
-// because a not-loaded state replaces the whole body (header, tabs and all)
-// and never the shell. The body renders the header from the same `pages.tools`
-// key this metadata uses, so the document title and the h1 cannot drift.
+// Every other path moves, for a member of the workspace, to the Agents tab
+// that absorbed it, with the query values the Tools views read: `/tools` to
+// the registry, `/tools/providers` and `/tools/servers` to Tool servers,
+// `/tools/policy` to Policies, `/tools/switches` to Off switches, and the
+// `?tab=` links written before the tabs became segments to the tab that took
+// each one. A path deeper than one segment names no page and is a 404.
 export default async function ToolsPage({
   params,
   searchParams,
@@ -48,14 +41,9 @@ export default async function ToolsPage({
   if (studio !== undefined) {
     const ctx = await requireViewer(org, ws);
     return (
-      <main
-        id="main"
-        className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-      >
-        <Suspense fallback={<StudioLoading />}>
-          <StudioServer ctx={ctx} source={dataSource()} route={studio} />
-        </Suspense>
-      </main>
+      <Suspense fallback={<StudioLoading />}>
+        <StudioServer ctx={ctx} source={dataSource()} route={studio} />
+      </Suspense>
     );
   }
   const query = await searchParams;
@@ -66,14 +54,15 @@ export default async function ToolsPage({
   );
   if (tab === null) notFound();
   const ctx = await requireViewer(org, ws);
-  return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10"
-    >
-      <Suspense fallback={<ToolsLoading />}>
-        <Tools ctx={ctx} source={dataSource()} tab={tab} searchParams={query} />
-      </Suspense>
-    </main>
+  permanentRedirectTo(
+    routes.tools(ctx.orgSlug, ctx.wsSlug, {
+      ...(tab === "tools" ? {} : { tab }),
+      category: firstParam(query.category),
+      provider: firstParam(query.provider),
+      names: firstParam(query.names),
+      rows: firstParam(query.rows),
+      cursor: firstParam(query.cursor),
+      belt: firstParam(query.belt),
+    }),
   );
 }

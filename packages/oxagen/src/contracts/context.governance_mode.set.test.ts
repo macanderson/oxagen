@@ -11,6 +11,8 @@ import {
   contextGovernanceModeSet,
   GOVERNANCE_BRANCH,
   GOVERNANCE_FILE,
+  STEERING_GOVERNANCE_BRANCH,
+  STEERING_GOVERNANCE_FILE,
 } from "./context.governance_mode.set";
 import { GOVERNANCE_MODES } from "./context.steering.shared";
 
@@ -21,6 +23,7 @@ const ANSWER = {
   effectiveMode: "regulated",
   fullName: "a-intel/platform",
   productionBranch: "main",
+  path: ".oxagen/rules/governance.toml",
   commitSha: null,
   pullRequest: {
     number: 412,
@@ -113,10 +116,30 @@ describe("set_governance_mode contract", () => {
     ).toBe(false);
   });
 
-  it("names the one file and the one branch a proposal uses", () => {
-    // Both are exported because the handler writes them and its test asserts
-    // them; a second spelling of either would be a bug nothing catches.
+  it("names the file and the branch each layout uses", () => {
+    // Each is exported because the handler writes it and its test asserts
+    // it. A second spelling of any of them would be a bug nothing catches.
     expect(GOVERNANCE_FILE).toBe(".oxagen/rules/governance.toml");
     expect(GOVERNANCE_BRANCH).toBe("oxagen/governance");
+    expect(STEERING_GOVERNANCE_FILE).toBe("steering/governance.toml");
+    // A steering PR that changes a file under steering/ starts with steering/.
+    expect(STEERING_GOVERNANCE_BRANCH).toBe("steering/governance");
+  });
+
+  it("answers the file it read the mode from", () => {
+    expect(
+      contextGovernanceModeSet.output.safeParse({
+        ...ANSWER,
+        path: STEERING_GOVERNANCE_FILE,
+      }).success,
+    ).toBe(true);
+    const withoutPath: Record<string, unknown> = { ...ANSWER };
+    delete withoutPath.path;
+    expect(contextGovernanceModeSet.output.safeParse(withoutPath).success).toBe(
+      false,
+    );
+    expect(
+      contextGovernanceModeSet.output.safeParse({ ...ANSWER, path: "" }).success,
+    ).toBe(false);
   });
 });

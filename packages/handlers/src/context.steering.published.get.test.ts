@@ -152,7 +152,7 @@ describe("get_published_steering", () => {
   });
 
   // A provisioned steering repository hangs from a `github_steering`
-  // connection, and only the Oxagen Steering app can read it. The handler
+  // connection, and only the Oxagen GitHub App can read it. The handler
   // names the head's connection so the client mints that app's token (#4519).
   it("asks for the steering head's connection when no bindingId is given", async () => {
     const steering: BoundRepository = {

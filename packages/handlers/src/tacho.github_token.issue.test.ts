@@ -23,8 +23,8 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 vi.mock("./lib/tacho-host", () => ({ resolveEnrolledHost: mocks.resolve }));
 vi.mock("./logger", () => ({ logger: { info: vi.fn(), error: vi.fn() } }));
-// The handler must never mint an Oxagen Steering app token. The spy catches a
-// call if a later change imports the minter.
+// The handler must never mint a steering token. The spy catches a call if a
+// later change imports the minter.
 vi.mock("./lib/steering-app", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./lib/steering-app")>()),
   mintSteeringInstallationToken: mocks.steeringMint,
@@ -234,60 +234,36 @@ describe("repository-scoped GitHub credentials", () => {
 });
 
 describe("the steering repository", () => {
-  it("gets the workspace installation's token when it covers the repository", async () => {
-    const d = deps();
-    d.governedRepository.mockResolvedValue(steeringRepo);
-    const result = await createTachoGithubTokenIssueHandler(d)(input, ctx);
-    expect(d.mint).toHaveBeenCalledWith({
-      installationId: "9",
-      repositoryId: 42,
-    });
-    expect(tachoGithubTokenIssue.output.parse(result)).toMatchObject({
-      token: "ghs_scoped",
-      repository: { full_name: "Acme/Repo", role: "main" },
-    });
-  });
-  it("refuses steering_repo_propose_only when no workspace installation exists", async () => {
-    const d = deps();
-    d.governedRepository.mockResolvedValue(steeringRepo);
-    d.installation.mockResolvedValue(null);
-    await expect(
-      createTachoGithubTokenIssueHandler(d)(input, ctx),
-    ).rejects.toMatchObject({
-      code: "conflict",
-      reason: "steering_repo_propose_only",
-      message: PROPOSE_ONLY_MESSAGE,
-    });
-    expect(d.mint).not.toHaveBeenCalled();
-  });
-  it("maps GitHub's 422 on the mint to steering_repo_propose_only", async () => {
-    const d = deps();
-    d.governedRepository.mockResolvedValue(steeringRepo);
-    d.mint.mockRejectedValue(NOT_COVERED);
-    const error = await createTachoGithubTokenIssueHandler(d)(
-      input,
-      ctx,
-    ).catch((error: Error) => error);
-    expect(error).toMatchObject({
-      code: "conflict",
-      reason: "steering_repo_propose_only",
-      message: PROPOSE_ONLY_MESSAGE,
-    });
-    expect((error as Error).message).not.toContain("parent installation");
-  });
-  it.each([401, 404, 500])(
-    "keeps github_refused when the steering repository's mint fails with %s",
-    async (status) => {
+  // One GitHub App serves steering and code repositories (ADR-228), and a
+  // ruleset bypass follows the app, so every token it mints for the steering
+  // repository could skip Oxagen's merge queue. The handler refuses them all.
+  it.each(["covered", "uncovered", "unconnected"])(
+    "refuses steering_repo_propose_only and mints nothing when the installation is %s",
+    async (setup) => {
       const d = deps();
       d.governedRepository.mockResolvedValue(steeringRepo);
-      d.mint.mockRejectedValue(
-        new Error(`GitHub App token mint failed (${status}): refused`),
-      );
+      if (setup === "uncovered") d.mint.mockRejectedValue(NOT_COVERED);
+      if (setup === "unconnected") d.installation.mockResolvedValue(null);
       await expect(
         createTachoGithubTokenIssueHandler(d)(input, ctx),
-      ).rejects.toMatchObject({ code: "conflict", reason: "github_refused" });
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_repo_propose_only",
+        message: PROPOSE_ONLY_MESSAGE,
+      });
+      expect(d.installation).not.toHaveBeenCalled();
+      expect(d.mint).not.toHaveBeenCalled();
     },
   );
+  it("checks the caller's role before it names the steering PR path", async () => {
+    const d = deps();
+    d.governedRepository.mockResolvedValue(steeringRepo);
+    mocks.role.mockRejectedValue(new Error("role removed"));
+    await expect(
+      createTachoGithubTokenIssueHandler(d)(input, ctx),
+    ).rejects.toThrow("role removed");
+    expect(d.mint).not.toHaveBeenCalled();
+  });
   it("keeps today's refusals for a repository that is not the steering repository", async () => {
     const refused = deps();
     refused.mint.mockRejectedValue(NOT_COVERED);
@@ -303,7 +279,7 @@ describe("the steering repository", () => {
       reason: "github_not_connected",
     });
   });
-  it("never mints an Oxagen Steering app token", async () => {
+  it("never imports or calls the steering token minter", async () => {
     const source = readFileSync(
       join(__dirname, "tacho.github_token.issue.ts"),
       "utf8",

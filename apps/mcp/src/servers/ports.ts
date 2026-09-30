@@ -11,8 +11,8 @@ import { apiPublicOrigin } from "@oxagen/config/api-origin";
 import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
 import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
-import { TACHO_BUNDLE_SIGNING_KEY_ENV } from "@oxagen/handlers/lib/tacho-bundle-signing";
 import { workspaceCredentialSource } from "@oxagen/handlers/mcp-studio/credentials/connect";
+import { readWorkspaceWithheldTools } from "@oxagen/handlers/mcp-studio/discovery/store";
 import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
 import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-calls/groups-store";
 import { launchSpecFor, machineGroupsOf } from "@oxagen/handlers/mcp-studio/local-calls/launch";
@@ -26,9 +26,9 @@ import { parseCredentialRef } from "@oxagen/oxagen/steering-repo/names";
 import type { CedarRuntime } from "@oxagen/policy";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { productionLocalTransport } from "../local-servers";
 import { relayTransport } from "../relay";
 import { postgresApprovals } from "./approvals";
-import { unbuiltRoute } from "./call";
 import { asCedarRuntime } from "./cedar";
 import { lazyCredentialSource } from "./credentials";
 import { servedRanker } from "./embeddings";
@@ -37,7 +37,6 @@ import { METER_LABEL, meterEntry } from "./meter";
 import type { PublishedSources } from "./published";
 import type { RunSources, ServedHost } from "./run";
 import {
-  ServedRouteError,
   type Admission,
   type MeterEvent,
   type OffSwitches,
@@ -45,6 +44,7 @@ import {
   type ServedPorts,
   type ServedRoute,
   type ServedRun,
+  type ServedTransport,
 } from "./types";
 
 type Scope = { orgId: string; workspaceId: string };
@@ -168,55 +168,16 @@ export function servedCredentials(run: ServedRun): CredentialSource {
   );
 }
 
-// One broker per process. A machine's local gateway long-polls this process
-// for its calls. On a platform that runs each request in its own function
-// instance, the gateway's poll and the agent's call can land in different
-// instances, and the call reads "disconnected" until a shared broker exists.
-let broker: LocalGatewayBroker | undefined;
 let cloud: Transport | undefined;
 
-function localTransport(route: ServedRoute): Transport {
-  const { server, run } = route;
-  const signer = localCallSignerFromEnv();
-  if (signer === undefined) {
-    throw new ServedRouteError(
-      "local_unavailable",
-      `This deployment holds no key to sign local calls, so Oxagen sent nothing. Ask an Oxagen operator to set ${TACHO_BUNDLE_SIGNING_KEY_ENV}.`,
-    );
-  }
-  if (run.machine === null) {
-    throw new ServedRouteError(
-      "local_unavailable",
-      "This run names no enrolled machine, so Oxagen sent nothing. Run the agent under tacho on an enrolled machine, then retry.",
-    );
-  }
-  const { pinned } = server;
-  const launch = pinned.type === "local" || pinned.type === "registry" ? launchSpecFor(server.name, pinned, server.source) : undefined;
-  if (launch === undefined) {
-    throw new ServedRouteError(
-      "local_unavailable",
-      `The lock does not say how a machine starts ${server.name}, so Oxagen sent nothing. Run tools lock in the steering repo, then open a steering PR.`,
-    );
-  }
-  broker ??= createInProcessBroker();
-  return createLocalTransport({
-    scope: scopeOf(run),
-    machine: run.machine,
-    groups: machineGroupsOf(server.source),
-    reader: postgresMachineGroupReader,
-    signer,
-    broker,
-    launch,
-  });
-}
-
 /** The transport for the network the environment names. */
-export function transportFor(route: ServedRoute): Transport {
-  const unbuilt = unbuiltRoute(route.network);
-  if (unbuilt !== null) throw unbuilt;
-  if (route.network === "local") return localTransport(route);
+export function transportFor(route: ServedRoute): ServedTransport {
+  // A local call waits in this process's broker until the machine's
+  // long-poll picks it up (local-servers/broker.ts says why one process).
+  if (route.network === "local") return productionLocalTransport(route);
   // A relay:<name> network goes through this process's relay broker (lane M12).
-  if (route.network.startsWith("relay:")) return relayTransport(route.run);
+  // Its transport can refuse a call before runTool claims an approval.
+  if (route.network.startsWith("relay:")) return relayTransport(route);
   cloud ??= createCloudTransport();
   return cloud;
 }
@@ -267,9 +228,8 @@ export const servedLog: ServedLog = {
 export function createServedPorts(run: ServedRun): ServedPorts {
   return {
     off: readOffSwitches,
-    // Discovery, which withholds a tool from a server, is only proposed
-    // (mcp-studio-spec, Discovery). Until it stores a withheld list, none is.
-    withheld: async () => new Set<string>(),
+    // The tools discovery holds back until their sync steering PR merges.
+    withheld: (served) => readWorkspaceWithheldTools(scopeOf(served)),
     admit: admitServed,
     emergencyDeny: servedEmergencyDenies(run, { gate: postgresKillSwitchReads, targets: readSwitchTargets }),
     approvals: postgresApprovals(),
