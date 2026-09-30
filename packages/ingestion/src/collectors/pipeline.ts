@@ -373,6 +373,10 @@ export async function collectItem(
   item: ProviderItem,
 ): Promise<CollectResult> {
   const mapped = definition.toWorkItem(item, config);
+  // Null: the record is outside the collector's configured scope. It is
+  // skipped, and no work item is written for it.
+  if (mapped === null)
+    return { providerId: item.ref.providerId, change: null, before: null, stale: false };
   const before = await ports.store.findItem(collector.id, mapped.providerId);
   if (before && isNewer(before.sourceUpdatedAt, mapped.sourceUpdatedAt))
     return { providerId: mapped.providerId, change: null, before, stale: true };
@@ -754,7 +758,9 @@ export async function nightlyCount(
       for (const item of page.items) {
         if (seen.has(item.ref.providerId)) continue;
         seen.add(item.ref.providerId);
-        if (definition.toWorkItem(item, config.data).statusCategory !== "closed")
+        // A record outside the collector's scope is not open work for it.
+        const mapped = definition.toWorkItem(item, config.data);
+        if (mapped !== null && mapped.statusCategory !== "closed")
           open.add(item.ref.providerId);
       }
       cursor = page.cursor;

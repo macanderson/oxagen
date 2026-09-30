@@ -935,6 +935,7 @@ describe("Tools › tool servers view", () => {
                 authorization: null,
                 contextTokens: null,
                 weeklyPrice: null,
+                steeringName: null,
               },
             ],
           }),
