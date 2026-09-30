@@ -19,9 +19,9 @@
  *           with (apps/web/scripts/lib/theme.mjs).
  * --rasters, --no-rasters
  *           whether --check renders each PNG and ICO with rsvg-convert and
- *           compares the bytes. On by default, and off by default when CI is
- *           set. PNG bytes depend on the librsvg build: librsvg 2.54 in the CI
- *           image and 2.62 on a laptop render the same SVG to different bytes.
+ *           compares the bytes. On by default, and off when CI is set. PNG
+ *           bytes depend on the librsvg build: librsvg 2.54 in the CI image
+ *           and 2.62 on a laptop render the same SVG to different bytes.
  *           With rasters off, the check reads each raster's size instead, and
  *           the SVGs they are rendered from are still compared byte for byte.
  *
