@@ -532,6 +532,72 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     ).toMatchObject({ id: a.id });
   });
 
+  it("admits a governance proposal, merges it with no record or promotion event, and still refuses an unknown kind (#4795)", async () => {
+    const row = await propose({
+      lineageId: "governance",
+      kind: "governance",
+      force: "info",
+      statement: "Change the steering governance mode from team to solo.",
+      status: "checks_passed",
+      governanceMode: "team",
+      provider: "github",
+      repository: "acme/steering",
+      baseRef: "main",
+      branch: "steering/governance",
+      path: "steering/governance.toml",
+      prNumber: 7,
+      prUrl: "https://github.com/acme/steering/pull/7",
+      headSha: "4d5e6f7a8b9c",
+      checks: [],
+    });
+    expect(row).toMatchObject({ kind: "governance", status: "checks_passed" });
+
+    const mergedAt = new Date("2026-09-30T08:00:00.000Z");
+    const merged = await inScope(() =>
+      store.mergeGovernance({
+        proposal: row,
+        commitSha: "9a8b7c6d5e4f",
+        mergedAt,
+        mergedByUserId: userId,
+      }),
+    );
+    expect(merged).toMatchObject({
+      status: "merged",
+      mergedCommit: "9a8b7c6d5e4f",
+      mergedAt,
+      mergedByUserId: userId,
+      publishedRecordId: null,
+      promotionEventId: null,
+      mergeClaimedAt: null,
+    });
+    await expect(
+      inScope(() =>
+        store.mergeGovernance({
+          proposal: row,
+          commitSha: "0f1e2d3c4b5a",
+          mergedAt,
+          mergedByUserId: userId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
+
+    // A record proposal still reads merged only with its record and its
+    // promotion event.
+    const record = await propose({ lineageId: `${lineage}.merged-check` });
+    await expect(
+      withSystemDb((tx) =>
+        tx
+          .update(schema.contextProposals)
+          .set({ status: "merged", mergedCommit: "1a2b3c4d" })
+          .where(eq(schema.contextProposals.id, record.id)),
+      ),
+    ).rejects.toThrow();
+    // The kind check still refuses a kind it does not list.
+    await expect(
+      propose({ lineageId: `${lineage}.unknown-kind`, kind: "directive" }),
+    ).rejects.toThrow();
+  });
+
   it("refuses a write tied to a head the proposal has moved past with head_moved, and applies one tied to its head", async () => {
     const p = await propose({ lineageId: `${lineage}.head` });
     await inScope(() =>
