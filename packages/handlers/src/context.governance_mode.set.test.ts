@@ -13,7 +13,7 @@
 // A steering repository keeps `steering/governance.toml`. Every route there
 // opens a steering PR. Solo and Apply now land it through the merge queue. The
 // review route leaves it open, records it as a governance proposal, and
-// merge_context_pr lands it for an approver (ADR-229, #4795).
+// merge_context_pr lands it for an approver (ADR-232, #4795).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
@@ -624,6 +624,29 @@ describe("set_governance_mode in a steering repository", () => {
     expect(deps.store.proposals[0]?.dismissedReason).toBe(
       "Replaced by a newer governance change on the same pull request",
     );
+  });
+
+  it("keeps the open governance proposal when a later call is refused (negative)", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    // The production branch turns on auto_merge, which only solo allows, so
+    // team to regulated can no longer be written.
+    const current = await productionText(deps);
+    deps.github.commit(
+      REPO.defaultBranch,
+      STEERING_FILE,
+      current.replace('mode = "team"', 'mode = "solo"').replace(
+        "auto_merge = false",
+        "auto_merge = true",
+      ),
+    );
+
+    await expect(
+      run(deps, { mode: "team" }, doubles()),
+    ).rejects.toMatchObject({ reason: "governance_invalid" });
+    expect(deps.store.proposals.map((p) => p.status)).toEqual([
+      "checks_passed",
+    ]);
   });
 
   it("reuses the open steering PR when the mode is set again", async () => {

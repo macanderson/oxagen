@@ -53,7 +53,7 @@
 // merged keeps it, and a retry resumes the merge. A claim a crash left behind
 // lapses after MERGE_CLAIM_SECONDS.
 //
-// A governance proposal (#4795, ADR-229) is the review-route PR
+// A governance proposal (#4795, ADR-232) is the review-route PR
 // set_governance_mode opens on steering/governance. It lands through the same
 // queue, reviewer rule, claim, and approvals, with four differences. The
 // check is governance/v1 on steering/governance.toml plus the steering
@@ -626,7 +626,7 @@ async function mergeGovernanceProposal(
   const recorded = input.row;
   const { prNumber, path } = recorded;
   let row: ProposalRow = recorded;
-  // The reviewed route never records a merge without review (ADR-229).
+  // The reviewed route never records a merge without review (ADR-232).
   if (input.capability === contextPrMergeWithoutReview.name) {
     throw reviewRequired(recorded.prUrl);
   }

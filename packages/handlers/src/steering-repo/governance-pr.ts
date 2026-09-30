@@ -1,5 +1,5 @@
 // steering-repo/governance-pr.ts: the title and body of the steering PR
-// `set_governance_mode` opens on `steering/governance` (#4766, ADR-229). Its
+// `set_governance_mode` opens on `steering/governance` (#4766, ADR-232). Its
 // own module, so the proposal views can print the body without loading the
 // merge queue.
 

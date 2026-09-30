@@ -8,7 +8,7 @@
 //
 //   steering  `steering/governance.toml`, the top-level `mode` key. Its
 //             presence on the production branch marks a steering repository.
-//             steering-repo/governance-mode.ts handles it (ADR-229).
+//             steering-repo/governance-mode.ts handles it (ADR-232).
 //   legacy    `.oxagen/rules/governance.toml`, handled here.
 //
 // THE MODE IN FORCE DECIDES THE ROUTE. Loosening governance is the change a
@@ -36,7 +36,7 @@
 // approver on the record (#4795). Each call first sets aside a governance
 // proposal already open, because the PR it reuses now carries this call's
 // change. Apply now is not that land path. In team or regulated it is an
-// override, and it is recorded as one (ADR-229).
+// override, and it is recorded as one (ADR-232).
 //
 // `applyImmediately` takes the review route back to landing at once. It is
 // not privilege escalation: the contract admits only org Owner/Admin and
@@ -78,6 +78,7 @@ import { logger } from "./logger";
 import {
   productionSteeringGovernanceSeams,
   readSteeringGovernance,
+  rewriteGovernanceMode,
   setSteeringGovernanceMode,
   type SteeringGovernanceSeams,
 } from "./steering-repo/governance-mode";
@@ -366,6 +367,9 @@ export function makeSetGovernanceModeHandler(
           }
           const wantsReview = currentMode !== "solo";
           const overrodeReview = wantsReview && input.applyImmediately;
+          // A mode the rest of the file does not allow refuses here, before
+          // an open proposal is set aside.
+          rewriteGovernanceMode(steeringText, input.mode);
           await setAsideGovernanceProposal(deps, scope, actingUserId);
           const result = await setSteeringGovernanceMode({
             host: deps.github,

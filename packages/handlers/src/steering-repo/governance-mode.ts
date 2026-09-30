@@ -1,5 +1,5 @@
 // steering-repo/governance-mode.ts: `set_governance_mode` in a steering
-// repository (#4766, ADR-229).
+// repository (#4766, ADR-232).
 //
 // A steering repository keeps its mode as the top-level `mode` key of
 // `steering/governance.toml`, beside the ledger, memory, and reviewer
@@ -12,7 +12,7 @@
 //
 // - Review (team or regulated): the PR stays open and waits for review. The
 //   handler records it as a governance proposal, and merge_context_pr lands
-//   it for an approver through landGovernancePr below (#4795, ADR-229).
+//   it for an approver through landGovernancePr below (#4795, ADR-232).
 // - Land at once (solo, or the override): the PR goes through the steering
 //   merge queue. The queue brings the branch up to date, stamps the ledger
 //   line, squash-merges with the trailers, and publish() makes the version
@@ -612,7 +612,7 @@ export async function setSteeringGovernanceMode(
 
   // Two routes land here, and neither reads the host's approvals. Solo needs
   // none, so the caller is the approver. Apply now in team or regulated is an
-  // explicit override: nobody approved it, and the ledger says so (ADR-229).
+  // explicit override: nobody approved it, and the ledger says so (ADR-232).
   const approval: MergeApproval = input.withoutReview
     ? { approvedBy: [], withoutReview: true }
     : { approvedBy: [input.actingUserId], withoutReview: false };
