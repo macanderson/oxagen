@@ -156,7 +156,9 @@ describe("assertWithinSpendBudget — admission", () => {
 });
 
 describe("assertWithinSpendBudget — fail open", () => {
-  beforeEach(() => logs.error.mockClear());
+  beforeEach(() => {
+    logs.error.mockClear();
+  });
 
   it("config load failure never blocks a turn", async () => {
     const d = deps({

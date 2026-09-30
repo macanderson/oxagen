@@ -604,20 +604,31 @@ describe("an item outside the scope", () => {
       }),
     });
 
-  it("is fetched and writes nothing", async () => {
+  it("is fetched, skipped, and writes nothing", async () => {
     const s = scoped();
     putRecord(s.fake, { id: "999", updatedAt: s.ago(5) });
     const ref = { providerId: "999", kind: "item" };
-    expect(await collectRef(s.h.ports, s.collector(), ref)).toBeNull();
+    expect(await collectRef(s.h.ports, s.collector(), ref)).toEqual({
+      providerId: "999",
+      change: null,
+      before: null,
+      stale: false,
+      skipped: true,
+    });
     expect(s.h.store.items).toEqual([]);
   });
 
   it("is neither collected nor counted as missed by the reconcile", async () => {
     const s = scoped();
     putRecord(s.fake, { id: "101", updatedAt: s.ago(30) });
-    putRecord(s.fake, { id: "999", updatedAt: s.ago(30) });
+    finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    // Both change after the collector existed and past the grace time, and
+    // no doorbell brought either in. Only the one in scope was missed.
+    s.h.advance(RECONCILE_EVERY);
+    putRecord(s.fake, { id: "101", title: "Changed quietly", updatedAt: s.ago(10) });
+    putRecord(s.fake, { id: "999", updatedAt: s.ago(10) });
     const result = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
-    expect(result.summary).toEqual({ ok: true, pages: 1, handled: 2, missed: 0 });
+    expect(result.summary).toEqual({ ok: true, pages: 1, handled: 2, missed: 1 });
     expect(s.h.store.items.map((item) => item.providerId)).toEqual(["101"]);
   });
 

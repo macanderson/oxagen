@@ -308,6 +308,8 @@ export interface CollectResult {
   before: StoredWorkItem | null;
   /** True when the stored item is newer than the one fetched, so nothing was written. */
   stale: boolean;
+  /** True when the record is outside the collector's scope, so nothing was written. */
+  skipped: boolean;
 }
 
 /**
@@ -363,8 +365,7 @@ export function taintedFields(input: WorkItemInput): TaintedField[] {
  * Map one fetched item and upsert it. The subject, description, and requester
  * pass through the screen before the store sees them. An item the store holds
  * a newer copy of is left alone, because a late delivery must not undo a
- * later change. Returns null when toWorkItem puts the item outside the
- * collector's scope, and writes nothing.
+ * later change.
  */
 export async function collectItem(
   ports: CollectorPorts,
@@ -372,12 +373,21 @@ export async function collectItem(
   definition: AnyCollectorDefinition,
   config: unknown,
   item: ProviderItem,
-): Promise<CollectResult | null> {
+): Promise<CollectResult> {
   const mapped = definition.toWorkItem(item, config);
-  if (mapped === null) return null;
+  // Null: the record is outside the collector's configured scope. It is
+  // skipped, and no work item is written for it.
+  if (mapped === null)
+    return {
+      providerId: item.ref.providerId,
+      change: null,
+      before: null,
+      stale: false,
+      skipped: true,
+    };
   const before = await ports.store.findItem(collector.id, mapped.providerId);
   if (before && isNewer(before.sourceUpdatedAt, mapped.sourceUpdatedAt))
-    return { providerId: mapped.providerId, change: null, before, stale: true };
+    return { providerId: mapped.providerId, change: null, before, stale: true, skipped: false };
   const { value: screened } = await ports.screen({
     subject: mapped.subject,
     description: mapped.description,
@@ -404,7 +414,7 @@ export async function collectItem(
     kind === null || stored.deleted
       ? null
       : { publicId: stored.publicId, change: kind, digest: changeDigest(input) };
-  return { providerId: mapped.providerId, change, before, stale: false };
+  return { providerId: mapped.providerId, change, before, stale: false, skipped: false };
 }
 
 export type OpenResult =
@@ -454,8 +464,8 @@ export async function openInboundEvent(
 
 /**
  * Fetch one item by id and collect it. A fetch error throws, so the durable
- * worker retries it. Returns null when the module is gone, the scope no
- * longer parses, or the item is outside the scope.
+ * worker retries it. Returns null when the module is gone or the scope no
+ * longer parses.
  */
 export async function collectRef(
   ports: CollectorPorts,
@@ -546,17 +556,17 @@ export async function reconcilePage(
     let missed = 0;
     for (const item of page.items) {
       const result = await collectItem(ports, collector, definition, config.data, item);
-      // An item outside the scope is never collected, so the doorbell did
-      // not miss it.
-      if (result === null) continue;
       if (result.change) changes.push(result.change);
       // A module maps sourceUpdatedAt from the same provider field it puts in
       // ProviderItem.updatedAt, so the stored copy is older than this change
       // exactly when the doorbell never brought it in. A stored copy with no
       // update time gives no evidence either way, so it is not counted: a
       // module that maps none would otherwise read as lagging forever.
+      // A record outside the scope is never collected, so no doorbell
+      // missed it.
       const changedAt = Date.parse(item.updatedAt);
       const doorbellMissed =
+        !result.skipped &&
         !result.stale &&
         changedAt > listeningSince &&
         changedAt <= cutoff &&
@@ -759,7 +769,7 @@ export async function nightlyCount(
       for (const item of page.items) {
         if (seen.has(item.ref.providerId)) continue;
         seen.add(item.ref.providerId);
-        // Oxagen holds no item outside the scope, so the count leaves it out.
+        // A record outside the collector's scope is not open work for it.
         const mapped = definition.toWorkItem(item, config.data);
         if (mapped !== null && mapped.statusCategory !== "closed")
           open.add(item.ref.providerId);
