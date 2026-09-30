@@ -273,6 +273,7 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       >
         <AgentCard
           agentKey={row.agentKey}
+          harness={row.harness}
           notRecorded={t("notRecorded")}
           sub={sub(row)}
         />

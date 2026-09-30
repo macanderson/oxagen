@@ -108,6 +108,7 @@ describe("toSpendReport", () => {
       name: "Fix the billing export",
       startedAt: "2026-09-14T09:30:00.000Z",
       agentKey: "claude-code",
+      harness: "codex",
       operatorKey: "prn_7h2",
       cost: priced,
       calls: 12,

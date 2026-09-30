@@ -92,6 +92,7 @@ const SpendTopRun = z.object({
   name: z.string().nullable(),
   startedAt: z.iso.datetime({ offset: true }),
   agentKey: z.string().nullable(),
+  harness: z.string().nullable().optional(),
   /** The operator's principal public id; null for a run with no operator. */
   operatorKey: z.string().nullable(),
   cost: Cost.nullable(),

@@ -22,6 +22,7 @@ import {
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { Avatar } from "@/ui/avatar";
 import { initialsOf } from "@/ui/avatar-spec";
 import { Badge } from "@/ui/badge";
@@ -360,10 +361,10 @@ function RunList({ row, at }: { row: Row; at: SpendAt }) {
             to={routes.run(at.org, at.ws, run.runId)}
             className="flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 hover:bg-hl"
           >
-            <Avatar
+            <AgentAvatar
               value={null}
               initials={initialsOf(run.agentKey ?? run.runId)}
-              shape="agent"
+              harness={run.harness}
               size={22}
             />
             <span className="flex min-w-0 flex-col">

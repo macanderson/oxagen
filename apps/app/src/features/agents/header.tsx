@@ -85,6 +85,7 @@ export function AgentHeader({
           <AgentCard
             layout="detail"
             agentKey={identity.agentKey}
+            harness={identity.harness}
             notRecorded={agents("notRecorded")}
             sub={
               <span className="inline-flex items-center gap-1.5 font-mono">
