@@ -22,6 +22,19 @@ variable "oidc_subjects" {
   type        = list(string)
 }
 
+variable "app_instance_type" {
+  description = <<-EOT
+    Graviton instance type of the environment's app node. It carries the
+    services at production's container limits, and with local_inngest and
+    capture_email it also carries Inngest and the mail capture beside
+    ClickHouse and Neo4j. The node memory preflight
+    (infra/tools/node/memory-budget.py) refuses a deploy when the hard
+    limits plus a 1 GiB host reserve pass physical memory.
+  EOT
+  type        = string
+  default     = "t4g.large"
+}
+
 variable "local_inngest" {
   description = "Run an isolated Inngest development server for a test environment."
   type        = bool
