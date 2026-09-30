@@ -55,12 +55,33 @@ describe("the hooks the writer emits", () => {
     for (const list of Object.values(entries)) {
       expect(list).toHaveLength(1);
       const entry = list[0] as HookEntry;
-      expect(entry.command).toBe(
-        `/opt/oxagen/tacho hook --enrollment ${ENROLLMENT} --harness cursor`,
+      expect(entry.command).toMatch(
+        new RegExp(
+          `; exec /opt/oxagen/tacho hook --enrollment ${ENROLLMENT} --harness cursor$`,
+        ),
       );
       expect(entry.type).toBe("command");
       expect(typeof entry.timeout).toBe("number");
     }
+  });
+
+  it("answers the collector's own allow when the collector is not installed", () => {
+    // ADR-230: a missing executable exits 127, which `failClosed` reads as a
+    // deny, so a removed app blocked every Cursor action. The command looks
+    // for the executable first and answers each event the way the collector
+    // answers an allow there.
+    const run = `exec /opt/oxagen/tacho hook --enrollment ${ENROLLMENT} --harness cursor`;
+    const skip = (answer: string) =>
+      `test ! -e /opt/oxagen/tacho && printf '%s\\n' '${answer}' && exit 0; ${run}`;
+    const command = (event: keyof typeof entries) =>
+      (entries[event][0] as HookEntry).command;
+    expect(command("preToolUse")).toBe(skip('{"permission":"allow"}'));
+    expect(command("subagentStart")).toBe(skip('{"permission":"allow"}'));
+    expect(command("beforeSubmitPrompt")).toBe(skip('{"continue":true}'));
+    expect(command("postToolUse")).toBe(skip("{}"));
+    expect(command("stop")).toBe(skip("{}"));
+    // A veto point still fails closed for a collector that is there.
+    expect((entries.preToolUse[0] as HookEntry)["failClosed"]).toBe(true);
   });
 
   it("fails closed at every veto point, because Cursor otherwise allows", () => {

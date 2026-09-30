@@ -1,10 +1,14 @@
-//! Automatic PATH installation for the bundled `oxagen` and `tacho`
-//! sidecars. `ensure_cli_installed` runs once per launch (off the main
-//! thread, from `lib.rs`'s `setup`): idempotent, never elevates, never
-//! clobbers a file it did not write. `install_cli` / `uninstall_cli` are the
-//! explicit "Link into PATH" / "Remove links" commands the Command line
-//! panel calls; they share the same decision functions so a manual click and
-//! an automatic launch never disagree about what counts as "ours".
+//! The per-user copy of the bundled `oxagen` and `tacho` sidecars, and
+//! automatic PATH installation of that copy. `ensure_cli_installed` runs
+//! once per launch (off the main thread, from `lib.rs`'s `setup`): it copies
+//! the sidecars into `<data-local>/oxagen/bin/<version>`, the directory every
+//! hook, credential helper, MCP entry and service unit names (ADR-230),
+//! links that copy onto PATH, and removes older versions nothing names any
+//! more. It is idempotent, never elevates, and never clobbers a file it did
+//! not write. `install_cli` / `uninstall_cli` are the explicit "Link into
+//! PATH" / "Remove links" commands the Command line panel calls; they share
+//! the same decision functions so a manual click and an automatic launch
+//! never disagree about what counts as "ours".
 //!
 //! The orchestration functions here do real filesystem and process I/O and
 //! are exercised through the Tauri commands and `ensure_cli_installed`. The
@@ -51,9 +55,10 @@ pub fn sidecar_dir() -> Option<PathBuf> {
 /// Whether a directory exists only for this launch: an AppImage's squashfs
 /// mount (`/tmp/.mount_*`, or the `APPIMAGE` variable the runtime sets), a
 /// mounted disk image, or App Translocation (a quarantined app opened where
-/// it was downloaded). `tacho enroll` bakes the sidecar's directory into the
-/// hook commands and the service unit, and PATH links point into it, so
-/// nothing durable may reference such a directory.
+/// it was downloaded). Nothing durable may reference such a directory. The
+/// hooks, the service and the PATH links name the per-user copy on every
+/// launch (ADR-230), so here it decides only whether a bundled directory
+/// that is on PATH counts as installed.
 ///
 /// A disk image mounts read-only under `/Volumes`. An external disk mounts
 /// there too, writable, and an app copied onto it stays: counting every
@@ -129,40 +134,81 @@ pub fn sidecar_dir_is_transient() -> bool {
     })
 }
 
-/// A per-user directory the app copies the sidecars into when it runs from
-/// a transient one: `~/Library/Application Support/oxagen/bin` on macOS,
-/// `~/.local/share/oxagen/bin` on Linux. Windows installs are never
-/// transient (the shims embed the Program Files path).
+/// The per-user directory the app keeps its copies of the sidecars under:
+/// `~/Library/Application Support/oxagen/bin` on macOS,
+/// `~/.local/share/oxagen/bin` on Linux, `%LOCALAPPDATA%\oxagen\bin` on
+/// Windows. Each app version gets its own directory in it
+/// (`versioned_bin_dir_in`).
 pub fn durable_bin_dir() -> PathBuf {
     Roots::real().durable_bin_dir()
+}
+
+/// The version of the sidecars this app carries. The build stamps the
+/// crate with the app's version (`tools/scripts/desktop-build-version.ts`),
+/// so this is the version the sidecars report too.
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Pure: a version as one directory name. Anything but ASCII letters,
+/// digits, `.`, `-`, `_` and `+` becomes `_`, so no version can name a
+/// parent directory, a path separator, or a character the hook commands
+/// would have to quote. A name of only dots would be `.` or `..`.
+pub fn version_dir_name(version: &str) -> String {
+    let name: String = version
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if name.chars().all(|c| c == '.') {
+        "unversioned".to_string()
+    } else {
+        name
+    }
+}
+
+/// `<durable>/<version>`: the copy of the sidecars that every hook, the
+/// credential helper, the MCP entry and the service unit name (ADR-230).
+/// A path inside the app bundle is never written anywhere that outlives a
+/// launch: the bundle can go to the Trash while an agent runs, and an
+/// update replaces it.
+pub fn versioned_bin_dir_in(durable: &Path, version: &str) -> PathBuf {
+    durable.join(version_dir_name(version))
+}
+
+/// `versioned_bin_dir_in` for this machine and this app.
+pub fn versioned_bin_dir() -> PathBuf {
+    versioned_bin_dir_in(&durable_bin_dir(), APP_VERSION)
 }
 
 pub fn has_both_sidecars(dir: &Path) -> bool {
     ["oxagen", "tacho"].iter().all(|name| dir.join(exe(name)).is_file())
 }
 
-/// The directory `tacho` should derive its hook and daemon commands from:
-/// the sidecar directory when it lasts, else the durable copy when one
-/// exists, else nothing (enrolling is refused by tacho itself until
-/// `ensure_cli_installed` / `install_cli` makes the copy or the app is
-/// moved).
+/// The directory `tacho` derives its hook, credential helper, MCP and
+/// daemon commands from: this version's per-user copy once it holds both
+/// sidecars, else nothing. With nothing, tacho refuses to enroll (it is
+/// handed the directory through `TACHO_BIN_DIR` all the same) until the
+/// launch-time pass has made the copy.
 pub fn bin_dir() -> Option<PathBuf> {
-    let sidecars = sidecar_dir()?;
-    if !sidecar_dir_is_transient() {
-        return Some(sidecars);
-    }
-    let durable = durable_bin_dir();
-    has_both_sidecars(&durable).then_some(durable)
+    let dir = versioned_bin_dir();
+    has_both_sidecars(&dir).then_some(dir)
 }
 
 /// What one install or uninstall pass runs against: the machine's roots, the
 /// directory the sidecars are in, whether that directory outlives this
-/// launch, and the two PATH values the decisions read. `real()` reads the
-/// process. A test builds one over a scratch directory.
+/// launch, this app's version, and the two PATH values the decisions read.
+/// `real()` reads the process. A test builds one over a scratch directory.
 pub struct InstallEnv {
     pub roots: Roots,
     pub sidecars: Option<PathBuf>,
     pub transient: bool,
+    /// This app's version, which names the directory its sidecars are kept
+    /// in: see `versioned_bin_dir_in`.
+    pub version: String,
     /// This process's own PATH.
     pub process_path: String,
     /// What a new terminal's PATH would be. `None` asks the login shell,
@@ -176,43 +222,44 @@ impl InstallEnv {
             roots: Roots::real(),
             sidecars: sidecar_dir(),
             transient: sidecar_dir_is_transient(),
+            version: APP_VERSION.to_string(),
             process_path: std::env::var("PATH").unwrap_or_default(),
             login_path: None,
         }
     }
+
+    /// Where this app keeps its sidecars: `<durable>/<version>`.
+    pub fn kept_dir(&self) -> PathBuf {
+        versioned_bin_dir_in(&self.roots.durable_bin_dir(), &self.version)
+    }
 }
 
-/// Point every sidecar the app spawns at the durable copy an earlier launch
-/// made (they inherit the app's environment): with `TACHO_BIN_DIR` set,
-/// `tacho` writes that path into hooks and the service unit instead of its
-/// own transient one.
+/// Point every sidecar the app spawns at this version's per-user copy (they
+/// inherit the app's environment): with `TACHO_BIN_DIR` set, `tacho` writes
+/// that path into the hooks, the credential helper, the MCP entry and the
+/// service unit instead of the bundle it runs from.
 ///
 /// Called first thing in `run()`, before any thread exists. Changing the
 /// environment once other threads run is unsound on Unix (a concurrent
-/// `getenv` in WebKit or the async runtime can read freed memory), so a copy
-/// made later in the launch is not exported here: `sidecar::run_sidecar`
-/// adds `sidecar_env` to each sidecar it spawns.
+/// `getenv` in WebKit or the async runtime can read freed memory).
+/// `sidecar::run_sidecar` also adds `sidecar_env` to each sidecar it spawns.
 pub fn export_bin_dir() {
     for (key, value) in sidecar_env() {
         std::env::set_var(key, value);
     }
 }
 
-/// What a sidecar needs in its environment on top of the app's own, read
-/// for each spawn so a copy made during this launch is used at once.
+/// What a sidecar needs in its environment on top of the app's own.
 pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
-    sidecar_env_for(sidecar_dir_is_transient(), bin_dir().as_deref())
+    sidecar_env_for(&versioned_bin_dir())
 }
 
-/// Pure: `TACHO_BIN_DIR` at the durable copy while the app runs from a
-/// transient directory. Nothing otherwise: from a directory that lasts,
-/// tacho derives the right path itself, and with no copy yet it refuses to
-/// enroll, which is the point.
-pub fn sidecar_env_for(transient: bool, bin_dir: Option<&Path>) -> std::collections::BTreeMap<String, String> {
+/// Pure: `TACHO_BIN_DIR` at the per-user copy, always. Before the launch
+/// has made the copy, the directory holds no `tacho`, and tacho refuses to
+/// enroll rather than name the bundle it runs from.
+pub fn sidecar_env_for(kept: &Path) -> std::collections::BTreeMap<String, String> {
     let mut env = std::collections::BTreeMap::new();
-    if let (true, Some(dir)) = (transient, bin_dir) {
-        env.insert("TACHO_BIN_DIR".to_string(), dir.display().to_string());
-    }
+    env.insert("TACHO_BIN_DIR".to_string(), kept.display().to_string());
     env
 }
 
@@ -937,27 +984,29 @@ fn link_one(dir: &Path, name: &str, target: &Path, _durable: &Path) -> LinkOutco
     }
 }
 
-/// Copy the two sidecars out of a transient directory into `durable_bin_dir`
-/// so links, hooks and the service unit have a path that outlives this
-/// launch. Returns the directory the links should target.
-#[cfg(not(windows))]
-fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
-    use std::os::unix::fs::PermissionsExt;
-    let durable = durable.to_path_buf();
-    fs::create_dir_all(&durable).map_err(|e| format!("cannot create {}: {e}", durable.display()))?;
+/// Copy the two sidecars out of the app bundle into `kept`, this version's
+/// per-user directory, so the hooks, the credential helper, the MCP entry,
+/// the service unit and the PATH links name a file that outlives the
+/// bundle. A file already there with the bundle's length and a modification
+/// time no older than the bundle's is left as it is, so a launch after the
+/// first copies nothing. Returns `kept`.
+fn keep_sidecars(sidecars: &Path, kept: &Path) -> Result<PathBuf, String> {
+    let kept = kept.to_path_buf();
+    fs::create_dir_all(&kept).map_err(|e| format!("cannot create {}: {e}", kept.display()))?;
     for name in ["oxagen", "tacho"] {
         let from = sidecars.join(exe(name));
-        let to = durable.join(exe(name));
+        let to = kept.join(exe(name));
+        if copy_is_current(&from, &to) {
+            continue;
+        }
         // Copy beside, then rename: a running daemon keeps its old inode
-        // and the link never points at a half-written file.
-        let staging = durable.join(staging_name(&exe(name)));
+        // and a hook never runs a half-written file.
+        let staging = kept.join(staging_name(&exe(name)));
         let staged = fs::copy(&from, &staging)
             .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))
-            .and_then(|_| {
-                fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
-                    .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))
-            })
+            .and_then(|_| make_executable(&staging))
             .and_then(|()| {
+                clear_quarantine(&staging);
                 fs::rename(&staging, &to)
                     .map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))
             });
@@ -966,14 +1015,199 @@ fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
             return Err(e);
         }
     }
-    Ok(durable)
+    Ok(kept)
+}
+
+/// Whether `to` already is the copy of `from` that `keep_sidecars` would
+/// make: a file of the same length, modified no earlier than `from`. A copy
+/// keeps the source's time on macOS and takes the time of the copy on Linux
+/// and Windows, and either is no earlier. A rebuilt bundle of the same
+/// version is newer than the copy, so it is copied again.
+fn copy_is_current(from: &Path, to: &Path) -> bool {
+    let (Ok(source), Ok(copy)) = (fs::metadata(from), fs::metadata(to)) else {
+        return false;
+    };
+    if !copy.is_file() || copy.len() != source.len() {
+        return false;
+    }
+    match (source.modified(), copy.modified()) {
+        (Ok(source), Ok(copy)) => copy >= source,
+        _ => false,
+    }
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+        .map_err(|e| format!("cannot chmod {}: {e}", path.display()))
+}
+
+/// Windows runs a file by its `.exe` name, not a mode bit.
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// macOS: a copy keeps the bundle's extended attributes, and with them the
+/// `com.apple.quarantine` a downloaded app carries. Gatekeeper refuses to run
+/// a quarantined executable that is outside the app the person approved,
+/// and a hook or launchd would then fail to start the copy. The person
+/// approved the app these two binaries ship in, so the copy drops that one
+/// attribute. A copy that has none is left as it is, and a failure here
+/// leaves the copy as the bundle had it.
+#[cfg(target_os = "macos")]
+fn clear_quarantine(path: &Path) {
+    let _ = std::process::Command::new("/usr/bin/xattr")
+        .args(["-d", "com.apple.quarantine"])
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn clear_quarantine(_path: &Path) {}
+
+/// Make this version's per-user copy (`InstallEnv::kept_dir`) from the
+/// bundled sidecars, recording in `created` every directory made for it, so
+/// Uninstall can remove them again. Every launch runs this, whatever the
+/// PATH link setting says: enrollment names the copy, and a PATH link is a
+/// separate choice.
+fn keep_versioned_copy(env: &InstallEnv, created: &mut Vec<PathBuf>) -> Result<PathBuf, String> {
+    let bundled = env
+        .sidecars
+        .as_deref()
+        .ok_or_else(|| "cannot locate the bundled binaries".to_string())?;
+    let kept = env.kept_dir();
+    created.extend(create_dir_tracking(&kept)?);
+    keep_sidecars(bundled, &kept)
+}
+
+/// `keep_versioned_copy`, with what it created written to `desktop.json`.
+fn keep_versioned_copy_recorded(env: &InstallEnv) -> Result<PathBuf, String> {
+    let mut created = Vec::new();
+    let kept = keep_versioned_copy(env, &mut created);
+    record_created(&env.roots, &created)?;
+    kept
+}
+
+/// Every string in a JSON document, however deep. The commands in
+/// `host.json` sit in strings (`hook_command`) and in arrays of them
+/// (`daemon_command`, `mcp_stdio_command`).
+fn json_strings(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::String(text) => out.push(text.clone()),
+        Value::Array(items) => items.iter().for_each(|item| json_strings(item, out)),
+        Value::Object(map) => map.values().for_each(|item| json_strings(item, out)),
+        _ => {}
+    }
+}
+
+/// What names a kept copy on this machine: every string in every agent's
+/// `host.json`, which records the hook, daemon and MCP commands its last
+/// enroll wrote into the harness files and the service, and the target of
+/// each PATH link or shim. `None` when an agent's `host.json` cannot be
+/// read, since then nothing can say which copies it names.
+fn kept_copy_references(env: &InstallEnv) -> Option<Vec<String>> {
+    let mut references = Vec::new();
+    for agent in crate::machine::agents(&env.roots) {
+        json_strings(agent.host.as_ref().ok()?, &mut references);
+    }
+    let links = env.roots.cli_install_dir();
+    for name in ["oxagen", "tacho"] {
+        if let Ok(target) = fs::read_link(links.join(name)) {
+            references.push(target.display().to_string());
+        }
+        if let Ok(shim) = fs::read_to_string(links.join(format!("{name}.cmd"))) {
+            references.push(shim);
+        }
+    }
+    Some(references)
+}
+
+/// Pure: whether any reference names a file inside `dir`. The separator
+/// after the directory keeps `…/bin/2.1.3` from matching `…/bin/2.1.30`.
+pub fn names_dir(references: &[String], dir: &Path) -> bool {
+    let prefix = format!("{}{}", dir.display(), std::path::MAIN_SEPARATOR);
+    references.iter().any(|reference| reference.contains(&prefix))
+}
+
+/// Pure: whether any reference names one of the two files an earlier
+/// release copied into `durable` itself, before copies had a version.
+pub fn names_flat_copy(references: &[String], durable: &Path) -> bool {
+    ["oxagen", "tacho"].iter().any(|name| {
+        let file = durable.join(exe(name)).display().to_string();
+        references.iter().any(|reference| reference.contains(&file))
+    })
+}
+
+/// Remove the two sidecars from `dir`. Nothing else in it is touched. A file
+/// that cannot be removed (on Windows, one a running daemon holds) stays and
+/// is reported in `left`, and the next launch tries again.
+fn remove_sidecars_in(dir: &Path, removed: &mut Vec<String>, left: &mut Vec<String>) {
+    for name in ["oxagen", "tacho"] {
+        let file = dir.join(exe(name));
+        if fs::symlink_metadata(&file).is_err() {
+            continue;
+        }
+        match fs::remove_file(&file) {
+            Ok(()) => removed.push(file.display().to_string()),
+            Err(e) => left.push(format!("cannot remove {}: {e}", file.display())),
+        }
+    }
+}
+
+/// The version directories under `durable`, whatever their version. A name
+/// that starts with a dot is not one.
+fn version_dirs(durable: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(durable) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
+        .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+        .map(|entry| entry.path())
+        .collect();
+    dirs.sort();
+    dirs
+}
+
+/// Remove every per-user copy an earlier version left that nothing on the
+/// machine names any more (ADR-230): the version directories other than
+/// this one, and the flat copy releases before them made in `durable`
+/// itself. A copy some agent's `host.json` or a PATH link still names stays,
+/// because a hook or the service runs it. Nothing is removed while any
+/// agent's `host.json` cannot be read. Returns what was removed.
+pub(crate) fn prune_old_copies(env: &InstallEnv) -> Vec<String> {
+    let Some(references) = kept_copy_references(env) else {
+        return Vec::new();
+    };
+    let durable = env.roots.durable_bin_dir();
+    let kept = env.kept_dir();
+    let mut removed = Vec::new();
+    let mut left = Vec::new();
+    for dir in version_dirs(&durable) {
+        if dir == kept || names_dir(&references, &dir) {
+            continue;
+        }
+        remove_sidecars_in(&dir, &mut removed, &mut left);
+        if crate::machine::remove_dir_if_empty(&dir) {
+            removed.push(dir.display().to_string());
+        }
+    }
+    if !names_flat_copy(&references, &durable) {
+        remove_sidecars_in(&durable, &mut removed, &mut left);
+    }
+    removed
 }
 
 /// A staging name no other copy uses: this process's id and the time.
 /// `INSTALL_LOCK` only orders the threads of one process, and a second app
 /// instance copying at the same moment used to write into the same
 /// `.tacho.tmp` as this one and rename a half-written binary into place.
-#[cfg(not(windows))]
 fn staging_name(file: &str) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1370,11 +1604,11 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
     }
 }
 
-/// The install itself, regardless of the opt-out flag: copy sidecars out of
-/// a transient directory if needed, link or shim each one, and (Unix) make
-/// sure the directory is on PATH for new terminals. For callers that
-/// already hold `INSTALL_LOCK`, which is not reentrant, so nothing here may
-/// take it again.
+/// The install itself, regardless of the opt-out flag: copy the sidecars
+/// into this version's per-user directory, link or shim each one to that
+/// copy, and (Unix) make sure the link directory is on PATH for new
+/// terminals. For callers that already hold `INSTALL_LOCK`, which is not
+/// reentrant, so nothing here may take it again.
 pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
     let roots = &env.roots;
     let dir = roots.cli_install_dir();
@@ -1403,39 +1637,36 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
         }
     }
 
+    let mut created: Vec<PathBuf> = Vec::new();
+
+    // Made before anything else, and whether or not anything is linked:
+    // every command enrollment writes names this copy (ADR-230).
+    let sidecars = match keep_versioned_copy(env, &mut created) {
+        Ok(kept) => kept,
+        Err(e) => {
+            let _ = record_created(roots, &created);
+            view.state = "failed".to_string();
+            view.note = e;
+            return view;
+        }
+    };
+
     // Linux .deb/.rpm etc: externalBin already lives on PATH. Only a
     // durable sidecar directory counts. An AppImage mount, a mounted .dmg or
     // an App Translocation directory can be on PATH for this launch and be
-    // gone by the next one, so that case falls through to the durable copy
-    // and the links below rather than reporting itself installed.
+    // gone by the next one, so that case falls through to the links below
+    // rather than reporting itself installed. The package's own binaries
+    // answer in a terminal. The hooks still name the per-user copy, which a
+    // removed package leaves in place.
     if !env.transient && path_var_contains(&env.process_path, &bundled) {
+        if let Err(e) = record_created(roots, &created) {
+            view.skipped.push(format!("could not record what was created: {e}"));
+        }
         view.state = "already".to_string();
         view.dir = bundled.display().to_string();
         view.note = note_for("already", &view);
         return view;
     }
-
-    let mut created: Vec<PathBuf> = Vec::new();
-
-    #[cfg(not(windows))]
-    let sidecars = if env.transient {
-        // Not exported to this process: see `export_bin_dir`.
-        match create_dir_tracking(&durable).and_then(|made| {
-            created.extend(made);
-            keep_sidecars(&bundled, &durable)
-        }) {
-            Ok(kept) => kept,
-            Err(e) => {
-                view.state = "failed".to_string();
-                view.note = e;
-                return view;
-            }
-        }
-    } else {
-        bundled
-    };
-    #[cfg(windows)]
-    let sidecars = bundled;
 
     // What a *new terminal* would resolve each name to, computed once
     // (login_shell_path spawns a shell). Linking into `dir` where `dir`
@@ -1451,6 +1682,9 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
     // before it. Re-read it here, with the lock held and nothing linked yet,
     // so a "Remove links" that landed in between is not undone.
     if !read_auto_link_cli(roots) {
+        if let Err(e) = record_created(roots, &created) {
+            view.skipped.push(format!("could not record what was created: {e}"));
+        }
         view.state = "opted_out".to_string();
         view.note = note_for("opted_out", &view);
         return view;
@@ -1550,9 +1784,11 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 }
 
 /// The one entry point `lib.rs`'s `setup` calls on every launch, off the
-/// main thread. Honours the `autoLinkCli` opt-out and never overwrites
-/// anything the user or another tool put on PATH. The outcome goes into
-/// `state` before the lock is released: see `CliInstallState::set`.
+/// main thread. Makes this version's per-user copy of the sidecars, links it
+/// onto PATH unless `autoLinkCli` opts out, never overwrites anything the
+/// user or another tool put on PATH, and then removes the copies earlier
+/// versions left that nothing names any more. The outcome goes into `state`
+/// before the lock is released: see `CliInstallState::set`.
 pub fn ensure_cli_installed(state: &CliInstallState) {
     ensure_cli_installed_in(&InstallEnv::real(), state);
 }
@@ -1572,9 +1808,20 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
             path_updated: false,
             note: String::new(),
         };
+        // Opting out of PATH links does not opt out of the copy: the hooks
+        // and the service name it.
+        if let Err(e) = keep_versioned_copy_recorded(env) {
+            view.skipped.push(format!(
+                "could not keep a copy of the tools in {}: {e}",
+                env.kept_dir().display()
+            ));
+        }
         view.note = note_for("opted_out", &view);
         view
     };
+    // After the links moved to this version, so a link into an older copy
+    // no longer holds it.
+    prune_old_copies(env);
     state.set(view.clone());
     view
 }
@@ -1638,14 +1885,20 @@ pub fn install_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>) 
     Ok(result)
 }
 
-/// Every target a link we wrote can point at: this launch's sidecars and the
-/// durable copy. A link at one of these is ours even when the app has since
-/// moved, which is what `is_oxagen_managed_path` alone cannot tell us about
-/// an unbundled (Linux tarball, developer) sidecar directory.
+/// Every target a link we wrote can point at: this version's per-user copy,
+/// the flat copy releases before it made, and this launch's sidecars (where
+/// links pointed before ADR-230). A link at one of these is ours even when
+/// the app has since moved, which is what `is_oxagen_managed_path` alone
+/// cannot tell us about an unbundled (Linux tarball, developer) sidecar
+/// directory.
 #[cfg(not(windows))]
 fn our_link_targets(env: &InstallEnv) -> Vec<PathBuf> {
     let durable = env.roots.durable_bin_dir();
-    let mut targets: Vec<PathBuf> = ["oxagen", "tacho"].iter().map(|name| durable.join(exe(name))).collect();
+    let kept = env.kept_dir();
+    let mut targets: Vec<PathBuf> = ["oxagen", "tacho"]
+        .iter()
+        .flat_map(|name| [kept.join(exe(name)), durable.join(exe(name))])
+        .collect();
     if let Some(sidecars) = &env.sidecars {
         targets.extend(["oxagen", "tacho"].iter().map(|name| sidecars.join(exe(name))));
     }
@@ -1746,8 +1999,8 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
 
 /// "Remove links": removes the symlinks/shims this installer wrote, strips
 /// the profile block(s) it added, and turns off automatic re-linking on the
-/// next launch. The sidecars themselves stay with the app. Ownership is
-/// tested exactly as it is on the way in, so a `oxagen` in the same directory
+/// next launch. The per-user copy of the sidecars stays, because the hooks
+/// and the service name it. Ownership is tested exactly as it is on the way in, so a `oxagen` in the same directory
 /// that we refused to overwrite is also one we refuse to delete. `async` for
 /// the same reason as `install_cli`.
 #[tauri::command(async)]
@@ -1788,7 +2041,7 @@ pub struct RemovalReport {
 
 /// Everything the app itself put on this machine, after `tacho unenroll` has
 /// taken out the hooks and the service: the PATH links and the profile block,
-/// the durable copy of the sidecars, and `~/.config/oxagen`. Refused while
+/// every per-user copy of the sidecars, and `~/.config/oxagen`. Refused while
 /// any agent on the machine is still enrolled. A host `tacho unenroll` has
 /// retired (the revoke could not reach the control plane) is not enrolled:
 /// refusing it made an offline uninstall impossible, forever. What
@@ -1808,21 +2061,20 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
     };
     // Read now as well: `desktop.json` goes with `~/.config/oxagen`.
     let config_dir_created = config_dir_created(roots);
-    // The durable copy: two ~120 MB binaries that nothing removed. Only when
-    // the app is not running from it (it never is: the app runs its bundled
-    // sidecars), and only the two files we copied plus the directories made
-    // for them.
+    // The per-user copies: two ~120 MB binaries per version, and the flat
+    // copy releases before ADR-230 made. Nothing is enrolled, so no hook or
+    // service runs them, and the app runs its bundled sidecars, never these.
+    // Only the two files each directory holds go, then the version directory
+    // when that empties it. The directories an install made above them go
+    // with `remove_created`, below.
     let durable = roots.durable_bin_dir();
-    for name in ["oxagen", "tacho"] {
-        let file = durable.join(exe(name));
-        if file.is_file() {
-            match fs::remove_file(&file) {
-                Ok(()) => report.removed.push(file.display().to_string()),
-                Err(e) => report.left.push(format!("cannot remove {}: {e}", file.display())),
-            }
+    for dir in version_dirs(&durable) {
+        remove_sidecars_in(&dir, &mut report.removed, &mut report.left);
+        if crate::machine::remove_dir_if_empty(&dir) {
+            report.removed.push(dir.display().to_string());
         }
     }
-    // The directories made for it go with `remove_created`, below.
+    remove_sidecars_in(&durable, &mut report.removed, &mut report.left);
 
     let links = unlink_cli_in(env);
     report.removed.extend(links.removed);
@@ -2412,19 +2664,249 @@ mod tests {
         assert!(!t("/home/dev/.local/share/oxagen/bin"));
     }
 
+    /// ADR-230: every sidecar is handed the versioned per-user copy, from a
+    /// bundle in /Applications as much as from a disk image. Before, a
+    /// bundle that lasts got nothing, and tacho wrote the bundle's own path
+    /// into every hook and the service unit, which the Trash then broke.
     #[test]
-    fn a_sidecar_gets_the_durable_copy_only_while_the_app_is_transient() {
+    fn every_sidecar_is_handed_the_versioned_copy() {
         let durable = Path::new("/home/dev/.local/share/oxagen/bin");
-        let env = sidecar_env_for(true, Some(durable));
-        assert_eq!(
-            env.get("TACHO_BIN_DIR").map(String::as_str),
-            Some("/home/dev/.local/share/oxagen/bin")
-        );
+        let kept = versioned_bin_dir_in(durable, "2.1.4-17");
+        assert_eq!(kept, durable.join("2.1.4-17"));
+        let env = sidecar_env_for(&kept);
+        assert_eq!(env.get("TACHO_BIN_DIR"), Some(&kept.display().to_string()));
         assert_eq!(env.len(), 1);
-        // No copy yet: tacho refuses to enroll from the transient directory.
-        assert!(sidecar_env_for(true, None).is_empty());
-        // A directory that lasts: tacho derives it itself.
-        assert!(sidecar_env_for(false, Some(Path::new("/Applications/Oxagen.app/Contents/MacOS"))).is_empty());
+        // The real one names this app's version under the durable directory.
+        let real = sidecar_env();
+        assert_eq!(
+            real.get("TACHO_BIN_DIR").map(PathBuf::from),
+            Some(durable_bin_dir().join(version_dir_name(APP_VERSION)))
+        );
+    }
+
+    #[test]
+    fn a_version_is_one_directory_name() {
+        assert_eq!(version_dir_name("2.1.3"), "2.1.3");
+        assert_eq!(version_dir_name("2.1.4-17"), "2.1.4-17");
+        assert_eq!(version_dir_name("2.1.4+sha.abc"), "2.1.4+sha.abc");
+        // No separator, parent or quote survives into the path.
+        assert_eq!(version_dir_name("../evil"), ".._evil");
+        assert_eq!(version_dir_name("a/b\\c d'e"), "a_b_c_d_e");
+        assert_eq!(version_dir_name(".."), "unversioned");
+        assert_eq!(version_dir_name(""), "unversioned");
+        assert_eq!(
+            versioned_bin_dir_in(Path::new("/d"), "2.1.3"),
+            Path::new("/d").join("2.1.3")
+        );
+    }
+
+    /// `…/2.1.3` is not named by a command in `…/2.1.30`, and the flat copy
+    /// is not named by a command in a version directory.
+    #[test]
+    fn a_reference_names_only_its_own_directory() {
+        let durable = Path::new("/d/oxagen/bin");
+        let old = durable.join("2.1.3");
+        let sep = std::path::MAIN_SEPARATOR;
+        let quoted = format!("'{}{sep}tacho' hook", old.display());
+        assert!(names_dir(std::slice::from_ref(&quoted), &old));
+        let longer = format!("{}{sep}tacho", durable.join("2.1.30").display());
+        assert!(!names_dir(std::slice::from_ref(&longer), &old));
+        assert!(!names_flat_copy(std::slice::from_ref(&quoted), durable));
+        let flat = durable.join(exe("tacho")).display().to_string();
+        assert!(names_flat_copy(&[flat], durable));
+        assert!(!names_dir(&[], &old));
+    }
+
+    fn put_file(path: &Path, text: &[u8]) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    /// An environment over a scratch home, with the bundled sidecars in a
+    /// directory the Trash can take away.
+    fn scratch_env(label: &str, version: &str) -> InstallEnv {
+        let roots = crate::machine::test_support::scratch_roots(label, "/bin/zsh");
+        let bundle = roots
+            .home
+            .join("Applications")
+            .join("Oxagen.app")
+            .join("Contents")
+            .join("MacOS");
+        for name in ["oxagen", "tacho"] {
+            put_file(&bundle.join(exe(name)), format!("{name} {version}").as_bytes());
+        }
+        InstallEnv {
+            roots,
+            sidecars: Some(bundle),
+            transient: false,
+            version: version.to_string(),
+            process_path: String::new(),
+            login_path: Some(String::new()),
+        }
+    }
+
+    /// ADR-230: the copy is made on every launch, not only from a disk
+    /// image, and a launch that finds it current copies nothing.
+    #[test]
+    fn a_launch_keeps_a_copy_of_this_version_and_the_next_one_copies_nothing() {
+        let env = scratch_env("kept-copy", "2.1.3");
+        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        assert_eq!(kept, env.roots.durable_bin_dir().join("2.1.3"));
+        assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
+        assert!(has_both_sidecars(&kept));
+        // The directories made for it are recorded, so Uninstall removes them.
+        let created = read_created(&env.roots);
+        assert!(created.contains(&kept.display().to_string()), "{created:?}");
+
+        // A copy of the same length, no older than the bundle: left alone.
+        fs::write(kept.join(exe("tacho")), b"TACHO 2.1.3").unwrap();
+        keep_versioned_copy_recorded(&env).unwrap();
+        assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"TACHO 2.1.3");
+
+        // A rebuilt bundle of the same version is newer: copied again.
+        let bundled = env.sidecars.clone().unwrap().join(exe("tacho"));
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(120);
+        fs::File::options()
+            .write(true)
+            .open(&bundled)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        keep_versioned_copy_recorded(&env).unwrap();
+        assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
+    }
+
+    /// A downloaded bundle is quarantined, and a copy keeps extended
+    /// attributes. Gatekeeper would refuse the quarantined copy when a hook
+    /// or launchd starts it, so the copy drops the attribute. The bundle
+    /// keeps its own.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_copy_drops_the_quarantine_a_downloaded_bundle_carries() {
+        fn xattr(args: &[&str], path: &Path) -> bool {
+            std::process::Command::new("/usr/bin/xattr")
+                .args(args)
+                .arg(path)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        }
+        let env = scratch_env("quarantine", "2.1.3");
+        let bundled = env.sidecars.clone().unwrap().join("tacho");
+        assert!(xattr(
+            &["-w", "com.apple.quarantine", "0081;00000000;Safari;"],
+            &bundled
+        ));
+        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        assert!(xattr(&["-p", "com.apple.quarantine"], &bundled));
+        assert!(!xattr(&["-p", "com.apple.quarantine"], &kept.join("tacho")));
+        assert_eq!(fs::read(kept.join("tacho")).unwrap(), b"tacho 2.1.3");
+    }
+
+    /// Audit D-03: an update copies the new version beside the one the
+    /// daemon and the hooks run, so no file they hold is replaced. The old
+    /// copy stays while any `host.json` names it, and goes on the first
+    /// launch after nothing does.
+    #[test]
+    fn an_update_keeps_the_running_version_until_nothing_names_it() {
+        let old = scratch_env("update", "2.1.3");
+        // No PATH links in this test: the copy is made either way.
+        write_auto_link_cli(&old.roots, false).unwrap();
+        ensure_cli_installed_in(&old, &CliInstallState::default());
+        let old_dir = old.kept_dir();
+        assert!(has_both_sidecars(&old_dir));
+        let host = old.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
+        let enrolled_on = |dir: &Path| {
+            let tacho = dir.join(exe("tacho")).display().to_string();
+            serde_json::json!({
+                "host_enrollment_id": "tch_1",
+                "revoked_at": null,
+                "hook_command": format!("'{tacho}' hook"),
+                "daemon_command": [tacho, "daemon"],
+            })
+            .to_string()
+        };
+        put_file(&host, enrolled_on(old_dir.as_path()).as_bytes());
+
+        // The update: a new bundle, a new version.
+        let new = scratch_env_over(&old, "2.1.4");
+        ensure_cli_installed_in(&new, &CliInstallState::default());
+        let new_dir = new.kept_dir();
+        assert_ne!(new_dir, old_dir);
+        assert!(has_both_sidecars(&new_dir));
+        // The running version is untouched.
+        assert_eq!(fs::read(old_dir.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
+
+        // Re-apply moves the enrollment onto the new copy. The next launch
+        // removes the old one.
+        put_file(&host, enrolled_on(new_dir.as_path()).as_bytes());
+        let removed = prune_old_copies(&new);
+        assert!(!old_dir.exists(), "{removed:?}");
+        assert!(has_both_sidecars(&new_dir));
+    }
+
+    /// The same bundle directory and home as `env`, carrying `version`.
+    fn scratch_env_over(env: &InstallEnv, version: &str) -> InstallEnv {
+        let bundle = env.sidecars.clone().unwrap();
+        for name in ["oxagen", "tacho"] {
+            put_file(&bundle.join(exe(name)), format!("{name} {version}").as_bytes());
+        }
+        InstallEnv {
+            roots: env.roots.clone(),
+            sidecars: Some(bundle),
+            transient: false,
+            version: version.to_string(),
+            process_path: String::new(),
+            login_path: Some(String::new()),
+        }
+    }
+
+    /// While a `host.json` cannot be read, nothing can say which copy it
+    /// names, so none is removed.
+    #[test]
+    fn no_copy_is_removed_while_a_host_file_cannot_be_read() {
+        let old = scratch_env("unreadable", "2.1.3");
+        keep_versioned_copy_recorded(&old).unwrap();
+        let host = old.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
+        put_file(&host, b"{ truncated");
+        let new = scratch_env_over(&old, "2.1.4");
+        keep_versioned_copy_recorded(&new).unwrap();
+        assert!(prune_old_copies(&new).is_empty());
+        assert!(has_both_sidecars(&old.kept_dir()));
+        // Once it reads and names nothing, the old copy goes.
+        put_file(&host, br#"{"host_enrollment_id":"tch_1","revoked_at":null}"#);
+        prune_old_copies(&new);
+        assert!(!old.kept_dir().exists());
+        assert!(has_both_sidecars(&new.kept_dir()));
+    }
+
+    /// The flat copy releases before ADR-230 made for a disk-image launch
+    /// stays while an enrollment names it, and goes once none does. Only
+    /// the two sidecars go: anything else in the directory is not ours.
+    #[test]
+    fn the_flat_copy_an_earlier_release_made_goes_once_nothing_names_it() {
+        let env = scratch_env("flat", "2.1.4");
+        let durable = env.roots.durable_bin_dir();
+        for name in ["oxagen", "tacho"] {
+            put_file(&durable.join(exe(name)), name.as_bytes());
+        }
+        put_file(&durable.join("notes.txt"), b"mine");
+        let host = env.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
+        let flat = durable.join(exe("tacho")).display().to_string();
+        let named = serde_json::json!({
+            "host_enrollment_id": "tch_1",
+            "revoked_at": null,
+            "daemon_command": [flat, "daemon"],
+        });
+        put_file(&host, named.to_string().as_bytes());
+        prune_old_copies(&env);
+        assert!(durable.join(exe("tacho")).is_file());
+        put_file(&host, br#"{"host_enrollment_id":"tch_1","revoked_at":null}"#);
+        prune_old_copies(&env);
+        assert!(!durable.join(exe("tacho")).exists());
+        assert!(!durable.join(exe("oxagen")).exists());
+        assert_eq!(fs::read(durable.join("notes.txt")).unwrap(), b"mine");
     }
 
     /// An app copied to an external disk stays there, and counting it as a

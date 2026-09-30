@@ -1768,7 +1768,8 @@ describe("harnesses and reassign", () => {
     expect(cursor.version).toBe(1);
     expect(cursor.hooks["preToolUse"]?.map((e) => e.command)).toEqual([
       "./mine.sh",
-      `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+      // ADR-230: an allow, not a failed spawn, once the collector is gone.
+      `test ! -e /opt/tacho/tacho-hook.mjs && printf '%s\\n' '{"permission":"allow"}' && exit 0; exec node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
     ]);
     expect(Object.keys(cursor.hooks).sort()).toEqual(
       [...CURSOR_HOOK_EVENTS].sort(),
@@ -3136,7 +3137,7 @@ describe("stella", () => {
       ),
     ).toBe(true);
     expect(text).toContain(
-      `command = "node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness stella"`,
+      `command = "test ! -e /opt/tacho/tacho-hook.mjs && exit 0; exec node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness stella"`,
     );
     expect(existsSync(d.paths.stellaSettingsJson)).toBe(false);
     expect(d.lines.join("\n")).toContain(`Stella: ${d.paths.stellaToml}`);
@@ -3509,7 +3510,7 @@ describe("cursor", () => {
       // The veto points fail closed: Cursor proceeds by default when a hook
       // crashes or times out, so without this a dead collector means allow.
       expect(document.hooks["preToolUse"]?.at(-1)).toMatchObject({
-        command: `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+        command: `test ! -e /opt/tacho/tacho-hook.mjs && printf '%s\\n' '{"permission":"allow"}' && exit 0; exec node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
         failClosed: true,
       });
       expect(document.hooks["beforeSubmitPrompt"]?.[0]).toMatchObject({

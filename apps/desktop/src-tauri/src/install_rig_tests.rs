@@ -1,6 +1,7 @@
 //! The desktop half of the install and uninstall rig. It runs "Link into
-//! PATH" and "Uninstall" for real against a scratch home seeded with a
-//! user's own files, and compares the whole tree before and after. Nothing
+//! PATH", the launch-time copy of the sidecars, and "Uninstall" for real
+//! against a scratch home seeded with a user's own files, and compares the
+//! whole tree before and after. Nothing
 //! here reads `$HOME`, `$SHELL` or the real `~/.local/bin`: every path comes
 //! from a `Roots` over a temp directory, and no login shell is spawned. The
 //! other half, `tacho enroll` and `unenroll`, is
@@ -22,6 +23,10 @@ fn put(path: &Path, text: &[u8]) {
     fs::write(path, text).unwrap();
 }
 
+/// The version every rig environment carries, and so the name of the
+/// per-user directory its sidecars are copied into.
+const RIG_VERSION: &str = "2.1.3";
+
 /// The installed app's sidecars, and an environment that never asks a shell.
 fn env_for(roots: Roots, transient: bool) -> InstallEnv {
     let sidecars: PathBuf = roots
@@ -37,6 +42,7 @@ fn env_for(roots: Roots, transient: bool) -> InstallEnv {
         roots,
         sidecars: Some(sidecars),
         transient,
+        version: RIG_VERSION.to_string(),
         process_path: "/usr/bin:/bin".to_string(),
         login_path: Some("/usr/bin:/bin".to_string()),
     }
@@ -66,11 +72,10 @@ fn link_twice_then_uninstall_twice_leaves_the_home_byte_identical() {
 
     let first = link_cli_in(&env, &CliInstallState::default()).unwrap();
     assert_eq!(first.state, "linked", "{first:?}");
+    // The link names the per-user copy, never the bundle (ADR-230).
     let link = env.roots.home.join(".local/bin/tacho");
-    assert_eq!(
-        fs::read_link(&link).unwrap(),
-        env.sidecars.clone().unwrap().join("tacho")
-    );
+    assert_eq!(fs::read_link(&link).unwrap(), env.kept_dir().join("tacho"));
+    assert_eq!(env.kept_dir(), env.roots.durable_bin_dir().join(RIG_VERSION));
     assert_eq!(
         fs::read(env.roots.home.join(".local/bin/oxagen")).unwrap(),
         b"#!/bin/sh\necho mine\n"
@@ -131,19 +136,56 @@ fn a_created_profile_the_user_has_since_written_in_is_kept() {
 
 #[cfg(unix)]
 #[test]
-fn the_durable_copy_made_for_a_disk_image_launch_is_removed() {
+fn the_versioned_copy_made_for_a_disk_image_launch_is_removed() {
     let env = env_for(scratch_roots("transient", "/bin/zsh"), true);
     put(&env.roots.home.join(".zprofile"), USER_ZPROFILE.as_bytes());
     let before = snapshot(&env.roots.home);
     assert_eq!(link_cli_in(&env, &CliInstallState::default()).unwrap().state, "linked");
-    let durable = env.roots.durable_bin_dir();
-    assert!(durable.join("tacho").is_file());
+    let kept = env.kept_dir();
+    assert!(kept.join("tacho").is_file());
     assert_eq!(
         fs::read_link(env.roots.home.join(".local/bin/tacho")).unwrap(),
-        durable.join("tacho")
+        kept.join("tacho")
     );
     remove_everything_in(&env, &CliInstallState::default()).unwrap();
     assert_eq!(snapshot(&env.roots.home), before);
+}
+
+/// #4298: the app moved to the Trash takes its bundle with it. Every link,
+/// and the per-user copy the hooks name, is outside the bundle, so each
+/// still resolves to a file.
+#[cfg(unix)]
+#[test]
+fn the_app_in_the_trash_leaves_every_link_resolving_to_the_kept_copy() {
+    let env = env_for(scratch_roots("trash", "/bin/zsh"), false);
+    assert_eq!(link_cli_in(&env, &CliInstallState::default()).unwrap().state, "linked");
+    let bundle = env.sidecars.clone().unwrap();
+    // The whole `Oxagen.app`, as Finder removes it.
+    fs::remove_dir_all(bundle.parent().unwrap().parent().unwrap()).unwrap();
+    assert!(!bundle.exists());
+    let kept = fs::canonicalize(env.kept_dir()).unwrap();
+    for name in ["oxagen", "tacho"] {
+        let resolved = fs::canonicalize(env.roots.home.join(".local/bin").join(name)).unwrap();
+        assert!(resolved.starts_with(&kept), "{resolved:?}");
+        assert!(resolved.is_file());
+    }
+}
+
+/// A Linux package whose binaries are already on PATH needs no link, and
+/// still gets the per-user copy: removing the package takes `/usr/bin/tacho`
+/// with it, and the hooks name the copy.
+#[cfg(unix)]
+#[test]
+fn a_package_already_on_path_still_gets_the_kept_copy() {
+    let mut env = env_for(scratch_roots("package", "/bin/zsh"), false);
+    env.process_path = format!("{}:/usr/bin", env.sidecars.clone().unwrap().display());
+    let before = snapshot(&env.roots.home);
+    let view = link_cli_in(&env, &CliInstallState::default()).unwrap();
+    assert_eq!(view.state, "already", "{view:?}");
+    assert!(env.kept_dir().join("tacho").is_file());
+    assert!(!env.roots.home.join(".local/bin").exists());
+    remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert_eq!(snapshot(&env.roots.home), without_oxagen_dir(before));
 }
 
 #[cfg(unix)]
@@ -260,9 +302,30 @@ fn uninstall_is_refused_while_any_agent_is_still_enrolled() {
     assert!(!root.exists());
 }
 
+/// `tree` without the per-user copy, the directories above it, and
+/// `desktop.json`, which records the directories made for the copy.
+fn without_kept_copy(
+    env: &InstallEnv,
+    mut tree: std::collections::BTreeMap<String, String>,
+) -> std::collections::BTreeMap<String, String> {
+    let data_local = env
+        .roots
+        .data_local
+        .strip_prefix(&env.roots.home)
+        .unwrap()
+        .to_path_buf();
+    tree.retain(|path, _| {
+        let path = Path::new(path);
+        !path.starts_with(&data_local)
+            && !data_local.starts_with(path)
+            && path != Path::new(".config/oxagen/desktop.json")
+    });
+    tree
+}
+
 #[cfg(unix)]
 #[test]
-fn remove_links_without_a_link_and_an_opted_out_launch_change_nothing() {
+fn remove_links_without_a_link_changes_nothing_and_an_opted_out_launch_only_keeps_the_copy() {
     let env = env_for(scratch_roots("noop", "/bin/zsh"), false);
     put(&env.roots.home.join(".zprofile"), USER_ZPROFILE.as_bytes());
     let before = snapshot(&env.roots.home);
@@ -275,7 +338,14 @@ fn remove_links_without_a_link_and_an_opted_out_launch_change_nothing() {
         ensure_cli_installed_in(&env, &CliInstallState::default()).state,
         "opted_out"
     );
-    assert_eq!(snapshot(&env.roots.home), opted_out);
+    // No link and no profile edit. The copy is made all the same, because
+    // enrollment names it whatever the PATH setting says (ADR-230).
+    assert!(env.kept_dir().join("tacho").is_file());
+    assert!(!env.roots.home.join(".local/bin").exists());
+    assert_eq!(
+        without_kept_copy(&env, snapshot(&env.roots.home)),
+        without_kept_copy(&env, opted_out)
+    );
 }
 
 #[cfg(unix)]
@@ -287,10 +357,7 @@ fn a_stale_link_into_an_older_app_is_replaced_and_a_foreign_one_is_not() {
     std::os::unix::fs::symlink("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho", bin.join("tacho")).unwrap();
     std::os::unix::fs::symlink("/opt/homebrew/Cellar/oxagen/1.0/bin/oxagen", bin.join("oxagen")).unwrap();
     link_cli_in(&env, &CliInstallState::default()).unwrap();
-    assert_eq!(
-        fs::read_link(bin.join("tacho")).unwrap(),
-        env.sidecars.clone().unwrap().join("tacho")
-    );
+    assert_eq!(fs::read_link(bin.join("tacho")).unwrap(), env.kept_dir().join("tacho"));
     assert_eq!(
         fs::read_link(bin.join("oxagen")).unwrap(),
         Path::new("/opt/homebrew/Cellar/oxagen/1.0/bin/oxagen")

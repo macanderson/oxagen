@@ -187,9 +187,9 @@ struct DesktopState {
     /// The sidecar directory is gone after this launch (AppImage mount,
     /// mounted .dmg, App Translocation); see `is_transient_dir`.
     sidecar_transient: bool,
-    /// The directory hooks and the service may reference: the sidecar
-    /// directory, or the durable copy `install_cli` made; None while the
-    /// app runs from a transient directory with no copy yet.
+    /// The directory hooks and the service may reference: this version's
+    /// per-user copy of the sidecars (ADR-230), None until the launch-time
+    /// pass has made it.
     bin_dir: Option<String>,
     oxagen_on_path: Option<String>,
     tacho_on_path: Option<String>,
@@ -392,11 +392,10 @@ fn macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Before any sidecar is spawned, and before any thread exists: a durable
-    // copy from an earlier launch is what tacho must write into hooks when
-    // the app runs from an AppImage or a mounted .dmg. A copy
-    // `ensure_cli_installed` makes later in this launch reaches the sidecars
-    // through `sidecar::run_sidecar` instead; see `cli_install::export_bin_dir`.
+    // Before any sidecar is spawned, and before any thread exists: the
+    // per-user copy of this version is what tacho must write into the hooks
+    // and the service, never the bundle (ADR-230). See
+    // `cli_install::export_bin_dir`.
     cli_install::export_bin_dir();
     // Before any sidecar can create `~/.config`, so Uninstall knows whether
     // the person had one already. See `cli_install::record_config_dir`.

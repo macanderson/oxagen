@@ -82,14 +82,28 @@ collector's `/status` on loopback) and every action runs a sidecar:
 ### What installing does
 
 The two CLIs ship inside the app bundle (`externalBin`). On every launch the
-app links them onto PATH itself — there is nothing to click for a fresh
-install to work from a terminal. `cli_install::ensure_cli_installed`
-(`src-tauri/src/cli_install.rs`) runs once per launch, off the main thread:
+app copies them out of the bundle and links that copy onto PATH itself, so
+there is nothing to click for a fresh install to work from a terminal.
+`cli_install::ensure_cli_installed` (`src-tauri/src/cli_install.rs`) runs
+once per launch, off the main thread:
 
+- **Keeps a versioned per-user copy (ADR-230).** Both sidecars are copied
+  into `<data-local>/oxagen/bin/<version>`: `~/Library/Application
+  Support/oxagen/bin/<version>` on macOS, `~/.local/share/oxagen/bin/<version>`
+  on Linux, `%LOCALAPPDATA%\oxagen\bin\<version>` on Windows. It happens on
+  every launch, with PATH linking on or off, and a copy that is already
+  current is left alone. Every sidecar the app runs gets `TACHO_BIN_DIR` set
+  to that directory, so `tacho enroll` writes it into every hook, the
+  credential helper, the MCP entry and the service unit, never a path in the
+  bundle. Moving the app to the Trash or removing the package leaves the
+  copy, so the hooks keep running. A new version copies itself beside the
+  old one, so an update never replaces a file the running collector holds.
+  The hooks and the collector move to it on **Re-apply**, and a later launch
+  removes an old version once no `host.json` and no PATH link names it.
 - **Never clobbers what it didn't write.** A missing link is created; a
   symlink (or, on Windows, a `.cmd` shim) that already points at an Oxagen
-  location — an older app path, an AppImage/App Translocation copy, or the
-  durable `<data-local>/oxagen/bin` copy — is replaced; anything else (a
+  location — an older app path, an AppImage/App Translocation copy, or a
+  per-user copy under `<data-local>/oxagen/bin` — is replaced; anything else (a
   Homebrew `oxagen`, a hand-written shim, a plain file) is left alone and
   reported back, never overwritten.
 - **Puts the directory on PATH for new terminals too**, not just this
@@ -303,10 +317,13 @@ runs the new build either way. A download, signature, or install error logs
 to the Activity panel and falls back to the prompt for the same version.
 
 Every install restarts the collector (`restart_tacho_service`): launchd's
-`kickstart -k` on macOS, `systemctl --user restart` on Linux. The collector
-runs from the sidecar inside the bundle, so without the restart it kept the
-old binary until the next sign-out or `tacho enroll`. The restart skips a
-service that is not loaded (macOS) or not active (Linux), so it starts nothing.
+`kickstart -k` on macOS, `systemctl --user restart` on Linux. The restart skips
+a service that is not loaded (macOS) or not active (Linux), so it starts
+nothing. Since ADR-230 the collector runs from the per-user copy its last
+enroll named, not from the bundle, so an install replaces no file it holds and
+the restart keeps its version. The next launch copies the new version beside
+it, and the panel offers **Re-apply**, which moves the hooks and the collector
+to the new copy.
 
 ### Signing key
 

@@ -7,6 +7,7 @@
  * write.
  */
 import type { TachoHarness } from "../wire";
+import { skipWhenCollectorAbsent } from "./hook-guard";
 
 /** Enforcement events run `tacho-hook` as a command hook (fail closed). */
 export const COMMAND_HOOK_EVENTS = [
@@ -107,16 +108,26 @@ export interface HookInstallConfig {
  * so its writer (`codex-writer.ts`) composes these helpers differently;
  * Stella's writer (`stella-writer.ts`) takes the command line and replaces
  * the timeout with its own millisecond field.
+ *
+ * `absentAnswer` is for a harness that blocks when a hook cannot run
+ * (Cursor, Stella): the command then prints it and exits 0 when the
+ * collector's executable is not installed (`skipWhenCollectorAbsent`,
+ * ADR-230). Left out, the command runs the collector and nothing else.
  */
 export function commandHookEntry(
   config: HookInstallConfig,
   timeoutS: number,
   harness: TachoHarness = "claude-code",
+  absentAnswer?: string,
 ): HookEntry {
   const tag = harness === "claude-code" ? "" : ` --harness ${harness}`;
+  const command = `${config.hookCommand} ${hookMarker(config.enrollmentId)}${tag}`;
   return {
     type: "command",
-    command: `${config.hookCommand} ${hookMarker(config.enrollmentId)}${tag}`,
+    command:
+      absentAnswer === undefined
+        ? command
+        : skipWhenCollectorAbsent(config.hookCommand, command, absentAnswer),
     timeout: timeoutS,
   };
 }
