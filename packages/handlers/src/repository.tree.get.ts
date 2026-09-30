@@ -28,6 +28,11 @@ import {
   type RepositoryTreeGetOutput,
 } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { INIT_BRANCH } from "@oxagen/oxagen/contracts/repository.init_pr.open";
+import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
+import {
+  governanceSchema,
+  resolveGovernance,
+} from "@oxagen/oxagen/steering-repo/governance";
 import {
   GOVERNANCE_TOML_PATH,
   LEGACY_OXAGEN_DIR,
@@ -56,11 +61,21 @@ export interface RepositoryTreeDeps {
   now: () => Date;
 }
 
-/** The mode a governance.toml's text declares, in the contract's words. */
+/**
+ * The mode a governance.toml's text declares, in the contract's words. A
+ * steering repository's file must read as governance/v1 in full, as the merge
+ * queue and `readSteeringLayout` read it: a file they refuse holds no mode in
+ * force, however clear its `mode` line is. A legacy file needs only its mode.
+ */
 export function declaredMode(
   text: string | null,
+  layout: "steering" | "legacy" = "legacy",
 ): RepositoryTreeGetOutput["governanceMode"] {
   if (text === null) return "absent";
+  if (layout === "steering") {
+    const read = readTomlFile(text, "governance/v1", governanceSchema);
+    return read.ok ? resolveGovernance(read.value).mode : "invalid";
+  }
   const mode = parseGovernanceMode(text);
   return typeof mode === "string" ? mode : "invalid";
 }
@@ -151,7 +166,10 @@ export function createRepositoryTreeGetHandler(
       workspaceToml,
       governancePath,
       governanceToml,
-      governanceMode: declaredMode(governanceToml),
+      governanceMode: declaredMode(
+        governanceToml,
+        governancePath === GOVERNANCE_TOML_PATH ? "steering" : "legacy",
+      ),
       initPullRequest: pr ? { number: pr.number, htmlUrl: pr.htmlUrl } : null,
       readAt: deps.now().toISOString(),
     };

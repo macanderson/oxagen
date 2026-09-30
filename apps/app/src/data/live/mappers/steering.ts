@@ -267,7 +267,9 @@ export function toMemoryPage(
 export function toOxagenTree(
   out: ContractOutput<typeof repositoryTreeGet>,
 ): z.input<typeof OxagenTree> {
-  const steering = out.steering.present;
+  // The layout is the governance file's: a legacy repository can hold an
+  // unrelated steering/ folder, and its tree is still .oxagen/.
+  const steering = out.governancePath.startsWith(`${STEERING_DIR}/`);
   const root = steering ? STEERING_DIR : LEGACY_OXAGEN_DIR;
   const prefix = `${root}/`;
   return {

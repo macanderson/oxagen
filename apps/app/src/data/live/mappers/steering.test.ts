@@ -217,6 +217,22 @@ describe("toOxagenTree", () => {
     });
   });
 
+  it("lists a legacy repository's .oxagen/ tree beside an unrelated steering/ folder", () => {
+    const tree = toOxagenTree(
+      repositoryTreeGet.output.parse({
+        ...base,
+        oxagen: { present: true, files: [".oxagen/workspace.toml"] },
+        steering: { present: true, files: ["steering/notes.md"] },
+        governancePath: ".oxagen/rules/governance.toml",
+      }),
+    );
+    expect(tree).toMatchObject({
+      root: ".oxagen",
+      files: ["workspace.toml"],
+      governancePath: ".oxagen/rules/governance.toml",
+    });
+  });
+
   it("lists a legacy repository's .oxagen/ tree", () => {
     const tree = toOxagenTree(
       repositoryTreeGet.output.parse({

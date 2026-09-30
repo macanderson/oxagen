@@ -182,13 +182,25 @@ describe("get_repository_tree", () => {
       ]),
       getFileContent: vi.fn(async (args: { path: string }) =>
         args.path === "steering/governance.toml"
-          ? 'mode = "regulated"\n'
+          ? 'schema = "governance/v1"\nmode = "regulated"\n'
           : 'mode = "solo"\n',
       ),
     });
     const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
     expect(out.governancePath).toBe("steering/governance.toml");
     expect(out.governanceMode).toBe("regulated");
+  });
+
+  it("reads a steering file governance/v1 refuses as invalid, whatever its mode line says", async () => {
+    // readSteeringLayout and the merge queue refuse this file, so no mode is
+    // in force, and the page must not report team.
+    const client = fakeGithub({
+      getTree: vi.fn(async () => ["steering/governance.toml"]),
+      getFileContent: vi.fn(async () => 'mode = "team"\n'),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("invalid");
   });
 
   it("answers head null and an empty tree when the production branch is gone from GitHub", async () => {
@@ -294,5 +306,20 @@ describe("declaredMode", () => {
     expect(declaredMode('mode = "solo"')).toBe("solo");
     expect(declaredMode('mode = "lax"')).toBe("invalid");
     expect(declaredMode("not toml [")).toBe("invalid");
+  });
+
+  it("reads a steering file as governance/v1 in full", () => {
+    const valid = 'schema = "governance/v1"\nmode = "team"\n';
+    expect(declaredMode(valid, "steering")).toBe("team");
+    // No schema line, an unknown key, and a rule the mode breaks.
+    expect(declaredMode('mode = "team"\n', "steering")).toBe("invalid");
+    expect(declaredMode(`${valid}colour = "gold"\n`, "steering")).toBe(
+      "invalid",
+    );
+    expect(
+      declaredMode(`${valid}\n[memory]\nauto_merge = true\n`, "steering"),
+    ).toBe("invalid");
+    // The legacy file still needs only its mode.
+    expect(declaredMode('mode = "team"\n', "legacy")).toBe("team");
   });
 });
