@@ -330,7 +330,8 @@ describe("probeModelCredential — direct vendors and custom endpoints", () => {
     expect(out).toMatchObject({
       ok: true,
       toolCalling: false,
-      error: "tools are not supported for this model",
+      failingTier: "balanced",
+      error: "balanced tier (some-model): tools are not supported for this model",
     });
   });
 
@@ -371,5 +372,239 @@ describe("probeModelCredential — direct vendors and custom endpoints", () => {
       toolProbeModel: "m",
     });
     expect(JSON.stringify(out)).not.toContain(KEY);
+  });
+});
+
+type Sent = { url: string; body: Record<string, unknown> | null; init: RequestInit };
+
+/** Every request the probe sent, with its JSON body parsed. */
+function sent(fetchMock: ReturnType<typeof stubFetch>): Sent[] {
+  return fetchMock.mock.calls.map((call) => {
+    const [url, init] = call as [string, RequestInit];
+    return {
+      url: String(url),
+      init,
+      body:
+        typeof init.body === "string"
+          ? (JSON.parse(init.body) as Record<string, unknown>)
+          : null,
+    };
+  });
+}
+
+const toolCall = () =>
+  jsonResponse(200, {
+    choices: [
+      {
+        finish_reason: "tool_calls",
+        message: { tool_calls: [{ function: { name: "ping" } }] },
+      },
+    ],
+  });
+const prose = () =>
+  jsonResponse(200, {
+    choices: [{ finish_reason: "stop", message: { content: "pong" } }],
+  });
+
+describe("probeModelCredential: every mapped tier (#3314)", () => {
+  it("asks each model an openai key maps, once each, at the endpoint the turn uses, and names the tier that fails", async () => {
+    const fetchMock = stubFetch(async (url, init) => {
+      if (String(url).endsWith("/models")) return jsonResponse(200, { data: [] });
+      const body = JSON.parse((init as RequestInit).body as string) as {
+        model: string;
+      };
+      return body.model === "gpt-5-mini" ? toolCall() : prose();
+    });
+    const out = await probeModelCredential({
+      provider: "openai",
+      apiKey: KEY,
+      toolProbeModels: {
+        fast: "gpt-5-mini",
+        balanced: "gpt-5.2",
+        precise: "gpt-5.2",
+      },
+    });
+    expect(out).toMatchObject({
+      ok: true,
+      toolCalling: false,
+      toolCallingByTier: { fast: true, balanced: false, precise: false },
+      failingTier: "balanced",
+      structuredOutputs: null,
+    });
+    const requests = sent(fetchMock);
+    // The key read, then one completion per distinct model, never three.
+    expect(requests).toHaveLength(3);
+    const completions = requests.slice(1);
+    expect(completions.map((r) => r.url)).toEqual([
+      "https://api.openai.com/v1/chat/completions",
+      "https://api.openai.com/v1/chat/completions",
+    ]);
+    expect(completions.map((r) => r.body?.model).sort()).toEqual([
+      "gpt-5-mini",
+      "gpt-5.2",
+    ]);
+    for (const r of completions) {
+      expect(
+        (r.init.headers as Record<string, string>).Authorization,
+      ).toBe(`Bearer ${KEY}`);
+      // OpenAI refuses max_tokens on its reasoning models.
+      expect(r.body?.max_completion_tokens).toBeGreaterThan(0);
+      expect(r.body?.max_tokens).toBeUndefined();
+      expect(r.body?.tool_choice).toEqual({
+        type: "function",
+        function: { name: "ping" },
+      });
+    }
+  });
+
+  it("asks an anthropic key's mapped model on Anthropic's OpenAI-compatible endpoint, as the runtime client does", async () => {
+    const fetchMock = stubFetch(async (url) =>
+      String(url).endsWith("/models") ? jsonResponse(200, { data: [] }) : toolCall(),
+    );
+    const out = await probeModelCredential({
+      provider: "anthropic",
+      apiKey: KEY,
+      toolProbeModels: { balanced: "claude-sonnet-4-5" },
+    });
+    expect(out).toMatchObject({
+      ok: true,
+      toolCalling: true,
+      toolCallingByTier: { balanced: true },
+      failingTier: null,
+      error: null,
+    });
+    const [keyRead, completion] = sent(fetchMock);
+    // The key read keeps Anthropic's own header; the completion goes where
+    // the turn's does, with the bearer token the compatible client sends.
+    expect((keyRead!.init.headers as Record<string, string>)["x-api-key"]).toBe(
+      KEY,
+    );
+    expect(completion!.url).toBe("https://api.anthropic.com/v1/chat/completions");
+    expect(
+      (completion!.init.headers as Record<string, string>).Authorization,
+    ).toBe(`Bearer ${KEY}`);
+    expect(completion!.body).toMatchObject({
+      model: "claude-sonnet-4-5",
+      max_tokens: 64,
+    });
+  });
+
+  it("reports an unanswered question as null when a model runs out of output first", async () => {
+    stubFetch(async (url) =>
+      String(url).endsWith("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(200, {
+            choices: [{ finish_reason: "length", message: { content: "" } }],
+          }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai",
+      apiKey: KEY,
+      toolProbeModels: { balanced: "o4-mini" },
+    });
+    expect(out).toMatchObject({
+      ok: true,
+      toolCalling: null,
+      toolCallingByTier: { balanced: null },
+      failingTier: null,
+    });
+    expect(out.error).toContain("balanced tier (o4-mini)");
+  });
+
+  it("asks nothing past the key of a routed provider, whatever it maps (negative)", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, { data: {} }));
+    const out = await probeModelCredential({
+      provider: "openrouter",
+      apiKey: KEY,
+      toolProbeModels: { balanced: "anthropic/claude-sonnet-4.5" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ ok: true, toolCalling: true });
+  });
+});
+
+describe("probeModelCredential: structured outputs on an openai_compatible endpoint (#3314)", () => {
+  const BASE = "https://vllm.example.com/v1";
+  const probe = (answer: (body: Record<string, unknown>) => Promise<Response>) => {
+    const fetchMock = stubFetch(async (url, init) => {
+      if (String(url).endsWith("/models")) return jsonResponse(200, { data: [] });
+      const body = JSON.parse((init as RequestInit).body as string) as Record<
+        string,
+        unknown
+      >;
+      return "tools" in body ? toolCall() : answer(body);
+    });
+    return {
+      fetchMock,
+      out: probeModelCredential({
+        provider: "openai_compatible",
+        apiKey: KEY,
+        baseUrl: BASE,
+        toolProbeModels: { fast: "llama-8b", balanced: "llama-70b" },
+      }),
+    };
+  };
+
+  it("asks the fast model for a JSON-schema answer, in the SDK's request shape, and records that it matched", async () => {
+    const { fetchMock, out } = probe(async () =>
+      jsonResponse(200, {
+        choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+      }),
+    );
+    expect(await out).toMatchObject({
+      ok: true,
+      toolCalling: true,
+      structuredOutputs: true,
+    });
+    const structured = sent(fetchMock).find(
+      (r) => r.body !== null && "response_format" in r.body,
+    )!;
+    expect(structured.url).toBe(`${BASE}/chat/completions`);
+    expect(structured.body).toMatchObject({
+      model: "llama-8b",
+      response_format: {
+        type: "json_schema",
+        json_schema: { strict: true, name: "response" },
+      },
+    });
+  });
+
+  it("records false when the endpoint refuses response_format", async () => {
+    const { out } = probe(async () =>
+      jsonResponse(400, { error: { message: "response_format is not supported" } }),
+    );
+    expect(await out).toMatchObject({
+      ok: true,
+      toolCalling: true,
+      structuredOutputs: false,
+      error: null,
+    });
+  });
+
+  it("records false when the endpoint ignores the schema and answers in prose", async () => {
+    const { out } = probe(async () => prose());
+    expect((await out).structuredOutputs).toBe(false);
+  });
+
+  it("records null, and still accepts the key, when the question gets no answer", async () => {
+    const { out } = probe(async () => {
+      throw new Error("socket hang up");
+    });
+    expect(await out).toMatchObject({ ok: true, structuredOutputs: null });
+  });
+
+  it("asks a named vendor no structured-output question (negative)", async () => {
+    const fetchMock = stubFetch(async (url) =>
+      String(url).endsWith("/models") ? jsonResponse(200, { data: [] }) : toolCall(),
+    );
+    const out = await probeModelCredential({
+      provider: "openai",
+      apiKey: KEY,
+      toolProbeModels: { fast: "gpt-5-mini" },
+    });
+    expect(out.structuredOutputs).toBeNull();
+    expect(
+      sent(fetchMock).some((r) => r.body !== null && "response_format" in r.body),
+    ).toBe(false);
   });
 });

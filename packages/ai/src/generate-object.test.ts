@@ -38,7 +38,12 @@ mocks.chargeUsageCredits.mockResolvedValue({
   rateCardMiss: false,
 });
 
-vi.mock("ai", () => ({ generateObject: mocks.generateObject }));
+// The real module otherwise: `asSchema` turns a schema into the JSON Schema
+// a prompt carries for an endpoint without structured outputs (#3314).
+vi.mock("ai", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("ai")>()),
+  generateObject: mocks.generateObject,
+}));
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
@@ -503,6 +508,57 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     >;
     expect(arg.system).toBe("You are a geography expert.");
     expect(arg.messages).toBe(messages);
+  });
+
+  it("puts the schema in the prompt for an endpoint that cannot take one (#3314)", async () => {
+    // A customer endpoint the probe never saw honour a JSON schema: its
+    // client sends JSON mode with no schema, so the model reads it here.
+    await generateObjectFor({
+      fundedBy: "org" as const,
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      schema: SCHEMA,
+      model: {
+        modelId: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        supportsStructuredOutputs: false,
+      } as never,
+      system: "You are a geography expert.",
+      prompt: "Capital of France?",
+      telemetry: TELEMETRY,
+    });
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    const system = String(arg.system);
+    expect(system.startsWith("You are a geography expert.\n\n")).toBe(true);
+    expect(system).toContain("Answer with one JSON object and nothing else");
+    expect(system).toContain('"answer"');
+    expect(system).toContain('"confidence"');
+    // The schema still goes to the SDK, which validates the answer with it.
+    expect(arg.schema).toBe(SCHEMA);
+  });
+
+  it("leaves the prompt alone for a model that takes a schema natively (negative)", async () => {
+    for (const model of [
+      { modelId: "openrouter-model", supportsStructuredOutputs: true },
+      { modelId: "gateway-model" },
+    ]) {
+      mocks.generateObject.mockClear();
+      await generateObjectFor({
+        fundedBy: "platform" as const,
+        chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+        schema: SCHEMA,
+        model: model as never,
+        system: "You are a geography expert.",
+        prompt: "Capital of France?",
+        telemetry: TELEMETRY,
+      });
+      const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<
+        string,
+        unknown
+      >;
+      expect(arg.system).toBe("You are a geography expert.");
+    }
   });
 
   it("forwards a caller-supplied abortSignal so a stalled call can be bounded", async () => {

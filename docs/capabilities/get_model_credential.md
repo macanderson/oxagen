@@ -46,6 +46,7 @@ None. The credential is the caller's organisation's.
 | modelMap | `{ fast?, balanced?, precise? }` | The key's own model id per tier; `{}` when none were given |
 | lastVerifiedAt | ISO-8601 \| null | Last successful `verify_model_credential` |
 | rotatedAt | ISO-8601 \| null | Last time the key was set or replaced |
+| structuredOutputs | boolean \| null | Whether the endpoint honoured a JSON-schema request when `verify_model_credential` last asked. `null` until then, and always `null` for a provider other than `openai_compatible`. `set_model_credential` resets it to `null`. The provider client sends a JSON schema only when it is `true` (#3314) |
 
 **The key is never returned.** A read that echoed it would turn every
 Owner/Admin token into a copy of the customer's vendor credential, so there is

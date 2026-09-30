@@ -378,6 +378,33 @@ describe("validateInlineEventPayload", () => {
     expect(unavailable.eventType).toBe("context.history_summarized");
   });
 
+  // #4228: the call that wrote the summary, recorded when this turn wrote it.
+  it("accepts the summary call's model, usage, and cost, and refuses a float cost", () => {
+    const written = {
+      provider: "conversation_history",
+      outcome: "applied",
+      summary_digest: DIGEST_A,
+      summary_chars: 812,
+      covered_message_count: 80,
+      window_message_count: 40,
+      regenerated: true,
+      summary_model: "anthropic/claude-haiku-4.5",
+      input_tokens: 900,
+      output_tokens: 40,
+      cost_usd_micros: 1_100,
+    };
+    expect(
+      validateInlineEventPayload("context.history_summarized", written)
+        .eventType,
+    ).toBe("context.history_summarized");
+    expect(() =>
+      validateInlineEventPayload("context.history_summarized", {
+        ...written,
+        cost_usd_micros: 1_100.5,
+      }),
+    ).toThrow();
+  });
+
   it("rejects a history summary receipt that carries the summary text", () => {
     expect(() =>
       validateInlineEventPayload("context.history_summarized", {

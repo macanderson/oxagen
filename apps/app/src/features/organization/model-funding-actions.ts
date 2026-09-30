@@ -72,9 +72,9 @@ function modelMapOf(input: ModelKeyInput) {
 }
 
 /**
- * Asks the vendor whether the key works, without storing it. For an
- * OpenAI-compatible endpoint it also asks the balanced model for one forced
- * tool call, because the assistant cannot answer anything without tools.
+ * Asks the vendor whether the key works, without storing it. For a direct
+ * vendor it also asks each mapped model for one forced tool call, because the
+ * assistant runs on every tier and cannot answer anything without tools.
  */
 export async function testModelKey(
   org: string,
@@ -83,15 +83,15 @@ export async function testModelKey(
   const refused = precheck(input);
   if (refused) return refused;
   const ctx = await requireViewer(org);
+  const modelMap = modelMapOf(input);
   const result = await kernelWrite(ctx, orgModelCredentialVerify, {
     provider: input.provider,
     apiKey: input.apiKey.trim(),
     ...(needsBaseUrl(input.provider)
-      ? {
-          baseUrl: input.baseUrl.trim(),
-          toolProbeModel: input.balanced.trim(),
-        }
+      ? { baseUrl: input.baseUrl.trim() }
       : {}),
+    // Every tier the key maps is asked, as the stored key will be (#3314).
+    ...(modelMap ? { modelMap } : {}),
   });
   if (!result.ok) return result;
   return {

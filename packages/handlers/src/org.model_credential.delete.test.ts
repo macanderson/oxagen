@@ -122,6 +122,7 @@ describe("org.model_credential.delete handler — a key was stored", () => {
       modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
+      structuredOutputs: null,
     });
   });
 });

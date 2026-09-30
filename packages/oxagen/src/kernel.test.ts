@@ -205,6 +205,55 @@ describe("capability kernel", () => {
   });
 });
 
+describe("kernel: the checked context names the invoke surface (#4222)", () => {
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+  });
+
+  const seen: unknown[] = [];
+  const register = () => {
+    seen.length = 0;
+    registerCapability({
+      name: "read_surface",
+      domain: "test",
+      description: "reports the surface it was invoked on",
+      mode: "sync" as const,
+      surfaces: ["api", "mcp", "agent"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({}),
+      output: z.object({}),
+    });
+    registerHandler("read_surface", async () => async (_input, checked) => {
+      seen.push(checked.invokeSurface);
+      return {};
+    });
+  };
+
+  it("hands a handler the surface the call was checked on", async () => {
+    register();
+    await invoke("read_surface", {}, ctx, { surface: "agent" });
+    await invoke("read_surface", {}, ctx, { surface: "mcp" });
+    expect(seen).toEqual(["agent", "mcp"]);
+  });
+
+  it("leaves it unset when the call named no surface, even inside an agent call (negative)", async () => {
+    register();
+    await invoke("read_surface", {}, ctx);
+    // A nested invoke from a handler reuses its caller's checked context. It
+    // names no surface, so it must not read as the agent's call.
+    await invoke(
+      "read_surface",
+      {},
+      { ...ctx, invokeSurface: "agent" } as CapabilityContext,
+    );
+    expect(seen).toEqual([undefined, undefined]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Security event emitter — kernel integration
 // ---------------------------------------------------------------------------

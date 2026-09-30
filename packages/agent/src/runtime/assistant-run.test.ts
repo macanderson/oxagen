@@ -1870,6 +1870,72 @@ describe("the recorder hands the ledger the content its frames are about", () =>
     expect(decode(frames[0]!.body)).toBe(JSON.stringify(text));
     expect(frames[1]!.body).toBeUndefined();
   });
+
+  it("records what the summary call used and cost on the frame this turn wrote (#4228)", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "chat",
+      instruction: "which cost centre?",
+      originMessageId: MESSAGE,
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    const text = "- The person's cost centre is CC-7741.";
+    const frame = {
+      outcome: "applied" as const,
+      digest: digestJcs(text),
+      chars: text.length,
+      coveredMessages: 80,
+      windowMessages: 40,
+      regenerated: true,
+      text,
+    };
+    await recorder.historySummary({
+      ...frame,
+      summaryCall: {
+        model: "anthropic/claude-haiku-4.5",
+        inputTokens: 900,
+        outputTokens: 40,
+        costUsd: 0.0011,
+      },
+    });
+    // Figures past the ledger's bounds are held to them, not refused: a
+    // refused frame would refuse the turn.
+    await recorder.historySummary({
+      ...frame,
+      summaryCall: {
+        model: "m".repeat(300),
+        inputTokens: 5_000_000,
+        outputTokens: Number.NaN,
+        costUsd: 5_000,
+      },
+    });
+    const frames = ledger.batches
+      .map((b) => b.events[0]!)
+      .filter((e) => e.eventType === "context.history_summarized");
+    expect(frames[0]!.payload).toMatchObject({
+      regenerated: true,
+      summary_model: "anthropic/claude-haiku-4.5",
+      input_tokens: 900,
+      output_tokens: 40,
+      cost_usd_micros: 1_100,
+    });
+    expect(frames[1]!.payload).toMatchObject({
+      summary_model: "m".repeat(128),
+      input_tokens: 1_000_000,
+      output_tokens: 0,
+      cost_usd_micros: 1_000_000_000,
+    });
+    for (const recorded of frames) {
+      expect(() =>
+        validateInlineEventPayload(recorded.eventType, recorded.payload),
+      ).not.toThrow();
+    }
+  });
 });
 
 // #4158: what the assembler put in the turn's prompt, and what it cut, on the

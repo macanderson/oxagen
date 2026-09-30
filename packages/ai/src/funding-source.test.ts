@@ -89,6 +89,7 @@ describe("resolveModelFundingSource", () => {
         digest: "sha256:abc",
         baseUrl: null,
         modelMap: {},
+        structuredOutputs: null,
       },
       keyHint: "cret",
     });
@@ -106,6 +107,7 @@ describe("resolveModelFundingSource", () => {
       "digest",
       "modelMap",
       "provider",
+      "structuredOutputs",
     ]);
   });
 

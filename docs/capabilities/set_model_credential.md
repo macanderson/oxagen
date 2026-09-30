@@ -105,7 +105,9 @@ verify on its own.
 
 The same **redacted** view `get_model_credential` returns: `configured`,
 `provider`, `status`, `keyHint` (the last four characters of the key),
-`baseUrl`, `modelMap`, `lastVerifiedAt`, and `rotatedAt`. The endpoint and the
+`baseUrl`, `modelMap`, `lastVerifiedAt`, `rotatedAt`, and `structuredOutputs`.
+A set resets `lastVerifiedAt` and `structuredOutputs` to `null`, because the
+new key or endpoint has not been asked yet. The endpoint and the
 model map are returned in full because neither is a secret. Setting a key never echoes it back, and
 there is no read-back path anywhere.
 

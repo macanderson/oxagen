@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
+import { providerCostUsd } from "@oxagen/billing/pricing";
 import { resourceScopeDigestOf } from "@oxagen/iam";
 import { z } from "zod";
 
@@ -1161,6 +1162,62 @@ describe("the prepared turn", () => {
       expect(mocks.generateObjectFor).not.toHaveBeenCalled();
       expect(summaryFrames).toEqual([]);
       expect(mocks.log).not.toContain("history-summary");
+    });
+
+    // #4228: the summary is paid for by the turn, so the per-turn budget
+    // counts it, priced on the summary's own model, and the run records it.
+    const summaryCost = () =>
+      providerCostUsd({
+        model: "model-for-fast",
+        inputTokens: 900,
+        outputTokens: 12,
+      });
+
+    it("hands the budget guard the summary's cost and records it on the frame (#4228)", async () => {
+      mocks.createTurnBudgetGuard.mockReturnValue(async () => "continue");
+      setup({ history: longThread() });
+      await runTurn(request);
+
+      const [, , hooks] = mocks.createTurnBudgetGuard.mock.calls[0]!;
+      expect(summaryCost()).toBeGreaterThan(0);
+      expect(hooks.openingCostUsd()).toBe(summaryCost());
+      expect(summaryFrames[0]).toMatchObject({
+        regenerated: true,
+        summaryCall: {
+          model: "model-for-fast",
+          inputTokens: 900,
+          outputTokens: 12,
+          costUsd: summaryCost(),
+        },
+      });
+      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops before the engine when the summary alone reaches the budget (#4228)", async () => {
+      const guard = vi.fn(async () => "stop" as const);
+      mocks.createTurnBudgetGuard.mockReturnValue(guard);
+      setup({ history: longThread() });
+
+      await expect(runTurn(request)).rejects.toMatchObject({
+        code: "engine_aborted",
+      });
+      // The guard judged the summary's cost with no engine usage yet.
+      expect(guard).toHaveBeenCalledWith({});
+      expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
+      // The record still says what the turn carried and spent, and the run
+      // seals as a budget stop does mid-turn: cancelled, not failed.
+      expect(summaryFrames).toHaveLength(1);
+      expect(sealCalls).toEqual([
+        { status: "aborted", reason: expect.any(String) },
+      ]);
+    });
+
+    it("asks the guard nothing before the engine when no summary was written (negative)", async () => {
+      const guard = vi.fn(async () => "stop" as const);
+      mocks.createTurnBudgetGuard.mockReturnValue(guard);
+      await runTurn(request).catch(() => undefined);
+      expect(guard).not.toHaveBeenCalled();
+      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -195,6 +195,8 @@ describe("loadModelCredential — an active row", () => {
       // tier ids are what it runs.
       baseUrl: null,
       modelMap: {},
+      // Never asked: a routed key's endpoint is not probed for it (#3314).
+      structuredOutputs: null,
     });
     expect(mocks.warn).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
@@ -219,6 +221,20 @@ describe("loadModelCredential — an active row", () => {
       provider: "openai_compatible",
       baseUrl: "https://api.together.xyz/v1",
       modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+    });
+  });
+
+  it("carries the endpoint's recorded structured-output answer to the provider client (#3314)", async () => {
+    mocks.findFirst.mockResolvedValue(
+      await activeRow({
+        provider: "openai_compatible",
+        baseUrl: "https://api.together.xyz/v1",
+        modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+        structuredOutputs: true,
+      }),
+    );
+    await expect(loadModelCredential(ORG)).resolves.toMatchObject({
+      structuredOutputs: true,
     });
   });
 

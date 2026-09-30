@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   probe: vi.fn(),
   loadModelCredential: vi.fn(),
+  invalidate: vi.fn(),
   update: vi.fn(),
   withTenantDb: vi.fn(),
 }));
@@ -36,6 +37,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 vi.mock("@oxagen/database/model-credential", () => ({
   loadModelCredential: mocks.loadModelCredential,
+  invalidateModelCredentialCache: mocks.invalidate,
 }));
 
 import { orgModelCredentialVerifyHandler } from "./org.model_credential.verify";
@@ -162,7 +164,7 @@ describe("org.model_credential.verify handler — the stored key", () => {
       provider: "gateway",
       apiKey: STORED_KEY,
       baseUrl: null,
-      toolProbeModel: null,
+      toolProbeModels: {},
     });
     expect(out).toEqual({
       ok: true,
@@ -229,15 +231,79 @@ describe("org.model_credential.verify handler — an openai_compatible key", () 
     modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
   };
 
-  it("asks the tool question of the model the assistant will actually run on", async () => {
+  it("asks the tool question of every model the assistant will actually run on", async () => {
     mocks.loadModelCredential.mockResolvedValue(COMPAT_STORED);
     await orgModelCredentialVerifyHandler({}, CTX);
     expect(mocks.probe).toHaveBeenCalledWith({
       provider: "openai_compatible",
       apiKey: STORED_KEY,
       baseUrl: "https://api.together.xyz/v1",
-      toolProbeModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      toolProbeModels: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
     });
+  });
+
+  it("stores the structured-output answer and drops the cached credential (#3314)", async () => {
+    mocks.loadModelCredential.mockResolvedValue(COMPAT_STORED);
+    mocks.probe.mockResolvedValue({
+      ok: true,
+      latencyMs: 30,
+      error: null,
+      toolCalling: true,
+      toolCallingByTier: { balanced: true },
+      failingTier: null,
+      structuredOutputs: false,
+    });
+    const out = await orgModelCredentialVerifyHandler({}, CTX);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    const written = mocks.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written.structuredOutputs).toBe(false);
+    expect(written.lastVerifiedAt).toBeInstanceOf(Date);
+    expect(mocks.invalidate).toHaveBeenCalledWith(CTX.orgId);
+    expect(out).toMatchObject({
+      toolCallingByTier: { balanced: true },
+      failingTier: null,
+    });
+    expect(() => orgModelCredentialVerify.output.parse(out)).not.toThrow();
+  });
+
+  it("keeps the structured-output answer even when a tier cannot call tools, and stamps no verification", async () => {
+    mocks.loadModelCredential.mockResolvedValue({
+      ...COMPAT_STORED,
+      modelMap: { fast: "llama-8b", balanced: "llama-70b" },
+    });
+    mocks.probe.mockResolvedValue({
+      ok: true,
+      latencyMs: 30,
+      error: "fast tier (llama-8b): tools are not supported for this model",
+      toolCalling: false,
+      toolCallingByTier: { fast: false, balanced: true },
+      failingTier: "fast",
+      structuredOutputs: true,
+    });
+    const out = await orgModelCredentialVerifyHandler({}, CTX);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    const written = mocks.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(written).toEqual({ structuredOutputs: true });
+    expect(out).toMatchObject({ toolCalling: false, failingTier: "fast" });
+  });
+
+  it("asks a candidate's every mapped tier when the caller sends its model map", async () => {
+    await orgModelCredentialVerifyHandler(
+      {
+        provider: "openai",
+        apiKey: CANDIDATE_KEY,
+        modelMap: { fast: "gpt-5-mini", balanced: "gpt-5.2" },
+      },
+      CTX,
+    );
+    expect(mocks.probe).toHaveBeenCalledWith({
+      provider: "openai",
+      apiKey: CANDIDATE_KEY,
+      baseUrl: null,
+      toolProbeModels: { fast: "gpt-5-mini", balanced: "gpt-5.2" },
+    });
+    // A candidate is not stored, so nothing is written.
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("does NOT stamp lastVerifiedAt when the key works but the endpoint cannot call tools", async () => {

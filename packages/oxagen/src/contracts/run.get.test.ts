@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_FRAME_LIMIT_DEFAULT,
+  AGENT_FRAME_LIMIT_MAX,
+  AGENT_WAIT_MS,
   FRAME_LIMIT_DEFAULT,
   FRAME_LIMIT_MAX,
   runFrameSchema,
@@ -49,6 +52,19 @@ describe("get_run contract", () => {
     expect(
       runGet.input.safeParse({ runId: LEDGER_ID, waitMs: -1 }).success,
     ).toBe(false);
+  });
+
+  it("tells the model the agent-surface bounds in the fields' descriptions (#4222)", () => {
+    // The model's tool schema is built from this schema, so a description is
+    // the only place it learns the bounds the handler applies to it.
+    const frameLimit = runGet.input.shape.frameLimit.description ?? "";
+    expect(frameLimit).toContain(`at most ${AGENT_FRAME_LIMIT_MAX}`);
+    expect(frameLimit).toContain(`${AGENT_FRAME_LIMIT_DEFAULT} by default`);
+    const waitMs = runGet.input.shape.waitMs.description ?? "";
+    expect(waitMs).toContain("never waits");
+    expect(waitMs).toContain(String(AGENT_WAIT_MS));
+    expect(AGENT_FRAME_LIMIT_DEFAULT).toBeLessThanOrEqual(AGENT_FRAME_LIMIT_MAX);
+    expect(AGENT_FRAME_LIMIT_MAX).toBeLessThan(FRAME_LIMIT_MAX);
   });
 
   it("refuses an id neither store mints (negative)", () => {

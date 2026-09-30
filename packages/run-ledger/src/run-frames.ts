@@ -284,6 +284,12 @@ function field(payload: unknown, key: string): string | null {
   return null;
 }
 
+/** Micro-dollars as a label: four places under 10 cents, two above. */
+function usdOfMicros(micros: number): string {
+  const usd = micros / 1_000_000;
+  return `$${usd.toFixed(usd < 0.1 ? 4 : 2)}`;
+}
+
 function numberField(payload: unknown, key: string): number | null {
   const value = field(payload, key);
   if (value === null) return null;
@@ -321,8 +327,14 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
     case "context.history_summarized": {
       const outcome = field(p, "outcome");
       const covered = field(p, "covered_message_count");
-      if (outcome && covered) return `history summary ${outcome} (${covered})`;
-      return outcome ? `history summary ${outcome}` : event.eventType;
+      // What the summary call cost, when this turn wrote it (#4228). The
+      // frame carries no cost record (ledger frames never do), so the label
+      // is where the Run page shows it.
+      const micros = numberField(p, "cost_usd_micros");
+      const cost = micros === null ? "" : ` ${usdOfMicros(micros)}`;
+      if (outcome && covered)
+        return `history summary ${outcome} (${covered})${cost}`;
+      return outcome ? `history summary ${outcome}${cost}` : event.eventType;
     }
     case "steering.manifest": {
       const included = field(p, "included");

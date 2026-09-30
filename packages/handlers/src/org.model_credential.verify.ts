@@ -3,17 +3,25 @@
 // capability.invoke_* audit records who asked; only the mutations
 // (org.model_credential.set / .delete) warrant a model_credential.* row.
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { probeModelCredential } from "@oxagen/ai";
+import { type CredentialProbeResult, probeModelCredential } from "@oxagen/ai";
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
-import { orgModelCredentialVerify } from "@oxagen/oxagen/contracts/org.model_credential.verify";
+import {
+  orgModelCredentialVerify,
+  type OrgModelCredentialVerifyOutput,
+} from "@oxagen/oxagen/contracts/org.model_credential.verify";
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
-import { loadModelCredential } from "@oxagen/database/model-credential";
+import {
+  invalidateModelCredentialCache,
+  loadModelCredential,
+} from "@oxagen/database/model-credential";
 import { logger } from "./logger";
 
 /**
- * verify_model_credential — ask the vendor whether a key is accepted, without
- * spending tokens (ADR-053 §2).
+ * verify_model_credential: ask the vendor whether a key is accepted, and on a
+ * direct vendor whether each mapped model can call tools (ADR-053 §2, #3314).
+ * The key check spends nothing. Each tool question is one forced call capped
+ * at a few output tokens.
  *
  * Two shapes, told apart by the input:
  *   - `provider` + `apiKey`: a candidate the settings page wants checked
@@ -23,7 +31,9 @@ import { logger } from "./logger";
  *     one place the envelope is ever opened) and checked the same way. On
  *     success `last_verified_at` is stamped on the live row so the settings
  *     page can show when the key last worked. A refusal stamps nothing: the
- *     column records the last time the vendor said yes.
+ *     column records the last time the vendor said yes. An
+ *     `openai_compatible` key's structured-output answer is stored whenever
+ *     the probe asked, because the provider client reads it.
  *
  * The contract's pairing rule already rejects one field without the other;
  * the check below is for a direct caller, and refuses rather than quietly
@@ -59,7 +69,11 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
       provider: input.provider,
       apiKey: input.apiKey,
       baseUrl: input.baseUrl ?? null,
-      toolProbeModel: input.toolProbeModel ?? null,
+      // Every tier the candidate maps is asked (#3314). A caller that names
+      // only the balanced model still passes it on its own.
+      ...(input.modelMap
+        ? { toolProbeModels: input.modelMap }
+        : { toolProbeModel: input.toolProbeModel ?? null }),
     });
     logger.info(
       // Never the key, never the endpoint: provider and verdict only.
@@ -74,13 +88,7 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
       },
       "org.model_credential.verify: candidate key checked against the vendor",
     );
-    return {
-      ok: probe.ok,
-      provider: input.provider,
-      latencyMs: probe.latencyMs,
-      error: probe.error,
-      toolCalling: probe.toolCalling,
-    };
+    return verification(input.provider, probe);
   }
 
   const stored = await loadModelCredential(ctx.orgId);
@@ -97,23 +105,36 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
     provider: stored.provider,
     apiKey: stored.apiKey,
     baseUrl: stored.baseUrl,
-    // The stored key is asked about the model it actually runs the assistant
-    // on, so a health sweep catches a model that lost tool support after the
-    // key was saved.
-    toolProbeModel: stored.modelMap.balanced ?? null,
+    // The stored key is asked about every model it runs the assistant on,
+    // tier by tier, so a health sweep catches a model that lost tool support
+    // after the key was saved (#3314).
+    toolProbeModels: stored.modelMap,
   });
 
   // Stamp "last worked" only when it would actually work: a key the vendor
   // accepts on an endpoint that cannot call tools is not a working assistant,
   // and `last_verified_at` is what the settings page shows as healthy.
-  if (probe.ok && probe.toolCalling !== false) {
+  const stamp = probe.ok && probe.toolCalling !== false;
+  // The structured-output answer is a fact about the endpoint whether or not
+  // it can call tools, so it is kept whenever the probe asked. The provider
+  // client reads it to decide whether to send a JSON schema (#3314).
+  const structured =
+    probe.ok &&
+    stored.provider === "openai_compatible" &&
+    probe.structuredOutputs !== undefined
+      ? { structuredOutputs: probe.structuredOutputs }
+      : null;
+  if (stamp || structured !== null) {
     // A health fact, not an edit: the audit columns are left alone so
     // `updated_at` keeps meaning "the last time somebody changed the key".
     const now = new Date();
     await withTenantDb((tx) =>
       tx
         .update(schema.modelCredentials)
-        .set({ lastVerifiedAt: now })
+        .set({
+          ...(stamp ? { lastVerifiedAt: now } : {}),
+          ...(structured ?? {}),
+        })
         .where(
           and(
             eq(schema.modelCredentials.orgId, ctx.orgId),
@@ -121,6 +142,9 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
           ),
         ),
     );
+    // The next completion builds its client on the answer just stored,
+    // rather than on the cached credential for up to its TTL.
+    if (structured !== null) invalidateModelCredentialCache(ctx.orgId);
   }
 
   logger.info(
@@ -135,11 +159,25 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
     },
     "org.model_credential.verify: stored key checked against the vendor",
   );
+  return verification(stored.provider, probe);
+};
+
+/** The probe's answer on the wire: the per-tier fields only when the probe asked tiers. */
+function verification(
+  provider: OrgModelCredentialVerifyOutput["provider"],
+  probe: CredentialProbeResult,
+): OrgModelCredentialVerifyOutput {
   return {
     ok: probe.ok,
-    provider: stored.provider,
+    provider,
     latencyMs: probe.latencyMs,
     error: probe.error,
     toolCalling: probe.toolCalling,
+    ...(probe.toolCallingByTier !== undefined
+      ? { toolCallingByTier: probe.toolCallingByTier }
+      : {}),
+    ...(probe.failingTier !== undefined
+      ? { failingTier: probe.failingTier }
+      : {}),
   };
-};
+}

@@ -23,6 +23,12 @@
 // tenant scope until one lands or the budget runs out. The gates and the audit
 // emissions already happened, once, before this handler started.
 //
+// An `agent`-surface read, a model's tool call, gets tighter bounds (#4222).
+// It never waits, since a long poll would hold the turn, and it reads at most
+// AGENT_FRAME_LIMIT_MAX frames, AGENT_FRAME_LIMIT_DEFAULT when it named none,
+// because every frame it reads is context the turn pays for. The Run page and
+// its SSE stream read on `api`, and those bounds are unchanged.
+//
 // A wrapped run's subagents record on chains of their own, each numbered from
 // 0 (#3823). A read pages one chain: the run's own, or the subagent chain
 // `sessionUuid` names, which must be one Postgres lists under the run's root.
@@ -32,13 +38,18 @@
 // any head moves, so a run where only a subagent is still recording wakes a
 // reader that follows the run's own chain.
 import { createHash } from "node:crypto";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
+  AGENT_FRAME_LIMIT_DEFAULT,
+  AGENT_FRAME_LIMIT_MAX,
+  AGENT_WAIT_MS,
+  FRAME_LIMIT_DEFAULT,
   RUN_CHAIN_HEADS_MAX,
   type RunChains,
   type RunFrame as RunFrameOut,
   runGet,
+  type RunGetInput,
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunPause } from "@oxagen/oxagen/contracts/run.list";
@@ -78,6 +89,32 @@ import { runLabel } from "./lib/run-item";
 
 /** How often the long poll re-reads the store. */
 export const POLL_INTERVAL_MS = 500;
+
+/**
+ * The page size and wait this read runs with. Only a call the kernel checked
+ * on the `agent` surface is bounded tighter (#4222). A call that named no
+ * surface keeps the contract's bounds, as the Run page's reads do.
+ *
+ * Zod fills an omitted `frameLimit` with FRAME_LIMIT_DEFAULT before the
+ * handler runs, so an agent call that sends exactly that number reads as one
+ * that sent none and gets AGENT_FRAME_LIMIT_DEFAULT. Either way it is under
+ * the agent cap.
+ */
+function readBounds(
+  input: Pick<RunGetInput, "frameLimit" | "waitMs">,
+  ctx: Pick<CheckedContext, "invokeSurface">,
+): { frameLimit: number; waitMs: number } {
+  if (ctx.invokeSurface !== "agent") {
+    return { frameLimit: input.frameLimit, waitMs: input.waitMs };
+  }
+  return {
+    frameLimit:
+      input.frameLimit === FRAME_LIMIT_DEFAULT
+        ? AGENT_FRAME_LIMIT_DEFAULT
+        : Math.min(input.frameLimit, AGENT_FRAME_LIMIT_MAX),
+    waitMs: AGENT_WAIT_MS,
+  };
+}
 
 const DECIMAL = /^\d+$/;
 
@@ -487,6 +524,9 @@ export function createRunGetHandler(
   }
 
   return async (input, ctx): Promise<RunGetOutput> => {
+    // Every read of the page size and the wait below goes through these, so
+    // the poll, the slice and the end-of-recording check agree (#4222).
+    const { frameLimit, waitMs } = readBounds(input, ctx);
     const position =
       input.framesAfter === undefined
         ? undefined
@@ -574,8 +614,8 @@ export function createRunGetHandler(
     const polled = poll(
       run,
       cursor ?? startCursorSeq(run),
-      input.frameLimit + 1,
-      input.waitMs,
+      frameLimit + 1,
+      waitMs,
       chain,
       moved,
     ).then(
@@ -605,10 +645,9 @@ export function createRunGetHandler(
       pause,
     ]);
     const { batch } = read;
-    const frames = batch.slice(0, input.frameLimit);
+    const frames = batch.slice(0, frameLimit);
     const last = frames.at(-1);
-    const ended =
-      batch.length <= input.frameLimit && run.item.status !== "live";
+    const ended = batch.length <= frameLimit && run.item.status !== "live";
     return {
       run: {
         ...run.item,

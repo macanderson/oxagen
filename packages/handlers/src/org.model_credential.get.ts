@@ -24,7 +24,7 @@ import { logger } from "./logger";
 /**
  * Project a credential row onto the REDACTED wire shape (ADR-053 §2): the
  * provider, the status, the last four characters, the endpoint and model map,
- * and two timestamps. Never the ciphertext, never the digest, never the key.
+ * two timestamps, and the endpoint's structured-output answer. Never the ciphertext, never the digest, never the key.
  * The endpoint and model map are not secrets and the settings page cannot
  * show an operator their configuration without them. Anything not listed here
  * does not leave the process.
@@ -34,16 +34,19 @@ import { logger } from "./logger";
  * disagree about who pays.
  */
 export function toCredentialView(
-  row: Pick<
-    ModelCredentialRow,
-    | "provider"
-    | "status"
-    | "keyHint"
-    | "baseUrl"
-    | "modelMap"
-    | "lastVerifiedAt"
-    | "rotatedAt"
-  > | null,
+  row:
+    | (Pick<
+        ModelCredentialRow,
+        | "provider"
+        | "status"
+        | "keyHint"
+        | "baseUrl"
+        | "modelMap"
+        | "lastVerifiedAt"
+        | "rotatedAt"
+      > &
+        Partial<Pick<ModelCredentialRow, "structuredOutputs">>)
+    | null,
 ): ModelCredentialView {
   if (!row) {
     return {
@@ -55,6 +58,7 @@ export function toCredentialView(
       modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
+      structuredOutputs: null,
     };
   }
   // The column's CHECK admits exactly the shared schema's values, so a parse
@@ -83,6 +87,9 @@ export function toCredentialView(
     modelMap: parseModelMap(row.modelMap),
     lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
     rotatedAt: row.rotatedAt?.toISOString() ?? null,
+    // What the verification probe last saw the endpoint do with a JSON
+    // schema, and so what the provider client asserts (#3314).
+    structuredOutputs: row.structuredOutputs ?? null,
   };
 }
 
