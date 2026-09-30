@@ -10,7 +10,7 @@ describe("update_runtime contract", () => {
     expect(runtimeUpdate.mutates).toBe(true);
     expect(runtimeUpdate.noBillingGate).toBe(true);
     expect(runtimeUpdate.scoped).toBe(true);
-    expect(runtimeUpdate.surfaces).toEqual(["api", "mcp"]);
+    expect(runtimeUpdate.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(runtimeUpdate.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

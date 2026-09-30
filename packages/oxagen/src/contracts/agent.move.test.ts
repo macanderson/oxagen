@@ -7,7 +7,7 @@ describe("move_agent contract", () => {
     expect(getCapability("move_agent")).toBe(agentMove);
     expect(agentMove.mutates).toBe(true);
     expect(agentMove.noBillingGate).toBe(true);
-    expect(agentMove.surfaces).toEqual(["api", "mcp"]);
+    expect(agentMove.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(agentMove.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: {},

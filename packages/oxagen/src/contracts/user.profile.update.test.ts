@@ -118,9 +118,10 @@ describe("update_profile contract", () => {
   // context with `userId: null`, so a machine credential has no own profile
   // to change: an MCP tool here could only ever return forbidden. The surface
   // list is pinned so the tool cannot be re-advertised without the principal
-  // arriving first.
+  // arriving first. A Stella turn runs as the person who asked, so the agent
+  // surface has a profile to change (#4180).
   it("carries no MCP surface while MCP contexts carry no person", () => {
-    expect(userProfileUpdate.surfaces).toEqual(["api"]);
+    expect(userProfileUpdate.surfaces).toEqual(["api", "agent"]);
     expect(userProfileUpdate.layers).not.toContain("mcp");
   });
 

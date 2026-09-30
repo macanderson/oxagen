@@ -1,5 +1,7 @@
 # remove_price_entry
 
+**Surfaces:** api, mcp, agent, cli
+
 End this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). From `at` on, every frame that resolves to this model and class is priced at the provider list price again — when one exists. `fallbackPriced` in the output says whether it does: a model this organization negotiated alone, with no list or override row of its own, has nothing to fall back to, and the class goes unpriced rather than list-priced.
 
 The handler checks for that fallback **before** it closes anything. When this organization has a live rate for the key and no list, override, or other negotiated row would price it once that rate ends, the call refuses with `price_entry_close_would_unprice` unless `confirmUnpriced: true` is set — closing first and reporting the gap in the output afterward would leave every frame in the meantime priced wrong, with the caller finding out only after the fact. A call with nothing live to close (never negotiated, or already ended) is unaffected: it stays the safe no-op a retry relies on.
@@ -22,6 +24,7 @@ Nothing here touches a list row either: the platform's published price is not an
 - Authentication: session or API key (org Owner, Admin or Billing only; an API key acts as its creator)
 - Capability name: `remove_price_entry`
 - Not billed (`noBillingGate: true`). IAM default-deny; **high** sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 `POST /remove` rather than `DELETE` on the collection: nothing is deleted, and the key plus the instant travel in a body, which `DELETE` carries unreliably across clients and proxies.
 

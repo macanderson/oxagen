@@ -1,5 +1,7 @@
 # set_price_entry
 
+**Surfaces:** api, mcp, agent, cli
+
 Set this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). A negotiated row carries the organization's own `orgId` and wins over the list row for the same model and token class, so from `effectiveFrom` on, every frame that resolves to this model and class is priced at the contracted rate rather than the provider's published one.
 
 The row a new rate supersedes is **closed, never overwritten**: `effective_to` is set to the new `effectiveFrom` and the old row stays readable at the price it charged, because a cost record names the entry ids it was priced with and must still resolve them. A correction is always a later row — a backdated write under an open row is refused.
@@ -16,6 +18,7 @@ The row a new rate supersedes is **closed, never overwritten**: `effective_to` i
 - Authentication: session or API key (org Owner, Admin or Billing only; an API key acts as its creator)
 - Capability name: `set_price_entry`
 - Not billed (`noBillingGate: true`). IAM default-deny; **high** sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Atomic cards
 

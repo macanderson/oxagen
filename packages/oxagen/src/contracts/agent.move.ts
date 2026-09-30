@@ -25,7 +25,7 @@ export const agentMove = registerCapability({
   description:
     "Move an agent to another runtime and keep its principal, roles and runs. Writes a new agent version and revokes its live host enrollments on the old runtime.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

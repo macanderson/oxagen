@@ -18,7 +18,7 @@ describe("seal_run contract", () => {
     // A workspace Member can cancel a run but not seal it (ADR-169).
     expect(runSeal.defaultRoles?.workspace).toEqual({ Owner: "allow" });
     expect(runSeal.agent?.requiresApproval).toBe(true);
-    expect(runSeal.surfaces).toEqual(["api", "mcp"]);
+    expect(runSeal.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("takes a run id with an optional reason, and refuses an empty reason or an unknown field", () => {

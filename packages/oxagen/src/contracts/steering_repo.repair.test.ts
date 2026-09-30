@@ -9,7 +9,7 @@ describe("repair_steering_repo contract", () => {
     expect(steeringRepoRepair.mutates).toBe(true);
     expect(steeringRepoRepair.noBillingGate).toBe(true);
     expect(steeringRepoRepair.sensitivity).toBe("high");
-    expect(steeringRepoRepair.surfaces).toEqual(["api", "mcp"]);
+    expect(steeringRepoRepair.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("is for org Owners and Admins only", () => {
@@ -19,9 +19,12 @@ describe("repair_steering_repo contract", () => {
     });
   });
 
-  it("is an admin button, off the agent surface", () => {
-    expect(steeringRepoRepair.surfaces).not.toContain("agent");
-    expect("agent" in steeringRepoRepair).toBe(false);
+  it("is on the agent surface behind a person's approval", () => {
+    expect(steeringRepoRepair.surfaces).toContain("agent");
+    expect(steeringRepoRepair.agent).toMatchObject({
+      requiresApproval: true,
+      riskLevel: "high",
+    });
   });
 
   it("takes nothing", () => {

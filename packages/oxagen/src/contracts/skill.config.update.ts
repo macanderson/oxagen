@@ -8,7 +8,7 @@ export const skillConfigUpdate = registerCapability({
   mode: "sync",
   description:
     "Propose skill configuration in a pull request, import the existing approved repository configuration once, or publish a merged configuration pull request after reading back its commit.",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

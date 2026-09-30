@@ -125,7 +125,7 @@ export const runIssuesGet = registerCapability({
   description:
     "Read the issues one run worked on: the task it was admitted for, the issues its pull requests close, and the issues its frames name, each with its state as the forge reads it now, whether that state could be read, what the run did to it, and the frames that show it.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -136,6 +136,7 @@ export const runIssuesGet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({ runId: runPublicIdSchema }).strict(),
   output: z
     .object({

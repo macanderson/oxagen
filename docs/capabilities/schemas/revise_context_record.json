@@ -4,7 +4,8 @@
   "description": "Revise a published record's statement: raise a proposal carrying its kind, force, effect and scope unchanged, and open the Context PR that publishes the new wording. The lineage is kept; nothing is in force until the pull request merges.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
   "agent": {

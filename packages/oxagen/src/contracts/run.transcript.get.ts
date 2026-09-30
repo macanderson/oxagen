@@ -849,7 +849,7 @@ export const runTranscriptGet = registerCapability({
   description:
     "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read with no `after` cursor carries the run's counts and figures.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -860,6 +860,7 @@ export const runTranscriptGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z
     .object({
       runId: runPublicIdSchema,

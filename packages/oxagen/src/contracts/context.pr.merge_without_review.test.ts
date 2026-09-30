@@ -21,7 +21,7 @@ describe("merge_pr_without_review contract", () => {
       workspace: { Owner: "allow" },
     });
     // The merger is a signed-in user. An API key carries none.
-    expect(contextPrMergeWithoutReview.surfaces).toEqual(["api"]);
+    expect(contextPrMergeWithoutReview.surfaces).toEqual(["api", "agent"]);
   });
 
   it("takes and answers what merge_context_pr does", () => {

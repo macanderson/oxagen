@@ -1,5 +1,7 @@
 # bisect_runs
 
+**Surfaces:** api, mcp, agent
+
 The first frame at which two recordings diverge (Mission Control spec §8.4 "bisect between any two runs of the same task"; ADR-058). Both runs are read frame by frame and each frame is reduced to a bisect key from its receipt; bodies are never read, so bisect works at grade `inspect` and above.
 
 ## Mode
@@ -14,6 +16,7 @@ The first frame at which two recordings diverge (Mission Control spec §8.4 "bis
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `bisect_runs`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

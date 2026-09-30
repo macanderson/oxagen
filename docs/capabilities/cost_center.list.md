@@ -8,7 +8,7 @@ The organization's cost-center labels, the labels finance charges spend back to 
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/cost-centers` with body `{}`
 - MCP: `list_cost_centers`
@@ -16,6 +16,7 @@ The organization's cost-center labels, the labels finance charges spend back to 
 - Capability name: `list_cost_centers`
 - Organization-level (`scoped: false`). The workspace in the path only routes the call.
 - Not billed (`noBillingGate: true`). IAM default-deny, low sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

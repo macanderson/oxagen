@@ -8,7 +8,7 @@ export const skillConfigGet = registerCapability({
   mode: "sync",
   description:
     "Read the published skill resolution configuration and its immutable version history. A workspace with no imported configuration starts with skills off.",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -19,6 +19,7 @@ export const skillConfigGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "configuration" },
   input: z.object({ version: z.string().min(1).max(128).optional() }).strict(),
   output: z
     .object({

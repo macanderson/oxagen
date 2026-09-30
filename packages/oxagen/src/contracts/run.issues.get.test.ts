@@ -32,7 +32,7 @@ describe("get_run_issues contract", () => {
     expect(runIssuesGet.noBillingGate).toBe(true);
     expect(runIssuesGet.scoped).toBe(true);
     expect(runIssuesGet.defaultEffect).toBe("deny");
-    expect(runIssuesGet.surfaces).toEqual(["api", "mcp"]);
+    expect(runIssuesGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 
   it("takes one run by its public id and refuses an unknown key (negative)", () => {

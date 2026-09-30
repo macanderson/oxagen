@@ -4,10 +4,15 @@
   "description": "Read issue provider connections and optionally list authorized Linear teams.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

@@ -4,7 +4,8 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api
+**Surfaces:** api, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 **Why api only:** The PR is opened from the operator console, and the CLI records the proposal with `oxagen context propose` (`propose_record`), so neither the MCP nor the CLI surface is declared. Adding the MCP tool is a lane of its own.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`

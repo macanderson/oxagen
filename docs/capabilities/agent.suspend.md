@@ -4,7 +4,7 @@
 **Domain:** agent
 **Mode:** sync
 **Scope:** org + workspace
-**Surfaces:** api
+**Surfaces:** api, agent
 **Mutates:** yes
 **Billing gate:** skipped (`noBillingGate: true`; a governance write on the identity)
 
@@ -40,6 +40,7 @@ Org Owner or Admin, checked by the handler (INV-29).
 ## Surfaces
 
 - `POST /api/v1/{org}/{ws}/agents/suspend`
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Errors
 

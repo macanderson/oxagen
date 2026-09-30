@@ -65,7 +65,7 @@ export const spendCostCenterStatementExport = registerCapability({
   description:
     "Export this organization's monthly chargeback statement as CSV: one line per cost center, and one for spend with no cost center, with runs, cost in micros and in cents, the basis, and the run ids that make up each line, plus the organization total they sum to.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   noBillingGate: true,
@@ -76,6 +76,7 @@ export const spendCostCenterStatementExport = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       month: monthSchema,

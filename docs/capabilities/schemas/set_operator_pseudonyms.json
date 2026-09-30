@@ -4,10 +4,15 @@
   "description": "Turn the workspace's operator pseudonyms on or off. With them on, the operator ranking shows a stable pseudonym in place of each name, keeps the ranks and the unproductive spend, and withholds each operator's unproductive share, run count, and runs. Org Owner or Admin only.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
-  "agent": null,
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "privacy"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

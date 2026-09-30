@@ -20,7 +20,8 @@ export const tachoEnrollmentRevoke = registerCapability({
   // consults this allowlist. The Enrollment tab of an agent's page revokes a
   // host through it, so the layer is claimed and bound in
   // apps/app/capability-ui-map.json; the surface stays the HTTP one.
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
+  mutates: true,
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -30,6 +31,7 @@ export const tachoEnrollmentRevoke = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "identity" },
   input: z
     .object({
       hostEnrollmentId: hostEnrollmentIdSchema,

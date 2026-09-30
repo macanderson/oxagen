@@ -8,7 +8,7 @@ export const runOutcomesSettingsGet = registerCapability({
   description:
     "Read organization consent and platform suspension for metered run follow-through.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -24,6 +24,7 @@ export const runOutcomesSettingsGet = registerCapability({
     },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({}).strict(),
   output: runOutcomesPolicySchema,
 });

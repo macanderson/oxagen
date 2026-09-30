@@ -1,5 +1,7 @@
 # list_tacho_hosts
 
+**Surfaces:** api, mcp, agent
+
 List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, the operating system version and CPU architecture the host reported at enrollment (`osVersion`, `arch`, null when it reported none), harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents). Cursor-paginated.
 
 ## Mode
@@ -15,6 +17,7 @@ List the machines enrolled as Tacho hosts in this workspace, newest first, with 
 - Authentication: session (org Owner or Admin; workspace Owner, Member or Viewer)
 - Capability name: `list_tacho_hosts`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

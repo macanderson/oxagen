@@ -4,7 +4,7 @@ The Run page's run waterfall (Mission Control spec §12.9; #4067): one run's per
 
 A wrapped run is counted in ClickHouse in two reads, whatever its length: one finds where each chain's turns open and where the proxy began observing it, and one groups every frame by chain and turn. A 250,000-frame run answers in about 0.3 seconds, where the Cost tab's former read of the whole transcript took 19 seconds and stopped at the transcript's 10,000-frame fold. A ledger run is read from the ledger, and its steps are the entries `get_run_transcript` folds at the `steps` zoom (ADR-182). The wrapped path's SQL counts steps by its own rule, and an integration test holds the two to the same rows.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -18,6 +18,7 @@ A wrapped run is counted in ClickHouse in two reads, whatever its length: one fi
 - Authentication: session or API key (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `get_run_turns`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

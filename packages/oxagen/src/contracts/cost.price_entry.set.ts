@@ -51,7 +51,7 @@ export const costPriceEntrySet = registerCapability({
   description:
     "Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant. Optional additionalRates commit other classes of the same model in one transaction. The negotiated row wins over the provider list price from then on; the row it supersedes is closed, never overwritten, so a run priced earlier keeps the entry it was priced with. Owner / Admin / Billing only.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "app", "unit", "docs"],
   scoped: true,
   // Setting the rate you are billed at must never be refused for being over
@@ -64,6 +64,7 @@ export const costPriceEntrySet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "billing" },
   input: z
     .object({
       ...priceEntryKeyShape,

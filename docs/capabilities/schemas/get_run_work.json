@@ -4,10 +4,15 @@
   "description": "Read recorded checkout locations and retained diff references, plus connected pull requests and their current CI checks.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "medium",
-  "agent": null,
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "run"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

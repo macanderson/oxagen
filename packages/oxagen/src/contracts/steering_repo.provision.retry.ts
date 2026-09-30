@@ -16,8 +16,8 @@ import { registerCapability } from "../registry";
  * status, when that status is not already `failed` or `blocked`.
  *
  * Org Owners and Admins only, the same as `repair_steering_repo`. Retry is
- * the health banner's other admin button, so the contract is not on the
- * agent surface and carries no agent metadata.
+ * the health banner's other admin button. Stella can run it too, and each
+ * call waits for a person's approval (#4180).
  */
 export const steeringRepoProvisionRetry = registerCapability({
   name: "retry_steering_repo_provision",
@@ -25,7 +25,7 @@ export const steeringRepoProvisionRetry = registerCapability({
   description:
     "Re-send a failed or blocked steering repo setup so the job runs again from its first step.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -36,6 +36,7 @@ export const steeringRepoProvisionRetry = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "vcs" },
   input: z.object({}).strict(),
   output: z.object({
     status: z.enum(["provisioning", "ready", "failed", "blocked"]),

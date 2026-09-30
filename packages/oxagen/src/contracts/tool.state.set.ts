@@ -25,7 +25,7 @@ export const toolStateSet = registerCapability({
   description:
     "Make tools available to toolbelts or take them out of every belt, and set whether each starts active in the All tools belt. Target a list of tools or every tool from one server.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

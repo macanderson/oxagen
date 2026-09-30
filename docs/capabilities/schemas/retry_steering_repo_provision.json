@@ -4,10 +4,15 @@
   "description": "Re-send a failed or blocked steering repo setup so the job runs again from its first step.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
-  "agent": null,
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "vcs"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

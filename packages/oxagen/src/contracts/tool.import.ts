@@ -79,7 +79,7 @@ export const toolImport = registerCapability({
   description:
     "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import. For a server the workspace's steering repo holds, it opens a steering PR that adds the pinned tools to the server's folder instead.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Versioning the registry is governance and spends no model tokens, so an

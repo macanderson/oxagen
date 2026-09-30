@@ -112,7 +112,7 @@ export const runContextGet = registerCapability({
   description:
     "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -123,6 +123,7 @@ export const runContextGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({ runId: runPublicIdSchema }).strict(),
   output: z
     .object({

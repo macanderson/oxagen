@@ -46,7 +46,7 @@ export const repositoryProductionBranchSet = registerCapability({
   description:
     "Confirm or change the production branch of one of the workspace's repositories. The branch must exist on GitHub; a change writes a new binding version and never edits the old one.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -57,6 +57,7 @@ export const repositoryProductionBranchSet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "vcs" },
   input: z
     .object({
       bindingId: repositoryBindingIdSchema,

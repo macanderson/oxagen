@@ -5,10 +5,15 @@
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "agent"
   ],
   "sensitivity": "high",
-  "agent": null,
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "tools"
+  },
   "chain": {
     "produces": [],
     "consumes": [],

@@ -57,7 +57,7 @@ describe("list_findings contract", () => {
   });
 
   it("narrows to one run and carries what each finding cites there (#4001)", () => {
-    expect(findingList.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(findingList.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(findingList.input.parse({ runId: "tse_4q8r1t6v" })).toEqual({
       status: "open",
       runId: "tse_4q8r1t6v",

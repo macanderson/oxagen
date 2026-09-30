@@ -3,7 +3,8 @@
 **Domain:** org
 **Mode:** sync
 **Scope:** organization
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 Marks the pending invitation revoked. It creates no membership and sends no email. Acceptance after revocation is refused by the pending-state comparison.
 

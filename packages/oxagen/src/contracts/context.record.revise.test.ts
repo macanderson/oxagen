@@ -9,7 +9,7 @@ describe("context.record.revise capability", () => {
   });
 
   it("is an api-only, high-sensitivity, default-deny governance write", () => {
-    expect(contextRecordRevise.surfaces).toEqual(["api"]);
+    expect(contextRecordRevise.surfaces).toEqual(["api", "agent"]);
     expect(contextRecordRevise.sensitivity).toBe("high");
     expect(contextRecordRevise.defaultEffect).toBe("deny");
     expect(contextRecordRevise.mutates).toBe(true);

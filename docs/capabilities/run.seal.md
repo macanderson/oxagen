@@ -1,6 +1,6 @@
 # seal_run
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 Seal a wrapped run that the control plane still reads as live, and queue a kill for its agent ([ADR-169](../adr/ADR-169-an-operator-seals-a-run-and-its-agent-is-killed.md), issue #4073).
 
@@ -22,6 +22,7 @@ In the same transaction the call queues a `kill` command for the agent on the ru
 - App: the Run page (`/[org]/[ws]/runs/[run]`) offers Seal run on a live or idle-closed wrapped run.
 - Capability name: `seal_run`
 - `mutates: true`; `agent.requiresApproval: true`, `riskLevel: high`. Not billed (`noBillingGate: true`): a lapsed bucket must not leave a finished agent running. IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

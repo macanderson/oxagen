@@ -110,7 +110,7 @@ export const tachoCommandDispatch = registerCapability({
   description:
     "Queue a pause, resume, cancel, steer or message command for one run, an agent's live runs, or every live run in the workspace, with a delivery mode on steer and message.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,
@@ -123,7 +123,7 @@ export const tachoCommandDispatch = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  agent: { requiresApproval: false, riskLevel: "medium", category: "control" },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "control" },
   input: dispatchCommandInputSchema,
   output: z
     .object({

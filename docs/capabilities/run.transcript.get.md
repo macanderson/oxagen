@@ -18,7 +18,7 @@ A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-05
 
 ## Surface
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/transcript`
 - MCP: `get_run_transcript`
@@ -26,6 +26,7 @@ A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-05
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_transcript`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

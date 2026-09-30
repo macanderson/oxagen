@@ -3,7 +3,7 @@
 **Domain:** conversation
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Risk level:** low
 
 ## Intent
@@ -89,9 +89,7 @@ it.
 - **App:** the assistant flyout reads your latest conversation when it opens
   (`apps/app/src/features/shell/assistant-thread-actions.ts`), and draws each
   sent file as the chip it showed when the question was sent
-
-Not on the agent surface: a turn already carries its own conversation as the
-model's transcript, and no assistant task needs to read another one.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Side effects
 

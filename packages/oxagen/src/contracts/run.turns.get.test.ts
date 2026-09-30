@@ -25,7 +25,7 @@ describe("get_run_turns contract", () => {
     expect(runTurnsGet.name).toBe("get_run_turns");
     expect(runTurnsGet.noBillingGate).toBe(true);
     expect(runTurnsGet.mutates).toBe(false);
-    expect(runTurnsGet.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(runTurnsGet.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
     expect(runTurnsGet.input.safeParse({ runId: "run_1" }).success).toBe(false);
     expect(runTurnsGet.input.safeParse({ runId: "tse_abc123" }).success).toBe(
       true,

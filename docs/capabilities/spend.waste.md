@@ -1,5 +1,7 @@
 # list_waste
 
+**Surfaces:** api, mcp, agent
+
 Spend the frames show bought nothing, by cause, with the runs that prove it (Mission Control spec §12.8; ADR-060). Each cause is a pattern read off the `cost.run_totals` rows of the active workspace, never a guess.
 
 ## Mode
@@ -13,6 +15,7 @@ Spend the frames show bought nothing, by cause, with the runs that prove it (Mis
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_waste`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

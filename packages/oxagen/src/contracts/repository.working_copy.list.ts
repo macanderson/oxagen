@@ -47,7 +47,7 @@ export const workingCopyList = registerCapability({
   description:
     "List the directories the CLI linked to this workspace, with machine, path, repository, branch, head, the state of .oxagen/, the commit last pulled and when each was last seen.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -63,6 +63,7 @@ export const workingCopyList = registerCapability({
       Viewer: "allow",
     },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },
   input: z
     .object({
       limit: z.number().int().min(1).max(200).default(100),

@@ -64,7 +64,7 @@ export const costUnpricedModelList = registerCapability({
   description:
     "List the models this organization has run that the price book cannot price: the model, its vendor, how many calls and tokens it has run in the window, and which token classes are missing a price — the reason a run's cost comes back blank.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -75,6 +75,7 @@ export const costUnpricedModelList = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z
     .object({
       /** RFC 3339; the last 30 days when omitted. */

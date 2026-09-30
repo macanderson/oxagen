@@ -102,6 +102,6 @@ describe("org.model_credential.get capability", () => {
       riskLevel: "low",
       category: "configuration",
     });
-    expect(orgModelCredentialGet.surfaces).toEqual(["api", "mcp"]);
+    expect(orgModelCredentialGet.surfaces).toEqual(["api", "mcp", "agent"]);
   });
 });

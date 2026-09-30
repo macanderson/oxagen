@@ -4,7 +4,8 @@
 **Domain:** context
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api
+**Surfaces:** api, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 **Why api only:** The merger is a signed-in user. An API key (the MCP bearer) carries none and is refused `no_principal`, so the MCP surface is not declared.
 **Risk level:** high (requires approval on the agent surface)
 **Billing:** `noBillingGate: true`

@@ -8,13 +8,14 @@ The skills this workspace's harness sessions reported when they started, over a 
 
 ## Surface
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 - API: `POST /v1/:org_slug/:workspace_slug/skills`
 - MCP: `list_skills`
 - Authentication: session or API key (org Owner, Admin or Member; workspace Owner or Member). An API key acts as its creator, bounded by the creator's current role; a key with no recorded creator is refused `no_principal`.
 - Capability name: `list_skills`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

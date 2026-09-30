@@ -36,12 +36,12 @@ export const runFork = registerCapability({
   description:
     "Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
-  agent: { requiresApproval: false, riskLevel: "medium", category: "run" },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "run" },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {

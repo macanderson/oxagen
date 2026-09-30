@@ -1,5 +1,7 @@
 # list_price_entries
 
+**Surfaces:** api, mcp, agent, cli
+
 The price book as the active organization reads it (Mission Control spec §12.2, App. A.7; ADR-060 §1): every provider list price effective at an instant and the organization's own negotiated rows, which win over the list row for the same model and token class. A cost record names the entry ids it was priced with, so a figure can always be traced to the price behind it.
 
 ## Mode
@@ -14,6 +16,7 @@ The price book as the active organization reads it (Mission Control spec §12.2,
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_price_entries`
 - Not billed (`noBillingGate: true`). IAM default-deny; low sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

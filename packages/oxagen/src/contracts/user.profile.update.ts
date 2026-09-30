@@ -66,7 +66,7 @@ export const userProfileUpdate = registerCapability({
   description:
     "Update the calling user's own display name and avatar, and return the persisted values.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: false,
   mutates: true,
@@ -84,6 +84,7 @@ export const userProfileUpdate = registerCapability({
     },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   input: z
     .object({
       // Optional, so a caller may change the avatar alone. The avatar editor

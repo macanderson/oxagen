@@ -8,7 +8,7 @@ Like `link_repository`, the caller names no installation. It is taken from the w
 
 `truncated` is honest rather than paginated: the installation token lists repositories a page at a time and this read walks a bounded number of pages (5 × 100 = 500). An installation granted access to more repositories than that says so, and the surface tells the person to narrow the App's repository access on GitHub (`github.manageUrl`) rather than silently hiding the repository they want.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -22,6 +22,7 @@ Like `link_repository`, the caller names no installation. It is taken from the w
 - Authentication: session; org Owner or Admin, checked by the handler (INV-29)
 - Capability name: `list_installation_repositories`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

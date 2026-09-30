@@ -6,7 +6,7 @@ export const resendMemberInvite = registerCapability({
   domain: "org",
   description: "Resend a pending invitation in the calling organization.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,
@@ -14,6 +14,7 @@ export const resendMemberInvite = registerCapability({
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "organization" },
   input: z
     .object({ invitationPublicId: z.string().regex(/^invi_[A-Za-z0-9]+$/) })
     .strict(),

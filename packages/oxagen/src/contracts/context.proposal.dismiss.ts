@@ -12,7 +12,7 @@ export const contextProposalDismiss = registerCapability({
   description:
     "Reject a record proposal with a reason. Refused once the proposal has merged.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

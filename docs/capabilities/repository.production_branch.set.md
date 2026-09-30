@@ -6,7 +6,7 @@ The production branch is the only branch whose commits update the code graph, th
 
 The handler reads the branch through the workspace's installation and, when it differs from what the binding records, writes a successor binding version carrying it and moves the head onto that version, in one transaction under the workspace's repository lock. Binding versions are immutable, so runs admitted against the old branch keep citing it. Naming the branch the binding already records writes nothing and answers `changed: false`.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -21,6 +21,7 @@ The handler reads the branch through the workspace's installation and, when it d
 - Authentication: session or API key. The main repository's branch takes an org Owner or Admin; a linked repository's also admits the workspace Owner. Checked by the handler (INV-29)
 - Capability name: `set_production_branch`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

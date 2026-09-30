@@ -24,15 +24,19 @@ import "../contracts.generated";
 /**
  * App actions that stay off the agent surface, each with the reason.
  *
- * An entry needs a reason a reviewer can check against the contract: the call
- * hands out or takes a secret, it is a step only a person's browser can take,
- * or it is the person's own say over Stella's turn.
+ * An entry needs a reason a reviewer can check against the contract. The
+ * reasons so far: the call hands out or takes a secret, only a person's
+ * browser can take the step, the call is the person's own say over Stella's
+ * turn, or it would let an agent change how people sign in or how its own
+ * work is graded.
  */
 const OFF_AGENT: Readonly<Record<string, string>> = {
   answer_interjection:
     "An agent paused to ask a person this question, so the answer has to come from a person.",
   ask_assistant:
     "It starts a Stella turn, so Stella calling it would run a turn inside its own turn.",
+  attach_github_installation:
+    "A person picks the installation right after the browser GitHub sign-in that stored the token it checks.",
   authorize_cli:
     "It mints the code that gives the CLI an API key once the person consents in the browser, and it is on no surface.",
   authorize_issue_provider:
@@ -49,8 +53,14 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It returns the SCIM bearer token once, which would land in Stella's transcript.",
   create_sso_provider:
     "Its input carries the OIDC client secret, which would land in Stella's transcript.",
+  delete_model_credential:
+    "Deleting the organization's key moves Stella's own turns onto the platform key, which Stella must not do.",
   delete_slack_connection:
     "It belongs to the Slack connection flow, which is on no surface.",
+  delete_sso_provider:
+    "Stella never changes how people sign in, and SSO settings decide that.",
+  dismiss_finding:
+    "A finding grades agents' runs, and the agent surface also serves registered agents, so an agent must not dismiss one.",
   export_audit_events:
     "It returns a signed file of up to 50,000 events for a person to download and verify. Stella reads the same events through query_audit_log.",
   get_assistant_engine:
@@ -65,8 +75,12 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It records the person's verdict on Stella's reply, so Stella must not write it.",
   register_agent:
     "It returns the new agent's long-lived credential once, which would land in Stella's transcript.",
+  register_mcp_server:
+    "Its input can carry the server's bearer token or auth headers, which would land in Stella's transcript.",
   resolve_approval:
     "It approves or denies a held call, so Stella could release the calls it was made to wait on.",
+  revoke_scim_token:
+    "Stella never changes how people sign in, and the SCIM token provisions them from the identity provider.",
   rotate_agent_credential:
     "It returns the replacement credential once, which would land in Stella's transcript.",
   rotate_scim_token:
@@ -77,6 +91,10 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It records the organization's consent to metered charges, and consent has to come from a person.",
   set_slack_channel:
     "It belongs to the Slack connection flow, which is on no surface.",
+  set_sso_group_roles:
+    "Stella never changes how people sign in, and SSO settings decide that.",
+  set_sso_policy:
+    "Stella never changes how people sign in, and SSO settings decide that.",
   start_issue_authorization:
     "It returns a sign-in URL for the person to open in a browser.",
   start_mcp_authorization:
@@ -89,6 +107,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It stores a file the person attaches to a message. The file is the person's, not the model's.",
   verify_model_credential:
     "Its input can carry a candidate API key, which would land in Stella's transcript.",
+  verify_sso_domain:
+    "Stella never changes how people sign in, and SSO settings decide that.",
 };
 
 /**

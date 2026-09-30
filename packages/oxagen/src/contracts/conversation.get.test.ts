@@ -63,7 +63,7 @@ describe("get_conversation contract", () => {
     expect(conversationGet.scoped).toBe(true);
     expect(conversationGet.noBillingGate).toBe(true);
     expect(conversationGet.defaultEffect).toBe("deny");
-    expect(conversationGet.surfaces).toEqual(["api", "mcp"]);
+    expect(conversationGet.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(conversationGet.layers).toContain("app");
   });
 

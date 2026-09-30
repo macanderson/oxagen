@@ -9,7 +9,7 @@ describe("clone_toolbelt contract", () => {
     expect(getCapability("clone_toolbelt")).toBe(toolbeltClone);
     expect(toolbeltClone.mutates).toBe(true);
     expect(toolbeltClone.noBillingGate).toBe(true);
-    expect(toolbeltClone.surfaces).toEqual(["api", "mcp"]);
+    expect(toolbeltClone.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(toolbeltClone.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
       workspace: { Owner: "allow" },

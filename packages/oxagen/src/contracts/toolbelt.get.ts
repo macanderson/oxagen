@@ -61,7 +61,7 @@ export const toolbeltGet = registerCapability({
   description:
     "Read one toolbelt with every tool in the workspace grouped by server: whether the belt holds each server and tool, whether each tool is active in the belt, and whether an owner or admin made it available.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

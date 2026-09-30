@@ -3,7 +3,8 @@
 **Domain:** org
 **Mode:** sync
 **Scope:** organisation (`scoped: false`, requires an orgId, no workspace)
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 **Sensitivity:** high · **Default effect:** deny · **Roles:** org Owner, Admin
 **Billing gate:** none · **Agent tool:** no (the in-app agent never reads or changes how people sign in)
 **Plan:** any. `entitled` says whether the plan includes SSO.

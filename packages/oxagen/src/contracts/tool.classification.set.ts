@@ -11,7 +11,7 @@ export const toolClassificationSet = registerCapability({
   description:
     "Set a tool version's safety classification — risk grade, side-effect class, egress class, impacts, measures and data classes — recording who reclassified it and why. Classification describes the tool; class kill switches and approval rules decide against it.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   // Governance configuration, not a governed action: reclassifying spends

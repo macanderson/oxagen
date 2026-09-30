@@ -8,7 +8,7 @@ describe("retry_steering_repo_provision contract", () => {
     expect(steeringRepoProvisionRetry.mutates).toBe(true);
     expect(steeringRepoProvisionRetry.noBillingGate).toBe(true);
     expect(steeringRepoProvisionRetry.sensitivity).toBe("high");
-    expect(steeringRepoProvisionRetry.surfaces).toEqual(["api"]);
+    expect(steeringRepoProvisionRetry.surfaces).toEqual(["api", "agent"]);
   });
 
   it("is for org Owners and Admins only", () => {
@@ -18,10 +18,10 @@ describe("retry_steering_repo_provision contract", () => {
     });
   });
 
-  it("is an admin button, off the agent and mcp surfaces", () => {
-    expect(steeringRepoProvisionRetry.surfaces).not.toContain("agent");
+  it("is off the mcp surface, and on the agent surface behind a person's approval", () => {
     expect(steeringRepoProvisionRetry.surfaces).not.toContain("mcp");
-    expect("agent" in steeringRepoProvisionRetry).toBe(false);
+    expect(steeringRepoProvisionRetry.surfaces).toContain("agent");
+    expect(steeringRepoProvisionRetry.agent?.requiresApproval).toBe(true);
   });
 
   it("takes nothing", () => {

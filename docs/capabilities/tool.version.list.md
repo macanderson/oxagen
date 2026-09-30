@@ -4,7 +4,7 @@
 **Domain:** tool
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`; a console read is never a governed action, ADR-052 exclusion 2)
 
@@ -67,6 +67,7 @@ None. Read-only; audit-exempt.
 - `POST /v1/{org}/{ws}/tools/versions`
 - MCP tool `list_tool_versions` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 - App: **Tools → Registry** at `/{org}/{ws}/tools` — the tool versions table with its impact chips and the labels/API-names toggle.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

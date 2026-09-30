@@ -2,7 +2,8 @@
 
 Read the machine and checkout locations recorded for a run, captured patch references, connected pull requests with their CI checks, and the subagents the session started.
 
-**Surfaces:** api
+**Surfaces:** api, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 **Mode:** sync
 

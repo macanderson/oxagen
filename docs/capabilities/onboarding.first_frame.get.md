@@ -1,5 +1,7 @@
 # get_first_frame
 
+**Surfaces:** api, mcp, agent
+
 The register flow's "Wait for the first frame" step (mockup `regRun`; #2967), for one registered agent: whether a host has enrolled for it (`enroll_host`), what that host last reported (heartbeat, hooks), and the first frame `ingest_tacho_events` accepted from it — the moment the agent exists on Fleet, as the run `list_runs` shows.
 
 `waitMs` is the handler-side long poll, as on `get_run`: the handler re-reads the store every 500 ms inside the tenant scope until the first frame lands or the budget runs out, so the page's stream costs one invoke per `waitMs` rather than one per tick. With no frame the answer is `firstFrame: null`, however long the wait; nothing here completes on a timer.
@@ -15,6 +17,7 @@ The register flow's "Wait for the first frame" step (mockup `regRun`; #2967), fo
 - Authentication: session or API key; org Owner, Admin or Member; workspace Owner or Member
 - Capability name: `get_first_frame`
 - Not billed (`noBillingGate: true`); IAM default-deny; medium sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

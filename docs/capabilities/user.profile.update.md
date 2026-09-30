@@ -1,5 +1,7 @@
 # update_profile
 
+**Surfaces:** api, agent
+
 The Account dialog's identity fields: display name and avatar. The rebuilt app has no write seam onto `auth.users` (its one `withSystemDb` read, `apps/app/src/server/tenancy-lookups.ts`, is column-gated to `id`/`twoFactorEnabled`), where the retired app wrote the row directly from a server action. Every write in the rebuilt app goes through `kernelWrite(contract)`, so the profile write became a real capability.
 
 The input carries no user id: the handler acts on the authenticated principal only. A capability that took a target user id would be a privilege-escalation surface.
@@ -17,6 +19,7 @@ The input carries no user id: the handler acts on the authenticated principal on
 - Authentication: session; the caller must carry a person (`forbidden` otherwise)
 - Capability name: `update_profile`
 - Not billed (`noBillingGate: true`): a settings write is never a governed action (ADR-052 exclusion 2).
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Access
 

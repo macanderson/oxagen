@@ -4,7 +4,7 @@ What each of one run's model requests carried, block by block, and what the stee
 
 The window is read from the frames that recorded the model calls, never from Neo4j. An in-app assistant run records each window on its `model.engine_call_started` frame, and the provider's token counts on the matching `model.engine_call_completed`, joined on `model_call_id`. A wrapped session records it on the tacho proxy's `llm_call` frame as the `oxagen.window` attribute, beside the usage the vendor reported. The attribute is part of the envelope, so a workspace that keeps digests only still records its windows.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -18,6 +18,7 @@ The window is read from the frames that recorded the model calls, never from Neo
 - Authentication: session or API key (org Owner, Admin or Member; workspace Owner or Member)
 - Capability name: `get_run_context`
 - Not billed (`noBillingGate: true`): a console read is never a governed action. IAM default-deny; medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

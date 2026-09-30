@@ -4,7 +4,7 @@
 **Domain:** kill_switch
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 **Mutates:** no
 **Billing gate:** skipped (`noBillingGate: true`)
 
@@ -39,6 +39,7 @@ None. Read-only; audit-exempt.
 - `POST /v1/{org}/{ws}/kill-switches/list`
 - MCP tool `list_kill_switches` (an API key acts as its creator at the role gate, ADR-072 decision 8)
 - App: **Tools → Kill switches** at `/{org}/{ws}/tools/switches` — the levels, the deny generation and a card per recorded switch.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Errors
 

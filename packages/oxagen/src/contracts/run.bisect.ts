@@ -33,7 +33,7 @@ export const runBisect = registerCapability({
   description:
     "Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -44,6 +44,7 @@ export const runBisect = registerCapability({
     org: { Owner: "allow", Admin: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z
     .object({
       runA: runPublicIdSchema,

@@ -3,7 +3,8 @@
 **Domain:** approval_rule
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 **Sensitivity:** medium
 **Metering:** none (`noBillingGate`, a console read)
 **App:** Tools › Policy at `/{org}/{ws}/tools/policy`: the auto-approval rules table. An org Owner, Admin or Compliance sees it.

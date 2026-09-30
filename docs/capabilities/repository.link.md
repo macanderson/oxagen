@@ -8,7 +8,7 @@ The repository is named by `owner/name` and nothing else. The installation is th
 
 One code repository can be linked to many workspaces, in the same organization or not. Each workspace lists it in its own `workspace.toml`, and each gets its own head.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -22,6 +22,7 @@ One code repository can be linked to many workspaces, in the same organization o
 - Authentication: session or API key. The handler admits an org Owner or Admin, or the workspace's Owner (INV-29).
 - Capability name: `link_repository`
 - Not billed (`noBillingGate: true`). IAM default-deny. Medium sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: medium`).
 
 ## Input
 

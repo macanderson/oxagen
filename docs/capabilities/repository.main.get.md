@@ -10,7 +10,7 @@ The installation id is deliberately NOT in the output. A caller that could name 
 
 This handler makes no GitHub API call. It is a settings read that has to render while GitHub is down, and every fact it reports is already local.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
 
 ## Mode
 
@@ -24,6 +24,7 @@ This handler makes no GitHub API call. It is a settings read that has to render 
 - Authentication: session; org Owner or Admin, checked by the handler (INV-29) — two of the roles `link_repository` admits, because the install URL in this output is the first step of a link
 - Capability name: `get_main_repository`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

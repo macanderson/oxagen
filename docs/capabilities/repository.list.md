@@ -6,7 +6,7 @@ One row per binding head, carrying the binding version the head points at. The m
 
 Makes no GitHub call. Every fact here is local, so the list renders while GitHub is down.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, agent, cli
 
 ## Mode
 
@@ -20,6 +20,7 @@ Makes no GitHub call. Every fact here is local, so the list renders while GitHub
 - Authentication: session or API key; org Owner or Admin, or a workspace Owner or Member (the contract's default roles)
 - Capability name: `list_repositories`
 - Not billed (`noBillingGate: true`); IAM default-deny; low sensitivity
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
 

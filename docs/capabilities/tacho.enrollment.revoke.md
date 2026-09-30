@@ -1,5 +1,7 @@
 # revoke_tacho_enrollment
 
+**Surfaces:** api, agent
+
 Revoke a Tacho host. The host's API keys are soft-deleted, the host row becomes `revoked`, and a `revoke` command is queued. Idempotent.
 
 A retired key cannot fetch that command, so the host learns of the revocation from the refusal. Its next ingest or command poll is answered 403 with the reason `host_revoked`, for a retired key by the API's auth resolver and for a live key on a revoked host by the handler (#3944). The collector then marks the host revoked, stops shipping, polling, and refreshing its bundle, keeps its recorded events in the local spool, and shows the revocation in `tacho status`. From then on every session on the host is denied at its next prompt or tool boundary while the hooks remain installed. If they are not installed, the next session on the host is an `unobserved_session` incident.
@@ -17,6 +19,7 @@ A revoke the host started itself (`tacho reassign`, `tacho unenroll`, or `tacho 
 - Authentication: org Owner or Admin, by session or by the API key `oxagen login` minted for them (what `tacho unenroll` sends); a key bound to an enrolled machine is refused (ADR-079)
 - Capability name: `revoke_tacho_enrollment`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity for the enrollment, ingest, bundle, and command capabilities, medium for the reads
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).
 
 ## Input
 

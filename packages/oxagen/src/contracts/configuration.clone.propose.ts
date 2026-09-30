@@ -8,7 +8,7 @@ export const configurationClonePropose = registerCapability({
   mode: "sync",
   description:
     "Validate a clone draft and open a create-only proposal under its new identity. Refuses changed source content or a name held by another record or proposal. Retiring the original is separate.",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,

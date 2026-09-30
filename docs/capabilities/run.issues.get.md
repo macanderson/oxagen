@@ -2,7 +2,8 @@
 
 The Run page's Issues tab (#3970): the issues one run worked on, each with its state as the forge reads it now, whether that read happened, what the run did to the issue, and the frames that show it.
 
-**Surfaces:** api, mcp
+**Surfaces:** api, mcp, agent
+**Agent:** Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 **Mode:** sync
 

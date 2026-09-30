@@ -27,7 +27,7 @@ export const runtimeCreate = registerCapability({
   description:
     "Name a runtime in this workspace: a laptop, a VM or a cloud workspace agents run on. The slug is derived from the name unless one is given. containmentRequired makes every agent on it run only under the contained launcher. Register an agent on it next.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   // `app`: the Runtimes page's Add a runtime dialog (apps/app features/runtimes).
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,

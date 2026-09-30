@@ -28,7 +28,7 @@ export const apiKeyList = registerCapability({
   description:
     "List the API keys in scope with their metadata: public id, name, prefix, creation, last use, expiry and revocation times. Never returns a key's secret or its hash.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // A console read is never a governed action (ADR-052 exclusion 2).
@@ -40,6 +40,7 @@ export const apiKeyList = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "identity" },
   input: z.object({}),
   output: z.object({
     items: z.array(

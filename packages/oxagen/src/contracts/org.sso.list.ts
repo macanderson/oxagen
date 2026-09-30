@@ -27,7 +27,7 @@ export const orgSsoList = registerCapability({
   description:
     "List the organisation's SSO identity providers (OIDC or SAML) with their domain verification record, callback URL, group-to-role mappings, whether SSO is required, and whether the organisation's plan includes SSO (the Enterprise plan). Secrets are never returned; the view says only whether one is stored.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "high",
@@ -39,6 +39,7 @@ export const orgSsoList = registerCapability({
   // A read. The app's kernelRead refuses a contract without this flag
   // (`contract_mutates`), and the Single sign-on and Roles pages read it.
   mutates: false,
+  agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
   input: z.object({}),
   output: z.object({
     providers: z.array(ssoProviderViewSchema),

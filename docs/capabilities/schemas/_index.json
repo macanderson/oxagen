@@ -59,7 +59,8 @@
       "name": "advance_onboarding",
       "domain": "onboarding",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -141,7 +142,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -243,7 +245,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -309,7 +312,8 @@
       "domain": "toolbelt",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -382,7 +386,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -477,7 +482,8 @@
       "domain": "runtime",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -613,7 +619,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -648,7 +655,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -771,7 +779,8 @@
       "domain": "toolbelt",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -828,7 +837,8 @@
       "name": "dismiss_proposal",
       "domain": "context",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -839,7 +849,8 @@
       "domain": "control",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -916,6 +927,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -939,7 +951,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -961,7 +974,8 @@
       "name": "export_run",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -995,7 +1009,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1015,7 +1030,8 @@
       "name": "fork_run",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1051,7 +1067,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1094,7 +1111,8 @@
       "domain": "approval_rule",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1176,7 +1194,8 @@
       "domain": "configuration",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1209,7 +1228,8 @@
       "domain": "context",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1232,7 +1252,8 @@
       "domain": "conversation",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1243,7 +1264,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1289,7 +1311,8 @@
       "domain": "privacy",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1300,7 +1323,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1311,7 +1335,8 @@
       "domain": "onboarding",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1322,7 +1347,8 @@
       "domain": "billing",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1382,7 +1408,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1427,7 +1454,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1489,7 +1517,8 @@
       "domain": "onboarding",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1512,7 +1541,8 @@
       "name": "get_operator_ranking",
       "domain": "spend",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1653,6 +1683,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1690,6 +1721,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1702,6 +1734,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1726,6 +1759,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1737,7 +1771,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1747,7 +1782,8 @@
       "name": "get_run_issue_providers",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1758,7 +1794,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1768,7 +1805,8 @@
       "name": "get_run_outcomes_settings",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1778,7 +1816,8 @@
       "name": "get_run_outputs",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1800,6 +1839,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1812,6 +1852,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -1822,7 +1863,8 @@
       "name": "get_run_work",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1845,7 +1887,8 @@
       "domain": "skill",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1901,7 +1944,8 @@
       "domain": "context",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -1947,7 +1991,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2035,7 +2080,8 @@
       "domain": "toolbelt",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2128,7 +2174,8 @@
       "domain": "tool",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2226,6 +2273,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -2284,7 +2332,8 @@
       "domain": "api_key",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2295,7 +2344,8 @@
       "domain": "approval_rule",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2341,7 +2391,8 @@
       "domain": "control",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2402,7 +2453,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2413,7 +2465,8 @@
       "domain": "credential",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2460,6 +2513,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -2471,7 +2525,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2494,7 +2549,8 @@
       "domain": "tacho",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2505,7 +2561,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2541,7 +2598,8 @@
       "domain": "billing",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2552,7 +2610,8 @@
       "domain": "kill_switch",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2607,7 +2666,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2749,6 +2809,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -2760,7 +2821,8 @@
       "domain": "context",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2796,6 +2858,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -2808,6 +2871,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -2844,7 +2908,8 @@
       "domain": "runtime",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2892,7 +2957,8 @@
       "domain": "skill",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2911,7 +2977,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2944,7 +3011,8 @@
       "domain": "tacho",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2977,7 +3045,8 @@
       "domain": "tool",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2988,7 +3057,8 @@
       "domain": "toolbelt",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -2999,7 +3069,8 @@
       "domain": "cost",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3010,7 +3081,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3021,7 +3093,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3067,7 +3140,8 @@
       "name": "merge_context_pr",
       "domain": "context",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3077,7 +3151,8 @@
       "name": "merge_pr_without_review",
       "domain": "context",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3088,7 +3163,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3098,7 +3174,8 @@
       "name": "open_context_pr",
       "domain": "context",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3110,6 +3187,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -3240,7 +3318,8 @@
       "name": "preview_skill_search",
       "domain": "skill",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3273,7 +3352,8 @@
       "domain": "configuration",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3295,7 +3375,8 @@
       "name": "propose_skill",
       "domain": "skill",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3563,6 +3644,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -3596,7 +3678,8 @@
       "domain": "repository",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3619,7 +3702,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3674,7 +3758,8 @@
       "name": "retire_agent",
       "domain": "agent",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3684,7 +3769,8 @@
       "name": "retry_steering_repo_provision",
       "domain": "repository",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3705,7 +3791,8 @@
       "name": "revise_context_record",
       "domain": "context",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3752,7 +3839,8 @@
       "domain": "org",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3795,7 +3883,8 @@
       "name": "revoke_tacho_enrollment",
       "domain": "tacho",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3872,7 +3961,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3907,7 +3997,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3970,7 +4061,8 @@
       "domain": "workspace",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4016,7 +4108,8 @@
       "domain": "billing",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4047,7 +4140,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4091,6 +4185,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -4146,7 +4241,8 @@
       "name": "set_operator_pseudonyms",
       "domain": "spend",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4187,7 +4283,8 @@
       "domain": "user",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4199,6 +4296,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -4211,6 +4309,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -4319,7 +4418,8 @@
       "domain": "tool",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4330,7 +4430,8 @@
       "domain": "tool",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4440,7 +4541,8 @@
       "name": "summarize_run",
       "domain": "run",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4460,7 +4562,8 @@
       "name": "suspend_agent",
       "domain": "agent",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4554,6 +4657,7 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent",
         "cli"
       ],
       "component": null,
@@ -4671,7 +4775,8 @@
       "name": "update_profile",
       "domain": "user",
       "surfaces": [
-        "api"
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4693,7 +4798,8 @@
       "domain": "runtime",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4704,7 +4810,8 @@
       "domain": "skill",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4738,7 +4845,8 @@
       "domain": "toolbelt",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "agent"
       ],
       "component": null,
       "produces": [],

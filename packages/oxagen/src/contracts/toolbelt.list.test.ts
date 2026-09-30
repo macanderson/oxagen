@@ -20,7 +20,7 @@ describe("list_toolbelts contract", () => {
   it("is a console read on api and mcp that workspace members can make", () => {
     expect(getCapability("list_toolbelts")).toBe(toolbeltList);
     expect(toolbeltList.mutates).toBe(false);
-    expect(toolbeltList.surfaces).toEqual(["api", "mcp"]);
+    expect(toolbeltList.surfaces).toEqual(["api", "mcp", "agent"]);
     expect(toolbeltList.defaultRoles.workspace).toMatchObject({
       Member: "allow",
     });

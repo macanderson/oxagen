@@ -18,7 +18,7 @@ export const toolbeltDelete = registerCapability({
   description:
     "Delete a custom toolbelt that no live agent carries. The All tools belt cannot be deleted.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

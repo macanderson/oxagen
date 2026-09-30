@@ -18,7 +18,7 @@ export const findingEvidenceGet = registerCapability({
   description:
     "Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -29,6 +29,7 @@ export const findingEvidenceGet = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
   input: findingDecisionInputSchema,
   output: z
     .object({ finding: findingSchema, evidence: findingEvidenceSchema })

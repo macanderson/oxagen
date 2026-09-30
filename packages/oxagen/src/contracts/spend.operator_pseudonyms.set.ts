@@ -17,7 +17,7 @@ export const spendOperatorPseudonymsSet = registerCapability({
   description:
     "Turn the workspace's operator pseudonyms on or off. With them on, the operator ranking shows a stable pseudonym in place of each name, keeps the ranks and the unproductive spend, and withholds each operator's unproductive share, run count, and runs. Org Owner or Admin only.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -28,6 +28,7 @@ export const spendOperatorPseudonymsSet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "high", category: "privacy" },
   input: z.object({ enabled: z.boolean() }).strict(),
   output: z.object({ pseudonyms: z.boolean() }).strict(),
 });

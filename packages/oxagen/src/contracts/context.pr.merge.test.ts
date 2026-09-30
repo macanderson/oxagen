@@ -9,7 +9,7 @@ describe("merge_context_pr contract", () => {
     expect(contextPrMerge.agent?.requiresApproval).toBe(true);
     expect(contextPrMerge.sensitivity).toBe("high");
     // The reviewer is a signed-in user; an API key carries none.
-    expect(contextPrMerge.surfaces).toEqual(["api"]);
+    expect(contextPrMerge.surfaces).toEqual(["api", "agent"]);
     expect(contextPrMerge.layers).not.toContain("mcp");
   });
 

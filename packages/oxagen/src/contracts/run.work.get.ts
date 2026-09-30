@@ -157,7 +157,7 @@ export const runWorkGet = registerCapability({
   description:
     "Read recorded checkout locations and retained diff references, plus connected pull requests and their current CI checks.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
@@ -168,6 +168,7 @@ export const runWorkGet = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
   input: z.object({ runId: runPublicIdSchema }).strict(),
   output: z
     .object({

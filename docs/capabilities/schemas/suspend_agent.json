@@ -4,7 +4,8 @@
   "description": "Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything.",
   "mode": "sync",
   "surfaces": [
-    "api"
+    "api",
+    "agent"
   ],
   "sensitivity": "high",
   "agent": {

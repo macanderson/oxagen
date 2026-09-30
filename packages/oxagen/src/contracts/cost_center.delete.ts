@@ -15,7 +15,7 @@ export const costCenterDelete = registerCapability({
   description:
     "Delete a cost-center label from this organization's list. Runs already rolled up keep it; new runs stop being charged to it.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
+  surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   noBillingGate: true,
@@ -26,6 +26,7 @@ export const costCenterDelete = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   input: z.object({ label: costCenterLabelSchema }).strict(),
   output: z
     .object({

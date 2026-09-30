@@ -23,7 +23,7 @@ export const onboardingAdvance = registerCapability({
   description:
     "Move the onboarding gate between the wrap and run steps. The run step completes only on the first frame, so unlocked is never a target.",
   mode: "sync",
-  surfaces: ["api"],
+  surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
@@ -34,6 +34,7 @@ export const onboardingAdvance = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},
   },
+  agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   input: z
     .object({
       /** `unlocked` is accepted by the schema and refused by the handler, so the refusal is a recorded decision. */
