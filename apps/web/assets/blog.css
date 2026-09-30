@@ -1268,3 +1268,82 @@
 .post-foot .sec-head {
   margin-bottom: 28px;
 }
+
+/* The template form in the agent SDLC post. It sends the company name and a
+   format to sdlc.oxagen.cloud with a plain GET, so it needs no script. The
+   chosen format takes the double border, the house shape for a held choice. */
+.sdlc-form {
+  margin: 1.6em 0;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.sdlc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.sdlc-row .field {
+  flex: 1 1 240px;
+}
+.sdlc-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sdlc-formats legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sdlc-formats label {
+  position: relative;
+}
+.sdlc-formats input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.sdlc-formats span {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  font-size: 14.5px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.sdlc-formats input:checked + span {
+  padding: 0 12px;
+  border: 3px double var(--ink);
+  color: var(--ink);
+}
+.sdlc-formats input:focus-visible + span {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.prose .sdlc-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+@media (max-width: 560px) {
+  .sdlc-row .btn {
+    width: 100%;
+  }
+}
