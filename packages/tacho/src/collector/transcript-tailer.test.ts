@@ -123,6 +123,7 @@ describe("TranscriptTailer", () => {
     options: {
       statePath?: string;
       budgetBytes?: number;
+      tickBudgetBytes?: number;
       now?: () => number;
       sealedIdleMs?: number;
     } = {},
@@ -231,6 +232,48 @@ describe("TranscriptTailer", () => {
     expect(session.lines).toHaveLength(4);
     for (let i = 0; i < 3; i += 1) await instance.tick();
     expect(session.lines).toHaveLength(10);
+  });
+
+  it("holds a tick to its budget across a session's subagents, and resumes at the file it could not start", async () => {
+    // Each subagent transcript got a budget of its own beside the tick's, so
+    // a session with many backlogged subagents read far past the tick budget
+    // in one tick and held its session's queue for every seal.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const line = `${"x".repeat(9)}\n`;
+    writeFileSync(path, line.repeat(30));
+    for (const id of ["a1", "a2", "a3"])
+      writeFileSync(subagentPath(path, id), line.repeat(30));
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session], {
+      budgetBytes: 100,
+      tickBudgetBytes: 250,
+      now: () => 1_000_000,
+      sealedIdleMs: 0,
+    });
+    const perFile = () =>
+      [undefined, "a1", "a2", "a3"].map(
+        (id) => session.lines.filter((l) => l.subagentId === id).length,
+      );
+
+    // 250 bytes of tick hold two full 100-byte reads. The third file waits.
+    await instance.tick();
+    expect(session.lines).toHaveLength(20);
+    expect(perFile()).toEqual([0, 10, 10, 0]);
+    // The next tick starts at that file, then the session's own transcript.
+    await instance.tick();
+    expect(perFile()).toEqual([10, 10, 10, 10]);
+    await instance.tick();
+    expect(perFile()).toEqual([10, 20, 20, 10]);
+
+    // Sealed, the session reads every file to its end before it drains. A
+    // drained cursor reads nothing more, so the full count shows the order.
+    session.sealed = true;
+    const drained = () =>
+      instance.state().cursors[cursorId("s1")]?.drained === true;
+    for (let i = 0; i < 10 && !drained(); i += 1) await instance.tick();
+    expect(drained()).toBe(true);
+    expect(perFile()).toEqual([30, 30, 30, 30]);
   });
 
   it("gets past a line longer than the budget without stalling, and seals a gap", async () => {

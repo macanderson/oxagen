@@ -91,8 +91,9 @@ that chain in between is rolled back with it if the write fails.
    between them. Each slice checks, inside the queue, that the cursor still
    stands where the read began, because a `Stop` in the queue can drain the
    transcript while the tick reads. A tick reads at most 4 MiB from a file and
-   starts no further session once it has read 16 MiB in all. The next tick
-   starts with the first session this one left. `Stop` and `SessionEnd` drain
+   at most 16 MiB in all, subagent transcripts included, and it starts no file
+   once less than 4 MiB of that is left. The next tick starts with the session
+   and the file this one could not start. `Stop` and `SessionEnd` drain
    their transcript inside their own session's queue, which holds no other
    session. The daemon never skips transcripts older than the enrollment
    (#4394, option 3): the record keeps what the host holds.

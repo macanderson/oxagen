@@ -74,10 +74,10 @@ import { MAX_TOMBSTONES, sessionMapKey, TOMBSTONE_RETAIN_MS } from "./registry";
 export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
 
 /**
- * Once one tick has read this many bytes across all transcripts, it starts
- * no further session. A session the tick starts is read in full budget, so
- * one session with many subagent transcripts can take the tick past this.
- * The next tick starts with the first session this one left.
+ * The most bytes one tick reads across all transcripts, subagents' included.
+ * A file is read a full budget or not at all, so the tick starts no file once
+ * less than one budget of this is left. The next tick starts with the session
+ * and the file this one could not start.
  */
 export const DEFAULT_TICK_BUDGET_BYTES = 16 * 1024 * 1024;
 
@@ -322,6 +322,12 @@ const IN_QUEUE: Sealer = {
   current: () => true,
 };
 
+/**
+ * The session's own transcript in a tick's list of files, beside its
+ * subagents' ids. A subagent id is a string, so `null` cannot equal one.
+ */
+const OWN_TRANSCRIPT = null;
+
 /** One turn of the event loop, so a hook or `/status` waiting on it runs. */
 function yieldTurn(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -374,6 +380,14 @@ export class TranscriptTailer {
   private ticking: Promise<void> = Promise.resolve();
   /** The cursor key of the first session the last tick's budget left unread. */
   private resumeAt: string | undefined;
+  /**
+   * For each session the last tick's budget cut short, the file it did not
+   * start: a subagent id, or `OWN_TRANSCRIPT` for the session's own.
+   */
+  private readonly fileResumeAt = new Map<
+    string,
+    string | typeof OWN_TRANSCRIPT
+  >();
 
   constructor(options: TranscriptTailerOptions) {
     this.options = options;
@@ -506,6 +520,24 @@ export class TranscriptTailer {
     return run;
   }
 
+  /**
+   * A session's files in tick order: its open subagents' transcripts, then
+   * its own, starting from the file the last tick left unread in it.
+   */
+  private filesInTickOrder(
+    key: string,
+    cursor: Cursor,
+  ): Array<string | typeof OWN_TRANSCRIPT> {
+    const files: Array<string | typeof OWN_TRANSCRIPT> = [
+      ...Object.keys(cursor.agents ?? {}),
+      OWN_TRANSCRIPT,
+    ];
+    const at = this.fileResumeAt.has(key)
+      ? files.indexOf(this.fileResumeAt.get(key) as string | null)
+      : -1;
+    return at <= 0 ? files : [...files.slice(at), ...files.slice(0, at)];
+  }
+
   /** The sessions in tick order: from the one the last tick left unread. */
   private inTickOrder(sessions: readonly TailedSession[]): TailedSession[] {
     const at =
@@ -587,18 +619,58 @@ export class TranscriptTailer {
           session,
           () => this.cursors.get(key) === cursor,
         );
-        const subagents = await this.tailSubagents(
-          session,
-          cursor,
-          this.budget,
-          (id, agent) =>
+        await this.findSubagents(session, cursor);
+        const before = cursor.offset;
+        let subagentsGrew = false;
+        let deferred = false;
+        let ownFailed = false;
+        // Every file of the session, its subagents' and its own, is read a
+        // full budget or not at all, and none is started once less than a
+        // budget of the tick is left. The file this tick could not start goes
+        // first in this session on the next tick, so no file waits forever
+        // behind the others.
+        for (const id of this.filesInTickOrder(key, cursor)) {
+          if (left < this.budget) {
+            this.fileResumeAt.set(key, id);
+            cutAt ??= key;
+            deferred = true;
+            break;
+          }
+          if (id === OWN_TRANSCRIPT) {
+            // Caught here so a failed read of the session's own transcript
+            // costs its subagents no pass when it comes first in the order.
+            try {
+              const pass = await this.advance(
+                session,
+                cursor,
+                this.budget,
+                sealer,
+              );
+              left -= pass.bytes;
+            } catch (error) {
+              ownFailed = true;
+              this.options.log?.(
+                `transcript tail for ${session.harnessSessionId} failed this tick: ${describe(error)}`,
+              );
+            }
+            continue;
+          }
+          const agent = cursor.agents?.[id];
+          if (agent === undefined) continue;
+          const at = agent.offset;
+          left -= await this.advanceSubagent(
+            session,
+            id,
+            agent,
+            this.budget,
             this.tickSealer(
               session,
               () => this.cursors.get(key)?.agents?.[id] === agent,
             ),
-        );
-        left -= subagents.bytes;
-        const subagentsGrew = subagents.grew;
+          );
+          if (agent.offset !== at) subagentsGrew = true;
+        }
+        if (!deferred) this.fileResumeAt.delete(key);
         if (session.sealed) {
           // A sealed chain still gets read at the normal budget, tick after
           // tick, until its transcript has sat unchanged for `sealedIdleMs`:
@@ -607,14 +679,16 @@ export class TranscriptTailer {
           // at seal time is not guaranteed to be the last write. See
           // `DEFAULT_SEALED_TAIL_IDLE_MS`. A subagent still writing counts as
           // growth too: a background agent can outlive its parent's last
-          // write, and a drained cursor would stop reading it.
-          const before = cursor.offset;
-          const pass = await this.advance(session, cursor, this.budget, sealer);
-          left -= pass.bytes;
+          // write, and a drained cursor would stop reading it. A tick that
+          // left one of the session's files unread, or failed to read its
+          // own, cannot say the session was quiet. It neither starts nor ends
+          // the quiet time.
           const now = this.options.now?.() ?? Date.now();
           if (cursor.offset > before || subagentsGrew) {
             delete cursor.sealedQuietSinceMs;
             this.dirty = true;
+          } else if (deferred || ownFailed) {
+            // Nothing to record this tick.
           } else if (cursor.sealedQuietSinceMs === undefined) {
             cursor.sealedQuietSinceMs = now;
             this.dirty = true;
@@ -625,10 +699,7 @@ export class TranscriptTailer {
             cursor.drained = true;
             this.dirty = true;
           }
-          continue;
         }
-        const pass = await this.advance(session, cursor, this.budget, sealer);
-        left -= pass.bytes;
       } catch (error) {
         this.options.log?.(
           `transcript tail for ${session.harnessSessionId} failed this tick: ${error instanceof Error ? error.message : String(error)}`,
@@ -641,6 +712,8 @@ export class TranscriptTailer {
     // registry does not list now counts as forgotten.
     for (const session of this.options.sessions())
       live.add(this.cursorKey(session));
+    for (const key of this.fileResumeAt.keys())
+      if (!live.has(key)) this.fileResumeAt.delete(key);
     this.keepForgotten(live);
     this.persist();
   }
@@ -745,7 +818,7 @@ export class TranscriptTailer {
       session,
       cursor,
       hook === "SessionEnd" ? Number.POSITIVE_INFINITY : this.budget,
-      () => IN_QUEUE,
+      IN_QUEUE,
     );
     this.persist();
   }
@@ -815,51 +888,64 @@ export class TranscriptTailer {
 
   /**
    * Open a cursor for every subagent transcript under the session's
-   * `subagents/` directory that has none and is not finished, then advance
-   * each open one by at most `budget`. Each subagent gets its own budget, so
-   * a tick reads at most one budget per transcript, subagents included.
-   * Answers whether any subagent transcript was read further, so a sealed
-   * session is not drained while one of its subagents is still writing, and
-   * how many bytes the reads moved past.
+   * `subagents/` directory that has none and is not finished.
+   */
+  private async findSubagents(
+    session: TailedSession,
+    cursor: Cursor,
+  ): Promise<void> {
+    const dir =
+      session.transcriptPath === undefined
+        ? undefined
+        : subagentDirOf(session.transcriptPath);
+    if (dir === undefined) return;
+    for (const path of await this.subagentTranscripts(dir)) {
+      const id = subagentIdOf(path);
+      if (id === undefined) continue;
+      if (cursor.subagents.includes(id)) continue;
+      if (cursor.agents?.[id] !== undefined) continue;
+      cursor.agents = { ...cursor.agents, [id]: { path, offset: 0 } };
+      this.dirty = true;
+    }
+  }
+
+  /**
+   * Advance one subagent transcript by at most `budget` and answer how many
+   * bytes the read moved past. A failure is logged and costs no other
+   * transcript its pass, the parent's included.
+   */
+  private async advanceSubagent(
+    session: TailedSession,
+    id: string,
+    agent: FileCursor,
+    budget: number,
+    sealer: Sealer,
+  ): Promise<number> {
+    try {
+      const pass = await this.advance(session, agent, budget, sealer, id);
+      return pass.bytes;
+    } catch (error) {
+      this.options.log?.(
+        `subagent transcript ${agent.path} failed this pass: ${describe(error)}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Find the session's subagent transcripts and advance each open one by at
+   * most `budget`, for a hook that drains them in its session's queue. The
+   * tick reads subagents file by file against its own allowance instead.
    */
   private async tailSubagents(
     session: TailedSession,
     cursor: Cursor,
     budget: number,
-    sealerFor: (id: string, agent: FileCursor) => Sealer,
-  ): Promise<{ grew: boolean; bytes: number }> {
-    const dir =
-      session.transcriptPath === undefined
-        ? undefined
-        : subagentDirOf(session.transcriptPath);
-    if (dir !== undefined) {
-      for (const path of await this.subagentTranscripts(dir)) {
-        const id = subagentIdOf(path);
-        if (id === undefined) continue;
-        if (cursor.subagents.includes(id)) continue;
-        if (cursor.agents?.[id] !== undefined) continue;
-        cursor.agents = { ...cursor.agents, [id]: { path, offset: 0 } };
-        this.dirty = true;
-      }
-    }
-    let grew = false;
-    let bytes = 0;
-    for (const [id, agent] of Object.entries(cursor.agents ?? {})) {
-      const before = agent.offset;
-      // One subagent's failure is logged and costs no other transcript its
-      // pass, the parent's included.
-      try {
-        const sealer = sealerFor(id, agent);
-        const pass = await this.advance(session, agent, budget, sealer, id);
-        bytes += pass.bytes;
-      } catch (error) {
-        this.options.log?.(
-          `subagent transcript ${agent.path} failed this pass: ${describe(error)}`,
-        );
-      }
-      if (agent.offset !== before) grew = true;
-    }
-    return { grew, bytes };
+    sealer: Sealer,
+  ): Promise<void> {
+    await this.findSubagents(session, cursor);
+    for (const [id, agent] of Object.entries(cursor.agents ?? {}))
+      await this.advanceSubagent(session, id, agent, budget, sealer);
   }
 
   /**
