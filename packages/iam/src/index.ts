@@ -56,12 +56,17 @@ export type {
   PersistedDecisionOutcome,
 } from "./live-agent-run-authorization";
 
-export { resourceScopeDigestOf } from "./resource-scope";
+export {
+  implicitScopeDigests,
+  resourceScopeDigestOf,
+} from "./resource-scope";
+export type { ImplicitScopeArgs } from "./resource-scope";
 
 export { assertNoActiveKillSwitch } from "./kill-switch-guard";
 export { reportAuditEmissionFailure } from "./check-iam";
 
 export {
+  callScopeDigests,
   flipKillSwitchOff,
   flipKillSwitchOn,
   matchKillSwitch,
@@ -70,6 +75,7 @@ export {
   readKillSwitches,
 } from "./kill-switch";
 export type {
+  KillSwitchCallFacts,
   KillSwitchDeny,
   KillSwitchRow,
   KillSwitchTargetKind,

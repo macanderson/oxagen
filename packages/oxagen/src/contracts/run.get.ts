@@ -40,6 +40,15 @@ export const FRAME_LIMIT_MAX = 500;
 export const FRAME_LIMIT_DEFAULT = 200;
 /** The longest a read may wait for an event past its cursor. */
 export const WAIT_MS_MAX = 20_000;
+/**
+ * The bounds on an `agent`-surface read (#4222). A model rarely needs more
+ * than the latest few frames, and every frame it reads is billed as context.
+ * The Run page's SSE poll reads on `api`, and those bounds stay as above.
+ */
+export const AGENT_FRAME_LIMIT_MAX = 100;
+export const AGENT_FRAME_LIMIT_DEFAULT = 50;
+/** An `agent`-surface read never waits: a long poll would hold the turn. */
+export const AGENT_WAIT_MS = 0;
 /** The most subagent chains one read lists in `chains.heads`. */
 export const RUN_CHAIN_HEADS_MAX = 200;
 
@@ -231,14 +240,28 @@ export const runGet = registerCapability({
        * heads that cursor named.
        */
       chainsAfter: z.string().max(64).optional(),
+      // `.describe()` rather than a doc comment: the model's tool schema is
+      // built from this schema (materialize-tools.ts), and a doc comment
+      // never reaches it.
       frameLimit: z
         .number()
         .int()
         .min(1)
         .max(FRAME_LIMIT_MAX)
-        .default(FRAME_LIMIT_DEFAULT),
+        .default(FRAME_LIMIT_DEFAULT)
+        .describe(
+          `Frames to return. Default ${FRAME_LIMIT_DEFAULT}, at most ${FRAME_LIMIT_MAX}. An agent-surface call returns at most ${AGENT_FRAME_LIMIT_MAX}, and ${AGENT_FRAME_LIMIT_DEFAULT} by default.`,
+        ),
       /** Long-poll budget: wait up to this long for an event past the cursor. */
-      waitMs: z.number().int().min(0).max(WAIT_MS_MAX).default(0),
+      waitMs: z
+        .number()
+        .int()
+        .min(0)
+        .max(WAIT_MS_MAX)
+        .default(0)
+        .describe(
+          `Milliseconds to wait for a frame past the cursor, at most ${WAIT_MS_MAX}. An agent-surface call never waits: it reads ${AGENT_WAIT_MS} whatever it passes.`,
+        ),
     })
     .strict(),
   output: z

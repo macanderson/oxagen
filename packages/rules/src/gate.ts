@@ -151,6 +151,13 @@ export class DecisionRuleUnavailableError extends Error {
 export interface DecisionGateArgs {
   requireFreshRules?: boolean;
   external?: { approvedDigest?: string };
+  /**
+   * A person's approval of this exact built-in call: the `approvalDigest` a
+   * `DecisionRuleApprovalRequiredError` carried when the call was parked
+   * (#4226). The kernel passes it from `InvokeOptions.approvedDigest`.
+   * External tools pass theirs in `external`.
+   */
+  approvedDigest?: string;
   capability: string;
   input: unknown;
   ctx: {
@@ -466,7 +473,24 @@ async function judgeRules(
       verdict,
     });
     if (commit !== undefined) return commit;
-    throw new DecisionRuleApprovalRequiredError(verdict);
+    const required = new DecisionRuleApprovalRequiredError(verdict);
+    // The same digest an external tool's approval carries, so a surface that
+    // parks this call can seal it with the approval and the resumed call can
+    // prove it (#4226). A value `inputDigest` cannot encode leaves the
+    // digest unset: the error the caller catches is still this one.
+    try {
+      required.approvalDigest = inputDigest({
+        capability,
+        input,
+        rules: ruleSet.rules,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        orgId: ctx.orgId,
+      });
+    } catch {
+      // Left unset on purpose. See above.
+    }
+    throw required;
   }
   throw new DecisionRuleDeniedError(verdict);
 }

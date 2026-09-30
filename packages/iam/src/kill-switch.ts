@@ -376,7 +376,7 @@ function activeTarget(args: {
 // ---------------------------------------------------------------------------
 
 /** What is known about one tool call at the gateway. */
-interface KillSwitchCallFacts {
+export interface KillSwitchCallFacts {
   readonly orgId: string;
   readonly workspaceId: string | null;
   /** The capability id the call is governed under (`mcp.<server>.<tool>` for an external tool). */

@@ -120,7 +120,17 @@ export const modelCredentialViewSchema = z.object({
   lastVerifiedAt: z.string().nullable(),
   /** ISO-8601 timestamp of the last time the key was set or replaced. */
   rotatedAt: z.string().nullable(),
+  /**
+   * Whether the endpoint honoured a `response_format` JSON-schema request
+   * when the verification probe last asked (#3314). Null when it was never
+   * asked, which is every provider but `openai_compatible`. Optional so a
+   * reader written before the field existed still validates.
+   */
+  structuredOutputs: z.boolean().nullable().optional(),
 });
+
+/** The tiers a credential's model map can name. */
+export const modelCredentialTierSchema = z.enum(["fast", "balanced", "precise"]);
 
 /**
  * What a verification reports. `ok: false` carries the vendor's own message
@@ -140,6 +150,21 @@ export const modelCredentialVerificationSchema = z.object({
   latencyMs: z.number().int().min(0),
   error: z.string().nullable(),
   toolCalling: z.boolean().nullable(),
+  /**
+   * The tool-calling answer for each tier the credential maps, from a
+   * completion with a tool sent to that tier's model (#3314). A tier the
+   * probe did not ask is absent. `toolCalling` is false when any asked tier
+   * answered false.
+   */
+  toolCallingByTier: z
+    .object({
+      fast: z.boolean().nullable().optional(),
+      balanced: z.boolean().nullable().optional(),
+      precise: z.boolean().nullable().optional(),
+    })
+    .optional(),
+  /** The first tier whose model could not serve a tool call; null when none failed. */
+  failingTier: modelCredentialTierSchema.nullable().optional(),
 });
 
 export type ModelCredentialProvider = z.output<
@@ -148,6 +173,7 @@ export type ModelCredentialProvider = z.output<
 export type ModelCredentialModelMap = z.output<
   typeof modelCredentialModelMapSchema
 >;
+export type ModelCredentialTier = z.output<typeof modelCredentialTierSchema>;
 export type ModelCredentialView = z.output<typeof modelCredentialViewSchema>;
 export type ModelCredentialVerification = z.output<
   typeof modelCredentialVerificationSchema

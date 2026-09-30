@@ -640,6 +640,14 @@ export interface CheckedContext extends CapabilityContext {
   /** Present only when the kernel is executing a lifecycle invocation. */
   execution?: LifecycleExecutionContext;
   /**
+   * The surface this invocation arrived on (`InvokeOptions.surface`), the one
+   * the kernel checked against the contract's `surfaces`. Undefined when the
+   * caller named none. A handler reads it to bound an `agent` call more
+   * tightly than an `api` one (#4222). `surface` above is the telemetry
+   * origin (`app`, `runner`, ...) and never says `agent`.
+   */
+  invokeSurface?: CapabilitySurface;
+  /**
    * The PLATFORM-CREATED reference to the immutable `iam.authorization_decisions`
    * row that allowed this invocation.
    *

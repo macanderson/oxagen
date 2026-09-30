@@ -14,6 +14,14 @@ export const approvalResumePayloadSchema = z
     rawInput: z.unknown(),
     validatedDigest: z.string(),
     riskLevel: z.enum(["low", "medium", "high"]),
+    /**
+     * The decision-rule digest the person approved, from
+     * `DecisionRuleApprovalRequiredError.approvalDigest`, when a rule rather
+     * than the contract parked the call (#4226). `resumeApprovedCall` hands it
+     * to `invoke()` as `approvedDigest`. Optional, so a payload sealed before
+     * this field existed still opens.
+     */
+    ruleDigest: z.string().optional(),
   })
   .strict();
 export type ApprovalResumePayload = z.infer<typeof approvalResumePayloadSchema>;

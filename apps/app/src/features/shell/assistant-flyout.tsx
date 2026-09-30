@@ -323,6 +323,9 @@ const EMPTY_THREAD: Thread = {
  */
 type Refusal =
   | "denied"
+  // An operator switched stella off in this workspace (#4218). Told apart
+  // from `denied`, which sends the person to their role instead.
+  | "killSwitch"
   | "invalid"
   | "attachment"
   | "attachmentModel"
@@ -531,6 +534,8 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
   switch (code) {
     case "denied":
       return <>{t("denied")}</>;
+    case "killSwitch":
+      return <>{t("killSwitch")}</>;
     case "invalid":
       return <>{t("invalid")}</>;
     case "attachment":

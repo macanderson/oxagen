@@ -217,6 +217,25 @@ export interface HistorySummaryFrame {
   reasonCode?: HistorySummaryFallbackReason;
   /** The summary carried, recorded as the frame's body. */
   text: string | null;
+  /**
+   * The call that wrote the summary, set only when this turn wrote it
+   * (`regenerated`). The run records its cost on the
+   * `context.history_summarized` frame (#4228).
+   */
+  summaryCall?: HistorySummaryCall;
+}
+
+/**
+ * The one model call that wrote a history summary: which model, what it used,
+ * and what that cost on the model's own rate (#4228).
+ */
+export interface HistorySummaryCall {
+  /** The model id the call ran on, as `modelIdOf` returns it. */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** The call's cost in USD, priced on `model`. */
+  costUsd: number;
 }
 
 export interface CompactedHistory {
@@ -224,6 +243,12 @@ export interface CompactedHistory {
   history: ModelMessage[];
   /** The run's frame, or null when every prior message fits the window. */
   frame: HistorySummaryFrame | null;
+  /**
+   * The call that wrote the summary, set only when this turn wrote it. The
+   * per-turn budget guard counts its cost before the engine's first step
+   * (`TurnBudgetGuardHooks.openingCostUsd`, #4228).
+   */
+  summaryCall?: HistorySummaryCall;
 }
 
 /** The summary took longer than the turn waits for it. */

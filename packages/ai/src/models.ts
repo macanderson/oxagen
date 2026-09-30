@@ -102,6 +102,14 @@ export interface ModelCredential {
    * and a routed key ignores it.
    */
   modelMap?: Partial<Record<OxagenTier, string>> | null;
+  /**
+   * Whether the endpoint honoured a `response_format` JSON-schema request
+   * when the verification probe last asked (`model_credentials.structured_outputs`,
+   * #3314). `compatibleClient` reads it to set `supportsStructuredOutputs`,
+   * so an `openai_compatible` endpoint that was never asked is not assumed
+   * to support it. Null or absent when the probe never asked.
+   */
+  structuredOutputs?: boolean | null;
 }
 
 export interface ModelSelector {

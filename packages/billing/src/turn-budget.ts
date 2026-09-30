@@ -285,6 +285,15 @@ export interface TurnBudgetGuardHooks {
    * steps that continue untouched.
    */
   onTick?: (costUsd: number, limitUsd: number) => void;
+  /**
+   * What the turn spent before the engine's first step, in USD, priced on the
+   * model that spent it: the history summary call, for one (#4228). The
+   * guard reads it on each tick and adds it to the engine's cost, so the
+   * per-turn budget covers everything the turn paid for. A function rather
+   * than a number because the summary can finish after the guard is built.
+   * Absent, the guard counts engine steps alone.
+   */
+  openingCostUsd?: () => number;
 }
 
 /**

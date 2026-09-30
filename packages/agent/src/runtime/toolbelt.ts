@@ -72,6 +72,22 @@ export interface CapabilityBeltEnv {
    */
   actingAgent?: ActingAgent | null;
   /**
+   * The scope digests every call of this turn carries: org, workspace,
+   * operator (`ctx.userId`) and acting agent, built with
+   * `implicitScopeDigests` from @oxagen/iam (#4218). The per-call gate
+   * matches a `resource_scope` deny against the same digests
+   * (`callScopeDigests`). Absent, the belt matches the acting agent's digest
+   * alone, as it did before.
+   */
+  scopeDigests?: readonly string[];
+  /**
+   * The impacts tagged on each capability's active tool version, keyed by
+   * capability id: the classification index the kill-switch gate reads
+   * (`readClassificationIndex`). A `class` deny covers a capability tagged
+   * with its class. Absent, no class digest is matched (#4218).
+   */
+  classTags?: ReadonlyMap<string, readonly string[]>;
+  /**
    * Plugin ids the org is entitled to, or `"unavailable"` when the read
    * failed (every plugin-claimed contract is then denied, fail closed).
    */

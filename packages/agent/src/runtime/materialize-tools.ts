@@ -212,6 +212,15 @@ export interface MaterializeOptions {
   /** When provided, only MCP servers whose publicId is in this set are loaded for the turn. */
   serverAllowlist?: Set<string>;
   /**
+   * Build the set from Oxagen's capability contracts alone (#4310, ADR-053).
+   * True skips every plugin type contributor, `mcp_server` and
+   * `mcp_server_local` both, so no workspace MCP server is connected and no
+   * workspace credential is decrypted. The in-app assistant's turn is the
+   * caller this is for. Absent or false keeps today's set, which
+   * `governed-turn`, `approval-resume` and `tools.load` rely on.
+   */
+  capabilitiesOnly?: boolean;
+  /**
    * Called immediately after an approval request is created and BEFORE
    * `waitForApproval` blocks. Lets the stream route emit an
    * `approval-required` SSE event so the client renders the approval card

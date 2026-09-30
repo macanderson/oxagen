@@ -339,6 +339,12 @@ export const modelCredentials = orgSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Whether the endpoint honoured a `response_format` JSON-schema request
+    // when the verification probe last asked (#3314). NULL when it was never
+    // asked: every provider but `openai_compatible`, and a row verified before
+    // the probe asked. The provider client sets `supportsStructuredOutputs`
+    // from this, so an endpoint nobody checked is not assumed to support it.
+    structuredOutputs: boolean("structured_outputs"),
   },
   (t) => ({
     // One LIVE credential per organisation. Partial on deleted_at so a revoked

@@ -36,7 +36,10 @@ import {
   fetchWithoutRedirects,
   redactUrlCredentials,
 } from "@oxagen/config/public-url";
-import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
+import type {
+  ModelCredentialProvider,
+  ModelCredentialTier,
+} from "@oxagen/oxagen/contracts/org.model_credential.shared";
 
 /**
  * Every probe request goes out through this. The URL was checked by the
@@ -63,8 +66,20 @@ export interface ProbeModelCredentialArgs {
    * An OpenAI-compatible server may host several models with different
    * capabilities, so the question is asked of the one the organisation will
    * actually use — the balanced tier, which the assistant runs on.
+   *
+   * @deprecated Pass `toolProbeModels`, which names every tier the runtime
+   * can select (#3314). Kept until the verify handler moves over.
    */
   readonly toolProbeModel?: string | null;
+  /**
+   * The model each tier maps to on this credential, from its `modelMap`
+   * (#3314). The probe sends a completion with a tool to each one, because
+   * `modelForRole` sends summaries and verdicts to `fast` and `precise`, not
+   * only to `balanced`. Takes precedence over `toolProbeModel` when set.
+   */
+  readonly toolProbeModels?: Partial<
+    Record<ModelCredentialTier, string>
+  > | null;
 }
 
 export interface CredentialProbeResult {
@@ -85,6 +100,21 @@ export interface CredentialProbeResult {
    * `openai_compatible`.
    */
   readonly toolCalling: boolean | null;
+  /**
+   * The tool-calling answer for each tier in `toolProbeModels` (#3314). A
+   * tier the probe did not ask is absent.
+   */
+  readonly toolCallingByTier?: Partial<
+    Record<ModelCredentialTier, boolean | null>
+  >;
+  /** The first tier whose model could not serve a tool call; null when none failed. */
+  readonly failingTier?: ModelCredentialTier | null;
+  /**
+   * Whether an `openai_compatible` endpoint honoured a `response_format`
+   * JSON-schema request (#3314). Null when it was not asked, which is every
+   * other provider and a refused key.
+   */
+  readonly structuredOutputs?: boolean | null;
 }
 
 /**

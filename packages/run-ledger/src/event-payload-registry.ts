@@ -316,6 +316,18 @@ const contextHistorySummarizedSchema = z
     regenerated: z.boolean(),
     /** Set when the outcome is not `applied`: why the summary is old or gone. */
     reason_code: reasonCodeSchema.optional(),
+    /**
+     * The call that wrote the summary, set only when `regenerated` (#4228).
+     * An event recorded before these fields existed carries none of them.
+     */
+    summary_model: shortLabelSchema.optional(),
+    input_tokens: countSchema.optional(),
+    output_tokens: countSchema.optional(),
+    /**
+     * What the summary call cost, in integer micro-dollars (`canonicalJson`
+     * refuses a float). Capped at $1,000, as the verifier's cost is.
+     */
+    cost_usd_micros: z.number().int().min(0).max(1_000_000_000).optional(),
   })
   .strict();
 

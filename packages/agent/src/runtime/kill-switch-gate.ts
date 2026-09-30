@@ -52,6 +52,7 @@ import {
   matchKillSwitch,
   readActiveKillSwitches,
   readDenyGenerationVector,
+  type ActiveEmergencyDeny,
   type KillSwitchRow,
 } from "@oxagen/iam";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
@@ -74,12 +75,21 @@ interface ToolCallFacts {
 }
 
 /** The impacts of every classified active version, by capability id. */
-type ClassificationIndex = ReadonlyMap<string, readonly string[]>;
+export type ClassificationIndex = ReadonlyMap<string, readonly string[]>;
 
 export interface KillSwitchSnapshot {
   readonly generation: DenyGenerationVector;
   readonly switches: readonly KillSwitchRow[];
   readonly tags: ClassificationIndex;
+  /**
+   * Every active emergency deny in scope, kill switches and plain denies
+   * alike. A plain deny has no `target_kind`, so it cannot be a
+   * `KillSwitchRow`: `rowOf` throws on one. This is the row set the belt
+   * reads (`readActiveEmergencyDenies`), so the gate and the belt can answer
+   * from one source (#4218). Absent until a reader fills it, and the gate
+   * then matches `switches` alone.
+   */
+  readonly denies?: readonly ActiveEmergencyDeny[];
 }
 
 /** The reads the gate makes; injectable for tests. */
@@ -94,7 +104,12 @@ export interface KillSwitchGateReads {
   }): Promise<KillSwitchSnapshot>;
 }
 
-async function readClassificationIndex(
+/**
+ * The impacts of each active tool version in the workspace, keyed by
+ * capability id. Exported so the belt can cut by class with the same index the
+ * gate matches against (#4218).
+ */
+export async function readClassificationIndex(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
 ): Promise<ClassificationIndex> {
