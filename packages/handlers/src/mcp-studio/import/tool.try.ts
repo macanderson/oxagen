@@ -577,7 +577,9 @@ async function send(deps: TryStudioToolDeps, call: Decided): Promise<ToolStudioT
 
     const scrub = scrubber(secretsOf(read));
     const shown = (exchange: RecordedExchange | undefined) => {
-      if (exchange === undefined) return { request: "", raw: "" };
+      if (exchange === undefined) {
+        return { request: capText("", TRY_REQUEST_MAX), raw: capText("", TRY_RESULT_MAX) };
+      }
       const clean = redactExchange(exchange, server.auth);
       return {
         request: capText(scrub(JSON.stringify(clean.request, null, 2)), TRY_REQUEST_MAX),
