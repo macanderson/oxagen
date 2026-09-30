@@ -1,8 +1,8 @@
 // Which view of one mandate's ledger a request asks for (#2957): a search, a
-// facet on the movement state, and a page. All three are query values on the
-// one route, not routes of their own (ARCHITECTURE.md §1.2), and a value the
-// page does not recognise falls back to the default rather than failing the
-// page.
+// facet on the movement state, a page, and how many rows a page holds (#4693).
+// All four are query values on the one route, not routes of their own
+// (ARCHITECTURE.md §1.2), and a value the page does not recognise falls back
+// to the default rather than failing the page.
 //
 // **The search, the facet and the pager all run over the rows already read,
 // and that is a property of the contract rather than a shortcut.**
@@ -33,7 +33,10 @@ export const MOVEMENT_STATES: readonly MandateMovement[] = [
   "release",
 ];
 
-/** How many movements one page of the table shows. */
+/** The page sizes Rows per page offers under the table (#4693). */
+export const LEDGER_ROWS: readonly number[] = [10, 25, 50, 100];
+
+/** How many movements one page of the table shows when the URL names no size. */
 export const LEDGER_PAGE = 25;
 
 export type MandateView = {
@@ -41,7 +44,9 @@ export type MandateView = {
   search: string | null;
   /** The movement state the facet narrows to; null for every state. */
   state: MandateMovement | null;
-  /** How many movements the page skips, a multiple of LEDGER_PAGE. */
+  /** How many movements one page shows, one of LEDGER_ROWS. */
+  rows: number;
+  /** How many movements the page skips, a multiple of `rows`. */
   offset: number;
 };
 
@@ -74,10 +79,14 @@ type Params = Readonly<Record<string, string | string[] | undefined>>;
 export function parseMandateView(params: Params): MandateView {
   const rawSearch = firstParam(params.q)?.trim();
   const rawState = firstParam(params.state);
+  const rawRows = Number(firstParam(params.rows));
+  const rows = LEDGER_ROWS.find((size) => size === rawRows) ?? LEDGER_PAGE;
   const rawOffset = firstParam(params.offset);
+  // The offset snaps to a page at this size, so every page starts where a
+  // Previous or Next link would land.
   const offset =
     rawOffset !== undefined && /^\d{1,6}$/.test(rawOffset)
-      ? Math.floor(Number(rawOffset) / LEDGER_PAGE) * LEDGER_PAGE
+      ? Math.floor(Number(rawOffset) / rows) * rows
       : 0;
   return {
     search:
@@ -85,21 +94,27 @@ export function parseMandateView(params: Params): MandateView {
         ? null
         : rawSearch.slice(0, SEARCH_MAX),
     state: MOVEMENT_STATES.find((state) => state === rawState) ?? null,
+    rows,
     offset,
   };
 }
 
-/** The route for a view; the defaults (no search, every state, page one) are left off. */
+/**
+ * The route for a view; the defaults (no search, every state, LEDGER_PAGE rows,
+ * page one) are left off.
+ */
 export function mandateLink(
   at: MandateAt,
   to: Partial<MandateView> = {},
 ): SafePath {
   const search = to.search ?? null;
   const state = to.state ?? null;
+  const rows = to.rows ?? LEDGER_PAGE;
   const offset = to.offset ?? 0;
   return routes.mandate(at.org, at.ws, at.mandate, {
     search: search === null ? undefined : search,
     state: state === null ? undefined : state,
+    rows: rows === LEDGER_PAGE ? undefined : String(rows),
     offset: offset === 0 ? undefined : String(offset),
   });
 }
@@ -140,14 +155,14 @@ export function ledgerPage(
       (view.state === null || row.kind === view.state) &&
       (view.search === null || matches(row, view.search)),
   );
-  // An offset past the end shows the last page rather than an empty table: a
+  // An offset past the end shows the first page rather than an empty table: a
   // link is the only way to reach one, and a blank page would read as a mandate
   // with no movements.
   const offset = view.offset >= selected.length ? 0 : view.offset;
   return {
-    rows: selected.slice(offset, offset + LEDGER_PAGE),
+    rows: selected.slice(offset, offset + view.rows),
     total: selected.length,
     offset,
-    hasMore: offset + LEDGER_PAGE < selected.length,
+    hasMore: offset + view.rows < selected.length,
   };
 }

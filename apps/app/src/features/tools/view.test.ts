@@ -2,8 +2,8 @@
 // `/tools` path segment and its aliases (`/tools/servers`, the pre-rev1
 // `?tab=` values), the Agents `?tab=` each view now lives on, a
 // tab id no longer served, the category chip only on the Tools tab,
-// the names toggle, and a cursor whose shape is checked before it goes back
-// to the kernel. Also the `measure = value` lines the auto-approval dialog
+// the names toggle, the rows a page holds (#4693), and a cursor whose shape is
+// checked before it goes back to the kernel. Also the `measure = value` lines the auto-approval dialog
 // writes its ceilings and allow lists in.
 import { describe, expect, it } from "vitest";
 import {
@@ -16,6 +16,8 @@ import {
   splitCommas,
   splitLines,
   textValue,
+  TOOLS_PAGE,
+  TOOLS_ROWS,
   TOOLS_TABS,
   toolsLink,
   toolsTabOf,
@@ -71,15 +73,33 @@ describe("parseToolsTab", () => {
 });
 
 describe("parseToolsView", () => {
-  it("defaults to labels, with no category, no provider, no cursor and no belt", () => {
+  it("defaults to labels, with no category, no provider, no cursor, 50 rows and no belt", () => {
     expect(parseToolsView("tools", {})).toEqual({
       tab: "tools",
       category: null,
       provider: null,
       names: "labels",
       cursor: null,
+      rows: 50,
       belt: null,
     });
+  });
+
+  // #4693: Rows per page offers four sizes. Any other value reads as the
+  // default, so a hand-typed address cannot ask for a size the list never draws.
+  it("reads a size Rows offers on every tab, and any other value as the default", () => {
+    expect(TOOLS_ROWS).toEqual([10, 25, 50, 100]);
+    expect(TOOLS_PAGE).toBe(50);
+    for (const size of TOOLS_ROWS) {
+      expect(parseToolsView("tools", { rows: String(size) }).rows).toBe(size);
+      expect(parseToolsView("providers", { rows: String(size) }).rows).toBe(
+        size,
+      );
+    }
+    for (const raw of ["7", "0", "-25", "1000", "25.5", "abc", ""]) {
+      expect(parseToolsView("tools", { rows: raw }).rows).toBe(TOOLS_PAGE);
+    }
+    expect(parseToolsView("tools", {}).rows).toBe(TOOLS_PAGE);
   });
 
   it("reads a belt only on the Toolbelts tab, and only as a toolbelt's public id", () => {
@@ -190,8 +210,30 @@ describe("toolsLink", () => {
     ).toBe("mcs_01k5s1");
   });
 
+  // #4693: the default size stays off the address, and any other size rides
+  // before the cursor.
+  it("leaves the default size off and puts any other size before the cursor", () => {
+    expect(toolsLink(at, { tab: "tools", rows: TOOLS_PAGE })).toBe(
+      "/acme/core-platform/agents?tab=tools",
+    );
+    expect(toolsLink(at, { tab: "tools", rows: 25, cursor: "c2" })).toBe(
+      "/acme/core-platform/agents?tab=tools&rows=25&cursor=c2",
+    );
+    expect(
+      toolsLink(at, {
+        tab: "tools",
+        category: "moves_money",
+        provider: "mcs_01k5s1",
+        names: "api",
+        rows: 100,
+      }),
+    ).toBe(
+      "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&names=api&rows=100",
+    );
+  });
+
   it("round-trips through the Agents ?tab= and parseToolsView", () => {
-    const link = toolsLink(at, { tab: "providers", cursor: "c9" });
+    const link = toolsLink(at, { tab: "providers", rows: 10, cursor: "c9" });
     const url = new URL(link, "https://mission-control.invalid");
     expect(url.pathname).toBe("/acme/core-platform/agents");
     expect(url.searchParams.get("tab")).toBe("servers");
@@ -204,6 +246,7 @@ describe("toolsLink", () => {
       provider: null,
       names: "labels",
       cursor: "c9",
+      rows: 10,
       belt: null,
     });
   });

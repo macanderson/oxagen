@@ -3,7 +3,9 @@
 // switch that stops it today, the schema's origin and digest, and its 30-day
 // calls. A row opens the version; its Provider cell shows the provider's icon
 // and name, and opens that provider. The provider chips narrow the registry to
-// the versions one provider supplied, across every page.
+// the versions one provider supplied, across every page. The pager under the
+// table pages by address, with Rows per page beside it (#4693). Every chip
+// and the names toggle keep the size and start over at the first page.
 //
 // What the record does not carry is said, not filled:
 //
@@ -31,11 +33,12 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
+import { LinkPager } from "@/ui/link-pager";
 import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
 import { ImportProvider } from "./import-provider";
 import { NotBacked, NotBackedValue } from "./not-backed";
-import { CursorPager, NotCarried } from "./parts";
+import { NotCarried } from "./parts";
 import { ProviderButton, type ProviderView } from "./provider-dialog";
 import { ProviderIcon } from "@/ui/provider-icon";
 import { ToolsReadFailure } from "./read-failure";
@@ -49,7 +52,12 @@ import {
 import { StubAction } from "./stub-action";
 import { ToggleLink } from "./toggle-link";
 import { ToolDialog } from "./tool-dialog";
-import { type ToolNameStyle, type ToolsAt, toolsLink } from "./view";
+import {
+  type ToolNameStyle,
+  TOOLS_ROWS,
+  type ToolsAt,
+  toolsLink,
+} from "./view";
 
 /**
  * Every impact the versions in `items` carry in their classification,
@@ -79,6 +87,7 @@ function CategoryChips({
   names,
   category,
   provider,
+  rows,
   items,
   complete,
 }: {
@@ -86,6 +95,7 @@ function CategoryChips({
   names: ToolNameStyle;
   category: string | null;
   provider: string | null;
+  rows: number;
   items: readonly ToolVersion[];
   /** False while a later page exists: the tags and counts are this page's. */
   complete: boolean;
@@ -101,7 +111,7 @@ function CategoryChips({
       className="flex flex-wrap gap-2"
     >
       <ToggleLink
-        to={toolsLink(at, { tab: "tools", names, provider })}
+        to={toolsLink(at, { tab: "tools", names, provider, rows })}
         pressed={category === null}
         data-category="all"
         className={chip}
@@ -118,8 +128,14 @@ function CategoryChips({
           key={tag}
           to={
             category === tag
-              ? toolsLink(at, { tab: "tools", names, provider })
-              : toolsLink(at, { tab: "tools", names, provider, category: tag })
+              ? toolsLink(at, { tab: "tools", names, provider, rows })
+              : toolsLink(at, {
+                  tab: "tools",
+                  names,
+                  provider,
+                  category: tag,
+                  rows,
+                })
           }
           pressed={category === tag}
           data-category={tag}
@@ -148,12 +164,14 @@ function ProviderChips({
   names,
   category,
   provider,
+  rows,
   views,
 }: {
   at: ToolsAt;
   names: ToolNameStyle;
   category: string | null;
   provider: string | null;
+  rows: number;
   views: ReadonlyMap<string, ProviderView>;
 }) {
   const t = useTranslations("tools.registry");
@@ -168,7 +186,7 @@ function ProviderChips({
       className="flex flex-wrap gap-2"
     >
       <ToggleLink
-        to={toolsLink(at, { tab: "tools", names, category })}
+        to={toolsLink(at, { tab: "tools", names, category, rows })}
         pressed={provider === null}
         data-provider="all"
         className={chip}
@@ -183,6 +201,7 @@ function ProviderChips({
             names,
             category,
             provider: provider === server.id ? null : server.id,
+            rows,
           })}
           pressed={provider === server.id}
           data-provider={server.id}
@@ -228,11 +247,13 @@ function NamesToggle({
   names,
   category,
   provider,
+  rows,
 }: {
   at: ToolsAt;
   names: ToolNameStyle;
   category: string | null;
   provider: string | null;
+  rows: number;
 }) {
   const t = useTranslations("tools.registry");
   return (
@@ -244,7 +265,13 @@ function NamesToggle({
       {(["labels", "api"] as const).map((style) => (
         <ToggleLink
           key={style}
-          to={toolsLink(at, { tab: "tools", category, provider, names: style })}
+          to={toolsLink(at, {
+            tab: "tools",
+            category,
+            provider,
+            names: style,
+            rows,
+          })}
           pressed={names === style}
           data-names={style}
           className="inline-flex min-h-7 max-md:min-h-11 items-center rounded-md px-2.5 text-[13px] text-muted-foreground hover:text-foreground aria-pressed:bg-hl aria-pressed:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -409,6 +436,7 @@ export function Registry({
   category,
   provider,
   cursor,
+  rows,
   canImport,
   canClassify,
   read,
@@ -421,7 +449,10 @@ export function Registry({
   category: string | null;
   /** The `mcs_…` id the page is narrowed to, or null for every provider. */
   provider: string | null;
+  /** The page the address names, by its cursor; null on the first page. */
   cursor: string | null;
+  /** The versions a page holds, one of `TOOLS_ROWS` (#4693). */
+  rows: number;
   canImport: boolean;
   canClassify: boolean;
   /** The page this view shows: narrowed by the chips and the cursor. */
@@ -432,6 +463,8 @@ export function Registry({
   servers: Read<McpServerList>;
 }) {
   const t = useTranslations("tools.registry");
+  const pager = useTranslations("tools.pager");
+  const list = useTranslations("ui.list");
   const locale = useLocale();
   if (!read.ok) {
     return (
@@ -466,6 +499,7 @@ export function Registry({
               names={names}
               category={category}
               provider={provider}
+              rows={rows}
             />
             <span
               data-testid="tools-shown"
@@ -493,6 +527,7 @@ export function Registry({
             names={names}
             category={category}
             provider={provider}
+            rows={rows}
             views={views}
           />
           <div className="flex flex-wrap items-center gap-2.5">
@@ -502,6 +537,7 @@ export function Registry({
                 names={names}
                 category={category}
                 provider={provider}
+                rows={rows}
                 items={items}
                 complete={nextCursor === null}
               />
@@ -551,21 +587,55 @@ export function Registry({
             ))}
           </Table>
         )}
+        {/* The cursor only walks forward, so the step back is the first
+            page. Both steps keep the filters and the size, and a new size
+            starts over at the first page (#4693). An empty first page has
+            nothing to page. */}
+        {items.length === 0 && cursor === null ? null : (
+          <LinkPager
+            label={pager("registry")}
+            rowsLabel={list("rows")}
+            previousLabel={pager("first")}
+            nextLabel={pager("next")}
+            perPage={rows}
+            sizes={TOOLS_ROWS.map((size) => ({
+              size,
+              first: toolsLink(at, {
+                tab: "tools",
+                names,
+                category,
+                provider,
+                rows: size,
+              }),
+            }))}
+            previous={
+              cursor === null
+                ? null
+                : toolsLink(at, {
+                    tab: "tools",
+                    names,
+                    category,
+                    provider,
+                    rows,
+                  })
+            }
+            next={
+              nextCursor === null
+                ? null
+                : toolsLink(at, {
+                    tab: "tools",
+                    names,
+                    category,
+                    provider,
+                    rows,
+                    cursor: nextCursor,
+                  })
+            }
+            // The panel's 16 px inset, which the notes below keep too.
+            className="px-4"
+          />
+        )}
         <div className={`${panelBody} flex flex-col gap-2`}>
-          {nextCursor === null ? null : (
-            <CursorPager
-              nextCursor={nextCursor}
-              link={(next) =>
-                toolsLink(at, {
-                  tab: "tools",
-                  names,
-                  category,
-                  provider,
-                  cursor: next,
-                })
-              }
-            />
-          )}
           <p
             data-state="facets-declared"
             className="max-w-prose text-xs text-muted-foreground"

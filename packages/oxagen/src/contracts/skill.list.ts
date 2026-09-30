@@ -27,7 +27,7 @@ import { registerCapability } from "../registry";
 export const SKILL_WINDOW_DAYS_MAX = 90;
 /** The window a read gets when it names none, in days. */
 export const SKILL_WINDOW_DAYS_DEFAULT = 30;
-/** Skill names per page. */
+/** The most skill names a page holds, and a page's size when a read names none. */
 export const SKILL_PAGE_SIZE = 100;
 /**
  * Distinct harnesses returned per skill row. `agent.harness` is
@@ -96,6 +96,16 @@ export const skillList = registerCapability({
         .default(SKILL_WINDOW_DAYS_DEFAULT),
       /** The `nextCursor` of the previous page; it carries that page's window. */
       cursor: z.string().min(1).max(SKILL_CURSOR_MAX).optional(),
+      /**
+       * Skill names on this page; default 100. Each page names its own size,
+       * so a cursor read at one size continues at another (#4693).
+       */
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(SKILL_PAGE_SIZE)
+        .default(SKILL_PAGE_SIZE),
     })
     .strict(),
   output: z

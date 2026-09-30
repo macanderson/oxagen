@@ -321,12 +321,15 @@ export const routes = {
       cursor: q?.cursor,
       view: q?.view,
     }),
-  /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
+  /**
+   * One agent. `tab` picks the section, `rows` how many of its incidents a
+   * page holds, and `cursor` a later page of them (#4693).
+   */
   agent: (
     org: string,
     ws: string,
     agent: string,
-    q?: { tab: string; cursor?: string },
+    q?: { tab: string; rows?: string; cursor?: string },
   ): SafePath =>
     withQuery(
       q?.tab === undefined
@@ -341,6 +344,7 @@ export const routes = {
               : q.tab,
           ),
       {
+        rows: q?.rows,
         cursor: q?.cursor,
       },
     ),
@@ -356,19 +360,21 @@ export const routes = {
    * from the record instead: the page's header links to the agent the mandate was
    * granted to.
    *
-   * `q` searches the ledger, `state` narrows it to one movement kind and
-   * `offset` opens a later page of it. All three are query values, not routes,
-   * for the reason every other filter and page here is.
+   * `q` searches the ledger, `state` narrows it to one movement kind, `rows`
+   * sets how many movements a page holds and `offset` opens a later page of
+   * it. All four are query values, not routes, for the reason every other
+   * filter and page here is.
    */
   mandate: (
     org: string,
     ws: string,
     mandate: string,
-    q?: { search?: string; state?: string; offset?: string },
+    q?: { search?: string; state?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "mandates", mandate), {
       q: q?.search,
       state: q?.state,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
@@ -389,7 +395,8 @@ export const routes = {
       runtime: q?.runtime,
     }),
   /**
-   * Billing; `cursor` opens a later page of its invoices, `checkout` is where
+   * Billing; `rows` sets how many invoices a page holds (#4693) and `cursor`
+   * opens a later page of them, `checkout` is where
    * a Stripe Checkout returns. The two meters return to different values —
    * `success` for a governed-action-unit purchase, `credits` for a usage
    * credit top-up — so the page can name the meter the payment landed on;
@@ -398,10 +405,11 @@ export const routes = {
   billing: (
     org: string,
     q?:
-      | { cursor: string }
+      | { rows?: string; cursor?: string }
       | { checkout: "success" | "cancel" | "credits" | "plan" },
   ): SafePath =>
     withQuery(pathOf(org, "billing"), {
+      rows: q !== undefined && "rows" in q ? q.rows : undefined,
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
       checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
     }),
@@ -491,11 +499,17 @@ export const routes = {
     ),
   /**
    * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
-   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
+   * `cursor` opens a later page of the inventory, and `rows` is the size of
+   * a page when it is off the default (#4693). `/{org}/{ws}/skills`
    * redirects here.
    */
-  skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+  skills: (
+    org: string,
+    ws: string,
+    q?: { cursor?: string; rows?: string },
+  ): SafePath =>
     withQuery(pathOf(org, ws, "steering", "skills"), {
+      rows: q?.rows,
       cursor: q?.cursor,
     }),
   /**
@@ -504,8 +518,9 @@ export const routes = {
    * it: Providers on Tool servers, Policy on Policies, Kill switches on Off
    * switches. The registry (`tab` left off) and Toolbelts are views of the
    * Tool servers tab, `?tab=tools` and `?tab=toolbelts`. A category chip, a
-   * provider chip, the API-names toggle, a cursor and the toolbelt open on the
-   * Toolbelts view (`belt`, ADR-198) are query values.
+   * provider chip, the API-names toggle, the rows a page of the view's list
+   * holds (#4693), a cursor and the toolbelt open on the Toolbelts view
+   * (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,
@@ -515,6 +530,7 @@ export const routes = {
       category?: string;
       provider?: string;
       names?: string;
+      rows?: string;
       cursor?: string;
       belt?: string;
     } = {},
@@ -524,6 +540,7 @@ export const routes = {
       category: q.category,
       provider: q.provider,
       names: q.names,
+      rows: q.rows,
       cursor: q.cursor,
       belt: q.belt,
     }),
@@ -560,7 +577,8 @@ export const routes = {
    * id written before the rename still maps to where it lives now: `policy`,
    * `settings` and `freshness` are Gates, `deliveries` is Assignments,
    * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, a selected proposal and a Skills cursor stay query values.
+   * page offset, the rows a page of proposals holds, a selected proposal and a
+   * Skills cursor stay query values.
    */
   steering: (
     org: string,
@@ -572,6 +590,8 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
+      /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
+      rows?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
@@ -590,6 +610,7 @@ export const routes = {
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
+      rows: q.rows,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,

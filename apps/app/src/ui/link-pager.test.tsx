@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The pager under the audit record (#4693): Previous and Next are links to the
-// addresses the server built, a missing step is a disabled button, and picking
-// a size from Rows per page visits the first page at that size.
+// The pager under a list that pages by address (#4693): Previous and Next are
+// links to the addresses the server built, a missing step is a disabled
+// button, and picking a size from Rows per page visits the first page at that
+// size. The audit record's addresses stand in for any list's.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +21,7 @@ vi.mock("@/ui/navigation", async (importOriginal) => ({
   }),
 }));
 
-const { AuditPager } = await import("./pager");
+const { LinkPager } = await import("./link-pager");
 
 beforeEach(() => {
   push.mockReset();
@@ -35,26 +36,30 @@ const SIZES = [5, 10, 25, 50].map((size) => ({
   ),
 }));
 
-function renderPager(steps: {
-  previous: SafePath | null;
-  next: SafePath | null;
-}) {
+function renderPager(
+  steps: {
+    previous: SafePath | null;
+    next: SafePath | null;
+  },
+  className?: string,
+) {
   return render(
-    <AuditPager
+    <LinkPager
       label="Pages"
       rowsLabel="Rows"
       previousLabel="Previous page"
       nextLabel="Next page"
       perPage={10}
       sizes={SIZES}
-      range={<span data-testid="audit-shown">1–10 of 30</span>}
+      range={<span data-testid="shown">1–10 of 30</span>}
+      className={className}
       {...steps}
     />,
   );
 }
 
-describe("AuditPager", () => {
-  it("links Next to the older page and disables Previous on the first", async () => {
+describe("LinkPager", () => {
+  it("links Next to the later page and disables Previous on the first", async () => {
     const { container } = renderPager({
       previous: null,
       next: routes.audit("acme", { outcome: "deny", offset: "10" }),
@@ -69,12 +74,12 @@ describe("AuditPager", () => {
     expect(screen.queryByRole("link", { name: "Previous page" })).toBeNull();
     // The range sits beside Rows, outside the Previous and Next landmark.
     const pages = screen.getByRole("navigation", { name: "Pages" });
-    expect(screen.getByTestId("audit-shown")).toHaveTextContent("1–10 of 30");
-    expect(pages.contains(screen.getByTestId("audit-shown"))).toBe(false);
+    expect(screen.getByTestId("shown")).toHaveTextContent("1–10 of 30");
+    expect(pages.contains(screen.getByTestId("shown"))).toBe(false);
     await expectNoAxe(container);
   });
 
-  it("links Previous to the newer page and disables Next past the last", () => {
+  it("links Previous to the page before and disables Next past the last", () => {
     renderPager({
       previous: routes.audit("acme", { outcome: "deny", offset: "10" }),
       next: null,
@@ -104,5 +109,10 @@ describe("AuditPager", () => {
     await userEvent.click(screen.getByRole("combobox", { name: "Rows" }));
     await userEvent.click(await screen.findByRole("option", { name: "10" }));
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("puts the caller's classes on the pager's row", () => {
+    const { container } = renderPager({ previous: null, next: null }, "px-4");
+    expect(container.querySelector("[data-rows-pager]")).toHaveClass("px-4");
   });
 });

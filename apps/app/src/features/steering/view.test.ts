@@ -3,7 +3,12 @@
 // five tabs landing where it lives now, the query values each view keeps,
 // and a 404 for a segment that names nothing.
 import { describe, expect, it } from "vitest";
-import { resolveSteeringRoute, shelfLink, steeringLink } from "./view";
+import {
+  resolveSteeringRoute,
+  shelfLink,
+  skillRowsParam,
+  steeringLink,
+} from "./view";
 
 const AT = { org: "acme", ws: "core" };
 const BASE = "/acme/core/steering";
@@ -22,6 +27,7 @@ describe("resolveSteeringRoute", () => {
           agent: null,
           kind: null,
           offset: 0,
+          rows: 50,
           proposal: null,
           cursor: null,
           skillView: undefined,
@@ -77,6 +83,56 @@ describe("resolveSteeringRoute", () => {
     });
   });
 
+  // #4693: Rows per page sits under both Proposals segments.
+  it("reads the size Rows per page picked on both Proposals segments", () => {
+    for (const rows of [10, 25, 50, 100]) {
+      expect(resolve(["proposals"], { rows: String(rows) })).toMatchObject({
+        view: { segment: "candidates", rows },
+      });
+    }
+    expect(
+      resolve(["proposals", "prs"], { rows: "10", offset: "20" }),
+    ).toMatchObject({ view: { segment: "prs", rows: 10, offset: 20 } });
+  });
+
+  it("reads a size Rows does not offer, or a size off Proposals, as 50 (negative)", () => {
+    for (const rows of ["0", "7", "200", "-10", "many", ""]) {
+      expect(resolve(["proposals"], { rows })).toMatchObject({
+        view: { rows: 50 },
+      });
+    }
+    expect(resolve(["records"], { rows: "10" })).toMatchObject({
+      view: { rows: 50 },
+    });
+  });
+
+  it("reads the size Rows per page picked under the skill inventory, 100 by default (#4693)", () => {
+    expect(resolve(["skills"])).toMatchObject({ view: { rows: 100 } });
+    for (const rows of [10, 25, 50, 100]) {
+      expect(resolve(["skills"], { rows: String(rows) })).toMatchObject({
+        view: { shelf: "skills", rows },
+      });
+    }
+    expect(
+      resolve(["skills"], { rows: "25", cursor: "c2" }),
+    ).toMatchObject({ view: { rows: 25, cursor: "c2" } });
+  });
+
+  it("reads a size the skill inventory does not offer as 100 (negative)", () => {
+    for (const rows of ["0", "7", "200", "-10", "many", ""]) {
+      expect(resolve(["skills"], { rows })).toMatchObject({
+        view: { rows: 100 },
+      });
+    }
+  });
+
+  it("leaves the skill inventory's default size off the address and writes any other", () => {
+    expect(skillRowsParam(100)).toBeUndefined();
+    for (const rows of [10, 25, 50]) {
+      expect(skillRowsParam(rows)).toBe(String(rows));
+    }
+  });
+
   it("names the Compiler's agent from its segment", () => {
     expect(resolve(["compiler", "release-manager"])).toMatchObject({
       view: { tab: "compiler", agent: "release-manager" },
@@ -117,6 +173,11 @@ describe("resolveSteeringRoute", () => {
     [["freshness"], {}, `${BASE}/gates`],
     [["deliveries"], {}, `${BASE}/assignments`],
     [["prs"], { proposal: "prp_1" }, `${BASE}/proposals/prs?proposal=prp_1`],
+    [
+      ["prs"],
+      { rows: "25", offset: "25" },
+      `${BASE}/proposals/prs?rows=25&offset=25`,
+    ],
     [["preview"], {}, `${BASE}/compiler`],
     [["preview", "release-manager"], {}, `${BASE}/compiler/release-manager`],
     [["library", "all"], {}, `${BASE}/library`],
@@ -174,11 +235,23 @@ describe("links", () => {
     expect(steeringLink(AT, { tab: "proposals", offset: 50 })).toBe(
       `${BASE}/proposals?offset=50`,
     );
+    expect(steeringLink(AT, { tab: "proposals", rows: 50, offset: 50 })).toBe(
+      `${BASE}/proposals?offset=50`,
+    );
     expect(steeringLink(AT, { tab: "deliveries" })).toBe(`${BASE}/assignments`);
     expect(
       steeringLink(AT, { tab: "compiler", agent: "release-manager" }),
     ).toBe(`${BASE}/compiler/release-manager`);
     expect(shelfLink(AT, "all")).toBe(`${BASE}/library`);
     expect(shelfLink(AT, "ontology")).toBe(`${BASE}/ontology`);
+  });
+
+  it("carries a size other than 50, before the offset", () => {
+    expect(steeringLink(AT, { tab: "proposals", rows: 25, offset: 50 })).toBe(
+      `${BASE}/proposals?rows=25&offset=50`,
+    );
+    expect(
+      steeringLink(AT, { tab: "prs", rows: 10, proposal: "prp_1" }),
+    ).toBe(`${BASE}/proposals/prs?rows=10&proposal=prp_1`);
   });
 });

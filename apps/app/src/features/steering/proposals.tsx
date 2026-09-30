@@ -35,9 +35,12 @@ function SupportList({ term, items }: { term: string; items: string[] }) {
 
 function ProposalItem({
   at,
+  rows,
   proposal,
 }: {
   at: SteeringAt;
+  /** The page size, which the link to the Context PR keeps. */
+  rows: number;
   proposal: Proposal;
 }) {
   const t = useTranslations("steering.proposals");
@@ -90,7 +93,7 @@ function ProposalItem({
       <div className="flex flex-wrap items-center gap-3">
         {pr === null ? null : (
           <SafeLink
-            to={steeringLink(at, { tab: "prs", proposal: proposal.id })}
+            to={steeringLink(at, { tab: "prs", rows, proposal: proposal.id })}
             className={linkText}
           >
             {t("viewPr", { number: String(pr.number) })}
@@ -110,10 +113,13 @@ function ProposalItem({
 export function Proposals({
   at,
   offset,
+  rows,
   read,
 }: {
   at: SteeringAt;
   offset: number;
+  /** How many proposals a page holds, one of PROPOSAL_ROWS. */
+  rows: number;
   read: Read<ProposalPage>;
 }) {
   const t = useTranslations("steering.proposals");
@@ -140,15 +146,16 @@ export function Proposals({
       <ul className="flex flex-col gap-3">
         {proposals.map((proposal) => (
           <li key={proposal.id}>
-            <ProposalItem at={at} proposal={proposal} />
+            <ProposalItem at={at} rows={rows} proposal={proposal} />
           </li>
         ))}
       </ul>
       <Pager
         offset={offset}
+        rows={rows}
         shown={proposals.length}
         total={total}
-        link={(to) => steeringLink(at, { tab: "proposals", offset: to })}
+        link={(to) => steeringLink(at, { tab: "proposals", ...to })}
       />
     </Section>
   );

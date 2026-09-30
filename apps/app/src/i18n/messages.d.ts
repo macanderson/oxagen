@@ -2999,7 +2999,6 @@ type Messages = {
         label: string;
         newer: string;
         older: string;
-        end: string;
       };
       emptyBodyEffective: string;
     };
@@ -8787,7 +8786,11 @@ type Messages = {
       noneReported: string;
       notReported: string;
       list: string;
-      next: string;
+      pager: {
+        label: string;
+        first: string;
+        next: string;
+      };
     };
     row: {
       sessions: string;
@@ -9213,10 +9216,8 @@ type Messages = {
         anyRegion: string;
         platformPriced: string;
         scheduled: string;
-        pagination: string;
-        previous: string;
-        next: string;
-        page: string;
+        pages: string;
+        scheduledPages: string;
       };
       dialog: {
         open: string;
@@ -10306,7 +10307,12 @@ type Messages = {
   tools: {
     loading: string;
     notCarried: string;
-    nextPage: string;
+    pager: {
+      registry: string;
+      grants: string;
+      first: string;
+      next: string;
+    };
     roles: {
       owner: string;
       admin: string;

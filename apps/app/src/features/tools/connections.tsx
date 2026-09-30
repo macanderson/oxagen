@@ -14,6 +14,9 @@
 // not-recorded state rather than a value nothing carries. Servers, Downscope
 // and Grants 30d are properties of a use, not of a connection, and the log
 // below is where the record carries them.
+//
+// The log pages by address under Rows per page (#4693). `list_connections`
+// takes no size and no cursor, so the Connections table is drawn whole.
 import { useTranslations } from "next-intl";
 import type {
   Connection,
@@ -24,12 +27,12 @@ import type {
 import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
 import { mono } from "@/ui/control-styles";
+import { LinkPager } from "@/ui/link-pager";
 import { cell, Table } from "@/ui/table";
 import { AddConnection } from "./add-connection";
 import { ConnectionDrawer } from "./connection-drawer";
 import {
   Chip,
-  CursorPager,
   NotCarried,
   Section,
   StateDot,
@@ -38,7 +41,7 @@ import {
 } from "./parts";
 import { NotBackedValue } from "./not-backed";
 import { ToolsReadFailure } from "./read-failure";
-import { type ToolsAt, toolsLink } from "./view";
+import { TOOLS_ROWS, type ToolsAt, toolsLink } from "./view";
 
 /** A connection's lifecycle word as a tone; the word itself is what is printed. */
 const CONNECTION_TONE = {
@@ -144,14 +147,20 @@ export function GrantsLog({
   at,
   orgRole,
   cursor,
+  rows,
   read,
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
+  /** The page the address names, by its cursor; null on the newest page. */
   cursor: string | null;
+  /** The grants a page holds, one of `TOOLS_ROWS` (#4693). */
+  rows: number;
   read: Read<CredentialGrantPage>;
 }) {
   const t = useTranslations("tools.connections");
+  const pager = useTranslations("tools.pager");
+  const list = useTranslations("ui.list");
   if (!read.ok) {
     return (
       <ToolsReadFailure
@@ -191,9 +200,28 @@ export function GrantsLog({
           <Row key={grant.id} grant={grant} />
         ))}
       </Table>
-      <CursorPager
-        nextCursor={nextCursor}
-        link={(next) => toolsLink(at, { tab: "providers", cursor: next })}
+      {/* The cursor only walks forward, so the step back is the newest
+          page. Both steps keep the size, and a new size starts over at the
+          newest page (#4693). */}
+      <LinkPager
+        label={pager("grants")}
+        rowsLabel={list("rows")}
+        previousLabel={pager("first")}
+        nextLabel={pager("next")}
+        perPage={rows}
+        sizes={TOOLS_ROWS.map((size) => ({
+          size,
+          first: toolsLink(at, { tab: "providers", rows: size }),
+        }))}
+        previous={
+          cursor === null ? null : toolsLink(at, { tab: "providers", rows })
+        }
+        next={
+          nextCursor === null
+            ? null
+            : toolsLink(at, { tab: "providers", rows, cursor: nextCursor })
+        }
+        className="px-0"
       />
       <p className="max-w-prose text-xs text-muted-foreground">
         {t("brokerNote")}
