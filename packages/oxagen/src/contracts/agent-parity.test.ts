@@ -27,8 +27,8 @@ import "../contracts.generated";
  * An entry needs a reason a reviewer can check against the contract. The
  * reasons so far: the call hands out or takes a secret, only a person's
  * browser can take the step, the call is the person's own say over Stella's
- * turn, or it would let an agent change how people sign in or how its own
- * work is graded.
+ * turn, or it would let an agent see what is withheld from it, touch how
+ * people sign in, or change how its own work is graded.
  */
 const OFF_AGENT: Readonly<Record<string, string>> = {
   answer_interjection:
