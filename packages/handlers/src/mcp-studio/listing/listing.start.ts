@@ -58,9 +58,13 @@ export function createStartStudioListingHandler(
     // The listing starts a program before any review, so it runs only on a
     // machine the person who asked enrolled (ADR-233). Refused here, before
     // any registry read, rather than left waiting for a machine that never
-    // claims it. A server with no groups is pinListing's to refuse.
+    // claims it. A server with no groups is pinListing's to refuse. A call
+    // with no person behind it owns no machine.
     const groups = machineGroupsOf(source);
-    if (groups.length > 0 && !(await deps.owners.ownsMachineIn(scope, actorUserId, groups))) {
+    if (
+      groups.length > 0 &&
+      (actorUserId === null || !(await deps.owners.ownsMachineIn(scope, actorUserId, groups)))
+    ) {
       throw new HandlerError({
         code: "conflict",
         reason: "machine_not_yours",
