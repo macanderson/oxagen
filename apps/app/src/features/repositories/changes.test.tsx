@@ -26,7 +26,7 @@ const change = (
     number: 7,
     url: "https://github.com/acme/platform/pull/7",
     repository: "acme/platform",
-    branch: `context/${proposalId}`,
+    branch: `steering/${proposalId}`,
   },
   openedBy: "the reconciler",
   status,

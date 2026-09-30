@@ -1852,6 +1852,14 @@
         }
       ]
     },
+    "get_steering_layout": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering \u203a Write a context record, and \u2318K Create \u203a Context record: the context-record wizard previews the file and branch its Context PR will write for the bound repository's layout (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/record-wizard.test.tsx",
+      "verifiedAt": "2026-09-30",
+      "verifiedBy": "steering-preview-4765"
+    },
     "get_steering_repo": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",

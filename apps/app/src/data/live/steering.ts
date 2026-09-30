@@ -10,6 +10,7 @@ import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get"
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
+import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { captureError } from "@oxagen/telemetry";
@@ -25,6 +26,7 @@ import {
   SteeringFreshness,
   SteeringDeliveries,
   SteeringHub,
+  SteeringLayout,
 } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -37,6 +39,7 @@ import {
   toRecordDetail,
   toRecordPage,
   toSteeringFreshness,
+  toSteeringLayout,
 } from "./mappers/steering";
 
 /** The view model parsed from a mapped record, or record_unmappable reported once. */
@@ -221,6 +224,21 @@ export const steering: DataSource["steering"] = {
           toSteeringFreshness(read.value),
           ctx.orgId,
           "freshness",
+        )
+      : read;
+  },
+  async layout(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: contextSteeringLayout,
+      input: {},
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          SteeringLayout,
+          toSteeringLayout(read.value),
+          ctx.orgId,
+          "layout",
         )
       : read;
   },
