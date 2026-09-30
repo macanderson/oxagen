@@ -3812,7 +3812,7 @@ async function initializeDaemon(
     });
     // Its terminal is sealed but not yet in the WAL. A frame sealed now
     // takes the seq after it and reaches the WAL first, so the records
-    // are dropped; a sealed chain takes them, marked after the stop.
+    // are dropped. A sealed chain takes them, marked after the stop.
     if (session.pendingTerminal === true) {
       log(
         `OTel records for session ${sessionId} dropped: its end is not yet written`,

@@ -185,7 +185,7 @@ export function createGitLane(deps: GitLaneDeps): GitLane {
    * The git work one session is waiting for, by harness session id.
    *
    * A hook never reads a worktree. It records that one wants reading and
-   * returns; the tick drains this map outside the hook queues. Two reasons.
+   * returns, and the tick drains this map outside the hook queues.
    * A hook holds its session's queue, which its agent waits on, and a
    * prompt hook has a budget measured in seconds, so four `git`
    * invocations for one session times every live session was a way to spend
