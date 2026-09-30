@@ -580,7 +580,12 @@ async function runPreparedTurn(
   );
 
   const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
+  // What the turn spent before the engine's first step: the history summary,
+  // set once it resolves below (#4228). The guard reads it on every tick, so
+  // the per-turn budget covers the summary, priced on the summary's model.
+  const openingCost = { usd: 0 };
   const budgetGuard = createTurnBudgetGuard(budgetPolicy, p.modelId, {
+    openingCostUsd: () => openingCost.usd,
     onWithinGrace: (verdict) =>
       hooks.onBudgetNotice?.({
         state: "within_grace",
@@ -698,6 +703,24 @@ async function runPreparedTurn(
     // it (ADR-174 §4).
     const compacted = await compactedHistory;
     if (compacted.frame) await run.historySummary(compacted.frame);
+    // The summary is the turn's first spend (#4228). With no engine usage
+    // yet, the guard judges it alone, in the budget's own mode: enforce
+    // stops, prompt asks, grace allows the cushion. A stop refuses the turn
+    // as a budget stop mid-turn does, with `engine_aborted`, after the frame
+    // above recorded what the summary cost.
+    openingCost.usd = compacted.summaryCall?.costUsd ?? 0;
+    if (
+      budgetGuard !== undefined &&
+      openingCost.usd > 0 &&
+      (await budgetGuard({})) === "stop"
+    ) {
+      throw Object.assign(
+        new Error(
+          `the history summary cost ${formatBudgetUsd(openingCost.usd)}, which reached the per-turn budget before the engine started`,
+        ),
+        { code: "engine_aborted" },
+      );
+    }
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -762,12 +785,15 @@ async function runPreparedTurn(
     });
   } catch (err) {
     // A seal that itself fails must not replace the refusal the caller needs
-    // to see; it is logged and the original error propagates.
+    // to see; it is logged and the original error propagates. A budget stop
+    // before the engine seals `cancelled`, as one mid-turn does (#4228).
+    const message = err instanceof Error ? err.message : String(err);
     await run
-      .seal({
-        status: "failed",
-        error: err instanceof Error ? err.message : String(err),
-      })
+      .seal(
+        errorCodeOf(err) === "engine_aborted"
+          ? { status: "aborted", reason: message }
+          : { status: "failed", error: message },
+      )
       .catch((sealErr: unknown) => {
         logger.error(
           { err: sealErr, runId: run.runPublicId },
