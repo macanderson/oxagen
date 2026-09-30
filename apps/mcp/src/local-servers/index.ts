@@ -64,32 +64,56 @@ async function claimForPoll(poll: { machine: string; scope: { orgId: string; wor
   }
 }
 
-/** The servers this process is discovering again after a tools change, by machine and name. */
-const rediscovering = new Set<string>();
-
-/**
- * Discovers a server again through the machine whose call reported its tools
- * changed (#4772). One run per machine and server at a time.
- */
-async function rediscoverForChange(change: {
+type ToolsChange = {
   machine: string;
   scope: { orgId: string; workspaceId: string };
   server: string;
-}): Promise<void> {
-  const key = `${change.machine}:${change.scope.workspaceId}:${change.server}`;
-  if (rediscovering.has(key)) return;
-  rediscovering.add(key);
+};
+
+/**
+ * The servers this process is discovering again after a tools change, keyed
+ * by workspace and server, whichever machine reported it. `next` holds a
+ * change that arrived during the run, so one more pass follows it.
+ */
+const rediscovering = new Map<string, { next: ToolsChange | null }>();
+
+/** One discovery of the server, through the machine that reported the change. */
+async function rediscoverOnce(change: ToolsChange): Promise<void> {
+  const [{ rediscoverOnMachine }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
+    import("@oxagen/handlers/mcp-studio/discovery/claim"),
+    import("@oxagen/handlers/mcp-studio/discovery/seams"),
+    import("@oxagen/handlers/tools.pr.open"),
+  ]);
+  await rediscoverOnMachine(change, {
+    broker: localGatewayBroker(),
+    reader: postgresMachineGroupReader,
+    seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
+  });
+}
+
+/**
+ * Discovers a server again through the machine whose call reported its tools
+ * changed (#4772). One run per workspace and server at a time, so two
+ * machines that report the same change do not race for one sync PR. A change
+ * reported during a run marks the server, and one more run follows, through
+ * the machine that reported last, so the newer tools list is never dropped.
+ */
+async function rediscoverForChange(change: ToolsChange): Promise<void> {
+  const key = `${change.scope.orgId}:${change.scope.workspaceId}:${change.server}`;
+  const active = rediscovering.get(key);
+  if (active !== undefined) {
+    active.next = change;
+    return;
+  }
+  const entry = { next: null as ToolsChange | null };
+  rediscovering.set(key, entry);
   try {
-    const [{ rediscoverOnMachine }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
-      import("@oxagen/handlers/mcp-studio/discovery/claim"),
-      import("@oxagen/handlers/mcp-studio/discovery/seams"),
-      import("@oxagen/handlers/tools.pr.open"),
-    ]);
-    await rediscoverOnMachine(change, {
-      broker: localGatewayBroker(),
-      reader: postgresMachineGroupReader,
-      seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
-    });
+    let current: ToolsChange | null = change;
+    while (current !== null) {
+      entry.next = null;
+      await rediscoverOnce(current);
+      current = entry.next;
+    }
   } finally {
     rediscovering.delete(key);
   }

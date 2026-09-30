@@ -121,8 +121,12 @@ function serveReply(
   if (outcome.accepted) {
     send(res, 204);
     const changed = outcome.toolsChanged;
-    if (changed !== undefined && deps.onToolsChanged !== undefined) {
-      deps.onToolsChanged({ machine, scope, server: changed.server }).catch((error: unknown) => {
+    const onToolsChanged = deps.onToolsChanged;
+    if (changed !== undefined && onToolsChanged !== undefined) {
+      // The reply is answered already. The rediscovery runs under the
+      // process's request admission, so its reservation lasts until it
+      // settles rather than ending with this response.
+      trackRequestWork(() => onToolsChanged({ machine, scope, server: changed.server })).catch((error: unknown) => {
         deps.log?.("local_servers.tools_changed_failed", {
           machine,
           server: changed.server,

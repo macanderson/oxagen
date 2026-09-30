@@ -266,7 +266,9 @@ export function createInProcessBroker(options: InProcessBrokerOptions = {}): Lon
     }
     if (!kindFits(entry.delivery, answer)) return { accepted: false, reason: "wrong_kind" };
     entry.settle({ reply: answer });
-    return answer.kind === "result" && answer.tools_changed === true
+    // A refused call can carry the notice too: a call to a tool the server
+    // just removed fails after the server says its tools changed.
+    return (answer.kind === "result" || answer.kind === "refused") && answer.tools_changed === true
       ? { accepted: true, toolsChanged: { server: entry.delivery.launch.server } }
       : { accepted: true };
   }

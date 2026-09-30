@@ -215,6 +215,25 @@ describe("createLocalServers: calls", () => {
     expect(resultReplySchema.safeParse(reply).success).toBe(true);
   });
 
+  it("keeps the change notice when the call then fails, as a call to a removed tool does (#4772)", async () => {
+    const base = mcpServer(behaviour());
+    const answer: RpcAnswer = (message, child) => {
+      if (message.method === "tools/call") {
+        child.send({ method: "notifications/tools/list_changed" });
+        child.send({ id: message.id, error: { code: -32602, message: "Unknown tool: read_file" } });
+        return;
+      }
+      base(message, child);
+    };
+    const r = rig({}, answer);
+    const delivery = callDelivery({ key: r.key, launch: npmLaunch(), arguments: { path: "notes.md" } });
+
+    const reply = await r.servers.handle(delivery);
+
+    expect(reply).toMatchObject({ kind: "refused", id: delivery.envelope.nonce, tools_changed: true });
+    expect(refusedReplySchema.safeParse(reply).success).toBe(true);
+  });
+
   it("launches M0's lock with WORK_DIR filled from this machine's env", async () => {
     const launch = lockLaunch();
     const r = rig();
