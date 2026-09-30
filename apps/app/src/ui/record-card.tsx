@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
   ConstraintEffect,
+  ProposalKind,
   RecordForce,
-  RecordKind,
   SharingScope,
 } from "@/data/contracts/steering";
 import { mono, panel } from "./control-styles";
@@ -26,7 +26,8 @@ export function RecordCard({
   children,
 }: {
   /** Null on a record no Context PR classified. */
-  kind: RecordKind | null;
+  /** A record kind, or `governance` on a governance proposal (#4795). */
+  kind: ProposalKind | null;
   force: RecordForce | null;
   constraintEffect: ConstraintEffect | null;
   sharingScope: SharingScope;

@@ -18,6 +18,25 @@ export const recordKindSchema = z.enum([
 ]);
 export type RecordKind = z.infer<typeof recordKindSchema>;
 
+/**
+ * What a proposal asks to change: a record of one of the six kinds, or the
+ * steering repository's governance mode (#4795). A governance proposal is the
+ * review-route PR `set_governance_mode` opens on `steering/governance`. It
+ * changes `steering/governance.toml` and publishes no record, so every reader
+ * of a record keeps `RecordKind` and never sees `governance`.
+ */
+export const proposalKindSchema = z.enum([
+  ...recordKindSchema.options,
+  "governance",
+]);
+export type ProposalKind = z.infer<typeof proposalKindSchema>;
+
+/**
+ * The lineage every governance proposal shares. The open-PR index allows one
+ * open PR per lineage, so a workspace has at most one governance PR open.
+ */
+export const GOVERNANCE_LINEAGE = "governance";
+
 /** How hard a record steers (spec §10.4: must/should ride the stable prefix). */
 export const recordForceSchema = z.enum(["must", "should", "may", "info"]);
 export type RecordForce = z.infer<typeof recordForceSchema>;
@@ -233,7 +252,7 @@ export const proposalViewSchema = z
   .object({
     id: z.string().regex(/^prp_[0-9A-Za-z]+$/),
     lineageId: z.string(),
-    kind: recordKindSchema,
+    kind: proposalKindSchema,
     force: recordForceSchema,
     constraintEffect: constraintEffectSchema.nullable(),
     sharingScope: publishedSharingScopeSchema,

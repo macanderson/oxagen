@@ -933,7 +933,7 @@ describe("merge_context_pr", () => {
       approverUserId: REVIEWER,
       policyVersion: "governance:regulated",
     });
-    expect(out.promotionEvent.seq).toBe(1);
+    expect(out).toMatchObject({ kind: "rule", promotionEvent: { seq: 1 } });
   });
 
   it("solo mode: the author merges", async () => {
@@ -1061,8 +1061,10 @@ describe("merge_context_pr", () => {
       { proposalId: second },
       ctx({ userId: REVIEWER }),
     );
-    expect(out.record.version).toBe(2);
-    expect(out.promotionEvent.seq).toBe(2);
+    expect(out).toMatchObject({
+      record: { version: 2 },
+      promotionEvent: { seq: 2 },
+    });
     expect(out.bundleVersion).toEqual({ before: 1, after: 2 });
     expect(h.store.records).toHaveLength(1);
     expect(h.store.ledger[1]!.prev).toBe(h.store.ledger[0]!.chainDigest);

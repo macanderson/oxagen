@@ -1777,6 +1777,7 @@ describe("one change on the Changes tab", () => {
   const CONTEXT_PR = {
     proposalId: "prp_open1",
     lineage: "ctx.scr.001-never-push-to-main",
+    kind: "rule",
     status: "checks_passed",
     governanceMode: "team",
     pr: {

@@ -19,6 +19,7 @@ import {
   checkResultSchema,
   constraintEffectSchema,
   governanceModeSchema,
+  proposalKindSchema,
   proposalStatusSchema,
   publishedSharingScopeSchema,
   recordForceSchema,
@@ -33,6 +34,12 @@ export const contextPrSchema = z
   .object({
     proposalId: z.string(),
     lineageId: z.string(),
+    /**
+     * A record kind, or `governance` for a change to the governance mode
+     * (#4795). A governance PR runs no record checks again and never merges
+     * without review, so a surface offers neither.
+     */
+    kind: proposalKindSchema,
     status: proposalStatusSchema,
     /** Read from governance.toml when the PR opens; null before. */
     governanceMode: governanceModeSchema.nullable(),
@@ -92,8 +99,10 @@ export const contextPrSchema = z
         commit: z.string(),
         at: instant,
         byUserId: z.string().nullable(),
-        promotionEventId: z.string(),
-        recordId: z.string(),
+        /** Null for a governance proposal, which appends no promotion event (#4795). */
+        promotionEventId: z.string().nullable(),
+        /** Null for a governance proposal, which publishes no record. */
+        recordId: z.string().nullable(),
       })
       .strict()
       .nullable(),
