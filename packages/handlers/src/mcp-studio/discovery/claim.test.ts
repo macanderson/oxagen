@@ -9,7 +9,11 @@ vi.mock("../../logger", () => ({
 
 import type { LocalGatewayBroker } from "../local-calls/broker";
 import type { MachineGroupReader } from "../local-calls/machines";
-import { CLAIMS_PER_POLL, claimMachineDiscoveries } from "./claim";
+import {
+  CLAIMS_PER_POLL,
+  claimMachineDiscoveries,
+  rediscoverOnMachine,
+} from "./claim";
 import type { DiscoveryRunData } from "./entry";
 import type { DiscoverySeams } from "./seams";
 import type { ClaimedDiscovery, DiscoveryClaimStore } from "./store";
@@ -149,6 +153,40 @@ describe("claimMachineDiscoveries", () => {
         error: "MCP discovery of files failed: the machine refused",
       }),
       "MCP discovery on a machine failed; the row records why",
+    );
+  });
+});
+
+describe("rediscoverOnMachine", () => {
+  it("runs the server's discovery for list_changed through the machine that reported it", async () => {
+    const run = runner();
+    const out = await rediscoverOnMachine(
+      { scope: SCOPE, machine: MACHINE, server: "files" },
+      { broker, reader: reader(["dev-laptops"]), run, seams },
+    );
+    expect(out?.server).toBe("files");
+    expect(run).toHaveBeenCalledWith(
+      {
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+        server: "files",
+        trigger: "list_changed",
+      },
+      expect.objectContaining({ seams: expect.anything() }),
+    );
+    expect(typeof run.mock.calls[0]?.[1].seams?.local.report).toBe("function");
+  });
+
+  it("answers null and logs when the run throws", async () => {
+    const run = vi.fn(() => Promise.reject(new Error("steering repo unreachable")));
+    const out = await rediscoverOnMachine(
+      { scope: SCOPE, machine: MACHINE, server: "files" },
+      { broker, reader: reader(["dev-laptops"]), run, seams },
+    );
+    expect(out).toBeNull();
+    expect(logs.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ server: "files", error: "steering repo unreachable" }),
+      "MCP discovery after a tools change failed; the row records why",
     );
   });
 });

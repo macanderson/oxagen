@@ -146,8 +146,17 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
     });
     if (!check.ok) return refused(envelope.nonce, check.refusal);
     const launch = await launchFor(delivery.launch, signal);
+    let toolsChanged = false;
     const result = await callTool(
-      { spawn: options.spawn, launch, deadlineMs: envelope.deadline_ms ?? DEFAULT_DEADLINE_MS, signal },
+      {
+        spawn: options.spawn,
+        launch,
+        deadlineMs: envelope.deadline_ms ?? DEFAULT_DEADLINE_MS,
+        signal,
+        onToolsChanged: () => {
+          toolsChanged = true;
+        },
+      },
       envelope.upstream,
       delivery.arguments,
     );
@@ -158,6 +167,7 @@ export function createLocalServers(options: LocalServersOptions): LocalServers {
       machine: options.machine,
       result: screened.result,
       redactions: screened.redactions,
+      ...(toolsChanged ? { tools_changed: true as const } : {}),
     };
   }
 

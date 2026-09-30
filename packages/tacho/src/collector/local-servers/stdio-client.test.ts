@@ -162,6 +162,30 @@ describe("callTool", () => {
     ]);
   });
 
+  it("reports notifications/tools/list_changed to the caller (#4772)", async () => {
+    const fake = fakeSpawn(
+      answering((message, child) => {
+        if (message.method !== "initialize") return;
+        child.send({ method: "notifications/tools/list_changed" });
+      }),
+    );
+    const onToolsChanged = vi.fn();
+    expect(await callTool(options(fake.spawn, { onToolsChanged }), "read_file", {})).toEqual(TEXT_RESULT);
+    expect(onToolsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports nothing for other notifications", async () => {
+    const fake = fakeSpawn(
+      answering((message, child) => {
+        if (message.method !== "initialize") return;
+        child.send({ method: "notifications/message", params: { level: "info" } });
+      }),
+    );
+    const onToolsChanged = vi.fn();
+    await callTool(options(fake.spawn, { onToolsChanged }), "read_file", {});
+    expect(onToolsChanged).not.toHaveBeenCalled();
+  });
+
   it("skips lines that are not JSON-RPC messages and answers the client did not ask for", async () => {
     const fake = fakeSpawn(
       answering((message, child) => {

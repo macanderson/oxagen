@@ -10,6 +10,12 @@
 // reporter bound to its broker and to that machine. The claim locks the row
 // and skips one another transaction holds, so two processes never run one
 // discovery.
+//
+// When a call's reply says the server sent notifications/tools/list_changed,
+// the process runs that server's discovery the same way, through the machine
+// that reported it (rediscoverOnMachine). It sends no durable event: the MCP
+// service holds no Inngest key, and the machine that saw the change is the
+// one polling now.
 import { logger } from "../../logger";
 import type { LocalGatewayBroker } from "../local-calls/broker";
 import type { MachineGroupReader } from "../local-calls/machines";
@@ -75,15 +81,7 @@ export async function claimMachineDiscoveries(
   for (let claimedCount = 0; claimedCount < limit; claimedCount += 1) {
     const claimed = await claims.claimWaiting(scope, groups, now());
     if (claimed === null) break;
-    seams ??= {
-      ...(await (deps.seams ?? discoverySeams)()),
-      // Only the machine that polled: its poll is the one waiting for a call.
-      local: gatewayLocalReporter({
-        broker: deps.broker,
-        reader: deps.reader,
-        machines: async () => [machine],
-      }),
-    };
+    seams ??= await machineSeams(machine, deps);
     try {
       results.push(
         await run(
@@ -111,4 +109,59 @@ export async function claimMachineDiscoveries(
     }
   }
   return results;
+}
+
+/**
+ * The process's seams, with a local reporter that asks only `machine`: the
+ * machine whose poll is waiting for a call now.
+ */
+async function machineSeams(
+  machine: string,
+  deps: MachineDiscoveryDeps,
+): Promise<DiscoverySeams> {
+  return {
+    ...(await (deps.seams ?? discoverySeams)()),
+    local: gatewayLocalReporter({
+      broker: deps.broker,
+      reader: deps.reader,
+      machines: async () => [machine],
+    }),
+  };
+}
+
+/**
+ * Discover `server` again through `machine`, after one of its calls reported
+ * notifications/tools/list_changed (#4772). runDiscovery reads the server's
+ * sync.schedule, so a manual server records a skipped run. Null when the run
+ * threw: runDiscovery records why on the row, and this logs it.
+ */
+export async function rediscoverOnMachine(
+  input: MachineDiscoveryInput & { server: string },
+  deps: MachineDiscoveryDeps,
+): Promise<DiscoveryResult | null> {
+  const { scope, machine, server } = input;
+  const run = deps.run ?? runDiscoveryEvent;
+  try {
+    return await run(
+      {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        server,
+        trigger: "list_changed",
+      },
+      { seams: await machineSeams(machine, deps) },
+    );
+  } catch (error) {
+    logger.warn(
+      {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        server,
+        machine,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "MCP discovery after a tools change failed; the row records why",
+    );
+    return null;
+  }
 }
