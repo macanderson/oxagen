@@ -50,6 +50,21 @@ export function tabOf(segment: string | null): AgentTab {
   return AGENT_TABS.find((tab) => tab === canonical) ?? "overview";
 }
 
+/** The sizes Rows offers under the Activity tab's incident list (#4693). */
+export const INCIDENT_ROWS = [10, 25, 50, 100] as const;
+/** The incidents a page holds when the address names no size, the same 50 `list_incidents` reads by default. */
+export const INCIDENT_PAGE = 50;
+
+/**
+ * The incidents a page holds, from `?rows=`. A size Rows does not offer reads
+ * as `INCIDENT_PAGE`, so a hand-typed URL cannot ask for a size the list never
+ * draws.
+ */
+export function incidentRowsOf(raw: string | null): number {
+  const rows = Number(raw);
+  return INCIDENT_ROWS.find((size) => size === rows) ?? INCIDENT_PAGE;
+}
+
 /** The trailing 30 UTC days that end today, the window every 30-day figure on the page covers. */
 function last30Days(now: number): DayRange {
   const day = 24 * 60 * 60 * 1000;
@@ -93,13 +108,18 @@ const SPEND_TABS: ReadonlySet<AgentTab> = new Set(["overview", "activity"]);
 const DELIVERY_TABS: ReadonlySet<AgentTab> = new Set(["overview", "steering"]);
 const FINDINGS_TABS: ReadonlySet<AgentTab> = new Set(["overview", "activity"]);
 
-/** Everything the tab needs beyond the identity, read at once. */
+/**
+ * Everything the tab needs beyond the identity, read at once. `incidentPage`
+ * is the page of incidents the address names (#4693). Only the Activity tab
+ * reads it. Every other tab reads the newest page at the contract's default
+ * size, because it draws no incident list to page.
+ */
 export async function readAgentTab(
   ctx: WsCtx,
   source: DataSource,
   detail: AgentDetail,
   tab: AgentTab,
-  cursor: string | null,
+  incidentPage: { cursor: string | null; rows: number },
   now: number,
 ): Promise<AgentReads> {
   const { id, agentKey } = detail.identity;
@@ -120,9 +140,13 @@ export async function readAgentTab(
   ] = await Promise.all([
     source.agents.toolbelt(ctx, id),
     source.mandates.list(ctx, { agentId: id }),
-    source.agents.incidents(ctx, id, {
-      cursor: tab === "activity" ? cursor : null,
-    }),
+    source.agents.incidents(
+      ctx,
+      id,
+      tab === "activity"
+        ? { cursor: incidentPage.cursor, limit: incidentPage.rows }
+        : { cursor: null },
+    ),
     source.runs.list(ctx, { cursor: null }),
     SPEND_TABS.has(tab) && agentKey !== null
       ? source.spend.byGroup(ctx, "agent", period)

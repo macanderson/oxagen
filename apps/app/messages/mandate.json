@@ -65,8 +65,7 @@
       "pager": {
         "label": "Ledger pages",
         "newer": "Newer",
-        "older": "Older",
-        "end": "The oldest movement read"
+        "older": "Older"
       },
       "emptyBodyEffective": "Its ledger is empty, so remaining authority equals the full period limit."
     },

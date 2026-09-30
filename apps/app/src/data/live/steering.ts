@@ -189,7 +189,7 @@ export const steering: DataSource["steering"] = {
     const read = await kernelRead(ctx, {
       contract: contextProposalList,
       input: {
-        limit: STEERING_PAGE,
+        limit: q.limit ?? STEERING_PAGE,
         offset: q.offset,
         ...(q.lineage === undefined ? {} : { lineageId: q.lineage }),
       },

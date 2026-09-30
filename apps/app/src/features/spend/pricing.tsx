@@ -8,6 +8,9 @@
 //
 // The two reads are independent, so one failing does not blank the tab: each
 // half renders its own answer, its own empty state or its own refusal.
+//
+// Each price table pages in the browser, with Rows per page beside Previous
+// and Next at its foot (#4693).
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type {
@@ -22,6 +25,7 @@ import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
+import { RowsPager } from "@/ui/pagination";
 import { Instant } from "./figures";
 import { PriceDialog } from "./price-dialog";
 import { RemoveRateDialog } from "./remove-rate-dialog";
@@ -30,6 +34,13 @@ import { Empty, HeaderCell, Panel } from "./tables";
 import type { SpendAt } from "./view";
 
 const cell = "px-4 py-2 text-left align-top";
+
+/**
+ * The sizes Rows per page offers under each price table (#4693). A table opens
+ * at 100 rows, the size the book paged by before a reader could choose one.
+ */
+const BOOK_ROWS: readonly number[] = [10, 25, 50, 100];
+const BOOK_DEFAULT_ROWS = 100;
 
 /**
  * The order the classes read in: what a call sent, what it read back out of
@@ -337,10 +348,14 @@ function PriceTable({
   scheduled: boolean;
 }) {
   const t = useTranslations("spend.pricing");
+  const list = useTranslations("ui.list");
+  const locale = useLocale();
+  const [perPage, setPerPage] = useState(BOOK_DEFAULT_ROWS);
   const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(entries.length / 100));
+  const pages = Math.max(1, Math.ceil(entries.length / perPage));
   const current = Math.min(page, pages - 1);
-  const visible = entries.slice(current * 100, (current + 1) * 100);
+  const from = current * perPage;
+  const visible = entries.slice(from, from + perPage);
   return (
     <>
       {entries.length === 0 ? (
@@ -428,32 +443,43 @@ function PriceTable({
           </tbody>
         </table>
       )}
-      {pages > 1 ? (
-        <nav
-          aria-label={t("book.pagination")}
-          className="flex items-center justify-between px-4 py-2"
-        >
-          <button
-            type="button"
-            disabled={current === 0}
-            onClick={() => {
-              setPage(current - 1);
-            }}
-          >
-            {t("book.previous")}
-          </button>
-          <span>{t("book.page", { page: current + 1, pages })}</span>
-          <button
-            type="button"
-            disabled={current + 1 === pages}
-            onClick={() => {
-              setPage(current + 1);
-            }}
-          >
-            {t("book.next")}
-          </button>
-        </nav>
-      ) : null}
+      {/* The pager draws under any table with a row, one page or many, so
+          the size stays in reach. Changing the rows goes back to page 1. */}
+      {entries.length === 0 ? null : (
+        <RowsPager
+          label={scheduled ? t("book.scheduledPages") : t("book.pages")}
+          rowsLabel={list("rows")}
+          perPage={perPage}
+          sizes={BOOK_ROWS}
+          onPerPage={(size) => {
+            setPerPage(size);
+            setPage(0);
+          }}
+          sizeLabel={(size) => formatCount(size, locale)}
+          range={list("range", {
+            from: formatCount(from + 1, locale),
+            to: formatCount(from + visible.length, locale),
+            total: formatCount(entries.length, locale),
+          })}
+          previousLabel={list("previous")}
+          nextLabel={list("next")}
+          previous={
+            current <= 0
+              ? null
+              : () => {
+                  setPage(current - 1);
+                }
+          }
+          next={
+            current >= pages - 1
+              ? null
+              : () => {
+                  setPage(current + 1);
+                }
+          }
+          className="border-t border-border px-4"
+        />
+      )}
     </>
   );
 }

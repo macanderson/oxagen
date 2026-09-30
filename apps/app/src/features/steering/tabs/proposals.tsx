@@ -26,9 +26,12 @@ const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px] aria-pressed:
 
 function Segments({
   at,
+  rows,
   current,
 }: {
   at: SteeringAt;
+  /** The page size, which both segments keep. */
+  rows: number;
   current: ProposalSegment;
 }) {
   const t = useTranslations("steering.tabs");
@@ -40,14 +43,14 @@ function Segments({
       data-testid="proposal-segments"
     >
       <PressLink
-        to={steeringLink(at, { tab: "proposals" })}
+        to={steeringLink(at, { tab: "proposals", rows })}
         pressed={current === "candidates"}
         className={chip}
       >
         {t("candidates")}
       </PressLink>
       <PressLink
-        to={steeringLink(at, { tab: "prs" })}
+        to={steeringLink(at, { tab: "prs", rows })}
         pressed={current === "prs"}
         className={chip}
       >
@@ -73,6 +76,7 @@ export async function ProposalsTab({
   at,
   segment,
   offset,
+  rows,
   proposal,
   pr: preread,
 }: {
@@ -81,6 +85,8 @@ export async function ProposalsTab({
   at: SteeringAt;
   segment: ProposalSegment;
   offset: number;
+  /** How many proposals a page holds, one of PROPOSAL_ROWS (#4693). */
+  rows: number;
   proposal: string | null;
   /**
    * get_context_pr for `proposal`, when the hub already read it to decide
@@ -89,7 +95,7 @@ export async function ProposalsTab({
   pr?: Read<ContextPr> | null;
 }) {
   const [read, pr] = await Promise.all([
-    source.steering.proposals(ctx, { offset }),
+    source.steering.proposals(ctx, { offset, limit: rows }),
     segment === "prs" && proposal !== null
       ? (preread ?? source.steering.contextPr(ctx, proposal))
       : null,
@@ -102,18 +108,19 @@ export async function ProposalsTab({
   return (
     <div className="flex flex-col gap-4" data-testid="tab-proposals">
       <LiveRefresh active={waiting} intervalMs={10_000} />
-      <Segments at={at} current={segment} />
+      <Segments at={at} rows={rows} current={segment} />
       {segment === "prs" ? (
         <ContextPrs
           at={at}
           offset={offset}
+          rows={rows}
           read={read}
           selected={proposal}
           pr={pr}
           canMergeWithoutReview={canMergeWithoutReview(ctx)}
         />
       ) : (
-        <Proposals at={at} offset={offset} read={read} />
+        <Proposals at={at} offset={offset} rows={rows} read={read} />
       )}
     </div>
   );

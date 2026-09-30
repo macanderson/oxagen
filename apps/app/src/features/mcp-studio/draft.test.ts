@@ -1,6 +1,7 @@
 // The Studio draft (#4678): how staged edits combine, what the diff and the
-// file list show, the definition tokens before and after, and what a saved
-// test loses before it is staged.
+// file list show, the definition tokens before and after, what a saved test
+// loses before it is staged, and which stored edits the page can read.
+import { STUDIO_DRAFT_OPS_BYTES_MAX } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { describe, expect, it } from "vitest";
 import {
   DESCRIPTION_MAX,
@@ -12,6 +13,7 @@ import {
   importedAfter,
   mergeDrafts,
   parseStoredDraft,
+  readDraftOps,
   scrubTest,
   sourceRequired,
   stageChecked,
@@ -338,5 +340,80 @@ describe("mergeDrafts", () => {
       ops: [importOf("list_prices")],
       dropped: 1,
     });
+  });
+});
+
+describe("readDraftOps", () => {
+  const UTF8 = new TextEncoder();
+  const bytesOf = (value: unknown) => UTF8.encode(JSON.stringify(value)).length;
+  /** The longest raw answer, and the longest shaped result, a saved test keeps. */
+  const TEXT_MAX = 262_144;
+  const padded = (raw: number, shaped = 0): DraftOp => ({
+    kind: "test",
+    tool: "list_invoices",
+    environment: "default",
+    args: "{}",
+    request: "{}",
+    raw: "x".repeat(raw),
+    shaped: "x".repeat(shaped),
+  });
+
+  /**
+   * Saved tests whose edits come to exactly `bytes` as UTF-8 JSON, the way
+   * save_studio_draft counts them.
+   */
+  function editsOfBytes(bytes: number): DraftOp[] {
+    const full = padded(TEXT_MAX);
+    // One edit and the comma before it. The brackets take the first edit's.
+    const step = bytesOf(full) + 1;
+    const floor = bytesOf(padded(0)) + 1;
+    const ops: DraftOp[] = [];
+    let used = 1;
+    while (used + step + floor <= bytes) {
+      ops.push(full);
+      used += step;
+    }
+    const rest = bytes - used - floor;
+    ops.push(padded(Math.min(rest, TEXT_MAX), Math.max(0, rest - TEXT_MAX)));
+    return ops;
+  }
+
+  it("reads stored edits of every kind", () => {
+    const ops = [
+      importOf("create_refund"),
+      removeOf("list_prices"),
+      classifyOf("create_refund", "critical", ["moves_money"]),
+      describeOf("create_refund", "Refund a charge."),
+      testOf("create_refund"),
+    ];
+    expect(readDraftOps(ops)).toEqual(ops);
+  });
+
+  it("refuses an edit kind this page does not know", () => {
+    expect(
+      readDraftOps([importOf("create_refund"), { kind: "rename", tool: "x" }]),
+    ).toBeNull();
+  });
+
+  it("refuses an edit with a field this page does not know", () => {
+    expect(
+      readDraftOps([{ ...importOf("create_refund"), alias: "refund" }]),
+    ).toBeNull();
+  });
+
+  it("refuses more edits than a draft holds", () => {
+    const ops = Array.from({ length: 2_000 }, (_, n) => importOf(`tool_${String(n)}`));
+    expect(readDraftOps(ops)).toHaveLength(2_000);
+    expect(readDraftOps([...ops, importOf("tool_2000")])).toBeNull();
+  });
+
+  it("holds edits up to save_studio_draft's byte limit and no further", () => {
+    const atLimit = editsOfBytes(STUDIO_DRAFT_OPS_BYTES_MAX);
+    expect(bytesOf(atLimit)).toBe(STUDIO_DRAFT_OPS_BYTES_MAX);
+    expect(readDraftOps(atLimit)).toHaveLength(atLimit.length);
+
+    const overLimit = editsOfBytes(STUDIO_DRAFT_OPS_BYTES_MAX + 1);
+    expect(bytesOf(overLimit)).toBe(STUDIO_DRAFT_OPS_BYTES_MAX + 1);
+    expect(readDraftOps(overLimit)).toBeNull();
   });
 });

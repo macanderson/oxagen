@@ -5,11 +5,11 @@
 // its viewer first and renders nothing for a person requireViewer refuses.
 // Fleet hands its viewer, the data source and the runs cursor to the Fleet
 // feature (WL-34) and renders the cost rollup's two tiles under its title
-// (#2962); the three Agents routes hand theirs, with the agent, the tab and the
-// cursor the URL names, to the Agents feature (#2956), and the Agents page
-// hands the tab its `?tab=` names and the whole query to the Agents area,
-// which absorbed Tools and the Runtimes list (#4806); Spend hands its viewer,
-// the data source and the query to its body (#2962); the Skills route moves a
+// (#2962); the three Agents routes hand theirs, with the agent, the tab, the
+// cursor and the rows the URL names, to the Agents feature (#2956, #4693), and
+// the Agents page hands the tab its `?tab=` names and the whole query to the
+// Agents area, which absorbed Tools and the Runtimes list (#4806); Spend hands
+// its viewer, the data source and the query to its body (#2962); the Skills route moves a
 // member to the Skills tab of Steering with its cursor; Steering hands its viewer,
 // the data source and the query to the Steering feature (#2961); the Tools and
 // Runtimes routes move a member to the Agents tab that absorbed each, with the
@@ -329,6 +329,12 @@ describe("the Tools route", () => {
       "/acme/core-platform/agents?tab=tools&category=moves_money&provider=mcs_01k5s1&cursor=c2",
     ],
     [["providers"], {}, "/acme/core-platform/agents?tab=servers"],
+    // #4693: an old link keeps the size its page held.
+    [
+      ["providers"],
+      { rows: "25", cursor: "g2" },
+      "/acme/core-platform/agents?tab=servers&rows=25&cursor=g2",
+    ],
     // `/tools/servers` is the Providers tab's name before rev1.
     [["servers"], {}, "/acme/core-platform/agents?tab=servers"],
     [["policy"], {}, "/acme/core-platform/agents?tab=policies"],
@@ -417,12 +423,12 @@ describe("the Audit page", () => {
 });
 
 describe("the Billing page", () => {
-  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome and the invoices cursor to Billing", async () => {
+  it("resolves the organization viewer, names the page once and hands the viewer, the data source, the title, the signed-in name, the checkout outcome, the invoices cursor and the page size to Billing", async () => {
     const ctx = { orgSlug: "acme", orgName: "Acme Robotics" };
     requireViewer.mockResolvedValue(ctx);
     await expectPageTitle(
       await BILLING(),
-      routeProps(SEGMENTS, { checkout: "success", cursor: "c2" }),
+      routeProps(SEGMENTS, { checkout: "success", cursor: "c2", rows: "25" }),
       title("billing"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
@@ -436,6 +442,7 @@ describe("the Billing page", () => {
       viewerName: "Marcus Bell",
       checkout: "success",
       cursor: "c2",
+      rows: "25",
     });
   });
 
@@ -448,6 +455,7 @@ describe("the Billing page", () => {
     expect(Billing.mock.calls[0]?.[0]).toMatchObject({
       checkout: null,
       cursor: null,
+      rows: null,
     });
   });
 });
@@ -618,6 +626,22 @@ describe("the Skills route", () => {
     expect(Skills).not.toHaveBeenCalled();
   });
 
+  it("keeps the page size the URL named on the way to the tab (#4693)", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await SKILLS()).default(
+          routeProps(SEGMENTS, { cursor: "c2", rows: "25" }),
+        ),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering/skills?rows=25&cursor=c2",
+    );
+  });
+
   it.each<[string[], Record<string, string>, string]>([
     [["search"], {}, "/acme/core-platform/steering/skills?view=search"],
     [["versions"], {}, "/acme/core-platform/steering/skills?view=versions"],
@@ -625,6 +649,16 @@ describe("the Skills route", () => {
       ["catalog"],
       { cursor: "c2" },
       "/acme/core-platform/steering/skills?cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { cursor: "c2", rows: "25" },
+      "/acme/core-platform/steering/skills?rows=25&cursor=c2",
+    ],
+    [
+      ["catalog"],
+      { rows: "7" },
+      "/acme/core-platform/steering/skills",
     ],
     [
       ["a-intel.release-notes", "source"],
@@ -805,10 +839,10 @@ describe("the Agents pages", () => {
     });
   });
 
-  it("the agent page hands the agent, the tab and the cursor the URL names to Agent", async () => {
+  it("the agent page hands the agent, the tab, the cursor and the rows the URL names to Agent", async () => {
     await expectBodyTitled(
       await AGENT(),
-      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3" }),
+      routeProps(SEGMENTS, { tab: "incidents", cursor: "c3", rows: "25" }),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -818,11 +852,13 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "incidents",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(await AGENT(), routeProps(SEGMENTS), title("agent"));
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       cursor: null,
+      rows: null,
     });
     await expectPageTitle(
       await AGENTS(),
@@ -835,11 +871,14 @@ describe("the Agents pages", () => {
     });
   });
 
-  it("the agent tab page hands the tab its path names, and the cursor, to Agent", async () => {
+  it("the agent tab page hands the tab its path names, the cursor and the rows to Agent", async () => {
     const page = await AGENT_TAB();
     await expectBodyTitled(
       page,
-      routeProps({ ...SEGMENTS, tab: "activity" }, { cursor: "c3" }),
+      routeProps(
+        { ...SEGMENTS, tab: "activity" },
+        { cursor: "c3", rows: "25" },
+      ),
       title("agent"),
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
@@ -849,6 +888,7 @@ describe("the Agents pages", () => {
       agent: "release-bot",
       tab: "activity",
       cursor: "c3",
+      rows: "25",
     });
     await expectBodyTitled(
       page,
@@ -858,6 +898,7 @@ describe("the Agents pages", () => {
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: "identity",
       cursor: null,
+      rows: null,
     });
   });
 });

@@ -52,6 +52,14 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The discovery section loads Add server, which loads Studio's server
+// actions (review-calls.ts). No test here calls them.
+vi.mock("./actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 
 afterEach(async () => {
   try {
@@ -690,6 +698,25 @@ describe("ToolsTab empty and missing states", () => {
   });
 });
 
+describe("ToolsTab discovery", () => {
+  it("says discovery progress is not available while get_studio_discovery is a stub", () => {
+    renderTab(propsOf(studioView(STRIPE)));
+    const section = screen.getByTestId("studio-discovery");
+    const note = within(section).getByTestId("studio-discovery-pending");
+    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
+    expect(note).toHaveAttribute("data-gap", "#4682");
+    expect(within(section).getByTestId("studio-discovery-start")).toBeDisabled();
+    // Tool counts wait on list_studio_tools, which the page reads.
+    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
+  });
+
+  it("offers a reader no way to start a discovery", () => {
+    renderTab(propsOf(studioView(STRIPE), { canEdit: false }));
+    expect(screen.getByTestId("studio-discovery-pending")).toBeInTheDocument();
+    expect(screen.queryByTestId("studio-discovery-start")).toBeNull();
+  });
+});
+
 describe("ToolsTab kill switches", () => {
   it("puts each tool's off control in its own row and keeps the facts for the panel", () => {
     renderTab(
@@ -815,18 +842,18 @@ describe("ToolsTab tool panel", () => {
         "Charges a customer once, in cents.",
       );
     });
-    expect(calls).toEqual([{ serverId: STRIPE, tool: "create_payment" }]);
+    expect(calls).toEqual([{ server: "stripe", tool: "create_payment" }]);
     await closePanel(user, panel, "create_payment");
   });
 
-  it("falls back to the not-built draft seam when the page passes none", async () => {
+  it("falls back to the pending Draft stub when the page passes none", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const panel = await openPanel(user, "create_payment");
-    await user.click(within(panel).getByTestId("studio-panel-draft"));
-    expect(
-      await within(panel).findByTestId("studio-panel-draft-not-built"),
-    ).toHaveTextContent(COPY.draftNotBuilt);
+    expect(within(panel).getByTestId("studio-panel-draft")).toBeDisabled();
+    const note = within(panel).getByTestId("studio-panel-draft-pending");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent(COPY.draftNotBuilt);
     await closePanel(user, panel, "create_payment");
   });
 
