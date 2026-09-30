@@ -151,9 +151,9 @@ export async function pinListing(
       `Oxagen could not read ${source.server} ${source.version} from the registry: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  let pin: PackagePin;
+  let packagePin: PackagePin;
   try {
-    pin = await readPackagePin(deps.digests, source, entry, deps.signal);
+    packagePin = await readPackagePin(deps.digests, source, entry, deps.signal);
   } catch (error) {
     if (!(error instanceof PackagePinProblem)) throw error;
     // A registry that did not answer may answer a retry. Anything else is
@@ -166,8 +166,8 @@ export async function pinListing(
     lockSource = registryLockSource({
       source,
       entry,
-      digest: pin.digest,
-      ...(pin.file === undefined ? {} : { file: pin.file }),
+      digest: packagePin.digest,
+      ...(packagePin.file === undefined ? {} : { file: packagePin.file }),
       server_version: undefined,
     });
   } catch (error) {
