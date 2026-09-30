@@ -2,7 +2,7 @@
 // (steering-repo-spec, Provisioning; lane S1, #4450).
 //
 // Creating a workspace creates its private steering repo `oxagen-<slug>`, and
-// creating an organization creates `<org>/oxagen`. The durable job
+// creating an organization creates `<org>/oxagen-config`. The durable job
 // `steering-repo/provision` runs the steps below one at a time:
 //
 //   1. pick_connection      The organization's Oxagen GitHub App installation or
@@ -24,7 +24,7 @@
 //                           PR publishes version 2 (#4732).
 //
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
-// the workspace's settings, or of the organization's for `<org>/oxagen`, and
+// the workspace's settings, or of the organization's for `<org>/oxagen-config`, and
 // records what each step made, so a rerun adopts it instead of making another.
 // A failed step records its name and error, and the job retries from it.
 //
@@ -519,7 +519,11 @@ export function pickSteeringConnection(
 async function createRepositoryStep(ctx: StepContext): Promise<void> {
   if (ctx.state.repository !== null) return;
   const connection = requireConnection(ctx);
-  const first_attempt = Math.max(1, ctx.state.attempt);
+  // The `config` workspace's first name is the organization's own
+  // `oxagen-config`, so it starts at `oxagen-config-2`.
+  const reserved =
+    ctx.scope.kind === "workspace" && baseName(ctx) === ORGANIZATION_REPO_NAME;
+  const first_attempt = Math.max(reserved ? 2 : 1, ctx.state.attempt);
   const max_attempts =
     ctx.scope.kind === "organization" ? 1 : WORKSPACE_NAME_ATTEMPTS;
   const on_attempt = async (attempt: number, name: string) => {

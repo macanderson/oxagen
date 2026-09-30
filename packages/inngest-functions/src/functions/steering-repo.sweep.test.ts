@@ -269,7 +269,7 @@ describe("steering-repo/health-check", () => {
   });
 
   it("reads an event with no workspace as the organization repository", async () => {
-    // The sweep sends workspaceId null for `<org>/oxagen`. An event that
+    // The sweep sends workspaceId null for `<org>/oxagen-config`. An event that
     // leaves the field out, or carries a non-string, reads the same way.
     for (const workspaceId of [null, undefined, 42]) {
       const runner = installRunner();

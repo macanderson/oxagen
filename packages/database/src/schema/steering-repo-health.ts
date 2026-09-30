@@ -1,7 +1,7 @@
 // A steering repo's health (steering-repo-spec, Settings drift; S2, #4560).
 //
 // One row per steering repo: a workspace's `oxagen-<slug>` or the
-// organization's `<org>/oxagen`. The organization repo belongs to no
+// organization's `<org>/oxagen-config`. The organization repo belongs to no
 // workspace, so `workspace_id` is null on its row and the table's tenant
 // policy is `workspace_nullable`.
 //
@@ -31,7 +31,7 @@ export const steeringRepoHealth = agentSchema.table(
   {
     id: uuid("id").primaryKey().default(uuidv7Default),
     orgId: uuid("org_id").notNull(),
-    // Null for the organization repo `<org>/oxagen`.
+    // Null for the organization repo `<org>/oxagen-config`.
     workspaceId: uuid("workspace_id"),
     provider: text("provider").notNull(),
     // GitHub's repository id or GitLab's project id.

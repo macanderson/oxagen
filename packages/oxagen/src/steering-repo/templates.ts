@@ -117,7 +117,7 @@ export interface SteeringRepoTemplateInput {
   organization: string;
   /** The repository as its host names it, such as `a-intel/oxagen-core-platform`. */
   repository: string;
-  /** A workspace's steering repo, or the organization's repository `<org>/oxagen`. */
+  /** A workspace's steering repo, or the organization's repository `<org>/oxagen-config`. */
   scope:
     | { kind: "workspace"; slug: string; label: string }
     | { kind: "organization" };

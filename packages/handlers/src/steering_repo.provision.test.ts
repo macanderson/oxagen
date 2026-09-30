@@ -263,6 +263,8 @@ class Harness {
   groupsRefused = false;
   githubConfigured = true;
   workspaceGone = false;
+  /** The workspace the job provisions for. A test names another slug. */
+  workspaceTarget: ProvisionTarget = WORKSPACE_TARGET;
   /** The code repository that still steers the workspace, if any. */
   legacy: LegacySteeringSource | null = null;
   /** The secret the hook's token is made with. A test rotates it. */
@@ -293,7 +295,8 @@ class Harness {
         const state = this.states.get(keyOf(scope));
         const connection = this.connections.get(scope.orgId);
         return Promise.resolve({
-          target: scope.kind === "workspace" ? WORKSPACE_TARGET : ORG_TARGET,
+          target:
+            scope.kind === "workspace" ? this.workspaceTarget : ORG_TARGET,
           state: state === undefined ? null : structuredClone(state),
           connection:
             connection === undefined ? null : structuredClone(connection),
@@ -1035,7 +1038,7 @@ describe("a GitLab hook URL that GitLab refuses", () => {
 // ── Organization scope ───────────────────────────────────────────────────────
 
 describe("the organization repo", () => {
-  it("creates <org>/oxagen with no workspace.toml and binds nothing", async () => {
+  it("creates <org>/oxagen-config with no workspace.toml and binds nothing", async () => {
     const hub = githubFake();
     const h = new Harness(hub, null);
     const deps = h.deps();
@@ -1054,16 +1057,16 @@ describe("the organization repo", () => {
       ["bind_repository", "ready", false],
     ]);
     expect(h.hookRequests).toEqual([]);
-    const repo = githubRepo(hub, "oxagen");
+    const repo = githubRepo(hub, "oxagen-config");
     expect(repo?.description).toBe(ORG_DESCRIPTION);
-    const files = seedFilesOf("github", "acme/oxagen", false);
+    const files = seedFilesOf("github", "acme/oxagen-config", false);
     expect(files["workspace.toml"]).toBeUndefined();
     expect(repo?.files).toEqual({ main: files });
     expect(h.binds).toEqual([]);
     expect(h.state(ORG_SCOPE)).toMatchObject({
       status: "ready",
       step: "publish_version",
-      repository: { name: "oxagen", full_name: "acme/oxagen" },
+      repository: { name: "oxagen-config", full_name: "acme/oxagen-config" },
       binding_id: null,
     });
     expect(h.state(WS)).toBeUndefined();
@@ -1080,13 +1083,13 @@ describe("the organization repo", () => {
 
   it("stops when another repository already holds the one name it may use", async () => {
     const hub = githubFake();
-    hub.seedRepository({ name: "oxagen", description: "Someone else's." });
+    hub.seedRepository({ name: "oxagen-config", description: "Someone else's." });
     const h = new Harness(hub, null);
     const err = await runUntilStopped(h.deps(), ORG_SCOPE);
     expect(err).toBeInstanceOf(SteeringProvisionBlockedError);
     expect(err).toMatchObject({ code: "repository_name_taken" });
     expect((err as Error).message).toContain(
-      "Every name from oxagen to oxagen is taken in acme.",
+      "Every name from oxagen-config to oxagen-config is taken in acme.",
     );
     expect(h.state(ORG_SCOPE)).toMatchObject({
       status: "blocked",
@@ -1095,6 +1098,23 @@ describe("the organization repo", () => {
       repository: null,
     });
     expect(h.notified).toEqual([]);
+  });
+
+  it("starts the config workspace at oxagen-config-2, beside the organization's repo", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.workspaceTarget = {
+      org_slug: WORKSPACE_TARGET.org_slug,
+      workspace: { slug: "config", name: "Config" },
+    };
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    await runSteeringRepoStep(h.deps(), WS, "create_repository");
+    expect(githubRepo(hub, "oxagen-config")).toBeUndefined();
+    expect(githubRepo(hub, "oxagen-config-2")).toBeDefined();
+    expect(h.state(WS)).toMatchObject({
+      attempt: 2,
+      repository: { name: "oxagen-config-2" },
+    });
   });
 });
 

@@ -373,7 +373,7 @@ After configuring an App and its env vars:
 ## Steering repos
 
 A steering repo holds steering records. Each workspace gets a private repository named
-`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen`. The Oxagen app creates and
+`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen-config`. The Oxagen app creates and
 runs them with the permissions in [Permissions](#permissions), Administration and Deployments
 write included.
 
