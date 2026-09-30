@@ -141,6 +141,11 @@ export interface SyncStore {
     args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
   ): Promise<boolean>;
   /**
+   * True when a governance proposal Oxagen merged names `commitSha` as its
+   * merge commit: merge_context_pr landed it for an approver (#4795).
+   */
+  governanceMergedAt(scope: Scope, commitSha: string): Promise<boolean>;
+  /**
    * Write the settings workspace.toml sets into `workspaces.settings`. A null
    * value removes its key, so the reader falls back to its default.
    */
@@ -537,6 +542,25 @@ export const postgresSyncStore: SyncStore = {
         .returning({ id: schema.contextProposals.id });
       return row !== undefined;
     });
+  },
+
+  async governanceMergedAt(scope, commitSha) {
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .select({ id: schema.contextProposals.id })
+        .from(schema.contextProposals)
+        .where(
+          and(
+            scoped(schema.contextProposals, scope),
+            eq(schema.contextProposals.kind, "governance"),
+            eq(schema.contextProposals.status, "merged"),
+            eq(schema.contextProposals.mergedCommit, commitSha),
+            isNotNull(schema.contextProposals.mergedByUserId),
+          ),
+        )
+        .limit(1),
+    );
+    return row !== undefined;
   },
 
   async publishWorkspaceSettings(scope, settings) {

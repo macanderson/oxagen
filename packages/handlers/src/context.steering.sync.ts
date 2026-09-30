@@ -32,11 +32,13 @@
 //   7. The sync state, and a check on the head commit naming every problem.
 //      Then the governance change, when the head moved: a governance mode in
 //      steering/governance.toml that differs from the last synced head's, on
-//      a commit with no `Oxagen-Version` trailer, landed outside Oxagen. The
-//      sync records it as `steering.governance_changed`, and as
+//      a commit Oxagen's records do not hold, landed outside Oxagen. The sync
+//      records it as `steering.governance_changed`, and as
 //      `steering.governance_overridden` when the mode it replaced asked for
-//      review. Every Oxagen merge writes that trailer and records its own
-//      event, so the sync records only the changes nobody else does.
+//      review. Every Oxagen merge writes an `Oxagen-Version` trailer, stores
+//      that version, and records its own event, so the sync records only the
+//      changes nobody else does. A trailer with no record behind it counts as
+//      outside, because anyone who can push can write one.
 //   8. The workspace's steering repository published as its next steering
 //      version (#4447), when a publisher is wired. The publisher resolves the
 //      steering head and reads it again under its own lock. A publish that
@@ -97,7 +99,11 @@ import {
 import { withToolProjection } from "./mcp-studio/publish-deps";
 import { versionTrailer } from "./steering-repo/diverged";
 import { readSteeringHealth } from "./steering-repo/health.read";
-import { steeringSyncPublish } from "./steering-repo/publisher";
+import {
+  steeringRepositoryKey,
+  steeringSyncPublish,
+} from "./steering-repo/publisher";
+import { postgresVersionStore } from "./steering-repo/version-store";
 
 /** What one publish of the workspace's steering repository did. */
 export interface SyncPublished {
@@ -147,6 +153,17 @@ export interface SyncDeps {
    * the sync still finds the change and answers it in the outcome.
    */
   emit?: (event: SecurityEventInput) => void;
+  /**
+   * The steering version Oxagen stored at a commit of the workspace's
+   * steering repository, or null. A merge Oxagen made stores its version, so
+   * this backs the commit's `Oxagen-Version` trailer (#4795). Unset, only a
+   * governance proposal Oxagen merged backs it.
+   */
+  steeringVersionAt?: (
+    scope: { orgId: string; workspaceId: string },
+    repo: SteeringRepository,
+    commitSha: string,
+  ) => Promise<{ version: number } | null>;
 }
 
 export function syncDeps(): SyncDeps {
@@ -158,6 +175,8 @@ export function syncDeps(): SyncDeps {
     now: () => new Date(),
     reconcileLinks: reconcileWorkspaceLinks,
     emit: emitSecurityEvent,
+    steeringVersionAt: (scope, repo, commitSha) =>
+      postgresVersionStore(scope).versionAt(steeringRepositoryKey(repo), commitSha),
     // The same publisher merge_context_pr calls, over the same host, so a
     // merge made on the host reaches the same version sequence.
     // The publish refuses while the steering repo is not healthy (S2).
@@ -763,7 +782,8 @@ export async function syncWorkspaceSteering(
     // the change is recorded once.
     if (headMoved && prior?.headSha) {
       outcome.governanceChange = await governanceChangeOutside(
-        deps.github,
+        deps,
+        scope,
         repo,
         { from: prior.headSha, to: head },
         pulls,
@@ -812,14 +832,18 @@ async function governanceModeAt(
  * a layout change or a file problem, which the checks and health report, and
  * not a mode change. A change whose commit carries `Oxagen-Version` came
  * through landSteeringPr, which merge_context_pr and set_governance_mode both
- * use, and each of them records its own event.
+ * use, and each of them records its own event. Anyone who can push can write
+ * that trailer too, so it counts only when Oxagen's records hold the commit
+ * (oxagenMerged).
  */
 async function governanceChangeOutside(
-  github: SteeringHost,
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
   repo: SteeringRepository,
   heads: { from: string; to: string },
   pulls: readonly { row: ProposalRow; pr: PullState }[],
 ): Promise<GovernanceChange | null> {
+  const { github } = deps;
   const mode = await governanceModeAt(github, repo, heads.to);
   if (mode === null) return null;
   const previousMode = await governanceModeAt(github, repo, heads.from);
@@ -829,7 +853,10 @@ async function governanceChangeOutside(
     GOVERNANCE_TOML_PATH,
     heads.to,
   );
-  if (commit === null || versionTrailer(commit.message) !== null) return null;
+  if (commit === null) return null;
+  const trailer = versionTrailer(commit.message);
+  if (trailer !== null && (await oxagenMerged(deps, scope, repo, commit.sha, trailer)))
+    return null;
   const carried = pulls.find(
     ({ row, pr }) =>
       row.kind === "governance" && pr.merged && pr.mergeCommitSha === commit.sha,
@@ -841,6 +868,24 @@ async function governanceChangeOutside(
     proposalId: carried?.row.publicId ?? null,
     pullRequest: carried?.row.prUrl ?? null,
   };
+}
+
+/**
+ * Whether Oxagen merged `commitSha`: a governance proposal it merged names
+ * the commit, or the steering version store holds the commit at the version
+ * its trailer names. The trailer alone proves nothing, because anyone who can
+ * push to the production branch can write it (#4795).
+ */
+async function oxagenMerged(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  commitSha: string,
+  trailer: number,
+): Promise<boolean> {
+  if (await deps.store.governanceMergedAt(scope, commitSha)) return true;
+  const stored = await deps.steeringVersionAt?.(scope, repo, commitSha);
+  return stored?.version === trailer;
 }
 
 /**

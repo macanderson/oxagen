@@ -1545,6 +1545,17 @@ export class MemorySyncStore implements SyncStore {
     return true;
   }
 
+  async governanceMergedAt(scope: SyncScope, commitSha: string) {
+    return this.store.proposals.some(
+      (p) =>
+        p.workspaceId === scope.workspaceId &&
+        p.kind === "governance" &&
+        p.status === "merged" &&
+        p.mergedCommit === commitSha &&
+        p.mergedByUserId !== null,
+    );
+  }
+
   async linkMergedGovernance(
     scope: SyncScope,
     proposalId: string,

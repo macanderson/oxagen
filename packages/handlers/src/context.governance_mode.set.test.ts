@@ -1072,7 +1072,10 @@ describe("merge_context_pr on a governance proposal", () => {
  * after one baseline sync. The fake names the seed commit after its branch, so
  * a commit first gives the baseline a head of its own to compare against.
  */
-async function syncedBaseline(deps: Harness) {
+async function syncedBaseline(
+  deps: Harness,
+  steeringVersionAt?: SyncDeps["steeringVersionAt"],
+) {
   deps.github.commit(REPO.defaultBranch, "README.md", "The steering repo.");
   const syncDeps: SyncDeps = {
     github: deps.github,
@@ -1081,6 +1084,7 @@ async function syncedBaseline(deps: Harness) {
     now: () =>
       new Date(deps.now().getTime() + (MERGE_GRACE_SECONDS + 60) * 1000),
     emit: deps.emit,
+    steeringVersionAt,
   };
   const sync = () => syncWorkspaceSteering(syncDeps, SCOPE);
   expect((await sync()).governanceChange).toBeNull();
@@ -1088,13 +1092,18 @@ async function syncedBaseline(deps: Harness) {
 }
 
 /** The production branch's governance.toml with `from` swapped for `to`. */
-async function pushMode(deps: Harness, from: string, to: string) {
+async function pushMode(
+  deps: Harness,
+  from: string,
+  to: string,
+  message = `Set the mode to ${to}`,
+) {
   const text = await productionText(deps);
   return deps.github.commit(
     REPO.defaultBranch,
     STEERING_FILE,
     text.replace(`mode = "${from}"`, `mode = "${to}"`),
-    `Set the mode to ${to}`,
+    message,
   );
 }
 
@@ -1169,6 +1178,38 @@ describe("the repository sync on a governance change", () => {
       "steering.governance_overridden",
     ]);
     expect(deps.events[0]?.detail).not.toHaveProperty("proposalId");
+  });
+
+  it("records a push whose commit forges an Oxagen-Version trailer (negative)", async () => {
+    const deps = steeringMode("team");
+    const sync = await syncedBaseline(deps);
+    // Anyone who can push can write the trailer. No Oxagen record holds this
+    // commit, so it is still a change made outside Oxagen.
+    const sha = await pushMode(deps, "team", "solo", "Set the mode to solo\n\nOxagen-Version: 22");
+
+    const out = await sync();
+
+    expect(out.governanceChange).toMatchObject({ commitSha: sha, previousMode: "team", mode: "solo" });
+    expect(deps.events.map((e) => e.eventType)).toEqual([
+      "steering.governance_changed",
+      "steering.governance_overridden",
+    ]);
+  });
+
+  it("records nothing for a commit whose trailer matches the version Oxagen stored at it", async () => {
+    const deps = steeringMode("solo");
+    let landed = "";
+    // A solo change lands through the merge queue with no proposal, and the
+    // version store holds its commit at the trailer's version.
+    const sync = await syncedBaseline(deps, async (_scope, _repo, commitSha) =>
+      commitSha === landed ? { version: 22 } : null,
+    );
+    landed = await pushMode(deps, "solo", "team", "steering: set governance mode to team\n\nOxagen-Version: 22");
+
+    const out = await sync();
+
+    expect(out.governanceChange).toBeNull();
+    expect(deps.events).toEqual([]);
   });
 
   it("records a change away from solo as a change only, since solo asks for no review", async () => {
