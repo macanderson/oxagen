@@ -180,9 +180,10 @@ export interface RuntimeCommands {
   transient?: string;
   /**
    * Set when the native layout found no `tacho` executable to name: none
-   * in `binDir`, and this process is not one. The commands above then name
-   * a file that does not exist, so a caller must refuse rather than write
-   * them into the hooks and the service.
+   * in `binDir`, and this process is not one, or `TACHO_BIN_DIR` names a
+   * directory with none in it. The commands above then name a file that
+   * does not exist, so a caller must refuse rather than write them into the
+   * hooks and the service.
    */
   executableProblem?: string;
 }
@@ -274,7 +275,11 @@ export function stableExecutablePath(
  *   - source: the `bin/` shims that load TypeScript through tsx.
  *
  * `TACHO_BIN_DIR` overrides the directory; the layout is still detected from
- * what is in it, so the desktop app can point at its own resources.
+ * what is in it. The desktop app sets it to its versioned per-user copy
+ * (ADR-230), so no command names the app bundle. A `TACHO_BIN_DIR` with no
+ * `tacho` in it is an `executableProblem`: this process is then not named
+ * in its place, because the process the app runs is the bundle's own
+ * sidecar, and naming it would put the bundle back into every hook.
  */
 export function runtimeCommands(
   entry: string | undefined = process.argv[1],
@@ -287,7 +292,8 @@ export function runtimeCommands(
   // Path flavour follows the target platform, not the host, so a macOS test
   // can describe a Windows layout.
   const P = platform === "win32" ? win32 : posix;
-  let binDir = env["TACHO_BIN_DIR"];
+  const named = env["TACHO_BIN_DIR"];
+  let binDir = named;
   if (binDir === undefined) {
     if (native) {
       binDir = P.dirname(nodePath);
@@ -307,13 +313,14 @@ export function runtimeCommands(
     // A `tacho` in the directory first, then this process when it is a
     // tacho: Scoop installs the binary under its release asset's name
     // (`tacho-x86_64-pc-windows-msvc.exe`), so `tacho.exe` is not there.
+    // Never when `TACHO_BIN_DIR` named the directory: see the doc comment.
     const running = P.basename(nodePath);
     const isTacho = (
       platform === "win32" ? running.toLowerCase() : running
     ).startsWith("tacho");
     const found = exists(nativeTacho)
       ? nativeTacho
-      : native && isTacho
+      : native && isTacho && named === undefined
         ? nodePath
         : undefined;
     const tacho =
@@ -331,7 +338,10 @@ export function runtimeCommands(
       ...(transient !== undefined ? { transient } : {}),
       ...(found === undefined
         ? {
-            executableProblem: `there is no ${exeName("tacho", platform)} in ${binDir}, and this process (${running}) is not one`,
+            executableProblem:
+              named !== undefined
+                ? `TACHO_BIN_DIR names ${binDir}, which holds no ${exeName("tacho", platform)}`
+                : `there is no ${exeName("tacho", platform)} in ${binDir}, and this process (${running}) is not one`,
           }
         : {}),
     };

@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-26
 - **Owners:** agents, tacho
+- **Amended:** 2026-09-30, §4 (issue #4474)
 - **Related:** issue #4372, issue #4369, ADR-198 (an agent is one operator on
   one runtime with one harness), ADR-152 (the contained launcher and the
   tier), ADR-096 (the contained tier), ADR-057 (the agent definition file,
@@ -108,6 +109,47 @@ enrollment on its runtime. An agent on no runtime whose every host was
 revoked before the migration, re-enrolled on the same machine, runs
 uncontained until an owner turns containment on for that runtime. A new
 machine is not affected.
+
+#### Amendment 2026-09-30: placements written during the deploy
+
+The backfill ran before the code that reads the runtime flag was live
+(#4474). `migration-gate` applied it at 08:09 UTC on 2026-09-27, in CI run
+36299501166 for commit `7eed65652`. The same run's `deploy-node` legs
+replaced the old code after it: the app at 08:18, the API at 08:20, and MCP,
+the last, at 08:33. For those 24 minutes the old `move_agent` could put an
+agent that required containment on a runtime the backfill had passed. The old
+host enrollment could bind an unplaced agent's first host to a runtime without
+the carry, and that host then counts as the first enrollment, so the carry
+never runs there.
+
+`20260930120700_runtime_containment_reconcile.sql` turns containment on for
+those runtimes. It applies the backfill's test again, and counts an agent only
+when the write that put it on the runtime falls between 08:08 and 08:34 UTC:
+the agent's latest `registered` or `runtime_changed` version names the runtime
+and was written then, or the agent's first host on the runtime was enrolled
+then. The window sits at least 40 seconds outside the recorded job steps on
+each side.
+
+- **An owner's choice stands.** A runtime whose containment an Owner or Admin
+  has set with `update_runtime` is skipped, whatever the value. The handler
+  writes a `capability.invoke_allowed` security event with
+  `detail.feature = "runtime_containment"` in the same transaction as each
+  change, and it is the only write that turns containment off, so the event
+  tells an owner's "off" apart from a missed carry. `agent.runtimes.updated_at`
+  cannot: a rename moves it too. Besides `update_runtime`, only
+  `findOrCreateHostRuntime` updates the row, and only to turn containment on.
+  No heartbeat or routine job touches it.
+- **A placement after the window stays as the new code left it.** A move there
+  takes the new runtime's containment, as Consequences says, and a first
+  enrollment carries the requirement itself. Running the whole backfill again
+  would undo those moves, so the reconcile does not.
+- **The pre-migration gap above stays.** An agent whose first host on a runtime
+  predates the window is not counted.
+
+Neither migration's count reaches the `migration-gate` log. Atlas prints each
+statement and its timing, and drops a server notice: the log of the backfill's
+apply (CI job 108576755615) shows the `DO` block and `-- ok`, and no count. The
+count is visible in a `psql` session that applies the file.
 
 ### 5. The budget stays per agent and read-only
 

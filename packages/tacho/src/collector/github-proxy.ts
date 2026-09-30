@@ -21,6 +21,9 @@ const LIFE_MS = 15 * 60_000;
 const MAX_LEASES = 1024;
 const MAX_REQUEST_BYTES = 128 * 1024 * 1024;
 const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
+/** The longest refusal message from the control plane the proxy passes to git. */
+const MAX_REFUSAL_CHARS = 500;
+const REFUSED = "Oxagen refused access to this repository";
 
 interface Lease {
   id: string;
@@ -55,6 +58,57 @@ function reply(res: ServerResponse, status: number, message: string): void {
   });
   res.end(message);
 }
+/**
+ * The `message` of an API error body (`{ error: { code, reason, message } }`),
+ * as one line of plain text, or undefined when the body carries none. Control
+ * characters become spaces, because git prints the text to the agent's
+ * terminal.
+ */
+function refusalMessage(body: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  const message = (parsed as { error?: { message?: unknown } } | null)?.error
+    ?.message;
+  if (typeof message !== "string") return undefined;
+  const line = message
+    .replace(/[\x00-\x1f\x7f-\x9f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return line === "" ? undefined : line.slice(0, MAX_REFUSAL_CHARS);
+}
+
+/**
+ * What git hears when the control plane will not mint a credential (#4577).
+ *
+ * Git shows a plain-text error body as `remote:` lines, so a 4xx passes on
+ * the API's own message, which says what to do next. The steering
+ * repository's `steering_repo_propose_only`, for one, sends the agent to a
+ * steering PR. Only the message goes, never the JSON. A 404 stays a 404, so
+ * git reports a missing repository the way it always has, and any other 4xx
+ * is a 403. A 5xx is not a refusal, and its body can carry internal detail,
+ * so the proxy never reads it and answers 502.
+ */
+async function mintRefusal(minted: {
+  status: number;
+  text: () => Promise<string>;
+}): Promise<{ status: number; message: string }> {
+  if (minted.status < 400 || minted.status >= 500)
+    return {
+      status: 502,
+      message:
+        "Oxagen could not issue a credential for this repository. Try again.",
+    };
+  const said = refusalMessage(await minted.text());
+  return {
+    status: minted.status === 404 ? 404 : 403,
+    message: said === undefined ? REFUSED : `${REFUSED}. ${said}`,
+  };
+}
+
 function bearer(req: IncomingMessage): string | undefined {
   const auth = req.headers.authorization;
   if (auth?.startsWith("Bearer ")) return auth.slice(7);
@@ -301,11 +355,8 @@ export function createGithubProxy(deps: GithubProxyDeps) {
         },
       );
       if (!minted.ok) {
-        reply(
-          res,
-          minted.status === 404 ? 404 : 403,
-          "Oxagen refused access to this repository",
-        );
+        const refusal = await mintRefusal(minted);
+        reply(res, refusal.status, refusal.message);
         return;
       }
       const value = JSON.parse(await minted.text()) as {

@@ -20,6 +20,7 @@ import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
 import { type CliDeps, cursorAppFacts } from "./deps";
 import { CURSOR_COVERAGE_NOTE, wrappedCursor } from "./detect";
 import { depsForAgent } from "./agent-deps";
+import { policyModeText } from "./policy-mode";
 
 export interface StatusOptions {
   json?: boolean;
@@ -576,12 +577,12 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
   deps.out(
     `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
   );
-  // Its own line: the policy mode is not the tier above it (ADR-095). It
-  // governs permission rules only. The model proxy's allowlist and enforced
-  // budget refuse calls in either mode (`refusalFor` in model-proxy.ts).
-  deps.out(
-    `Policy      ${h.mode === "enforce" ? "enforce: a matching permission rule can deny a governed call or ask first" : "observe: a matching permission rule is recorded and the call goes ahead"}`,
-  );
+  // Its own line: the policy mode is not the tier above it (ADR-095). The
+  // mode decides the whole evaluation of a governed call, and `tacho enroll`
+  // and the desktop app say it in the same words (policy-mode.ts). `h.mode`
+  // passed the bundle schema, so an unknown mode never reaches this line: a
+  // host.json carrying one reads as not enrolled, with the reason.
+  deps.out(`Policy      ${policyModeText(h.mode)}`);
   deps.out(
     `Bundle      v${b.version} (${b.etag}) fetched ${b.age_s}s ago, expires ${b.expires_at}`,
   );

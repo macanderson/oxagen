@@ -278,7 +278,10 @@ fn restart_service() -> Result<ServiceRestart, String> {
 }
 
 /// After an install, restart the collector so hooks and the daemon run the
-/// same build. Held as a job, so a quit waits for it.
+/// same build. Held as a job, so a quit waits for it. The collector runs the
+/// per-user copy its last enroll named (ADR-230), which an install does not
+/// replace, so the restart keeps that version. Re-apply, which the app offers
+/// once its version differs, moves the hooks and the service to the new copy.
 #[tauri::command(async)]
 pub fn restart_tacho_service(app: tauri::AppHandle) -> Result<ServiceRestart, String> {
     let _job = crate::activity::Job::start(&app);

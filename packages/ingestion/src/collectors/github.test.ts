@@ -310,6 +310,13 @@ describe("toWorkItem", () => {
     return mapped;
   }
 
+  it("answers null for an issue in a repository the collector file does not name", () => {
+    // The connection reads every repository it reaches, so an unlisted one
+    // arrives through listChangedSince and the doorbell alike.
+    expect(githubCollector.toWorkItem(providerItem(restIssue()), { repos: ["acme/api"] })).toBeNull();
+    expect(githubCollector.toWorkItem(providerItem(restIssue()), { repos: ["Acme/Web"] })).not.toBeNull();
+  });
+
   it("maps a recorded open issue", () => {
     expect(githubCollector.toWorkItem(providerItem(restIssue()), scope)).toEqual({
       providerId: `issue:node:${NODE_ID}`,

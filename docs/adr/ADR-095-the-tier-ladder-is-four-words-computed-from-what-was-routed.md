@@ -129,3 +129,39 @@ The policy mode and the tier are two facts, and one surface showed them as
 one. The desktop app's Status row read "active, observe mode", and a person
 enrolled on `gateway` took it to mean they were not. The desktop app and
 `tacho status` now print the policy mode on a line of its own (#4564).
+
+## Amendment 2026-09-30: the Policy line says what the mode decides
+
+The line the amendment above added described the mode as governing permission
+rules only. It governs the whole evaluation of a governed tool call
+(`evaluatePreToolUse` in `packages/tacho/src/host/bundle.ts`):
+
+- Under `enforce`, a mandate that requires the contained tier denies every
+  tool in a session `tacho run --contained` did not start.
+- Under `enforce`, a stale bundle denies a call that can change something
+  while the control plane is unreachable.
+- Under `enforce`, a deny rule or a Cedar forbid denies, and an ask rule or a
+  call no rule covers asks.
+- Under `observe`, each of those decisions is recorded and the call goes
+  ahead.
+
+Three things refuse in both modes. Operator controls deny: a paused,
+suspended, or revoked host, and a paused or cancelled session. A bundle that
+does not verify denies a call that can change something, because its claimed
+mode is not believed. That corrects the Context section above, which said an
+unverified bundle denies in enforce mode. The model proxy refuses a model the
+mandate does not permit and a call past an enforced budget, on routed model
+calls (`refusalFor` in `packages/tacho/src/collector/model-proxy.ts`).
+
+The desktop app's Policy row, the Policy line of `tacho status`, and the end
+of `tacho enroll` print the same sentences (#4570):
+
+- `observe`: "observe: Oxagen records what the policy would decide on a
+  governed call and lets it go ahead. Budget and model limits still apply to
+  model calls routed through Oxagen."
+- `enforce`: "enforce: the policy can deny a governed call or ask first.
+  Budget and model limits also apply to model calls routed through Oxagen."
+
+Any other value, a missing one included, reads "unknown policy mode:" and the
+value. Only the desktop app can meet one, because it reads host.json without
+the bundle schema. It used to show every value but `enforce` as observe.
