@@ -1059,7 +1059,13 @@ export async function materializeTools(
       ? null
       : { status: recorded.status === "granted" ? "granted" : "denied" };
   };
-  for (const contributor of getPluginTypeContributors()) {
+  // The in-app assistant's set is Oxagen's capability contracts and nothing
+  // else (ADR-053 §1, #4310). Skipping every contributor means no workspace
+  // MCP server is connected or listed, and no MCP credential is resolved.
+  const contributors = opts.capabilitiesOnly
+    ? []
+    : getPluginTypeContributors();
+  for (const contributor of contributors) {
     let contributed: ContributedRawTool[] = [];
     try {
       contributed = await contributor.contributeTools(ctx, {

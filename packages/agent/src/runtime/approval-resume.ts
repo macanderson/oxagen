@@ -251,7 +251,11 @@ export async function resumeApprovedCall(
         const tools = await materializeTools(ctx, {
           allowlist: new Set([cap.name]),
           riskCeiling: payload.riskLevel,
-          serverAllowlist: new Set(),
+          // A resume runs one built-in capability. An empty server allowlist
+          // read as "every server", so each approved resume used to connect
+          // every workspace MCP server and resolve its credential for tools
+          // it could not call (#4310).
+          capabilitiesOnly: true,
           callerRoles: { org: orgRoles, workspace: workspaceRoles },
         });
         if (!Object.values(tools.nameMap).includes(cap.name)) {

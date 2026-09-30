@@ -16,7 +16,7 @@ import type {
 /** The surface's per-turn overrides; the contract's input carries none of them. */
 export type AssistantTurnOverrides = Pick<
   AssistantTurnRequest,
-  "activeServerIds" | "tier" | "model" | "effort" | "budget"
+  "tier" | "model" | "effort" | "budget"
 >;
 
 export interface AssistantStream {

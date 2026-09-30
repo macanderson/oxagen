@@ -383,6 +383,19 @@ describe("approved call resumption", () => {
   // The budget read is scoped to the org the call resumes in. It takes the
   // scope as an argument (#4159), so a read with none would type-fail and,
   // loosely typed, read no org at all.
+  // A resume runs one built-in capability. The listing used to pass an empty
+  // server allowlist, which reads as "every server", so each approved resume
+  // connected every workspace MCP server and resolved its credential for
+  // tools it could never call (#4310).
+  it("lists the approved capability alone and loads no MCP server", async () => {
+    expect(await resumeApprovedCall(ref)).toBe("succeeded");
+    const [, opts] = h.tools.mock.calls[0]!;
+    expect(opts).toMatchObject({
+      allowlist: new Set(["write_test"]),
+      capabilitiesOnly: true,
+    });
+    expect(opts).not.toHaveProperty("serverAllowlist");
+  });
   it("reads the budgets of the org the call resumes in", async () => {
     await resumeApprovedCall(ref);
     expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });

@@ -30,7 +30,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `content` | string | Yes | The message text you send. |
 | `conversationId` | string | No | Existing conversation to continue, by its `cnv_` public ID or the conversation ID a response returned. Omit it to start a new conversation. |
-| `activeServerIds` | string[] | No | MCP server IDs to turn on for this turn. Omit it or pass `[]` to load every workspace server. |
+| `activeServerIds` | string[] | No | Has no effect. stella's tools are Oxagen's capabilities, and a turn loads no workspace MCP server. The field is accepted so an older client is not refused. |
 | `tier` | string | No | Model tier override: `"fast"`, `"balanced"`, or `"precise"`. Omit it to use workspace defaults. |
 | `model` | string | No | Explicit model ID override. Omit it to use workspace defaults. |
 | `effort` | string | No | Reasoning effort override: `"low"`, `"medium"`, or `"high"`. Omit it to use workspace defaults. |

@@ -1545,6 +1545,40 @@ describe("materializeTools — external MCP IAM enforcement (GAP-4)", () => {
     expect(tools[toolAlias]).toBeDefined();
   });
 
+  // #4310: stella's belt is Oxagen's capability contracts alone (ADR-053 §1).
+  // A workspace with a healthy MCP server and a decision rule that denies
+  // every external call gives the same set as a workspace with neither. The
+  // server is never connected and never listed. The listing reads no
+  // decision rule for a capability (`decideCapabilityForBelt`), so the rule
+  // can only reach the MCP half, and that half is gone.
+  it("builds the set from capability contracts alone with capabilitiesOnly (#4310)", async () => {
+    externalRulesMock.mockRejectedValue(new Error("decision rule denied"));
+    vi.mocked(connectMcp).mockClear();
+    vi.mocked(listMcpToolDescriptors).mockClear();
+    const withServer = await materializeTools(CTX, { capabilitiesOnly: true });
+    expect(
+      Object.values(withServer.nameMap).filter((n) => n.startsWith("mcp.")),
+    ).toEqual([]);
+    expect(connectMcp).not.toHaveBeenCalled();
+    expect(listMcpToolDescriptors).not.toHaveBeenCalled();
+    expect(externalRulesFactory).not.toHaveBeenCalled();
+
+    dbMocks.rowsByTable.delete(dbMocks.schema.mcpServers);
+    externalRulesMock.mockReset().mockResolvedValue(undefined);
+    const empty = await materializeTools(CTX, { capabilitiesOnly: true });
+    expect(Object.values(withServer.nameMap).sort()).toEqual(
+      Object.values(empty.nameMap).sort(),
+    );
+
+    // The premise, not assumed: without the option the same workspace lists
+    // the server's tool.
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [MCP_SERVER]);
+    const full = await materializeTools(CTX);
+    expect(Object.values(full.nameMap)).toContain(
+      `mcp.${MCP_SERVER.id}.list_pull_requests`,
+    );
+  });
+
   it("passes serverAllowlist through to contributeTools options", async () => {
     // Verify the threading: materializeTools propagates serverAllowlist to every
     // plugin-type contributor via the PluginContributeOptions argument.

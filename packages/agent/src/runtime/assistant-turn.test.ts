@@ -689,6 +689,10 @@ describe("the prepared turn", () => {
       executionStepId: "msg-user",
     });
     expect(materializeOpts).toMatchObject({ approvalMode: "park" });
+    // stella's tools are Oxagen's capability contracts alone (#4310): no
+    // workspace MCP server is loaded, and no request field picks one.
+    expect(materializeOpts.capabilitiesOnly).toBe(true);
+    expect(materializeOpts).not.toHaveProperty("serverAllowlist");
     // The agent the turn runs as, so a switch on it reaches the belt and the
     // call gate. The tools still run as the person.
     expect(materializeOpts.actingAgent).toEqual({

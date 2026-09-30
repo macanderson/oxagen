@@ -262,6 +262,8 @@ describe("POST chat/stream — the turn on the wire", () => {
       content: "hi",
       pageContext: { route: "fleet", orgSlug: "acme", workspaceSlug: "main" },
       tier: "fast",
+      // Accepted and ignored (#4310): stella loads no workspace MCP server.
+      activeServerIds: ["mcs_workspace"],
     }).then((r) => r.text());
     expect(mocks.invoke).toHaveBeenCalledWith(
       "ask_assistant",
@@ -280,7 +282,6 @@ describe("POST chat/stream — the turn on the wire", () => {
       { surface: "api" },
     );
     expect(mocks.stream!.overrides).toEqual({
-      activeServerIds: [],
       tier: "fast",
       model: null,
       effort: null,
