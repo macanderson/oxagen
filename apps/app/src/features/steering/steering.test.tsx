@@ -163,7 +163,7 @@ function proposalPage(count: number, total: number) {
         pr: {
           number: 600 + i,
           repository: "acme/core-platform",
-          branch: `context/ctx.page.${String(i)}`,
+          branch: `steering/ctx.page.${String(i)}`,
         },
       }),
     ),
@@ -1279,6 +1279,7 @@ describe("Proposals", () => {
       ],
       contextPr: [],
       freshness: [],
+      layout: [],
       deliveries: [],
       hub: [[ctx]],
       memories: [],

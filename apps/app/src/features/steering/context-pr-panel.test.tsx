@@ -158,7 +158,7 @@ describe("once every check passed", () => {
     expect(link).toHaveAttribute("href", PR_URL);
     expect(link).toHaveAttribute("target", "_blank");
     expect(panel.querySelector('[data-fact="branch"] dd')).toHaveTextContent(
-      "context/ctx.release.no-reread-changelog into main",
+      "steering/ctx.release.no-reread-changelog into main",
     );
     expect(panel.querySelector('[data-fact="head"] dd')).toHaveTextContent(
       "9f8e7d6c5b4a",
@@ -372,7 +372,7 @@ describe("a memory PR", () => {
     ).toBeEnabled();
   });
 
-  it("shows no memory section on a steering PR from a context branch (negative)", () => {
+  it("shows no memory section on a steering PR from a steering branch (negative)", () => {
     renderState("checks_passed");
     expect(document.querySelector("[data-memory-pr]")).toBeNull();
   });

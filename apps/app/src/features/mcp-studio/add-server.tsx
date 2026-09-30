@@ -14,11 +14,11 @@
 //     folder (#4756).
 //   - A registry entry shows whether it offers a remote, a package or both.
 //     The package form asks for machine groups, the package type and the
-//     required arguments, and its submit waits on #4742, which keeps the
-//     registry's packages[] (registryPackagesOf).
-//   - Discovery progress follows the server's discovery until it finishes.
-//     get_studio_discovery and start_studio_discovery are lane M10's (#4682),
-//     and until they merge the section says progress is not available yet.
+//     required arguments, and its submit waits on the app's RegistryServer
+//     carrying the registry's packages[] (registryPackagesOf, #4678).
+//   - Discovery progress follows the server's discovery until it finishes,
+//     through get_studio_discovery and start_studio_discovery (lane M10,
+//     #4682, bound in studio-calls.ts).
 //
 // Every value is read off the form at submit. The dialog holds only the
 // uploaded files' names, which the root document picker lists. No credential
@@ -64,7 +64,7 @@ import {
   registryPackagesOf,
   type StudioDiscovery,
   startStudioDiscovery,
-} from "./pending-capabilities";
+} from "./studio-calls";
 import {
   type CreateStudioServer,
   type NewStudioServer,
@@ -276,7 +276,11 @@ export function DefinitionFields({
             </PullRequestLink>
           )}
         </p>
-        <DiscoveryProgress server={outcome.server} canStart={false} />
+        <DiscoveryProgress
+          at={at}
+          server={outcome.server}
+          canStart={false}
+        />
       </div>
     );
   }
@@ -740,12 +744,15 @@ function pending(discovery: StudioDiscovery | null): boolean {
  * discovery carries is the handler's, so the section never shows it.
  */
 export function DiscoveryProgress({
+  at,
   server,
   canStart,
   start = startStudioDiscovery,
   get = getStudioDiscovery,
   pollMs = 5000,
 }: {
+  /** The workspace the server belongs to. */
+  at: StudioAt;
   server: string | null;
   canStart: boolean;
   start?: typeof startStudioDiscovery;
@@ -758,22 +765,23 @@ export function DiscoveryProgress({
   const [starting, setStarting] = useState(false);
   // Bumped after a start, so the read runs again and follows the new run.
   const [round, setRound] = useState(0);
+  // The poll depends on the workspace's slugs, not on the object that carries
+  // them, so a parent that builds a new object does not restart it.
+  const { org, ws } = at;
 
   useEffect(() => {
-    if (!get.available || server === null) return;
+    if (server === null) return;
     const name = server;
+    const where: StudioAt = { org, ws };
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const read = () => {
       get
-        .call({ server: name })
+        .call(where, { server: name })
         .then((answer) => {
           if (!live) return;
           if (!answer.ok) {
-            setView({
-              kind: "failed",
-              code: answer.reason === "failed" ? answer.code : answer.reason,
-            });
+            setView({ kind: "failed", code: answer.code });
             return;
           }
           setView({ kind: "read", discovery: answer.discovery });
@@ -788,21 +796,18 @@ export function DiscoveryProgress({
       live = false;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [get, server, pollMs, round]);
+  }, [get, server, pollMs, round, org, ws]);
 
   const run = async () => {
-    if (server === null || starting || !start.available) return;
+    if (server === null || starting) return;
     setStarting(true);
     try {
-      const answer = await start.call({ server });
+      const answer = await start.call({ org, ws }, { server });
       if (answer.ok) {
         setView({ kind: "read", discovery: answer.discovery });
         setRound((n) => n + 1);
       } else {
-        setView({
-          kind: "failed",
-          code: answer.reason === "failed" ? answer.code : answer.reason,
-        });
+        setView({ kind: "failed", code: answer.code });
       }
     } catch {
       setView({ kind: "failed", code: null });
@@ -811,20 +816,13 @@ export function DiscoveryProgress({
     }
   };
 
-  // The note a disabled start names: discovery as a whole, or the start alone.
-  const unavailable = !get.available
-    ? "get_studio_discovery"
-    : !start.available
-      ? "start_studio_discovery"
-      : null;
   const startButton =
     canStart && server !== null ? (
       <button
         type="button"
         data-testid="studio-discovery-start"
-        disabled={unavailable !== null}
+        data-capability={start.name}
         aria-disabled={starting || undefined}
-        aria-describedby={unavailable === null ? undefined : `${id}-pending`}
         className={`${buttonSecondary} self-start`}
         onClick={() => void run()}
       >
@@ -842,16 +840,7 @@ export function DiscoveryProgress({
       <p id={`${id}-title`} className="text-sm font-medium text-foreground">
         {t("title")}
       </p>
-      {unavailable === "get_studio_discovery" ? (
-        <PendingNote
-          id={`${id}-pending`}
-          capability={unavailable}
-          gap="discovery"
-          testId="studio-discovery-pending"
-        >
-          {t("notAvailable")}
-        </PendingNote>
-      ) : server === null ? (
+      {server === null ? (
         <p
           data-testid="studio-discovery-unnamed"
           className="text-[13px] text-muted-foreground"
@@ -877,16 +866,6 @@ export function DiscoveryProgress({
         <DiscoveryState discovery={view.discovery} />
       )}
       {startButton}
-      {unavailable === "start_studio_discovery" && startButton !== null ? (
-        <PendingNote
-          id={`${id}-pending`}
-          capability={unavailable}
-          gap="discovery"
-          testId="studio-discovery-pending"
-        >
-          {t("notAvailable")}
-        </PendingNote>
-      ) : null}
     </section>
   );
 }

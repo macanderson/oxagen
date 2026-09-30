@@ -7,10 +7,11 @@
 // source editor, and saving opens a pull request: a published record is
 // changed the way it was published.
 //
-// The record is read through the repository binding, out of
-// `.oxagen/rules/<lineage>.toml` on the production branch, with the registry
-// mirror as a fallback. Provenance is the publishing commit from git, never a
-// column.
+// The record is read through the repository binding, out of its file on the
+// production branch, with the registry mirror as a fallback. That file is
+// `steering/<kind folder>/<lineage>.md` in a steering repository and
+// `.oxagen/rules/<lineage>.toml` in a legacy one (#4765). Provenance is the
+// publishing commit from git, never a column.
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -19,6 +20,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import { getSession } from "@/server/session";
+import { branchFor, recordPathFor } from "@/features/create";
 import type { WsCtx } from "@/server/viewer";
 import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
@@ -144,10 +146,11 @@ export async function Record({
   if (!LINEAGE.test(lineage)) notFound();
   const at: RecordAt = { org: ctx.orgSlug, ws: ctx.wsSlug, lineage };
   const readAt = instantOfRead();
-  const [read, proposals, freshness] = await Promise.all([
+  const [read, proposals, freshness, layoutRead] = await Promise.all([
     source.steering.record(ctx, lineage),
     source.steering.proposals(ctx, { offset: 0, lineage }),
     source.steering.freshness(ctx),
+    source.steering.layout(ctx),
   ]);
   // A lineage neither the repository nor the registry holds is a 404, not a
   // page error: the route named a record that does not exist.
@@ -183,6 +186,14 @@ export async function Record({
     : null;
   const fresh = valueOf(freshness);
   const repository = fresh?.repository ?? null;
+  // The file and branch open_context_pr writes (#4765). The record's own path
+  // wins. Without one, the layout decides, and an unread layout or an unknown
+  // kind leaves both null: the page shows a placeholder rather than a guess.
+  const layout = valueOf(layoutRead)?.layout ?? null;
+  const path =
+    detail.record.path ??
+    (kind === null ? null : recordPathFor(layout, kind, lineage));
+  const branch = branchFor(path, lineage);
   return (
     <>
       <PageRecord
@@ -194,11 +205,13 @@ export async function Record({
         at={at}
         detail={detail}
         repository={repository}
+        path={path}
+        branch={branch}
         canWrite={canRevise(ctx)}
-        pendingBranch={
-          open === null ? null : (open.pr?.branch ?? `context/${lineage}`)
+        pendingBranch={open === null ? null : (open.pr?.branch ?? branch)}
+        lineagePanel={
+          <LineagePanel detail={detail} path={path} repository={repository} />
         }
-        lineagePanel={<LineagePanel detail={detail} repository={repository} />}
         kindPanel={
           <KindPanel
             detail={detail}

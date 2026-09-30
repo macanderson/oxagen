@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // Propose a change, on its own: a diff that keeps unchanged lines as
 // context, a proposal whose pull request has not opened yet, a workspace
-// whose repository could not be read, a write that throws, and Cancel, which
-// forgets the refusal it showed.
+// whose repository could not be read, a layout that was not read, the branch
+// the write answers with, a write that throws, and Cancel, which forgets the
+// refusal it showed.
 import {
   act,
   cleanup,
@@ -28,7 +29,13 @@ const DRAFT = "Never push to main.\nOpen a pull request.\nWait for review.";
 
 const onOpened = vi.fn();
 
-function Harness({ repository }: { repository: string | null }) {
+function Harness({
+  repository,
+  branch = `steering/${LINEAGE}`,
+}: {
+  repository: string | null;
+  branch?: string | null;
+}) {
   const [open, setOpen] = useState(true);
   return (
     <IntlProvider>
@@ -45,6 +52,7 @@ function Harness({ repository }: { repository: string | null }) {
         onOpenChange={setOpen}
         at={{ org: "acme", ws: "core-platform", lineage: LINEAGE }}
         path={`.oxagen/rules/${LINEAGE}.toml`}
+        branch={branch}
         repository={repository}
         base={BASE}
         draft={DRAFT}
@@ -79,7 +87,7 @@ describe("Propose a change", () => {
     );
     expect(sides).toEqual(["ctx", "ctx", "add"]);
     expect(diff).not.toHaveTextContent("acme/platform");
-    expect(diff).toHaveTextContent(`context/${LINEAGE}`);
+    expect(diff).toHaveTextContent(`steering/${LINEAGE}`);
     expect(screen.getByTestId("record-propose")).toHaveTextContent(
       "constraint_effect",
     );
@@ -88,7 +96,7 @@ describe("Propose a change", () => {
   it("says the proposal is raised when its pull request has not opened yet", async () => {
     revise.mockResolvedValue({
       ok: true,
-      value: { status: "proposed", prNumber: null, prUrl: null },
+      value: { status: "proposed", prNumber: null, prUrl: null, branch: null },
     });
     const user = userEvent.setup();
     render(<Harness repository={null} />);
@@ -100,14 +108,19 @@ describe("Propose a change", () => {
     expect(done).toHaveTextContent(
       "The proposal is raised and its pull request has not opened yet.",
     );
-    expect(onOpened).toHaveBeenCalledWith(`context/${LINEAGE}`);
+    expect(onOpened).toHaveBeenCalledWith(`steering/${LINEAGE}`);
     expect(screen.queryByTestId("record-propose-submit")).toBeNull();
   });
 
   it("numbers the pull request without a repository it could not read", async () => {
     revise.mockResolvedValue({
       ok: true,
-      value: { status: "pr_open", prNumber: 528, prUrl: null },
+      value: {
+        status: "pr_open",
+        prNumber: 528,
+        prUrl: null,
+        branch: `steering/${LINEAGE}`,
+      },
     });
     const user = userEvent.setup();
     render(<Harness repository={null} />);
@@ -115,6 +128,26 @@ describe("Propose a change", () => {
     expect(await screen.findByTestId("record-propose-done")).toHaveTextContent(
       `#528 opened. ${LINEAGE} changes when it merges`,
     );
+  });
+
+  it("shows a placeholder branch while the layout is unread, then records the branch the write answers with", async () => {
+    revise.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "pr_open",
+        prNumber: 529,
+        prUrl: null,
+        branch: `memory/${LINEAGE}`,
+      },
+    });
+    const user = userEvent.setup();
+    render(<Harness repository="acme/platform" branch={null} />);
+    const diff = screen.getByTestId("record-diff");
+    expect(diff).toHaveTextContent("…");
+    expect(diff).not.toHaveTextContent(`context/${LINEAGE}`);
+    await user.click(screen.getByTestId("record-propose-submit"));
+    await screen.findByTestId("record-propose-done");
+    expect(onOpened).toHaveBeenCalledWith(`memory/${LINEAGE}`);
   });
 
   it("says it is opening while it waits, then names the call as unanswered when it throws (negative)", async () => {

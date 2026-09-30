@@ -19,6 +19,7 @@ const credStore: Record<
     authKind: string;
     oauthClientId: string | null;
     oauthClientSecret: string | null;
+    oauthClientAuthMethod: string | null;
     accessToken: string | null;
     refreshToken: string | null;
   }
@@ -32,6 +33,7 @@ vi.mock("../credentials/workspace-credential", () => ({
     authKind: string;
     oauthClientId?: string | null;
     oauthClientSecret?: string | null;
+    oauthClientAuthMethod?: string | null;
     accessToken?: string | null;
     refreshToken?: string | null;
   }) => {
@@ -40,6 +42,7 @@ vi.mock("../credentials/workspace-credential", () => ({
       authKind: input.authKind,
       oauthClientId: input.oauthClientId ?? null,
       oauthClientSecret: input.oauthClientSecret ?? null,
+      oauthClientAuthMethod: input.oauthClientAuthMethod ?? null,
       accessToken: input.accessToken ?? null,
       refreshToken: input.refreshToken ?? null,
     };
@@ -59,6 +62,7 @@ vi.mock("../credentials/workspace-credential", () => ({
       // No oauthClientSecret → null → triggers the {} branch in clientInformation()
       oauthClientSecret: stored.oauthClientSecret,
       oauthClientId: stored.oauthClientId,
+      oauthClientAuthMethod: stored.oauthClientAuthMethod,
       authKind: stored.authKind,
       status: "active",
     };

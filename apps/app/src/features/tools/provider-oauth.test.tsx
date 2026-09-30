@@ -5,11 +5,12 @@
 // the one dialog. The popup is a stub window; its outcome arrives as the
 // callback page sends it, a same-origin message carrying the flow's state.
 // Also: a message for another flow is ignored, a declined sign-in is named, a
-// blocked popup is offered as a link, a server that asks for no OAuth connects
-// open, a bearer-token server never takes the OAuth path, a custom server
-// signs in with OAuth, and a stdio-only server cannot be selected but runs as
-// a package through Studio's form, disabled until #4742 merges. axe checks the
-// state each test ends in (INV-26).
+// refusal the OAuth catalogue does not name is read under the reason the
+// kernel gave, a blocked popup is offered as a link, a server that asks for no
+// OAuth connects open, a bearer-token server never takes the OAuth path, a
+// custom server signs in with OAuth, and a stdio-only server cannot be
+// selected but runs as a package through Studio's form, disabled until #4742
+// merges. axe checks the state each test ends in (INV-26).
 import {
   act,
   cleanup,
@@ -67,6 +68,7 @@ const { ImportProvider } = await import("./import-provider");
 
 const at = { org: "acme", ws: "core-platform" };
 const oauth = translator("tools.import.oauth");
+const failure = translator("tools.actions.failure");
 const browse = translator("tools.import.browse");
 const offer = translator("mcpStudio.addServer.offer");
 const pkg = translator("mcpStudio.addServer.package");
@@ -443,6 +445,7 @@ describe("Add a provider › registry and OAuth", () => {
     ["authorization_expired"],
     ["authorization_failed"],
     ["authorization_discovery_failed"],
+    ["registration_refused"],
     ["authorization_url_invalid"],
     ["endpoint_not_public"],
     ["redirect_url_invalid"],
@@ -466,6 +469,65 @@ describe("Add a provider › registry and OAuth", () => {
       expect(popup.close).toHaveBeenCalled();
     },
   );
+
+  it.each<[string, Record<string, unknown>, string]>([
+    [
+      "a session with no person",
+      { reason: "denied", code: "no_principal" },
+      failure("noPrincipal"),
+    ],
+    [
+      "an unknown refusal",
+      { reason: "denied", code: "authz_denied" },
+      failure("refused", { code: "authz_denied" }),
+    ],
+    [
+      "a start waiting on approval",
+      { reason: "pending_approval", accessRequestId: "arq_123" },
+      failure("pendingApproval", { accessRequestId: "arq_123" }),
+    ],
+    [
+      "an invalid input",
+      { reason: "invalid", code: "invalid_input" },
+      failure("invalid"),
+    ],
+  ])(
+    "names %s under the reason the kernel gave",
+    async (_case, refusal, text) => {
+      openWizard();
+      fireEvent.click(
+        await screen.findByTestId("registry-browser-pick-verified/linear"),
+      );
+      startProviderAuthorization.mockResolvedValue({ ok: false, ...refusal });
+      fireEvent.click(screen.getByTestId("tools-import-connect"));
+      const alert = await screen.findByTestId("tools-import-oauth-failure");
+      expect(alert).toHaveTextContent(text);
+      expect(alert).not.toHaveTextContent("Could not be recorded");
+    },
+  );
+
+  it("names a code the callback page sends with no reason as unrecorded", async () => {
+    openWizard();
+    fireEvent.click(
+      await screen.findByTestId("registry-browser-pick-verified/linear"),
+    );
+    startProviderAuthorization.mockResolvedValue({
+      ok: true,
+      value: {
+        status: "redirect",
+        authorizationUrl: "https://mcp.linear.app/a",
+        state: STATE_LINEAR,
+      },
+    });
+    fireEvent.click(screen.getByTestId("tools-import-connect"));
+    await screen.findByTestId("tools-import-oauth-waiting");
+    callback({ ok: false, state: STATE_LINEAR, code: "token_exchange_failed" });
+    expect(
+      await screen.findByTestId("tools-import-oauth-failure"),
+    ).toHaveTextContent(
+      failure("unavailable", { code: "token_exchange_failed" }),
+    );
+  });
 
   it("ignores a forged outcome from another origin and a malformed one, and settles on the callback's", async () => {
     openWizard();

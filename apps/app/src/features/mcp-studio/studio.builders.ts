@@ -47,12 +47,6 @@ import {
   type StudioServerView,
   type StudioTool,
 } from "./model";
-import type {
-  DraftStudioDescription,
-  ListStudioFindings,
-  TryResult,
-  TryStudioTool,
-} from "./pending-capabilities";
 import type { StudioAt } from "./route";
 import type {
   GetStudioDraft,
@@ -61,6 +55,12 @@ import type {
   StudioFinding,
   StudioReview,
 } from "./seams";
+import type {
+  DraftStudioDescription,
+  ListStudioFindings,
+  TryResult,
+  TryStudioTool,
+} from "./studio-calls";
 
 export const STRIPE = "mcs_01k5s1";
 export const GITHUB = "mcs_01k5s2";
@@ -964,36 +964,40 @@ export function fakeOpen(...answers: OpenAnswer[]) {
 }
 
 /**
- * try_studio_tool as it will be once #4742 merges: available, giving its
- * answers in turn.
+ * try_studio_tool giving its answers in turn. `calls` keeps each input, and
+ * `workspaces` the workspace each call named.
  */
 export function fakeTry(...answers: TryResult[]) {
   const { fn, calls } = answering<
-    Parameters<TryStudioTool["call"]>[0],
+    Parameters<TryStudioTool["call"]>[1],
     TryResult
   >(answers);
+  const workspaces: StudioAt[] = [];
   const call: TryStudioTool = {
     name: "try_studio_tool",
-    available: true,
-    gap: "capability",
-    call: fn,
+    call: (at, input) => {
+      workspaces.push(at);
+      return fn(input);
+    },
   };
-  return { call, calls };
+  return { call, calls, workspaces };
 }
 
-/** draft_studio_description once #4742 merges. */
+/** draft_studio_description giving its answers in turn. */
 export function fakeDraft(...answers: DraftAnswer[]) {
   const { fn, calls } = answering<
-    Parameters<DraftStudioDescription["call"]>[0],
+    Parameters<DraftStudioDescription["call"]>[1],
     DraftAnswer
   >(answers);
+  const workspaces: StudioAt[] = [];
   const draft: DraftStudioDescription = {
     name: "draft_studio_description",
-    available: true,
-    gap: "capability",
-    call: fn,
+    call: (at, input) => {
+      workspaces.push(at);
+      return fn(input);
+    },
   };
-  return { draft, calls };
+  return { draft, calls, workspaces };
 }
 
 /** list_studio_findings' answer for one folder: the draft's findings. */
@@ -1129,6 +1133,7 @@ export function studioSource(reads: StudioReads = {}) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      layout: refuse,
       hub: refuse,
       deliveries: refuse,
       memories: refuse,

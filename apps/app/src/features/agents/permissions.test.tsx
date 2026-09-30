@@ -317,9 +317,12 @@ describe("Permissions › containment (ADR-204)", () => {
     expect(value).toHaveTextContent("set on the runtime Build box");
     expect(
       within(containment).getByRole("link", { name: "Build box" }),
-    ).toHaveAttribute("href", "/acme/core-platform/runtimes/rtm_buildbox");
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=runtimes&runtime=rtm_buildbox",
+    );
     expect(containment).toHaveTextContent(
-      "An organization Owner or Admin changes it on the runtime’s page. The change applies to every agent on that runtime and reaches each host on its next bundle fetch.",
+      "An organization Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch.",
     );
   });
 
@@ -332,10 +335,10 @@ describe("Permissions › containment (ADR-204)", () => {
     expect(within(containment).queryByRole("switch")).toBeNull();
     expect(within(containment).queryByRole("checkbox")).toBeNull();
     expect(within(containment).queryByRole("button")).toBeNull();
-    // The one way to change it is the runtime's own page.
+    // The one way to change it is the runtime's drawer on the Runtimes tab.
     expect(within(containment).getByRole("link")).toHaveAttribute(
       "href",
-      "/acme/core-platform/runtimes/rtm_buildbox",
+      "/acme/core-platform/agents?tab=runtimes&runtime=rtm_buildbox",
     );
   });
 

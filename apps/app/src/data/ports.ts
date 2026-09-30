@@ -119,6 +119,7 @@ import type {
   SteeringFreshness,
   SteeringDeliveries,
   SteeringHub,
+  SteeringLayout,
 } from "./contracts/steering";
 import type { SteeringRepo } from "./contracts/steering-repo";
 import type {
@@ -669,6 +670,8 @@ export interface DataSource {
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
+    /** get_steering_layout: whether the main repository uses the steering or the legacy layout, null while none is bound or the read failed */
+    layout(ctx: WsCtx): Promise<Read<SteeringLayout>>;
     /**
      * The hub header's reads: list_repositories and get_repository_tree for
      * the governance mode on the main repository, and three list_proposals

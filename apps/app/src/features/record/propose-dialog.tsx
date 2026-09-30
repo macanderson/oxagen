@@ -6,8 +6,9 @@
 //
 // The write is `revise_context_record`: it raises a proposal carrying the
 // record's kind, force, effect and scope exactly as they stand, then hands it
-// to `open_context_pr`, which commits the file to `context/<lineage>`, opens
-// the pull request and runs the six checks. The handler gates the role
+// to `open_context_pr`, which commits the file to `steering/<lineage>` (or
+// `memory/<lineage>` for a memory), opens the pull request and runs the six
+// checks. The handler gates the role
 // (INV-29), so a role that may not revise is refused there whatever this
 // dialog draws.
 import { useTranslations } from "next-intl";
@@ -66,6 +67,7 @@ export function ProposeDialog({
   onOpenChange,
   at,
   path,
+  branch,
   repository,
   base,
   draft,
@@ -77,8 +79,10 @@ export function ProposeDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   at: RecordAt;
-  /** `.oxagen/rules/<lineage>.toml`. */
+  /** The record's file, or the placeholder while the layout is unread. */
   path: string;
+  /** The branch the pull request opens on; null while the layout is unread. */
+  branch: string | null;
   /** The main repository the pull request opens on; null when unread. */
   repository: string | null;
   base: string;
@@ -94,7 +98,6 @@ export function ProposeDialog({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
-  const branch = `context/${at.lineage}`;
   const rows = useMemo(() => diffLines(base, draft), [base, draft]);
   const stat = useMemo(() => diffStat(base, draft), [base, draft]);
   const changed = draft !== base;
@@ -116,7 +119,7 @@ export function ProposeDialog({
       const result = await reviseRecord(at.org, at.ws, at.lineage, draft, "");
       if (result.ok) {
         setOpened(result.value);
-        onOpened(branch);
+        onOpened(result.value.branch ?? branch ?? "…");
       } else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
@@ -196,7 +199,7 @@ export function ProposeDialog({
                 ←
               </span>
               <Badge tone="approval" dot={false} mono>
-                {branch}
+                {branch ?? "…"}
               </Badge>
               <span className="flex-1" />
               <span

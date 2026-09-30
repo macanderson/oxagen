@@ -1,8 +1,8 @@
-// The pieces the Runtimes pages are drawn from (mockup `pRuntimes()`,
-// `rtDetail()`, `rtHealth()` and `tierLadder()`): a titled panel with a count
-// badge, a stat tile, the not-recorded value, the health badge, the platform
-// and harness words, and the tier ladder. Presentational; each takes
-// translated text or reads its own namespace.
+// The pieces the Runtimes tab and the runtime drawer are drawn from (mockup
+// `agtRuntimesTab()` and `agt-runtime`): a titled panel with a count badge,
+// the not-recorded value, the health badge, and the platform and harness
+// words. Presentational; each takes translated text or reads its own
+// namespace.
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { RuntimeEnrollment } from "@/data/contracts/runtimes";
@@ -13,10 +13,6 @@ import {
   panelBody,
   panelHeader,
   panelTitle,
-  statNote,
-  statTerm,
-  statTile,
-  statValue,
 } from "@/ui/control-styles";
 
 /**
@@ -114,26 +110,6 @@ export function Note({ children }: { children: ReactNode }) {
         {children}
       </p>
     </div>
-  );
-}
-
-export function Tile({
-  term,
-  value,
-  basis,
-  testId,
-}: {
-  term: string;
-  value: ReactNode;
-  basis: string;
-  testId: string;
-}) {
-  return (
-    <dl data-testid={testId} className={statTile}>
-      <dt className={statTerm}>{term}</dt>
-      <dd className={statValue}>{value}</dd>
-      <dd className={statNote}>{basis}</dd>
-    </dl>
   );
 }
 
@@ -333,36 +309,5 @@ export function ModelSurface({ host }: { host: RuntimeEnrollment }) {
         <Sub monoFace>{t("shadowed", { file: host.shadowedBy })}</Sub>
       )}
     </span>
-  );
-}
-
-const RUNGS = ["observe", "harness", "gateway", "contained"] as const;
-
-/**
- * `tierLadder(null)`: the four rungs in order, each with what it needs and
- * what it earns, two to a row on a phone and four on a wide screen. No rung is
- * marked current: a tier is a run's, and this page reads no run.
- */
-export function TierLadder() {
-  const t = useTranslations("runtimes.ladder");
-  return (
-    <ol
-      aria-label={t("label")}
-      data-testid="tier-ladder"
-      className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border border-border bg-border lg:grid-cols-4"
-    >
-      {RUNGS.map((rung) => (
-        <li
-          key={rung}
-          data-rung={rung}
-          className="bg-card px-3.5 py-3 text-xs text-muted-foreground"
-        >
-          <b className={`${mono} mb-1 block text-[13px] text-foreground`}>
-            {rung}
-          </b>
-          {t(rung)}
-        </li>
-      ))}
-    </ol>
   );
 }

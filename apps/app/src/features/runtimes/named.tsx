@@ -1,23 +1,14 @@
-// The Runtimes panel over `list_runtimes` (ADR-198): each runtime the
-// workspace named, the live agents on it with their harness, the host
-// enrollments bound to it and when a host last reported.
+// The cells a named runtime (`list_runtimes`, ADR-198) is drawn with, in the
+// Runtimes tab's row and in its drawer: the live agents on it with their
+// harness, and when a host last reported.
 //
 // A runtime is a slot, not a machine: a laptop replaced by another keeps its
-// runtime, and its agents keep their principals. A runtime with no agent yet
-// offers Register an agent, the one way to put it to work. Each runtime's name
-// opens its page, where an Owner or Admin sets its containment (ADR-204).
-import { useLocale, useTranslations } from "next-intl";
-import type { NamedRuntime, NamedRuntimeList } from "@/data/contracts/runtimes";
-import type { Read } from "@/data/read";
-import { routes } from "@/shared/safe-path";
+// runtime, and its agents keep their principals.
+import { useTranslations } from "next-intl";
+import type { NamedRuntime } from "@/data/contracts/runtimes";
 import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
-import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
-import { ReadFailure } from "@/ui/read-failure";
-import { cell, numericCell, Table } from "@/ui/table";
-import { RegisterOnRuntime } from "./controls";
-import { Panel, Sub } from "./parts";
+import { Sub } from "./parts";
 
 export function AgentsCell({ runtime }: { runtime: NamedRuntime }) {
   const t = useTranslations("runtimes");
@@ -47,100 +38,5 @@ export function LastSeen({ at }: { at: string | null }) {
         timeStyle: "short",
       })}
     </time>
-  );
-}
-
-export function NamedRuntimes({
-  read,
-  org,
-  ws,
-  canRegister,
-}: {
-  read: Read<NamedRuntimeList>;
-  org: string;
-  ws: string;
-  /** Whether the viewer may register an agent (an org Owner or Admin). */
-  canRegister: boolean;
-}) {
-  const t = useTranslations("runtimes.named");
-  const locale = useLocale();
-  if (!read.ok)
-    return (
-      <Panel id="runtimes-named" title={t("title")}>
-        <div className="px-4 py-3.5">
-          <ReadFailure read={read} section={t("title")} />
-        </div>
-      </Panel>
-    );
-  const { runtimes } = read.value;
-  if (runtimes.length === 0)
-    return (
-      <Panel id="runtimes-named" title={t("title")} count={0}>
-        <p
-          data-testid="named-runtimes-none"
-          className="px-4 py-3.5 text-sm text-muted-foreground"
-        >
-          {t("none")}
-        </p>
-      </Panel>
-    );
-  return (
-    <Panel
-      id="runtimes-named"
-      title={t("title")}
-      count={formatCount(runtimes.length, locale)}
-    >
-      <Table
-        label={t("title")}
-        columns={[
-          { label: t("columns.runtime") },
-          { label: t("columns.agents") },
-          { label: t("columns.hosts"), numeric: true },
-          { label: t("columns.lastSeen") },
-        ]}
-      >
-        {runtimes.map((runtime) => (
-          <tr
-            key={runtime.id}
-            data-testid="named-runtime"
-            data-runtime={runtime.id}
-            className="relative cursor-pointer border-b border-border last:border-b-0"
-          >
-            <td className={cell}>
-              {/* The name's link is stretched over the row, and Register an
-                  agent sits above it, so the row opens the runtime. */}
-              <SafeLink
-                to={routes.runtime(org, ws, runtime.id)}
-                aria-label={t("open", { runtime: runtime.name })}
-                data-touch-target=""
-                className="inline-flex max-w-full items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                <span className="min-w-0 md:truncate">{runtime.name}</span>
-              </SafeLink>
-              <Sub monoFace>{runtime.slug}</Sub>
-            </td>
-            <td className={cell}>
-              <AgentsCell runtime={runtime} />
-              {runtime.agents.length === 0 && canRegister ? (
-                <div className="pt-1">
-                  <RegisterOnRuntime
-                    org={org}
-                    ws={ws}
-                    runtimeId={runtime.id}
-                    runtimeName={runtime.name}
-                  />
-                </div>
-              ) : null}
-            </td>
-            <td className={numericCell}>
-              {formatCount(runtime.liveHosts, locale)}
-            </td>
-            <td className={cell}>
-              <LastSeen at={runtime.lastSeenAt} />
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Panel>
   );
 }

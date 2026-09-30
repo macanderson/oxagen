@@ -1,9 +1,9 @@
-// The not-loaded states of the Runtimes pages (runtimes.md, States), each the
+// The not-loaded states of the Runtimes tab and the runtime drawer, each the
 // mockup's `.state-wrap` (the shared `StateWrap`): an icon, a title, the
 // sentences, the actions. Error, access denied and waiting-for-approval replace
-// the page body, header included, and the shell around it stays. Empty keeps
-// the header, and carries Add a runtime itself, because naming a runtime is the
-// way in (ADR-198). The icons are
+// the tab's body, and the Agents header and tab strip stay. Empty carries Add
+// a runtime itself, because naming a runtime is one way in (ADR-198), and the
+// enroll command, the other. The icons are
 // the mockup's: a framed panel for empty, a circled exclamation for error, a
 // lock for denied.
 import { useTranslations } from "next-intl";

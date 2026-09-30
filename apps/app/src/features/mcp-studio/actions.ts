@@ -11,10 +11,17 @@
 // names it where the person acted.
 //
 // The Changes tab's save sends neither `serverToml` nor `source`. The
-// definition comes from the server's discovery record, which the app cannot
-// read until lane M10's discovery capabilities land (pending-capabilities.ts).
-// Until then a draft that imports a tool reads as "definition not recorded"
-// (sourceRequired).
+// definition comes from the server's steering folder, which the page reads
+// once the Studio record is bound (#4678). Until then a draft that imports a
+// tool reads as "definition not recorded" (sourceRequired).
+//
+// The rest are Studio's other capabilities (#4678 part 3), which replaced the
+// typed stubs part 2 drew against: discovery (lane M10, #4682), and Try it,
+// Draft, findings and named credentials (#4742). studio-calls.ts binds each to
+// the page's workspace. Each handler gates the role itself. try_studio_tool is
+// metered as a governed action and draft_studio_description as in-app agent
+// spend, so both go through kernelWrite, whose result names an exhausted
+// budget.
 //
 // Add server's From a definition sends both (saveNewStudioServerAction): the
 // server.toml Studio wrote and the definition the person uploaded, with no
@@ -22,6 +29,23 @@
 // that creates the server's folder (ADR-224). When Review refuses, the
 // dialog saves again at the revision the first save returned, so a retry
 // replaces that draft instead of starting a new one.
+import {
+  type ToolStudioCredentialSetInput,
+  type ToolStudioCredentialSetOutput,
+  toolStudioCredentialSet,
+} from "@oxagen/oxagen/contracts/tool.studio.credential.set";
+import {
+  type ToolStudioDescriptionDraftOutput,
+  toolStudioDescriptionDraft,
+} from "@oxagen/oxagen/contracts/tool.studio.description.draft";
+import {
+  type ToolStudioDiscoveryGetOutput,
+  toolStudioDiscoveryGet,
+} from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
+import {
+  type ToolStudioDiscoveryStartOutput,
+  toolStudioDiscoveryStart,
+} from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
 import {
   type ToolStudioDraftGetOutput,
   toolStudioDraftGet,
@@ -33,9 +57,22 @@ import {
   toolStudioDraftSave,
 } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import {
+  type ToolStudioFindingsListOutput,
+  toolStudioFindingsList,
+} from "@oxagen/oxagen/contracts/tool.studio.findings.list";
+import {
   type ToolStudioReviewOpenOutput,
   toolStudioReviewOpen,
 } from "@oxagen/oxagen/contracts/tool.studio.review.open";
+import {
+  type ToolStudioToolsListOutput,
+  toolStudioToolsList,
+} from "@oxagen/oxagen/contracts/tool.studio.tools.list";
+import {
+  type ToolStudioTryInput,
+  type ToolStudioTryOutput,
+  toolStudioTry,
+} from "@oxagen/oxagen/contracts/tool.studio.try";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -123,4 +160,92 @@ export async function openStudioReviewAction(
     server: review.server,
     revision: review.revision,
   });
+}
+
+/** Ask for a discovery of one server now. */
+export async function startStudioDiscoveryAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioDiscoveryStartOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioDiscoveryStart, { server });
+}
+
+/** One server's latest discovery, or null before the first one. */
+export async function getStudioDiscoveryAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioDiscoveryGetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioDiscoveryGet,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
+}
+
+/** One server's tools: its tools.toml keys, then the tools no key imports. */
+export async function listStudioToolsAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioToolsListOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioToolsList,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
+}
+
+/** Call one imported tool from the Test tab. */
+export async function tryStudioToolAction(
+  org: string,
+  ws: string,
+  input: ToolStudioTryInput,
+): Promise<ActionResult<ToolStudioTryOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioTry, input);
+}
+
+/** Draft one tool's description with the in-app agent. It saves nothing. */
+export async function draftStudioDescriptionAction(
+  org: string,
+  ws: string,
+  input: { server: string; tool: string },
+): Promise<ActionResult<ToolStudioDescriptionDraftOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioDescriptionDraft, input);
+}
+
+/** The tool checks' findings on one server's draft, or on its folder. */
+export async function listStudioFindingsAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioFindingsListOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioFindingsList,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
+}
+
+/**
+ * Store a named credential. The secret crosses this call once and never
+ * comes back: the output names the credential and its reference only.
+ */
+export async function setMcpCredentialAction(
+  org: string,
+  ws: string,
+  input: ToolStudioCredentialSetInput,
+): Promise<ActionResult<ToolStudioCredentialSetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioCredentialSet, input);
 }

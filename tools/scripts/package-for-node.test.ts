@@ -133,7 +133,7 @@ function nodeManifest(env: Record<string, string>): {
         "-euo",
         "pipefail",
         "-c",
-        `log() { :; }\n${script.slice(start, end + 2)}\nOUT="$1"\nwrite_manifest 3000 512m /api/health ""`,
+        `log() { :; }\nfail() { printf 'error: %s\\n' "$*" >&2; exit 1; }\n${script.slice(start, end + 2)}\nOUT="$1"\nwrite_manifest 3000 512m /api/health ""`,
         "_",
         out,
       ],
@@ -161,6 +161,55 @@ describe("package-for-node.sh region", () => {
     expect(nodeManifest({ OXAGEN_REGION: "eu-west-1" }).env.OXAGEN_REGION).toBe(
       "eu-west-1",
     );
+  });
+});
+
+// Production's APP_URL reached the build and never the running app, because
+// the node starts a container with Parameter Store alone and no parameter held
+// it. build-env.ts --runtime-out writes the registry's static values that
+// Parameter Store lacks, and the manifest carries them.
+describe("package-for-node.sh runtime env", () => {
+  function runtimeFile(contents: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "runtime-env-"));
+    const file = join(dir, "runtime-env.json");
+    writeFileSync(file, contents);
+    return file;
+  }
+
+  it("carries the static values build-env wrote into the manifest", () => {
+    const file = runtimeFile('{"APP_URL":"https://app.example"}');
+    expect(
+      nodeManifest({ RUNTIME_ENV_FILE: file, OXAGEN_REGION: "" }).env,
+    ).toEqual({
+      APP_URL: "https://app.example",
+      NEXT_TELEMETRY_DISABLED: "1",
+      OXAGEN_REGION: "us-east-1",
+    });
+  });
+
+  it("keeps the manifest's own region over the file's", () => {
+    const file = runtimeFile('{"OXAGEN_REGION":"xx-west-9"}');
+    expect(
+      nodeManifest({ RUNTIME_ENV_FILE: file, OXAGEN_REGION: "" }).env
+        .OXAGEN_REGION,
+    ).toBe("us-east-1");
+  });
+
+  it("refuses a file that is not an object of string values", () => {
+    expect(() =>
+      nodeManifest({ RUNTIME_ENV_FILE: runtimeFile('{"PORT":3000}') }),
+    ).toThrow();
+    expect(() =>
+      nodeManifest({ RUNTIME_ENV_FILE: runtimeFile('["APP_URL"]') }),
+    ).toThrow();
+  });
+
+  it("refuses a file that is not there", () => {
+    expect(() =>
+      nodeManifest({
+        RUNTIME_ENV_FILE: join(tmpdir(), "no-such-runtime-env.json"),
+      }),
+    ).toThrow();
   });
 });
 
