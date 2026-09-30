@@ -46,8 +46,8 @@ const LOCK: McpLockSource = {
 };
 
 const TOOLS = [
-  { name: "read_file", description: "Read one file.", inputSchema: { type: "object" } },
-  { name: "write_file", description: "Write one file.", inputSchema: { type: "object" } },
+  { name: "read_file", description: "Read one file.", inputSchema: { type: "object" as const } },
+  { name: "write_file", description: "Write one file.", inputSchema: { type: "object" as const } },
 ];
 
 const broker = { connected: () => true } as unknown as LocalGatewayBroker;

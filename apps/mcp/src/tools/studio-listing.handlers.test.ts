@@ -87,7 +87,8 @@ describe("start_studio_listing", () => {
 
   it("refuses a missing listing, which start never returns", async () => {
     mocks.invoke.mockResolvedValue({ listing: null });
-    await expect(startStudioListing({ server: "notes", revision: 3 })).rejects.toThrow();
+    // A registry package sends no pin. The tool's argument type still names the key.
+    await expect(startStudioListing({ server: "notes", revision: 3, pin: undefined })).rejects.toThrow();
   });
 });
 
