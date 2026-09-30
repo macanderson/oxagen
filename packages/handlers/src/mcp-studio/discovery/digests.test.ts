@@ -42,21 +42,28 @@ describe("registryDigests", () => {
     ]);
   });
 
-  it("reads the SHA-256 the PyPI index publishes", async () => {
-    const hex = "c3".repeat(32);
+  it("reads no digest for a PyPI release, whose files differ by host (ADR-233)", async () => {
     const fetchFn = vi.fn(() =>
       Promise.resolve(
-        answer({ json: { urls: [{ digests: { sha256: hex } }] } }),
+        answer({
+          json: {
+            urls: [
+              { digests: { sha256: "c3".repeat(32) } },
+              { digests: { sha256: "d4".repeat(32) } },
+            ],
+          },
+        }),
       ),
     );
-    const digest = await registryDigests(
-      fetchFn as unknown as typeof fetch,
-    ).digest(
+    const read = registryDigests(fetchFn as unknown as typeof fetch).digest(
       { name: "acme-files", version: "1.4.0", registry_type: "pypi" },
       { command: "uvx", args: ["acme-files==1.4.0"] },
     );
 
-    expect(digest).toBe(`sha256:${hex}`);
+    await expect(read).rejects.toThrow(
+      "acme-files@1.4.0 is a PyPI release, whose pin names one file the launch installs (ADR-233)",
+    );
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("rejects with the registry's answer, and names no local gateway", async () => {

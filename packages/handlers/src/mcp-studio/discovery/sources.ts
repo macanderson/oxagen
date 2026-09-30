@@ -439,7 +439,9 @@ async function discoverRegistry(
  * reads the new version's digest from the public registry, pins it in the
  * lock source, and asks a machine for tools/list at that pin, so the sync PR
  * moves source.version and shows the new digest to its reviewer (ADR-233). An
- * OCI image, and a process with no digest reader, stop at needs_digest.
+ * OCI image, and a process with no digest reader, stop at needs_digest. So
+ * does a PyPI release: its pin names one file, which uvx name@version does not
+ * install, and the file selection ships with the machine's reader (ADR-233).
  */
 async function discoverMovedPackage(
   ctx: SourceContext,
@@ -448,7 +450,11 @@ async function discoverMovedPackage(
   latestVersion: string,
 ): Promise<Discovered> {
   const reader = ctx.seams.digests;
-  if (reader === undefined || source.registry_type === "oci") {
+  if (
+    reader === undefined ||
+    source.registry_type === "oci" ||
+    source.registry_type === "pypi"
+  ) {
     throw new NeedsDigest(source.server, latestVersion);
   }
   const next: RegistrySource = { ...source, version: latestVersion };

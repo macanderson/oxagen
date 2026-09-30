@@ -4,10 +4,12 @@
 // The local gateway compares the digest of what it would run with the lock
 // before it starts anything, through @oxagen/tacho's digester. Oxagen reads
 // with the same digester, so the two reads agree by construction: npm's
-// tarball hashed, the SHA-256 the PyPI index publishes, and the NuGet package
-// hashed. The machine only checks a digest and never supplies one. An OCI
-// image pins its digest in the image reference, which the catalog does not
-// carry, so Oxagen reads none for it.
+// tarball hashed, and the NuGet package hashed. The machine only checks a
+// digest and never supplies one. An OCI image pins its digest in the image
+// reference, which the catalog does not carry, so Oxagen reads none for it.
+// A PyPI release holds one file per platform, and uvx name@version installs
+// the host's. Its pin names one file, which ships with the machine's reader
+// and the launch that installs that file, so Oxagen reads none for it yet.
 import {
   createPackageDigester,
   type LaunchPackage,
@@ -26,10 +28,7 @@ export interface RegistryDigests {
   ): Promise<string>;
 }
 
-/**
- * The digest the digester is handed before one is known. It never matches a
- * real artifact, so for a PyPI release the digester answers the first file's.
- */
+/** The digest the digester is handed before one is known. It never matches a real artifact. */
 const UNPINNED = `sha256:${"0".repeat(64)}`;
 
 /**
@@ -59,14 +58,20 @@ export function registryDigests(
   });
   return {
     digest: (pkg, launch, signal) =>
-      digester
-        .digest(
-          { ...pkg, digest: UNPINNED },
-          { command: launch.command, args: [...launch.args] },
-          signal,
-        )
-        .catch((error: unknown) => {
-          throw new Error(reasonOf(error));
-        }),
+      pkg.registry_type === "pypi"
+        ? Promise.reject(
+            new Error(
+              `${pkg.name}@${pkg.version} is a PyPI release, whose pin names one file the launch installs (ADR-233)`,
+            ),
+          )
+        : digester
+            .digest(
+              { ...pkg, digest: UNPINNED },
+              { command: launch.command, args: [...launch.args] },
+              signal,
+            )
+            .catch((error: unknown) => {
+              throw new Error(reasonOf(error));
+            }),
   };
 }

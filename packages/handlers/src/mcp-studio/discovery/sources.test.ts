@@ -1429,6 +1429,35 @@ describe("discover a registry package on machines", () => {
     expect(report).not.toHaveBeenCalled();
   });
 
+  it("stops at needs_digest for a PyPI release, whose pin names one file (ADR-233)", async () => {
+    const { report, local } = reporter();
+    const { digests, read } = digestReader(DIGEST_NEXT);
+    const { ctx } = acmeServer(
+      {
+        trigger: "schedule",
+        seams: { local, digests },
+        source: { ...ACME, registry_type: "pypi" },
+        lock: {
+          ...ACME_LOCK,
+          package: {
+            ...ACME_LOCK.package,
+            name: "acme-files",
+            registry_type: "pypi",
+          },
+          command: "uvx",
+          args: ["acme-files==1.3.0"],
+        },
+      },
+      acmePackageEntry("1.4.0"),
+    );
+    const error = await refusal(discover(ctx));
+
+    expect(error).toBeInstanceOf(NeedsDigest);
+    expect(error).toMatchObject({ code: "needs_digest", latestVersion: "1.4.0" });
+    expect(read).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
   it("stops at needs_digest when no digest reader is installed", async () => {
     const { report, local } = reporter();
     const { ctx } = acmeServer(
