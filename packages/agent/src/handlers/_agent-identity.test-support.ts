@@ -501,6 +501,8 @@ export async function seedLedgerRun(
   } = {},
 ): Promise<void> {
   const digest = `sha256:${"0".repeat(64)}`;
+  // tenancy: a test seed that writes one agent_runs row, scoped to the
+  // seeded tenant by tenant.orgId and tenant.workspaceId.
   await withSystemDb(async (tx) => {
     await tx.insert(schema.agentRuns).values({
       orgId: tenant.orgId,
