@@ -421,9 +421,9 @@ function ListingProgress({
   const { org, ws } = at;
   // The parent rebuilds onDone on every render. The poll reads the latest
   // one through this ref, so a new closure does not restart the poll.
-  const done = useRef(onDone);
+  const doneRef = useRef(onDone);
   useEffect(() => {
-    done.current = onDone;
+    doneRef.current = onDone;
   });
 
   useEffect(() => {
@@ -445,7 +445,7 @@ function ListingProgress({
             listing !== null &&
             (listing.status === "succeeded" || listing.status === "failed")
           ) {
-            done.current(listing);
+            doneRef.current(listing);
           } else {
             timer = setTimeout(read, pollMs);
           }
