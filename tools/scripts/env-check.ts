@@ -232,6 +232,16 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
 // them here silences the "promote to schema" warning without polluting the
 // runtime Zod schema with vars that deployed services never validate.
 export const SCHEMA_EXEMPT = new Set<string>([
+  // Dedicated staging load rig. Deployed services do not read these values.
+  "FLEET_STAGING_ORIGIN",
+  "FLEET_OPERATOR_TOKEN",
+  "FLEET_BUNDLE_PUBLIC_KEY_PEM",
+  "FLEET_CLICKHOUSE_URL",
+  "FLEET_CLICKHOUSE_HOST",
+  "FLEET_CLICKHOUSE_USER",
+  "FLEET_CLICKHOUSE_PASSWORD",
+  "FLEET_DATABASE_URL",
+  "FLEET_DATABASE_HOST",
   // CLI-only — read via process.env in apps/cli; services: []
   "OXAGEN_API_TOKEN",
   "OXAGEN_ORG_ID",

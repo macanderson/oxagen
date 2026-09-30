@@ -58,6 +58,15 @@ that refuses 15,000 requests proves neither that rate nor timely processing.
 11. Emit process memory, reservations, admissions, and rejections every 30 seconds.
     Alarm on the V8 diagnostic itself. V8 aborts do not set Docker's OOMKilled
     flag. Alarm separately on sustained projected memory pressure.
+12. Check the whole node before replacing a service. Sum hard container limits,
+    include a 256 MiB limit for Caddy, and reserve 1 GiB for host services. Swap
+    does not count as physical capacity. Refuse unknown unlimited containers or
+    insufficient RAM before stopping the current service. Hold one node-wide
+    deployment lock through replacement, health checks, and rollback.
+13. Read conversation exports in one database snapshot with a 500-message and
+    2 MiB content-and-metadata ceiling. Refuse oversized exports before loading
+    their payload into Node. Bound PDF text, blocks, and pages before storage;
+    report the limit without publishing a partial export.
 
 ## Consequences
 

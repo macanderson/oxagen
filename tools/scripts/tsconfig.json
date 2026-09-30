@@ -6,5 +6,5 @@
     "noEmit": true,
     "allowJs": true
   },
-  "include": ["*.ts", "*.mjs", "lib/**/*.ts"]
+  "include": ["*.ts", "*.mjs", "lib/**/*.ts", "fleet-capacity/**/*.ts"]
 }

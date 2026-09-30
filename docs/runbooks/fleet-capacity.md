@@ -25,6 +25,12 @@ container limits, Node heap limits, replica counts, database limits, and worker
 concurrency with every result. Estimate the run's compute, storage, model, and
 network cost before provisioning additional capacity.
 
+The node deployment preflight counts every running container's hard limit and
+reserves 1 GiB for the operating system, Docker, and monitoring. It rejects
+unlimited containers and ignores swap when calculating capacity. With the API,
+MCP, Caddy, and existing service budgets, the node needs at least 9,984 MiB of
+physical RAM. A node resize supplies headroom; it does not prove fleet throughput.
+
 Separate intake from background workers before scaling them independently.
 Keep MCP relay sessions routed to their owning process, or implement a shared
 broker with durable ownership and reconnect recovery. The current process-local

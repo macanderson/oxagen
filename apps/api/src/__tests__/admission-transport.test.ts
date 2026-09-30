@@ -43,6 +43,35 @@ describe("API test response transport", () => {
     expect(gate.snapshot().reservedBytes).toBe(0);
   });
 
+  it("replaces the finalized context response before outer middleware and the client read it", async () => {
+    const gate = createRequestAdmission(API_ADMISSION_LANES, () => ({
+      heapUsed: 0, heapLimit: 2 ** 30, rss: 0, memoryLimit: 2 ** 31,
+    }));
+    const transport = createTestResponseTransport();
+    const app = new Hono<AppEnv>();
+    let outerBody: unknown;
+    app.use("*", async (c, next) => {
+      await next();
+      expect(c.finalized).toBe(true);
+      expect(c.res.bodyUsed).toBe(false);
+      outerBody = await c.res.clone().json();
+      c.header("x-outer", "preserved");
+    });
+    app.use("*", transport.wrap(createApiRequestAdmission(gate)));
+    app.post("/created", (c) => {
+      c.header("x-route", "preserved");
+      return c.json({ created: true }, 201);
+    });
+    const response = await app.request("/created", { method: "POST" });
+    expect(response.status).toBe(201);
+    expect(response.headers.get("x-route")).toBe("preserved");
+    expect(response.headers.get("x-outer")).toBe("preserved");
+    expect(response.bodyUsed).toBe(false);
+    expect(await response.json()).toEqual({ created: true });
+    expect(outerBody).toEqual({ created: true });
+    expect(gate.snapshot().reservedBytes).toBe(0);
+  });
+
   it("reports a finite response failure and releases its reservation", async () => {
     const { app, gate } = fixture();
     const failure = new Error("Response source failed");
