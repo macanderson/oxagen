@@ -293,6 +293,7 @@ describe("readModelCallFrames", () => {
 
     // One joined row per call at most, and none for a row carrying neither
     // id: a fan-out here would turn one call into several priced frames.
+    // That holds for the two proxy joins as well (#4508), so four in all.
     expect(
       joined.match(/toInt64\(max\(coalesce\(thinking_tokens, 0\)\)\)/g),
     ).toHaveLength(2);
@@ -301,8 +302,8 @@ describe("readModelCallFrames", () => {
         /toInt64\(max\(coalesce\(cache_creation_1h_tokens, 0\)\)\)/g,
       ),
     ).toHaveLength(2);
-    expect(joined.match(/GROUP BY call_key/g)).toHaveLength(2);
-    expect(joined.match(/HAVING call_key != ''/g)).toHaveLength(2);
+    expect(joined.match(/GROUP BY call_key/g)).toHaveLength(4);
+    expect(joined.match(/HAVING call_key != ''/g)).toHaveLength(4);
 
     // The transcript's figure wins, and a call no transcript row joins keeps
     // its own, which is how a collector-only call still reports reasoning.
@@ -478,6 +479,104 @@ describe("readModelCallFrames", () => {
       contextFrameTokens: null,
       steeringTokens: 0,
     });
+  });
+
+  // #4508 item 1. Only the proxy recorded the request, so only its sighting
+  // carries the token sources and the system context. When an OTel or
+  // transcript row of the same call sealed first, the host stamps the proxy
+  // row a duplicate and the priced row carries none of them, so the run's
+  // sums came out low. The read joins the proxy sighting back on either id.
+  it("takes the token sources from the proxy sighting when another source sealed the call first", async () => {
+    const digest = `sha256:${"d".repeat(64)}`;
+    const part = {
+      kind: "tool",
+      name: "Read",
+      provider: "builtin",
+      digest: `sha256:${"e".repeat(64)}`,
+      tokens: 12_400,
+    };
+    // What the store returns for one call whose OTel row sealed first and
+    // whose proxy row sealed second: the OTel row priced, the proxy row's
+    // members joined back.
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "anthropic",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        cache_write_1h: "0",
+        output: "200",
+        reasoning: "0",
+        server_tool_request: "0",
+        cost_micros: null,
+        session_uuid: RUN,
+        tool_definition_tokens: 12_400,
+        context_frame_tokens: null,
+        steering_tokens: 80,
+        system_context_digest: digest,
+        system_context_parts: JSON.stringify([part]),
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    const { query } = lastQuery();
+
+    // Still one priced row per call: the duplicate filter stays on the
+    // priced side alone.
+    expect(query.match(/attrs\[\{duplicateAttr:String\}\] = ''/g)).toHaveLength(
+      1,
+    );
+    // The proxy sighting is joined on the request id and, apart, on the
+    // message id, as the transcript row is, and without the duplicate
+    // filter, because the row it needs is the stamped one.
+    const proxyJoins = query
+      .split("LEFT JOIN (")
+      .slice(1)
+      .filter((join) => join.includes("fidelity = 'proxy'"));
+    expect(proxyJoins).toHaveLength(2);
+    for (const join of proxyJoins) {
+      expect(join).toContain("source = 'collector' AND fidelity = 'proxy'");
+      expect(join).toContain("kind = 'llm_call'");
+      expect(join).not.toContain("attrs[{duplicateAttr:String}]");
+      expect(join).toContain("GROUP BY call_key");
+      expect(join).toContain("HAVING call_key != ''");
+    }
+    expect(query).toContain("ON r.call_key = c.request_id");
+    expect(query).toContain("ON q.call_key = c.message_id");
+    // The priced row's own member wins; the proxy's fills a gap.
+    for (const [column, joined] of [
+      ["tool_definition_tokens", "tool_definitions"],
+      ["context_frame_tokens", "context_frames"],
+      ["steering_tokens", "steering"],
+    ] as const) {
+      expect(query).toContain(
+        `coalesce(c.${column}, r.${joined}, q.${joined}) AS ${column}`,
+      );
+    }
+    // The digest and its parts come from one row, the priced one when it
+    // carries a digest.
+    expect(query).toContain(
+      "if(c.system_context_digest != '', c.system_context_digest, if(r.context_digest != '', r.context_digest, q.context_digest)) AS system_context_digest",
+    );
+    expect(query).toContain(
+      "if(c.system_context_digest != '', c.system_context_parts, if(r.context_digest != '', r.context_parts, q.context_parts)) AS system_context_parts",
+    );
+
+    expect(frames).toEqual([
+      expect.objectContaining({
+        inputUncached: 1000,
+        toolDefinitionTokens: 12_400,
+        contextFrameTokens: null,
+        steeringTokens: 80,
+        systemContextDigest: digest,
+        systemContextParts: [part],
+      }),
+    ]);
   });
 
   it("carries the system context digest, and the parts when the frame listed them", async () => {

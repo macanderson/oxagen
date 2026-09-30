@@ -838,6 +838,181 @@ describe("the loopback model proxy", () => {
     expect(stored).toHaveProperty("system");
   });
 
+  // #4348. A call became the session's prior when it was forwarded, before
+  // its frame reached the WAL. A second call that overlapped it folded
+  // against it, and when the first call's frame write failed, the second
+  // shipped pointing at a body nothing held.
+  it("never points a call at an overlapping call whose frame was lost", async () => {
+    // The vendor answers the calls held here only when the test says so.
+    const held: Array<() => void> = [];
+    let hold = false;
+    const stream = streamingAnthropic(1);
+    const fake = await vendor((req, res, seen) => {
+      if (hold) held.push(() => stream(req, res, seen));
+      else stream(req, res, seen);
+    });
+    const { handle, port, session, frames, log } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-overlap");
+    const path = "/anthropic/v1/messages";
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-overlap",
+    ];
+    const system = [
+      {
+        type: "text",
+        text: `You are careful. ${"Read before you write. ".repeat(40)}`,
+      },
+    ];
+    const ask = (messages: unknown[]) =>
+      JSON.stringify({
+        model: "claude-sonnet-5",
+        stream: true,
+        system,
+        messages,
+      });
+    const asked = { role: "user", content: PROMPT };
+    const answered = { role: "assistant", content: COMPLETION };
+
+    // A first call lands, so the session has a prior whose body is on disk.
+    const first = ask([asked]);
+    await call(port, { path, headers, body: first });
+    await until(() => frames(uuid).length === 1);
+
+    // A and B are both forwarded before either answers.
+    hold = true;
+    const aBody = ask([
+      asked,
+      answered,
+      { role: "user", content: "and then?" },
+    ]);
+    const bBody = ask([
+      asked,
+      answered,
+      { role: "user", content: "and then?" },
+      { role: "assistant", content: "then this" },
+      { role: "user", content: "and after that?" },
+    ]);
+    const a = call(port, { path, headers, body: aBody });
+    await until(() => fake.requests.length === 2);
+    const b = call(port, { path, headers, body: bBody });
+    await until(() => fake.requests.length === 3);
+
+    // A answers first, and its frame never reaches the WAL.
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = 0;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (failed === 0 && events.some((event) => event.kind === "llm_call")) {
+          failed += 1;
+          throw Object.assign(new Error("ENOSPC: no space left on device"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    held[0]!();
+    expect((await a).status).toBe(200);
+    await until(() => failed === 1);
+    await until(() =>
+      log.some((line) => line.includes("sealing the call's frame failed")),
+    );
+    // Then B answers.
+    held[1]!();
+    expect((await b).status).toBe(200);
+    await until(() => frames(uuid).length === 2);
+    fault.mockRestore();
+
+    const [one, two] = frames(uuid);
+    // No frame on the chain carries A's request.
+    expect(
+      frames(uuid).map((frame) => frame.attrs["oxagen.request_full_digest"]),
+    ).toEqual([sha(first), sha(bBody)]);
+    const [stored] = handle.wal.bodiesFor([two!]);
+    const exchange = JSON.parse(
+      Buffer.from(stored!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    const request = JSON.parse(exchange.request) as Record<string, unknown>;
+    // B folded against the call that landed, never against A.
+    expect(request["$oxagen_prior"]).toEqual({
+      unchanged_from: sha(first),
+      messages: 1,
+      fields: ["system"],
+    });
+    expect(two!.attrs["oxagen.request_prior_digest"]).not.toBe(sha(aBody));
+    // And B still resolves its system context from the call it cut against.
+    const oneBody = one!.body as Record<string, unknown>;
+    const twoBody = two!.body as Record<string, unknown>;
+    expect(oneBody["system_context_digest"]).toMatch(/^sha256:/);
+    expect(twoBody["system_context_digest"]).toBe(
+      oneBody["system_context_digest"],
+    );
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+  });
+
+  // A call the proxy does not meter, such as a token count, seals no frame,
+  // so no frame holds its request. It became the session's prior anyway, and
+  // the next call pointed at a body nothing held.
+  it("never folds a call against a request no frame recorded, such as a token count", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-count");
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-count",
+    ];
+    const system = [
+      {
+        type: "text",
+        text: `You are careful. ${"Read before you write. ".repeat(40)}`,
+      },
+    ];
+    const ask = (messages: unknown[]) =>
+      JSON.stringify({
+        model: "claude-sonnet-5",
+        stream: true,
+        system,
+        messages,
+      });
+    const first = ask([{ role: "user", content: PROMPT }]);
+    await call(port, { path: "/anthropic/v1/messages", headers, body: first });
+    await until(() => frames(uuid).length === 1);
+
+    const next = ask([
+      { role: "user", content: PROMPT },
+      { role: "assistant", content: COMPLETION },
+      { role: "user", content: "and then?" },
+    ]);
+    await call(port, {
+      path: "/anthropic/v1/messages/count_tokens",
+      headers,
+      body: next,
+    });
+    expect(fake.requests.map((r) => r.url)).toContain(
+      "/v1/messages/count_tokens",
+    );
+    await call(port, { path: "/anthropic/v1/messages", headers, body: next });
+    await until(() => frames(uuid).length === 2);
+
+    const [, two] = frames(uuid);
+    expect(two!.attrs["oxagen.request_prior_digest"]).toBe(sha(first));
+    const [stored] = handle.wal.bodiesFor([two!]);
+    const exchange = JSON.parse(
+      Buffer.from(stored!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    const request = JSON.parse(exchange.request) as Record<string, unknown>;
+    expect(request["messages"]).toHaveLength(2);
+  });
+
   it("gives a refusal's seq to the next frame when its frame never reached the WAL", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { handle, port, session, frames } = await boot(fake.url, {
@@ -2571,11 +2746,11 @@ describe("the loopback model proxy", () => {
     );
 
     // A second call that repeats the same oversized `system` block. Had the
-    // first call's digest stayed remembered as a valid prior (the bug this
-    // guards), this would fold `system` out, ship a small body, and point
-    // `unchanged_from` at a call whose own body the WAL never holds. The fix
-    // forgets the session's memory instead, so this call has nothing to fold
-    // against and is, correctly, over the cap again.
+    // first call been remembered as a valid prior (the bug this guards),
+    // this would fold `system` out, ship a small body, and point
+    // `unchanged_from` at a call whose own body the WAL never holds. A call
+    // becomes a prior only once its frame stores its request, so this call
+    // has nothing to fold against and is, correctly, over the cap again.
     const second = JSON.stringify({
       model: "claude-sonnet-5",
       stream: true,
