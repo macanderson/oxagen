@@ -13,6 +13,7 @@
  * step. Nothing here reaches the real home directory or a real service
  * manager; see `install-rig.ts`.
  */
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -32,6 +33,7 @@ import { tachoHookPresence } from "../host/settings-writer";
 import { readStellaHooksFile, stellaHookPresence } from "../host/stella-writer";
 import { TEST_ENROLLMENT } from "../host/test-support";
 import type { TachoHarness } from "../wire";
+import { runtimeCommands } from "./deps";
 import { enroll } from "./enroll";
 import { loadOrCreateRunTokenKey, mintRunToken } from "../host/run-token";
 import {
@@ -1281,3 +1283,150 @@ describe("install rig: failure injection", () => {
     ).toHaveLength(1);
   });
 });
+
+/**
+ * #4298 and ADR-230: the desktop app enrolls with `TACHO_BIN_DIR` at its
+ * versioned per-user copy, and the app then goes to the Trash. Each
+ * harness's hook command is run through a real shell, the way the harness
+ * runs it, first with the bundle gone and then with the copy gone too.
+ */
+describe.skipIf(process.platform === "win32")(
+  "install rig: the desktop app moved to the Trash",
+  () => {
+    const ANSWER = '{"from":"kept-copy"}';
+
+    /** A stand-in `tacho` that reads the payload and says where it ran. */
+    function stubTacho(path: string): void {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(
+        path,
+        `#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '${ANSWER}'\n`,
+      );
+      chmodSync(path, 0o755);
+    }
+
+    function run(command: string) {
+      return spawnSync("/bin/sh", ["-c", command], {
+        input: '{"hook_event_name":"PreToolUse"}',
+        encoding: "utf8",
+        timeout: 10_000,
+      });
+    }
+
+    type Groups = Record<string, Array<{ hooks: Array<{ command?: string }> }>>;
+    const ours = (command: string | undefined): command is string =>
+      command?.includes(`--enrollment ${TEST_ENROLLMENT}`) === true;
+
+    /** The PreToolUse command each wrapped harness runs, as enroll wrote it. */
+    function preToolUseCommands(rig: Rig): Record<string, string> {
+      const claude = (rig.deps.readSettings() as { hooks: Groups }).hooks;
+      const codex = (rig.deps.readCodexHooks() as { hooks: Groups }).hooks;
+      const cursor = (
+        rig.deps.readCursorHooks(rig.deps.paths.cursorHooks[0] as string) as {
+          hooks: Record<string, Array<{ command?: string }>>;
+        }
+      ).hooks;
+      const toml = readFileSync(rig.deps.paths.stellaToml, "utf8");
+      const block = toml.slice(
+        toml.indexOf(`# >>> tacho enrollment ${TEST_ENROLLMENT}`),
+      );
+      const stella = /^command = (".*")$/m.exec(block)?.[1];
+      const pick = (groups: Groups) =>
+        groups["PreToolUse"]
+          ?.flatMap((group) => group.hooks)
+          .map((hook) => hook.command)
+          .find(ours);
+      const found = {
+        "claude-code": pick(claude),
+        codex: pick(codex),
+        cursor: cursor["preToolUse"]?.map((hook) => hook.command).find(ours),
+        stella:
+          stella === undefined ? undefined : (JSON.parse(stella) as string),
+      };
+      for (const [harness, command] of Object.entries(found))
+        expect(command, `${harness} has no hook of this enrollment`).toMatch(
+          /--enrollment/,
+        );
+      return found as Record<string, string>;
+    }
+
+    it("leaves every hook running the per-user copy, and none blocking once that is gone too", async () => {
+      const seed = seedHome();
+      const app = join(seed.home, "Applications", "Oxagen.app");
+      const bundled = join(app, "Contents", "MacOS", "tacho");
+      const kept = join(
+        seed.home,
+        "Library",
+        "Application Support",
+        "oxagen",
+        "bin",
+        "2.1.3",
+      );
+      stubTacho(bundled);
+      stubTacho(join(kept, "tacho"));
+      // What the desktop app's sidecar computes: it runs from the bundle,
+      // and the app hands it the per-user copy.
+      const runtime = runtimeCommands(
+        undefined,
+        { TACHO_BIN_DIR: kept },
+        bundled,
+        "darwin",
+        true,
+      );
+      const rig = buildRig(seed, { overrides: { runtime } });
+      const enrolled = await enroll({ harnesses: ALL }, rig.deps);
+      expect(enrolled.ok, enrolled.warnings.join("\n")).toBe(true);
+
+      // Nothing enroll wrote names the bundle: the hooks, the service and
+      // the MCP entry name the copy.
+      const commands = preToolUseCommands(rig);
+      for (const command of Object.values(commands))
+        expect(command).not.toContain("Oxagen.app");
+      const plist = text(
+        seed.home,
+        "Library",
+        "LaunchAgents",
+        "sh.oxagen.tachod.plist",
+      );
+      expect(plist).toContain(`${join(kept, "tacho")}</string>`);
+      expect(plist).not.toContain("Oxagen.app");
+      const desktop = rig.deps.readClaudeDesktopConfig() as {
+        mcpServers: Record<string, { command?: string; args?: string[] }>;
+      };
+      const mcp = Object.values(desktop.mcpServers).find((entry) =>
+        entry.args?.includes(TEST_ENROLLMENT),
+      );
+      expect(mcp?.command).toBe(join(kept, "tacho"));
+      expect(readHostFile(rig.deps.paths.hostFile)?.hook_command).toBe(
+        `'${join(kept, "tacho")}' hook`,
+      );
+
+      // The app goes to the Trash. Every hook still runs the copy.
+      rmSync(app, { recursive: true, force: true });
+      for (const [harness, command] of Object.entries(commands)) {
+        const result = run(command);
+        expect(result.status, `${harness}: ${result.stderr}`).toBe(0);
+        expect(result.stdout, harness).toBe(`${ANSWER}\n`);
+      }
+
+      // The copy goes too. Cursor and Stella block on a hook that cannot
+      // run, so theirs answer an allow themselves. Claude Code and Codex
+      // block only on exit 2, and report the shell's 127 as an error.
+      rmSync(kept, { recursive: true, force: true });
+      const cursor = run(commands["cursor"] as string);
+      expect(cursor.status, cursor.stderr).toBe(0);
+      expect(cursor.stdout).toBe('{"permission":"allow"}\n');
+      const stella = run(commands["stella"] as string);
+      expect(stella.status, stella.stderr).toBe(0);
+      expect(stella.stdout).toBe("");
+      for (const harness of ["claude-code", "codex"]) {
+        const result = run(commands[harness] as string);
+        expect(result.status, harness).toBe(127);
+      }
+
+      // The uninstall needs nothing from the app or the copy.
+      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+      expect(rig.serviceLoaded()).toBe(false);
+    });
+  },
+);
