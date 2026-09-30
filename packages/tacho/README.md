@@ -540,14 +540,46 @@ service body and `tacho hook` the command hook, dispatched in
 tool call (cold start about 111 ms, the same process-start cost as the
 separate `.mjs`; the 50 ms budget is the time allowed to *reach* the daemon).
 `runtimeCommands` writes `<bin>/tacho hook` and `[<bin>/tacho, daemon]`
-whenever it finds that layout — inside the desktop app bundle, in a Homebrew
-prefix, or in a `TACHO_BIN_DIR` the app points it at.
+whenever it finds that layout, in a Homebrew prefix or in the `TACHO_BIN_DIR`
+the desktop app points it at. A `TACHO_BIN_DIR` with no `tacho` in it is an
+`executableProblem`, and `enroll` refuses: the running process is not named in
+its place, because for the desktop app that process is the bundle's sidecar.
 
 ### The desktop app
 
 `apps/desktop` (Tauri 2) ships this binary and the compiled `oxagen` CLI as
 sidecars, signs the machine in, enrolls it, and manages the workspace and
 the wrappers by running these same commands; it owns no state of its own.
+
+Every command enrollment writes names a versioned per-user copy of the
+sidecars, never a path inside the app bundle (ADR-230). On each launch the app
+copies both binaries into `~/Library/Application Support/oxagen/bin/<version>`
+on macOS, `~/.local/share/oxagen/bin/<version>` on Linux, or
+`%LOCALAPPDATA%\oxagen\bin\<version>` on Windows, and runs every sidecar with
+`TACHO_BIN_DIR` at that directory. The hooks, the Claude Code credential
+helper, the Claude Desktop MCP entry, and the service unit therefore survive
+the app going to the Trash or its package being removed. An update copies its
+version beside the old one, so no file the running daemon holds is replaced.
+`tacho enroll` run from the new copy (the app's Re-apply) moves the hooks and
+the service to it, and the app removes an old copy once no `host.json` and no
+PATH link names it.
+
+To uninstall without the app, run the copy's own `tacho unenroll --all
+--purge`, for example `"$HOME/Library/Application
+Support/oxagen/bin/<version>/tacho" unenroll --all --purge`. It removes what
+enrollment wrote: the harness files from their receipts (`install-receipts.json`,
+`host/harness-file.ts`), the service, and the agent state. The copy itself,
+the PATH links, and the shell profile block are the app's, and its
+**Uninstall** removes them.
+
+A Cursor or Stella hook blocks the action when it cannot run: Cursor's veto
+hooks carry `failClosed`, and Stella reads a non-zero exit as a deny. So on
+macOS and Linux those two commands test for the collector's executable first
+(`host/hook-guard.ts`). When it is not installed they print the collector's
+own allow for the event (nothing, for Stella) and exit 0. A collector that is
+there runs as before, and its deny, crash, or timeout still blocks. Claude
+Code and Codex report a failed hook as an error and carry on, so their
+commands are unchanged.
 `.github/workflows/desktop.yml` builds one job per OS and attaches the
 bundles and the bare binaries (with `.sha256` files) to a `desktop-v<version>`
 release; `tools/packaging/` holds the Homebrew and Scoop templates that

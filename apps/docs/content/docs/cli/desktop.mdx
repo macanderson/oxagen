@@ -47,15 +47,43 @@ sudo rpm -i Oxagen.x86_64.rpm
 chmod +x Oxagen_amd64.AppImage && ./Oxagen_amd64.AppImage
 ```
 
+## Per-user copy
+
+Each time it opens, the app copies `oxagen` and `tacho` out of itself into a directory named for its version:
+
+| Platform | Directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/oxagen/bin/<version>` |
+| Linux | `~/.local/share/oxagen/bin/<version>` |
+| Windows | `%LOCALAPPDATA%\oxagen\bin\<version>` |
+
+Enrollment writes this copy's path into every hook, the Claude Code credential helper, the Claude Desktop MCP entry, and the collector service. It never writes a path inside the app. Moving the app to the Trash or removing the package leaves the copy in place, so your agents keep working until you uninstall.
+
+A new version copies itself beside the old one, so an update never replaces a file the running collector holds. The hooks and the collector stay on the old copy until you click **Re-apply**, which the app offers when the two differ. The app removes an old copy at its next launch once no enrollment and no link names it.
+
 ## Command line
 
-The app links `oxagen` and `tacho` into `~/.local/bin` on macOS and Linux. On Windows it writes `.cmd` shims to a directory on your user `PATH`. It never asks for administrator rights, and it never replaces a file it did not write.
+The app links `oxagen` and `tacho` from the per-user copy into `~/.local/bin` on macOS and Linux. On Windows it writes `.cmd` shims to a directory on your user `PATH`. It never asks for administrator rights, and it never replaces a file it did not write.
 
 Open a new terminal after the first launch. On macOS and Linux, this prints both paths:
 
 ```bash
 command -v oxagen tacho
 ```
+
+## Uninstall
+
+In the app, **Uninstall** removes every enrollment, the links, every per-user copy, and `~/.config/oxagen`. Then remove the app: drag it to the Trash on macOS, remove it in **Settings > Apps** on Windows, or remove the package on Linux.
+
+If you removed the app first, run the per-user copy's `tacho` to take the hooks and the collector out:
+
+```bash
+"$HOME/Library/Application Support/oxagen/bin/<version>/tacho" unenroll --all --purge
+```
+
+Use the Linux or Windows directory from the table above on those platforms. Then delete the `oxagen` directory that holds the copy, the `oxagen` and `tacho` links in `~/.local/bin`, and the lines from `# >>> oxagen >>>` to `# <<< oxagen <<<` in your shell profile. With fish, delete `~/.config/fish/conf.d/oxagen.fish` instead.
+
+If the per-user copy is gone as well, the Cursor and Stella hooks on macOS and Linux allow each action instead of blocking it, and Claude Code and Codex report a hook error on each tool call. On Windows the Cursor and Stella hooks block. Install the app again and use **Uninstall**, or run `tacho unenroll --all --purge` from any other install of `tacho`.
 
 ## Updates
 
