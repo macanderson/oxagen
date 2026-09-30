@@ -700,7 +700,7 @@ describe("Add a provider › registry and OAuth", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens Studio's package form for a package, disabled until #4742, and Change goes back", async () => {
+  it("opens Studio's package form for a package, disabled until #4756, and Change goes back", async () => {
     openWizard();
     search("acme");
     fireEvent.click(
@@ -711,15 +711,14 @@ describe("Add a provider › registry and OAuth", () => {
     const picked = screen.getByTestId("tools-import-package-picked");
     expect(within(picked).getByText("Local files")).toBeVisible();
     expect(within(picked).getByText("github.com/someone")).toBeVisible();
-    // search_mcp_registry drops packages[] until #4742, so the form says so.
-    expect(screen.getByTestId("studio-add-package-unknown")).toHaveTextContent(
-      pkg("noPackages"),
-    );
+    // search_mcp_registry carries the entry's packages (#4742). The form
+    // waits on the first-run listing for a machine-run server (#4756).
+    expect(screen.getByTestId("studio-add-package")).toBeVisible();
     expect(screen.getByLabelText(pkg("type"))).toBeDisabled();
     expect(screen.getByTestId("studio-add-package-submit")).toBeDisabled();
     const note = screen.getByTestId("studio-add-package-pending");
     expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-gap", "#4678");
+    expect(note).toHaveAttribute("data-gap", "#4756");
     expect(note).toHaveTextContent(pkg("pending"));
     // A package never takes the remote Connect.
     expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
