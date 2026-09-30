@@ -27,6 +27,10 @@ import postgres from "postgres";
 /** The notices the connection receives. The migration reports its count in one. */
 const notices: string[] = [];
 
+// A JSON value is bound as text and cast in SQL (`${JSON.stringify(x)}::text::jsonb`).
+// Bound straight to `::jsonb`, the parameter takes the jsonb type, and postgres.js
+// serializes it with JSON.stringify a second time, so the row holds a JSON
+// string where the migration reads an object.
 const sql = postgres(process.env["DATABASE_URL"]!, {
   max: 1,
   prepare: false,
@@ -103,7 +107,7 @@ async function seedAgent(
     INSERT INTO agent.agent_versions
       (agent_id, version, is_published, config, created_by_id, created_at, change_kind)
     VALUES
-      (${agent.id}, 1, true, ${JSON.stringify(config)}::jsonb, ${USER}, ${LEGACY}, 'legacy')
+      (${agent.id}, 1, true, ${JSON.stringify(config)}::text::jsonb, ${USER}, ${LEGACY}, 'legacy')
     RETURNING id
   `;
   if (!version) throw new Error(`agent ${slug} got no version`);
@@ -214,7 +218,7 @@ async function ownerSetsContainment(
       (occurred_at, event_type, actor_user_id, org_id, workspace_id, capability, outcome, detail)
     VALUES
       (${at}, 'capability.invoke_allowed', ${USER}, ${ORG}, ${WS}, 'update_runtime', 'success',
-       ${JSON.stringify(detail)}::jsonb)
+       ${JSON.stringify(detail)}::text::jsonb)
   `;
 }
 
