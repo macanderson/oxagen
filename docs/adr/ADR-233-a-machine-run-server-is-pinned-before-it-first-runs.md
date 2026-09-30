@@ -124,6 +124,23 @@ version, because Oxagen reads that digest itself.
   because a pin the machine checks against every file of a release does not
   hold.
 
+Added on 2026-09-30, when the PyPI rule shipped:
+
+- `pickPypiFile` in `@oxagen/tacho` chooses the file: the release's
+  `py3-none-any` or `py2.py3-none-any` wheel, else its source distribution.
+  A yanked file, and one not served over https, is never picked. Oxagen and
+  the machine call the same function, so they agree on the file.
+- The lock's package records the file as `file: { name, url }`, required for
+  a pypi package and allowed for no other type. The launch is
+  `uvx --from <url> <name>`, and the digest is that file's SHA-256.
+- The file's URL reaches a machine only in the launch's args, after
+  `--from`. The launch's package carries no `file`, because the machine's
+  launch schema is strict, and a machine that predates this still reads the
+  launch. The machine hashes the file at that URL, and it refuses a pypi
+  launch with no `--from`, so uvx never picks the file.
+- A first listing and a version move read the pin through one function,
+  `readPackagePin`, so the two paths cannot drift.
+
 ## Alternatives considered
 
 - **Trust the digest a machine reports on its first run.** A machine that runs

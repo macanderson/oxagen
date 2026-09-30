@@ -5,7 +5,10 @@
  *
  * The digest names the artifact itself. For npm it is the SHA-256 of the
  * tarball the registry serves, and for nuget the SHA-256 of the nupkg. For
- * pypi it is the SHA-256 the index reports for one of the release's files.
+ * pypi it is the SHA-256 of the one file the launch installs with
+ * `uvx --from <url>`: the release's universal wheel, or its source
+ * distribution (ADR-233). pickPypiFile chooses that file, and Oxagen chooses
+ * it with the same function, so the two reads agree.
  * For oci it is the image manifest digest the launch pins, which docker
  * enforces when it pulls by digest. For a local server it is the SHA-256 of
  * the executable the command resolves to on this machine.
@@ -50,6 +53,12 @@ export interface PackageDigesterDeps {
   timeoutMs?: number;
 }
 
+/** One file of a PyPI release: its file name, and the URL a launch installs it from. */
+export interface PypiFile {
+  name: string;
+  url: string;
+}
+
 export interface PackageDigester {
   /** The digest of what the launch would run. Throws a LocalServerError with digest_unavailable when it cannot tell. */
   digest(
@@ -57,6 +66,12 @@ export interface PackageDigester {
     launch: Pick<LaunchSpec, "command" | "args">,
     signal?: AbortSignal,
   ): Promise<Sha256Digest>;
+  /**
+   * The one file of a PyPI release a pin names (pickPypiFile), read from the
+   * index. Throws a LocalServerError with digest_unavailable when the index
+   * does not answer or the release has no such file.
+   */
+  pypiFile(pkg: Pick<LaunchPackage, "name" | "version">, signal?: AbortSignal): Promise<PypiFile>;
 }
 
 /** A failure the digester reports as the reason in digest_unavailable. */
@@ -68,8 +83,35 @@ function objectOf(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function isSha256Hex(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+/** A wheel that runs on every host: pure Python 3, no ABI, any platform. */
+const UNIVERSAL_WHEEL = /-(?:py3|py2\.py3)-none-any\.whl$/;
+
+/**
+ * The one file of a PyPI release a pin names (ADR-233), from the index's
+ * `urls` list: the release's universal wheel, or its source distribution
+ * when it has none. A yanked file, and one served over anything but https,
+ * is never picked. Undefined when the release has neither.
+ */
+export function pickPypiFile(urls: unknown): PypiFile | undefined {
+  const files = (Array.isArray(urls) ? (urls as unknown[]) : []).flatMap((raw) => {
+    const file = objectOf(raw);
+    const name = file?.filename;
+    const url = file?.url;
+    if (typeof name !== "string" || typeof url !== "string" || !url.startsWith("https://")) return [];
+    if (file?.yanked === true) return [];
+    return [{ name, url, type: file?.packagetype }];
+  });
+  const pick =
+    files.find((file) => file.type === "bdist_wheel" && UNIVERSAL_WHEEL.test(file.name)) ??
+    files.find((file) => file.type === "sdist");
+  return pick === undefined ? undefined : { name: pick.name, url: pick.url };
+}
+
+/** The URL a pypi launch installs from: the word after `--from`, when it is https. */
+export function pypiFromUrl(args: readonly string[]): string | undefined {
+  const at = args.indexOf("--from");
+  const url = at < 0 ? undefined : args[at + 1];
+  return url !== undefined && url.startsWith("https://") ? url : undefined;
 }
 
 /** npm's URL form of a package name: a scoped name keeps its @ and escapes its slash. */
@@ -129,6 +171,7 @@ export function platformPathSearch(
 export function createPackageDigester(deps: PackageDigesterDeps): PackageDigester {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_DIGEST_TIMEOUT_MS;
   const remembered = new Map<string, Promise<readonly Sha256Digest[]>>();
+  const files = new Map<string, Promise<Sha256Digest>>();
 
   async function read(url: string, signal: AbortSignal | undefined): Promise<DigestResponse> {
     const limit = AbortSignal.timeout(timeoutMs);
@@ -159,17 +202,27 @@ export function createPackageDigester(deps: PackageDigesterDeps): PackageDigeste
     return [await bytesAt(tarball, signal)];
   }
 
-  async function pypiDigests(pkg: LaunchPackage, signal: AbortSignal | undefined): Promise<Sha256Digest[]> {
+  async function releaseFile(
+    pkg: Pick<LaunchPackage, "name" | "version">,
+    signal: AbortSignal | undefined,
+  ): Promise<PypiFile> {
     const url = `${REGISTRY_URLS.pypi}/${encodeURIComponent(pkg.name)}/${encodeURIComponent(pkg.version)}/json`;
     const release = objectOf(await (await read(url, signal)).json());
-    const urls = release?.urls;
-    const files = Array.isArray(urls) ? (urls as unknown[]) : [];
-    const digests = files
-      .map((file) => objectOf(objectOf(file)?.digests)?.sha256)
-      .filter(isSha256Hex)
-      .map((hex): Sha256Digest => `sha256:${hex}`);
-    if (digests.length === 0) throw new DigestProblem("the index lists no file with a sha256 digest");
-    return digests;
+    const file = pickPypiFile(release?.urls);
+    if (file === undefined) {
+      throw new DigestProblem("the release has no py3-none-any wheel and no source distribution");
+    }
+    return file;
+  }
+
+  /** The SHA-256 of the file at `url`. A published file never changes, so it is read once. */
+  function fileDigest(url: string, signal: AbortSignal | undefined): Promise<Sha256Digest> {
+    const known = files.get(url);
+    if (known !== undefined) return known;
+    const pending = bytesAt(url, signal);
+    files.set(url, pending);
+    pending.catch(() => files.delete(url));
+    return pending;
   }
 
   async function nugetDigests(pkg: LaunchPackage, signal: AbortSignal | undefined): Promise<Sha256Digest[]> {
@@ -179,14 +232,14 @@ export function createPackageDigester(deps: PackageDigesterDeps): PackageDigeste
   }
 
   function registryDigests(
-    type: Exclude<RegistryType, "oci">,
+    type: Exclude<RegistryType, "oci" | "pypi">,
     pkg: LaunchPackage,
     signal: AbortSignal | undefined,
   ): Promise<readonly Sha256Digest[]> {
     const key = `${type}:${pkg.name}@${pkg.version}`;
     const known = remembered.get(key);
     if (known !== undefined) return known;
-    const readers = { npm: npmDigests, pypi: pypiDigests, nuget: nugetDigests };
+    const readers = { npm: npmDigests, nuget: nugetDigests };
     const pending = readers[type](pkg, signal);
     remembered.set(key, pending);
     // A failed read is forgotten, so the next call asks the registry again.
@@ -221,9 +274,16 @@ export function createPackageDigester(deps: PackageDigesterDeps): PackageDigeste
     const type = pkg.registry_type;
     if (type === undefined) return localDigest(launch.command);
     if (type === "oci") return ociDigest(pkg, launch.args);
+    if (type === "pypi") {
+      // A release holds one file per host, and uvx name@version would pick
+      // one. The launch names the one file the pin was made from.
+      const url = pypiFromUrl(launch.args);
+      if (url === undefined) {
+        throw new DigestProblem("the launch does not install one pinned file with --from <url>");
+      }
+      return fileDigest(url, signal);
+    }
     const digests = await registryDigests(type, pkg, signal);
-    // A pypi release carries several files, and uvx picks one. The lock pins
-    // the file it was made from, so any file with that digest is a match.
     const locked = pkg.digest as Sha256Digest;
     return digests.includes(locked) ? locked : (digests[0] as Sha256Digest);
   }
@@ -232,6 +292,14 @@ export function createPackageDigester(deps: PackageDigesterDeps): PackageDigeste
     async digest(pkg, launch, signal) {
       try {
         return await digestOf(pkg, launch, signal);
+      } catch (error) {
+        const reason = error instanceof DigestProblem ? error.message : String(error);
+        throw new LocalServerError(digestUnavailable(`${pkg.name}@${pkg.version}`, reason));
+      }
+    },
+    async pypiFile(pkg, signal) {
+      try {
+        return await releaseFile(pkg, signal);
       } catch (error) {
         const reason = error instanceof DigestProblem ? error.message : String(error);
         throw new LocalServerError(digestUnavailable(`${pkg.name}@${pkg.version}`, reason));
