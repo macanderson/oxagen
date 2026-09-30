@@ -16,7 +16,9 @@ import { promptSettingsReadHandler } from "./prompt.settings.read";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-beforeEach(() => mocks.loadWorkspacePromptConfig.mockReset());
+beforeEach(() => {
+  mocks.loadWorkspacePromptConfig.mockReset();
+});
 
 describe("promptSettingsReadHandler", () => {
   it("throws without a workspace context", async () => {
