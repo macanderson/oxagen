@@ -200,8 +200,9 @@ if [[ -n $smoke ]]; then
   jq -e '(.method | type == "string")
          and (.path | type == "string" and startswith("/"))
          and ((.headers // {}) | type == "object" and all(.[]; type == "string"))
-         and ((.body // "") | type == "string")' <<<"$smoke" >/dev/null 2>&1 \
-    || fail "oxagen-run.json: 'smoke' needs a method, a path that starts with /, string headers, and a string body"
+         and ((.body // "") | type == "string")
+         and ((.expect // "") | type == "string")' <<<"$smoke" >/dev/null 2>&1 \
+    || fail "oxagen-run.json: 'smoke' needs a method, a path that starts with /, string headers, and a string body and expect"
 fi
 
 # An empty command runs the image's own entrypoint, which is what an external
@@ -382,21 +383,32 @@ healthy() {
 # after the request, and the process never exited.
 serves() {
   [[ -n $smoke ]] || return 0
-  local method path body code header
+  local method path body expect code header reply
   method=$(jq -r '.method' <<<"$smoke")
   path=$(jq -r '.path' <<<"$smoke")
   body=$(jq -r '.body // ""' <<<"$smoke")
+  expect=$(jq -r '.expect // ""' <<<"$smoke")
   local header_args=()
   while IFS= read -r header; do
     [[ -n $header ]] && header_args+=(-H "$header")
   done < <(jq -r '(.headers // {}) | to_entries[] | "\(.key): \(.value)"' <<<"$smoke")
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X "$method" \
+  reply=$(mktemp)
+  code=$(curl -s -o "$reply" -w '%{http_code}' --max-time 30 -X "$method" \
     ${header_args[@]+"${header_args[@]}"} ${body:+--data-raw "$body"} \
     "http://127.0.0.1:$port$path" || true)
   if [[ ! $code =~ ^[1-4][0-9][0-9]$ ]]; then
     echo "error: $SERVICE answered the smoke request $method $path with '${code:-nothing}'" >&2
+    rm -f "$reply"
     return 1
   fi
+  # An MCP error arrives inside a 200, so a status alone passed a tools/list
+  # that failed for every tool (#4829).
+  if [[ -n $expect ]] && ! grep -qF -- "$expect" "$reply"; then
+    echo "error: $SERVICE answered the smoke request $method $path with $code, without '$expect': $(head -c 300 "$reply")" >&2
+    rm -f "$reply"
+    return 1
+  fi
+  rm -f "$reply"
   log "$SERVICE answered the smoke request $method $path with $code"
   sleep 10
   if ! curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$port$health_path"; then

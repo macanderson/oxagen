@@ -223,6 +223,7 @@ describe("package-for-node.sh smoke request", () => {
     path: string;
     headers: Record<string, string>;
     body: string;
+    expect?: string;
   }
   const smokeOf = (env: Record<string, string>): Smoke | undefined =>
     (nodeManifest(env) as { env: Record<string, string>; smoke?: Smoke }).smoke;
@@ -250,14 +251,23 @@ describe("package-for-node.sh smoke request", () => {
     expect(() => smokeOf({ WRITE_MANIFEST_SMOKE: "not json" })).toThrow();
   });
 
-  it("gives mcp an MCP initialize past the bearer gate", () => {
+  it("gives mcp a tools/list past the bearer gate that must return schemas", () => {
+    // tools/list answered 200 with an MCP error for every tool (#4829), so the
+    // reply has to carry an inputSchema, not only a status.
     const smoke = mcpSmoke();
     expect(smoke.method).toBe("POST");
     expect(smoke.path).toBe("/mcp");
     expect(smoke.headers.Authorization).toMatch(/^Bearer \S+$/);
     expect(smoke.headers.Accept).toContain("text/event-stream");
-    expect((JSON.parse(smoke.body) as { method: string }).method).toBe("initialize");
+    expect((JSON.parse(smoke.body) as { method: string }).method).toBe("tools/list");
+    expect(smoke.expect).toBe('"inputSchema"');
     expect(smokeOf({ WRITE_MANIFEST_SMOKE: JSON.stringify(smoke) })).toEqual(smoke);
+  });
+
+  it("refuses an expect that is not a string", () => {
+    expect(() =>
+      smokeOf({ WRITE_MANIFEST_SMOKE: '{"method":"GET","path":"/","expect":3}' }),
+    ).toThrow();
   });
 
   it("passes the mcp request to the mcp manifest", () => {

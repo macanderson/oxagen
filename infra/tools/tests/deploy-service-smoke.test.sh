@@ -36,17 +36,23 @@ if [[ ! -s $work/serves.sh ]]; then
   exit 1
 fi
 
-# run SMOKE SMOKE_CODE HEALTH_EXIT: the smoke request answers SMOKE_CODE
-# ("000" for no answer), and the health check after it exits HEALTH_EXIT.
+# run SMOKE SMOKE_CODE HEALTH_EXIT [REPLY]: the smoke request answers
+# SMOKE_CODE ("000" for no answer) with the body REPLY, and the health check
+# after it exits HEALTH_EXIT.
 run() {
-  SMOKE=$1 SMOKE_CODE=$2 HEALTH_EXIT=$3 FN="$work/serves.sh" ARGS="$work/args" bash -c '
+  SMOKE=$1 SMOKE_CODE=$2 HEALTH_EXIT=$3 REPLY_BODY=${4:-} FN="$work/serves.sh" ARGS="$work/args" bash -c '
     log() { :; }
     sleep() { :; }
     curl() {
-      local arg
+      local arg out="" prev=""
+      for arg in "$@"; do
+        [[ $prev == "-o" ]] && out=$arg
+        prev=$arg
+      done
       for arg in "$@"; do
         if [[ $arg == "%{http_code}" ]]; then
           printf "%s\n" "$@" > "$ARGS"
+          [[ -n $out && $out != /dev/null ]] && printf "%s" "$REPLY_BODY" > "$out"
           printf "%s" "$SMOKE_CODE"
           [[ $SMOKE_CODE == 000 ]] && return 7
           return 0
@@ -77,6 +83,16 @@ if run "$MCP_SMOKE" 401 0; then pass; else fail "a 401 is an answer, and should 
 if run "$MCP_SMOKE" 000 0; then fail "no answer to the smoke request should roll back"; else pass; fi
 if run "$MCP_SMOKE" 503 0; then fail "a 503 should roll back"; else pass; fi
 if run "$MCP_SMOKE" 200 7; then fail "a health route that stops answering after the request should roll back"; else pass; fi
+
+# --- the body it expects --------------------------------------------------
+
+LIST_SMOKE='{"method":"POST","path":"/mcp","headers":{"Content-Type":"application/json"},"body":"{}","expect":"\"inputSchema\""}'
+if run "$LIST_SMOKE" 200 0 'data: {"result":{"tools":[{"name":"x","inputSchema":{}}]}}'; then pass; else fail "a reply that carries the expected text should deploy"; fi
+if run "$LIST_SMOKE" 200 0 'data: {"error":{"code":-32603,"message":"Cannot read properties of undefined"}}'; then
+  fail "an MCP error inside a 200 should roll back (#4829)"
+else
+  pass
+fi
 
 # --- the request it sends -------------------------------------------------
 
