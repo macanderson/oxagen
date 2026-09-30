@@ -260,6 +260,7 @@ async function signIn(
         .join(" ");
       throw new Error(
         `${firstLine(error)} The page stayed at ${page.url()}${shown ? ` and showed: ${shown}` : " with no alert"}.`,
+        { cause: error },
       );
     }
     return { ok: true, state: await context.storageState() };
