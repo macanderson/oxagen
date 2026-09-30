@@ -27,6 +27,7 @@
  * product with a message catalogue passes its own translations:
  *   data-title, data-body, data-body-ios, data-install, data-dismiss, data-label
  */
+/* global module, window */
 (function (root, factory) {
   var api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -91,7 +92,7 @@
   function framed(win) {
     try {
       return !!win.top && win.top !== win;
-    } catch (e) {
+    } catch {
       return true; // a cross-origin top refuses the read: still a frame
     }
   }

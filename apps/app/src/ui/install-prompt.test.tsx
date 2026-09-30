@@ -25,8 +25,8 @@ describe("InstallPrompt", () => {
   });
 
   it("passes every string from the catalogue", async () => {
-    const { props } = await InstallPrompt();
-    expect(props).toMatchObject({
+    const el = await InstallPrompt();
+    expect(el.props).toMatchObject({
       "data-title": "Add Oxagen to your home screen",
       "data-body": "Open it like an app, full screen, one tap away.",
       "data-body-ios": "Tap Share, then Add to Home Screen.",
