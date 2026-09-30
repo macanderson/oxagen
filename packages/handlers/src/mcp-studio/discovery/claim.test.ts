@@ -30,7 +30,10 @@ const NOW = new Date("2026-09-30T09:00:00.000Z");
 const broker = { connected: () => true } as unknown as LocalGatewayBroker;
 
 function reader(groups: readonly string[]): MachineGroupReader {
-  return { groupsOf: vi.fn(() => Promise.resolve(groups)) };
+  return {
+    groupsOf: vi.fn(() => Promise.resolve(groups)),
+    isSuspended: vi.fn(() => Promise.resolve(false)),
+  };
 }
 
 /** A claim store that hands out `waiting` in order, then nothing. */

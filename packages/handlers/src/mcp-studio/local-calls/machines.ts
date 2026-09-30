@@ -5,8 +5,8 @@
 // server, or a registry package with source.machines, only when one of its
 // groups is in the server's source.machines. The cloud gateway checks this
 // before it signs an envelope, so a machine outside the group never receives
-// a call.
-import { notInGroup, type LocalServerRefusal } from "@oxagen/tacho/local-servers";
+// a call. A suspended machine runs nothing, whatever its groups (#4554).
+import { machineSuspended, notInGroup, type LocalServerRefusal } from "@oxagen/tacho/local-servers";
 
 /** The workspace a machine is enrolled in. */
 export interface MachineScope {
@@ -16,8 +16,19 @@ export interface MachineScope {
 
 /** Reads a machine's groups. `groups-store.ts` reads them from Postgres. */
 export interface MachineGroupReader {
-  /** The groups the machine is in, in this workspace. Empty when the machine is in none or is not enrolled. */
+  /**
+   * The groups the machine runs local servers for, in this workspace. Empty
+   * when the machine is in none, is not enrolled, is revoked, or is
+   * suspended, so every caller that claims or dispatches work for it gets
+   * none.
+   */
   groupsOf(scope: MachineScope, machine: string): Promise<readonly string[]>;
+  /**
+   * True when this workspace enrolled the machine and it is suspended.
+   * checkMachine asks only after a group check fails, so the refusal names the
+   * suspension rather than a group change.
+   */
+  isSuspended(scope: MachineScope, machine: string): Promise<boolean>;
 }
 
 /**
@@ -48,7 +59,12 @@ export function machineGroupRefusal(
   return serverGroups.some((group) => member.has(group)) ? undefined : notInGroup(serverGroups);
 }
 
-/** Read the machine's groups and check them against the server's source.machines. */
+/**
+ * Read the machine's groups and check them against the server's
+ * source.machines. A suspended machine is in no group, and it is refused with
+ * machine_suspended so the person lifts the suspension instead of changing a
+ * group.
+ */
 export async function checkMachine(
   reader: MachineGroupReader,
   scope: MachineScope,
@@ -56,5 +72,7 @@ export async function checkMachine(
   serverGroups: readonly string[],
 ): Promise<LocalServerRefusal | undefined> {
   if (serverGroups.length === 0) return notInGroup(serverGroups);
-  return machineGroupRefusal(serverGroups, await reader.groupsOf(scope, machine));
+  const refusal = machineGroupRefusal(serverGroups, await reader.groupsOf(scope, machine));
+  if (refusal === undefined) return undefined;
+  return (await reader.isSuspended(scope, machine)) ? machineSuspended() : refusal;
 }

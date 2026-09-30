@@ -14,7 +14,7 @@
 import { HandlerError } from "@oxagen/oxagen";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notInArray } from "drizzle-orm";
 import type { MachineGroupReader, MachineOwnerReader, MachineScope } from "./machines";
 
 const members = schema.tachoMachineGroupMembers;
@@ -191,10 +191,14 @@ export function postgresMachineGroupStore(tx: Tx): MachineGroupStore {
   };
 }
 
+/** Host statuses that run no local server: the machine is in no group while it holds one. */
+const HOST_STATUSES_THAT_RUN_NOTHING = ["revoked", "suspended"];
+
 /**
  * The groups a machine is in, for the cloud gateway's check before it signs
- * an envelope. A revoked machine is in no group, and so is a machine this
- * workspace never enrolled.
+ * an envelope and for the claims its poll makes. A revoked or suspended
+ * machine is in no group (#4554), and so is a machine this workspace never
+ * enrolled. list_machine_groups still lists a suspended member.
  */
 export const postgresMachineGroupReader: MachineGroupReader = {
   groupsOf: (scope, machine) =>
@@ -208,11 +212,22 @@ export const postgresMachineGroupReader: MachineGroupReader = {
             and(
               inWorkspace(members, scope),
               eq(hosts.publicId, machine),
-              ne(hosts.status, "revoked"),
+              notInArray(hosts.status, HOST_STATUSES_THAT_RUN_NOTHING),
             ),
           )
           .orderBy(asc(members.groupName));
         return rows.map((row) => row.group);
+      }),
+    ),
+  isSuspended: (scope, machine) =>
+    runInTenantScope(scope, () =>
+      withTenantDb(async (tx) => {
+        const [host] = await tx
+          .select({ status: hosts.status })
+          .from(hosts)
+          .where(and(inWorkspace(hosts, scope), eq(hosts.publicId, machine)))
+          .limit(1);
+        return host?.status === "suspended";
       }),
     ),
 };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { notInGroup, refusalText } from "./index";
+import { machineSuspended, notInGroup, refusalText } from "./index";
+import { refusalSchema } from "./wire";
 
 /** A server's groups, and the sentence a machine outside them reads. */
 const outsiders: [string, string[], string][] = [
@@ -13,5 +14,23 @@ describe("notInGroup", () => {
     const refusal = notInGroup(groups);
     expect(refusal).toEqual({ code: "not_in_group", message, fix: "Ask a workspace admin to add it." });
     expect(refusalText(refusal)).toBe(`${message} Ask a workspace admin to add it.`);
+  });
+});
+
+describe("machineSuspended", () => {
+  it("names the suspension and tells the person to lift it (#4554)", () => {
+    const refusal = machineSuspended();
+    expect(refusal).toEqual({
+      code: "machine_suspended",
+      message: "This machine is suspended.",
+      fix: "Ask a workspace admin to lift the suspension, then retry.",
+    });
+    expect(refusalText(refusal)).toBe(
+      "This machine is suspended. Ask a workspace admin to lift the suspension, then retry.",
+    );
+  });
+
+  it("fits the refusal shape a reply carries", () => {
+    expect(refusalSchema.safeParse(machineSuspended()).success).toBe(true);
   });
 });

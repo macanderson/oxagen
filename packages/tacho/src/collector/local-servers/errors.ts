@@ -15,6 +15,7 @@ export const LOCAL_SERVER_ERROR_CODES = [
   "digest_mismatch",
   "cloud_unreachable",
   "missing_variable",
+  "machine_suspended",
   "digest_unavailable",
   "envelope_invalid",
   "envelope_expired",
@@ -62,6 +63,18 @@ export function notInGroup(groups: readonly string[]): LocalServerRefusal {
     code: "not_in_group",
     message: `This machine is not in group ${groupList(groups)}.`,
     fix: "Ask a workspace admin to add it.",
+  };
+}
+
+/**
+ * The cloud gateway's refusal for a machine an admin suspended (#4554). It has
+ * its own code so the fix names the suspension, not a group change.
+ */
+export function machineSuspended(): LocalServerRefusal {
+  return {
+    code: "machine_suspended",
+    message: "This machine is suspended.",
+    fix: "Ask a workspace admin to lift the suspension, then retry.",
   };
 }
 
