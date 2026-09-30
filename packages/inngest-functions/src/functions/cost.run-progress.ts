@@ -45,7 +45,7 @@ export const [costRunProgress] = createFunction(
   {
     id: "cost.run-progress",
     retries: 3,
-    concurrency: { limit: 1, key: "event.data.workspaceId" },
+    concurrency: [{ limit: 2 }, { limit: 1, key: "event.data.workspaceId" }],
     debounce: { key: "event.data.runId", period: "30s", timeout: "2m" },
   },
   { event: RUN_PROGRESSED_EVENT },

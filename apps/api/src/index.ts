@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { PORTS } from "@oxagen/config";
 import { app } from "./app";
 import { bootstrap } from "./bootstrap";
+import { apiAdmission } from "./middleware/admission";
 import { logger } from "./middleware/logger";
 
 // Local / self-hosted entrypoint: a long-running Node server (tsx in dev).
@@ -33,9 +34,15 @@ async function main(): Promise<void> {
   // only control — but the control that fails open is the one worth having.
   const hostname = process.env.HOST ?? process.env.HOSTNAME ?? "127.0.0.1";
 
-  serve({ fetch: app.fetch, port, hostname }, (info) => {
+  const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
     logger.info({ port: info.port, hostname }, "api listening");
   });
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 10_000;
+  const metrics = setInterval(() => {
+    logger.info({ event: "resource_budget", ...apiAdmission.snapshot() }, "api resource budget");
+  }, 30_000);
+  metrics.unref();
 }
 
 // A rejected bootstrap must kill the process rather than leave an unhandled

@@ -164,7 +164,7 @@ export interface DurableFunctionConfig {
    */
   retries?: number;
   /** Concurrency limits for this function. */
-  concurrency?: ConcurrencyConfig;
+  concurrency?: ConcurrencyConfig | ConcurrencyConfig[];
   /** Events that trigger automatic cancellation of in-flight runs. */
   cancelOn?: CancelOnConfig[];
   /** Timeout configuration for the function run. */

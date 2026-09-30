@@ -1,3 +1,4 @@
+import { trackRequestWork } from "@oxagen/config/request-work";
 /**
  * MCP capability-context resolution.
  *
@@ -364,13 +365,13 @@ export async function buildContext(
   const gatewaySessionUuid = extractGatewaySession(hdrs);
   const gatewayChainGenesisHash = extractGatewayGenesis(hdrs);
 
-  const resolution = await resolveMcpContext(
+  const resolution = await trackRequestWork(() => resolveMcpContext(
     authHeader,
     requestId,
     clientIp,
     gatewaySessionUuid,
     gatewayChainGenesisHash,
-  );
+  ));
   if (!resolution.ok) throw new McpUnauthorizedError(resolution.reason);
   return resolution.ctx;
 }

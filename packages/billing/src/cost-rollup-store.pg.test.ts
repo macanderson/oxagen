@@ -914,4 +914,29 @@ describe.skipIf(!enabled)("running rollups against Postgres", () => {
     expect(rows).toHaveLength(3);
     expect(rows.every((row) => row.runs === 2)).toBe(true);
   });
+
+  it("streams a day across read and write batches without dropping totals", async () => {
+    await withSystemDb((tx) => tx.insert(totals).values(
+      Array.from({ length: 260 }, (_, index) => ({
+        ...record(`tse_${tag}batch${index}`, {
+          startedAt: new Date("2001-08-02T00:00:00Z"),
+          sealedAt: new Date("2001-08-02T00:05:00Z"),
+          taskRef: `task-${index}`,
+        }),
+        cacheHitRate: null,
+        productiveRatio: null,
+        rolledUpAt: new Date("2001-08-02T00:10:00Z"),
+      })),
+    ));
+    const rows = await rebuildDailyTotals({ ...scope, day: "2001-08-02" });
+    expect(rows.filter((row) => row.groupKind === "task")).toHaveLength(260);
+    const center = rows.find((row) => row.groupKind === "cost_center");
+    expect(center?.runs).toBe(260);
+    expect(center?.costMicros).toBe(26_000n);
+    const stored = await withSystemDb((tx) => tx.select()
+      .from(schema.dailyTotals)
+      .where(eq(schema.dailyTotals.workspaceId, scope.workspaceId)));
+    expect(stored.filter((row) => row.day === "2001-08-02")).toHaveLength(rows.length);
+  });
+
 });

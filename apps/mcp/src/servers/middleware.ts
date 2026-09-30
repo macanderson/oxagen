@@ -1,3 +1,4 @@
+import { trackRequestWork } from "@oxagen/config/request-work";
 // middleware.ts: the served tools inside Oxagen's MCP endpoint (lane M15;
 // mcp-studio-spec, Call path).
 //
@@ -172,13 +173,13 @@ function holdAnswer(
     const held = Buffer.concat(chunks).toString("utf8");
     const written: Head | null = head;
     const typed = headerIn(written?.headers, "content-type") ?? res.getHeader("content-type");
-    void rewrite(held, typeof typed === "string" ? typed : undefined)
+    void trackRequestWork(() => rewrite(held, typeof typed === "string" ? typed : undefined)
       .catch(() => held)
       .then((body) => {
         if (res.getHeader("content-length") !== undefined) res.setHeader("content-length", Buffer.byteLength(body));
         if (written !== null) writeHead(written.status, ...headFor(written, body));
         end(body, ...(done === undefined ? [] : [done]));
-      })
+      }))
       .catch((error: unknown) => {
         log.warn("Oxagen could not send the tools/list answer.", { error: errorName(error) });
       });
@@ -245,7 +246,10 @@ export function createServedToolsMiddleware(deps: ServedMiddlewareDeps): ServedM
       return;
     }
     if (request.method === "tools/list") {
-      const served = servedList(deps, req.headers);
+      const served = trackRequestWork(() => servedList(deps, req.headers)).catch((error: unknown) => {
+        deps.log.warn("Oxagen could not read the served tools.", { error: errorName(error) });
+        return [];
+      });
       holdAnswer(res, async (body, contentType) => spliceTools(body, contentType, request.id, await served), deps.log);
       next();
       return;
@@ -258,7 +262,7 @@ export function createServedToolsMiddleware(deps: ServedMiddlewareDeps): ServedM
     }
     // answerCall guards every read and the call itself. Only writing the
     // answer can reject here, and the response is spent by then.
-    answerCall(deps, req, res, next, request, name).catch((error: unknown) => {
+    trackRequestWork(() => answerCall(deps, req, res, next, request, name)).catch((error: unknown) => {
       deps.log.warn("Oxagen could not send a served call's answer.", { tool: name, error: errorName(error) });
     });
   };

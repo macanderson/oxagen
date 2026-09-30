@@ -12,6 +12,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   loadPriceBookSlice,
+  withPriceBookSnapshot,
   loadPriceBookSliceInTenantScope,
 } from "./price-book";
 
@@ -90,6 +91,26 @@ describe.skipIf(!process.env["DATABASE_URL"])(
       const rows = await loadPriceBookSlice(slice);
       const own = rows.filter((r) => r.orgId === orgId).map((r) => r.id);
       expect(own.sort()).toEqual([family, byAlias].sort());
+    });
+
+    it("keeps one price revision when another connection changes a row between batches", async () => {
+      try {
+        await withPriceBookSnapshot(async (load) => {
+          const before = await load(slice);
+          await withSystemDb((tx) => tx.update(schema.priceEntries)
+            .set({ microsPerMillion: 2_000_000n })
+            .where(eq(schema.priceEntries.id, family)));
+          const after = await load(slice);
+          expect(before.find((entry) => entry.id === family)?.microsPerMillion).toBe(1_000_000n);
+          expect(after.find((entry) => entry.id === family)?.microsPerMillion).toBe(1_000_000n);
+        });
+        const fresh = await loadPriceBookSlice(slice);
+        expect(fresh.find((entry) => entry.id === family)?.microsPerMillion).toBe(2_000_000n);
+      } finally {
+        await withSystemDb((tx) => tx.update(schema.priceEntries)
+          .set({ microsPerMillion: 1_000_000n })
+          .where(eq(schema.priceEntries.id, family)));
+      }
     });
 
     it("answers the same inside the organization's tenant scope", async () => {
