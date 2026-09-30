@@ -3481,16 +3481,12 @@ describe("materializeTools — a call a decision rule sends to a person", () => 
 });
 
 // ADR-235: `tool_invocations` feeds the workspace's "calls 30d" count, and the
-// workspace does not monitor Stella. A Stella call writes no row. Any other
+// workspace does not monitor Stella. Stella's turn passes
+// `feedsWorkspaceToolCounts: false`, and a call then writes no row. Any other
 // caller's call, completed or refused, writes one as before.
 describe("materializeTools — the workspace's tool call counts", () => {
   const call = (tools: Record<string, unknown>, name: string) =>
     (tools[name] as { execute: (i: unknown) => Promise<unknown> }).execute;
-  const stellaCtx = () => ({
-    ...CTX,
-    messageId: "msg_turn",
-    oxagenAssistant: createOxagenAssistantBinding({ requestId: "req-turn" }),
-  });
 
   beforeEach(() => {
     vi.mocked(invoke).mockReset().mockResolvedValue({ ok: true });
@@ -3499,14 +3495,27 @@ describe("materializeTools — the workspace's tool call counts", () => {
     killSwitchMocks.check.mockResolvedValue(null);
   });
 
-  it("writes no row for a Stella call, completed or refused", async () => {
-    const { tools } = await materializeTools(stellaCtx());
-    await call(tools, "capA")({ x: "1" });
-    vi.mocked(invoke).mockRejectedValueOnce(new Error("refused"));
-    await expect(call(tools, "capA")({ x: "2" })).rejects.toThrow("refused");
-    expect(invoke).toHaveBeenCalledTimes(2);
-    expect(mocks.insertToolInvocation).not.toHaveBeenCalled();
-  });
+  it.each([
+    { name: "a session", ctx: { ...CTX, messageId: "msg_turn" } },
+    {
+      name: "an API key",
+      ctx: { ...CTX, messageId: "msg_turn", apiKeyId: "key_1" },
+    },
+  ])(
+    "writes no row for a call of a Stella turn $name starts, completed or refused",
+    async ({ ctx }) => {
+      const { tools } = await materializeTools(ctx, {
+        feedsWorkspaceToolCounts: false,
+      });
+      await call(tools, "capA")({ x: "1" });
+      vi.mocked(invoke).mockRejectedValueOnce(new Error("refused"));
+      await expect(call(tools, "capA")({ x: "2" })).rejects.toThrow(
+        "refused",
+      );
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(mocks.insertToolInvocation).not.toHaveBeenCalled();
+    },
+  );
 
   it("writes a row for any other caller's call (negative)", async () => {
     const { tools } = await materializeTools({ ...CTX, messageId: "msg_1" });
@@ -3516,13 +3525,12 @@ describe("materializeTools — the workspace's tool call counts", () => {
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(2);
   });
 
-  it("writes a row when a hand-built binding claims the call is Stella's (negative)", async () => {
-    const claimed = {
+  it("writes a row when a context claims a Stella binding without the option (negative)", async () => {
+    const { tools } = await materializeTools({
       ...CTX,
       messageId: "msg_1",
-      oxagenAssistant: { principalKind: "oxagen_assistant", requestId: "r" },
-    } as unknown as typeof CTX;
-    const { tools } = await materializeTools(claimed);
+      oxagenAssistant: createOxagenAssistantBinding({ requestId: "r" }),
+    });
     await call(tools, "capA")({ x: "1" });
     expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
   });

@@ -652,6 +652,9 @@ describe("prepareAssistantTurn", () => {
       oxagenAssistant?: unknown;
     };
     expect(isKernelIssuedOxagenAssistant(toolCtx.oxagenAssistant)).toBe(true);
+    expect(mocks.materializeTools.mock.calls[0]![1]).toMatchObject({
+      feedsWorkspaceToolCounts: false,
+    });
     expect(mocks.invoke).toHaveBeenCalled();
     for (const [, , ctx] of mocks.invoke.mock.calls) {
       expect(
@@ -672,6 +675,11 @@ describe("prepareAssistantTurn", () => {
     });
     const toolCtx = mocks.materializeTools.mock.calls[0]![0] as object;
     expect(toolCtx).not.toHaveProperty("oxagenAssistant");
+    // It keeps the rules, not the monitoring: its calls still stay out of
+    // the tool registry's "calls 30d".
+    expect(mocks.materializeTools.mock.calls[0]![1]).toMatchObject({
+      feedsWorkspaceToolCounts: false,
+    });
   });
 
   it("never keeps a binding the adapter's context brings (negative)", async () => {

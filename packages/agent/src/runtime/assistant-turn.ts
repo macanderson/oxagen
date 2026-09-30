@@ -579,6 +579,11 @@ async function runPreparedTurn(
         // (ADR-053 §1, #4310). The workspace's MCP servers serve its own
         // agents, so none is connected, listed, or given a credential here.
         capabilitiesOnly: true,
+        // The workspace does not monitor Stella (ADR-235), so its calls stay
+        // out of the tool registry's "calls 30d". This holds for a turn an API
+        // key starts too, which keeps the workspace's rules but not its
+        // monitoring.
+        feedsWorkspaceToolCounts: false,
         // `search_tools` and `load_tools` exist twice: as capability contracts
         // for the API and MCP surfaces, and as the belt's meta-tools. Both
         // claim the same model-facing alias. Execution resolves

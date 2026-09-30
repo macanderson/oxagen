@@ -3,10 +3,11 @@
 //
 // Stella is Oxagen's own agent. The customer's workspace does not govern it
 // and does not monitor it. So the kernel's workspace decision-rules gate does
-// not run for a call that carries this binding, and the tool belt writes no
-// `tool_invocations` row for it (packages/agent materialize-tools.ts). The
-// person's own IAM check still runs, and so do the billing, budget, and
-// entitlement gates, the usage recorder, and the security event emitter.
+// not run for a call that carries this binding. The person's own IAM check
+// still runs, and so do the billing, budget, and entitlement gates, the usage
+// recorder, and the security event emitter. The binding decides the rules
+// alone: the turn keeps its calls out of the workspace's monitoring by other
+// means, for a turn an API key starts as well (ADR-235).
 //
 // The binding widens what a call may do, so no request can be allowed to
 // claim it. The registry is a module-private WeakSet, the pattern

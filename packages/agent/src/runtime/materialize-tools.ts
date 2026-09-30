@@ -17,7 +17,6 @@ import {
   type ExternalRefusalCode,
   type KernelSecurityOutcome,
 } from "@oxagen/oxagen/kernel";
-import { isOxagenAssistantCall } from "@oxagen/oxagen/oxagen-assistant";
 import {
   type AgentRunIAMResolution,
   type EffectiveMcpScope,
@@ -223,6 +222,13 @@ export interface MaterializeOptions {
    * `governed-turn`, `approval-resume` and `tools.load` rely on.
    */
   capabilitiesOnly?: boolean;
+  /**
+   * False skips the `tool_invocations` row each call writes, which feeds the
+   * workspace's "calls 30d" count. The in-app assistant's turn passes false
+   * on every adapter, a turn an API key starts included, because the
+   * workspace does not monitor Stella (ADR-235). Absent or true keeps the row.
+   */
+  feedsWorkspaceToolCounts?: boolean;
   /**
    * Called immediately after an approval request is created and BEFORE
    * `waitForApproval` blocks. Lets the stream route emit an
@@ -614,10 +620,10 @@ export async function materializeTools(
 
   // `tool_invocations` feeds one reader, the "calls 30d" count on the
   // workspace's tool registry (`countRecentToolInvocations`). The workspace
-  // does not monitor Stella (ADR-235), so a Stella call writes no row there.
+  // does not monitor Stella (ADR-235), so Stella's turn turns the write off.
   // Its row could not be told apart later: `surface` holds the transport and
   // `message_id` the person's message. The run ledger keeps Stella's receipts.
-  const feedsWorkspaceToolCounts = !isOxagenAssistantCall(ctx);
+  const feedsWorkspaceToolCounts = opts.feedsWorkspaceToolCounts !== false;
 
   // Register a tool under a model-safe alias and record the reverse mapping.
   // Sanitizing collapses distinct chars to "_", so two real names could in

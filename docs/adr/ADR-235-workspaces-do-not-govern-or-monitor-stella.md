@@ -111,6 +111,8 @@ capability would meet the workspace's rules one level down.
   `tool_invocations` row. That table's one reader is the registry's
   "calls 30d" count, and a row there cannot be told apart later, because its
   `surface` holds the transport and its `message_id` the person's message.
+  The turn turns the write off with `feedsWorkspaceToolCounts: false`, not
+  with the binding, so a turn an API key starts stays out of the count too.
 
 Stella's turns were already out of `list_runs`, `list_recent_runs`, and
 `search_tools`. The Steering page's delivery report reads Tacho events, and a
@@ -119,7 +121,7 @@ Stella turn writes none.
 ### 5. Limits of this decision
 
 - **A turn an API key starts keeps the workspace's rules.** It gets no
-  binding. The key's holder may be an automation, and a binding there would
+  binding. It still feeds none of the monitoring §4 lists. The key's holder may be an automation, and a binding there would
   let it route an action a rule refuses on the API through Stella instead.
   Such a turn's writes already cannot park.
 - **The `ask_assistant` call itself still meets the rules gate.** The API
