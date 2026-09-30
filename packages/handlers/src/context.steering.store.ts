@@ -257,6 +257,21 @@ export interface SteeringStore {
     from: readonly ProposalStatus[],
     guard?: ProposalGuard,
   ): Promise<ProposalRow>;
+  /**
+   * Set aside `prior` and insert its replacement in one transaction, so a
+   * lineage never loses its open proposal to a write that failed halfway
+   * (#4795). `prior` moves as updateProposal would move it, and a refusal
+   * there inserts nothing.
+   */
+  replaceProposal(
+    prior: {
+      id: string;
+      patch: ProposalPatch;
+      from: readonly ProposalStatus[];
+      guard?: ProposalGuard;
+    },
+    values: ProposalInsert,
+  ): Promise<ProposalRow>;
 
   listRecords(
     scope: SteeringScope,
@@ -657,6 +672,55 @@ export const postgresSteeringStore: SteeringStore = {
           `[context.steering] proposal ${id} vanished during update`,
         );
       throw refusedWrite(current, from, guard);
+    });
+  },
+
+  async replaceProposal(prior, values) {
+    return withTenantDb(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`${values.workspaceId}:${values.lineageId.toLowerCase()}`}, 0))`,
+      );
+      const claimCol = schema.contextProposals.mergeClaimedAt;
+      const [set] = await tx
+        .update(schema.contextProposals)
+        .set({ ...prior.patch, updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(schema.contextProposals.id, prior.id),
+            inArray(schema.contextProposals.status, [...prior.from]),
+            prior.guard?.headSha !== undefined
+              ? eq(schema.contextProposals.headSha, prior.guard.headSha)
+              : undefined,
+            prior.guard?.noClaimSince !== undefined
+              ? or(isNull(claimCol), lte(claimCol, prior.guard.noClaimSince))
+              : undefined,
+          ),
+        )
+        .returning({ id: schema.contextProposals.id });
+      if (!set) {
+        const [current] = await tx
+          .select({
+            publicId: schema.contextProposals.publicId,
+            status: schema.contextProposals.status,
+            headSha: schema.contextProposals.headSha,
+            mergeClaimedAt: claimCol,
+          })
+          .from(schema.contextProposals)
+          .where(eq(schema.contextProposals.id, prior.id))
+          .limit(1);
+        if (!current)
+          throw new Error(
+            `[context.steering] proposal ${prior.id} vanished during replace`,
+          );
+        throw refusedWrite(current, prior.from, prior.guard);
+      }
+      const [row] = await tx
+        .insert(schema.contextProposals)
+        .values(values)
+        .returning();
+      if (!row)
+        throw new Error("[context.steering] proposal insert returned no row");
+      return toProposal(row);
     });
   },
 

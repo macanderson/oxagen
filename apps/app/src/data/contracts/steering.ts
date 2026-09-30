@@ -137,6 +137,8 @@ export const ContextPr = z.object({
   proposalId: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
+  /** A record kind, or governance for a change to the governance mode (#4795). */
+  kind: ProposalKind,
   status: ProposalStatus,
   /** Read from governance.toml when the pull request opens; null before. */
   governanceMode: GovernanceMode.nullable(),

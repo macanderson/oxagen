@@ -634,6 +634,44 @@ describe("set_governance_mode in a steering repository", () => {
     );
   });
 
+  it("withdraws the open governance proposal and closes its PR when the mode in force is picked again", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    const pr = deps.github.pulls[0]!;
+
+    const out = await run(deps, { mode: "team" }, doubles());
+
+    expect(out).toMatchObject({ outcome: "unchanged", effectiveMode: "team", proposalId: null });
+    // A reviewer can no longer land a mode nobody asked for now.
+    expect(deps.store.proposals).toEqual([
+      expect.objectContaining({
+        kind: "governance",
+        status: "rejected",
+        dismissedReason: "Withdrawn: the mode it proposed was set back to the mode in force",
+        updatedById: AUTHOR,
+      }),
+    ]);
+    expect(pr.state).toBe("closed");
+    expect(deps.github.deletedBranches).toContain(STEERING_BRANCH);
+    expect(deps.events).toEqual([]);
+  });
+
+  it("keeps the open governance proposal when the replacement's checks cannot run (negative)", async () => {
+    const deps = steeringMode("team");
+    await run(deps, { mode: "solo" }, doubles());
+    const seams: SteeringGovernanceSeams = {
+      ...doubles(),
+      check: async () => {
+        throw new Error("the steering checker is down");
+      },
+    };
+
+    await expect(run(deps, { mode: "solo" }, seams)).rejects.toThrow("the steering checker is down");
+    // The proposal stays open until a replacement is recorded, so the PR
+    // keeps a land path.
+    expect(deps.store.proposals.map((p) => p.status)).toEqual(["checks_passed"]);
+  });
+
   it("keeps the open governance proposal when a later call is refused (negative)", async () => {
     const deps = steeringMode("team");
     await run(deps, { mode: "solo" }, doubles());
@@ -888,6 +926,37 @@ describe("merge_context_pr on a governance proposal", () => {
         recordId: null,
       },
     });
+  });
+
+  it("answers the version an earlier call published when it resumes a merged PR", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    // An earlier call merged and published the PR, then failed before its
+    // record landed.
+    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const seams = doubles();
+    const published: SteeringPublisher = {
+      ...fakePublisher(seams.published),
+      store: {
+        highestVersion: async () => 21,
+        versionAt: async (_repository, commit) =>
+          commit === mergeSha ? { version: 21, published: true } : null,
+      },
+    };
+
+    const out = await createMergeContextPrHandler(
+      deps,
+      mergeSeams(seams, { publisher: () => published }),
+    )({ proposalId }, ctx({ userId: REVIEWER }));
+
+    expect(out).toMatchObject({
+      kind: "governance",
+      governance: { mode: "solo" },
+      mergedCommit: mergeSha,
+      publishedVersion: 21,
+    });
+    // The resume merges nothing twice.
+    expect(deps.github.merges).toEqual([]);
   });
 
   it("brings a branch that fell behind up to date and runs the steering checks again", async () => {
