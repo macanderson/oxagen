@@ -421,13 +421,13 @@ export function DefinitionFields({
             ))}
           </ul>
         </FormAlert>
-      ) : outcome.kind === "exists" || outcome.kind === "moved" ? (
-        <FormAlert testId={`studio-add-definition-${outcome.kind}`}>
-          {t(outcome.kind, { name: outcome.name })}
-        </FormAlert>
-      ) : (
+      ) : outcome.kind === "failed" ? (
         <FormAlert testId="studio-add-definition-failed">
           {failureText(outcome.code)}
+        </FormAlert>
+      ) : (
+        <FormAlert testId={`studio-add-definition-${outcome.kind}`}>
+          {t(outcome.kind, { name: outcome.name })}
         </FormAlert>
       )}
       <button
