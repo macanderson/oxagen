@@ -6,6 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { generateDeviceKey, deviceKeyPem } from "../../../packages/tacho/src/host/device-key";
 import { TACHO_BUNDLE_FEATURES, TACHO_MAX_REQUEST_BYTES, type TachoBatch } from "../../../packages/tacho/src/wire";
+import { persistentOutputRoot } from "./storage";
 import { ArrivalClock, Latency, eventsInRange, makeBatch, reconcile, sampleAt, validateControlBundle, validateEnrollment, validateProfile, type Profile, type WorkloadHost } from "./core";
 
 export class HttpFailure extends Error {
@@ -66,7 +67,9 @@ interface Machine {
 export async function runFleet(profile: Profile, output: string, token: string, pinnedKey: string) {
   validateProfile(profile, process.env["FLEET_STAGING_ORIGIN"] ?? "", true);
   const runId = randomUUID();
-  const directory = resolve(output, runId);
+  const workflowRun = process.env["GITHUB_RUN_ID"];
+  if (workflowRun !== undefined && !/^[0-9]+$/.test(workflowRun)) throw new Error("Invalid workflow run identifier.");
+  const directory = resolve(output, workflowRun ? `${workflowRun}-${runId}` : runId);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const stateDir = join(directory, "private");
   mkdirSync(stateDir, { mode: 0o700 });
@@ -308,8 +311,8 @@ export async function runFleet(profile: Profile, output: string, token: string, 
 }
 
 export async function main(args: string[]): Promise<void> {
-  const [mode, profilePath, output = "fleet-results"] = args;
-  if (!profilePath || (mode !== "plan" && mode !== "run")) throw new Error("Usage: run.ts plan|run profile.json [output-directory]");
+  const [mode, profilePath, extra] = args;
+  if (!profilePath || extra !== undefined || (mode !== "plan" && mode !== "run")) throw new Error("Usage: run.ts plan|run profile.json");
   const profile = validateProfile(JSON.parse(readSmall(profilePath, 128 * 1024)) as Profile,
     process.env["FLEET_STAGING_ORIGIN"] ?? "", mode === "run");
   if (mode === "plan") {
@@ -319,6 +322,7 @@ export async function main(args: string[]): Promise<void> {
       networkRequestsSent: 0 }, null, 2)}\n`);
     return;
   }
+  const output = persistentOutputRoot(process.env["FLEET_OUTPUT_ROOT"] ?? "");
   const token = process.env["FLEET_OPERATOR_TOKEN"];
   const pinnedKey = process.env["FLEET_BUNDLE_PUBLIC_KEY_PEM"];
   if (!token || !pinnedKey) throw new Error("Staging operator credentials and the pinned bundle public key are required.");

@@ -26,6 +26,7 @@ const source = readFileSync(
   fileURLToPath(new URL("./middleware.ts", import.meta.url)),
   "utf8",
 );
+const middlewareIndex = source.indexOf("const middleware: RequestHandler[] = [");
 
 // Each entry: the call that must appear, and what silently breaks without it.
 const REQUIRED_STARTUP_CALLS: ReadonlyArray<readonly [string, string]> = [
@@ -58,10 +59,10 @@ describe("mcp middleware startup wiring", () => {
     // xmcp exposes no lifecycle hook, so module scope is the only location
     // guaranteed to run on cold start. If a bootstrap call ever moved below
     // the exported middleware, it would run per-request (or not at all).
-    const exportIndex = source.indexOf("export default [");
-    expect(exportIndex).toBeGreaterThan(-1);
+    expect(middlewareIndex).toBeGreaterThan(-1);
+    expect(source).toContain("export default middleware;");
     for (const [call] of REQUIRED_STARTUP_CALLS) {
-      expect(source.indexOf(call)).toBeLessThan(exportIndex);
+      expect(source.indexOf(call)).toBeLessThan(middlewareIndex);
     }
   });
 
@@ -70,13 +71,15 @@ describe("mcp middleware startup wiring", () => {
     // network is refused as disconnected. Nothing else in apps/mcp imports it.
     const install = source.indexOf('import "./relay/install"');
     expect(install).toBeGreaterThan(-1);
-    expect(install).toBeLessThan(source.indexOf("export default ["));
+    expect(middlewareIndex).toBeGreaterThan(-1);
+    expect(install).toBeLessThan(middlewareIndex);
   });
 
   it("runs the served tools after the auth gate", () => {
     // xmcp runs the array in order. The served tools read the request's key,
     // so a request without one must be turned away before they run.
-    const exported = source.slice(source.indexOf("export default ["));
+    expect(middlewareIndex).toBeGreaterThan(-1);
+    const exported = source.slice(middlewareIndex);
     const gate = exported.indexOf("apiKeyAuthMiddleware({");
     expect(gate).toBeGreaterThan(-1);
     expect(exported.indexOf("servedToolsMiddleware,")).toBeGreaterThan(gate);
