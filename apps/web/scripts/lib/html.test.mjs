@@ -4,6 +4,7 @@ import {
   esc,
   feedXml,
   formatDate,
+  HERO_FONT_PRELOAD,
   picture,
   indexPage,
   inlineWordmark,
@@ -397,6 +398,70 @@ describe("pages", () => {
     expect(html).not.toContain("<picture>");
     expect(html).not.toContain('class="tags');
     expect(html).not.toContain("Keep reading");
+  });
+});
+
+describe("hero font", () => {
+  // Mac, 2026-09-29: Space Grotesk sets the wordmark and hero line 1, and
+  // nothing else. The wordmark is an SVG, so on a blog page the face reaches
+  // only an element marked .hero-line-1, and only a page with a hero
+  // downloads it.
+  const postHtml = () =>
+    postPage({
+      post,
+      html: "<p>body</p>",
+      headings: [],
+      pillars,
+      related: [],
+      wordmark,
+    });
+
+  it("marks line 1 of the index hero and leaves line 2 in the heading face", () => {
+    const html = indexPage({
+      pillars,
+      posts: [post],
+      wordmark,
+      image: "/blog/og.png",
+    });
+    expect(html).toContain(
+      '<h1><span class="hero-line-1">What the research says about agents,</span><br><span class="gold">and how to govern them</span></h1>',
+    );
+    expect(html.match(/hero-line-1/g)).toHaveLength(1);
+    expect(html).toContain(HERO_FONT_PRELOAD);
+  });
+
+  it("marks the one-line pillar hero", () => {
+    const html = pillarPage({
+      pillar: pillars[0],
+      pillars,
+      posts: [post],
+      wordmark,
+    });
+    expect(html).toContain('<h1 class="hero-line-1">Alpha</h1>');
+    expect(html).toContain(HERO_FONT_PRELOAD);
+  });
+
+  it("sets a post title in the heading face and preloads no Space Grotesk", () => {
+    const html = postHtml();
+    expect(html).toContain("<h1>Title &lt;&quot;quoted&quot;&gt;</h1>");
+    expect(html).not.toContain("hero-line-1");
+    expect(html).not.toContain("space-grotesk");
+  });
+
+  it("preloads one Space Grotesk weight for a hero and none without one", () => {
+    expect(HERO_FONT_PRELOAD.match(/space-grotesk-latin-\d+/g)).toEqual([
+      "space-grotesk-latin-600",
+    ]);
+    const html = layout({
+      title: "T",
+      description: "D",
+      path: "/blog/",
+      image: "/x.png",
+      body: "",
+      wordmark,
+      pillars,
+    });
+    expect(html).not.toContain("space-grotesk");
   });
 });
 

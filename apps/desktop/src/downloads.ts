@@ -312,13 +312,12 @@ export interface PageEntry extends Installer {
 /**
  * The webfonts the page loads from `/fonts/` on the downloads host, copied
  * there by `scripts/publish-downloads.mjs` from `apps/web/fonts/` (the kit's
- * files, vendored by `tools/scripts/sync-brand-assets.mjs`). Three faces, one
- * job each: Space Grotesk for the headings, Geist for everything read, and
- * Monaspace Neon for file names, sizes, digests and the verify command.
+ * files, vendored by `tools/scripts/sync-brand-assets.mjs`). Two faces: Geist
+ * for the headings and everything read, and Monaspace Neon for file names,
+ * sizes, digests and the verify command. The wordmark is outlines in the
+ * lockup, so the page loads no Space Grotesk (CLAUDE.md, Type).
  */
 export const FONT_FILES = [
-  "space-grotesk-latin-600.woff2",
-  "space-grotesk-latin-700.woff2",
   "geist-latin-wght.woff2",
   "monaspace-neon-latin-wght.woff2",
 ] as const;
@@ -456,8 +455,6 @@ ${body}
   const macUpdates =
     sorted.some((e) => e.os === "macOS") && updatesItself(input.version);
   const fontFaces = [
-    ["Space Grotesk", "space-grotesk-latin-600.woff2", "600"],
-    ["Space Grotesk", "space-grotesk-latin-700.woff2", "700"],
     ["Geist", "geist-latin-wght.woff2", "100 900"],
     ["Monaspace Neon", "monaspace-neon-latin-wght.woff2", "200 800"],
   ]
@@ -477,7 +474,7 @@ ${body}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-7 -17 27 34'%3E%3Cpath d='M6.54 4.16l5.8 3.04v6.08l-5.8 3.04-5.8-3.04V7.2z' fill='%23D4AF37'/%3E%3Cpath d='M6.54-16.32l5.8 3.04v6.08l-5.8 3.04-5.8-3.04v-6.08z' fill='%23D4AF37'/%3E%3C/svg%3E">
 <style>
 ${fontFaces}
-:root{--ink:#09090B;--panel:#18181B;--hl:#27272A;--border:#27272A;--rule:#3F3F46;--fg:#FFFFFF;--body:#E4E4E7;--muted:#A1A1AA;--dim:#71717A;--gold:#D4AF37;--gold-deep:#8A7223;--accent-text:#D4AF37;--on-gold:#09090B;--font-display:"Space Grotesk","Helvetica Neue",Arial,sans-serif;--font:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"Monaspace Neon",ui-monospace,"SF Mono",Menlo,Consolas,monospace;--radius:12px;--wrap:1120px;color-scheme:dark}
+:root{--ink:#09090B;--panel:#18181B;--hl:#27272A;--border:#27272A;--rule:#3F3F46;--fg:#FFFFFF;--body:#E4E4E7;--muted:#A1A1AA;--dim:#71717A;--gold:#D4AF37;--gold-deep:#8A7223;--accent-text:#D4AF37;--on-gold:#09090B;--font:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"Monaspace Neon",ui-monospace,"SF Mono",Menlo,Consolas,monospace;--radius:12px;--wrap:1120px;color-scheme:dark}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--ink:#FFFFFF;--panel:#FFFFFF;--hl:#F4F4F5;--border:#E4E4E7;--rule:#D4D4D8;--fg:#09090B;--body:#27272A;--muted:#71717A;--dim:#A1A1AA;--accent-text:#8A7223;color-scheme:light}}
 :root[data-theme="light"]{--ink:#FFFFFF;--panel:#FFFFFF;--hl:#F4F4F5;--border:#E4E4E7;--rule:#D4D4D8;--fg:#09090B;--body:#27272A;--muted:#71717A;--dim:#A1A1AA;--accent-text:#8A7223;color-scheme:light}
 *{box-sizing:border-box}
@@ -494,8 +491,8 @@ header a{text-decoration:none;color:var(--fg);display:inline-flex}
 .tag{font-size:12px;color:var(--muted);letter-spacing:.02em}
 .hero{padding:44px 0 36px;border-bottom:1px solid var(--border)}
 .eyebrow{font:500 12px/1.4 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
-h1{font:700 40px/1.15 var(--font-display);letter-spacing:-.02em;color:var(--fg);margin:0 0 14px}
-h2{font:600 20px/1.25 var(--font-display);color:var(--fg);margin:0 0 6px}
+h1{font:700 40px/1.15 var(--font);letter-spacing:-.02em;color:var(--fg);margin:0 0 14px}
+h2{font:600 20px/1.25 var(--font);color:var(--fg);margin:0 0 6px}
 .lede{margin:0;max-width:64ch;font-size:18px;line-height:1.6}
 .meta{margin:18px 0 0;color:var(--muted);font-size:14px;display:flex;flex-wrap:wrap;gap:6px 18px}
 .meta code{font-size:13px;color:var(--fg)}

@@ -7,8 +7,9 @@
 // Also: a message for another flow is ignored, a declined sign-in is named, a
 // blocked popup is offered as a link, a server that asks for no OAuth connects
 // open, a bearer-token server never takes the OAuth path, a custom server
-// signs in with OAuth, and a stdio-only server cannot be selected. axe checks
-// the state each test ends in (INV-26).
+// signs in with OAuth, and a stdio-only server cannot be selected but runs as
+// a package through Studio's form, disabled until #4742 merges. axe checks the
+// state each test ends in (INV-26).
 import {
   act,
   cleanup,
@@ -41,6 +42,14 @@ const {
   navigatePopup: vi.fn(),
   providerRedirectUrl: vi.fn(),
 }));
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("@/ui/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/ui/navigation")>()),
   navigatePopup,
@@ -59,6 +68,8 @@ const { ImportProvider } = await import("./import-provider");
 const at = { org: "acme", ws: "core-platform" };
 const oauth = translator("tools.import.oauth");
 const browse = translator("tools.import.browse");
+const offer = translator("mcpStudio.addServer.offer");
+const pkg = translator("mcpStudio.addServer.package");
 const STATE_LINEAR = "l".repeat(32);
 const STATE_SLACK = "s".repeat(32);
 
@@ -583,14 +594,80 @@ describe("Add a provider › registry and OAuth", () => {
     expect(document.body.textContent).not.toContain("sk-acme");
   });
 
-  it("lists a stdio-only server with the reason and no Select", async () => {
+  it("lists a stdio-only server with the reason, no Select, and Run as a package", async () => {
     openWizard();
     search("acme");
     const card = (await screen.findByText("Local files")).closest("li");
     if (!(card instanceof HTMLElement)) throw new Error("no card");
     expect(within(card).getByText(browse("stdioOnly"))).toBeVisible();
-    expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+    expect(
+      within(card).queryByTestId(
+        "registry-browser-pick-io.github.someone/local",
+      ),
+    ).not.toBeInTheDocument();
+    const run = within(card).getByRole("button");
+    expect(run).toHaveAttribute(
+      "data-testid",
+      "registry-browser-package-io.github.someone/local",
+    );
+    expect(run).toHaveAccessibleName(
+      offer("pickPackageNamed", { name: "Local files" }),
+    );
+    expect(run).toHaveTextContent(offer("pickPackage"));
+    expect(within(card).getByText(offer("package"))).toHaveAttribute(
+      "data-offer",
+      "package",
+    );
     expect(within(card).getByText("by github.com/someone")).toBeVisible();
+  });
+
+  it("says a remote entry offers a remote and no package", async () => {
+    openWizard();
+    search("acme");
+    const card = (
+      await screen.findByTestId("registry-browser-pick-com.acme/keyed")
+    ).closest("li");
+    if (!(card instanceof HTMLElement)) throw new Error("no card");
+    expect(within(card).getByText(offer("remote"))).toHaveAttribute(
+      "data-offer",
+      "remote",
+    );
+    expect(
+      within(card).queryByTestId("registry-browser-package-com.acme/keyed"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens Studio's package form for a package, disabled until #4742, and Change goes back", async () => {
+    openWizard();
+    search("acme");
+    fireEvent.click(
+      await screen.findByTestId(
+        "registry-browser-package-io.github.someone/local",
+      ),
+    );
+    const picked = screen.getByTestId("tools-import-package-picked");
+    expect(within(picked).getByText("Local files")).toBeVisible();
+    expect(within(picked).getByText("github.com/someone")).toBeVisible();
+    // search_mcp_registry drops packages[] until #4742, so the form says so.
+    expect(screen.getByTestId("studio-add-package-unknown")).toHaveTextContent(
+      pkg("noPackages"),
+    );
+    expect(screen.getByLabelText(pkg("type"))).toBeDisabled();
+    expect(screen.getByTestId("studio-add-package-submit")).toBeDisabled();
+    const note = screen.getByTestId("studio-add-package-pending");
+    expect(note).toHaveAttribute("data-state", "not-available");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent(pkg("pending"));
+    // A package never takes the remote Connect.
+    expect(screen.queryByTestId("tools-import-connect")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(picked).getByRole("button", { name: browse("change") }),
+    );
+    expect(
+      screen.queryByTestId("tools-import-package-picked"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("studio-add-package")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(browse("search"))).toBeVisible();
   });
 
   it("signs in to a custom internal server with OAuth", async () => {

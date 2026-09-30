@@ -80,7 +80,7 @@ describe("Fork", () => {
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     await waitFor(() => {
       expect(screen.getByTestId("fork-attempt")).toHaveTextContent("arun_9x2k");
     });
@@ -91,7 +91,7 @@ describe("Fork", () => {
       "120",
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "The attempt is minted.",
+      "The attempt is created.",
     );
   });
 
@@ -202,10 +202,10 @@ describe("Fork", () => {
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "10");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     await waitFor(() => {
       expect(screen.getByTestId("run-fork-failure")).toHaveTextContent(
-        "This recording is graded below fork, so the cassette would have a hole in it. Nothing was minted.",
+        "This recording is graded below fork, so the cassette would have a hole in it. Nothing was created.",
       );
     });
   });
@@ -221,10 +221,10 @@ describe("Fork", () => {
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "10");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     await waitFor(() => {
       expect(screen.getByTestId("run-fork-failure")).toHaveTextContent(
-        "A frame before that point kept no body, so the replay would have a hole before the branch. Nothing was minted.",
+        "A frame before that point kept no body, so the replay would have a hole before the branch. Nothing was created.",
       );
     });
   });
@@ -241,7 +241,7 @@ describe("Fork", () => {
     renderReplay(run);
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "0");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     await waitFor(() => {
       expect(screen.getByTestId("run-fork-failure")).toHaveTextContent(
         "The branch point is a frame sequence number of at least 1.",
@@ -506,7 +506,7 @@ describe("Fork dialog", () => {
     renderReplay(forkable());
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     await screen.findByTestId("fork-attempt");
     await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByTestId("run-fork"));
@@ -520,7 +520,7 @@ describe("Fork dialog", () => {
     renderReplay(forkable());
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
-    const submit = screen.getByRole("button", { name: "Mint the attempt" });
+    const submit = screen.getByRole("button", { name: "Create the attempt" });
     await user.click(submit);
     await user.click(submit);
     expect(forkRun).toHaveBeenCalledTimes(1);
@@ -532,7 +532,7 @@ describe("Fork dialog", () => {
     renderReplay(forkable());
     await user.click(screen.getByTestId("run-fork"));
     await user.type(screen.getByLabelText("Replay up to frame"), "120");
-    await user.click(screen.getByRole("button", { name: "Mint the attempt" }));
+    await user.click(screen.getByRole("button", { name: "Create the attempt" }));
     expect(await screen.findByTestId("run-fork-failure")).toBeTruthy();
     expect(screen.queryByTestId("fork-attempt")).toBeNull();
   });

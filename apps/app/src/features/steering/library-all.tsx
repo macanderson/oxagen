@@ -1,6 +1,8 @@
 // The Library's All shelf (roadmap pages/steering.md, "Library, the All
-// shelf"): the stat strip, the lead note, and "Everything written down", one
-// table over the items the assembler reads, in the assembler's order.
+// shelf"): the stat strip, the lead note, and "All items", one table over the
+// items the assembler reads, in the assembler's order. The mockup titles that
+// table "Everything written down"; the app names it with a plain noun instead
+// (CLAUDE.md, Labels and headings).
 //
 // Today the one source read into it is the record registry (list_records,
 // status active), read whole (./library-read.ts) so the assembler's order
@@ -9,7 +11,7 @@
 // under the table with Rows, Previous and Next) work over every row. Every row
 // is a record. Token cost and the enforcement grant have no field on that
 // contract, so the Compiles to and Token cost cells and the Compiled size and
-// Carry a grant tiles print "not recorded"
+// Enforcement grants tiles print "not recorded"
 // rather than a figure nobody measured, and the repository a repository-scoped
 // record names prints "not recorded" under its scope. Instructions, skills,
 // memory and ontology notes join the list when the steering registry reads

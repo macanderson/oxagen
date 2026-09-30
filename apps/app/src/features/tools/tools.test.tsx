@@ -45,6 +45,14 @@ const { choices } = vi.hoisted(() => {
     },
   };
 });
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("@/features/shell/client", () => ({
   ...choices,
   openApprovals: vi.fn(),
@@ -405,7 +413,7 @@ describe("Tools › not loaded", () => {
     const panel = within(screen.getByTestId("tools-denied"));
     expect(panel.getByText("You cannot see the tool registry")).toBeVisible();
     expect(screen.getByTestId("tools-denied").textContent).toContain(
-      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(panel.getByText("Signed in as")).toBeVisible();
     expect(panel.getAllByText("tools.read on core-platform")).toHaveLength(2);
@@ -691,17 +699,41 @@ describe("Tools › registry view", () => {
     await renderTools({
       versions: readOk(toolVersionPage({ nextCursor: "c2" })),
     });
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/agents?tab=tools&cursor=c2",
-    );
+    const pages = screen.getByRole("navigation", {
+      name: "Tool version pages",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=tools&cursor=c2");
+  });
+
+  it("asks the kernel for the size Rows names, and for its default of 50 by leaving it off (#4693)", async () => {
+    const sized = await renderTools({}, "tools", { rows: "25" });
+    expect(sized.calls.versions).toContainEqual([
+      owner,
+      { category: null, cursor: null, serverId: null, limit: 25 },
+    ]);
+    cleanup();
+    // The default read carries no size, so the page's read is the same read
+    // the header and the registry count make.
+    for (const rows of [undefined, "50", "7"]) {
+      const { calls } = await renderTools({}, "tools", { rows });
+      expect(calls.versions.length).toBeGreaterThan(0);
+      for (const call of calls.versions) {
+        expect(call).toEqual([
+          owner,
+          { category: null, cursor: null, serverId: null },
+        ]);
+      }
+      cleanup();
+    }
   });
 
   it("closes on the gate note, naming the order the record decides in", async () => {
     await renderTools();
     expect(
       screen.getByText(
-        "The gate shown is today’s: the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents are shown the tool; the gate decides whether the call survives. Open a provider on any row to see what it imported and the connection it is reached with.",
+        "Gate today reads the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents see a tool, and the gate decides whether a call goes through. Open a provider on any row to see what it imported and the connection that reaches it.",
       ),
     ).toBeVisible();
   });
@@ -713,7 +745,7 @@ describe("Tools › registry view", () => {
     expect(within(dialog).getByText("moves_money")).toBeVisible();
     expect(
       within(dialog).getByText(
-        /Category is a registry attribute, not a policy/,
+        /A rule may reference a category/,
       ),
     ).toBeVisible();
   });
@@ -864,7 +896,7 @@ describe("Tools › tool servers view", () => {
       "1 provider needs a look.",
     );
     expect(
-      screen.getByText(/MCP is one transport among several/),
+      screen.getByText(/is imported, versioned, and decided the same way/),
     ).toBeVisible();
   });
 
@@ -1051,10 +1083,26 @@ describe("Tools › tool servers view", () => {
       { grants: readOk(credentialGrantPage({ nextCursor: "g2" })) },
       "providers",
     );
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
-      "href",
-      "/acme/core-platform/agents?tab=servers&cursor=g2",
-    );
+    const pages = screen.getByRole("navigation", {
+      name: "Credential grant pages",
+    });
+    expect(
+      within(pages).getByRole("link", { name: "Next page" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers&cursor=g2");
+  });
+
+  it("asks the kernel for as many grants as Rows names, and leaves the default off (#4693)", async () => {
+    const sized = await renderTools({}, "providers", {
+      rows: "100",
+      cursor: "g2",
+    });
+    expect(sized.calls.grants).toEqual([[owner, { cursor: "g2", limit: 100 }]]);
+    cleanup();
+    for (const rows of [undefined, "50", "250"]) {
+      const { calls } = await renderTools({}, "providers", { rows });
+      expect(calls.grants).toEqual([[owner, { cursor: null }]]);
+      cleanup();
+    }
   });
 
   it("offers a member no provider write", async () => {

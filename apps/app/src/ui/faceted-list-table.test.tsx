@@ -103,7 +103,7 @@ describe("faceted ListTable", () => {
     const scope = screen.getByRole("combobox", { name: "Filter by Scope" });
     await pickOption(user, scope, "org");
     expect(bodyRows()).toHaveLength(6);
-    await pickOption(user, scope, "All · Scope");
+    await pickOption(user, scope, "All (Scope)");
 
     await user.click(screen.getByRole("button", { name: "Tokens" }));
     expect(bodyRows()[0]).toHaveTextContent("Record 12");

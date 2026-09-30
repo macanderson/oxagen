@@ -168,7 +168,7 @@ describe("People", () => {
       "No contract records a member's two-factor method yet, so this filter cannot narrow the list.",
     );
     // A disabled select cannot open, so its trigger shows All alone.
-    expect(twoFactor).toHaveTextContent("All · Two-factor");
+    expect(twoFactor).toHaveTextContent("All (Two-factor)");
     expect(
       within(panel).getByRole("combobox", { name: "Rows" }),
     ).toBeInTheDocument();
@@ -336,12 +336,12 @@ describe("Invitations", () => {
     const sent = within(panel).getByLabelText("Sent");
     const expires = within(panel).getByLabelText("Expires");
     expect(await optionNames(user, sent)).toEqual([
-      "All · Sent",
+      "All (Sent)",
       "Sep 1, 2026",
       "Sep 10, 2026",
     ]);
     expect(await optionNames(user, expires)).toEqual([
-      "All · Expires",
+      "All (Expires)",
       "Sep 17, 2026",
     ]);
     await pickOption(user, sent, "Sep 10, 2026");
@@ -351,7 +351,7 @@ describe("Invitations", () => {
     expect(
       document.querySelector('[data-row="invi_9z8y7x6w5v4t3s2r1q0p9n"]'),
     ).toBeNull();
-    await pickOption(user, sent, "All · Sent");
+    await pickOption(user, sent, "All (Sent)");
     await pickOption(user, expires, "Sep 17, 2026");
     // An invitation that never expires falls outside any expiry day.
     expect(

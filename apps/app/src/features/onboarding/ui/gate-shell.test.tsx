@@ -189,7 +189,7 @@ describe("GateDenied", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Anderson Intelligence Corp. do not include enrollment.create on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Anderson Intelligence Corp. do not include enrollment.create on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -203,7 +203,7 @@ describe("GateDenied", () => {
       "Needed",
       "enrollment.create on core-platform",
       "Decided by",
-      "the organization role check · deny wins over every allow",
+      "the organization role check",
     ]);
     await userEvent.click(
       screen.getByRole("button", { name: "Request access" }),

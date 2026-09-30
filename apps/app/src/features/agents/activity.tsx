@@ -6,32 +6,32 @@
 // Every figure is read from a record: the runs from `list_runs`, the tokens
 // and spend from this agent's row of `get_spend`, the findings from
 // `list_findings` narrowed to this agent's key, and the incidents from
-// `list_incidents` narrowed to the agent, one cursor page. A run's own token
-// count, a class's rate and cost, and the tool-definition share of input are
-// not recorded yet (G3), so they say so.
+// `list_incidents` narrowed to the agent, one cursor page at the size Rows
+// picks (#4693). A run's own token count, a class's rate and cost, and the
+// tool-definition share of input are not recorded yet (G3), so they say so.
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { useLocale, useTranslations } from "next-intl";
 import type { IncidentPage } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { SpendFindings } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono, panel } from "@/ui/control-styles";
+import { LinkPager } from "@/ui/link-pager";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
-import type { AgentRunRows } from "./agent-reads";
+import { type AgentRunRows, INCIDENT_PAGE, INCIDENT_ROWS } from "./agent-reads";
 import {
   Facts,
   Instant,
   NotBacked,
   NotRecordedValue,
   Note,
-  Pager,
   Panel,
   Sub,
 } from "./parts";
@@ -360,16 +360,31 @@ function Last30({
 
 const TAMPER: ReadonlySet<string> = new Set(TAMPER_INCIDENT_KINDS);
 
+/**
+ * A page of the incident list: the newest page at `rows`, or the page at
+ * `cursor`. The default size is left off the address (#4693).
+ */
+function incidentsLink(place: Place, rows: number, cursor?: string): SafePath {
+  return routes.agent(place.org, place.ws, place.agent, {
+    tab: "activity",
+    rows: rows === INCIDENT_PAGE ? undefined : String(rows),
+    cursor,
+  });
+}
+
 function Incidents({
   read,
   cursor,
+  rows,
   place,
 }: {
   read: Read<IncidentPage>;
   cursor: string | null;
+  rows: number;
   place: Place;
 }) {
   const t = useTranslations("agents.detail.incidents");
+  const list = useTranslations("ui.list");
   if (!read.ok) {
     return (
       <Panel id="agent-incidents" title={t("title")}>
@@ -481,29 +496,26 @@ function Incidents({
           </SafeLink>
         </Panel>
       ))}
-      <Pager
+      {/* The cursor only walks forward, so the step back is the newest
+          page. Both steps keep the size, and a new size starts over at the
+          newest page (#4693). */}
+      <LinkPager
         label={t("pager")}
-        first={
-          cursor === null
-            ? null
-            : {
-                to: routes.agent(place.org, place.ws, place.agent, {
-                  tab: "activity",
-                }),
-                text: t("first"),
-              }
-        }
+        rowsLabel={list("rows")}
+        previousLabel={t("first")}
+        nextLabel={t("next")}
+        perPage={rows}
+        sizes={INCIDENT_ROWS.map((size) => ({
+          size,
+          first: incidentsLink(place, size),
+        }))}
+        previous={cursor === null ? null : incidentsLink(place, rows)}
         next={
           page.nextCursor === null
             ? null
-            : {
-                to: routes.agent(place.org, place.ws, place.agent, {
-                  tab: "activity",
-                  cursor: page.nextCursor,
-                }),
-                text: t("next"),
-              }
+            : incidentsLink(place, rows, page.nextCursor)
         }
+        className="px-0"
       />
       <div className={`${panel} px-4 py-3.5`}>
         <Note>{t("note")}</Note>
@@ -519,6 +531,7 @@ export function ActivitySection({
   findings,
   incidents,
   cursor,
+  rows,
   agentKey,
   place,
 }: {
@@ -528,6 +541,8 @@ export function ActivitySection({
   findings: Read<SpendFindings> | null;
   incidents: Read<IncidentPage>;
   cursor: string | null;
+  /** The incidents a page holds, one of `INCIDENT_ROWS`. */
+  rows: number;
   agentKey: string | null;
   place: Place;
 }) {
@@ -543,7 +558,7 @@ export function ActivitySection({
           place={place}
         />
       </div>
-      <Incidents read={incidents} cursor={cursor} place={place} />
+      <Incidents read={incidents} cursor={cursor} rows={rows} place={place} />
     </div>
   );
 }

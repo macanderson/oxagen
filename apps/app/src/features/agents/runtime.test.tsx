@@ -143,7 +143,7 @@ describe("Runtime › host", () => {
         .filter((li) => li.getAttribute("aria-current") === "step"),
     ).toEqual([]);
     const tier = screen.getByRole("region", {
-      name: "What this tier delivers",
+      name: "Tier coverage",
     });
     expect(tier).toHaveTextContent(
       "No run of this agent is on the newest page of runs, so no tier is recorded for it.",
@@ -154,7 +154,7 @@ describe("Runtime › host", () => {
   it("answers each tier row for the rung the newest run recorded", () => {
     renderRuntime({ lastRun: runRow({ enforcementTier: "contained" }) });
     const tier = screen.getByRole("region", {
-      name: "What this tier delivers",
+      name: "Tier coverage",
     });
     expect(tier).toHaveTextContent(
       "Model callsrouted through the loopback proxy on the host.",
@@ -178,14 +178,14 @@ describe("Runtime › revoked and retired", () => {
     expect(screen.queryByTestId("unenroll-command")).toBeNull();
   });
 
-  it("offers a retired identity neither Wrap it nor the enroll path (negative)", () => {
+  it("offers a retired identity neither Wrap the agent nor the enroll path (negative)", () => {
     renderRuntime({
       detail: agentDetail({ identity: { status: "retired" }, hosts: [] }),
     });
     const empty = screen.getByTestId("runtime-empty");
-    expect(within(empty).queryByRole("link", { name: "Wrap it" })).toBeNull();
+    expect(within(empty).queryByRole("link", { name: "Wrap the agent" })).toBeNull();
     expect(
-      within(empty).queryByRole("button", { name: "Show the CLI path" }),
+      within(empty).queryByRole("button", { name: "Enroll a host" }),
     ).toBeNull();
   });
 
@@ -211,7 +211,7 @@ describe("Runtime › organization role", () => {
     renderRuntime({ detail: agentDetail({ hosts: [] }) });
     expect(
       within(screen.getByTestId("runtime-empty")).getByRole("button", {
-        name: "Show the CLI path",
+        name: "Enroll a host",
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("runtime-needs-role")).toBeNull();
@@ -235,7 +235,7 @@ describe("Runtime › organization role", () => {
     });
     const empty = screen.getByTestId("runtime-empty");
     expect(
-      within(empty).queryByRole("button", { name: "Show the CLI path" }),
+      within(empty).queryByRole("button", { name: "Enroll a host" }),
     ).toBeNull();
     expect(within(empty).getByTestId("runtime-needs-role")).toHaveTextContent(
       "needs an organization Owner or Admin role",

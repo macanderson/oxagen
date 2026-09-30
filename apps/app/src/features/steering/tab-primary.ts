@@ -61,7 +61,13 @@ export async function bodyTakesHeaderGold({
           : null;
       }
       if (view.offset !== 0) return null;
-      const page = await source.steering.proposals(ctx, { offset: 0 });
+      // The same input the tab body reads with, size included, so the
+      // kernel's per-request read table answers the body without a second
+      // invoke (#4693).
+      const page = await source.steering.proposals(ctx, {
+        offset: 0,
+        limit: view.rows,
+      });
       return page.ok && page.value.total === 0 ? "empty" : null;
     }
     case "gates":

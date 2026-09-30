@@ -21,7 +21,7 @@ export default async function BillingPage({
 }: PageProps<"/[org]/billing">) {
   const { org } = await params;
   const ctx = await requireViewer(org);
-  const { checkout, cursor } = await searchParams;
+  const { checkout, cursor, rows } = await searchParams;
   const [t, user] = await Promise.all([
     getTranslations("pages"),
     getAuthUser(),
@@ -34,6 +34,7 @@ export default async function BillingPage({
       viewerName={user === null || user.name === "" ? null : user.name}
       checkout={firstParam(checkout) ?? null}
       cursor={firstParam(cursor) ?? null}
+      rows={firstParam(rows) ?? null}
     />
   );
 }

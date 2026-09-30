@@ -25,14 +25,14 @@
       "perPeriod": "Per period",
       "perPeriodBasis": "Each limit resets on the window named beside it. A cap on calls is a limit of its own.",
       "settled": "Settled",
-      "settledBasis": "This period, summed from the ledger's settlements.",
+      "settledBasis": "Summed from this period's ledger settlements.",
       "remaining": "Remaining",
       "remainingBasis": "The period limit less what is settled and what is reserved at decision time."
     },
     "ledger": {
-      "title": "The ledger",
+      "title": "Ledger",
       "label": "Draws on this mandate",
-      "basis": "Reservations are taken at decision time; settlements and releases are recorded on the answer.",
+      "basis": "Reservations are taken at decision time. Settlements and releases are recorded on the answer.",
       "note": "Two concurrent calls cannot both fit under the same remaining limit: the reservation is taken before dispatch.",
       "columns": {
         "when": "When",
@@ -65,13 +65,12 @@
       "pager": {
         "label": "Ledger pages",
         "newer": "Newer",
-        "older": "Older",
-        "end": "The oldest movement read"
+        "older": "Older"
       },
       "emptyBodyEffective": "Its ledger is empty, so remaining authority equals the full period limit."
     },
     "grant": {
-      "title": "The grant",
+      "title": "Grant",
       "agent": "Agent",
       "grantedBy": "Granted by",
       "notGranted": "not granted",
@@ -94,11 +93,11 @@
       "approvalConsequenceRoles": "Approvers are the org roles accountable for the consequence.",
       "valid": "Valid",
       "validWindow": "{from} until {to}",
-      "validWindowBasis": "The window is half-open: the mandate stops being honoured at the instant it ends, not at the end of that day."
+      "validWindowBasis": "The mandate stops being honoured at the instant its window ends."
     },
     "reconciliation": {
       "title": "Reconciliation",
-      "body": "Every draw on a mandate is meant to carry a receipt, and a charge a connection reports with no receipt is money Oxagen did not govern.",
+      "body": "A charge a connection reports without a receipt is spend Oxagen did not govern.",
       "notRecorded": "No read carries receipt frames yet, so this page cannot tell you whether a charge went unrecorded. The organization's audit record lists every governed action, and it cannot be filtered to one mandate: its events carry the capability, the actor and the outcome, and no mandate id.",
       "openAudit": "Open the audit record"
     },
@@ -108,7 +107,7 @@
         "title": "Change the limits on {mandate}",
         "body": "The ledger keeps its rows. The next reservation reads the new per-period limit over what this period has already drawn, so lowering a limit under authority already settled leaves the mandate over its limit rather than undoing the draw. A field left blank leaves that limit as it is; removing a limit altogether is done over the API.",
         "measure": "Measure",
-        "measureHint": "The measure the tool version declares the limit under. Only this measure's limit changes; every other measure keeps the bound it holds.",
+        "measureHint": "The measure the tool version declares the limit under. Other measures keep their limits.",
         "unit": "Unit",
         "unitHint": "What the measure counts, in its own name. A money limit keeps the currency it was granted in, and its figures are amounts such as 12.50. Add a new money limit over the API.",
         "perCall": "Per call",
@@ -135,7 +134,7 @@
         "title": "Revoke {mandate}",
         "body": "The mandate ends now. Every reservation held by a call that has not dispatched is released, and those calls end unanswered. The ledger keeps every movement it has recorded.",
         "reason": "Reason",
-        "reasonHint": "Recorded on the mandate. The audit record shows that it was revoked, not why.",
+        "reasonHint": "Recorded on the mandate. The audit record omits the reason.",
         "confirm": "Revoke this mandate",
         "pending": "Revoking",
         "draft": {

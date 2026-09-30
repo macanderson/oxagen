@@ -261,7 +261,7 @@ describe("Identity › trust relationships", () => {
     const trust = region("Trust relationships");
     expect(trust).toHaveTextContent("Replaynot recorded");
     expect(trust).toHaveTextContent("Tamper incidentsnot recorded");
-    expect(within(trust).queryByRole("link", { name: "Read them" })).toBeNull();
+    expect(within(trust).queryByRole("link", { name: "Open the incidents" })).toBeNull();
   });
 
   it("says replay is not recorded when the newest run recorded no grade (negative)", () => {
@@ -277,6 +277,6 @@ describe("Identity › trust relationships", () => {
     });
     const trust = region("Trust relationships");
     expect(trust).toHaveTextContent("Tamper incidents0");
-    expect(within(trust).queryByRole("link", { name: "Read them" })).toBeNull();
+    expect(within(trust).queryByRole("link", { name: "Open the incidents" })).toBeNull();
   });
 });

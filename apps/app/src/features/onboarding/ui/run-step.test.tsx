@@ -112,14 +112,14 @@ describe("RunStep while waiting", () => {
         name: "Waiting for the first frame",
       }),
     ).toBeInTheDocument();
-    expect(card).toHaveTextContent("polling · 1s");
+    expect(card).toHaveTextContent("polling every second");
     expect(card).toHaveTextContent("aintel.core.release-manager");
     expect(card).toHaveTextContent("Claude Code");
     expect(card).toHaveTextContent("host enrolled");
     const log = screen.getByTestId("first-frame-log");
-    expect(log).toHaveTextContent("host enrolled · enrollment hen_01");
-    expect(log).toHaveTextContent("collector reporting · last heartbeat");
-    expect(log).toHaveTextContent("hooks written · the collector checked them");
+    expect(log).toHaveTextContent("host enrolled as enrollment hen_01");
+    expect(log).toHaveTextContent("collector heartbeat received");
+    expect(log).toHaveTextContent("hooks written and checked by the collector");
     expect(log).toHaveTextContent("waiting…");
     expect(
       screen.getByTestId("first-frame-log-not-backed"),
