@@ -36,7 +36,9 @@ export const runSummarize = registerCapability({
   scoped: true,
   noBillingGate: true,
   mutates: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
+  // The job pays for a model call that the per-turn budget never sees, so
+  // Stella asks a person before it queues one.
+  agent: { requiresApproval: true, riskLevel: "medium", category: "run" },
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {

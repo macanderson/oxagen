@@ -44,7 +44,7 @@ Org Owner, Org Admin.
 
 - `POST /api/v1/{org}/{ws}/api-keys`
 - MCP tool `api_key_create`
-- Agent: requires `agent.requiresApproval = false`, risk `medium` — surfaced as a tool in the org-management category.
+- Agent: `agent.requiresApproval = true`, risk `high`, in the org-management category. A person approves each call first, because the call returns a raw key, as `rotate_api_key` does.
 
 ## Errors
 

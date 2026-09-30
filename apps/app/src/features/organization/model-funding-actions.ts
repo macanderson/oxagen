@@ -105,7 +105,16 @@ export async function testModelKey(
   };
 }
 
-/** Stores the key (replacing any key already stored) and returns the redacted view. */
+/**
+ * Stores the key (replacing any key already stored) and returns the redacted view.
+ *
+ * Storing a key resets its structured-output answer to unknown (#3314), and
+ * the answer the form's test got for the candidate is never stored. So for an
+ * `openai_compatible` endpoint, the only provider with such an answer, the
+ * stored key is verified once more. That verify records the answer the
+ * provider client reads. A verify that fails leaves the key stored and the
+ * answer unknown, and the client keeps the schema in the prompt.
+ */
 export async function saveModelKey(
   org: string,
   input: ModelKeyInput,
@@ -114,12 +123,16 @@ export async function saveModelKey(
   if (refused) return refused;
   const ctx = await requireViewer(org);
   const modelMap = modelMapOf(input);
-  return kernelWrite(ctx, orgModelCredentialSet, {
+  const saved = await kernelWrite(ctx, orgModelCredentialSet, {
     provider: input.provider,
     apiKey: input.apiKey.trim(),
     ...(needsBaseUrl(input.provider) ? { baseUrl: input.baseUrl.trim() } : {}),
     ...(modelMap === undefined ? {} : { modelMap }),
   });
+  if (saved.ok && input.provider === "openai_compatible") {
+    await kernelWrite(ctx, orgModelCredentialVerify, {});
+  }
+  return saved;
 }
 
 /** Removes the key; the organisation's next turn runs on Oxagen's key. */

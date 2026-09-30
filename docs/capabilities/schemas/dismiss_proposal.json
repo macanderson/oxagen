@@ -9,7 +9,7 @@
   ],
   "sensitivity": "medium",
   "agent": {
-    "requiresApproval": false,
+    "requiresApproval": true,
     "riskLevel": "medium",
     "category": "governance"
   },

@@ -11,7 +11,9 @@ describe("export_run contract", () => {
       Owner: "allow",
       Admin: "allow",
     });
-    expect(runExport.agent?.requiresApproval).toBe(false);
+    // Stella asks a person before it queues high-sensitivity evidence.
+    expect(runExport.agent?.requiresApproval).toBe(true);
+    expect(runExport.agent?.riskLevel).toBe("medium");
   });
 
   it("takes a run id from either store and answers the queued export id", () => {

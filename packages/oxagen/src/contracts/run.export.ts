@@ -34,7 +34,8 @@ export const runExport = registerCapability({
   scoped: true,
   noBillingGate: true,
   mutates: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "run" },
+  // A high-sensitivity write, so Stella asks a person before it queues one.
+  agent: { requiresApproval: true, riskLevel: "medium", category: "run" },
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: {

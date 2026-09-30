@@ -336,6 +336,10 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       }));
     if (!conversation)
       throw new ApprovalResumeError("requester_conversation_missing");
+    // A call a decision rule parked also keys on the rule digest (#4226).
+    // When the rules change, the digest changes, and the call gets a new row
+    // for the person to answer. Keyed on the input alone, it would keep
+    // finding the old row, whose resume the new rules refuse.
     const resumeKey = inputDigest({
       orgId: args.orgId,
       workspaceId: args.workspaceId,
@@ -343,6 +347,7 @@ async function createResumableApproval(args: CreateApprovalArgs) {
       requesterUserId,
       capability: args.capabilityName,
       digest,
+      ...(args.ruleDigest ? { ruleDigest: args.ruleDigest } : {}),
     });
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${resumeKey}, 0))`,

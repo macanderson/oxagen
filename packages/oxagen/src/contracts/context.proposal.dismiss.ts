@@ -17,8 +17,10 @@ export const contextProposalDismiss = registerCapability({
   scoped: true,
   noBillingGate: true,
   mutates: true,
+  // It closes the proposal's Context PR and deletes the branch, so Stella
+  // asks a person first.
   agent: {
-    requiresApproval: false,
+    requiresApproval: true,
     riskLevel: "medium",
     category: "governance",
   },

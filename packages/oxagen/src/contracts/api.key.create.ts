@@ -25,9 +25,11 @@ export const apiKeyCreate = registerCapability({
   // API key management does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.
   noBillingGate: true,
+  // It returns a raw key, as `rotate_api_key` does, so Stella asks a person
+  // first, at the same risk.
   agent: {
-    requiresApproval: false,
-    riskLevel: "medium",
+    requiresApproval: true,
+    riskLevel: "high",
     category: "organization",
   },
   sensitivity: "high",

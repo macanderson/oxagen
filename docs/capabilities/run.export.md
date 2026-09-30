@@ -15,8 +15,8 @@ The signed, offline-verifiable evidence bundle for one sealed run (Mission Contr
 - CLI: `oxagen run export <run-id>`
 - Authentication: session or API key; org Owner or Admin, checked in the handler (`assertOrgRole`, `apps/app/ARCHITECTURE.md` §3.2) for the signed-in user or the key's creator (`resolveActingUserId`); a key with no recorded creator is refused `forbidden / no_principal`
 - Capability name: `export_run`
-- `mutates: true`; `agent.requiresApproval: false`; not billed (`noBillingGate: true`). IAM default-deny; high sensitivity.
-- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
+- `mutates: true`; `agent.requiresApproval: true`; not billed (`noBillingGate: true`). IAM default-deny; high sensitivity.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. A person approves each call first (`riskLevel: medium`), because the bundle is high-sensitivity evidence.
 
 ## Input
 
