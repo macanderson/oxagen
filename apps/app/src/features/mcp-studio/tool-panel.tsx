@@ -7,9 +7,10 @@
 // Every edit here is staged in the draft, never written. A suggested
 // classification stays a suggestion until a person confirms or changes it,
 // and the steering PR that Changes opens is what records it. Draft asks the
-// in-app agent for a description (draft_studio_description) and bills as
-// in-app agent spend. #4742 builds that capability. Until it merges, Draft
-// renders disabled with a one-line note (pending-capabilities.ts).
+// in-app agent for a description (draft_studio_description, #4742, through
+// studio-calls.ts) and bills as in-app agent spend. Draft names the server by
+// its folder, so it renders disabled with a one-line note until the record
+// names it.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import {
@@ -39,14 +40,14 @@ import {
   stagedClassification,
   stagedDescription,
 } from "./draft";
-import { studioGapRef } from "./gaps";
 import type { StudioClassification, StudioTool } from "./model";
 import { StudioNotRecorded } from "./not-recorded";
+import { PendingNote } from "./pending-note";
+import type { StudioAt } from "./route";
 import {
   type DraftStudioDescription,
   draftStudioDescription,
-} from "./pending-capabilities";
-import { PendingNote } from "./pending-note";
+} from "./studio-calls";
 
 const section = "flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0";
 const heading = "text-[13.5px] font-semibold text-foreground";
@@ -260,6 +261,7 @@ function Classification({
 }
 
 function Description({
+  at,
   serverName,
   tool,
   ops,
@@ -267,6 +269,7 @@ function Description({
   onStage,
   draft,
 }: {
+  at: StudioAt;
   serverName: string | null;
   tool: StudioTool;
   ops: readonly DraftOp[];
@@ -281,7 +284,6 @@ function Description({
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<
     | { kind: "none" }
-    | { kind: "not_built"; gap: string }
     | { kind: "failed"; message: string }
     /** The call threw, so no answer came back. */
     | { kind: "error" }
@@ -289,26 +291,21 @@ function Description({
   const imported = importedAfter(tool, ops);
   const trimmed = text.trim();
   /** Draft names the server by its folder, so it waits for the record too. */
-  const blocked = !draft.available
-    ? draft.gap
-    : serverName === null
-      ? "record"
-      : null;
+  const blocked = serverName === null ? "record" : null;
   const runDraft = async () => {
-    if (serverName === null || !draft.available) return;
+    if (serverName === null) return;
     setPending(true);
     setOutcome({ kind: "none" });
     try {
-      const result = await draft.call({ server: serverName, tool: tool.name });
+      const result = await draft.call(at, {
+        server: serverName,
+        tool: tool.name,
+      });
       if (result.ok) {
         setText(result.description);
         return;
       }
-      setOutcome(
-        result.reason === "not_built"
-          ? { kind: "not_built", gap: studioGapRef(result.gap) }
-          : { kind: "failed", message: result.message },
-      );
+      setOutcome({ kind: "failed", message: result.message });
     } catch {
       setOutcome({ kind: "error" });
     } finally {
@@ -379,17 +376,6 @@ function Description({
               {t("draftNotBuilt")}
             </PendingNote>
           )}
-          {outcome.kind === "not_built" ? (
-            <p
-              role="status"
-              data-state="not-built"
-              data-gap={outcome.gap}
-              data-testid="studio-panel-draft-not-built"
-              className={note}
-            >
-              {t("draftNotBuilt")}
-            </p>
-          ) : null}
           {outcome.kind === "failed" ? (
             <p role="alert" className={note}>
               {t("draftFailed", { message: outcome.message })}
@@ -549,6 +535,7 @@ function Feedback({ tool }: { tool: StudioTool }) {
 }
 
 export function ToolPanel({
+  at,
   serverName,
   tool,
   ops,
@@ -560,6 +547,8 @@ export function ToolPanel({
   onOpenChange,
   draft = draftStudioDescription,
 }: {
+  /** The workspace Draft runs in. */
+  at: StudioAt;
   /** The folder name Draft names the server by; null until the record names it. */
   serverName: string | null;
   tool: StudioTool;
@@ -573,7 +562,7 @@ export function ToolPanel({
   offFacts: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Draft's capability: the stub until #4742 merges. */
+  /** Draft's capability. A test passes a fake. */
   draft?: DraftStudioDescription;
 }) {
   const t = useTranslations("mcpStudio.panel");
@@ -601,6 +590,7 @@ export function ToolPanel({
           onStage={stage}
         />
         <Description
+          at={at}
           serverName={serverName}
           tool={tool}
           ops={ops}
