@@ -93,9 +93,15 @@ every long thread and changes the cached prefix on every turn.
   kept it. The summariser is told to keep identifiers, numbers and decisions,
   and the frame's body shows what it kept.
 - A long thread pays one fast-tier call about every five turns.
-- The summary's tokens are metered and charged as assistant use. They do not
-  count against the per-turn budget guard, which reads the engine's
-  completions.
+- The summary's tokens are metered and charged as assistant use. Since #4228
+  they also count against the per-turn budget. `compactHistory` returns the
+  call's model, usage and cost, priced on the summary's own model, and the
+  guard adds that cost to every tick (`openingCostUsd`). A summary that alone
+  reaches an enforced budget stops the turn before the engine starts, with
+  the same `engine_aborted` refusal a mid-turn stop gives. The
+  `context.history_summarized` frame records the model, the token counts and
+  the cost in `cost_usd_micros`, and the Run page's label for the frame shows
+  the cost.
 - A thread with more than 261 unsummarised messages, which only a thread
   older than this record can have, gets its oldest messages left out of the
   first summary. The summary says so and the log names the conversation.

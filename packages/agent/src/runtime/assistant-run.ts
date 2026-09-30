@@ -66,7 +66,7 @@ import {
   goalVerdictPayload,
   type TurnLedgerGoalVerdict,
 } from "./engine/goal";
-import type { HistorySummaryFrame } from "./history-summary";
+import type { HistorySummaryCall, HistorySummaryFrame } from "./history-summary";
 import { sendRunSealed } from "./run-sealed-event";
 import type {
   TurnLedger,
@@ -139,6 +139,29 @@ const GOAL_MAX_CHARS = 8192;
  * the `context.history_summarized` frame name it (`history-summary.ts`).
  */
 export const HISTORY_SUMMARY_PROVIDER = "conversation_history";
+
+/**
+ * The summary call's model, usage, and cost as the frame records them
+ * (#4228). The ledger refuses a payload outside its bounds, and a refused
+ * frame refuses the turn, so each figure is held to them: the model label to
+ * 128 characters, token counts to one million, and the cost to $1,000 in
+ * whole micro-dollars.
+ */
+function summaryCallPayload(call: HistorySummaryCall): {
+  summary_model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd_micros: number;
+} {
+  const bounded = (n: number, max: number): number =>
+    Number.isFinite(n) ? Math.min(max, Math.max(0, Math.round(n))) : 0;
+  return {
+    summary_model: call.model.slice(0, 128) || "unknown",
+    input_tokens: bounded(call.inputTokens, 1_000_000),
+    output_tokens: bounded(call.outputTokens, 1_000_000),
+    cost_usd_micros: bounded(call.costUsd * 1_000_000, 1_000_000_000),
+  };
+}
 
 /**
  * The context the turn frames, as the spec names it. `engram` is the
@@ -1004,6 +1027,7 @@ class Recorder implements AssistantRunRecorder {
         window_message_count: frame.windowMessages,
         regenerated: frame.regenerated,
         ...(frame.reasonCode ? { reason_code: frame.reasonCode } : {}),
+        ...(frame.summaryCall ? summaryCallPayload(frame.summaryCall) : {}),
       },
       body: frame.text === null ? undefined : jsonBody(eventType, frame.text),
     });

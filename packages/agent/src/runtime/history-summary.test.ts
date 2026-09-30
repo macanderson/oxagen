@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
+import { providerCostUsd } from "@oxagen/billing/pricing";
 
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
@@ -299,7 +300,22 @@ describe("a 120-message thread with no summary yet", () => {
       },
     ]);
 
-    // And the run says a summary was used.
+    // What the summary call used and cost, priced on its own model, for the
+    // turn's budget guard and the run's record (#4228).
+    const summaryCall = {
+      model: "model-for-fast",
+      inputTokens: 900,
+      outputTokens: 40,
+      costUsd: providerCostUsd({
+        model: "model-for-fast",
+        inputTokens: 900,
+        outputTokens: 40,
+      }),
+    };
+    expect(summaryCall.costUsd).toBeGreaterThan(0);
+    expect(compacted.summaryCall).toEqual(summaryCall);
+
+    // And the run says a summary was used, and what it cost.
     expect(compacted.frame).toEqual({
       outcome: "applied",
       digest: digestJcs(text),
@@ -308,6 +324,7 @@ describe("a 120-message thread with no summary yet", () => {
       windowMessages: keep,
       regenerated: true,
       text,
+      summaryCall,
     });
   });
 });
@@ -334,6 +351,9 @@ describe("a stored summary", () => {
       coveredMessages: 80,
       windowMessages: 46,
     });
+    // A reused summary cost this turn nothing (negative, #4228).
+    expect(compacted.summaryCall).toBeUndefined();
+    expect(compacted.frame?.summaryCall).toBeUndefined();
   });
 
   it("is folded into a new one once the messages after it outgrow the window", async () => {
@@ -475,6 +495,8 @@ describe("a summary that cannot be written in time", () => {
       outcome: "unavailable",
       reasonCode: "summary_failed",
     });
+    // The turn carried no summary, so it records no summary call.
+    expect(compacted.summaryCall).toBeUndefined();
   });
 });
 

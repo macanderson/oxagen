@@ -324,7 +324,13 @@ export function createTurnBudgetGuard(
   let limitUsd = policy.limitUsd;
 
   return async (usage: TurnUsageSnapshot) => {
-    const cost = turnCostUsd(model, usage, rateCard);
+    // What the turn spent before the engine's first step, such as the history
+    // summary (#4228). A figure that is not a finite positive number counts as
+    // nothing rather than poisoning the comparison with NaN.
+    const opening = hooks.openingCostUsd?.() ?? 0;
+    const cost =
+      turnCostUsd(model, usage, rateCard) +
+      (Number.isFinite(opening) && opening > 0 ? opening : 0);
     hooks.onTick?.(cost, limitUsd);
     const verdict = evaluateTurnBudget({ ...policy, limitUsd }, cost);
     switch (verdict.action) {

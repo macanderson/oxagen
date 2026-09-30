@@ -606,6 +606,26 @@ describe("frameKinds and the chips an entry answers", () => {
     expect(summary.summary).toBe("history summary applied (80)");
   });
 
+  it("names what a history summary this turn wrote cost, with no cost record (#4228)", () => {
+    const written = ledgerFrame(
+      event(9, "context.history_summarized", {
+        provider: "conversation_history",
+        outcome: "applied",
+        covered_message_count: 80,
+        window_message_count: 40,
+        regenerated: true,
+        summary_model: "anthropic/claude-haiku-4.5",
+        input_tokens: 900,
+        output_tokens: 40,
+        cost_usd_micros: 1_100,
+      }),
+    );
+    expect(written.summary).toBe("history summary applied (80) $0.0011");
+    // The turn's spend is metered per run, so the frame adds nothing to it.
+    expect(written.costMicros).toBeNull();
+    expect(frameKinds(written)).toEqual(["recall"]);
+  });
+
   it("counts the prompt an operator typed, once, and not a subagent's", () => {
     const typed = tachoFrame(tachoRow(6, "turn_start", { turnSeq: 1 }));
     const handed = tachoFrame(
