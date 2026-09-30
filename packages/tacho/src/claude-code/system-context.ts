@@ -23,17 +23,34 @@
  * `budgetTokens`, the UTF-8 byte count over four, the unit the steering
  * assembler already budgets in. Each count carries its basis beside it.
  *
- * The proxy stores a request with the prefix the previous call holds cut out
- * (`request-prefix.ts`). A cut request names the call that holds the cut
+ * The proxy stores a request with the part its session's prior holds cut
+ * out (`request-prefix.ts`). A cut request names the call that holds the cut
  * fields by that call's full digest, so this module remembers what each
  * request it measured resolved to, by full digest, and a cut request reuses
  * the parts it points at. A digest names exact bytes, so the memory is
- * shared by every recorder in the process. A cut request whose earlier call
- * this process never measured, after a restart, measures no system context.
+ * shared by every recorder in the process.
+ *
+ * A cut request resolves by this rule (#4348, #4508):
+ *
+ * 1. A call becomes its session's prior only once its frame is on the WAL.
+ *    Sealing that frame measured the call, so its context was in this memory
+ *    before any later call could name it.
+ * 2. The proxy keeps that context beside the prior in `RequestPrefixMemory`,
+ *    which evicts by session, as the prior itself is evicted. A fold takes
+ *    the context of the call it cut against and holds it until its own frame
+ *    seals.
+ * 3. Just before that seal, the proxy puts the context back in this memory
+ *    (`SystemContextMemory.restorePrior`). Resolving then never depends on
+ *    what this memory evicted since: another session's calls, or a call
+ *    that settled out of order.
+ *
+ * So this memory is only the hand-off between a seal and the proxy, and a
+ * small bound serves it. A cut request whose earlier call this process never
+ * measured, after a restart, measures no system context.
  */
 import { budgetTokens } from "@contextgraphprotocol/typescript-sdk";
 import type { z } from "zod";
-import { PRIOR_MEMBER } from "../collector/request-prefix";
+import { type PrefixFold, PRIOR_MEMBER } from "../collector/request-prefix";
 import {
   digestBytes,
   digestJcs,
@@ -44,6 +61,7 @@ import {
 } from "../digest";
 import {
   modelFacts,
+  refineTokenSourcePairs,
   SYSTEM_CONTEXT_PARTS_MAX,
   type SystemContextPart,
 } from "../envelope";
@@ -59,7 +77,11 @@ export const REQUEST_FULL_DIGEST_ATTR = "oxagen.request_full_digest";
 export const SYSTEM_CONTEXT_PARTS_OMITTED_ATTR =
   "oxagen.system_context_parts_omitted";
 
-/** How many measured requests the shared memory holds. */
+/**
+ * How many measured requests the shared memory holds. It is a hand-off, not
+ * the store a later fold reads (see the rule above), so its bound does not
+ * limit how many sessions resolve.
+ */
 const MEMORY_REQUESTS = 512;
 
 /** How many distinct system contexts one turn lists before listing again. */
@@ -80,7 +102,8 @@ const tokenSourceFacts = modelFacts
     system_context_digest: true,
     system_context_parts: true,
   })
-  .strict();
+  .strict()
+  .superRefine((facts, ctx) => refineTokenSourcePairs(facts, ctx));
 
 export type TokenSourceFacts = z.output<typeof tokenSourceFacts>;
 
@@ -122,9 +145,27 @@ export class SystemContextMemory {
       this.entries.delete(oldest);
     }
   }
+
+  /**
+   * Put back the context of the call `fold` cut against, as the fold took it
+   * from the prefix memory, so the frame about to seal resolves it whatever
+   * this memory evicted since. A fold that cut nothing, or whose prior was
+   * remembered with no context, puts back nothing.
+   */
+  restorePrior(
+    fold: Pick<PrefixFold<RequestContext>, "prior" | "priorPayload">,
+  ): void {
+    if (fold.prior === undefined || fold.priorPayload === undefined) return;
+    this.set(fold.prior.unchanged_from, fold.priorPayload);
+  }
 }
 
-const SHARED_MEMORY = new SystemContextMemory();
+/**
+ * The memory every recorder in the process resolves against by default. The
+ * proxy reads and restores contexts here around each seal, so the two share
+ * this one instance.
+ */
+export const SHARED_SYSTEM_CONTEXT_MEMORY = new SystemContextMemory();
 
 type Json = Record<string, JsonValue | undefined>;
 
@@ -376,11 +417,11 @@ function sum(parts: readonly SystemContextPart[]): number {
 }
 
 /**
- * The name of the steering part that stands for the assembled text around
- * the items: the header, the force headings, the separators, and any
- * omission note. It is always the first steering part, and its digest is the
- * manifest's `text_digest`, so a record that happens to share the name still
- * reads as a separate part.
+ * The name of the steering part that stands for the assembled text: every
+ * included record with the header, the force headings, the separators, and
+ * any omission note. It is always the first steering part, and its digest is
+ * the manifest's `text_digest`, so a record that happens to share the name
+ * still reads as a separate part.
  */
 export const STEERING_ASSEMBLY_PART = "$assembly";
 
@@ -391,20 +432,20 @@ export interface SteeringContext {
 }
 
 /**
- * The steering a `steering.manifest` body names. Each included item is a
- * part. The host appends one included `steer` item per operator message it
- * delivered beside the assembled text, so those count on top of it.
+ * The steering a `steering.manifest` body names. The host appends one
+ * included `steer` item per operator message it delivered beside the
+ * assembled text, so those count on top of it, one part each.
  *
- * The assembler's `spent_tokens` covers its whole text, which is more than
- * the item bodies, and `text_digest` names those bytes. When the manifest
- * carries both, the total is `spent_tokens` plus the delivered steers, and
- * one {@link STEERING_ASSEMBLY_PART} part carries the text digest and the
- * tokens the items leave over. A changed header then changes the
- * whole-context digest. A manifest without both counts its items alone.
+ * The assembler's `spent_tokens` covers its whole text, and `text_digest`
+ * names those bytes. When the manifest carries both, the assembled text is
+ * one {@link STEERING_ASSEMBLY_PART} part with that digest and that count,
+ * and the total is `spent_tokens` plus the delivered steers. The part is
+ * digested over the text alone, so a bundle assembled again with the same
+ * text and a new record `id` or `recorded_at` keeps its digest, and so does
+ * the whole context (#4508). A changed header changes it.
  *
- * The total follows `spent_tokens`, not the parts. Each item's count rounds
- * up on its own, so the items can add up to more than the assembled text.
- * The assembly part then counts zero, and the parts sum past the total.
+ * A manifest without both lists each included item as its own part,
+ * digested over the item's manifest entry, and counts the items alone.
  */
 export function steeringContext(
   body: Record<string, unknown>,
@@ -412,14 +453,15 @@ export function steeringContext(
   const items = body["items"];
   if (!Array.isArray(items)) return undefined;
   const parts: SystemContextPart[] = [];
-  let assembled = 0;
+  const steers: SystemContextPart[] = [];
+  let total = 0;
   let delivered = 0;
   for (const item of items) {
     if (!isObject(item) || item["outcome"] !== "included") continue;
     const { id, kind, force, recorded_at, tokens } = item;
     if (typeof id !== "string" || id.length === 0) continue;
     if (typeof tokens !== "number" || !Number.isFinite(tokens)) continue;
-    parts.push({
+    const part: SystemContextPart = {
       kind: "steering",
       name: clip(id),
       digest: digestJcs({
@@ -430,9 +472,13 @@ export function steeringContext(
         tokens,
       }),
       tokens: clampU32(tokens),
-    });
-    if (kind === "steer") delivered += clampU32(tokens);
-    else assembled += clampU32(tokens);
+    };
+    parts.push(part);
+    total += part.tokens;
+    if (kind === "steer") {
+      steers.push(part);
+      delivered += part.tokens;
+    }
   }
   const spent = body["spent_tokens"];
   const text = body["text_digest"];
@@ -441,17 +487,17 @@ export function steeringContext(
     !Number.isFinite(spent) ||
     !isSha256Digest(text)
   ) {
-    return { parts, tokens: clampU32(assembled + delivered) };
+    return { parts, tokens: clampU32(total) };
   }
   const assembly: SystemContextPart = {
     kind: "steering",
     name: STEERING_ASSEMBLY_PART,
     digest: text,
-    tokens: clampU32(spent - assembled),
+    tokens: clampU32(spent),
   };
   return {
-    parts: [assembly, ...parts],
-    tokens: clampU32(clampU32(spent) + delivered),
+    parts: [assembly, ...steers],
+    tokens: clampU32(assembly.tokens + delivered),
   };
 }
 
@@ -491,7 +537,7 @@ export class SystemContextTracker {
 
   constructor(
     state?: SystemContextState,
-    private readonly memory: SystemContextMemory = SHARED_MEMORY,
+    private readonly memory: SystemContextMemory = SHARED_SYSTEM_CONTEXT_MEMORY,
   ) {
     const parts = state?.steering?.map((part) => ({ ...part }));
     this.steering =

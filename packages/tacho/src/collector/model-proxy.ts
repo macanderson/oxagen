@@ -102,6 +102,10 @@ import {
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
 import {
+  type RequestContext,
+  SHARED_SYSTEM_CONTEXT_MEMORY,
+} from "../claude-code/system-context";
+import {
   CONTEXT_WINDOW_ATTR,
   encodeWindowAttr,
   measureProviderRequest,
@@ -697,9 +701,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       : {}),
   });
   const observed = new Map<string, number>();
-  // What each session's previous call carried, so the next call's body holds
-  // only what is new (`request-prefix.ts`).
-  const priors = new RequestPrefixMemory();
+  // What each session's last landed call carried, so the next call's body
+  // holds only what is new (`request-prefix.ts`), and that call's system
+  // context, so the next call's frame can resolve the part it cut
+  // (`system-context.ts`).
+  const priors = new RequestPrefixMemory<RequestContext>();
   let callsObserved = 0;
   let refused = 0;
   retireIdleSockets(httpAgent);
@@ -1426,12 +1432,15 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // injected body when `beforeForward` changed one, because the request that
     // was made is the request a fork has to replay.
     const sent = injected ? body : readable();
-    // The body stores the request with the prefix the previous call already
-    // holds cut out. Folding runs on the full decoded text, whatever its
-    // size: a request over the cap usually folds down to the few messages
-    // that are new, and checking the raw bytes here — before the fold had a
-    // chance to make that saving — used to throw it away and ship no request
-    // half at all for a call whose folded delta would have been a few KB.
+    // The body stores the request with the prefix the session's last landed
+    // call already holds cut out. The fold changes no memory: this call
+    // becomes the prior only once its own frame lands (`settle`), so a call
+    // that overlaps it never points at it. Folding runs on the full decoded
+    // text, whatever its size: a request over the cap usually folds down to
+    // the few messages that are new, and checking the raw bytes here —
+    // before the fold had a chance to make that saving — used to throw it
+    // away and ship no request half at all for a call whose folded delta
+    // would have been a few KB.
     // Only `fold.text`, what would actually be stored, is checked against
     // the cap, below.
     const requestText = sent !== undefined ? sent.toString("utf8") : undefined;
@@ -1493,8 +1502,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       // `settleMetered` is synchronous, so no other writer seals between
       // the mark and the rollback.
       const mark = recorder.markChain();
+      let landed = false;
       try {
-        settleMetered(errorClass);
+        landed = settleMetered(errorClass);
       } catch (error) {
         // Sealing a frame or appending it to the WAL must never surface
         // here: this runs inside response, error and close event listeners
@@ -1503,10 +1513,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // take the whole daemon down mid-call over one frame. The response
         // already sent, or already decided, is unaffected. Only this call's
         // own frame is lost, with its body, and that is logged rather than
-        // silent.
-        // The next call folds against this one's request unless it is
-        // forgotten, and would ship pointing at a body that never landed.
-        if (fold !== undefined) priors.forget(sessionKey);
+        // silent. This call was never remembered, so no later call points
+        // at the body it lost.
         try {
           recorder.rollbackChain(mark);
         } catch (rollbackError) {
@@ -1518,10 +1526,29 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
+      // The call's frame, with its request stored as `fold.text`, is on the
+      // WAL. Only now does the call become the session's prior (#4348), and
+      // its system context goes beside it: sealing the frame measured it, so
+      // the shared memory holds it under the digest the next fold will name.
+      // The prefix memory keeps it until the session is evicted, whatever
+      // the shared memory evicts first (#4508).
+      if (landed && fold !== undefined)
+        priors.remember(
+          sessionKey,
+          fold,
+          SHARED_SYSTEM_CONTEXT_MEMORY.get(fold.fullDigest),
+        );
     };
 
-    const settleMetered = (errorClass: string | undefined): void => {
-      if (!metered) return;
+    /**
+     * Seal the call's frame and write it to the WAL. Returns true when the
+     * frame stored this call's request as `fold.text`, so a later call may
+     * cut against it.
+     */
+    const settleMetered = (errorClass: string | undefined): boolean => {
+      // No frame seals for a call the proxy does not meter, so nothing holds
+      // its request and no later call may point at it.
+      if (!metered) return false;
       const usage: ObservedUsage = meter?.end() ?? {};
       const model = usage.model ?? requestModel;
       // A stream that stopped before the vendor's closing count (the caller
@@ -1604,16 +1631,21 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             requestContentText = undefined;
         }
       }
-      // `fold` already remembered this call as the session's next prior
-      // (`request-prefix.ts`), on the assumption its own body would ship.
-      // A request cut for size here — alone, or only once paired with the
-      // response — breaks that assumption: the next call's `unchanged_from`
-      // would point at a body nobody stored. Forgetting falls back to
-      // storing the next call in full, which costs the saving this call
-      // would have offered but never points at an unstored body.
-      if (fold !== undefined && requestContentText === undefined) {
-        priors.forget(sessionKey);
-      }
+      // Whether this frame stores the folded request. Only then may a later
+      // call cut against this one (`settle` remembers it once the frame is
+      // on the WAL). A request cut for size here, alone or only once paired
+      // with the response, is stored nowhere, so this call is never
+      // remembered and the next call folds against the last one that did
+      // ship, or stores its request whole. It never points at a body nobody
+      // stored.
+      const shipsFold =
+        fold !== undefined && !unfolded && requestContentText !== undefined;
+      // The frame about to seal resolves the part it cut from the context of
+      // the call it cut against. The fold took that context from the prefix
+      // memory when the call was forwarded. Putting it back in the shared
+      // memory now means the resolve never depends on what that memory
+      // evicted while this call streamed (#4508).
+      if (shipsFold) SHARED_SYSTEM_CONTEXT_MEMORY.restorePrior(fold);
       // Bytes came back and none of them are here, so either the encoding the
       // vendor chose is one this build has no decoder for, or the exchange
       // pushed the shared cap over and this half was the one dropped to keep
@@ -1770,6 +1802,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         chain.takeBodies(),
       );
       sessionSighting?.commit();
+      return shipsFold;
     };
 
     // The caller went away: stop paying for tokens nobody will read.

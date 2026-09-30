@@ -12,8 +12,10 @@ import {
   parseTachoEvent,
   SYSTEM_CONTEXT_PARTS_MAX,
   type TachoEvent,
+  TOKEN_SOURCE_COUNTS,
 } from "./envelope";
 import { minimalSession, sealAll, unsealed } from "./test-helpers";
+import { tachoEventWireSchema } from "./wire";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
 
@@ -110,6 +112,59 @@ describe("the token source members at ingest", () => {
       const body = { ...(base["body"] as Record<string, unknown>), ...bad };
       expect(() => parseTachoEvent({ ...base, body })).toThrow();
     }
+  });
+
+  // #4508 item 5. A count with no basis cannot say whether it was reported
+  // or estimated, and a basis with no count names nothing.
+  it("refuses a count without its basis and a basis without its count, for each source", () => {
+    const base = wire(llmCall({}));
+    const baseBody = base["body"] as Record<string, unknown>;
+    for (const count of TOKEN_SOURCE_COUNTS) {
+      const basis = `${count}_basis`;
+      const cases: Array<[Record<string, unknown>, string]> = [
+        [{ [count]: 120 }, basis],
+        [{ [basis]: "estimated" }, count],
+      ];
+      for (const [bad, missing] of cases) {
+        const event = { ...base, body: { ...baseBody, ...bad } };
+        const parsed = tachoEventWireSchema.safeParse(event);
+        expect(parsed.success).toBe(false);
+        const paths = parsed.error?.issues.map((issue) => issue.path.join("."));
+        expect(paths).toEqual([`body.${missing}`]);
+        expect(() => parseTachoEvent(event)).toThrow();
+      }
+      // Both together, and neither, still parse.
+      const paired = {
+        ...base,
+        body: { ...baseBody, [count]: 120, [basis]: "reported" },
+      };
+      expect(tachoEventWireSchema.safeParse(paired).success).toBe(true);
+    }
+    expect(tachoEventWireSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("holds the pair on every kind whose body carries the sources, and on no other", () => {
+    const [error, manifest] = sealAll([
+      unsealed("error", { model: "claude-opus-4-5" }),
+      unsealed("steering.manifest", { items: [] }),
+    ]);
+    const unpaired = { steering_tokens: 40 };
+    const refuse = wire(error!);
+    expect(
+      tachoEventWireSchema.safeParse({
+        ...refuse,
+        body: { ...(refuse["body"] as Record<string, unknown>), ...unpaired },
+      }).success,
+    ).toBe(false);
+    // A steering manifest's body is opaque on the wire, and a member of that
+    // name there is not a token source.
+    const opaque = wire(manifest!);
+    expect(
+      tachoEventWireSchema.safeParse({
+        ...opaque,
+        body: { ...(opaque["body"] as Record<string, unknown>), ...unpaired },
+      }).success,
+    ).toBe(true);
   });
 
   it("parses a frame from a recorder that predates the members, as before", () => {

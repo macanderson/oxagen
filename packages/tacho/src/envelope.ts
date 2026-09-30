@@ -299,6 +299,42 @@ export const modelFacts = z.object({
     .optional(),
 });
 
+/**
+ * The three token sources, each named by its count member. Its basis rides
+ * beside it as `<count>_basis`.
+ */
+export const TOKEN_SOURCE_COUNTS = [
+  "tool_definition_tokens",
+  "context_frame_tokens",
+  "steering_tokens",
+] as const;
+
+/**
+ * Hold each token source's count and basis together: both present or both
+ * absent (#4508). A count with no basis leaves a reader unable to tell a
+ * reported count from an estimate, and a basis with no count names a
+ * measurement that is not there. `path` is where `body` sits in the value
+ * being parsed.
+ */
+export function refineTokenSourcePairs(
+  body: Readonly<Record<string, unknown>>,
+  ctx: z.RefinementCtx,
+  path: readonly (string | number)[] = [],
+): void {
+  for (const count of TOKEN_SOURCE_COUNTS) {
+    const basis = `${count}_basis`;
+    const hasCount = body[count] !== undefined;
+    if (hasCount === (body[basis] !== undefined)) continue;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [...path, hasCount ? basis : count],
+      message: hasCount
+        ? `${count} needs ${basis} beside it`
+        : `${basis} names no ${count}`,
+    });
+  }
+}
+
 /** Prompt and response facts (data-model section 2.8). */
 export const promptFacts = z.object({
   prompt_digest: digest.optional(),
@@ -1079,8 +1115,29 @@ const members = TACHO_KINDS.map((kind) => member(kind)) as unknown as [
   ...AnyKindMember[],
 ];
 
-/** The wire schema: one envelope, discriminated on `kind`. */
-export const tachoEventSchema = z.discriminatedUnion("kind", members);
+/** The kinds whose body carries the token source members. */
+const TOKEN_SOURCE_KINDS: ReadonlySet<TachoKind> = new Set(
+  TACHO_KINDS.filter(
+    (kind) => TOKEN_SOURCE_COUNTS[0] in KIND_BODIES[kind].shape,
+  ),
+);
+
+/**
+ * The wire schema: one envelope, discriminated on `kind`. A body that
+ * carries a token source count carries its basis too, and the reverse
+ * ({@link refineTokenSourcePairs}). The pair is checked here rather than on
+ * each body, which must stay a plain object for `KIND_BODIES[kind].shape`.
+ */
+export const tachoEventSchema = z
+  .discriminatedUnion("kind", members)
+  .superRefine((event, ctx) => {
+    if (TOKEN_SOURCE_KINDS.has(event.kind))
+      refineTokenSourcePairs(
+        event.body as Readonly<Record<string, unknown>>,
+        ctx,
+        ["body"],
+      );
+  });
 
 export type TachoEvent = z.infer<typeof tachoEventSchema>;
 export type TachoEventInput = z.input<typeof tachoEventSchema>;
