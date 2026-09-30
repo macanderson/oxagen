@@ -13,7 +13,7 @@
 //   recharts' own accessibility layer is off, because the data reaches
 //   assistive tech through the text beside the chart or a ChartTable, never
 //   through a keyboard walk of the marks.
-// - The tooltip is the maia menu surface: 70% popover ground over a blurred,
+// - The tooltip is the maia menu surface: the popover ground over a blurred,
 //   saturated backdrop, a hairline foreground ring, and maia's radius and
 //   spacing. It leads with the value and names the series only when there are
 //   two or more. A value the record does not hold reads "not recorded".
@@ -135,7 +135,7 @@ export const ChartTooltip = Tooltip;
  * the text above it stays sharp, a hairline ring rather than a border.
  */
 const TOOLTIP_SURFACE =
-  "relative isolate grid min-w-32 gap-1.5 rounded-xl bg-popover/70 px-3 py-2 text-xs text-popover-foreground shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate grid min-w-32 gap-1.5 rounded-xl bg-popover/55 dark:bg-popover/70 px-3 py-2 text-xs text-popover-foreground shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /**
  * The tooltip body. recharts clones it with the hovered point's payload, so

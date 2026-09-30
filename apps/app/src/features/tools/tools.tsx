@@ -1,22 +1,24 @@
-// Tools (mockup `tools.md`, route `tools[/<tab>]`): every tool version the
-// registry holds, the providers they came from, the toolbelts that put a tool
-// in front of an agent, the policy that decides a call, and the kill switches.
-// The chain the page makes readable is Provider → Tool → Toolbelt → Agent.
+// The Tools views (mockup `tools.md`), now tabs of the Agents page: every tool
+// version the registry holds, the providers they came from, the toolbelts that
+// put a tool in front of an agent, the policy that decides a call, and the
+// kill switches. The chain the views make readable is Provider → Tool →
+// Toolbelt → Agent. The Agents page draws the one header and the tab strip;
+// this module draws a tab's body, the header's tool actions, and the counts
+// the strip carries.
 //
-// The page reads the registry's first page, the provider roster and the switch
-// board before it draws anything, because all three feed the header and the
-// tab strip. The registry read decides the page's state: a refusal or an
-// outage of the tool read replaces the whole body (header and tabs included)
-// and never the shell, and a workspace with no provider and no version is the
-// empty state. The kernel seam serves one read per request, so a tab body that
-// asks for the same record again pays nothing.
+// A body reads the registry's first page before it draws anything. A refusal
+// or an outage of that read replaces the tab's body and never the header, the
+// strip or the shell, and a workspace with no provider and no version shows
+// the empty state on the Tool servers views. Policies and Off switches do not
+// hang on a provider, so they draw whatever the registry holds. The kernel
+// seam serves one read per request, so a body that asks for the same record
+// the header or the strip read pays nothing.
 import { useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
-import { PageHeader } from "@/ui/page-header";
 import { FlipControls } from "./switch-controls";
 import { ImportProvider } from "./import-provider";
 import type { LedgerGrant } from "./mandates-ledger";
@@ -26,7 +28,7 @@ import { Registry } from "./registry";
 import { ToolsEmpty, ToolsPageFailure } from "./states";
 import { StubAction } from "./stub-action";
 import { Switches, switchesOn } from "./switches";
-import { ToolsTabs } from "./tabs";
+import { isServerView, ServerViews } from "./tabs";
 import { Toolbelts } from "./toolbelts";
 import {
   parseToolsView,
@@ -113,69 +115,117 @@ function grantableAgents(read: Read<AgentPage>): LedgerGrant {
   };
 }
 
-/** The tabs that carry their own primary action, so the header yields the gold. */
-const OWN_PRIMARY: ReadonlySet<ToolsTab> = new Set([
-  "toolbelts",
-  "providers",
-  "policy",
-]);
-
-function Header({
+/**
+ * The Tools actions in the Agents page header, each in the default style
+ * because Connect an agent is the page's one gold action: Import a provider
+ * and New tool on every tab, and Flip a kill switch on Off switches, the tab
+ * whose record it writes. An org Owner or Admin only; nobody else may write
+ * what they open.
+ */
+export async function ToolsHeaderActions({
   ctx,
-  at,
+  source,
   tab,
-  servers,
-  denyGeneration,
-  members,
 }: {
   ctx: WsCtx;
-  at: ToolsAt;
-  tab: ToolsTab;
-  servers: readonly { id: string; name: string }[] | null;
-  denyGeneration: { org: number; workspace: number };
-  members: readonly { id: string; name: string | null; email: string }[];
+  source: DataSource;
+  /** The Tools view the Agents tab shows, or null on Agents and Runtimes. */
+  tab: ToolsTab | null;
 }) {
-  const pages = useTranslations("pages");
-  const t = useTranslations("tools");
-  const admin = canAdministerOrg(ctx);
+  if (!canAdministerOrg(ctx)) return null;
+  const at: ToolsAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
+  const flips = tab === "switches";
+  const [servers, board, members] = await Promise.all([
+    source.tools.mcpServers(ctx),
+    flips ? source.tools.killSwitches(ctx) : Promise.resolve(null),
+    flips ? source.org.members(ctx) : Promise.resolve(null),
+  ]);
   return (
-    <PageHeader
-      title={pages("tools")}
-      eyebrow={t("eyebrow", { workspace: ctx.wsName })}
-      description={t("lede")}
-      actions={
-        admin ? (
-          <>
-            <ImportProvider at={at} servers={servers} />
-            <StubAction
-              label={t("header.newTool")}
-              tone={OWN_PRIMARY.has(tab) ? "secondary" : "primary"}
-              title={t("header.wizard.title")}
-              subtitle={t("header.wizard.subtitle")}
-              gap="toolWizard"
-              note={t("header.wizard.note")}
-              confirm={t("header.wizard.confirm")}
-              testId="tools-new-tool"
-            >
-              <ol className="flex list-decimal flex-col gap-1 pl-5 text-[13px] text-muted-foreground">
-                <li>{t("header.wizard.steps.describe")}</li>
-                <li>{t("header.wizard.steps.recommend")}</li>
-                <li>{t("header.wizard.steps.manifest")}</li>
-                <li>{t("header.wizard.steps.code")}</li>
-                <li>{t("header.wizard.steps.pr")}</li>
-              </ol>
-            </StubAction>
-            <FlipControls
-              at={at}
-              denyGeneration={denyGeneration}
-              existing={null}
-              members={members}
-            />
-          </>
-        ) : undefined
+    <ToolsHeaderButtons
+      at={at}
+      servers={servers.ok ? servers.value.servers : null}
+      flip={
+        board === null
+          ? null
+          : {
+              denyGeneration: board.ok
+                ? board.value.denyGeneration
+                : { org: 0, workspace: 0 },
+              members: members?.ok === true ? members.value.members : [],
+            }
       }
     />
   );
+}
+
+function ToolsHeaderButtons({
+  at,
+  servers,
+  flip,
+}: {
+  at: ToolsAt;
+  servers: readonly { id: string; name: string }[] | null;
+  flip: {
+    denyGeneration: { org: number; workspace: number };
+    members: readonly { id: string; name: string | null; email: string }[];
+  } | null;
+}) {
+  const t = useTranslations("tools");
+  return (
+    <>
+      <ImportProvider at={at} servers={servers} />
+      <StubAction
+        label={t("header.newTool")}
+        tone="secondary"
+        title={t("header.wizard.title")}
+        subtitle={t("header.wizard.subtitle")}
+        gap="toolWizard"
+        note={t("header.wizard.note")}
+        confirm={t("header.wizard.confirm")}
+        testId="tools-new-tool"
+      >
+        <ol className="flex list-decimal flex-col gap-1 pl-5 text-[13px] text-muted-foreground">
+          <li>{t("header.wizard.steps.describe")}</li>
+          <li>{t("header.wizard.steps.recommend")}</li>
+          <li>{t("header.wizard.steps.manifest")}</li>
+          <li>{t("header.wizard.steps.code")}</li>
+          <li>{t("header.wizard.steps.pr")}</li>
+        </ol>
+      </StubAction>
+      {flip === null ? null : (
+        <FlipControls
+          at={at}
+          denyGeneration={flip.denyGeneration}
+          existing={null}
+          members={flip.members}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The counts the Agents tab strip carries for the Tools tabs: the providers
+ * on Tool servers and the switches denying on Off switches. Null where the
+ * read did not answer, so the strip prints no figure rather than a zero.
+ */
+export async function toolsTabCounts(
+  ctx: WsCtx,
+  source: DataSource,
+): Promise<{
+  servers: number | null;
+  switchesOn: number | null;
+  switchesOnIsFloor: boolean;
+}> {
+  const [servers, board] = await Promise.all([
+    source.tools.mcpServers(ctx),
+    source.tools.killSwitches(ctx),
+  ]);
+  return {
+    servers: servers.ok ? servers.value.servers.length : null,
+    switchesOn: board.ok ? switchesOn(board.value.switches) : null,
+    switchesOnIsFloor: board.ok && board.value.truncated,
+  };
 }
 
 async function TabBody({
@@ -325,7 +375,7 @@ async function TabBody({
   }
 }
 
-export async function Tools({
+export async function ToolsBody({
   ctx,
   source,
   tab,
@@ -333,28 +383,28 @@ export async function Tools({
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The tab the route resolved from its path segment or a legacy `?tab=`. */
+  /** The Tools view the Agents page's `?tab=` resolved to. */
   tab: ToolsTab;
   /** The query the URL carried: `category`, `provider`, `names`, `rows`, `cursor`, `belt`. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseToolsView(tab, searchParams);
   const at: ToolsAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
-  const [registry, servers, board, members] = await Promise.all([
+  const [registry, servers] = await Promise.all([
     source.tools.versions(ctx, {
       category: null,
       cursor: null,
       serverId: null,
     }),
     source.tools.mcpServers(ctx),
-    source.tools.killSwitches(ctx),
-    canAdministerOrg(ctx) ? source.org.members(ctx) : Promise.resolve(null),
   ]);
   if (!registry.ok) {
     return <ToolsPageFailure ctx={ctx} at={at} tab={tab} read={registry} />;
   }
   const roster = servers.ok ? servers.value.servers : null;
+  const serverView = isServerView(view.tab) ? view.tab : null;
   if (
+    serverView !== null &&
     registry.value.items.length === 0 &&
     registry.value.nextCursor === null &&
     roster !== null &&
@@ -364,42 +414,25 @@ export async function Tools({
   }
   return (
     <div className="flex flex-col gap-4">
-      <Header
-        ctx={ctx}
-        at={at}
-        tab={view.tab}
-        servers={roster}
-        denyGeneration={
-          board.ok ? board.value.denyGeneration : { org: 0, workspace: 0 }
-        }
-        members={members?.ok === true ? members.value.members : []}
-      />
-      <ToolsTabs
-        at={at}
-        current={view.tab}
-        versions={{
-          count: registry.value.items.length,
-          complete: registry.value.nextCursor === null,
-        }}
-        providers={roster === null ? null : roster.length}
-        switchesOn={board.ok ? switchesOn(board.value.switches) : null}
-        switchesOnIsFloor={board.ok && board.value.truncated}
-      />
-      <div
-        role="tabpanel"
-        id={`tools-panel-${view.tab}`}
-        aria-labelledby={`tools-tab-${view.tab}`}
-        className="flex flex-col gap-4"
-      >
-        {await TabBody({ ctx, source, view, at })}
-      </div>
+      {serverView === null ? null : (
+        <ServerViews
+          at={at}
+          current={serverView}
+          versions={{
+            count: registry.value.items.length,
+            complete: registry.value.nextCursor === null,
+          }}
+          providers={roster === null ? null : roster.length}
+        />
+      )}
+      {await TabBody({ ctx, source, view, at })}
     </div>
   );
 }
 
 /**
- * The skeleton the route shows while the reads run: the shell stays and the
- * body is four tile blocks and a panel of seven rows, so nothing reads as a
+ * The skeleton a Tools tab shows while its reads run: the header and the strip
+ * stay, and the body is four tile blocks and a panel of seven rows, so nothing reads as a
  * zero or a stale row while the page loads.
  */
 export function ToolsLoading() {

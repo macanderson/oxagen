@@ -23,6 +23,7 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/done-record": "workspace:*",
     "@oxagen/github": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",

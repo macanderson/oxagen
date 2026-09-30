@@ -483,7 +483,7 @@ export interface DataSource {
     waste(ctx: WsCtx, period: DayRange): Promise<Read<SpendWaste>>;
     /**
      * get_operator_ranking (D15): operators by unproductive spend, for a
-     * manager. Caller: features/spend/spend.tsx on the operator tab, which
+     * manager. Caller: features/spend/spend.tsx on the Findings tab, which
      * reads it only for an org Owner or Admin.
      */
     operatorRanking(
