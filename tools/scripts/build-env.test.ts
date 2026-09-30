@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ENV_REGISTRY } from "@oxagen/config";
+import { ENV_REGISTRY, staticValueFor } from "@oxagen/config";
 import {
   renderEnvFile,
+  renderRuntimeEnv,
   resolveBuildEnv,
   shellQuote,
   type Parameter,
@@ -213,5 +214,91 @@ describe("preview without OAuth", () => {
         withoutOAuth: true,
       }),
     ).toThrow("only for preview");
+  });
+});
+
+describe("runtime fill", () => {
+  const appUrl = staticValueFor("APP_URL", "production");
+
+  it("carries a static value no parameter holds to the running container", () => {
+    // Production's APP_URL: set by the registry, held by no parameter, and
+    // read at request time by the Slack and Linear connect flows.
+    expect(appUrl).toBeDefined();
+    const { runtimeFill } = resolveBuildEnv({
+      service: "app",
+      env: "production",
+      parameters: [],
+      prefix: PREFIX,
+    });
+    expect(runtimeFill.find((entry) => entry.key === "APP_URL")?.value).toBe(
+      appUrl,
+    );
+  });
+
+  it("leaves a value Parameter Store holds to Parameter Store", () => {
+    const { runtimeFill, drift } = resolveBuildEnv({
+      service: "app",
+      env: "production",
+      parameters: [param("APP_URL", appUrl ?? "")],
+      prefix: PREFIX,
+    });
+    expect(runtimeFill.map((entry) => entry.key)).not.toContain("APP_URL");
+    expect(drift).not.toContain("APP_URL");
+  });
+
+  it("reports a parameter that disagrees with the registry and keeps it out of the manifest", () => {
+    const { runtimeFill, drift } = resolveBuildEnv({
+      service: "app",
+      env: "production",
+      parameters: [
+        param("INGESTION_CRYPTO_PROVIDER", "a-value-the-registry-never-names"),
+      ],
+      prefix: PREFIX,
+    });
+    expect(drift).toEqual(["INGESTION_CRYPTO_PROVIDER"]);
+    expect(runtimeFill.map((entry) => entry.key)).not.toContain(
+      "INGESTION_CRYPTO_PROVIDER",
+    );
+  });
+
+  it("carries only static, non-secret values the service claims", () => {
+    for (const env of ["production", "preview"] as const) {
+      for (const service of ["app", "api", "mcp", "docs"] as const) {
+        const { runtimeFill } = resolveBuildEnv({
+          service,
+          env,
+          parameters: [],
+          prefix: PREFIX,
+        });
+        for (const { key } of runtimeFill) {
+          const meta = ENV_REGISTRY[key];
+          expect(meta?.valueOrigin, key).toBe("static");
+          expect(meta?.secret, key).toBe(false);
+          expect(meta?.services, key).toContain(service);
+        }
+      }
+    }
+  });
+
+  it("adds nothing for a key the registry leaves to Parameter Store in this environment", () => {
+    // Staging builds as preview, and the registry sets no preview APP_URL:
+    // staging's own parameter decides it.
+    expect(staticValueFor("APP_URL", "preview")).toBeUndefined();
+    const { runtimeFill } = resolveBuildEnv({
+      service: "app",
+      env: "preview",
+      parameters: [],
+      prefix: "/oxagen/staging",
+    });
+    expect(runtimeFill.map((entry) => entry.key)).not.toContain("APP_URL");
+  });
+
+  it("renders the fill as a JSON object of strings", () => {
+    const rendered = renderRuntimeEnv([
+      { key: "A", value: "one", secret: false, source: "registry" },
+      { key: "B", value: "two words", secret: false, source: "registry" },
+    ]);
+    expect(JSON.parse(rendered)).toEqual({ A: "one", B: "two words" });
+    expect(renderRuntimeEnv([])).toBe("{}\n");
   });
 });
