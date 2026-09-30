@@ -242,6 +242,15 @@ describe("chrome", () => {
     expect(html).toContain('"a": "\\u003c/script>"');
     expect(html).toContain('<link rel="stylesheet" href="/assets/blog.css">');
     expect(html).toContain("<p>hi</p>");
+    // Installable like the hand-authored pages: the launch screens and the
+    // install prompt ride in after the manifest.
+    expect(html).toContain(
+      '<link rel="manifest" href="/oxagen.webmanifest">\n<!-- pwa: written by tools/scripts/sync-brand-assets.mjs -->',
+    );
+    expect(html).toContain('rel="apple-touch-startup-image"');
+    expect(html).toContain(
+      '<script src="/assets/install-prompt.js" defer data-icon="/icon-192.png"></script>',
+    );
     const abs = layout({
       title: "T",
       description: "D",
