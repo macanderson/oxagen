@@ -357,7 +357,7 @@ describe("Agents, loaded", () => {
   it("draws a Composition row from the record, and the unbacked columns as not recorded", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
     expect(cellsOf(only(rows()))).toEqual([
-      "reacme.core.release-botClaude Code",
+      "REacme.core.release-botClaude Code",
       "MBMarcus Bell",
       "not recorded",
       // The belt the agent carries (ADR-198).
@@ -517,7 +517,7 @@ describe("Agents, loaded", () => {
     const [first, second] = rows();
     if (first === undefined || second === undefined) throw new Error("rows");
     expect(cellsOf(first)).toEqual([
-      "reacme.core.release-botCuts releases and opens their pull requests.",
+      "REacme.core.release-botCuts releases and opens their pull requests.",
       "Claude Codeclaude-code",
       "MBMarcus Bell",
       "enrolled",

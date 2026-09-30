@@ -66,8 +66,8 @@ describe("AgentCard", () => {
       expect(
         container.querySelector("[data-agent-avatar]"),
       ).toHaveStyle({
-        width: `${avatarSize}px`,
-        height: `${avatarSize}px`,
+        width: `${String(avatarSize)}px`,
+        height: `${String(avatarSize)}px`,
       });
       expect(container.querySelector("[data-harness-mark]")).toHaveAttribute(
         "data-harness-mark",
