@@ -1270,7 +1270,7 @@
 }
 
 /* The template form in the agent SDLC post. It sends the company name and a
-   format to sdlc.oxagen.cloud with a plain GET, so it needs no script. The
+   format to sdlc.oxagen.sh with a plain GET, so it needs no script. The
    chosen format takes the double border, the house shape for a held choice. */
 .sdlc-form {
   margin: 1.6em 0;
