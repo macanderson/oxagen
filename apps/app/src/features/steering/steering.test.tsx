@@ -1279,6 +1279,7 @@ describe("Proposals", () => {
       ],
       contextPr: [],
       freshness: [],
+      layout: [],
       deliveries: [],
       hub: [[ctx]],
       memories: [],

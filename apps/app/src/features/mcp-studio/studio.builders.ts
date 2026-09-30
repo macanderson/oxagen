@@ -1129,6 +1129,7 @@ export function studioSource(reads: StudioReads = {}) {
       proposals: refuse,
       contextPr: refuse,
       freshness: refuse,
+      layout: refuse,
       hub: refuse,
       deliveries: refuse,
       memories: refuse,

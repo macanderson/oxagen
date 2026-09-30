@@ -218,6 +218,19 @@ export const SteeringFreshness = z.object({
 export type SteeringFreshness = z.infer<typeof SteeringFreshness>;
 
 /**
+ * The layout of the workspace's main repository, from `get_steering_layout`
+ * (#4765): `steering` when its production branch carries
+ * `steering/governance.toml`, `legacy` otherwise, and null while no
+ * repository is bound or the read failed. The record page needs it to name
+ * the file and branch `open_context_pr` writes, because the two layouts
+ * disagree on both.
+ */
+export const SteeringLayout = z.object({
+  layout: z.enum(["steering", "legacy"]).nullable(),
+});
+export type SteeringLayout = z.infer<typeof SteeringLayout>;
+
+/**
  * One published record's page (#3395; MC spec §10.2), from `get_record`.
  *
  * `backing` says where the bytes came from. `file` means the record was read
