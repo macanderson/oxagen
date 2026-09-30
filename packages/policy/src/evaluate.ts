@@ -80,6 +80,12 @@ export interface ToolCallVerdict extends CedarVerdict {
   /** The action the call was decided as. Empty when the call named none. */
   action: string;
   agent: string;
+  /**
+   * True when the deny is an argument that does not fit its declared type,
+   * so the caller's input is the fix. Absent for every other error, such as
+   * an undeclared agent, a tool not imported, or a failure inside Cedar.
+   */
+  invalidArguments?: true;
 }
 
 interface ResolvedCall {
@@ -138,7 +144,7 @@ export function decideToolCall(input: ToolCallInput): ToolCallVerdict {
   }
   const call = resolveCall(input, principal.harness);
   if ("error" in call) return deny(input.agent, input.action ?? "", [call.error]);
-  if (call.errors.length > 0) return deny(input.agent, call.action, call.errors);
+  if (call.errors.length > 0) return { ...deny(input.agent, call.action, call.errors), invalidArguments: true };
 
   const skill =
     input.skill !== undefined && harnessNamesSkill(principal.harness) ? input.skill : undefined;

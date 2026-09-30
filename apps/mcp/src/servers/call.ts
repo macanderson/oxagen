@@ -377,15 +377,23 @@ async function runTool(view: ServedView, ports: ServedPorts, entry: ServedTool, 
     approved = { request, id: approval.id, approvers: approval.approvers };
   }
   if (verdict.errors.length > 0) {
-    // Cedar could not read the arguments, so the input schema is the fix.
-    // Agent feedback counts it as a schema rejection (ADR-234).
-    return {
-      ...refusal(
-        `Oxagen could not decide ${tool.name}: ${verdict.errors.join(" ")} Check the arguments against the tool's input schema, then call it again.`,
-        "denied",
-      ),
-      problem: "schema_rejected",
-    };
+    // An argument of the wrong type is the agent's to fix, and agent
+    // feedback counts it as a schema rejection (ADR-234). Any other error,
+    // such as a failure inside Cedar, is the policy's, and says nothing
+    // about the tool.
+    if (verdict.invalidArguments === true) {
+      return {
+        ...refusal(
+          `Oxagen could not decide ${tool.name}: ${verdict.errors.join(" ")} Check the arguments against the tool's input schema, then call it again.`,
+          "denied",
+        ),
+        problem: "schema_rejected",
+      };
+    }
+    return refusal(
+      `Oxagen could not decide ${tool.name}: ${verdict.errors.join(" ")} Ask a workspace admin to check the steering record's policy.`,
+      "denied",
+    );
   }
   if (verdict.decision !== "allow") return refusal(denial(agent, tool.name, verdict), "denied");
 

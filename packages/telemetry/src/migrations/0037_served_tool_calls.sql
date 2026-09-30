@@ -39,8 +39,9 @@ CREATE TABLE IF NOT EXISTS served_tool_calls (
   -- Why the call did not do what the agent asked, when the tool is the reason:
   -- schema_rejected (the tool's input schema refused the arguments) or
   -- error_result (the tool ran and returned an error result). A denial
-  -- because Cedar could not read the arguments is schema_rejected too. Empty
-  -- otherwise, including a refusal by policy, billing, or the route.
+  -- because an argument does not fit its declared type is schema_rejected
+  -- too. Empty otherwise, including a refusal by policy, a failure inside
+  -- Cedar, or a route that refused the call.
   problem LowCardinality(String) DEFAULT '',
 
   created_at DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1))
