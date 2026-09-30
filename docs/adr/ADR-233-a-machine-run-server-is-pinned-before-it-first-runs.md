@@ -45,6 +45,12 @@ hashes npm's tarball, reads the SHA-256 the PyPI index publishes, hashes the
 NuGet package, takes an OCI digest from the image reference, and hashes the
 executable a local command resolves to.
 
+A PyPI release is several files, one per platform and Python version, and the
+launch runs `uvx name@version`, which installs whichever file fits the host.
+The digester collects the SHA-256 of every file in the release and accepts a
+pin that matches any of them. So a pin taken from one file passes on a host
+that installs another.
+
 Discovery does not reach a machine in production. It runs in the API's
 durable functions, the broker that holds the machines' connections runs in
 the MCP service, and discovery's seams install `noLocalReporter` until that
@@ -59,10 +65,19 @@ start anything else.
 ### 1. Where the pin comes from
 
 - **A registry package** (npm, PyPI, NuGet): Oxagen reads the digest from the
-  public registry with the same reader the machine uses. A version never
-  changes under its name, so the machine's own read agrees with Oxagen's.
-  Discovery reads it at each run, so a new catalog version no longer stops at
-  `needs_digest`.
+  public registry with the same reader the machine uses. A published file
+  never changes under its name, so the machine's own read agrees with
+  Oxagen's. Discovery reads it at each run, so a new catalog version no longer
+  stops at `needs_digest`.
+- **A PyPI release pins one file, not the version.** Oxagen selects the
+  release's file that runs on every host: its `py3-none-any` wheel, or its
+  source distribution when it has no such wheel. A release with neither is
+  refused, as an OCI entry that pins no digest is. The lock records that
+  file's name and SHA-256. The launch installs that file by its URL
+  (`uvx --from <url> <name>`) in place of `uvx name@version`, so the host
+  cannot pick another. The machine hashes the file the launch names and
+  compares it with the pin. It no longer accepts a pin because some file in
+  the release carries it.
 - **An OCI image**: the digest the catalog entry's reference pins. An entry
   that pins none is refused, as it is today.
 - **A local command**: the person names the version and the SHA-256 of the
@@ -104,6 +119,10 @@ version, because Oxagen reads that digest itself.
   reader, which retires `needs_digest`; and the draft listing with the two app
   forms, after #4772 gives a request in the API a way to reach a machine.
 - #4756's definition of done is amended to this path.
+- The PyPI rule changes the machine's reader and the lock's launch with the
+  server-side reader. Until they ship, a PyPI package stays at `needs_digest`,
+  because a pin the machine checks against every file of a release does not
+  hold.
 
 ## Alternatives considered
 
