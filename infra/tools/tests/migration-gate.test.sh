@@ -71,8 +71,16 @@ contains "$PIPE" "needs: [checks, test, migration-gate, staging]" \
 # reject the commit. Without this edge a commit that fails its tests would
 # still migrate prod.
 
-contains "$PIPE" "needs: [preflight, checks, test, staging]" \
-  "migration-gate applies only after checks, test and staging pass"
+contains "$PIPE" "[preflight, checks, test, e2e, atlas-validate, rls-integration, rds-compatibility, staging]" \
+  "migration-gate applies only after every check, and staging when it is awake"
+
+# Staging is dormant while no customers are live (#4868). The gate runs past a
+# skipped staging only while the STAGING_ENABLED variable is off, so waking
+# staging makes it a gate again without another edit here.
+contains "$PIPE" "(needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true')" \
+  "a skipped staging passes the gate only while staging is dormant"
+contains "$PIPE" "needs.rds-compatibility.result == 'success'" \
+  "the gate names the checks staging used to carry"
 
 # --- the gate asks all three stores ----------------------------------------
 #
