@@ -112,6 +112,10 @@ function isPrivateAccessRefusal(err: unknown): boolean {
  */
 export function createVercelBlobAdapter(token: string): StorageAdapter {
   let publicOnly = false;
+  let privateAccessKnown = false;
+  let accessProbe: Promise<void> | undefined;
+  let accessWaiters = 0;
+  let waitingBytes = 0;
 
   function learnPublicOnly(key: string): void {
     if (publicOnly) return;
@@ -128,6 +132,55 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
     );
   }
 
+  async function withAccess<T>(
+    key: string,
+    requested: "public" | "private",
+    send: (access: "public" | "private") => Promise<T>,
+    bytes = 0,
+  ): Promise<{ result: T; access: "public" | "private" }> {
+    // One first request learns the store's access mode. Concurrent callers
+    // wait for its answer instead of each uploading a refused private body.
+    if (requested === "private" && accessProbe) {
+      if (accessWaiters >= 64 || bytes > 64 * 1024 * 1024 - waitingBytes) {
+        throw Object.assign(
+          new Error("Storage access negotiation is at capacity. Retry the request later."),
+          { code: "store_overloaded", retryAfterSeconds: 2 },
+        );
+      }
+      accessWaiters += 1;
+      waitingBytes += bytes;
+      try {
+        while (accessProbe) await accessProbe;
+      } finally {
+        accessWaiters -= 1;
+        waitingBytes -= bytes;
+      }
+    }
+    let finishProbe: (() => void) | undefined;
+    if (requested === "private" && !publicOnly && !privateAccessKnown) {
+      accessProbe = new Promise<void>((resolve) => { finishProbe = resolve; });
+    }
+    let access = publicOnly ? "public" : requested;
+    try {
+      let result: T;
+      try {
+        result = await send(access);
+        if (access === "private") privateAccessKnown = true;
+      } catch (err) {
+        if (access !== "private" || !isPrivateAccessRefusal(err)) throw err;
+        learnPublicOnly(key);
+        access = "public";
+        result = await send(access);
+      }
+      return { result, access };
+    } finally {
+      if (finishProbe) {
+        accessProbe = undefined;
+        finishProbe();
+      }
+    }
+  }
+
   return {
     driver: "vercel-blob",
 
@@ -139,15 +192,9 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // has private access enabled. A store provisioned public-only rejects
       // `access: "private"` outright, so that one error is caught below and
       // retried as public, and every later read goes to public directly.
-      const result = publicOnly
-        ? await blobGet(key, { token, access: "public" })
-        : await blobGet(key, { token, access: "private" }).catch(
-            async (err: unknown) => {
-              if (!isPrivateAccessRefusal(err)) throw err;
-              learnPublicOnly(key);
-              return blobGet(key, { token, access: "public" });
-            },
-          );
+      const { result } = await withAccess(key, "private", (access) =>
+        blobGet(key, { token, access }),
+      );
 
       if (!result || !result.stream) {
         // SDK returns null for 404 (not found) or 304 (not modified).
@@ -188,7 +235,6 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
       // store a requested "private" put falls back to "public"; we must report
       // the real visibility so callers persist accurate metadata and never
       // treat a world-readable blob as access-controlled.
-      let effectiveAccess: "public" | "private" = publicOnly ? "public" : access;
       // Converted once: a refused private attempt retries with the same bytes.
       const body = toPutBody(input.body);
       const send = (level: "public" | "private") =>
@@ -200,16 +246,11 @@ export function createVercelBlobAdapter(token: string): StorageAdapter {
           allowOverwrite: true,
         });
 
-      const result = await send(effectiveAccess).catch(
-        async (err: unknown) => {
-          if (effectiveAccess !== "private" || !isPrivateAccessRefusal(err)) {
-            throw err;
-          }
-          // The store is public-only, so the blob is stored world-readable.
-          effectiveAccess = "public";
-          learnPublicOnly(input.key);
-          return send("public");
-        },
+      const { result, access: effectiveAccess } = await withAccess(
+        input.key,
+        access,
+        send,
+        bytes,
       );
 
       logger.info(

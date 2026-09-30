@@ -522,7 +522,10 @@ export async function withRepeatableReadTenantDb<T>(
  * shrink. The check reads the comment's syntax only. Review must confirm that
  * the query actually applies the fence the comment names.
  */
-export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function withSystemDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+  options?: { repeatableRead?: boolean },
+): Promise<T> {
   // Count every withSystemDb call that runs with no active tenant scope. During
   // the seeding window (TENANT_RLS_ENFORCEMENT_ENABLED off) this counter is the
   // operator signal: when db.query.unscoped reads zero it is safe to flip
@@ -546,6 +549,8 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   // where the probe can read it rather than left to be inferred (#3223).
   return runOnPlane("shared", () =>
     db().transaction(async (tx) => {
+      if (options?.repeatableRead)
+        await tx.execute(sql`set transaction isolation level repeatable read`);
       await tx.execute(sql`select set_config('app.rls_bypass', 'on', true)`);
       return fn(tx);
     }),

@@ -1671,6 +1671,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OPENAI_APPS_VERIFICATION_TOKEN: {
+    group: "MCP",
+    description:
+      "Optional OpenAI Apps domain verification challenge. MCP serves this value publicly at /.well-known/openai-apps-challenge when set.",
+    secret: false,
+    clientExposed: false,
+    services: ["mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   // ── Release / build metadata ────────────────────────────────────────────────
   PLATFORM_VERSION: {

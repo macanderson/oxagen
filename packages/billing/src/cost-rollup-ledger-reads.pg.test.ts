@@ -1,19 +1,19 @@
 // The two ledger reads the cost rollup and the Runs list share, evaluated by
 // Postgres over the payloads the in-app assistant writes (#3372). Runs
 // wherever DATABASE_URL points at a database (CI's `test` job); a local run
-// without one is skipped, not red. It reads literals and writes nothing.
+// without one is skipped. The cursor test inserts and removes its own events.
 //
 // A shape test of the rendered SQL says which text the query sends. These say
 // what Postgres answers for it: that the turn rule agrees with the seal's
 // rollup on every payload shape, so a run's turns do not change when
 // compaction swaps its rows for the seal, and that an assistant tool call's
 // name reaches the breakdown.
-import { closeDatabase, withSystemDb } from "@oxagen/database";
+import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { deriveSealRollup, type SealedFrameRow } from "@oxagen/run-ledger";
-import { type SQL, sql } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { rollupRun, type RunMeta, type ToolCallFrame } from "./cost-rollup";
-import { modelCallHidesTurn, toolCallName } from "./cost-rollup-store";
+import { modelCallHidesTurn, streamLedgerToolCalls, toolCallName } from "./cost-rollup-store";
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -136,5 +136,50 @@ describe.skipIf(!enabled)("the ledger reads against Postgres", () => {
       { name: "run.list", calls: 1, resultTokens: null, costMicros: null },
       { name: "search_tools", calls: 1, resultTokens: null, costMicros: null },
     ]);
+  });
+});
+
+
+describe.skipIf(!enabled)("ledger tool streaming", () => {
+  it("keeps repeat history across pages and excludes other workspaces", async () => {
+    const runUuid = crypto.randomUUID();
+    const orgId = crypto.randomUUID();
+    const workspaceId = crypto.randomUUID();
+    const attemptId = crypto.randomUUID();
+    const events = schema.agentRunEvents;
+    try {
+      await withSystemDb((tx) => tx.insert(events).values(
+        Array.from({ length: 258 }, (_, index) => ({
+          orgId,
+          workspaceId: index === 257 ? crypto.randomUUID() : workspaceId,
+          runId: runUuid,
+          eventRecordVersion: 2,
+          attemptId,
+          runSeq: index + 1,
+          attemptSeq: index + 1,
+          eventSchemaVersion: "1",
+          eventType: "tool.call_completed",
+          stage: "tool",
+          payloadDigest: `sha256:${"a".repeat(64)}`,
+          eventDigest: `sha256:${"b".repeat(64)}`,
+          observedAt: new Date("2026-09-01T00:00:00Z"),
+          payloadInline: { capability_name: "Bash", outcome: "completed",
+            input_digest: "input", output_digest: "output" },
+        })),
+      ));
+      const batches: ToolCallFrame[][] = [];
+      await streamLedgerToolCalls({
+        meta: { ...META, orgId, workspaceId },
+        frames: { kind: "ledger", runUuid },
+      }, async (batch) => { batches.push(batch); });
+      expect(batches.map((batch) => batch.length)).toEqual([256, 1]);
+      expect(batches[0]?.[0]?.repeated).toBe(false);
+      expect(batches[1]?.[0]?.repeated).toBe(true);
+      const result = rollupRun({ meta: META, modelCalls: [], toolCalls: batches.flat(), book: [] });
+      expect(result.unproductiveSteps).toBe(256);
+      expect(result.toolCalls).toBe(257);
+    } finally {
+      await withSystemDb((tx) => tx.delete(events).where(eq(events.orgId, orgId)));
+    }
   });
 });

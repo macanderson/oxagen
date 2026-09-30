@@ -24,7 +24,7 @@
 // an envelope its own key id can open. The same plaintext under the same
 // tenant and KEK lands on the same key, so a retried append rewrites an
 // equivalent object rather than minting a second one. Within one process the
-// store skips that rewrite for a key it remembers writing (`writeOnce`).
+// store checks remembered keys still exist before skipping a rewrite (`writeOnce`).
 //
 // The module lives in @oxagen/run-ledger so the ingest handlers, the read
 // handlers and the durable jobs (@oxagen/inngest-functions) share one store.
@@ -40,7 +40,13 @@ import {
   ARCHIVE_SEGMENT_CONTENT_TYPE,
   SHA256_DIGEST_PATTERN,
 } from "@oxagen/tacho";
-import { storage, type StorageAdapter } from "@oxagen/storage";
+import {
+  storage,
+  StorageNotFoundError,
+  readResponseBody,
+  ResponseBodyTooLargeError,
+  type StorageAdapter,
+} from "@oxagen/storage";
 import { MESSAGE_ASSEMBLY_CONTENT_TYPE } from "./content-blocks";
 import type { RunArchiveStore, RunBodyStore } from "./frame-body";
 
@@ -164,15 +170,69 @@ function digestHexOf(digest: string): string {
   return digest.slice("sha256:".length);
 }
 
-async function readAll(body: ReadableStream<Uint8Array>): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = [];
-  const reader = body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
+export class EvidenceBodyTooLargeError extends Error {
+  override readonly name = "EvidenceBodyTooLargeError";
+  readonly code = "evidence_body_too_large";
+
+  constructor(readonly maxBytes: number) {
+    super(`Evidence object exceeds the ${maxBytes}-byte read limit`);
   }
-  return Buffer.concat(chunks);
+}
+
+/** Reject excess work before encryption retains another body in memory. */
+export class EvidenceStoreBusyError extends Error {
+  override readonly name = "EvidenceStoreBusyError";
+  readonly code = "evidence_store_busy";
+  readonly retryAfterSeconds = 2;
+
+  constructor() {
+    super("Evidence storage is at capacity. Retry the request later.");
+  }
+}
+
+async function readAll(
+  body: ReadableStream<Uint8Array>,
+  maxBytes = Number.POSITIVE_INFINITY,
+  sizeBytes: number | null = null,
+): Promise<Buffer> {
+  if (Number.isFinite(maxBytes)) {
+    try {
+      const bytes = await readResponseBody(new Response(body, {
+        headers: sizeBytes === null ? {} : { "content-length": String(sizeBytes) },
+      }), maxBytes);
+      return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    } catch (error) {
+      if (error instanceof ResponseBodyTooLargeError)
+        throw new EvidenceBodyTooLargeError(maxBytes);
+      throw error;
+    }
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    if (sizeBytes !== null && sizeBytes > maxBytes) {
+      throw new EvidenceBodyTooLargeError(maxBytes);
+    }
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw new EvidenceBodyTooLargeError(maxBytes);
+      if (value.byteLength > 0) chunks.push(value);
+    }
+    if (chunks.length === 1) {
+      const chunk = chunks[0]!;
+      return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+    }
+    return Buffer.concat(chunks, total);
+  } catch (err) {
+    // Cancellation releases the upstream response even when its length lied.
+    await reader.cancel(err).catch(() => undefined);
+    throw err;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 const encoder = new TextEncoder();
@@ -193,7 +253,11 @@ export function parseFrameBodyPlaintext(plaintext: Uint8Array): {
   contentType: string;
   bytes: Uint8Array;
 } {
-  const buf = Buffer.from(plaintext);
+  const buf = Buffer.from(
+    plaintext.buffer,
+    plaintext.byteOffset,
+    plaintext.byteLength,
+  );
   if (buf.length < 2) throw new RangeError("frame body plaintext too short");
   const length = buf.readUInt16BE(0);
   if (length === 0 || 2 + length > buf.length) {
@@ -201,7 +265,11 @@ export function parseFrameBodyPlaintext(plaintext: Uint8Array): {
   }
   return {
     contentType: decoder.decode(buf.subarray(2, 2 + length)),
-    bytes: new Uint8Array(buf.subarray(2 + length)),
+    bytes: new Uint8Array(
+      buf.buffer,
+      buf.byteOffset + 2 + length,
+      buf.byteLength - 2 - length,
+    ),
   };
 }
 
@@ -224,7 +292,7 @@ function parseScratchObject(object: Uint8Array): {
   keyId: string;
   envelope: Buffer;
 } {
-  const buf = Buffer.from(object);
+  const buf = Buffer.from(object.buffer, object.byteOffset, object.byteLength);
   if (buf.length < 2) throw new RangeError("scratch object too short");
   const length = buf.readUInt16BE(0);
   if (length === 0 || 2 + length > buf.length) {
@@ -251,49 +319,91 @@ interface EvidenceStoreDeps {
   readCrypto: (keyId: string) => IngestionCryptoAdapter;
   /** Overrides {@link REMEMBERED_WRITE_KEYS}. Tests set it low to see eviction. */
   rememberedWriteKeys?: number;
+  /** Unique writes admitted before encryption. Excess calls fail for retry. */
+  maxActiveWrites?: number;
+  /** Total plaintext bytes retained by admitted unique writes. */
+  maxActiveWriteBytes?: number;
 }
 
+interface WritePool {
+  limits: readonly number[];
+  once: (key: string, bytes: number, write: () => Promise<void>) => Promise<void>;
+}
+
+// Adapter identity keeps different stores apart without retaining dead stores.
+const writePools = new WeakMap<StorageAdapter, WritePool>();
+
 /**
- * Runs each content-addressed write once per key while the key is remembered.
- *
- * Body and assembly keys name the tenant, the KEK and the digest of the bytes,
- * so a key this process already wrote holds the same object a second write
- * would produce. Tacho ingest used to encrypt and upload a body again
- * whenever it saw the same bytes again: 37 keys were written 2 to 4 times in the two
- * minutes before one heap failure (#4202).
- *
- * The map is a least-recently-used set of at most `limit` keys, so memory
- * stays flat. It holds the write's promise, so a second write of a key that is
- * still in flight waits for the first instead of starting its own. A write
- * that fails is forgotten, and the next caller writes the key again. Nothing
- * deletes these objects today. A future delete path must forget the key here,
- * or a later write of the same bytes would be skipped.
+ * Keep active writes separate from completed keys so eviction cannot start a
+ * second encryption of an object still uploading. Completed keys are hints:
+ * verify storage still holds the object before skipping a later upload.
+ * Retention or an external delete can remove an object after its first write.
  */
-function writeOnce(limit: number) {
-  const written = new Map<string, Promise<void>>();
-  return async function once(
-    key: string,
-    write: () => Promise<void>,
-  ): Promise<void> {
-    const known = written.get(key);
-    if (known !== undefined) {
-      written.delete(key);
-      written.set(key, known);
-      return known;
+function writeOnce(deps: EvidenceStoreDeps) {
+  const limit = deps.rememberedWriteKeys ?? REMEMBERED_WRITE_KEYS;
+  const maxActive = deps.maxActiveWrites ?? 64;
+  const maxBytes = deps.maxActiveWriteBytes ?? 64 * 1024 * 1024;
+  for (const value of [limit, maxActive, maxBytes]) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new RangeError("Evidence write limits must be positive safe integers");
     }
-    const pending = write();
-    written.set(key, pending);
+  }
+  const limits = [limit, maxActive, maxBytes];
+  const existing = writePools.get(deps.storage);
+  if (existing) {
+    if (limits.some((value, index) => value !== existing.limits[index])) {
+      throw new RangeError("Evidence stores sharing an adapter must share write limits");
+    }
+    return existing.once;
+  }
+  const written = new Set<string>();
+  const active = new Map<string, Promise<void>>();
+  let activeBytes = 0;
+  function remember(key: string): void {
+    written.delete(key);
+    written.add(key);
     if (written.size > limit) {
-      const oldest = written.keys().next().value;
+      const oldest = written.values().next().value;
       if (oldest !== undefined) written.delete(oldest);
     }
+  }
+  async function once(
+    key: string,
+    bytes: number,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    const known = active.get(key);
+    if (known !== undefined) return known;
+    if (active.size >= maxActive || bytes > maxBytes - activeBytes) {
+      throw new EvidenceStoreBusyError();
+    }
+    activeBytes += bytes;
+    // Defer work until its promise is registered, including synchronous errors.
+    const pending = Promise.resolve().then(async () => {
+      if (written.has(key)) {
+        written.delete(key);
+        try {
+          const object = await deps.storage.get(key);
+          await object.body.cancel();
+          remember(key);
+          return;
+        } catch (err) {
+          if (!(err instanceof StorageNotFoundError)) throw err;
+        }
+      }
+      await write();
+      remember(key);
+    });
+    active.set(key, pending);
     try {
       await pending;
-    } catch (err) {
-      if (written.get(key) === pending) written.delete(key);
-      throw err;
+    } finally {
+      active.delete(key);
+      activeBytes -= bytes;
     }
-  };
+  }
+  writePools.set(deps.storage, { limits, once });
+  return once;
 }
 
 /**
@@ -348,7 +458,12 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
    * opens any body, as after erasure, and `BodyUnopenableError` when this
    * body alone does not open. Any other failure may pass.
    */
-  getBody(scope: EvidenceScope, ref: string): Promise<StoredFrameBody>;
+  getBody(
+    scope: EvidenceScope,
+    ref: string,
+    /** Maximum encrypted object bytes, enforced before decryption. */
+    options?: { maxBytes: number },
+  ): Promise<StoredFrameBody>;
   /** Required here: this store always has somewhere to put a fold. */
   putAssembly(input: {
     orgId: string;
@@ -397,6 +512,8 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
     scope: EvidenceScope,
     jobRunId: string,
     name: string,
+    /** Maximum encrypted object bytes, enforced before decryption. */
+    options?: { maxBytes: number },
   ): Promise<{ bytes: Uint8Array; contentType: string }>;
   /**
    * Delete a job's named scratch objects. A name with no object is skipped,
@@ -412,13 +529,13 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
 export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
   // The key is checked before the body is encrypted, so a skipped write also
   // skips the fresh data key and its KMS wrap.
-  const once = writeOnce(deps.rememberedWriteKeys ?? REMEMBERED_WRITE_KEYS);
+  const once = writeOnce(deps);
   return {
     async put(input) {
       const { adapter, keyId } = deps.writeCrypto();
       const digestHex = digestHexOf(input.digest);
       const key = evidenceBodyKey(input, keyId, digestHex);
-      await once(key, async () => {
+      await once(key, input.bytes.byteLength, async () => {
         const ciphertext = await encrypt(
           frameBodyPlaintext(input.contentType, input.bytes),
           keyId,
@@ -439,7 +556,13 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
       return { ref: evidenceBodyRef(keyId, digestHex) };
     },
 
-    async getBody(scope, ref) {
+    async getBody(scope, ref, options) {
+      if (
+        options &&
+        (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0)
+      ) {
+        throw new RangeError("Evidence read limit must be a nonnegative safe integer");
+      }
       const parsed = parseEvidenceBodyRef(ref);
       if (!parsed)
         throw new TypeError(`not an evidence body reference: ${ref}`);
@@ -447,10 +570,14 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
       const object = await deps.storage.get(
         evidenceBodyKey(scope, parsed.keyId, parsed.digestHex),
       );
-      const ciphertext = await readAll(object.body);
+      const ciphertext = await readAll(
+        object.body,
+        options?.maxBytes,
+        object.sizeBytes,
+      );
       let plaintext: Buffer;
       try {
-        plaintext = await decrypt(Buffer.from(ciphertext), parsed.keyId, {
+        plaintext = await decrypt(ciphertext, parsed.keyId, {
           adapter,
         });
       } catch (err) {
@@ -473,19 +600,24 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
       const key = evidenceAssemblyKey(input, parsed.keyId, parsed.digestHex);
       // The fold is a function of the body's bytes, so the key names its
       // content as surely as a body key does.
-      await once(key, async () => {
+      await once(key, input.bytes.byteLength, async () => {
         const { adapter } = deps.readCrypto(parsed.keyId);
         const ciphertext = await encrypt(
           frameBodyPlaintext(MESSAGE_ASSEMBLY_CONTENT_TYPE, input.bytes),
           parsed.keyId,
           { adapter },
         );
-        await deps.storage.put({
+        const written = await deps.storage.put({
           key,
           body: ciphertext,
           contentType: BODY_OBJECT_CONTENT_TYPE,
           access: "private",
         });
+        if (written.key !== key) {
+          throw new Error(
+            `evidence assembly landed on an unexpected key: ${written.key}`,
+          );
+        }
       });
     },
 
@@ -498,7 +630,7 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
           evidenceAssemblyKey(scope, parsed.keyId, parsed.digestHex),
         );
         const plaintext = await decrypt(
-          Buffer.from(await readAll(object.body)),
+          await readAll(object.body),
           parsed.keyId,
           { adapter },
         );
@@ -565,12 +697,18 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
       }
     },
 
-    async getScratch(scope, jobRunId, name) {
+    async getScratch(scope, jobRunId, name, options) {
+      if (
+        options &&
+        (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0)
+      ) {
+        throw new RangeError("Evidence read limit must be a nonnegative safe integer");
+      }
       const object = await deps.storage.get(
         evidenceScratchKey(scope, jobRunId, name),
       );
       const { keyId, envelope } = parseScratchObject(
-        await readAll(object.body),
+        await readAll(object.body, options?.maxBytes, object.sizeBytes),
       );
       const { adapter } = deps.readCrypto(keyId);
       const plaintext = await decrypt(envelope, keyId, { adapter });

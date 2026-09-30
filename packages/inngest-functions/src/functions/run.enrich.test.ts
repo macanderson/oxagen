@@ -546,7 +546,10 @@ describe("the enrichment budget", () => {
 it("registers enrichment under the adapter limits and serializes each organization's work", () => {
   const config = state.configs.get("run.enrich")!;
   expect(config.batchEvents?.maxSize).toBeLessThanOrEqual(5);
-  expect(config.concurrency).toEqual({ limit: 1, key: "event.data.orgId" });
+  expect(config.concurrency).toEqual([
+    { limit: 2 },
+    { limit: 1, key: "event.data.orgId" },
+  ]);
   expect(config.batchEvents?.key).toContain("event.data.runPublicId");
   // Every run waits out the batch before its account starts.
   expect(config.batchEvents?.timeout).toBe("2s");
@@ -1429,6 +1432,7 @@ describe("the transcript chunks a job keeps", () => {
       key("chunk-0"),
       key("chunk-1"),
       key("chunk-2"),
+      key("manifest"),
     ]);
     // The manifest goes last, so a cleanup that fails part way can finish.
     expect(state.scratchDeleted).toEqual([
@@ -1442,15 +1446,15 @@ describe("the transcript chunks a job keeps", () => {
     expect([...state.bodies.keys()]).toEqual(["long-body"]);
   });
 
-  it("keeps no chunks for a run whose input did not change (negative)", async () => {
+  it("removes streamed chunks when the input did not change", async () => {
     expect(await run()).toMatchObject({ status: "generated" });
     const written = [...state.scratchWritten];
     expect(await run()).toEqual({ status: "unchanged" });
-    expect(state.scratchWritten).toEqual(written);
+    expect(state.scratchWritten.length).toBeGreaterThan(written.length);
     expect(state.scratch.size).toBe(0);
   });
 
-  it("keeps no chunks for a run with no retained text (negative)", async () => {
+  it("removes streamed chunks when there is no retained text", async () => {
     state.frames = [
       tachoFrame({
         seq: 1,
@@ -1471,7 +1475,7 @@ describe("the transcript chunks a job keeps", () => {
       }),
     ];
     expect(await run()).toEqual({ status: "no_retained_text" });
-    expect(state.scratchWritten).toEqual([]);
+    expect(state.scratch.size).toBe(0);
     expect(state.call).not.toHaveBeenCalled();
   });
 
@@ -1649,7 +1653,6 @@ describe("the transcript chunks a job keeps", () => {
     ];
     expect(await run()).toEqual({ status: "no_retained_text" });
     expect(state.call).not.toHaveBeenCalled();
-    expect(state.scratchWritten).toEqual([]);
     expect(state.scratchDeleted).toEqual([
       key("chunk-0"),
       key("chunk-1"),

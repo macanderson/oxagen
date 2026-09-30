@@ -42,6 +42,10 @@ export const ENRICHMENT_MAX_CHUNKS =
 /** The scratch object that names how many chunks a job may have written. */
 export const ENRICHMENT_SCRATCH_MANIFEST = "manifest";
 
+// Encrypted limits include UTF-8 expansion, the key id, and the envelope.
+export const ENRICHMENT_MANIFEST_MAX_BYTES = 64 * 1024;
+export const ENRICHMENT_SCRATCH_MAX_BYTES = 256 * 1024;
+
 /** The scratch object name of a job's transcript chunk at `index`. */
 export function enrichmentChunkName(index: number): string {
   return `chunk-${index}`;
@@ -51,7 +55,7 @@ export function enrichmentChunkName(index: number): string {
 // also names them. The schema drops them, since no read trusts them.
 const manifestSchema = z.object({
   /** How many chunk names the job may have written, over every attempt. */
-  chunks: z.number().int().min(0),
+  chunks: z.number().int().min(0).max(ENRICHMENT_MAX_CHUNKS),
 });
 type Manifest = z.infer<typeof manifestSchema>;
 const encoder = new TextEncoder();
@@ -80,9 +84,12 @@ async function readManifest(
       scope,
       jobRunId,
       ENRICHMENT_SCRATCH_MANIFEST,
+      { maxBytes: ENRICHMENT_MANIFEST_MAX_BYTES },
     ));
   } catch (error) {
     if (isNotFound(error)) return null;
+    if (error instanceof Error && error.name === "EvidenceBodyTooLargeError")
+      return "unreadable";
     throw error;
   }
   try {
@@ -135,7 +142,7 @@ export async function keepEnrichmentChunks(
   const prior = await enrichmentScratchCount(scope, jobRunId);
   const named = Math.max(prior, chunks.length);
   if (chunks.length === 0) return { scratch: named, digests: [] };
-  const bodies = chunks.map((text) => encoder.encode(text));
+  const digests: string[] = [];
   const manifest: Manifest = { chunks: named };
   await store.putScratch({
     scope,
@@ -144,7 +151,9 @@ export async function keepEnrichmentChunks(
     contentType: "application/json",
     bytes: encoder.encode(JSON.stringify(manifest)),
   });
-  for (const [index, bytes] of bodies.entries()) {
+  for (const [index, text] of chunks.entries()) {
+    const bytes = encoder.encode(text);
+    digests.push(digestBytes(bytes));
     await store.putScratch({
       scope,
       jobRunId,
@@ -155,7 +164,61 @@ export async function keepEnrichmentChunks(
   }
   return {
     scratch: named,
-    digests: bodies.map((bytes) => digestBytes(bytes)),
+    digests,
+  };
+}
+
+/** Write each chunk before the collector opens another body. */
+export async function createEnrichmentChunkWriter(
+  scope: RunScope,
+  jobRunId: string,
+) {
+  const store = evidenceStore();
+  const prior = await enrichmentScratchCount(scope, jobRunId);
+  const digests: string[] = [];
+  const chars: number[] = [];
+  let scratch = prior;
+  return {
+    async write(text: string) {
+      const index = digests.length;
+      if (index >= ENRICHMENT_MAX_CHUNKS || text.length > ENRICHMENT_CHUNK_CHARS)
+        throw new Error("Enrichment transcript exceeds its scratch limit");
+      // Reserve every possible name before writing any chunk. A failed read
+      // can then clean up without trusting the collector's in-memory state.
+      if (index === 0) {
+        scratch = Math.max(prior, ENRICHMENT_MAX_CHUNKS);
+        await store.putScratch({
+          scope,
+          jobRunId,
+          name: ENRICHMENT_SCRATCH_MANIFEST,
+          contentType: "application/json",
+          bytes: encoder.encode(JSON.stringify({ chunks: scratch })),
+        });
+      }
+      const bytes = encoder.encode(text);
+      await store.putScratch({
+        scope,
+        jobRunId,
+        name: enrichmentChunkName(index),
+        contentType: "text/plain",
+        bytes,
+      });
+      digests.push(digestBytes(bytes));
+      chars.push(text.length);
+    },
+    async finish() {
+      if (digests.length > 0) {
+        scratch = Math.max(prior, digests.length);
+        await store.putScratch({
+          scope,
+          jobRunId,
+          name: ENRICHMENT_SCRATCH_MANIFEST,
+          contentType: "application/json",
+          bytes: encoder.encode(JSON.stringify({ chunks: scratch })),
+        });
+      }
+      return { scratch, digests, chars };
+    },
   };
 }
 
@@ -179,11 +242,21 @@ export async function readEnrichmentChunk(
     throw new NonRetriableError(
       `Enrichment chunk ${String(index)} of job ${jobRunId} has no digest in its read step's output to check it against`,
     );
-  const { bytes } = await evidenceStore().getScratch(
-    scope,
-    jobRunId,
-    enrichmentChunkName(index),
-  );
+  let bytes: Uint8Array;
+  try {
+    ({ bytes } = await evidenceStore().getScratch(
+      scope,
+      jobRunId,
+      enrichmentChunkName(index),
+      { maxBytes: ENRICHMENT_SCRATCH_MAX_BYTES },
+    ));
+  } catch (error) {
+    if (error instanceof Error && error.name === "EvidenceBodyTooLargeError")
+      throw new NonRetriableError(
+        `Enrichment chunk ${String(index)} of job ${jobRunId} exceeds its read limit`,
+      );
+    throw error;
+  }
   if (digestBytes(bytes) !== digest)
     throw new NonRetriableError(
       `Enrichment chunk ${String(index)} of job ${jobRunId} does not match the digest its read step recorded`,

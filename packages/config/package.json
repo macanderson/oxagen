@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./api-origin": "./src/api-origin.ts",
     "./env": "./src/env.ts",
-    "./public-url": "./src/public-url.ts"
+    "./public-url": "./src/public-url.ts",
+    "./request-work": "./src/request-work.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

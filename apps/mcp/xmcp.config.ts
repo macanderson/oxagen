@@ -19,6 +19,18 @@ const config: XmcpConfig = {
   // equivalent so rspack finds the TypeScript source.
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
+    // Use the pinned framework's Express adapter under an owned HTTP edge.
+    // The default server parses every body before application middleware.
+    // xmcp's config evaluator rejects Node builtin imports.
+    config.entry = {
+      ...(config.entry as Record<string, string>),
+      http: `${process.cwd()}/src/http.ts`,
+    };
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "xmcp-adapter-runtime": `${process.cwd()}/node_modules/xmcp/dist/runtime/adapter-express.js`,
+      "xmcp-home-template": `${process.cwd()}/node_modules/xmcp/src/runtime/templates/home.ts`,
+    };
 
     // xmcp force-aliases `zod` (and `zod/v3`, `zod/v4-mini`) to this app's
     // local zod (v3). better-auth depends on zod v4 and its dist imports

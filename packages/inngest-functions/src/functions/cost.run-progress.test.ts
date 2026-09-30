@@ -26,7 +26,7 @@ type Handler = (ctx: {
   };
 }) => Promise<unknown>;
 type Config = {
-  concurrency?: { limit: number; key: string };
+  concurrency?: { limit: number; key?: string }[];
   debounce?: { key: string; period: string; timeout: string };
 };
 let handler: Handler | null = null;
@@ -76,10 +76,10 @@ describe("cost.run-progress", () => {
   });
 
   it("serialises on the workspace, whose day rows every run rewrites", () => {
-    expect(config?.concurrency).toEqual({
-      limit: 1,
-      key: "event.data.workspaceId",
-    });
+    expect(config?.concurrency).toEqual([
+      { limit: 2 },
+      { limit: 1, key: "event.data.workspaceId" },
+    ]);
   });
 
   it("rebuilds an open run's row and the day it started on, and asks for no findings", async () => {

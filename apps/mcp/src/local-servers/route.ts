@@ -1,3 +1,4 @@
+import { trackRequestWork } from "@oxagen/config/request-work";
 // route.ts: the two routes an enrolled machine polls for local tool calls
 // (mcp-studio-spec, Local servers; #4773).
 //
@@ -130,7 +131,7 @@ export function createLocalServersRoute(deps: LocalServersRouteDeps): LocalServe
       return;
     }
     const hangup = poll ? hangupOf(res) : undefined;
-    void (async () => {
+    void trackRequestWork(async () => {
       const auth = await deps.authenticate(req.headers);
       if (!auth.ok) {
         send(res, auth.status, auth.body);
@@ -138,7 +139,7 @@ export function createLocalServersRoute(deps: LocalServersRouteDeps): LocalServe
       }
       if (hangup !== undefined) await servePoll(auth.machine, hangup, res, deps);
       else serveReply(auth.machine, req.body, res, deps);
-    })().catch((error: unknown) => {
+    }).catch((error: unknown) => {
       deps.log?.("local_servers.route_failed", { path, error: error instanceof Error ? error.message : String(error) });
       send(res, 500, { error: { code: "internal_error", message: "The local-server route failed. The machine retries." } });
     });
