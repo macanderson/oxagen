@@ -154,7 +154,10 @@ export const OUTSIDE_ORG = {
   workspaceName: "Home",
 } as const;
 
-/** The second workspace of e2e-org: marcus owns it, and it holds nothing. */
+/**
+ * The second workspace of e2e-org. Each persona holds the role it holds in
+ * core (marcus owns it), and nothing else is added to it.
+ */
 export const EMPTY_WORKSPACE = { slug: "empty", name: "Empty" } as const;
 
 /**

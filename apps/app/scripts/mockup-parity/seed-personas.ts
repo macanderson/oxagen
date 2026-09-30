@@ -15,8 +15,9 @@
 //      accepts through accept_member_invite, and the owner sets a Billing or
 //      Compliance role through change_member_role;
 //   3. each persona's role in workspace core;
-//   4. a second workspace, `empty`, through create_workspace, with marcus as
-//      an owner of it and nothing added;
+//   4. a second workspace, `empty`, through create_workspace, where each
+//      persona holds the role it holds in core (marcus owns it) and nothing
+//      else is added;
 //   5. the outsider's own organization, e2e-outside, through create_org;
 //   6. the ids a capture path names beyond the run: the agent and runtime
 //      seed:e2e registered, one stdio tool server through register_mcp_server,
@@ -371,14 +372,15 @@ async function seedWorkspaceRole(
 // ── 4. The empty workspace ────────────────────────────────────────────────
 
 /**
- * create_workspace refuses an organization Member, so the owner creates it and
- * marcus is made an owner of it beside them. It holds what a new workspace
- * holds and nothing more.
+ * create_workspace refuses an organization Member, so the owner creates it.
+ * Each persona then gets the role it holds in core, so marcus owns it and any
+ * persona's page can be captured empty. It holds what a new workspace holds
+ * and nothing more.
  */
 async function seedEmptyWorkspace(
   core: Scope,
   ownerId: string,
-  marcusId: string,
+  accounts: ReadonlyMap<PersonaKey, Account>,
 ): Promise<void> {
   let workspaceId = await findWorkspaceId(core.orgId, EMPTY_WORKSPACE.slug);
   if (workspaceId === null) {
@@ -397,12 +399,16 @@ async function seedEmptyWorkspace(
   } else {
     log("empty workspace already exists", { slug: EMPTY_WORKSPACE.slug });
   }
-  await seedWorkspaceRole(
-    { orgId: core.orgId, workspaceId },
-    ownerId,
-    marcusId,
-    "owner",
-  );
+  for (const persona of PERSONAS) {
+    const account = accounts.get(persona.key);
+    if (!account || persona.workspaceRole === null) continue;
+    await seedWorkspaceRole(
+      { orgId: core.orgId, workspaceId },
+      ownerId,
+      account.userId,
+      persona.workspaceRole,
+    );
+  }
 }
 
 // ── 5. The outsider's organization ────────────────────────────────────────
@@ -725,11 +731,7 @@ async function main(): Promise<void> {
     }
   }
 
-  await seedEmptyWorkspace(
-    core,
-    ownerId,
-    requireAccount(accounts, "marcus").userId,
-  );
+  await seedEmptyWorkspace(core, ownerId, accounts);
   await seedOutsideOrg(requireAccount(accounts, "outsider").userId);
   const ids = await seedCaptureIds(core, ownerId);
   const invitations = await seedInvitations(core, ownerId);

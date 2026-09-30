@@ -13,7 +13,8 @@
 //   denied         the path as guest, an organization Member outside the
 //                  workspace, when the path names a workspace; else as the
 //                  outsider, a member of another organization only
-//   empty          the path with {ws} as the empty workspace, as its owner
+//   empty          the path with {ws} as the empty workspace, as
+//                  page.app.persona, who holds the same role there as in core
 //   signed-out     the path with no session
 //   not-found      the path with its id placeholders as `no-such-id`
 //   error          the path on the fault server, whose ClickHouse and Neo4j
@@ -163,9 +164,6 @@ export type PagePlan = {
   readonly skipped: readonly Skip[];
 };
 
-/** The persona the empty workspace is captured as: it owns that workspace. */
-const EMPTY_WORKSPACE_VIEWER: PersonaKey = "marcus";
-
 /**
  * Who `denied` signs in as. On a path that names a workspace it is guest, an
  * organization Member in no workspace, for whom the design draws "You cannot
@@ -286,11 +284,7 @@ export function planPage(page: RegistryPage): PagePlan {
         break;
       case "empty":
         if (path.includes("{ws}")) {
-          take(
-            "empty",
-            EMPTY_WORKSPACE_VIEWER,
-            fields({ workspace: "empty" }),
-          );
+          take("empty", base, fields({ workspace: "empty" }));
         } else {
           skipped.push({
             state: "empty",

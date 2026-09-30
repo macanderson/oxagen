@@ -132,6 +132,23 @@ describe("planPage", () => {
     );
   });
 
+  it("captures empty as the page's own persona, who holds the same role in the empty workspace", () => {
+    const plan = planPage(
+      page({
+        slug: "onboarding-agent",
+        app: { path: "/welcome/{org}/{ws}/wrap", persona: "priya" },
+        checks: ["empty"],
+      }),
+    );
+    expect(plan.captures.find((c) => c.state === "empty")).toEqual({
+      ...BASE,
+      state: "empty",
+      persona: "priya",
+      path: "/welcome/{org}/{ws}/wrap",
+      workspace: "empty",
+    });
+  });
+
   it("skips every interaction, a plan, first-run, and suspended with a reason", () => {
     const plan = planPage(
       page({
