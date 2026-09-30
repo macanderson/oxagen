@@ -1,7 +1,7 @@
 // call.test.ts: a served tools/call from each source in each exposure mode,
 // decided on the real tool, parked, refused, and metered (lane M15).
 import type { CallToolResult, ManifestServer, RequestKind, ResolvedCredential } from "@oxagen/mcp-studio";
-import type { PolicyFile } from "@oxagen/policy";
+import { requireCedarRuntime, type CedarRuntime, type PolicyFile } from "@oxagen/policy";
 import { describe, expect, it } from "vitest";
 import { callServed, sandboxOf } from "../call";
 import type { Ranker, SearchEntry } from "../search";
@@ -1050,6 +1050,32 @@ describe("callServed agent feedback records (ADR-234)", () => {
     const { call, recorded } = await setup();
     await call("billing__list_charges", { limit: "5" });
     expect(problems(recorded)).toEqual(["billing__list_charges denied schema_rejected"]);
+  });
+
+  it("records no problem when Cedar itself fails, and names the policy as the fix", async () => {
+    const real = await requireCedarRuntime();
+    // Visibility asks isAuthorizedPartial, so the tool stays served. Only
+    // the call's own decision fails inside Cedar.
+    const failing: CedarRuntime = {
+      ...real,
+      isAuthorized: () => ({ type: "failure", errors: [{ message: "The evaluator stopped." }], warnings: [] }),
+    } as CedarRuntime;
+    const { call, recorded } = await setup({ cedar: () => Promise.resolve(failing) });
+    const result = await call("billing__list_charges");
+    expect(textOf(result)).toBe(
+      "Oxagen could not decide billing__list_charges: The evaluator stopped. Ask a workspace admin to check the steering record's policy.",
+    );
+    expect(problems(recorded)).toEqual(["billing__list_charges denied none"]);
+  });
+
+  it("records nothing for a call billing refuses", async () => {
+    const { call, recorded } = await setup({
+      admit: () => Promise.resolve({ admitted: false, reason: "units_exhausted" }),
+    });
+    const result = await call("billing__list_charges");
+    expect(result?.isError).toBe(true);
+    expect(recorded.meter).toEqual([]);
+    expect(recorded.calls).toEqual([]);
   });
 
   it("records a policy denial, a parked call, and a missing credential with no problem", async () => {

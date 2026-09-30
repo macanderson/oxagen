@@ -763,6 +763,7 @@ describe("calls that cannot be decided", () => {
       action: "jira__create_issue",
       errors: ["The workspace imported no tool named jira__create_issue."],
     });
+    expect(verdict.invalidArguments).toBeUndefined();
   });
 
   it("denies a call that names no tool", () => {
@@ -779,12 +780,17 @@ describe("calls that cannot be decided", () => {
       decision: "deny",
       action: "stripe__create_refund",
       errors: ["Argument amount_cents is not a Long."],
+      invalidArguments: true,
     });
   });
 
   it("denies a built-in argument of the wrong type", () => {
     const verdict = decide(policy, RELEASE_BOT, { action: "builtin__shell", args: { command: 7 } });
-    expect(verdict).toMatchObject({ decision: "deny", errors: ["Argument command is not a String."] });
+    expect(verdict).toMatchObject({
+      decision: "deny",
+      errors: ["Argument command is not a String."],
+      invalidArguments: true,
+    });
   });
 
   it("denies a call whose context the schema rejects", () => {
@@ -796,6 +802,8 @@ describe("calls that cannot be decided", () => {
     expect(verdict.decision).toBe("deny");
     expect(verdict.reasons).toEqual([]);
     expect(verdict.errors.length).toBeGreaterThan(0);
+    // Cedar refused the request, not an argument's type.
+    expect(verdict.invalidArguments).toBeUndefined();
   });
 
   it("ignores an argument the tool does not declare", () => {

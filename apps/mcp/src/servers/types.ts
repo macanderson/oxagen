@@ -254,7 +254,8 @@ export interface ServedPorts {
   meter(event: MeterEvent): Promise<void>;
   /**
    * Record one call to a tool for MCP Studio's agent feedback (ADR-234).
-   * Called for every call that names a tool, beside meter. A failure is
+   * Called beside meter for every call billing admits that names a tool. A
+   * call billing refuses is neither metered nor recorded. A failure is
    * logged and the call's result stands.
    */
   recordCall(call: ServedCallRecord): Promise<void>;

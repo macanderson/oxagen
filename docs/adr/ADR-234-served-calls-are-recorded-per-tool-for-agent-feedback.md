@@ -35,15 +35,18 @@ A row holds the server's name, the full tool name, the tacho session's
 `tse_` id, the metered outcome, and a `problem`:
 
 - `schema_rejected` when the tool's input schema refused the arguments, when
-  Cedar could not read them, or when a search-mode `call` passed arguments
-  that are not an object.
+  an argument does not fit the type the policy declares for it, or when a
+  search-mode `call` passed arguments that are not an object. The policy
+  package marks the type case with `invalidArguments` on its verdict.
 - `error_result` when the tool ran and answered with an error result.
-- Empty for every other outcome, such as a denial by policy, a parked call,
-  a missing credential, or a route that refused the call. Those say nothing
-  about the tool.
+- Empty for every other outcome, such as a denial by policy, a failure
+  inside Cedar, a parked call, a missing credential, or a route that refused
+  the call. Those say nothing about the tool.
 
 A call to a search-mode `call` that names no tool, or a tool the server does
-not have, writes no row. Search and describe write none.
+not have, writes no row. Search and describe write none. A call billing
+refuses writes none either: billing answers before the gateway checks
+anything, so the call is neither metered nor recorded.
 
 `readServedToolFeedback` answers, per tool of one server over a window:
 
