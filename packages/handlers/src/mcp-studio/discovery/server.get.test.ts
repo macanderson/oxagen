@@ -432,8 +432,11 @@ describe("sourceOf", () => {
 
 describe("shapingOf", () => {
   it("lists no shaping for a tools.toml with no keys", () => {
-    expect(shapingOf(must(parseToolsToml('schema = "mcp-tools/v1"\n')))).toEqual(
-      [],
-    );
+    const empty = [
+      "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
+      'schema = "mcp-tools/v1"',
+      "",
+    ].join("\n");
+    expect(shapingOf(must(parseToolsToml(empty)))).toEqual([]);
   });
 });
