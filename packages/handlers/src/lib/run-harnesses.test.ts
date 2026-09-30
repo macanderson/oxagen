@@ -28,7 +28,14 @@ describe("readRunHarnesses", () => {
   it("reads the recorded harness within the caller's org and workspace", async () => {
     const db = drizzle.mock({ schema });
     const captured: { sql: string; params: unknown[] }[] = [];
-    mocks.withTenantDb.mockImplementation((fn: (tx: typeof db) => unknown) => {
+    mocks.withTenantDb.mockImplementation((...args: unknown[]) => {
+      const fn = args.find(
+        (arg): arg is (tx: typeof db) => unknown => typeof arg === "function",
+      );
+      if (fn === undefined)
+        throw new Error(
+          `withTenantDb received no callback: ${args.map((arg) => typeof arg).join(", ")}`,
+        );
       const query = fn(db) as { toSQL(): { sql: string; params: unknown[] } };
       captured.push(query.toSQL());
       return Promise.resolve([{ publicId: sessionId, harness: "codex" }]);
