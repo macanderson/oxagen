@@ -12,10 +12,16 @@
  * so the test cannot pass for a reason other than the change it guards.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalJson, contentHashOf } from "./canonical-json";
 import { assembleManifest } from "./generate";
 import type { ManifestCapability, ManifestTable, StoreKind } from "./types";
@@ -109,11 +115,37 @@ const renderLegacy: Render = (tables, capabilities) => {
   });
 };
 
+/**
+ * The environment git runs in for the temporary repository: the caller's,
+ * without any `GIT_*` variable, and with global and system config turned off.
+ *
+ * A git hook exports `GIT_DIR`, `GIT_INDEX_FILE`, and `GIT_WORK_TREE`. When
+ * vitest runs inside one, those would point `git init` and `git commit` at the
+ * outer repository. A developer's global config can also sign every commit or
+ * set `core.hooksPath`, which fails or slows the commits here (#4664, item 14).
+ * `tools/scripts/lib/capability-schema-docs.test.ts` repeats this helper,
+ * because a package test cannot import a helper from `tools/`.
+ */
+function isolatedGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith("GIT_")) env[key] = value;
+  }
+  env.GIT_CONFIG_GLOBAL = "/dev/null";
+  env.GIT_CONFIG_NOSYSTEM = "1";
+  return env;
+}
+
 function git(cwd: string, args: string[]): string {
   return execFileSync(
     "git",
     ["-c", "user.email=test@example.com", "-c", "user.name=Test", ...args],
-    { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    {
+      cwd,
+      encoding: "utf8",
+      env: isolatedGitEnv(),
+      stdio: ["ignore", "pipe", "pipe"],
+    },
   ).trim();
 }
 
@@ -205,5 +237,40 @@ describe("two branches that each add a table and a capability", () => {
     for (const hunk of hunks) {
       expect(hunk).toMatch(/"contentHash"|"tableCount"/);
     }
+  });
+});
+
+describe("git in the temporary repository", () => {
+  let repo: string;
+  let outer: string;
+
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), "storage-manifest-git-"));
+    outer = mkdtempSync(join(tmpdir(), "storage-manifest-outer-"));
+    const globalConfig = join(outer, "gitconfig");
+    writeFileSync(globalConfig, "[test]\n\tmarker = global\n");
+    // What a git hook and a developer's global config put in the environment.
+    vi.stubEnv("GIT_DIR", join(outer, ".git"));
+    vi.stubEnv("GIT_INDEX_FILE", join(outer, "index"));
+    vi.stubEnv("GIT_WORK_TREE", outer);
+    vi.stubEnv("GIT_CONFIG_GLOBAL", globalConfig);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(outer, { recursive: true, force: true });
+  });
+
+  it("ignores the caller's GIT_DIR, index, work tree, and global config (#4664)", () => {
+    git(repo, ["init", "-q", "-b", "main"]);
+    commitManifest(repo, "{}\n", "base");
+
+    expect(git(repo, ["rev-parse", "--git-dir"])).toBe(".git");
+    expect(git(repo, ["log", "--format=%s"])).toBe("base");
+    expect(existsSync(join(outer, ".git"))).toBe(false);
+    expect(
+      git(repo, ["config", "--default", "unset", "--get", "test.marker"]),
+    ).toBe("unset");
   });
 });

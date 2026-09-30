@@ -13,8 +13,11 @@ import {
   ROUTE_TYPES,
   generatedDeclarations,
   needsTypegen,
+  routeLists,
+  routeOf,
   runsNextTypegen,
   stagedConfig,
+  typegenCommand,
 } from "./lib/typecheck-staged-plan.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -67,6 +70,193 @@ describe("needsTypegen", () => {
     expect(needsTypegen("/repo/apps/docs", PLAIN_PKG, fs([]).exists)).toBe(
       false,
     );
+    expect(
+      needsTypegen("/repo/apps/docs", PLAIN_PKG, fs([]).exists, {
+        staged: ["src/app/new/page.tsx"],
+        read: () => "",
+      }),
+    ).toBe(false);
+  });
+});
+
+// A trimmed copy of what `next typegen` writes for apps/app.
+const ROUTES_DTS = [
+  "// This file is generated automatically by Next.js",
+  'type AppRoutes = "/" | "/[org]" | "/[org]/audit" | "/[org]/[ws]/spend/[[...tab]]" | "/login"',
+  'type AppRouteHandlerRoutes = "/[org]/audit/export" | "/api/auth/[...all]"',
+  "type PageRoutes = never",
+  'type LayoutRoutes = "/" | "/[org]" | "/[org]/[ws]"',
+  "type RedirectRoutes = never",
+  "",
+  "interface ParamMap {",
+  '  "/[org]/audit": { "org": string; }',
+  "}",
+].join("\n");
+
+describe("routeOf", () => {
+  it("reads the route and the alias that lists it from a route file's path", () => {
+    expect(routeOf("src/app/[org]/audit/page.tsx")).toEqual({
+      route: "/[org]/audit",
+      alias: "AppRoutes",
+    });
+    expect(routeOf("src/app/[org]/layout.tsx")).toEqual({
+      route: "/[org]",
+      alias: "LayoutRoutes",
+    });
+    expect(routeOf("src/app/[org]/audit/export/route.ts")).toEqual({
+      route: "/[org]/audit/export",
+      alias: "AppRouteHandlerRoutes",
+    });
+    expect(routeOf("src/app/page.tsx")).toEqual({
+      route: "/",
+      alias: "AppRoutes",
+    });
+    expect(routeOf("app/[org]/page.tsx")).toEqual({
+      route: "/[org]",
+      alias: "AppRoutes",
+    });
+  });
+
+  it("drops route groups, which are not part of the URL", () => {
+    expect(routeOf("src/app/(auth)/login/page.tsx")).toEqual({
+      route: "/login",
+      alias: "AppRoutes",
+    });
+  });
+
+  it("marks a parallel-route slot or a default file, which change the slot map", () => {
+    expect(routeOf("src/app/[org]/@modal/page.tsx")).toBe("slot");
+    expect(routeOf("src/app/[org]/default.tsx")).toBe("slot");
+  });
+
+  it("ignores files that declare no route", () => {
+    expect(routeOf("src/app/[org]/audit/audit-table.tsx")).toBeNull();
+    expect(routeOf("src/app/[org]/audit/page.test.tsx")).toBeNull();
+    expect(routeOf("src/components/page.tsx")).toBeNull();
+    expect(routeOf("src/app/[org]/loading.tsx")).toBeNull();
+  });
+});
+
+describe("routeLists", () => {
+  it("reads the quoted routes of each alias", () => {
+    const lists = routeLists(ROUTES_DTS);
+    expect(lists.get("AppRoutes")).toEqual(
+      new Set([
+        "/",
+        "/[org]",
+        "/[org]/audit",
+        "/[org]/[ws]/spend/[[...tab]]",
+        "/login",
+      ]),
+    );
+    expect(lists.get("LayoutRoutes")).toEqual(
+      new Set(["/", "/[org]", "/[org]/[ws]"]),
+    );
+    expect(lists.get("PageRoutes")).toEqual(new Set());
+  });
+});
+
+describe("needsTypegen with route types already on disk (#4664 item 3)", () => {
+  const onDisk = fs([`${APP}/${ROUTE_TYPES}`]).exists;
+  const read = () => ROUTES_DTS;
+
+  it("regenerates when a staged page declares a route the file does not list", () => {
+    // The witness: before this, a commit adding a page typed
+    // PageProps<"/[org]/z2-probe"> failed with TS2344 against the old list.
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/app/[org]/z2-probe/page.tsx"],
+        read,
+      }),
+    ).toBe(true);
+  });
+
+  it("regenerates for a new layout on a route that has only a page", () => {
+    // "/[org]/audit" is in AppRoutes but not in LayoutRoutes, so
+    // LayoutProps<"/[org]/audit"> needs a fresh list.
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/app/[org]/audit/layout.tsx"],
+        read,
+      }),
+    ).toBe(true);
+  });
+
+  it("regenerates for a new route handler and for a slot", () => {
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/app/api/new/route.ts"],
+        read,
+      }),
+    ).toBe(true);
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/app/[org]/@modal/page.tsx"],
+        read,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not regenerate for routes the file already lists", () => {
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: [
+          "src/app/[org]/audit/page.tsx",
+          "src/app/(auth)/login/page.tsx",
+          "src/app/[org]/layout.tsx",
+          "src/app/[org]/audit/export/route.ts",
+          "src/app/[org]/audit/audit-table.tsx",
+        ],
+        read,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not regenerate when no staged file is a route entry", () => {
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/features/audit/audit.tsx"],
+        read,
+      }),
+    ).toBe(false);
+  });
+
+  it("regenerates when routes.d.ts cannot be read", () => {
+    expect(
+      needsTypegen(APP, APP_PKG, onDisk, {
+        staged: ["src/app/[org]/audit/page.tsx"],
+        read: () => {
+          throw new Error("EACCES");
+        },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("typegenCommand (#4664 item 6)", () => {
+  const ROOT = "/repo";
+  const realpath = (p: string) => `/real${p}`;
+
+  it("runs the package's own next binary by its real path, not through pnpm", () => {
+    const io = {
+      exists: fs([`${APP}/node_modules/.bin/next`]).exists,
+      realpath,
+    };
+    expect(typegenCommand(APP, ROOT, io)).toEqual({
+      command: `/real${APP}/node_modules/.bin/next`,
+      args: ["typegen"],
+    });
+  });
+
+  it("falls back to the root's next binary", () => {
+    const io = { exists: fs([`${ROOT}/node_modules/.bin/next`]).exists, realpath };
+    expect(typegenCommand(APP, ROOT, io)?.command).toBe(
+      `/real${ROOT}/node_modules/.bin/next`,
+    );
+  });
+
+  it("is null when no next binary is installed", () => {
+    expect(typegenCommand(APP, ROOT, { exists: () => false, realpath })).toBeNull();
   });
 });
 
@@ -164,11 +354,17 @@ describe("typecheck-staged.mjs uses the plan", () => {
 
   it("runs typegen only behind needsTypegen, and writes the planned config", () => {
     expect(source).toContain('from "./lib/typecheck-staged-plan.mjs"');
+    // needsTypegen gets the staged paths, so a new route regenerates.
     expect(source).toMatch(
-      /if \(needsTypegen\(pkgDir, pkgJson, existsSync\)\)/,
+      /needsTypegen\(pkgDir, pkgJson, existsSync, \{\s*staged,/,
     );
-    expect(source).toContain('["exec", "next", "typegen"]');
     expect(source).toMatch(/stagedConfig\(/);
+  });
+
+  it("starts typegen through typegenCommand, never through pnpm", () => {
+    expect(source).toMatch(/typegenCommand\(pkgDir, repoRoot,/);
+    expect(source).toMatch(/spawnSync\(typegen\.command, typegen\.args,/);
+    expect(source).not.toMatch(/spawnSync\("pnpm"/);
   });
 
   it("describes how route files are handled in its header comment", () => {

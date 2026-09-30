@@ -139,6 +139,13 @@ describe("registry normalization", () => {
             version: "1.2.0",
             runtimeHint: "npx",
             transport: { type: "stdio" },
+            packageArguments: [
+              { type: "named", name: "--root", isRequired: true, default: "." },
+              { type: "positional", valueHint: "token", isSecret: true },
+              { type: "named", name: "--mode", value: "read" },
+              { type: "flag", name: "--verbose" },
+              null,
+            ],
             environmentVariables: [
               { name: "FILES_ROOT", isRequired: true },
               { name: "FILES_TOKEN", isSecret: true },
@@ -164,6 +171,36 @@ describe("registry normalization", () => {
         version: "1.2.0",
         transport: "stdio",
         runtimeHint: "npx",
+        // An argument of a type Studio cannot place is dropped.
+        packageArguments: [
+          {
+            type: "named",
+            name: "--root",
+            valueHint: null,
+            isRequired: true,
+            isSecret: false,
+            value: null,
+            default: ".",
+          },
+          {
+            type: "positional",
+            name: null,
+            valueHint: "token",
+            isRequired: false,
+            isSecret: true,
+            value: null,
+            default: null,
+          },
+          {
+            type: "named",
+            name: "--mode",
+            valueHint: null,
+            isRequired: false,
+            isSecret: false,
+            value: "read",
+            default: null,
+          },
+        ],
         environmentVariables: [
           { name: "FILES_ROOT", isRequired: true, isSecret: false },
           { name: "FILES_TOKEN", isRequired: false, isSecret: true },
@@ -198,6 +235,7 @@ describe("registry normalization", () => {
         version: null,
         transport: "stdio",
         runtimeHint: null,
+        packageArguments: [],
         environmentVariables: [],
       },
     ]);

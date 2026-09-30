@@ -22,6 +22,25 @@ export const mcpRegistryAuth = z.enum([
 ]);
 
 /**
+ * One argument a registry package takes (the registry's `packageArguments`).
+ * Studio asks for a required one that the registry gives no fixed value.
+ */
+export const mcpRegistryPackageArgument = z.object({
+  type: z.enum(["named", "positional"]),
+  /** A named argument's flag, such as `--port`. */
+  name: z.string().nullable(),
+  /** A positional argument's hint. */
+  valueHint: z.string().nullable(),
+  isRequired: z.boolean(),
+  /** A secret takes its value from a variable on each machine, never from Oxagen. */
+  isSecret: z.boolean(),
+  /** A fixed value the registry sets, or null. */
+  value: z.string().nullable(),
+  /** The value when none is set, or null. */
+  default: z.string().nullable(),
+});
+
+/**
  * One package a registry entry publishes: something a machine runs, as
  * opposed to a remote Oxagen connects to. Studio offers a package-only entry
  * as a server the local gateway runs (mcp-studio-spec, Sources). The compile
@@ -36,6 +55,8 @@ export const mcpRegistryPackage = z.object({
   transport: mcpRegistryTransport,
   /** The runner the entry expects, such as `npx` or `docker`, or null. */
   runtimeHint: z.string().nullable(),
+  /** The arguments the package takes, in the registry's order. */
+  packageArguments: z.array(mcpRegistryPackageArgument).default([]),
   /** The variables the package reads. Names only, never values. */
   environmentVariables: z.array(
     z.object({

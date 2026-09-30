@@ -1,5 +1,6 @@
 // studio-discovery.handlers.test.ts: the MCP tools for discovery (lane M10,
-// #4682): start_studio_discovery, get_studio_discovery, and list_studio_tools.
+// #4682): start_studio_discovery, get_studio_discovery, and list_studio_tools,
+// and get_studio_server, which reads the folder beside the catalog (#4678).
 //
 // The kernel `invoke` and the context seam `buildContext` are doubles. Each
 // case checks that invoke received the contract name, the args, and
@@ -25,6 +26,9 @@ import startStudioDiscovery, {
 import getStudioDiscovery, {
   metadata as getStudioDiscoveryMeta,
 } from "./tool.studio.discovery.get";
+import getStudioServer, {
+  metadata as getStudioServerMeta,
+} from "./tool.studio.server.get";
 import listStudioTools, {
   metadata as listStudioToolsMeta,
 } from "./tool.studio.tools.list";
@@ -212,5 +216,58 @@ describe("list_studio_tools", () => {
   it("refuses an output outside the contract", async () => {
     mocks.invoke.mockResolvedValue({ server: "ledger", tools: [] });
     await expect(listStudioTools({ server: "ledger" })).rejects.toThrow();
+  });
+});
+
+/** The ledger folder: the catalog, and the rest of the folder beside it. */
+const SERVER = {
+  ...TOOLS,
+  folder: "tools/servers/ledger",
+  label: "Ledger",
+  description: "Entries in the finance ledger.",
+  source: {
+    type: "remote" as const,
+    url: "https://ledger.example/mcp",
+    transport: "http",
+    network: null,
+  },
+  auth: {
+    mode: "service" as const,
+    scheme: "bearer",
+    credential: "oxagen:credential/ledger",
+  },
+  environments: [
+    { name: "default", sandbox: false, url: null, network: null, credential: null },
+  ],
+  sync: { schedule: "daily" as const, lastAt: AT },
+  shaping: [
+    { tool: "list_entries", hide: [], fixed: [], select: [], selection: null },
+  ],
+};
+
+describe("get_studio_server", () => {
+  it("carries its contract's name and read-only hints", () => {
+    expect(getStudioServerMeta.name).toBe("get_studio_server");
+    expect(getStudioServerMeta.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
+  });
+
+  it("invokes with the contract name and forwards the folder", async () => {
+    mocks.invoke.mockResolvedValue(SERVER);
+    const result = await getStudioServer({ server: "ledger" });
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "get_studio_server",
+      { server: "ledger" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual(SERVER);
+  });
+
+  it("refuses an output with the catalog alone", async () => {
+    mocks.invoke.mockResolvedValue(TOOLS);
+    await expect(getStudioServer({ server: "ledger" })).rejects.toThrow();
   });
 });

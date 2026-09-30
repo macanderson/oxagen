@@ -105,7 +105,7 @@ jobs:
           script: |
             const { linkedIssues, verdict, formatVerdict } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
-            const { checkClosingKeywords, formatClosingKeywords } = await import(
+            const { checkClosingKeywords, formatClosingKeywords, pullRequestSources } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/check-closing-keywords.mjs`)
 
             // Read the pull request live rather than from the event payload.
@@ -174,19 +174,19 @@ jobs:
             // them into the commit that lands on main.
             // The same check fails a commit that still closes an issue the
             // description demoted to `Refs`, since the squash closes it anyway.
-            const sources = [{ label: 'PR body', text: pr.body, kind: 'body' }]
-            try {
-              const commits = await github.paginate(github.rest.pulls.listCommits, {
-                ...context.repo, pull_number: pr.number, per_page: 100 })
-              for (const c of commits) {
-                sources.push({
-                  label: `commit ${c.sha.slice(0, 7)}`, text: c.commit.message,
-                  kind: 'commit' })
-              }
-            } catch (error) {
-              core.warning(`Could not list the pull request's commits: ${error.message}`)
+            //
+            // When the commits cannot be listed, the check fails and says so
+            // in the summary and the comment. It used to log a warning and
+            // pass on the description alone, which read green with half the
+            // check skipped. Re-running the job reads the commits again.
+            const { sources, commitsError } = await pullRequestSources(pr.body, () =>
+              github.paginate(github.rest.pulls.listCommits, {
+                ...context.repo, pull_number: pr.number, per_page: 100 }))
+            if (commitsError) {
+              core.error(`Could not list the pull request's commits: ${commitsError}`)
             }
-            const closingResult = checkClosingKeywords(sources, { repository: context.repo })
+            const closingResult = checkClosingKeywords(sources, {
+              repository: context.repo, commitsError })
 
             const result = { ok: dodResult.ok && closingResult.ok }
             const summary = [formatVerdict(dodResult), formatClosingKeywords(closingResult)]

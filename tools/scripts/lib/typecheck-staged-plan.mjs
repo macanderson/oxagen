@@ -12,10 +12,11 @@
  * `--no-verify`, which skips format and lint too.
  *
  * The hook now mirrors each package's own typecheck: a package whose
- * `typecheck` script runs `next typegen` gets its route types generated once,
- * when they are missing, and the generated declarations are put in the
- * staged program. No other package is touched, and nothing is generated when
- * no staged file belongs to such a package.
+ * `typecheck` script runs `next typegen` gets its route types generated when
+ * they are missing, or when a staged route file declares a route they do not
+ * list yet, and the generated declarations are put in the staged program. No
+ * other package is touched, and nothing is generated when no staged file
+ * belongs to such a package.
  */
 import { join } from "node:path";
 
@@ -32,18 +33,108 @@ export function runsNextTypegen(pkgJson) {
   return /\bnext typegen\b/.test(pkgJson?.scripts?.typecheck ?? "");
 }
 
+/** An App Router file that puts a route in `routes.d.ts`. */
+const ROUTE_ENTRY = /^(?:src\/)?app\/(?:(.*)\/)?(page|layout|route|default)\.(?:tsx|ts|jsx|js)$/;
+
+/**
+ * The route an App Router file declares, and the `routes.d.ts` type alias
+ * that lists it. Route groups such as `(auth)` are not part of the URL, so
+ * they are dropped. Null for a file that is not a route entry, and for one
+ * that sits in a parallel-route slot (`@modal`) or is a slot's `default`:
+ * those change the slot map, not a route list, so the caller regenerates.
+ *
+ * @param {string} file package-relative path, with forward slashes
+ * @returns {{ route: string, alias: string } | null | "slot"}
+ */
+export function routeOf(file) {
+  const match = ROUTE_ENTRY.exec(file);
+  if (!match) return null;
+  const [, dir = "", kind] = match;
+  const segments = dir.split("/").filter(Boolean);
+  if (kind === "default" || segments.some((s) => s.startsWith("@"))) {
+    return "slot";
+  }
+  const kept = segments.filter((s) => !/^\([^)]*\)$/.test(s));
+  const route = `/${kept.join("/")}`;
+  const alias = {
+    page: "AppRoutes",
+    layout: "LayoutRoutes",
+    route: "AppRouteHandlerRoutes",
+  }[kind];
+  return { route, alias };
+}
+
+/**
+ * The quoted routes each `type X = "..." | "..."` alias in `routes.d.ts`
+ * lists.
+ *
+ * @param {string} text the contents of `routes.d.ts`
+ * @returns {Map<string, Set<string>>}
+ */
+export function routeLists(text) {
+  const lists = new Map();
+  for (const [, name, body] of text.matchAll(/^type (\w+) = (.*)$/gm)) {
+    lists.set(name, new Set([...body.matchAll(/"([^"]*)"/g)].map((m) => m[1])));
+  }
+  return lists;
+}
+
 /**
  * Whether the hook has to run `next typegen` for this package before tsc.
- * False when the package does not use generated route types, and false when
- * they are already on disk: the hook runs on every commit, and typegen loads
- * the whole Next config.
+ *
+ * False when the package does not use generated route types. True when
+ * `routes.d.ts` is missing, which is every fresh clone and new worktree.
+ * When the file exists, true only when a staged App Router file declares a
+ * route that the file does not list yet: a new page, layout, or route
+ * handler, or a renamed one. Without that, a commit that adds
+ * `src/app/[org]/new/page.tsx` typed `PageProps<"/[org]/new">` failed with
+ * TS2344 while CI, which runs typegen first, accepted it (#4664 item 3).
+ * Everything else reuses the types on disk: the hook runs on every commit,
+ * and typegen loads the whole Next config.
  *
  * @param {string} pkgDir absolute package directory
  * @param {{ scripts?: Record<string, string> }} pkgJson
  * @param {(p: string) => boolean} exists
+ * @param {{ staged?: string[], read?: (p: string) => string }} [change]
+ *   package-relative staged paths, and a reader for `routes.d.ts`
  */
-export function needsTypegen(pkgDir, pkgJson, exists) {
-  return runsNextTypegen(pkgJson) && !exists(join(pkgDir, ROUTE_TYPES));
+export function needsTypegen(pkgDir, pkgJson, exists, change = {}) {
+  if (!runsNextTypegen(pkgJson)) return false;
+  const routeTypes = join(pkgDir, ROUTE_TYPES);
+  if (!exists(routeTypes)) return true;
+  const entries = (change.staged ?? [])
+    .map((f) => routeOf(f.split("\\").join("/")))
+    .filter(Boolean);
+  if (entries.length === 0) return false;
+  if (entries.includes("slot") || !change.read) return true;
+  let lists;
+  try {
+    lists = routeLists(change.read(routeTypes));
+  } catch {
+    return true;
+  }
+  return entries.some(({ route, alias }) => !lists.get(alias)?.has(route));
+}
+
+/**
+ * The command that runs `next typegen` for a package: the `next` binary the
+ * package installs, by its real path, so pnpm is not involved. The staged
+ * typecheck starts `tsc` the same way, because a pnpm `.bin` shim reached
+ * through a symlinked `node_modules` resolves its target against the wrong
+ * directory, and `pnpm exec` can start an install or refuse to run in a
+ * sparse worktree (#4664 item 6). Null when no `next` binary is installed.
+ *
+ * @param {string} pkgDir absolute package directory
+ * @param {string} repoRoot absolute repository root
+ * @param {{ exists: (p: string) => boolean, realpath: (p: string) => string }} io
+ * @returns {{ command: string, args: string[] } | null}
+ */
+export function typegenCommand(pkgDir, repoRoot, { exists, realpath }) {
+  for (const dir of [pkgDir, repoRoot]) {
+    const bin = join(dir, "node_modules", ".bin", "next");
+    if (exists(bin)) return { command: realpath(bin), args: ["typegen"] };
+  }
+  return null;
 }
 
 /**

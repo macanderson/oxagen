@@ -7,9 +7,12 @@
  * the same tree always produces the same model — that is what lets
  * `--check` diff the output in CI.
  */
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
+// A relative import, as gen-rls-migration.ts reads the tenant policy: the file
+// imports only `node:crypto`, and `pnpm gate` runs this collector, so a package
+// import would have to be declared in the root package.json.
+import { contentHashOf } from "../../../../packages/database/src/storage-manifest/canonical-json";
 import { sendersIn, triggersIn } from "../../check-inngest-senders";
 
 export interface WorkspacePackage {
@@ -214,9 +217,13 @@ export function collectWorkspace(root: string): WorkspacePackage[] {
 
 /**
  * Read the committed manifest and compute the two values it no longer
- * commits (ADR-216). The file is canonical JSON kept current by
- * `pnpm schema:manifest:check`, so the sha256 of its bytes is the content hash
- * `pnpm schema:manifest` prints.
+ * commits (ADR-216).
+ *
+ * The hash comes from `contentHashOf`, the function `pnpm schema:manifest` and
+ * its drift report call, so the atlas prints the value those commands print.
+ * Hashing the file's bytes agreed only while the file was exactly canonical.
+ * A CRLF checkout, or a merge that kept a legacy `contentHash` or
+ * `tableCount`, gave a hash no command reproduced (#4664, item 15).
  */
 export function collectManifest(root: string): StorageManifest {
   const text = read(join(root, "packages/database/storage-manifest.json"));
@@ -226,7 +233,7 @@ export function collectManifest(root: string): StorageManifest {
   > & { stores: Omit<StorageManifest["stores"][number], "tableCount">[] };
   return {
     ...committed,
-    contentHash: createHash("sha256").update(text).digest("hex"),
+    contentHash: contentHashOf(committed),
     stores: committed.stores.map((store) => ({
       ...store,
       tableCount: committed.tables.filter((t) => t.store === store.kind)

@@ -23,6 +23,9 @@ build
 coverage
 .vercel
 
+# The brand kit CI checks out beside the tree for pnpm check:brand (#3074)
+.brand-kit/
+
 # Developer-local symlinks
 .cache
 .venv

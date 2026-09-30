@@ -194,8 +194,8 @@ async function renderStudio({
 } = {}) {
   const ctx = viewer(orgRole);
   const { source, calls } = studioSource(reads);
-  const readRecord = vi.fn<RecordReader>((_ctx, id) =>
-    Promise.resolve(record(id)),
+  const readRecord = vi.fn<RecordReader>((_ctx, server) =>
+    Promise.resolve(record(server.id)),
   );
   const readFindings = vi.fn<FindingsCall>(findings);
   const readTools = vi.fn<ToolsListCall>(toolsList);
@@ -269,7 +269,10 @@ describe("StudioServer reads", () => {
     expect(calls.killSwitches).toEqual([[ctx]]);
     expect(calls.members).toEqual([[ctx]]);
     expect(readRecord).toHaveBeenCalledTimes(1);
-    expect(readRecord).toHaveBeenCalledWith(ctx, STRIPE);
+    expect(readRecord).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: STRIPE }),
+    );
     expect(readFindings).not.toHaveBeenCalled();
     expect(screen.getByTestId("studio-server")).toBeInTheDocument();
   });
@@ -796,7 +799,10 @@ describe("StudioServer without a Studio record", () => {
       ops: [{ kind: "remove", tool: "get_file_contents" }],
     });
     const { ctx, readRecord } = await renderStudio({ serverId: GITHUB });
-    expect(readRecord).toHaveBeenCalledWith(ctx, GITHUB);
+    expect(readRecord).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: GITHUB }),
+    );
     const budget = screen.getByTestId("studio-budget-missing");
     expect(budget).toHaveAttribute("role", "note");
     expect(budget).toHaveAttribute("data-state", "not-recorded");

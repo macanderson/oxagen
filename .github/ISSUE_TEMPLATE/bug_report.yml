@@ -16,7 +16,7 @@ body:
       label: Surface
       description: Where does the defect occur?
       options:
-        - Web app (app.oxagen.sh / apps/app)
+        - Web app (oxagen.app / apps/app)
         - API (api.oxagen.sh / apps/api)
         - MCP server (mcp.oxagen.sh / apps/mcp)
         - CLI (oxagen)

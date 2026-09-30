@@ -12,22 +12,33 @@
  * such edit looks like a tidy-up in review. So this guard holds them:
  *
  *   1. The lint and typecheck turbo call passes `--continue`.
- *   2. No `run:` in the job joins two `pnpm` commands with `&&`.
- *   3. The pnpm-install step has `id: install`.
- *   4. Every step after "Lint and typecheck" runs under
+ *   2. No `run:` in the job joins two `pnpm`, `node`, or `tsx` commands
+ *      with `&&`.
+ *   3. No literal `run: |` block puts two such commands on separate lines.
+ *      GitHub runs `run:` under `bash -e`, so the first failing line ends
+ *      the block the way `&&` does. A block that turns that off with
+ *      `set +e` is exempt, since it handles the exit statuses itself.
+ *   4. The pnpm-install step has `id: install`.
+ *   5. Every step after "Lint and typecheck" runs under
  *      `!cancelled() && steps.install.outcome == 'success'`, except the steps
  *      in EXEMPT_STEPS, which carry their own reason.
+ *   6. No root script the job runs, directly or through a run-checks list,
+ *      chains commands with `&&`. `check:contracts` did, 26 guards long, so
+ *      one failing guard hid the rest inside a step that looked like it
+ *      reported everything (#4664 item 9).
  *
  * A text scan, not a YAML parse, for the same reason as
  * check-main-concurrency.mjs: the repo carries no YAML dependency for its
  * guards, and the job's step layout (six-space `- ` items) is stable.
  */
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const path = join(repoRoot, ".github", "workflows", "pipeline.yml");
+const packageJson = join(repoRoot, "package.json");
 
 /**
  * Steps after "Lint and typecheck" that may keep the default `success()`.
@@ -40,6 +51,67 @@ export const EXEMPT_STEPS = new Set(["File Linear tickets for manifest gaps"]);
 
 const CONTINUE_IF =
   /!cancelled\(\)\s*&&\s*steps\.install\.outcome\s*==\s*'success'/;
+
+/** Two commands, each started by pnpm, node, or tsx, joined by `&&`. */
+const CHAINED = /\b(?:pnpm|node|tsx)\b[^\n]*&&[^\n]*\b(?:pnpm|node|tsx)\b/;
+
+/** A shell line that starts a pnpm, node, tsx, or npx command. */
+const COMMAND_LINE = /^(?:pnpm|node|tsx|npx)\s/;
+
+const SHELL_OPERATOR = /^(?:&&|\|\||;|\||&)$/;
+
+/**
+ * The root scripts one shell command runs: each `pnpm <name>` or
+ * `pnpm run <name>` that names a root script, and each name listed after
+ * `node .../run-checks.mjs`.
+ *
+ * @param {string} command
+ * @param {Record<string, string>} scripts
+ * @returns {string[]}
+ */
+export function scriptsRunBy(command, scripts) {
+  const tokens = command.split(/\s+/).filter(Boolean);
+  const names = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === "pnpm") {
+      const name = tokens[i + 1] === "run" ? tokens[i + 2] : tokens[i + 1];
+      if (name !== undefined && scripts[name] !== undefined) names.push(name);
+    } else if (
+      tokens[i] === "node" &&
+      /(^|\/)run-checks\.mjs$/.test(tokens[i + 1] ?? "")
+    ) {
+      for (const t of tokens.slice(i + 2)) {
+        if (SHELL_OPERATOR.test(t)) break;
+        if (scripts[t] !== undefined) names.push(t);
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * The root scripts, among those `names` run and the ones they run in turn,
+ * that chain commands with `&&`.
+ *
+ * @param {string[]} names
+ * @param {Record<string, string>} scripts
+ * @returns {string[]}
+ */
+export function chainedScripts(names, scripts) {
+  const found = [];
+  const seen = new Set();
+  const queue = [...names];
+  while (queue.length > 0) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const command = scripts[name];
+    if (command === undefined) continue;
+    if (CHAINED.test(command)) found.push(name);
+    queue.push(...scriptsRunBy(command, scripts));
+  }
+  return found;
+}
 
 /** The text of one top-level job under `jobs:`, or null. */
 export function jobBlock(yaml, jobName) {
@@ -113,8 +185,15 @@ export function steps(job) {
   });
 }
 
-/** Every way the checks job would stop reporting at the first failure. */
-export function problems(yaml) {
+/**
+ * Every way the checks job would stop reporting at the first failure.
+ *
+ * @param {string} yaml pipeline.yml
+ * @param {Record<string, string>} [scripts] the root package.json `scripts`,
+ *   for property 6. Left out, property 6 is not checked.
+ * @returns {string[]}
+ */
+export function problems(yaml, scripts = {}) {
   const job = jobBlock(yaml, "checks");
   if (!job) return ["pipeline.yml has no `checks` job."];
   const list = steps(job);
@@ -139,15 +218,31 @@ export function problems(yaml) {
     }
   }
 
+  const named = [];
   for (const s of list) {
+    const label = s.name ?? s.uses;
     // Join shell continuations first: `pnpm a &&` at the end of one line and
     // `pnpm b` on the next is still a chain, and so is a `\` line break.
     const shell = (s.run ?? "").replace(/\\\n/g, " ").replace(/&&\s*\n/g, "&& ");
-    if (/\bpnpm\b[^\n]*&&[^\n]*\bpnpm\b/.test(shell)) {
+    if (CHAINED.test(shell)) {
       found.push(
-        `"${s.name ?? s.uses}" chains pnpm commands with &&, so the first failure hides the rest. Use tools/scripts/run-checks.mjs.`,
+        `"${label}" chains commands with &&, so the first failure hides the rest. Use tools/scripts/run-checks.mjs.`,
       );
     }
+    const lines = shell.split("\n").map((l) => l.trim());
+    const commands = lines.filter((l) => COMMAND_LINE.test(l));
+    if (commands.length > 1 && !lines.includes("set +e")) {
+      found.push(
+        `"${label}" runs ${commands.length} commands on separate lines under bash -e, so the first failure hides the rest. Use tools/scripts/run-checks.mjs.`,
+      );
+    }
+    named.push(...scriptsRunBy(shell, scripts));
+  }
+
+  for (const name of chainedScripts(named, scripts)) {
+    found.push(
+      `pnpm ${name} chains commands with &&, so its first failing command hides the rest. Make each command a root script and list them in a tools/scripts/run-checks.mjs call.`,
+    );
   }
 
   const install = list.find((s) => s.uses === "./.github/actions/pnpm-install");
@@ -172,23 +267,9 @@ export function problems(yaml) {
   return found;
 }
 
-// Real paths, not `file://${argv[1]}`: node resolves symlinks in the main
-// module's URL but not in argv[1], and a false here would exit 0 having
-// checked nothing. run-checks.test.ts proves the symlink case.
-const isEntrypoint = (() => {
-  if (!process.argv[1]) return false;
-  try {
-    return (
-      realpathSync(process.argv[1]) ===
-      realpathSync(fileURLToPath(import.meta.url))
-    );
-  } catch {
-    return false;
-  }
-})();
-
-if (isEntrypoint) {
-  const found = problems(readFileSync(path, "utf8"));
+if (isEntrypoint(import.meta.url)) {
+  const { scripts = {} } = JSON.parse(readFileSync(packageJson, "utf8"));
+  const found = problems(readFileSync(path, "utf8"), scripts);
   if (found.length > 0) {
     console.error(
       "check-checks-job-continues: the checks job would stop at its first failure (#3428).\n\n" +

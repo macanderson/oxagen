@@ -64,7 +64,7 @@ describe("NewOrganizationScreen", () => {
     const form = elements(
       await NewOrganizationScreen({ searchParams: Promise.resolve({}) }),
     ).find((e) => e.type === OrganizationForm);
-    expect(form?.props.host).toBe("app.oxagen.sh");
+    expect(form?.props.host).toBe("oxagen.app");
   });
 
   it("carries a requested destination through log in and to the form", async () => {

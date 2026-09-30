@@ -4,6 +4,9 @@
  * ran and failed. The preflight must name what is missing and exit with a code
  * that no check uses, so "could not run" is never mistaken for "failed".
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -165,6 +168,101 @@ describe("preflight", () => {
   });
 });
 
+describe("preflight through a workspace package", () => {
+  // A filtered install such as `pnpm install --filter @oxagen/tacho...` links
+  // @oxagen/oxagen at the root and installs none of its own dependencies.
+  // The preflight passed there, and `pnpm check:contracts` then died on
+  // "Cannot find package 'zod'" (scratch run 36664757916).
+  const links: Record<string, string> = {
+    [`${ROOT}/node_modules/@oxagen/oxagen`]: `${ROOT}/packages/oxagen`,
+    [`${ROOT}/packages/oxagen/node_modules/@oxagen/config`]: `${ROOT}/packages/config`,
+  };
+  const realpath = (p: string) => links[p] ?? p;
+  const manifests = {
+    "packages/oxagen/package.json": JSON.stringify({
+      name: "@oxagen/oxagen",
+      dependencies: { zod: "3.25.76", "@oxagen/config": "workspace:*" },
+      devDependencies: { vitest: "2.1.9" },
+    }),
+    "packages/config/package.json": JSON.stringify({
+      name: "@oxagen/config",
+      dependencies: { yaml: "2.9.1" },
+    }),
+  };
+  const linked = {
+    ...SOURCES,
+    ...manifests,
+    ...installed("tsx"),
+    ...installed("kleur"),
+    ...installed("@oxagen/oxagen"),
+  };
+  const DECLARED = "@oxagen/oxagen, declared in packages/oxagen/package.json";
+
+  it("names the dependencies of a linked workspace package that are not installed", async () => {
+    // The witness: the #3403 checkout, where the link exists and its
+    // dependencies do not.
+    const result = await preflight("check:contracts", {
+      ...checkout(linked),
+      realpath,
+    });
+    expect(result.missing).toEqual([
+      { name: "zod", neededBy: DECLARED },
+      { name: "@oxagen/config", neededBy: DECLARED },
+    ]);
+    expect(report("check:contracts", result)).toContain(
+      `zod is not installed (needed by ${DECLARED}).`,
+    );
+  });
+
+  it("follows a workspace dependency into its own dependencies", async () => {
+    const result = await preflight("check:contracts", {
+      ...checkout({
+        ...linked,
+        ...installed("zod", "packages/oxagen/"),
+        ...installed("@oxagen/config", "packages/oxagen/"),
+      }),
+      realpath,
+    });
+    expect(result.missing).toEqual([
+      {
+        name: "yaml",
+        neededBy: "@oxagen/config, declared in packages/config/package.json",
+      },
+    ]);
+  });
+
+  it("passes when every declared dependency is installed, beside the package or at the root", async () => {
+    const result = await preflight("check:contracts", {
+      ...checkout({
+        ...linked,
+        ...installed("zod"),
+        ...installed("@oxagen/config", "packages/oxagen/"),
+        ...installed("yaml", "packages/config/"),
+      }),
+      realpath,
+    });
+    expect(result).toEqual({ missing: [], unknownScript: false });
+  });
+
+  it("does not ask for a workspace package's devDependencies, or walk an npm package", async () => {
+    const result = await preflight("check:contracts", {
+      ...checkout({
+        ...linked,
+        ...installed("zod", "packages/oxagen/"),
+        ...installed("@oxagen/config", "packages/oxagen/"),
+        ...installed("yaml", "packages/config/"),
+        // kleur resolves inside node_modules, so it is not walked even
+        // though its manifest names a dependency that is absent.
+        "node_modules/kleur/package.json": JSON.stringify({
+          dependencies: { absent: "1.0.0" },
+        }),
+      }),
+      realpath,
+    });
+    expect(result.missing).toEqual([]);
+  });
+});
+
 describe("preflight on a script file", () => {
   const FILE = "tools/scripts/typecheck-staged.mjs";
   const files = {
@@ -230,6 +328,29 @@ describe("report", () => {
       "@oxagen/oxagen is not installed (needed by tools/scripts/gen-capability-schemas.ts)",
     );
     expect(text).toContain("Run `pnpm install` at the repository root");
+  });
+
+  it("names a filtered install that works, by adding the root's dependency graph", () => {
+    // A filtered install that adds `--filter oxagen-monorepo...` ran
+    // `pnpm check:contracts` to exit 0 (scratch run 36665719175, step F5).
+    const result = {
+      unknownScript: false,
+      missing: [{ name: "zod", neededBy: "@oxagen/oxagen" }],
+    };
+    expect(report("check:contracts", result)).toContain(
+      "`pnpm install --filter <your package>... --filter oxagen-monorepo...`",
+    );
+    expect(report("check:contracts", result, "renamed-root")).toContain(
+      "--filter renamed-root...",
+    );
+  });
+
+  it("names the real root package in that remedy", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const root = JSON.parse(
+      readFileSync(join(here, "..", "..", "package.json"), "utf8"),
+    );
+    expect(root.name).toBe("oxagen-monorepo");
   });
 
   it("uses an exit code no check uses, so it cannot read as a failed check", () => {

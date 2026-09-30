@@ -392,7 +392,7 @@ export async function disconnect(input: ConnectTarget, deps: ConnectDeps): Promi
   return true;
 }
 
-const DEFAULT_APP_ORIGIN = "https://app.oxagen.sh";
+const DEFAULT_APP_ORIGIN = "https://oxagen.app";
 
 const APP_ORIGIN_SOURCES = ["APP_URL", "NEXT_PUBLIC_APP_URL"] as const;
 
