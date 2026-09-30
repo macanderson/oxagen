@@ -592,6 +592,16 @@
                       }
                     ]
                   },
+                  "harness": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "operatorKey": {
                     "anyOf": [
                       {

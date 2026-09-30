@@ -47,8 +47,8 @@ describe("AgentAvatar", () => {
         <AgentAvatar value={null} initials="RB" harness="codex" size={size} />,
       );
       expect(container.firstElementChild).toHaveStyle({
-        width: `${size}px`,
-        height: `${size}px`,
+        width: `${String(size)}px`,
+        height: `${String(size)}px`,
       });
       expect(container.firstElementChild).not.toHaveClass("overflow-hidden");
       const badge = container.querySelector("[data-harness-badge]");
@@ -59,8 +59,8 @@ describe("AgentAvatar", () => {
         "rounded-full",
       );
       expect(badge).toHaveStyle({
-        width: `${badgeSize}px`,
-        height: `${badgeSize}px`,
+        width: `${String(badgeSize)}px`,
+        height: `${String(badgeSize)}px`,
       });
     },
   );
