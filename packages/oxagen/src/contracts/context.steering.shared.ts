@@ -184,6 +184,12 @@ export const lineageIdSchema = z
   .regex(
     CONTEXT_RECORD_LINEAGE,
     "a lineage id is lowercase letters, digits, dots and hyphens (e.g. ctx.release.notes-format)",
+  )
+  // Every governance proposal holds this lineage, and the open-PR index keys
+  // on it, so a record on it would share the one governance PR slot (#4795).
+  .refine(
+    (id) => id !== GOVERNANCE_LINEAGE,
+    `${GOVERNANCE_LINEAGE} is reserved for governance changes; choose another lineage id`,
   );
 
 /** The record a proposal asks to publish. */

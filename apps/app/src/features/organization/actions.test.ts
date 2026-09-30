@@ -306,6 +306,7 @@ const GOVERNANCE = {
   commitSha: "c0ffee1",
   pullRequest: null,
   overrodeReview: true,
+  proposalId: null,
 };
 
 describe("editWorkspace", () => {

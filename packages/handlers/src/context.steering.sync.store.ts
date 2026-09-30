@@ -129,6 +129,18 @@ export interface SyncStore {
     },
   ): Promise<boolean>;
   /**
+   * Record a governance PR the host merged (#4795). A governance proposal
+   * publishes no record, so it points at none: the row moves to `merged` with
+   * its merge commit and no approver. False when the row is not a governance
+   * proposal, already left the open states, or a merge claimed it after
+   * `noClaimSince` and is still landing it.
+   */
+  linkMergedGovernance(
+    scope: Scope,
+    proposalId: string,
+    args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
+  ): Promise<boolean>;
+  /**
    * Write the settings workspace.toml sets into `workspaces.settings`. A null
    * value removes its key, so the reader falls back to its default.
    */
@@ -485,6 +497,36 @@ export const postgresSyncStore: SyncStore = {
         .where(
           and(
             eq(schema.contextProposals.id, proposalId),
+            inArray(schema.contextProposals.status, [...OPEN_PR]),
+            or(
+              isNull(schema.contextProposals.mergeClaimedAt),
+              lte(schema.contextProposals.mergeClaimedAt, args.noClaimSince),
+            ),
+          ),
+        )
+        .returning({ id: schema.contextProposals.id });
+      return row !== undefined;
+    });
+  },
+
+  async linkMergedGovernance(scope, proposalId, args) {
+    return withTenantDb(async (tx) => {
+      await lockWorkspacePublication(tx, scope.workspaceId);
+      const [row] = await tx
+        .update(schema.contextProposals)
+        .set({
+          status: "merged",
+          mergedCommit: args.mergedCommit,
+          mergedAt: args.mergedAt,
+          mergedByUserId: null,
+          mergeClaimedAt: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(schema.contextProposals.id, proposalId),
+            scoped(schema.contextProposals, scope),
+            eq(schema.contextProposals.kind, "governance"),
             inArray(schema.contextProposals.status, [...OPEN_PR]),
             or(
               isNull(schema.contextProposals.mergeClaimedAt),

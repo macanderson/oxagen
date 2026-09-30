@@ -809,6 +809,7 @@ export class FakeGitHub implements SteeringGitHub {
         authorLogin: "fixture-author",
         committedAt: meta.at.toISOString(),
         summary: meta.message.split("\n", 1)[0] ?? "",
+        message: meta.message,
       };
     }
     return null;
@@ -1522,6 +1523,34 @@ export class MemorySyncStore implements SyncStore {
       mergedByUserId: null,
       publishedRecordId: record.id,
       promotionEventId: promotion.id,
+      mergeClaimedAt: null,
+    });
+    return true;
+  }
+
+  async linkMergedGovernance(
+    scope: SyncScope,
+    proposalId: string,
+    args: { mergedCommit: string; mergedAt: Date; noClaimSince: Date },
+  ) {
+    const proposal = this.store.proposals.find((p) => p.id === proposalId);
+    if (
+      !proposal ||
+      proposal.workspaceId !== scope.workspaceId ||
+      proposal.kind !== "governance" ||
+      !OPEN.has(proposal.status)
+    )
+      return false;
+    if (
+      proposal.mergeClaimedAt !== null &&
+      proposal.mergeClaimedAt.getTime() > args.noClaimSince.getTime()
+    )
+      return false;
+    Object.assign(proposal, {
+      status: "merged",
+      mergedCommit: args.mergedCommit,
+      mergedAt: args.mergedAt,
+      mergedByUserId: null,
       mergeClaimedAt: null,
     });
     return true;

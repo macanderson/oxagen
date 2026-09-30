@@ -68,6 +68,7 @@
       "applied": "{path} on {branch} of {repository} now sets mode = {mode}. It is in force now. Under solo the change skips review.",
       "unchanged": "Governance mode is already {mode}; nothing to change.",
       "openPr": "Open pull request #{number}",
+      "review": "Open the change for review",
       "failure": {
         "denied": "Your roles here do not include set_governance_mode. An org Owner or Admin, or a workspace Owner or Admin, changes the mode. Nothing was changed.",
         "noRepository": "This workspace has no steering repository the GitHub App can reach, so there is no governance.toml to change. Check the GitHub connection on Repositories.",

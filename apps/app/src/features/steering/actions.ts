@@ -99,6 +99,11 @@ export type GovernanceChanged = {
   /** The governance file the mode lives in for the repository's layout. */
   path: string;
   pullRequest: { number: number; htmlUrl: string } | null;
+  /**
+   * The governance proposal a reviewer lands from Proposals, when a steering
+   * repository's change went to review (ADR-232). Null otherwise.
+   */
+  proposalId: string | null;
 };
 
 /**
@@ -143,6 +148,7 @@ export async function setGovernanceMode(
     productionBranch,
     path,
     pullRequest,
+    proposalId,
   } = result.value;
   return {
     ok: true,
@@ -156,6 +162,7 @@ export async function setGovernanceMode(
         pullRequest === null
           ? null
           : { number: pullRequest.number, htmlUrl: pullRequest.htmlUrl },
+      proposalId,
     },
   };
 }

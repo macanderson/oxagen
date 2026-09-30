@@ -636,6 +636,7 @@ export function createSteeringGitLab(
               authorLogin: null,
               committedAt: commit.committedAt,
               summary: commit.summary,
+              message: commit.message,
             }
           : null;
       });

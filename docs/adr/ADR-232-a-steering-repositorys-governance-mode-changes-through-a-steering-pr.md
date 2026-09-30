@@ -77,6 +77,41 @@ and approvals as a record, with these differences:
 only its merge commit, so the repository sync can also record a governance PR
 someone merged outside Oxagen (#4795).
 
+The lineage id `governance` is reserved. `lineageIdSchema` refuses it for a
+record proposal, because a record on it would share the one governance PR slot
+the open-PR index gives each workspace.
+
+### 4. The repository sync records a governance change that landed outside Oxagen
+
+The branch rules let only the Oxagen GitHub App update `main` (ADR-228). If
+they drift, a reviewer can merge the governance PR on the host, or someone can
+push straight to `main`. Health then reads `diverged`, but the new mode is in
+force at once, because every call reads it from the production head.
+
+Added on 2026-09-30. When the production head moves, the sync reads the mode in
+`steering/governance.toml` at the last synced head and at the new one. A
+different mode, on a commit with no `Oxagen-Version` trailer, landed outside
+Oxagen. The trailer is the test health's history judge already uses (`diverged.ts`),
+so the two agree on which commits Oxagen made. `landSteeringPr` writes it on
+every merge, and `set_governance_mode` and `merge_context_pr` land every
+governance change through it and record their own events. So the sync records
+only the changes nobody else records.
+
+- A governance PR merged on the host reads `merged` with its merge commit and
+  no approver, and the sync deletes its branch.
+- The sync emits `steering.governance_changed` with a null actor, the commit,
+  both modes, and `landedOutsideOxagen: true`. It names the proposal when a
+  governance PR carried the commit.
+- It also emits `steering.governance_overridden` when the mode it replaced
+  asked for review, which is every mode but `solo`. `set_governance_mode`
+  emits both events for Apply now for the same reason: "every governance
+  change" and "every skipped review" each stay one event-type filter. The
+  review route through `merge_context_pr` still emits only the change.
+- The sync compares modes, not files. A file missing or unreadable at either
+  head is a layout change or a file problem, which the checks and health
+  report. Two changes between syncs that end at the mode they started from
+  record nothing.
+
 ## Consequences
 
 - A reviewed governance change has a land path, and its approver is on record.
@@ -84,8 +119,11 @@ someone merged outside Oxagen (#4795).
   keeps `RecordKind`. The proposal views, `list_proposals`, `get_context_pr`,
   and the app's proposal list and PR panel take `ProposalKind`, and a merged
   governance PR names no promotion event and no record.
-- The repository sync skips a merged governance row until its governance
-  branch records the merge (#4795).
+- The repository sync records a governance PR merged on the host, and any
+  other mode change Oxagen did not make, as decision 4 sets out.
+- `set_governance_mode` answers `proposalId` for a proposed change in a
+  steering repository, and the app links it to the Context PR panel where a
+  reviewer lands it.
 
 ## Alternatives considered
 
@@ -95,3 +133,10 @@ someone merged outside Oxagen (#4795).
 - **Let an owner land a governance PR without review, as for a record.** That
   is Apply now under another name, without the override record ADR-133 exists
   to leave.
+- **A new event type for a change outside Oxagen.** It would add a third
+  filter a reader must know to join, and "every governance change" would miss
+  rows. `landedOutsideOxagen` on the existing event marks the source instead.
+- **Tell Oxagen's merges apart by the rows and versions it wrote.** A publish
+  can fail after the merge, and the sync's own publish then versions whatever
+  head it reads, so neither table separates Oxagen's merges from a push. The
+  trailer is on the commit itself.
