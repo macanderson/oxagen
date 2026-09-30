@@ -17,8 +17,7 @@
  * Usage: node tools/scripts/run-checks.mjs check:manifest check:contracts ...
  */
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { isEntrypoint as isMainModule } from "./lib/is-entrypoint.mjs";
 
 /**
  * Run `pnpm run <name>` with inherited stdio and return its exit status.
@@ -101,21 +100,12 @@ export function summaryLines({ results, failed }) {
 }
 
 /**
- * Whether node was started on this file.
- *
- * Node resolves symlinks in the main module's URL but not in argv[1], so the
- * usual `import.meta.url === file://${argv[1]}` test reads false when the
- * checkout path runs through a symlink. For this runner that is not a
- * harmless miss: the script would exit 0 having run no check, and the CI step
- * would pass green. Compare real paths instead.
+ * Whether node was started on this file. `lib/is-entrypoint.mjs` compares real
+ * paths, so a checkout reached through a symlink still runs the checks instead
+ * of exiting 0 having run none.
  */
 export function isEntrypoint(argv1 = process.argv[1], moduleUrl = import.meta.url) {
-  if (!argv1) return false;
-  try {
-    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
-  } catch {
-    return false;
-  }
+  return isMainModule(moduleUrl, argv1);
 }
 
 if (isEntrypoint()) {

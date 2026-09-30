@@ -24,7 +24,7 @@
 // The negation window does not. The DoD gate reads the few words before the
 // keyword, and this check reads the whole sentence (see `isNegatedInSentence`).
 
-import { pathToFileURL } from "node:url";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 import {
   CLOSING_PATTERN,
   linkedIssues,
@@ -257,9 +257,6 @@ async function main() {
   process.exit(result.ok ? 0 : 1);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isEntrypoint(import.meta.url)) {
   await main();
 }

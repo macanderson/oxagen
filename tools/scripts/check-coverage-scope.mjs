@@ -24,7 +24,7 @@
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 /** Where Vitest's `json` coverage reporter writes, relative to the package. */
 export const REPORT = join("coverage", "coverage-final.json");
@@ -123,7 +123,7 @@ export function checkPackage(pkgDir, { cwd, read, exists, realpath }) {
   return { code: 1, message: lines.join("\n") };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isEntrypoint(import.meta.url)) {
   const dirs = process.argv.slice(2);
   if (dirs.length === 0) {
     process.stderr.write(

@@ -32,6 +32,7 @@ import {
   packagesImportedBy,
   usesTsx,
 } from "./lib/script-deps.mjs";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 /** The exit code for "this check could not run". */
 export const CANNOT_RUN = 3;
@@ -128,7 +129,7 @@ export function report(name, result) {
   return `${lines.join("\n")}\n`;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isEntrypoint(import.meta.url)) {
   const name = process.argv[2];
   if (!name) {
     process.stderr.write(

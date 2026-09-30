@@ -34,7 +34,7 @@
 // unticked box. Whether the human ticking the box was *honest* is not
 // something either approach can check; the box is at least a recorded claim.
 
-import { pathToFileURL } from "node:url";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 /**
  * Label that waives the linked-issue requirement.
@@ -684,9 +684,6 @@ async function main() {
   process.exit(result.ok ? 0 : 1);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (isEntrypoint(import.meta.url)) {
   await main();
 }
