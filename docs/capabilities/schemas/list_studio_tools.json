@@ -1,0 +1,335 @@
+{
+  "name": "list_studio_tools",
+  "domain": "tool",
+  "description": "List one server folder's tools: each tools.toml key with its confirmed classification, then each tool the last discovery found that no key imports, with a suggested classification. Includes each tool's definition tokens and the server's token budget.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "server"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "mcpServerId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "snapshotId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "capturedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "exposure": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "search"
+            ]
+          },
+          "budget": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "mode",
+          "budget"
+        ],
+        "additionalProperties": false
+      },
+      "tokens": {
+        "type": "object",
+        "properties": {
+          "definitions": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "budget": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "definitions",
+          "budget"
+        ],
+        "additionalProperties": false
+      },
+      "imported": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "offered": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "searchRecommended": {
+        "type": "boolean"
+      },
+      "compileError": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "key": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "imported",
+                "available"
+              ]
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "importedDescription": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "annotations": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "classification": {
+              "type": "object",
+              "properties": {
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "sideEffect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write",
+                    "irreversible"
+                  ]
+                },
+                "egress": {
+                  "type": "string",
+                  "enum": [
+                    "local",
+                    "org_tenant",
+                    "third_party"
+                  ]
+                },
+                "impacts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "confirmed": {
+                  "type": "boolean"
+                },
+                "basis": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "source_hint",
+                        "annotations",
+                        "http_method",
+                        "graphql_operation",
+                        "grpc_idempotency",
+                        "fail_safe"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "risk",
+                "sideEffect",
+                "egress",
+                "impacts",
+                "confirmed",
+                "basis"
+              ],
+              "additionalProperties": false
+            },
+            "snapshotId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "capturedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "withheld": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "key",
+            "state",
+            "description",
+            "importedDescription",
+            "inputSchema",
+            "annotations",
+            "tokens",
+            "classification",
+            "snapshotId",
+            "capturedAt",
+            "withheld"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "server",
+      "mcpServerId",
+      "snapshotId",
+      "capturedAt",
+      "exposure",
+      "tokens",
+      "imported",
+      "offered",
+      "searchRecommended",
+      "compileError",
+      "tools"
+    ],
+    "additionalProperties": false
+  }
+}

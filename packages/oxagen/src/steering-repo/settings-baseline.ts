@@ -12,7 +12,7 @@
 // because its numeric id differs per installation and per GitLab instance.
 import { REQUIRED_CHECK_NAME, STEERING_DEFAULT_BRANCH, STEERING_ENVIRONMENT } from "./names";
 
-/** The app that acts on steering repos: Oxagen Steering on GitHub, its bot user on GitLab. */
+/** The app that acts on steering repos: the Oxagen GitHub App on GitHub, its bot user on GitLab. */
 export const OXAGEN_STEERING_APP = "oxagen-steering";
 export type OxagenSteeringApp = typeof OXAGEN_STEERING_APP;
 

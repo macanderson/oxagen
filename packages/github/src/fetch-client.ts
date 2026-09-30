@@ -1,6 +1,7 @@
 import type {
   GitHubBranch,
   GitHubCheckRun,
+  GitHubCheckRunArgs,
   GitHubCiChecks,
   GitHubClient,
   GitHubClosingIssues,
@@ -1277,28 +1278,33 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return branches;
   }
 
-  async function createCheckRun(args: {
-    owner: string;
-    repo: string;
-    name: string;
-    headSha: string;
-    conclusion: "success" | "failure";
-    title: string;
-    summary: string;
-    startedAt: string;
-    completedAt: string;
-  }): Promise<{ id: number; htmlUrl: string }> {
+  async function createCheckRun(
+    args: GitHubCheckRunArgs,
+  ): Promise<{ id: number; htmlUrl: string }> {
+    // GitHub refuses a conclusion or an end time on a run that is still going.
+    const state =
+      args.status === "in_progress"
+        ? { status: "in_progress", started_at: args.startedAt }
+        : {
+            status: "completed",
+            conclusion: args.conclusion,
+            started_at: args.startedAt,
+            completed_at: args.completedAt,
+          };
     const data = await request<GHCheckRun>(
       "POST",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/check-runs`,
       {
         name: args.name,
         head_sha: args.headSha,
-        status: "completed",
-        conclusion: args.conclusion,
-        started_at: args.startedAt,
-        completed_at: args.completedAt,
-        output: { title: args.title, summary: args.summary },
+        ...state,
+        ...(args.detailsUrl === undefined ? {} : { details_url: args.detailsUrl }),
+        ...(args.externalId === undefined ? {} : { external_id: args.externalId }),
+        output: {
+          title: args.title,
+          summary: args.summary,
+          ...(args.text === undefined ? {} : { text: args.text }),
+        },
       },
     );
     return { id: data.id, htmlUrl: data.html_url };

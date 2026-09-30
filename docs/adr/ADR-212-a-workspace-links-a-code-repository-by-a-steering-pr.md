@@ -87,13 +87,16 @@ checkout cannot name a workspace.
    adds `tacho.sessions.repository_unlinked`, which ingest writes once, on
    the session's genesis row. `get_run` and `get_tacho_session` answer it.
 9. **The steering repository's credential stays with Oxagen.** Oxagen reads
-   and writes a provisioned steering repository server-side through the
-   Oxagen Steering app installation (`mintSteeringInstallationToken`). No
-   agent receives that token. `create_github_token` for the steering
-   repository hands out the workspace installation's token when that
-   installation covers the repository. Otherwise it refuses with
+   and writes a provisioned steering repository server-side through an
+   installation token of the Oxagen GitHub App
+   (`mintSteeringInstallationToken`). No agent receives that token.
+   `create_github_token` refuses the steering repository with
    `steering_repo_propose_only`, and the agent changes the steering
-   repository through a steering PR.
+   repository through a steering PR. Amended by ADR-228 on 2026-09-29: one
+   app now serves code repositories and steering repos, so every token it
+   mints carries the merge ruleset's bypass, and `create_github_token` no
+   longer hands out the workspace installation's token for the steering
+   repository.
 
 ## Consequences
 

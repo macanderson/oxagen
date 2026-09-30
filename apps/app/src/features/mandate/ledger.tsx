@@ -26,6 +26,7 @@ import { useFormatter } from "@/ui/formatter";
 import { Measure } from "@/ui/measure";
 import { SafeForm, SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
+import { LedgerStateSelect } from "./ledger-state-select";
 import {
   LEDGER_PAGE,
   ledgerPage,
@@ -85,22 +86,23 @@ function Filters({ at, view }: { at: MandateAt; view: MandateView }) {
         />
       </span>
       <span className={field}>
-        <label className={fieldLabel} htmlFor="ledger-state">
+        <span id="ledger-state-label" className={fieldLabel}>
           {t("state")}
-        </label>
-        <select
+        </span>
+        <LedgerStateSelect
+          key={view.state ?? ""}
           id="ledger-state"
-          name="state"
+          aria-labelledby="ledger-state-label"
           defaultValue={view.state ?? ""}
-          className={control}
-        >
-          <option value="">{t("anyState")}</option>
-          {MOVEMENT_STATES.map((state) => (
-            <option key={state} value={state}>
-              {t(`kind.${state}`)}
-            </option>
-          ))}
-        </select>
+          items={[
+            { value: "", label: t("anyState") },
+            ...MOVEMENT_STATES.map((state) => ({
+              value: state,
+              label: t(`kind.${state}`),
+            })),
+          ]}
+          className="w-full data-[size=default]:h-10 max-md:text-base"
+        />
       </span>
       <button type="submit" className={`${control} font-medium`}>
         {t("apply")}

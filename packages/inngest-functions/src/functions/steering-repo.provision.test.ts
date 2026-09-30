@@ -1,17 +1,25 @@
 // The durable steering repo provision (lane S1, #4450). The job asks the
 // runner for its step list, then runs each step as its own durable step. The
 // runner is the seam `@oxagen/handlers` installs at boot, so these tests
-// install a fake one and assert what it receives and which steps run.
-import { describe, expect, it, vi } from "vitest";
+// install a fake one and assert what it receives and which steps run. A
+// workspace event first reads whether the workspace is archived. That read is
+// mocked here, and steering-repo-backfill.test.ts covers its query.
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   configs: [] as { options: unknown; trigger: unknown }[],
+  archived: vi.fn<
+    (scope: { orgId: string; workspaceId: string }) => Promise<boolean>
+  >(async () => false),
 }));
 vi.mock("../create-function", () => ({
   createFunction: (options: unknown, trigger: unknown, handler: unknown) => {
     mocks.configs.push({ options, trigger });
     return [handler];
   },
+}));
+vi.mock("../lib/steering-repo-backfill", () => ({
+  isWorkspaceArchived: mocks.archived,
 }));
 
 import { NonRetriableError } from "@oxagen/functions";
@@ -40,6 +48,10 @@ const STEPS = [
   "bind_repository",
 ] as const;
 
+// The step that reads whether the workspace is archived. It runs before the
+// runner's steps, and only for a workspace event.
+const CHECK = "check_workspace";
+
 const WORKSPACE_EVENT = {
   orgId: ORG_ID,
   workspaceId: WORKSPACE_ID,
@@ -66,7 +78,7 @@ type FakeStep = {
 type Handler = (ctx: {
   event: { data: Record<string, unknown> };
   step: FakeStep;
-}) => Promise<{ status: string }>;
+}) => Promise<{ status: string; reason?: string }>;
 
 const handler = steeringRepoProvision as unknown as Handler;
 
@@ -133,6 +145,11 @@ class BlockedError extends Error {
   }
 }
 
+beforeEach(() => {
+  mocks.archived.mockReset();
+  mocks.archived.mockResolvedValue(false);
+});
+
 describe("steering-repo/provision", () => {
   it("runs on the provision request with four retries and one run per organization at a time", () => {
     const config = mocks.configs.find(
@@ -154,11 +171,44 @@ describe("steering-repo/provision", () => {
     await expect(
       handler({ event: { data: WORKSPACE_EVENT }, step }),
     ).resolves.toEqual({ status: "ready" });
-    expect(step.names).toEqual(STEPS);
+    expect(step.names).toEqual([CHECK, ...STEPS]);
     expect(runner.steps).toHaveBeenCalledTimes(1);
+    expect(mocks.archived.mock.calls).toEqual([
+      [{ orgId: ORG_ID, workspaceId: WORKSPACE_ID }],
+    ]);
     expect(runner.runStep.mock.calls).toEqual(
       STEPS.map((name) => [WORKSPACE_SCOPE, name]),
     );
+  });
+
+  it("ends a queued event for an archived workspace with no provision step", async () => {
+    // A person archived the workspace after the backfill sent its event. No
+    // step runs, so nothing reaches the provider or the database.
+    mocks.archived.mockResolvedValue(true);
+    const runner = installRunner();
+    const step = fakeStep();
+    await expect(
+      handler({ event: { data: WORKSPACE_EVENT }, step }),
+    ).resolves.toEqual({ status: "skipped", reason: "workspace_archived" });
+    expect(step.names).toEqual([CHECK]);
+    expect(mocks.archived.mock.calls).toEqual([
+      [{ orgId: ORG_ID, workspaceId: WORKSPACE_ID }],
+    ]);
+    expect(runner.runStep).not.toHaveBeenCalled();
+  });
+
+  it("runs no provision step when the archived read fails, and lets Inngest retry it", async () => {
+    const outage = new Error("Postgres refused the connection");
+    mocks.archived.mockRejectedValue(outage);
+    const runner = installRunner();
+    const step = fakeStep();
+    const failure = await failureOf(
+      handler({ event: { data: WORKSPACE_EVENT }, step }),
+    );
+    expect(failure).toBe(outage);
+    expect(failure).not.toBeInstanceOf(NonRetriableError);
+    expect(step.names).toEqual([CHECK]);
+    expect(runner.runStep).not.toHaveBeenCalled();
   });
 
   it("reads an event with no workspace as the organization repository", async () => {
@@ -169,11 +219,15 @@ describe("steering-repo/provision", () => {
       { orgId: ORG_ID, actorUserId: ACTOR_ID },
     ]) {
       const runner = installRunner();
-      await handler({ event: { data }, step: fakeStep() });
+      const step = fakeStep();
+      await handler({ event: { data }, step });
+      // The organization repository has no workspace to archive.
+      expect(step.names).toEqual(STEPS);
       expect(runner.runStep).toHaveBeenCalledTimes(STEPS.length);
       for (const [scope] of runner.runStep.mock.calls)
         expect(scope).toStrictEqual(ORG_SCOPE);
     }
+    expect(mocks.archived).not.toHaveBeenCalled();
   });
 
   it("carries on past a step that does not apply and returns the status the last step reports", async () => {
@@ -204,7 +258,7 @@ describe("steering-repo/provision", () => {
     await expect(
       handler({ event: { data: WORKSPACE_EVENT }, step }),
     ).resolves.toEqual({ status: "provisioning" });
-    expect(step.names).toEqual([]);
+    expect(step.names).toEqual([CHECK]);
     expect(runner.runStep).not.toHaveBeenCalled();
   });
 
@@ -218,7 +272,7 @@ describe("steering-repo/provision", () => {
     await expect(
       handler({ event: { data: WORKSPACE_EVENT }, step }),
     ).resolves.toEqual({ status: "ready" });
-    expect(step.names).toEqual(STEPS);
+    expect(step.names).toEqual([CHECK, ...STEPS]);
     expect(runner.runStep).toHaveBeenCalledTimes(STEPS.length);
   });
 
@@ -244,7 +298,7 @@ describe("steering-repo/provision", () => {
       isNonRetriable: true,
     });
     expect((failure as NonRetriableError).cause).toBe(blocked);
-    expect(step.names).toEqual(["pick_connection", "create_repository"]);
+    expect(step.names).toEqual([CHECK, "pick_connection", "create_repository"]);
     expect(runner.runStep).toHaveBeenCalledTimes(2);
   });
 
@@ -260,7 +314,7 @@ describe("steering-repo/provision", () => {
     );
     expect(failure).toBe(outage);
     expect(failure).not.toBeInstanceOf(NonRetriableError);
-    expect(step.names).toEqual(STEPS.slice(0, 4));
+    expect(step.names).toEqual([CHECK, ...STEPS.slice(0, 4)]);
     expect(runner.runStep).toHaveBeenCalledTimes(4);
   });
 
@@ -324,24 +378,28 @@ describe("steering-repo/provision", () => {
       handler({ event: { data: WORKSPACE_EVENT }, step }),
     ).rejects.toThrow("Cannot load ./steering_repo.provision");
     expect(step.names).toEqual([]);
+    expect(mocks.archived).not.toHaveBeenCalled();
     expect(runner.runStep).not.toHaveBeenCalled();
   });
 
   it("reaches the runner only inside step.run, so a replay skips the steps that finished", async () => {
     // Inngest returns a finished step's stored output on a replay and never
-    // runs its body again. A retry starts at the step that failed.
-    const memo = new Map<string, unknown>(
-      STEPS.slice(0, -1).map((name): [string, unknown] => [
+    // runs its body again. A retry starts at the step that failed, and the
+    // archived read is not repeated.
+    const memo = new Map<string, unknown>([
+      [CHECK, false],
+      ...STEPS.slice(0, -1).map((name): [string, unknown] => [
         name,
         outcome(name),
       ]),
-    );
+    ]);
     const runner = installRunner();
     const step = fakeStep(memo);
     await expect(
       handler({ event: { data: WORKSPACE_EVENT }, step }),
     ).resolves.toEqual({ status: "ready" });
-    expect(step.names).toEqual(STEPS);
+    expect(step.names).toEqual([CHECK, ...STEPS]);
+    expect(mocks.archived).not.toHaveBeenCalled();
     expect(runner.runStep.mock.calls).toEqual([
       [WORKSPACE_SCOPE, "bind_repository"],
     ]);

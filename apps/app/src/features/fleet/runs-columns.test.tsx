@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import {
   agentPage,
   approvalQueue,
@@ -338,7 +339,9 @@ describe("the pull-request filter", () => {
         },
       ],
     ]);
-    expect(screen.getByTestId("pr-filter")).toHaveValue("with");
+    expect(screen.getByTestId("pr-filter")).toHaveTextContent(
+      "With pull requests",
+    );
     expect(screen.getByTestId("pr-filter-note")).toHaveTextContent(
       "Runs from an external engine are left out.",
     );
@@ -352,7 +355,11 @@ describe("the pull-request filter", () => {
     await renderFleet([runRow({ id: "arun_1" })]);
     expect(screen.queryByTestId("pr-filter-note")).toBeNull();
     const user = userEvent.setup();
-    await user.selectOptions(screen.getByTestId("pr-filter"), "without");
+    await pickOption(
+      user,
+      screen.getByTestId("pr-filter"),
+      "Without pull requests",
+    );
     expect(push).toHaveBeenCalledWith("/acme/core-platform?prs=without");
   });
 
@@ -362,7 +369,9 @@ describe("the pull-request filter", () => {
     expect(screen.getByTestId("runs-none")).toHaveTextContent(
       "No run on this page has a pull request. Older runs may.",
     );
-    expect(screen.getByTestId("pr-filter")).toHaveValue("with");
+    expect(screen.getByTestId("pr-filter")).toHaveTextContent(
+      "With pull requests",
+    );
   });
 });
 

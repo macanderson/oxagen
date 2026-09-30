@@ -59,7 +59,13 @@ import {
   type SteeringCheckout,
   type ToolsPullRequestFile,
 } from "./seams";
-import { discover, NeedsDigest, snapshotsOf, type Discovered } from "./sources";
+import {
+  discover,
+  NeedsDigest,
+  servedDescriptorSet,
+  snapshotsOf,
+  type Discovered,
+} from "./sources";
 import {
   postgresDiscoveryStore,
   type DiscoveryFinish,
@@ -125,7 +131,7 @@ interface Run {
 }
 
 /** The three files of a server folder, parsed. */
-interface ServerFiles {
+export interface ServerFiles {
   parsed: McpServer;
   serverText: string;
   tools: McpTools;
@@ -149,7 +155,8 @@ function messageOf(error: unknown): string {
  * Whether a trigger runs for a server's sync.schedule:
  *
  * - schedule: a daily server, and any server but a manual one that has
- *   never finished a discovery, so a new server's tools are found once.
+ *   never finished a discovery with its mcp.servers row live, so a new
+ *   server's tools are found and snapshotted once.
  * - push: an on-change server.
  * - list_changed and registry_version: any server but a manual one.
  * - manual and lock_merged: always.
@@ -184,11 +191,18 @@ export function scheduleAllows(
  * read its own failure as the discovery it is retrying: scheduleAllows would
  * answer false, the retry would record skipped without contacting the source,
  * and the row would be neither stalled nor picked up by the daily sweep.
+ *
+ * A run that finished before the server's mcp.servers row existed does not
+ * count either. It recorded the offered names, but it had no mcpServerId to
+ * write tool snapshots under, so list_studio_tools has no tools to show. The
+ * hourly sweep sends such a server a scheduled discovery once its row is live,
+ * and this answer lets that discovery run.
  */
 export function everFinished(
-  prior: Pick<DiscoveryRow, "status" | "finishedAt"> | null,
+  prior: Pick<DiscoveryRow, "status" | "finishedAt" | "mcpServerId"> | null,
 ): boolean {
   if (prior === null || prior.status === "failed") return false;
+  if (prior.mcpServerId === null) return false;
   return prior.finishedAt !== null;
 }
 
@@ -202,7 +216,12 @@ function parsedFile<T>(path: string, result: ReadResult<T>): T {
   return result.value;
 }
 
-async function readServerFiles(
+/**
+ * server.toml, tools.toml, and tools.lock.json for one server at the
+ * checkout's commit, parsed. Refuses a folder that lacks one or does not
+ * parse.
+ */
+export async function readServerFiles(
   checkout: SteeringCheckout,
   server: string,
 ): Promise<ServerFiles> {
@@ -372,15 +391,22 @@ export function moveSourceVersion(
 
 // ── Compiling ────────────────────────────────────────────────────────────────
 
-/** What the gateway serves now, compiled from the production branch. */
-function compileServed(server: string, files: ServerFiles): ManifestServer {
+/**
+ * What the gateway serves now, compiled from the production branch. A gRPC
+ * server passes the descriptor set its proto/ files give.
+ */
+function compileServed(
+  server: string,
+  files: ServerFiles,
+  descriptorSet: Uint8Array | undefined,
+): ManifestServer {
   try {
     const compiled = compile({
       server: files.parsed,
       tools: files.tools,
       upstream: lockedUpstreamTools(files.lock),
       security_schemes: lockedSecuritySchemes(files.lock),
-      descriptor_set: undefined,
+      descriptor_set: descriptorSet,
     });
     return toManifestServer(compiled, files.lock);
   } catch (error) {
@@ -615,12 +641,13 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
     return finished(kept, "skipped");
   }
 
-  // compile() refuses a gRPC server without its descriptor set, and only
-  // lane M3's reflection reads one, so gRPC stops at its seam.
-  if (files.parsed.source.type === "grpc") {
-    await seams.grpc.discover({ scope, server, signal: run.signal });
-  }
-  const served = compileServed(server, files);
+  // compile() refuses a gRPC server without its descriptor set, which the
+  // folder's proto/ files give through lane M3's importer.
+  const servedDescriptors =
+    files.parsed.source.type === "grpc"
+      ? await servedDescriptorSet(checkout, server, seams.grpc)
+      : undefined;
+  const served = compileServed(server, files, servedDescriptors);
 
   const discovered = await discover({
     scope,
