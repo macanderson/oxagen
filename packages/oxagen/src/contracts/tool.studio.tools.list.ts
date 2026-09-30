@@ -67,6 +67,36 @@ export const studioServerToolSchema = z.object({
 
 export type StudioServerTool = z.output<typeof studioServerToolSchema>;
 
+/** One server folder's tools, as list_studio_tools answers them. */
+export const studioToolsListOutputSchema = z.object({
+  server: z.string(),
+  /** `mcs_…`, or null before the server has a registry row. */
+  mcpServerId: z.string().nullable(),
+  /** The newest snapshot row among the offered tools, or null with none. */
+  snapshotId: z.string().nullable(),
+  capturedAt: isoDateSchema.nullable(),
+  /** server.toml's exposure: every definition direct, or three search tools. */
+  exposure: z.object({
+    mode: z.enum(["direct", "search"]),
+    /** server.toml's definition_budget, or the default. */
+    budget: z.number().int().min(1),
+  }),
+  tokens: z.object({
+    /** Every imported tool's definition together, or null when the folder does not compile. */
+    definitions: z.number().int().min(0).nullable(),
+    budget: z.number().int().min(1),
+  }),
+  /** tools.toml's key count. */
+  imported: z.number().int().min(0),
+  /** The count of tools the last discovery found. */
+  offered: z.number().int().min(0),
+  /** True when a direct server's definitions exceed its budget. */
+  searchRecommended: z.boolean(),
+  /** The compiler's message when the folder does not compile, or null. */
+  compileError: z.string().nullable(),
+  tools: z.array(studioServerToolSchema),
+});
+
 /**
  * List one server's tools for Studio's Tools tab (lane M10, #4682): every
  * tools.toml key first, then every tool the last discovery found that no key
@@ -102,34 +132,7 @@ export const toolStudioToolsList = registerCapability({
       server: studioServerNameSchema,
     })
     .strict(),
-  output: z.object({
-    server: z.string(),
-    /** `mcs_…`, or null before the server has a registry row. */
-    mcpServerId: z.string().nullable(),
-    /** The newest snapshot row among the offered tools, or null with none. */
-    snapshotId: z.string().nullable(),
-    capturedAt: isoDateSchema.nullable(),
-    /** server.toml's exposure: every definition direct, or three search tools. */
-    exposure: z.object({
-      mode: z.enum(["direct", "search"]),
-      /** server.toml's definition_budget, or the default. */
-      budget: z.number().int().min(1),
-    }),
-    tokens: z.object({
-      /** Every imported tool's definition together, or null when the folder does not compile. */
-      definitions: z.number().int().min(0).nullable(),
-      budget: z.number().int().min(1),
-    }),
-    /** tools.toml's key count. */
-    imported: z.number().int().min(0),
-    /** The count of tools the last discovery found. */
-    offered: z.number().int().min(0),
-    /** True when a direct server's definitions exceed its budget. */
-    searchRecommended: z.boolean(),
-    /** The compiler's message when the folder does not compile, or null. */
-    compileError: z.string().nullable(),
-    tools: z.array(studioServerToolSchema),
-  }),
+  output: studioToolsListOutputSchema,
 });
 
 export type ToolStudioToolsListInput = z.output<typeof toolStudioToolsList.input>;

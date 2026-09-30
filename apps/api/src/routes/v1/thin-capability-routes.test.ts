@@ -99,6 +99,7 @@ import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
 import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
+import { toolStudioServerGet } from "@oxagen/oxagen/contracts/tool.studio.server.get";
 import { toolStudioToolsList } from "@oxagen/oxagen/contracts/tool.studio.tools.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
@@ -241,6 +242,7 @@ import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft
 import { toolStudioTryRoute } from "./tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
 import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
+import { toolStudioServerGetRoute } from "./tool.studio.server.get";
 import { toolStudioToolsListRoute } from "./tool.studio.tools.list";
 import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
@@ -1174,6 +1176,16 @@ const ROUTES: ThinRoute[] = [
     route: toolStudioToolsListRoute as unknown as Hono<never>,
     method: "POST",
     capability: toolStudioToolsList.name,
+    body: { server: "ledger" },
+    invalidBody: { server: "Ledger" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.studio.server.get",
+    route: toolStudioServerGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStudioServerGet.name,
     body: { server: "ledger" },
     invalidBody: { server: "Ledger" },
     jsonGuard: true,

@@ -65,6 +65,10 @@ import {
   toolStudioReviewOpen,
 } from "@oxagen/oxagen/contracts/tool.studio.review.open";
 import {
+  type ToolStudioServerGetOutput,
+  toolStudioServerGet,
+} from "@oxagen/oxagen/contracts/tool.studio.server.get";
+import {
   type ToolStudioToolsListOutput,
   toolStudioToolsList,
 } from "@oxagen/oxagen/contracts/tool.studio.tools.list";
@@ -248,4 +252,22 @@ export async function setMcpCredentialAction(
 ): Promise<ActionResult<ToolStudioCredentialSetOutput>> {
   const ctx = await requireViewer(org, ws);
   return kernelWrite(ctx, toolStudioCredentialSet, input);
+}
+
+/**
+ * One server folder as the server page draws it: server.toml, each key's
+ * shaping, and the tool catalog, from one read of the production branch.
+ */
+export async function getStudioServerAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioServerGetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioServerGet,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
 }

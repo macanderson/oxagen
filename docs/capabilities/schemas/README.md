@@ -541,6 +541,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - draft_studio_description
 - get_studio_discovery
 - get_studio_draft
+- get_studio_server
 - import_tools
 - list_studio_findings
 - list_studio_tools
