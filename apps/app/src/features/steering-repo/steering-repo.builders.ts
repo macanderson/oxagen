@@ -204,13 +204,14 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
     steeringRepo: {
       get: (...args) => {
         calls.push(args);
-        // The contract's record holds a mutable differences array, and the
-        // view's is read-only, so an answered read copies it across.
+        // The contract's record holds mutable arrays, and the view's are
+        // read-only, so an answered read copies them across.
         return Promise.resolve(
           read.ok
             ? readOk({
                 ...read.value,
                 differences: [...read.value.differences],
+                connectionChoices: [...read.value.connectionChoices],
               })
             : read,
         );

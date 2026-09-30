@@ -669,7 +669,7 @@
         "startNote": "Oxagen creates the repo on your GitHub organization or GitLab group. This takes up to a minute.",
         "startingNote": "Oxagen is creating the repo. Keep this dialog open to see each step.",
         "choose": {
-          "label": "Where to create steering repos",
+          "label": "Steering repo location",
           "action": "Use this one",
           "provider": {
             "github": "GitHub organization",

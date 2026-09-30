@@ -303,7 +303,7 @@ export function SteeringRepoProvisioning({
     const { connection } = options;
     const capability = importing ? IMPORT_CAPABILITY : RETRY_CAPABILITY;
     try {
-      if (importing && ws !== null) {
+      if (importing) {
         const result =
           connection === undefined && options.startFresh === undefined
             ? await importWorkspaceSteering(org, ws)

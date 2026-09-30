@@ -48,13 +48,14 @@ export const STEERING_IMPORT_LEGACY_CONNECTION =
 export const STEERING_NO_CONNECTION = "no_connection";
 
 /**
+ * @internal Exported for types.test.ts, which pins it to the job's code.
  * The error code of a workspace still steered by a code repository. The
- * import moves that steering and creates the steering repo.
+ * setup reads `legacySource` for it and goes on through the import.
  */
 export const STEERING_IMPORT_REQUIRED = "steering_import_required";
 
 /** A GitHub organization or GitLab group setup can create steering repos in. */
-export type SteeringConnectionChoice = {
+type SteeringConnectionChoice = {
   provider: "github" | "gitlab";
   /** The GitHub installation id or the GitLab group id. */
   id: number;
