@@ -32,6 +32,17 @@
  * would re-read every open transcript from byte 0 and seal every message a
  * second time onto a chain that already holds it.
  *
+ * A cursor outlives its session in the registry. `forgetSealed` drops a
+ * sealed session a week after it was last seen and keeps a chain tombstone
+ * for `TOMBSTONE_RETAIN_MS` (thirty days), because Claude Code can resume
+ * the session under the same id for as long as it keeps the transcript. The
+ * tailer keeps the forgotten session's cursor for the same span, stamped
+ * with `forgottenAtMs`, and reopens it when the session is listed again. A
+ * resume then reads on from the last line read before the session was
+ * forgotten. Dropping the cursor made the resume start a fresh one at byte
+ * 0, and every earlier model call sealed a second `llm_call` on the
+ * continued chain (#4345).
+ *
  * Every file call goes through `fs.promises`. The daemon's tick runs on the
  * same thread that answers hooks and `GET /health`, and a synchronous read
  * of 4 MiB holds both; the detector's synchronous scan already showed what
@@ -44,7 +55,7 @@ import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { readJsonStateFile, writeSensitiveFileAtomic } from "../host/fs";
 import type { TachoHarness } from "../wire";
-import { sessionMapKey } from "./registry";
+import { MAX_TOMBSTONES, sessionMapKey, TOMBSTONE_RETAIN_MS } from "./registry";
 
 /** The most bytes one tick reads from one transcript. */
 export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
@@ -188,9 +199,10 @@ interface Cursor extends FileCursor {
    * Set once a sealed session's transcript has gone `sealedIdleMs` without
    * growing, so the cursor stops reading it. The cursor then stays as a
    * tombstone for as long as the registry lists the sealed session (seven
-   * days), and nothing reads the transcript again. Dropping it sooner lets
-   * the next tick make a fresh cursor at byte 0 and append the whole
-   * transcript after `agent_stop`.
+   * days), and for `TOMBSTONE_RETAIN_MS` after it forgets the session (see
+   * `forgottenAtMs`). Nothing reads the transcript again unless the session
+   * resumes. Dropping it sooner lets the next tick make a fresh cursor at
+   * byte 0 and append the whole transcript after `agent_stop`.
    */
   drained?: boolean;
   /**
@@ -200,6 +212,17 @@ interface Cursor extends FileCursor {
    * genuinely quiet for `sealedIdleMs`, not merely stopped for one tick.
    */
   sealedQuietSinceMs?: number;
+  /**
+   * Epoch ms of the first tick that found the session missing from the
+   * registry. The cursor is kept, read position and subagent cursors
+   * included, for `TOMBSTONE_RETAIN_MS` after that, the span the registry
+   * keeps the chain tombstone a resume continues from. A resume inside it
+   * reads only what the transcript gained after the last line read. Cleared
+   * when the session is listed again. Absent in state files written before
+   * forgotten cursors were kept, and a build that predates it drops the
+   * cursor as before.
+   */
+  forgottenAtMs?: number;
 }
 
 interface PersistedTailState {
@@ -362,6 +385,9 @@ export class TranscriptTailer {
    * its quiet grace kept the sealed session's `sealedQuietSinceMs`, and the
    * next seal drained it with no grace at all. Only the read position
    * carries over, nothing the sealed session left on the cursor.
+   * A cursor kept after the registry forgot its session reopens the same
+   * way when a resume opens the session again, and its `forgottenAtMs` goes
+   * with the rest.
    * A drained cursor that never read its file (the one `tick` makes for a
    * sealed session it holds none for) does not know where the recorded part
    * ends, so it stays final rather than feed the whole transcript a second
@@ -393,9 +419,9 @@ export class TranscriptTailer {
   }
 
   /**
-   * Advance every live cursor by at most the budget, and drop the cursors of
-   * sessions that left the registry. A drained cursor is kept until then,
-   * and reopened when its session is.
+   * Advance every live cursor by at most the budget, and keep the cursors of
+   * sessions that left the registry as tombstones (`keepForgotten`). A
+   * drained cursor is reopened when its session is.
    */
   async tick(): Promise<void> {
     for (const session of this.options.sessions())
@@ -468,13 +494,60 @@ export class TranscriptTailer {
         );
       }
     }
-    for (const id of [...this.cursors.keys()]) {
-      if (!live.has(id)) {
-        this.cursors.delete(id);
+    this.keepForgotten(live);
+    this.persist();
+  }
+
+  /**
+   * Keep the cursor of every session the registry no longer lists, for as
+   * long as the registry keeps that session's chain tombstone: at most
+   * `TOMBSTONE_RETAIN_MS` after this tick first found it missing, and at
+   * most `MAX_TOMBSTONES` of them, oldest dropped first.
+   *
+   * The registry's tombstone holds the chain's position only, and this
+   * cursor is the read position, so it has to live as long. Deleted here, as
+   * it was, the resume made a fresh cursor at byte 0 and fed the whole
+   * transcript to a recorder whose call ledgers were empty (#4345). A fresh
+   * cursor cannot start at the end of the file instead: the lines a resumed
+   * session writes before the next tick would be lost.
+   *
+   * A cursor whose session is listed again loses its stamp and is live.
+   */
+  private keepForgotten(live: ReadonlySet<string>): void {
+    const now = this.options.now?.() ?? Date.now();
+    const kept: Array<[string, number]> = [];
+    for (const [key, cursor] of this.cursors) {
+      if (live.has(key)) {
+        if (cursor.forgottenAtMs !== undefined) {
+          delete cursor.forgottenAtMs;
+          this.dirty = true;
+        }
+        continue;
+      }
+      // Stamped on the first tick that finds the session missing. A stamp
+      // that is not a number came from a damaged state file, and is replaced
+      // so the cursor still expires.
+      if (
+        typeof cursor.forgottenAtMs !== "number" ||
+        !Number.isFinite(cursor.forgottenAtMs)
+      ) {
+        cursor.forgottenAtMs = now;
         this.dirty = true;
       }
+      // The comparison `forgetSealed` makes for the chain tombstone.
+      if (cursor.forgottenAtMs < now - TOMBSTONE_RETAIN_MS) {
+        this.cursors.delete(key);
+        this.dirty = true;
+        continue;
+      }
+      kept.push([key, cursor.forgottenAtMs]);
     }
-    this.persist();
+    if (kept.length <= MAX_TOMBSTONES) return;
+    kept.sort(([, a], [, b]) => a - b);
+    for (const [key] of kept.slice(0, kept.length - MAX_TOMBSTONES)) {
+      this.cursors.delete(key);
+      this.dirty = true;
+    }
   }
 
   /**

@@ -439,6 +439,15 @@ export function parseSealedState(value: unknown): SealedState | undefined {
  * for that id derives the same session uuid and would start again at
  * sequence 0, forking a chain the WAL already holds. The tombstone is what
  * lets it continue instead.
+ *
+ * The tombstone holds the chain's position, not the transcript's. The
+ * transcript tailer keeps the forgotten session's read position in its own
+ * cursor (`TranscriptTailer`, `forgottenAtMs`), in its own state file, for
+ * the same `TOMBSTONE_RETAIN_MS` and `MAX_TOMBSTONES`. A resume then feeds
+ * the continued chain only the lines the transcript gained after the last
+ * line read before the session was forgotten. Without that cursor the
+ * resume read the transcript from byte 0 into a recorder whose call ledgers
+ * start empty, and every earlier model call counted twice (#4345).
  */
 export interface ChainTombstone {
   /** `sessionMapKey` of the forgotten record. */
@@ -452,11 +461,15 @@ export interface ChainTombstone {
 /**
  * How long a tombstone outlives the session it stands for. Claude Code
  * deletes a transcript thirty days after its last use by default, and a
- * session with no transcript cannot be resumed.
+ * session with no transcript cannot be resumed. The transcript tailer keeps
+ * a forgotten session's cursor for the same span.
  */
 export const TOMBSTONE_RETAIN_MS = 30 * 24 * 60 * 60_000;
 
-/** The most tombstones kept; the oldest is dropped first. */
+/**
+ * The most tombstones kept; the oldest is dropped first. The transcript
+ * tailer keeps at most this many forgotten cursors, by the same rule.
+ */
 export const MAX_TOMBSTONES = 512;
 
 /**
@@ -872,6 +885,10 @@ export class SessionRegistry {
    * forgot continues its chain from the tombstone, but only when a new
    * recorder derives the same uuid: that is proof it is the same chain, and
    * anything else (a legacy uuid, a host enrolled again) opens its own.
+   * The new recorder's call ledgers are empty, so it cannot tell a model
+   * call it already sealed from a new one. The transcript tailer's kept
+   * cursor is what stops the earlier calls from reaching it again (see
+   * `ChainTombstone`).
    */
   private openRecorder(
     harnessSessionId: string,
@@ -1148,7 +1165,11 @@ export class SessionRegistry {
   /**
    * Forget sealed sessions older than `retainMs`, and report the harness
    * session ids dropped. The roster keeps them counted, and a tombstone keeps
-   * where each chain stopped, so a resume after this continues it.
+   * where each chain stopped, so a resume after this continues it. The
+   * transcript's read position survives in the tailer, not here: its next
+   * tick finds the session missing and keeps the session's cursor as long
+   * as this keeps the tombstone, so the resume is fed only what the
+   * transcript gained since (`ChainTombstone`).
    */
   forgetSealed(retainMs: number): string[] {
     const now = this.options.now();

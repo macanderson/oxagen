@@ -20,7 +20,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
-import { sessionMapKey } from "./registry";
+import { sessionMapKey, TOMBSTONE_RETAIN_MS } from "./registry";
 import {
   completeLines,
   subagentDirOf,
@@ -744,12 +744,19 @@ describe("TranscriptTailer", () => {
     expect(session.lines).toHaveLength(4);
     expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
 
-    // Once the registry forgets the session, the tombstone goes too.
+    // Once the registry forgets the session, the tombstone stays as long as
+    // the registry keeps the chain's tombstone, so a resume reads on from
+    // here (#4345). Then it goes too.
     const sessions = [session];
     const second = tailer(sessions, { now: () => clock });
     await second.instance.tick();
     expect(second.instance.state().cursors[cursorId("s1")]).toBeDefined();
     sessions.length = 0;
+    await second.instance.tick();
+    expect(
+      second.instance.state().cursors[cursorId("s1")]?.forgottenAtMs,
+    ).toBe(clock);
+    clock += TOMBSTONE_RETAIN_MS + 1;
     await second.instance.tick();
     expect(second.instance.state().cursors[cursorId("s1")]).toBeUndefined();
   });
