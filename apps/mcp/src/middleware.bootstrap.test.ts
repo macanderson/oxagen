@@ -75,12 +75,20 @@ describe("mcp middleware startup wiring", () => {
     expect(install).toBeLessThan(middlewareIndex);
   });
 
+  it("imports no value from xmcp's package root (#4829)", () => {
+    // A value import from "xmcp" pulls xmcp's HTTP runtime into dist/http.js,
+    // and that runtime reads HTTP_CORS_* constants the app build never
+    // defines, so the server threw at startup. Type-only imports are erased.
+    const valueImport = /^import\s+(?!type\b)[^;]*\sfrom\s+"xmcp";/m;
+    expect(source).not.toMatch(valueImport);
+  });
+
   it("runs the served tools after the auth gate", () => {
     // xmcp runs the array in order. The served tools read the request's key,
     // so a request without one must be turned away before they run.
     expect(middlewareIndex).toBeGreaterThan(-1);
     const exported = source.slice(middlewareIndex);
-    const gate = exported.indexOf("apiKeyAuthMiddleware({");
+    const gate = exported.indexOf("apiKeyGate,");
     expect(gate).toBeGreaterThan(-1);
     expect(exported.indexOf("servedToolsMiddleware,")).toBeGreaterThan(gate);
   });
