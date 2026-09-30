@@ -3650,6 +3650,8 @@ type Messages = {
           argumentRequired: string;
           argumentInvalid: string;
         };
+        notYours: string;
+        resumable: string;
       };
       listing: {
         title: string;

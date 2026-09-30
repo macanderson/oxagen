@@ -98,7 +98,7 @@ A local command, or a registry package with `source.machines`, has no tools unti
 
 1. Save the new server's `server.toml` with `save_studio_draft` at `revision: 0`. Send no source.
 2. Call `start_studio_listing` with the revision the save returned. A local command sends `pin`: the version it runs and the SHA-256 of the file the command resolves to on the machine. Run `shasum -a 256` on that file to read it. A registry package sends no pin, because Oxagen reads its SHA-256 from the public registry. Oxagen pins npm and NuGet packages.
-3. Read `get_studio_listing` until `status` is `succeeded` or `failed`. A machine in one of the server's `source.machines` groups lists the tools the next time it polls Oxagen. It checks the pin before it starts anything.
+3. Read `get_studio_listing` until `status` is `succeeded` or `failed`. A machine you enrolled, in one of the server's `source.machines` groups, lists the tools the next time it polls Oxagen. It checks the pin before it starts anything. A listing starts a program before any review, so it never runs on another person's machine, and `start_studio_listing` refuses with `machine_not_yours` when you enrolled none in those groups.
 4. A listing that succeeds carries `tools`: each tool the machine listed, with the classification Studio suggests. The listing saved the draft, so read it again, then save an import and a classification for each tool you want.
 5. Call `open_studio_review`. The folder's first `tools.lock.json` pins what the machine checked.
 

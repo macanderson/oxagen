@@ -452,7 +452,7 @@
         "variables": "Variables",
         "variablesHint": "One name per line. Each machine sets the value.",
         "machines": "Machine groups",
-        "machinesHint": "One group per line. The local gateway runs the server on machines in these groups.",
+        "machinesHint": "One group per line. A machine you enrolled in one of these groups lists the tools.",
         "version": "Version",
         "versionHint": "The version of the program the command runs.",
         "digest": "SHA-256",
@@ -528,7 +528,9 @@
           "entryVersion": "The registry lists no version for this entry, so Oxagen cannot pin it.",
           "argumentRequired": "Enter a value for {argument}.",
           "argumentInvalid": "The value for {argument} has a $ that names no variable. Write $$ for one $, or $'{'NAME'}' for a variable."
-        }
+        },
+        "notYours": "You enrolled no machine in these groups. A listing runs only on a machine you enrolled, so enroll one and add it to a group first.",
+        "resumable": "A draft named {name} is saved with no tools listed. List the tools again to save this form over it."
       },
       "listing": {
         "title": "Tool listing",

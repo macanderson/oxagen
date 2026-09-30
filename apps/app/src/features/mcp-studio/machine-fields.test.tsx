@@ -149,11 +149,14 @@ function fakeCreate(...answers: CreateAnswer[]) {
 }
 
 /** Every call the flow makes, answering the path where everything works. */
+type ReadAnswer = Awaited<ReturnType<Calls["read"]>>;
+
 function fakeCalls(
   over: {
     create?: CreateAnswer[];
     start?: StartAnswer[];
     get?: ListingAnswer[];
+    read?: ReadAnswer[];
   } = {},
 ) {
   const create = fakeCreate(
@@ -168,10 +171,14 @@ function fakeCalls(
       { ok: true, listing: LISTED },
     ],
   );
-  const read = fakeGet({
-    ok: true,
-    draft: savedDraft({ server: "notes", serverId: null, revision: 2 }),
-  });
+  const read = fakeGet(
+    ...(over.read ?? [
+      {
+        ok: true,
+        draft: savedDraft({ server: "notes", serverId: null, revision: 2 }),
+      },
+    ]),
+  );
   const save = fakeSave({
     ok: true,
     draft: savedDraft({ server: "notes", serverId: null, revision: 3 }),
@@ -349,15 +356,89 @@ describe("Local command", () => {
     });
   });
 
-  it("names a draft of that name already saved, and lists nothing (negative)", async () => {
-    const fake = fakeCalls({ create: [{ ok: false, reason: "exists" }] });
+  it("names a saved draft that holds a definition, and saves nothing over it (negative)", async () => {
+    const fake = fakeCalls({
+      create: [{ ok: false, reason: "exists" }],
+      read: [
+        {
+          ok: true,
+          draft: savedDraft({
+            server: "notes",
+            serverId: null,
+            revision: 2,
+            source: { type: "openapi", bytes: 2048 },
+          }),
+        },
+      ],
+    });
     const user = renderLocal(fake.calls);
     await fillLocal(user);
     await user.click(screen.getByTestId("studio-add-local-submit"));
     expect(
       await screen.findByTestId("studio-add-local-exists"),
     ).toHaveTextContent(tMachine("exists", { name: "notes" }));
+    expect(fake.create.calls).toHaveLength(1);
     expect(fake.start.calls).toHaveLength(0);
+  });
+
+  it("resumes the listing of a draft already saved under that folder name", async () => {
+    const fake = fakeCalls({
+      create: [{ ok: false, reason: "exists" }],
+      get: [
+        { ok: true, listing: listing() },
+        { ok: true, listing: listing() },
+        { ok: true, listing: LISTED },
+      ],
+    });
+    const user = renderLocal(fake.calls);
+    await fillLocal(user);
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+
+    // The dialog picks up the stored listing instead of starting another.
+    expect(
+      await screen.findAllByTestId("studio-add-classify-tool"),
+    ).toHaveLength(2);
+    expect(fake.start.calls).toHaveLength(0);
+    expect(fake.read.calls).toStrictEqual([{ server: "notes" }]);
+  });
+
+  it("offers to save over a saved draft with no tools listed, then lists it", async () => {
+    const fake = fakeCalls({
+      create: [
+        { ok: false, reason: "exists" },
+        { ok: true, serverId: null, revision: 3 },
+      ],
+      get: [{ ok: true, listing: null }, { ok: true, listing: listing() }],
+    });
+    const user = renderLocal(fake.calls);
+    await fillLocal(user);
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+    expect(
+      await screen.findByTestId("studio-add-local-resumable"),
+    ).toHaveTextContent(tMachine("resumable", { name: "notes" }));
+
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+    await waitFor(() => {
+      expect(fake.start.calls).toHaveLength(1);
+    });
+    // The second submit saves over the stored draft at its revision.
+    expect(fake.create.calls[1]?.saved).toStrictEqual({
+      serverId: null,
+      revision: 2,
+    });
+    expect(fake.start.calls[0]?.revision).toBe(3);
+  });
+
+  it("names the refusal when the person enrolled no machine in the groups (negative)", async () => {
+    const fake = fakeCalls({
+      start: [{ ok: false, reason: "failed", code: "machine_not_yours" }],
+    });
+    const user = renderLocal(fake.calls);
+    await fillLocal(user);
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+    expect(
+      await screen.findByTestId("studio-add-local-failed"),
+    ).toHaveTextContent(tMachine("notYours"));
   });
 
   it("shows the listing while it waits for a machine in the server's groups", async () => {
@@ -579,6 +660,14 @@ describe("RegistryPackageFields", () => {
     expect(
       screen.getByTestId("studio-add-package-unpinned"),
     ).toHaveTextContent(tPackage("unpinned", { types: "pypi" }));
+    expect(screen.queryByTestId("studio-add-package")).not.toBeInTheDocument();
+  });
+
+  it("offers no package whose transport is not stdio, which the local gateway does not run (negative)", () => {
+    renderPackage(fakeCalls().calls, [{ ...NPM, transport: "streamable-http" }]);
+    expect(
+      screen.getByTestId("studio-add-package-unpinned"),
+    ).toHaveTextContent(tPackage("unpinned", { types: "npm" }));
     expect(screen.queryByTestId("studio-add-package")).not.toBeInTheDocument();
   });
 

@@ -21,6 +21,14 @@
 // again saves over that draft at the revision the first save returned, then
 // lists again. It never starts over at revision 0.
 //
+// The draft and its listing outlive the dialog. When a submit finds the
+// folder's draft already saved, the dialog reads its listing and resumes it:
+// the listing while a machine has yet to answer, the classify step once it
+// has, or the form, ready to save over a draft with no tools listed. It never
+// saves over a draft that holds a definition.
+//
+// A listing runs only on a machine the person who asked enrolled (ADR-233).
+//
 // No credential passes through either form. A registry package's secret
 // argument takes its value from a variable set on each machine.
 import { useTranslations } from "next-intl";
@@ -118,7 +126,9 @@ type FormOutcome =
   /** A refusal's code, or null when the call threw before Oxagen answered. */
   | { kind: "failed"; code: string | null }
   /** The machine did not list the tools, or the draft no longer holds them. */
-  | { kind: "unlisted" };
+  | { kind: "unlisted" }
+  /** A draft of that name is saved with no tools listed; the next submit saves over it. */
+  | { kind: "resumable"; name: string };
 
 /** Where the dialog is. */
 type Stage =
@@ -180,8 +190,43 @@ function MachineServerFlow({
     if (code === "needs_digest") return t("needsDigest");
     if (code === "registry_unreachable") return t("registryUnreachable");
     if (code === "machines_required") return tProblem("machines");
+    if (code === "machine_not_yours") return t("notYours");
     if (code === "server_toml_invalid") return t("tomlInvalid");
     return isReviewCode(code) ? tPr(`codes.${code}`) : tPr("failed", { code });
+  };
+
+  /**
+   * Pick up the saved draft of `name` where it stands: poll its listing,
+   * classify what it listed, or hold its revision for the next submit.
+   */
+  const resume = async (name: string): Promise<FormOutcome | null> => {
+    const [listed, read] = await Promise.all([
+      calls.get.call(at, { server: name }),
+      calls.read({ server: name }),
+    ]);
+    if (!read.ok) return { kind: "failed", code: read.code };
+    const draft = read.draft;
+    // A draft that holds a definition is someone's upload. Never save over it.
+    if (draft === null || (draft.source !== null && draft.source.type !== "mcp")) {
+      return { kind: "exists", name };
+    }
+    setStored({
+      server: name,
+      saved: { serverId: draft.serverId, revision: draft.revision },
+    });
+    const listing = listed.ok ? listed.listing : null;
+    if (
+      listing !== null &&
+      (listing.status === "waiting_for_machine" || listing.status === "running")
+    ) {
+      setStage({ kind: "listing", server: name });
+      return null;
+    }
+    if (listing?.status === "succeeded" && listing.tools !== null) {
+      setStage({ kind: "classify", server: name, tools: listing.tools });
+      return null;
+    }
+    return { kind: "resumable", name };
   };
 
   const run = async (form: HTMLFormElement): Promise<FormOutcome | null> => {
@@ -190,6 +235,7 @@ function MachineServerFlow({
     const { server, pin } = built.value;
     const saved = await calls.create(server, stored?.saved ?? null);
     if (!saved.ok) {
+      if (saved.reason === "exists") return resume(server.server);
       return saved.reason === "failed"
         ? { kind: "failed", code: saved.code }
         : { kind: saved.reason, name: server.server };
@@ -292,6 +338,10 @@ function MachineServerFlow({
           </FormAlert>
         ) : outcome.kind === "unlisted" ? (
           <FormAlert testId={`${testId}-unlisted`}>{t("unlisted")}</FormAlert>
+        ) : outcome.kind === "resumable" ? (
+          <FormAlert testId={`${testId}-resumable`}>
+            {t("resumable", { name: outcome.name })}
+          </FormAlert>
         ) : (
           <FormAlert testId={`${testId}-${outcome.kind}`}>
             {t(outcome.kind, { name: outcome.name })}
@@ -922,11 +972,17 @@ export function LocalCommandFields({
   );
 }
 
-/** A package the form can pin: npm or NuGet, with the stdio transport. */
+/**
+ * A package the form can pin and a machine can run: npm or NuGet, served
+ * over stdio, the one transport the local gateway runs.
+ */
 function pinnable(pkg: RegistryPackage): pkg is RegistryPackage & {
   registryType: PinnedPackageType;
 } {
-  return PINNED_PACKAGE_TYPES.some((type) => type === pkg.registryType);
+  return (
+    pkg.transport === "stdio" &&
+    PINNED_PACKAGE_TYPES.some((type) => type === pkg.registryType)
+  );
 }
 
 /**
