@@ -406,7 +406,7 @@ const prose = () =>
     choices: [{ finish_reason: "stop", message: { content: "pong" } }],
   });
 
-describe("probeModelCredential — every mapped tier (#3314)", () => {
+describe("probeModelCredential: every mapped tier (#3314)", () => {
   it("asks each model an openai key maps, once each, at the endpoint the turn uses, and names the tier that fails", async () => {
     const fetchMock = stubFetch(async (url, init) => {
       if (String(url).endsWith("/models")) return jsonResponse(200, { data: [] });
@@ -523,7 +523,7 @@ describe("probeModelCredential — every mapped tier (#3314)", () => {
   });
 });
 
-describe("probeModelCredential — structured outputs on an openai_compatible endpoint (#3314)", () => {
+describe("probeModelCredential: structured outputs on an openai_compatible endpoint (#3314)", () => {
   const BASE = "https://vllm.example.com/v1";
   const probe = (answer: (body: Record<string, unknown>) => Promise<Response>) => {
     const fetchMock = stubFetch(async (url, init) => {
