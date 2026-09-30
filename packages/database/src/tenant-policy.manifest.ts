@@ -254,6 +254,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "mcp.search_embeddings", policyClass: "standard" },
   // The last tool discovery of each steering server (M10, #4682).
   { table: "mcp.server_discoveries", policyClass: "standard" },
+  // One tool listing per Studio draft of a machine-run server (ADR-233,
+  // #4756): orgScopeMixin → standard.
+  { table: "mcp.studio_listings", policyClass: "standard" },
   // Relays for servers in a private network (M12, #4685): org_id +
   // workspace_id NOT NULL → standard. Every reader goes through withSystemDb
   // on the shared plane, because the broker looks a token up before any org
