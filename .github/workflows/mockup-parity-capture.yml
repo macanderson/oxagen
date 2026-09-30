@@ -13,8 +13,8 @@
 #                  pages: page slugs, comma-separated, or empty for every page
 #                  registry_ref: the oxagen-roadmap ref to read the registry at
 #   pull request   that changes this workflow or apps/app/scripts/mockup-parity:
-#                  every page at the pull request's merge commit, so a broken
-#                  capture fails before it merges
+#                  every page at the pull request's merge commit, dark desktop
+#                  only, so a broken capture fails before it merges
 #
 # The artifact mockup-parity-<label> (mockup-parity-pr on a pull request)
 # holds <slug>/<state>.<theme>.<viewport>.png and manifest.json. The manifest
@@ -110,7 +110,9 @@ jobs:
     defaults:
       run:
         shell: bash
-    # Every page in three variants is about 1,500 screenshots.
+    # Every page in three variants is about 1,500 screenshots. A pull request
+    # takes the dark desktop variant alone, which proves every page and route
+    # still captures in a third of the time.
     timeout-minutes: 240
     permissions:
       contents: read
@@ -186,7 +188,9 @@ jobs:
             label="pr"
             capture_ref="$HEAD_REF"
           fi
-          if ! printf '%s' "$PAGES" | grep -Eq '^[a-z0-9,-]*$'; then
+          # grep reads no line from an empty value and answers no match, and a
+          # pull request always passes an empty pages, so it is asked only when set.
+          if [ -n "$PAGES" ] && ! printf '%s' "$PAGES" | grep -Eq '^[a-z0-9,-]+$'; then
             echo "::error::pages must be page slugs separated by commas"; exit 1
           fi
           if [ -n "$REGISTRY_REF" ] && ! is_ref "$REGISTRY_REF"; then
@@ -362,6 +366,7 @@ jobs:
           CAPTURE_REF: ${{ steps.inputs.outputs.capture_ref }}
           REGISTRY_USED: ${{ steps.registry.outputs.ref }}
           FAULT_UP: ${{ steps.fault.outputs.up }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           args=(
@@ -375,6 +380,7 @@ jobs:
           if [ -n "$CAPTURE_REF" ]; then args+=(--ref "$CAPTURE_REF"); fi
           if [ -n "$PAGES" ]; then args+=(--pages "$PAGES"); fi
           if [ "$FAULT_UP" = "true" ]; then args+=(--fault-url http://localhost:3001); fi
+          if [ "$EVENT" = "pull_request" ]; then args+=(--variants dark.desktop); fi
           pnpm --filter @oxagen/app exec tsx scripts/mockup-parity/capture.ts "${args[@]}"
 
       # A relative path: in a container job the runner.temp and
