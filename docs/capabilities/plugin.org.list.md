@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -53,7 +53,7 @@ None — read-only.
 
 - `GET /api/v1/{org}/{ws}/plugins/org/list`
 - MCP tool `plugin_org_list`
-- Agent: no approval required, risk `low`.
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 
 ## Errors
 

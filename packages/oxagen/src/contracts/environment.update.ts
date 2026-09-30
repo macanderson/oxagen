@@ -8,7 +8,7 @@ export const environmentUpdate = registerCapability({
   description:
     "Update a workspace environment's name, slug, description, or active state. The default environment cannot be deactivated.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

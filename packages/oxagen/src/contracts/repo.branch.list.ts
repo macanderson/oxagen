@@ -7,7 +7,7 @@ export const repoBranchList = registerCapability({
   description:
     "List branches in a GitHub repository, including each branch's SHA, protection status, and which one is the repository's default branch.",
   mode: "sync",
-  surfaces: ["agent", "api", "mcp"],
+  surfaces: ["api", "mcp"],
   layers: ["api", "mcp", "unit"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "vcs" },

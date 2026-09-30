@@ -29,7 +29,7 @@ export const pluginSchemaValidate = registerCapability({
   description:
     "Validate a connector plugin config object against its schema before install or configure. Returns field-level errors for form display.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: false,

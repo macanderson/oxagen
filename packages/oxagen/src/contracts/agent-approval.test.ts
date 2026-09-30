@@ -12,6 +12,8 @@
  * `delete_secret_key`, `upsert_secret_key`, `set_secret_value`) while the
  * other 29 high-risk agent contracts set the flag. A fifth,
  * `unset_secret_value`, was rated medium and is now rated high with them.
+ * `import_env_secrets` has since left the agent surface with the other
+ * actions `DEREGISTERED.md` retires (#4180).
  * This test reads every registered contract, so the next one fails here
  * instead of in review.
  */

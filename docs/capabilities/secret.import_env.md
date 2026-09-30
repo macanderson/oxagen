@@ -3,9 +3,10 @@
 **Domain:** secret
 **Mode:** sync
 **Scope:** tenant + workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
+**Agent:** none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).
 **Risk level:** high
-**Requires approval:** yes, on the agent surface (riskLevel: high)
+**Requires approval:** yes (`riskLevel: high`). The block stays in the contract, and it applies again if the action returns to the agent surface.
 
 ## Intent
 

@@ -7,7 +7,7 @@ export const pluginCatalogGet = registerCapability({
   description:
     "Get full detail for one catalog server by name+version, fetched live from the workspace's enabled registries.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

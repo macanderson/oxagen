@@ -7,7 +7,7 @@ export const pluginOrgUninstall = registerCapability({
   description:
     "Soft-delete a plugin listing from this workspace and remove all dependent MCP server rows.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: { requiresApproval: true, riskLevel: "high", category: "plugin" },
   layers: ["api", "docs", "mcp", "unit"],
   scoped: true,

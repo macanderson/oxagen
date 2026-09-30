@@ -267,7 +267,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             orgId: tenant.orgId,
             roleId: agentRole!.id,
-            capabilityId: "list_agent_environments",
+            capabilityId: "get_agent",
             effect: "require_approval",
           },
           {
@@ -279,7 +279,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             orgId: tenant.orgId,
             roleId: ownerRole!.id,
-            capabilityId: "list_agent_environments",
+            capabilityId: "get_agent",
             effect: "allow",
           },
         ]);
@@ -318,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         readOnly: true,
       });
       expect(byName.get("list_agents")!.rule).toMatch(/^(agent|human):/);
-      expect(byName.get("list_agent_environments")).toMatchObject({
+      expect(byName.get("get_agent")).toMatchObject({
         decision: "require_approval",
       });
       // A capability carries the schema the model is handed, derived from the

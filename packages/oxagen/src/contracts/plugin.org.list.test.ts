@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { pluginOrgList } from "./plugin.org.list";
 
 describe("plugin.org.list contract", () => {
-  it("registers with api+mcp+agent surfaces and org admin roles", () => {
+  it("registers with api+mcp surfaces, off the retired agent surface (#4180), and org admin roles", () => {
     expect(pluginOrgList.name).toBe("list_plugins");
     expect(pluginOrgList.surfaces).toContain("api");
     expect(pluginOrgList.surfaces).toContain("mcp");
-    expect(pluginOrgList.surfaces).toContain("agent");
+    expect(pluginOrgList.surfaces).not.toContain("agent");
     expect(pluginOrgList.defaultRoles.org.Owner).toBe("allow");
     expect(pluginOrgList.defaultRoles.org.Admin).toBe("allow");
   });

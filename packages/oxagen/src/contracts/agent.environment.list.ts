@@ -8,7 +8,7 @@ export const agentEnvironmentList = registerCapability({
   description:
     "List an agent's environment bindings, with each binding's resolved template name.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "low",

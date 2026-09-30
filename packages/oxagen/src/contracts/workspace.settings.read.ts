@@ -30,7 +30,7 @@ export const workspaceSettingsRead = registerCapability({
   description:
     "Read the active workspace's general settings: name, slug, description, and the effective consequence-role map for mandates.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },

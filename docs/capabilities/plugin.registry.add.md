@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** org
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** low
 
 ## Intent
@@ -37,3 +37,4 @@ Org Owner, Org Admin.
 
 - `POST /api/v1/{org}/{ws}/plugins/registry/add`
 - MCP tool `plugin_registry_add`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

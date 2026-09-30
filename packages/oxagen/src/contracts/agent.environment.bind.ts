@@ -17,7 +17,7 @@ export const agentEnvironmentBind = registerCapability({
   description:
     "Bind an agent identity to an environment (a named vault of secrets it may resolve). Upserts the binding; promoting one to primary atomically demotes the agent's previous primary.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

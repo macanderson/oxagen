@@ -45,7 +45,7 @@ export const agentMemoryPolicyRead = registerCapability({
   description:
     "Read the workspace memory decay policy: half-lives by weight and recall confidence threshold",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "memory" },

@@ -3,7 +3,7 @@
 **Domain:** plugin
 **Mode:** sync
 **Scope:** workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp
 **Risk level:** medium
 
 ## Intent
@@ -36,3 +36,4 @@ Org Owner, Org Admin.
 
 - `POST /api/v1/{org}/{ws}/plugin/credential/revoke`
 - MCP tool `revoke_plugin_credential`
+- Agent: none. `DEREGISTERED.md` retires this action, so Stella cannot call it (#4180).

@@ -8,7 +8,7 @@ export const environmentSetDefault = registerCapability({
   description:
     "Promote an environment to the workspace default. Atomically swaps the existing default; the promoted environment is reactivated.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
+  surfaces: ["api", "mcp"],
   agent: {
     requiresApproval: false,
     riskLevel: "medium",
