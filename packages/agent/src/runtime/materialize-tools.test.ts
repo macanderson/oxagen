@@ -387,8 +387,10 @@ vi.mock("@oxagen/iam", async () => {
 import {
   materializeTools,
   digestInputFor,
+  type ApprovalRequiredEvent,
   type MaterializeOptions,
 } from "./materialize-tools";
+import { ApprovalPendingError } from "./approval-pending";
 import { decideCapabilityForBelt } from "./toolbelt";
 import { resourceScopeDigestOf, type ActiveEmergencyDeny } from "@oxagen/iam";
 import type { RegistryCapability } from "../registry-loader";
@@ -3408,5 +3410,137 @@ describe("materializeTools role rule", () => {
     expect(belt).toContain("capA");
     expect(belt).not.toContain("install_plugin");
     expect(belt).not.toContain("get_rate_card");
+  });
+});
+
+// #4226: a workspace decision rule's `require_approval` on a built-in
+// capability. The kernel's rules gate throws it from invoke(). stella's turn
+// has an approval channel, so under park mode the call waits for a person
+// with the rule named, where it used to fail with the rule's error.
+describe("materializeTools — a call a decision rule sends to a person", () => {
+  const RULE_DIGEST = "a".repeat(64);
+  /** What the rules gate throws: `DecisionRuleApprovalRequiredError`. */
+  const ruleRequiresApproval = (digest: string | undefined = RULE_DIGEST) =>
+    Object.assign(
+      new Error(
+        'decision rule "approve-medium" requires approval: medium refunds need a person',
+      ),
+      {
+        name: "DecisionRuleApprovalRequiredError",
+        code: "decision_rule_approval_required",
+        ruleIds: ["approve-medium"],
+        approvalDigest: digest,
+      },
+    );
+  const PARK_CTX = { ...CTX, messageId: "msg_rule" };
+  const call = (tools: Record<string, unknown>, name: string) =>
+    (tools[name] as { execute: (i: unknown) => Promise<unknown> }).execute;
+
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset().mockResolvedValue({ ok: true });
+    mocks.createApprovalRequest.mockClear();
+    mocks.insertToolInvocation.mockClear();
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([]);
+    killSwitchMocks.check.mockResolvedValue(null);
+  });
+
+  it("parks the call with the rule named on the row and its digest sealed", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(ruleRequiresApproval());
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_rule",
+      approvalPublicId: "apr_rule",
+    });
+    const events: ApprovalRequiredEvent[] = [];
+    const { tools } = await materializeTools(PARK_CTX, {
+      approvalMode: "park",
+      onApprovalRequired: (e) => events.push(e),
+    });
+    await expect(call(tools, "capA")({ x: "1" })).rejects.toSatisfy(
+      (e) =>
+        e instanceof ApprovalPendingError &&
+        e.capability === "capA" &&
+        e.approvalPublicId === "apr_rule",
+    );
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: CTX.orgId,
+        workspaceId: CTX.workspaceId,
+        messageId: "msg_rule",
+        capabilityName: "capA",
+        inputPreview: { x: "1" },
+        digestInput: { x: "1" },
+        resumeRequesterUserId: CTX.userId,
+        ruleIds: ["approve-medium"],
+        ruleDigest: RULE_DIGEST,
+      }),
+    );
+    // The turn collects the card from this event (assistant-turn.ts).
+    expect(events).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_rule",
+        approvalPublicId: "apr_rule",
+        capability: "capA",
+        expiresAt: expect.any(String),
+      }),
+    ]);
+    // A parked call is not a failure in `tool_invocations`.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability_name: "capA",
+        status: "parked",
+        error_class: null,
+      }),
+    );
+  });
+
+  const refusalCases: {
+    name: string;
+    opts: MaterializeOptions;
+    ctx: Parameters<typeof materializeTools>[0];
+    digest: string | undefined;
+  }[] = [
+    { name: "outside park mode", opts: {}, ctx: PARK_CTX, digest: RULE_DIGEST },
+    {
+      name: "with no digest to prove the approval",
+      opts: { approvalMode: "park" },
+      ctx: PARK_CTX,
+      digest: undefined,
+    },
+    {
+      name: "with no message to attach the row to",
+      opts: { approvalMode: "park" },
+      ctx: CTX,
+      digest: RULE_DIGEST,
+    },
+    {
+      name: "for an API key's call",
+      opts: { approvalMode: "park" },
+      ctx: { ...PARK_CTX, apiKeyId: "key_1" },
+      digest: RULE_DIGEST,
+    },
+  ];
+  it.each(refusalCases)(
+    "keeps the rule's refusal $name (negative)",
+    async ({ opts, ctx, digest }) => {
+      const refusal = ruleRequiresApproval(digest);
+      vi.mocked(invoke).mockRejectedValueOnce(refusal);
+      const { tools } = await materializeTools(ctx, opts);
+      await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(refusal);
+      expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("leaves every other invoke error as it was (negative)", async () => {
+    const other = Object.assign(new Error("refused"), {
+      code: "decision_rule_denied",
+    });
+    vi.mocked(invoke).mockRejectedValueOnce(other);
+    const { tools } = await materializeTools(PARK_CTX, {
+      approvalMode: "park",
+    });
+    await expect(call(tools, "capA")({ x: "1" })).rejects.toBe(other);
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });
 });

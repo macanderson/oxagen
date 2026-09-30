@@ -342,6 +342,11 @@ export async function resumeApprovedCall(
           surface: "agent",
           requireFreshRules: true,
           runId: run.runId,
+          // A decision rule parked this call, and the person approved the
+          // exact call the rule judged (#4226). The rules gate re-judges it
+          // on current rules and accepts the approval only when the digest
+          // still matches. A changed rule set asks a person again.
+          ...(payload.ruleDigest ? { approvedDigest: payload.ruleDigest } : {}),
           assertValidatedInput: (value) => {
             if (inputDigest(value) !== payload.validatedDigest)
               throw new ApprovalResumeError("input_schema_changed");

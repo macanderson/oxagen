@@ -215,6 +215,7 @@ beforeEach(async () => {
     })({
       capability: "write_test",
       requireFreshRules: opts?.requireFreshRules,
+      approvedDigest: opts?.approvedDigest,
       input: (h.schema as z.ZodType).parse(input),
       ctx,
     });
@@ -326,6 +327,82 @@ describe("approved call resumption", () => {
       }
     },
   );
+  // #4226: a decision rule parked the call, and the resume payload seals the
+  // digest the rules gate put on its error. The resume hands it back, and the
+  // gate, judging on current rules, runs the approved call once.
+  describe("a call a decision rule parked", () => {
+    const humanRule: RuleSet = {
+      schema: "oxagen.decision-rules.v1",
+      rules: [
+        {
+          id: "human-rule",
+          description: "a person approves test writes",
+          capability: "write_test",
+          when: { all: [] },
+          effect: "require_approval",
+        },
+      ],
+    };
+    /** The digest the gate gave when the turn parked the call. */
+    async function parkedDigest(): Promise<string> {
+      const { createDecisionRulesGate, DecisionRuleApprovalRequiredError } =
+        await import("@oxagen/rules");
+      const error = await createDecisionRulesGate({
+        loadRuleSet: async () => humanRule,
+      })({
+        capability: "write_test",
+        input: (h.schema as z.ZodType).parse(payload.rawInput),
+        ctx: {
+          orgId: ref.orgId,
+          workspaceId: ref.workspaceId,
+          userId: payload.requesterUserId,
+        },
+      }).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(DecisionRuleApprovalRequiredError);
+      return (error as InstanceType<typeof DecisionRuleApprovalRequiredError>)
+        .approvalDigest!;
+    }
+    beforeEach(() => {
+      h.realRules = humanRule;
+      h.autoApprove.mockResolvedValue(null);
+    });
+    it("runs the approved call once", async () => {
+      const digest = await parkedDigest();
+      h.row.resumePayload = await encryptApprovalResume({
+        ...payload,
+        ruleDigest: digest,
+      });
+      expect(await resumeApprovedCall(ref)).toBe("succeeded");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
+      expect(h.invoke.mock.calls[0]![3]).toMatchObject({
+        approvedDigest: digest,
+        requireFreshRules: true,
+      });
+      expect(await resumeApprovedCall(ref)).toBe("not_claimed");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
+    });
+    it("asks again when the approval does not match the call the rule judges now (negative)", async () => {
+      h.row.resumePayload = await encryptApprovalResume({
+        ...payload,
+        ruleDigest: "0".repeat(64),
+      });
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeError).toBe("new_rule_requires_approval");
+      expect(h.receipt).not.toHaveBeenCalled();
+    });
+    it("never runs a call the person denied (negative)", async () => {
+      h.row.resumePayload = await encryptApprovalResume({
+        ...payload,
+        ruleDigest: await parkedDigest(),
+      });
+      h.row.resolution = "denied";
+      expect(await resumeApprovedCall(ref)).toBe("not_claimed");
+      expect(h.invoke).not.toHaveBeenCalled();
+    });
+  });
   it.each(["approval", "unavailable"] as const)(
     "records a typed %s refusal before the handler as failed",
     async (kind) => {
