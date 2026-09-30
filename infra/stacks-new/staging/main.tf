@@ -2,7 +2,7 @@ module "environment" {
   local_inngest = true
   capture_email = true
   # Staging runs production's service limits (8448 MiB with ClickHouse and
-  # Neo4j), Inngest (2 GiB), and the 1 GiB host reserve: 11.3 GiB, over
+  # Neo4j), Inngest (4 GiB), and the 1 GiB host reserve: 13.3 GiB, over
   # t4g.large's 7.6 GiB. Every staging deploy stopped at the memory
   # preflight until the node grew (#4835).
   app_instance_type  = "t4g.xlarge"

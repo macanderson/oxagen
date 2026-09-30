@@ -170,8 +170,9 @@ resource "aws_iam_role_policy" "deploy" {
 
 locals {
   # The Inngest development server's hard memory limit. It is the only
-  # container on the node that no deploy manifest sizes.
-  inngest_memory = "2g"
+  # container on the node that no deploy manifest sizes. Staging's server
+  # held 3.53 GiB on 2026-09-30, so the cap sits above that working set.
+  inngest_memory = "4g"
 }
 
 resource "aws_ssm_association" "inngest" {
