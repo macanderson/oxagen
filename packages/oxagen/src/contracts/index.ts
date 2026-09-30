@@ -297,6 +297,10 @@ import { toolStudioToolsList } from "./tool.studio.tools.list";
 import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
+import { toolStudioCredentialSet } from "./tool.studio.credential.set";
+import { toolStudioFindingsList } from "./tool.studio.findings.list";
+import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
+import { toolStudioTry } from "./tool.studio.try";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
@@ -993,6 +997,10 @@ export {
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolStudioCredentialSet,
+  toolStudioFindingsList,
+  toolStudioDescriptionDraft,
+  toolStudioTry,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
@@ -1434,6 +1442,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolStudioCredentialSet,
+  toolStudioFindingsList,
+  toolStudioDescriptionDraft,
+  toolStudioTry,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,

@@ -1608,6 +1608,30 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .toolRelayRevokeHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "set_mcp_credential",
+    async () =>
+      (await import("./mcp-studio/credentials/set"))
+        .setMcpCredentialHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_studio_findings",
+    async () =>
+      (await import("./mcp-studio/import/findings.list"))
+        .listStudioFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "draft_studio_description",
+    async () =>
+      (await import("./mcp-studio/import/description.draft"))
+        .draftStudioDescriptionHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "try_studio_tool",
+    async () =>
+      (await import("./mcp-studio/import/tool.try.ports"))
+        .tryStudioToolHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))

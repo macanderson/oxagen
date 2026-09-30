@@ -176,6 +176,81 @@
             },
             "connectable": {
               "type": "boolean"
+            },
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "registryType": {
+                    "type": "string"
+                  },
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "transport": {
+                    "type": "string",
+                    "enum": [
+                      "streamable-http",
+                      "sse",
+                      "stdio"
+                    ]
+                  },
+                  "runtimeHint": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "environmentVariables": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "isRequired": {
+                          "type": "boolean"
+                        },
+                        "isSecret": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "isRequired",
+                        "isSecret"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "registryType",
+                  "identifier",
+                  "version",
+                  "transport",
+                  "runtimeHint",
+                  "environmentVariables"
+                ],
+                "additionalProperties": false
+              },
+              "default": []
             }
           },
           "required": [

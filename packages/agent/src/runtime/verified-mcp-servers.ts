@@ -284,6 +284,7 @@ function toServer(row: Verified): McpRegistryServer {
     authHeader: null,
     oauthRegistration: row.oauthRegistration,
     connectable: true,
+    packages: [],
   };
 }
 
