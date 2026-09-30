@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ProviderUrl, parseProviderUrl } from "@/shared/provider-url";
 import { navigatePopup } from "@/ui/navigation";
+import { type OAuthFailure, oauthCodeFailure } from "./oauth-failure";
 import { MCP_OAUTH_CHANNEL, OAuthOutcome } from "./oauth-flow";
 import {
   type AuthorizationDraft,
@@ -34,8 +35,12 @@ export type OAuthPhase =
   /** The server registers no clients: the workspace brings an OAuth app. */
   | { kind: "client_required"; scopes: string; redirectUrl: string }
   | { kind: "not_oauth" }
-  /** A failure code: an ActionResult code or the callback's. */
-  | { kind: "failed"; code: string };
+  /**
+   * The failure as the seam returned it, reason and code both. A code from
+   * the callback page, or one the flow names itself, carries no reason and is
+   * recorded as `unavailable` (`oauth-failure.ts`).
+   */
+  | { kind: "failed"; failure: OAuthFailure };
 
 const POPUP_FEATURES = "popup=yes,width=560,height=720";
 
@@ -67,7 +72,7 @@ export function useProviderOAuth(
         discoveredTools: outcome.discoveredTools,
       });
     } else {
-      setPhase({ kind: "failed", code: outcome.code });
+      setPhase({ kind: "failed", failure: oauthCodeFailure(outcome.code) });
     }
   }, []);
 
@@ -111,10 +116,7 @@ export function useProviderOAuth(
         const result = await startProviderAuthorization(at.org, at.ws, draft);
         if (!result.ok) {
           closeOpened();
-          setPhase({
-            kind: "failed",
-            code: "code" in result ? result.code : result.reason,
-          });
+          setPhase({ kind: "failed", failure: result });
           return;
         }
         const out = result.value;
@@ -123,7 +125,10 @@ export function useProviderOAuth(
             const target = parseProviderUrl(out.authorizationUrl);
             if (target === null) {
               closeOpened();
-              setPhase({ kind: "failed", code: "authorization_url_invalid" });
+              setPhase({
+                kind: "failed",
+                failure: oauthCodeFailure("authorization_url_invalid"),
+              });
               return;
             }
             pendingStateRef.current = out.state;
@@ -159,7 +164,10 @@ export function useProviderOAuth(
         }
       } catch {
         closeOpened();
-        setPhase({ kind: "failed", code: "action_failed" });
+        setPhase({
+          kind: "failed",
+          failure: oauthCodeFailure("action_failed"),
+        });
       }
     },
     [at.org, at.ws],

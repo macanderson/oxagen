@@ -23,7 +23,9 @@ const { other: _other, ...DEFAULT_CONSEQUENCE_ROLES_WITHOUT_OTHER } =
   DEFAULT_CONSEQUENCE_ROLES;
 
 describe("workspace.settings.read handler", () => {
-  beforeEach(() => mocks.findFirst.mockReset());
+  beforeEach(() => {
+    mocks.findFirst.mockReset();
+  });
 
   it("maps the workspace row, pulling description and avatarUrl from their columns", async () => {
     mocks.findFirst.mockResolvedValue({

@@ -3,19 +3,86 @@
 // force filter in `wzRecord` step 3). The steps and their tests read the
 // record through these functions, so both agree on one reading.
 //
-// The file itself is not built here. open_context_pr writes
-// `.oxagen/rules/<lineage>.toml` in the context-record/v0.1 format and stamps
-// `record_id` and `record_hash` from its content on the server
-// (packages/handlers/src/context.steering.file.ts), so the bytes a reviewer
-// sees are the bytes the checks hash. This module only shapes what the
-// operator chooses: the lineage, the statement, the force and the effect.
+// The file itself is not built here. open_context_pr writes it and stamps
+// `record_id` and `record_hash` from its content on the server, so the bytes
+// a reviewer sees are the bytes the checks hash. In a legacy repository (no
+// `steering/governance.toml` on its production branch) that file is
+// `.oxagen/rules/<lineage>.toml`, context-record/v0.1
+// (packages/handlers/src/context.steering.file.ts). In a steering repository
+// it is a Markdown steering record under `steering/`
+// (packages/handlers/src/context.steering.record.ts). `recordPathFor` and
+// `branchFor` below mirror that split so the wizard's preview names the path
+// and the branch open_context_pr actually writes, never a guess. This module
+// otherwise only shapes what the operator chooses: the lineage, the
+// statement, the force and the effect.
 import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
+import {
+  LEGACY_RULES_DIR,
+  MEMORY_DIR,
+  recordFileName,
+  STEERING_DIR,
+} from "@oxagen/oxagen/steering-repo/paths";
 import type {
   ConstraintEffect,
   RecordForce,
   RecordKind,
 } from "@/data/contracts/steering";
 import { estimateTokens, wordsOf } from "./draft-text";
+
+/** The bound repository's layout, or null while it is unread or unbound. */
+export type RepoLayout = "steering" | "legacy" | null;
+
+/**
+ * The folder under `steering/` a new record of this kind goes to, mirroring
+ * `FOLDERS` in packages/handlers/src/context.steering.record.ts. Memory has
+ * no folder here: it goes to `MEMORY_SHARD` instead.
+ */
+const STEERING_FOLDERS: Record<Exclude<RecordKind, "memory">, string> = {
+  rule: "business-rules",
+  constraint: "constraints",
+  procedure: "procedures",
+  fact: "facts",
+  preference: "preferences",
+};
+
+/**
+ * Where a new memory goes in a steering repository: the curator's shard for a
+ * memory with no repository, path or tool, mirroring `memoryArea(null, null)`
+ * in packages/handlers/src/memory/naming.ts.
+ */
+const MEMORY_SHARD = "workspace/general";
+
+/**
+ * The path a new record of this kind will hold once open_context_pr writes
+ * it, given the bound repository's layout. Null while the layout is unread
+ * or unbound, matching the handler's own refusal to guess.
+ */
+export function recordPathFor(
+  layout: RepoLayout,
+  kind: RecordKind,
+  lineageId: string,
+): string | null {
+  if (layout === null) return null;
+  if (layout === "legacy") return `${LEGACY_RULES_DIR}/${lineageId}.toml`;
+  if (kind === "memory")
+    return `${MEMORY_DIR}/${MEMORY_SHARD}/${recordFileName(lineageId)}`;
+  return `${STEERING_DIR}/${STEERING_FOLDERS[kind]}/${recordFileName(lineageId)}`;
+}
+
+/**
+ * The branch open_context_pr cuts for a record at `path`: `memory/<lineage>`
+ * under the memory shard, `steering/<lineage>` everywhere else (both layouts
+ * agree on this once the path is known). Null while `path` is null.
+ */
+export function branchFor(
+  path: string | null,
+  lineageId: string,
+): string | null {
+  if (path === null) return null;
+  return path.startsWith(`${MEMORY_DIR}/`)
+    ? `memory/${lineageId}`
+    : `steering/${lineageId}`;
+}
 
 /** proposedRecordSchema's statement limit. */
 export const STATEMENT_MAX = 2000;
@@ -68,8 +135,8 @@ function slugOf(desc: string): string {
 /**
  * The lineage id a description implies in a workspace:
  * `ctx.<first segment of the workspace slug>.<slug>`, the shape the mockup
- * mints (`ctx.core.do-not-re-read-changelog`). It is also the file stem under
- * `.oxagen/rules/` and the branch `context/<lineage>`.
+ * mints (`ctx.core.do-not-re-read-changelog`). It is also the file stem
+ * `recordPathFor` builds the new record's path from.
  */
 export function lineageOf(ws: string, desc: string): string {
   const set =

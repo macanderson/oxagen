@@ -52,14 +52,21 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-// The discovery section loads Add server, which loads Studio's server
-// actions (review-calls.ts). No test here calls them.
-vi.mock("./actions", () => ({
+// Studio's server actions. The discovery section reads the server's
+// discovery when it mounts, so that read answers "none yet" by default, and
+// Draft's answer is the one test that uses it sets.
+const actions = vi.hoisted(() => ({
   saveStudioDraftAction: vi.fn(),
   saveNewStudioServerAction: vi.fn(),
   getStudioDraftAction: vi.fn(),
   openStudioReviewAction: vi.fn(),
+  getStudioDiscoveryAction: vi.fn(() =>
+    Promise.resolve({ ok: true as const, value: { discovery: null } }),
+  ),
+  startStudioDiscoveryAction: vi.fn(),
+  draftStudioDescriptionAction: vi.fn(),
 }));
+vi.mock("./actions", () => actions);
 
 afterEach(async () => {
   try {
@@ -73,8 +80,8 @@ afterEach(async () => {
 type TabProps = ComponentProps<typeof ToolsTab>;
 
 /**
- * The words the tests look for, from messages/mcp-studio.json: `offNone` and
- * `draftNotBuilt` from `mcpStudio.panel`, the rest from `mcpStudio.tools`.
+ * The words the tests look for, from messages/mcp-studio.json: `offNone`
+ * from `mcpStudio.panel`, the rest from `mcpStudio.tools`.
  */
 const COPY = {
   readOnly:
@@ -91,8 +98,6 @@ const COPY = {
     "The budget is 8,000 tokens. Some imported tools have no measured definition, so the total is not known.",
   offNone:
     "The registry holds no version of this tool, so it has no switch to turn off.",
-  draftNotBuilt:
-    "Draft is not available yet. You can write the description yourself.",
 } as const;
 
 const COLUMNS = [
@@ -699,20 +704,29 @@ describe("ToolsTab empty and missing states", () => {
 });
 
 describe("ToolsTab discovery", () => {
-  it("says discovery progress is not available while get_studio_discovery is a stub", () => {
+  it("reads the server's discovery through get_studio_discovery for the page's workspace", async () => {
     renderTab(propsOf(studioView(STRIPE)));
     const section = screen.getByTestId("studio-discovery");
-    const note = within(section).getByTestId("studio-discovery-pending");
-    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
-    expect(note).toHaveAttribute("data-gap", "#4682");
-    expect(within(section).getByTestId("studio-discovery-start")).toBeDisabled();
+    expect(
+      await within(section).findByTestId("studio-discovery-none"),
+    ).toBeInTheDocument();
+    expect(actions.getStudioDiscoveryAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      "stripe",
+    );
+    const start = within(section).getByTestId("studio-discovery-start");
+    expect(start).toBeEnabled();
+    expect(start).toHaveAttribute("data-capability", "start_studio_discovery");
     // Tool counts wait on list_studio_tools, which the page reads.
     expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
   });
 
-  it("offers a reader no way to start a discovery", () => {
+  it("offers a reader no way to start a discovery", async () => {
     renderTab(propsOf(studioView(STRIPE), { canEdit: false }));
-    expect(screen.getByTestId("studio-discovery-pending")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("studio-discovery-none"),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("studio-discovery-start")).toBeNull();
   });
 });
@@ -846,14 +860,32 @@ describe("ToolsTab tool panel", () => {
     await closePanel(user, panel, "create_payment");
   });
 
-  it("falls back to the pending Draft stub when the page passes none", async () => {
+  it("drafts through draft_studio_description when the page passes no seam", async () => {
     const user = userEvent.setup();
+    actions.draftStudioDescriptionAction.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        server: "stripe",
+        tool: "create_payment",
+        description: "Charges a customer once, in cents.",
+      },
+    });
     renderTab(propsOf(studioView(STRIPE)));
     const panel = await openPanel(user, "create_payment");
-    expect(within(panel).getByTestId("studio-panel-draft")).toBeDisabled();
-    const note = within(panel).getByTestId("studio-panel-draft-pending");
-    expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent(COPY.draftNotBuilt);
+    await user.click(within(panel).getByTestId("studio-panel-draft"));
+    await waitFor(() => {
+      expect(within(panel).getByTestId("studio-panel-description")).toHaveValue(
+        "Charges a customer once, in cents.",
+      );
+    });
+    expect(actions.draftStudioDescriptionAction).toHaveBeenCalledWith(
+      STUDIO_AT.org,
+      STUDIO_AT.ws,
+      { server: "stripe", tool: "create_payment" },
+    );
+    expect(
+      within(panel).queryByTestId("studio-panel-draft-pending"),
+    ).toBeNull();
     await closePanel(user, panel, "create_payment");
   });
 

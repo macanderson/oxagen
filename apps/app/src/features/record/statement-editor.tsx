@@ -144,7 +144,7 @@ export function StatementEditor({
   onChange,
   bar,
 }: {
-  /** `statement in .oxagen/rules/<lineage>.toml`. */
+  /** `statement in <the record's file>`, or `…` while the layout is unread. */
   path: string;
   value: string;
   /** The statement in force; the draft is modified when it differs. */

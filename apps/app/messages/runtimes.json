@@ -1,10 +1,33 @@
 {
   "runtimes": {
     "page": {
-      "eyebrow": "{workspace}",
-      "description": "The hosts your agents run on and the tier each host earns.",
       "add": "Add a runtime",
       "loading": "Reading the runtimes of this workspace"
+    },
+    "list": {
+      "title": "Runtimes",
+      "columns": {
+        "runtime": "Runtime",
+        "kind": "Kind",
+        "health": "Health",
+        "agents": "Agents",
+        "lastSeen": "Last seen"
+      },
+      "open": "Open {runtime}",
+      "hosts": "{count, plural, one {# live host} other {# live hosts}}",
+      "hostsNone": "No host enrolled",
+      "idle": "{count, plural, one {# runtime with no agent assigned.} other {# runtimes with no agent assigned.}}",
+      "more": "The first {count} enrollments are listed. More are recorded than this tab reads.",
+      "health": {
+        "offline": "Offline",
+        "unseen": "Not seen yet",
+        "noHost": "No host",
+        "hooksIncomplete": "Hooks incomplete"
+      }
+    },
+    "drawer": {
+      "title": "Runtime",
+      "missing": "This workspace holds no runtime with that id. It may have been unenrolled."
     },
     "add": {
       "title": "Add a runtime",
@@ -14,7 +37,7 @@
       "slug": "Slug",
       "slugHint": "Made from the name. Lowercase letters and digits joined by hyphens.",
       "containment": "Require the contained launcher",
-      "containmentHint": "Every agent on this runtime then runs only under the contained launcher. You can change this later on the runtime’s page.",
+      "containmentHint": "Every agent on this runtime then runs only under the contained launcher. You can change this later on the Runtimes tab.",
       "next": "Next you register the agent that runs here: one agent for each harness on this runtime.",
       "submit": "Add and register an agent",
       "pending": "Adding",
@@ -32,18 +55,14 @@
       }
     },
     "named": {
-      "title": "Runtimes",
       "columns": {
-        "runtime": "Runtime",
         "agents": "Agents",
         "hosts": "Live hosts",
         "lastSeen": "Last seen"
       },
-      "none": "No runtime is named yet. Add one to register the agent that runs on it.",
       "noAgent": "No agent yet",
       "register": "Register an agent",
       "registerOn": "Register an agent on {runtime}",
-      "open": "Open {runtime}",
       "never": "never"
     },
     "containment": {
@@ -67,38 +86,8 @@
     },
     "notRecorded": "not recorded",
     "notReported": "not reported yet",
-    "tiles": {
-      "runtimes": "Runtimes",
-      "runtimesBasis": "{count, plural, one {# agent enrollment recorded} other {# agent enrollments recorded}}",
-      "agentsHosted": "Agents hosted",
-      "agentsHostedBasis": "every agent on a host shares its hooks",
-      "highestTier": "Highest tier earned",
-      "highestTierBasis": "computed per run from what was actually routed",
-      "degraded": "Degraded",
-      "degradedBasis": "hosts with a telemetry gap in the last 24 hours"
-    },
     "hosts": {
-      "title": "Enrolled hosts",
-      "more": "The first {count} enrollments are listed. More are recorded than this page reads.",
-      "columns": {
-        "runtime": "Runtime",
-        "kind": "Kind",
-        "harness": "Harness",
-        "modelSurface": "Model surface",
-        "tier": "Tier",
-        "agents": "Agents",
-        "collector": "Collector",
-        "hooks": "Hooks",
-        "health": "Health",
-        "checkpoint": "Last checkpoint"
-      },
-      "open": "Open {hostname}",
-      "agentsNone": "enrolled with no agent assigned",
-      "collector": "tachod {version}",
-      "gaps": "gaps in 24h not recorded",
-      "hookCount": "count not recorded",
-      "hookCountAll": "5 of 5",
-      "note": "The host sets the tier, so every agent on one host earns the same tier. Oxagen computes it per run from what was routed and does not raise it later."
+      "collector": "tachod {version}"
     },
     "modelSurface": {
       "loopback": "loopback proxy",
@@ -125,15 +114,6 @@
       "none": "none reported",
       "atEnrollment": "at enrollment",
       "versionUnrecorded": "version not recorded"
-    },
-    "ladder": {
-      "title": "Tier ladder",
-      "label": "Tier ladder",
-      "observe": "Recorded only. No hook is installed and nothing is delivered.",
-      "harness": "Hooks installed. Steering is delivered and the four blocking hook events can refuse: client-attested and fail-open.",
-      "gateway": "Model and MCP traffic routed through the gateway. Metering observed, budgets enforced on routed traffic.",
-      "contained": "The agent runs under an OS sandbox whose only egress is the gateway. The only tier that earns the word enforced.",
-      "note": "Only <code>contained</code> earns the word enforced. On <code>observe</code> nothing is delivered and nothing can refuse, which is why an agent with no runtime still has an identity and a toolbelt and receives no steering."
     },
     "empty": {
       "title": "No runtime is enrolled",
@@ -181,7 +161,6 @@
       "smokeBody": "A smoke session would run one turn on {hostname}, recorded like any other run, so you can see the hooks answer. No capability starts a session on a host from the console yet. Run one turn of the agent on the host itself."
     },
     "detail": {
-      "back": "← All runtimes",
       "subtitle": "<kind>kind</kind><os>os</os><who>Started by</who>",
       "kindUnrecorded": "kind not recorded",
       "healthUnrecorded": "health not recorded",

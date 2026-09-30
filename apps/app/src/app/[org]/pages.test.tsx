@@ -167,11 +167,10 @@ vi.mock("@/features/run", () => ({ Run }));
 // The Agents area's own imports; its tests (features/agents/area.test.tsx)
 // render the Runtimes tab for real.
 vi.mock("@/features/runtimes", () => ({
-  AddRuntime: () => null,
-  mayAddRuntime: () => false,
-  Runtime: () => null,
+  RuntimeInDrawer: () => null,
   Runtimes: () => null,
   RuntimesLoading: () => null,
+  runtimesCount: () => Promise.resolve(null),
 }));
 // The tab parser stays real: which tab a `?tab=` names is the route's answer.
 vi.mock("@/features/agents", async () => ({
@@ -264,6 +263,7 @@ const SEGMENTS = {
   ws: "core-platform",
   run: "arun_1",
   agent: "release-bot",
+  runtime: "tch_mbellmbp16aaaaaaaaaaaaa",
 };
 type Load = () => Promise<PageModule<typeof SEGMENTS>>;
 
@@ -286,6 +286,8 @@ const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
 /** A redirect with no title of its own, so not a `Load`. */
 const RUNTIMES = () => import("./[ws]/runtimes/page");
+/** One runtime's old path, now a redirect to its drawer; its params carry `runtime`. */
+const RUNTIME = () => import("./[ws]/runtimes/[runtime]/page");
 
 const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
@@ -322,7 +324,10 @@ describe("the Tools route", () => {
   });
 
   it.each<[string[] | undefined, Record<string, string>, string]>([
-    [undefined, {}, "/acme/core-platform/agents?tab=tools"],
+    // A bare `/tools` lands on Tool servers, as the mockup routes it.
+    [undefined, {}, "/acme/core-platform/agents?tab=servers"],
+    // A registry filter keeps the registry, the view the filter narrows.
+    [undefined, { names: "api" }, "/acme/core-platform/agents?tab=tools&names=api"],
     [
       undefined,
       { category: "moves_money", provider: "mcs_01k5s1", cursor: "c2" },
@@ -609,6 +614,26 @@ describe("the Runtimes route", () => {
     ).rejects.toThrow("REDIRECT /acme/core-platform/agents?tab=runtimes");
     expect(requireViewer).toHaveBeenCalledWith(...WS);
   });
+
+  it.each(["tch_mbellmbp16aaaaaaaaaaaaa", "rtm_macslaptop"])(
+    "moves a member from one runtime's old path %s to its drawer over the Runtimes tab",
+    async (runtime) => {
+      requireViewer.mockResolvedValue({
+        orgSlug: "acme",
+        wsSlug: "core-platform",
+      });
+      await expect(
+        Promise.resolve(
+          (await RUNTIME()).default({
+            params: Promise.resolve({ ...SEGMENTS, runtime }),
+          }),
+        ),
+      ).rejects.toThrow(
+        `REDIRECT /acme/core-platform/agents?tab=runtimes&runtime=${runtime}`,
+      );
+      expect(requireViewer).toHaveBeenCalledWith(...WS);
+    },
+  );
 });
 
 describe("the Skills route", () => {
@@ -1182,6 +1207,7 @@ describe("a person requireViewer refuses", () => {
     ["agent", AGENT] as const,
     ["spend", SPEND] as const,
     ["runtimes", RUNTIMES] as const,
+    ["runtime", RUNTIME] as const,
     ["run", RUN] as const,
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,

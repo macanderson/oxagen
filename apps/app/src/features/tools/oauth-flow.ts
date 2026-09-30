@@ -11,6 +11,12 @@
 import { z } from "zod";
 
 export const MCP_OAUTH_CALLBACK_PATH = "/api/v1/mcp/oauth/callback";
+/**
+ * Oxagen's OAuth client metadata document. Its URL is Oxagen's client ID at
+ * every authorization server that accepts one (`oauth-client-metadata.ts`).
+ */
+export const MCP_OAUTH_CLIENT_METADATA_PATH =
+  "/api/v1/mcp/oauth/client-metadata";
 export const MCP_OAUTH_COOKIE = "oxagen_mcp_oauth";
 export const MCP_OAUTH_CHANNEL = "oxagen-mcp-oauth";
 export const MCP_OAUTH_MESSAGE = "oxagen:mcp-oauth";

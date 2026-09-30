@@ -9,7 +9,9 @@ vi.mock("@oxagen/billing", async (importOriginal) => ({
 const { orgHasSso } = await import("./entitlement");
 
 describe("orgHasSso", () => {
-  beforeEach(() => resolveOrgTier.mockReset());
+  beforeEach(() => {
+    resolveOrgTier.mockReset();
+  });
 
   it("is true on the Enterprise plan", async () => {
     resolveOrgTier.mockResolvedValue("enterprise");

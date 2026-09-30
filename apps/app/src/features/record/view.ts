@@ -1,8 +1,8 @@
 // Which record the route names (#3395), and where the page links back to. A
-// lineage is a file stem under `.oxagen/rules/`, so it reaches this page from
-// the repository rather than from us: it is checked against the contract's own
-// rule here, and an address that could never name a record is a 404 rather
-// than a page error.
+// lineage is a record file's stem, under `steering/` or `.oxagen/rules/`
+// (#4765), so it reaches this page from the repository rather than from us:
+// it is checked against the contract's own rule here, and an address that
+// could never name a record is a 404 rather than a page error.
 import { routes, type SafePath } from "@/shared/safe-path";
 
 /** The workspace a link on the page points into, and the record it is about. */

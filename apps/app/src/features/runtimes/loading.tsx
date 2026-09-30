@@ -1,14 +1,12 @@
-// The Runtimes pages while the read is in flight (runtimes.md, States:
-// "the shell stays; the page body, header included, is replaced by the
-// skeleton"): four tile blocks and a panel of seven rows, the mockup's
-// `skeleton()`. The frame is a busy region inside the shell's `main#main`,
-// the page's one landmark (ADR-227). A `main` here, with or without an `id`,
+// The Runtimes tab while its reads are in flight: a panel of seven rows, the
+// mockup's `skeleton()`. The Agents page's header and tab strip stay above
+// it. The frame is a busy region inside the shell's `main#main`, the page's
+// one landmark (ADR-227). A `main` here, with or without an `id`,
 // would give the document two while the page streams in beside it (#4053,
 // arch/loading-landmarks.test.ts).
 import { useTranslations } from "next-intl";
-import { panel, panelBody, panelHeader, statStrip } from "@/ui/control-styles";
+import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 
-const TILES = [0, 1, 2, 3];
 const ROWS = [0, 1, 2, 3, 4, 5, 6];
 
 /** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */
@@ -25,16 +23,6 @@ export function RuntimesLoading() {
         className="flex flex-col gap-3.5"
       >
         <span className="sr-only">{t("loading")}</span>
-        <div className={statStrip}>
-          {TILES.map((tile) => (
-            <span
-              key={tile}
-              aria-hidden="true"
-              data-skeleton-tile=""
-              className={`${bone} h-16 rounded-[11px]`}
-            />
-          ))}
-        </div>
         <div aria-hidden="true" className={panel}>
           <div className={panelHeader}>
             <span

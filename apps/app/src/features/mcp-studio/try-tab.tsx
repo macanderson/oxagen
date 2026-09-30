@@ -11,10 +11,9 @@
 // still drops any credential header the record carries (scrubTest), since
 // lane M11 refuses a saved test that holds one.
 //
-// Run calls try_studio_tool, which #4742 builds. Until it merges the stub in
-// pending-capabilities.ts says so, and Run renders disabled with a one-line
-// note. Run is disabled too while the record does not name the server's
-// folder, because the call names the server by it.
+// Run calls try_studio_tool (#4742) through studio-calls.ts. Run is disabled,
+// with a one-line note, while the record does not name the server's folder,
+// because the call names the server by it.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Badge } from "@/ui/badge";
@@ -35,14 +34,13 @@ import { StateWrap } from "@/ui/state-wrap";
 import { scrubTest } from "./draft";
 import type { StudioGap } from "./gaps";
 import type { StudioEnvironment, StudioTool } from "./model";
-import { StudioNotRecorded } from "./not-recorded";
+import { PendingNote } from "./pending-note";
+import type { StudioAt } from "./route";
 import {
   type TryResult,
   type TryStudioTool,
   tryStudioTool,
-} from "./pending-capabilities";
-import { PendingNote } from "./pending-note";
-import type { StudioAt } from "./route";
+} from "./studio-calls";
 import { useStudioDraft } from "./use-draft";
 
 type Phase =
@@ -126,7 +124,7 @@ export function TryTab({
   agentEnvironment: string | null;
   /** An org Owner or Admin, who can save a call as a test in the draft. */
   canEdit: boolean;
-  /** The Test tab's capability: the stub until #4742 merges. */
+  /** The Test tab's capability. A test passes a fake. */
   call?: TryStudioTool;
 }) {
   const t = useTranslations("mcpStudio.try");
@@ -158,15 +156,11 @@ export function TryTab({
 
   const chosen = environments.find((env) => env.name === environment);
   const live = chosen !== undefined && !chosen.sandbox;
-  /** Why Run is off: its capability has not merged, or no folder is named. */
-  const blocked: StudioGap | null = !call.available
-    ? call.gap
-    : serverName === null
-      ? "record"
-      : null;
+  /** Why Run is off: no folder is named, so the call cannot name the server. */
+  const blocked: StudioGap | null = serverName === null ? "record" : null;
 
   const run = async () => {
-    if (serverName === null || !call.available) return;
+    if (serverName === null) return;
     const parsed = argsOf(args);
     if (parsed === null) {
       setPhase({ kind: "badJson" });
@@ -176,7 +170,7 @@ export function TryTab({
     setSaved({ kind: "none" });
     const sent = { tool, environment, args };
     try {
-      const result = await call.call({
+      const result = await call.call(at, {
         server: serverName,
         tool,
         environment,
@@ -401,10 +395,6 @@ export function TryTab({
             </p>
           ) : null}
         </>
-      ) : result.reason === "not_built" ? (
-        <StudioNotRecorded gap={result.gap} testId="studio-try-not-built">
-          {t("notBuilt")}
-        </StudioNotRecorded>
       ) : result.reason === "denied" ? (
         <FormAlert testId="studio-try-denied">
           {t("denied", { message: result.message })}

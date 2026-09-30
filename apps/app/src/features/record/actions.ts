@@ -22,6 +22,8 @@ type Revised = {
   status: ContractOutput<typeof contextRecordRevise>["status"];
   prNumber: number | null;
   prUrl: string | null;
+  /** The branch open_context_pr committed to; null when no pull request opened. */
+  branch: string | null;
 };
 
 export async function reviseRecord(
@@ -45,6 +47,7 @@ export async function reviseRecord(
           status: result.value.status,
           prNumber: result.value.pr?.number ?? null,
           prUrl: result.value.pr?.url ?? null,
+          branch: result.value.pr?.branch ?? null,
         },
       }
     : result;

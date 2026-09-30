@@ -82,7 +82,7 @@ describe("toProposalPage", () => {
       pr: {
         number: 519,
         repository: "acme/core-platform",
-        branch: `context/${LINEAGE}`,
+        branch: `steering/${LINEAGE}`,
       },
       checks: { passed: 6, total: 6 },
     });

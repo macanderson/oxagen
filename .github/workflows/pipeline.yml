@@ -1676,12 +1676,14 @@ jobs:
               --service ${{ matrix.service }} \
               --env production \
               --prefix "$PARAMETER_PREFIX" \
-              --out "$RUNNER_TEMP/build-env"
+              --out "$RUNNER_TEMP/build-env" \
+              --runtime-out "$RUNNER_TEMP/runtime-env.json"
 
       # Sourced into this one step rather than exported through $GITHUB_ENV:
       # the values are the whole production configuration for this service, and
       # `pnpm install` above — which runs third-party lifecycle scripts — has no
-      # business seeing them.
+      # business seeing them. The runtime env file holds the registry's static
+      # values Parameter Store lacks, for the manifest (build-env.ts).
       - name: Package ${{ matrix.service }}
         if: steps.order.outputs.ship == 'true'
         run: |
@@ -1690,6 +1692,9 @@ jobs:
             set -a
             . "$RUNNER_TEMP/build-env"
             set +a
+          fi
+          if [ -f "$RUNNER_TEMP/runtime-env.json" ]; then
+            export RUNTIME_ENV_FILE="$RUNNER_TEMP/runtime-env.json"
           fi
           tools/scripts/package-for-node.sh ${{ matrix.service }}
 
@@ -1847,7 +1852,7 @@ jobs:
         run: |
           set -euo pipefail
           aws ssm get-parameters-by-path --path /oxagen/production --recursive --with-decryption --output json --query 'Parameters[].{Name:Name,Value:Value}' |
-            pnpm exec tsx tools/scripts/build-env.ts --service app --env production --prefix /oxagen/production --out "$RUNNER_TEMP/build-env"
+            pnpm exec tsx tools/scripts/build-env.ts --service app --env production --prefix /oxagen/production --out "$RUNNER_TEMP/build-env" --runtime-out "$RUNNER_TEMP/runtime-env.json"
       - name: Build and stamp the app
         env:
           SOURCE_COMMIT: ${{ inputs.source_commit }}
@@ -1856,6 +1861,7 @@ jobs:
           set -a
           . "$RUNNER_TEMP/build-env"
           set +a
+          export RUNTIME_ENV_FILE="$RUNNER_TEMP/runtime-env.json"
           tools/scripts/package-for-node.sh app
           jq -n --arg revision "$SOURCE_COMMIT" --arg run "$GITHUB_RUN_ID" '{revision: $revision, run: $run}' > dist-deploy/app/oxagen-build.json
       - uses: ./.github/actions/ship-to-node

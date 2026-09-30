@@ -9,6 +9,7 @@
 // suite covers what that one cannot reach without re-reading every tab. axe
 // checks the state each test ends in (INV-26).
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -72,6 +73,7 @@ const { mcpServerListOutput, toolVersionListOutput } = await import(
 const at = { org: "acme", ws: "core-platform" };
 const PROVIDERS = "/acme/core-platform/agents?tab=servers";
 const failure = translator("tools.actions.failure");
+const oauth = translator("tools.import.oauth");
 const drill = translator("tools.providers.drill");
 const providers = translator("tools.providers");
 
@@ -681,6 +683,40 @@ describe("Providers › status light and reconnect (#4132)", () => {
     popup.remove();
   });
 
+  it.each<[string]>([["authorization_expired"], ["authorization_failed"]])(
+    "names a sign-in the callback page ended with %s in the catalogue's words",
+    async (code) => {
+      const popup = stubPopup();
+      const state = "s".repeat(32);
+      startProviderAuthorization.mockResolvedValue({
+        ok: true,
+        value: {
+          status: "redirect",
+          authorizationUrl: "https://mcp.linear.app/authorize?state=s",
+          state,
+        },
+      });
+      renderProviders(oneProvider(oauthServer({ state: "revoked" }), []));
+      fireEvent.click(screen.getByTestId("provider-reconnect-mcs_01k5s1"));
+      await screen.findByTestId("provider-reconnect-cancel-mcs_01k5s1");
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: { type: "oxagen:mcp-oauth", ok: false, state, code },
+            origin: window.origin,
+          }),
+        );
+      });
+      const alert = await screen.findByTestId(
+        "provider-reconnect-failure-mcs_01k5s1",
+      );
+      expect(alert).toHaveTextContent(oauth(`failure.${code}`));
+      expect(alert).not.toHaveTextContent(code);
+      popup.open.mockRestore();
+      popup.remove();
+    },
+  );
+
   it("offers no Reconnect for a static provider or to a reader who may not administer", () => {
     renderProviders(oneProvider({}, []));
     expect(
@@ -745,7 +781,27 @@ describe("Providers › status light and reconnect (#4132)", () => {
     [
       "a refused start",
       { ok: false, reason: "denied", code: "org_role_required" },
-      "org_role_required",
+      oauth("failure.org_role_required"),
+    ],
+    [
+      "a start the provider will not register",
+      { ok: false, reason: "unavailable", code: "registration_refused" },
+      oauth("failure.registration_refused"),
+    ],
+    [
+      "a provider no longer in the workspace",
+      { ok: false, reason: "not_found", code: "server_not_found" },
+      oauth("failure.server_not_found"),
+    ],
+    [
+      "an unknown refusal, under the reason the kernel gave",
+      { ok: false, reason: "denied", code: "authz_denied" },
+      failure("refused", { code: "authz_denied" }),
+    ],
+    [
+      "a session with no person",
+      { ok: false, reason: "denied", code: "no_principal" },
+      failure("noPrincipal"),
     ],
     [
       "a server that now wants the workspace's OAuth app",

@@ -1,38 +1,51 @@
-// The capabilities Studio calls before they exist (#4678, part 2 of a planned
-// split). Each stub carries the capability's name, its input and output as
-// the owning lane states them, and `available: false`. A control whose
-// capability is not available renders disabled, with a one-line note. Part 3
-// swaps each stub for a server action that calls the real capability once it
-// merges. The owning lane may change a shape before then, and part 3 adjusts
-// the call sites to match.
+// The capabilities Studio calls beyond the draft and Review (#4678, part 3).
+// Part 2 drew each screen against a typed stub in this module. Each one is now
+// a call bound to a server action in actions.ts, which runs the capability for
+// the workspace the page names:
 //
 //   - start_studio_discovery, get_studio_discovery and list_studio_tools:
-//     lane M10 part 2 (#4682). Discovery progress after Add server, and the
-//     tools discovery found. The shapes are the ones M10 set and the
-//     coordinator accepted, with dates as ISO strings.
+//     lane M10 (#4682). Discovery progress after Add server, and the tools
+//     discovery found.
 //   - try_studio_tool: the Test tab, metered as a governed action (#4742).
 //   - draft_studio_description: Draft on the tool panel, billed as in-app
 //     agent spend (#4742).
-//   - list_studio_findings: the Changes tab's findings (#4742, PR #4743).
+//   - list_studio_findings: the Changes tab's findings (#4742).
 //   - set_mcp_credential: the Connection tab's service secret and OAuth
-//     client forms (#4742, PR #4743). Org Owner and Admin only.
-//   - registryPackagesOf: a registry entry's packages. search_mcp_registry
-//     drops them today (toRegistryServer), and #4742 fixes that.
+//     client forms (#4742). Org Owner and Admin only.
+//   - registryPackagesOf: a registry entry's packages. The app's
+//     RegistryServer does not carry them yet, so the package path stays off.
 //
-// This module imports nothing server-only, so client components import it.
-// A credential crosses only set_mcp_credential's input, which a form reads at
-// submit and never holds in state.
+// A component takes each call as a prop, so a test passes a fake. A refusal
+// reaches the page as a code, never as the handler's text. Try it is the one
+// exception: a policy denial or an upstream failure is its answer, so the tab
+// prints the handler's message.
+//
+// Client components import this module. It imports the server actions, which
+// Next turns into references, and nothing server-only. A credential crosses
+// only set_mcp_credential's input, which a form reads at submit and never
+// holds in state.
 import type {
   RegistryServer,
   ToolEgress,
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import type { StudioGap } from "./gaps";
+import type { ActionResult } from "@/server/kernel";
+import {
+  draftStudioDescriptionAction,
+  getStudioDiscoveryAction,
+  listStudioFindingsAction,
+  listStudioToolsAction,
+  setMcpCredentialAction,
+  startStudioDiscoveryAction,
+  tryStudioToolAction,
+} from "./actions";
+import { codeOf, type Refused } from "./review-calls";
+import type { StudioAt } from "./route";
 import type { StudioFinding } from "./seams";
 
-/** The capabilities this module stubs, by the names their owners register. */
-type PendingCapability =
+/** The capabilities this module binds, by the names their owners register. */
+type StudioCapability =
   | "start_studio_discovery"
   | "get_studio_discovery"
   | "list_studio_tools"
@@ -41,44 +54,40 @@ type PendingCapability =
   | "list_studio_findings"
   | "set_mcp_credential";
 
-/** The answer every stub gives: its capability has not merged. */
-type NotBuilt = { ok: false; reason: "not_built"; gap: StudioGap };
-
 /**
  * A refusal with the handler's code (`denied`, `unavailable`, or the reason
  * the handler names). No message text reaches the app, so the page maps a
  * code it knows to its own copy.
  */
-type Refused = { ok: false; reason: "failed"; code: string };
+type Failed = { ok: false; reason: "failed"; code: string };
 
 /**
- * A capability's answer as Studio's action returns it. The capability's
- * output carries no `ok`, as get_studio_draft returns `{ draft }`. The action
- * adds `ok: true` to it, or refuses with the handler's code.
+ * A capability's answer as Studio reads it. The capability's output carries
+ * no `ok`, as get_studio_draft returns `{ draft }`, so the call adds
+ * `ok: true` to it, or refuses with the handler's code.
  */
-type Answer<Output> = ({ ok: true } & Output) | Refused;
+type Answer<Output> = ({ ok: true } & Output) | Failed;
 
 /**
- * One capability as Studio calls it. A control carries the name as
- * `data-capability` and the gap as `data-gap`, so a reader of the DOM can
- * follow a disabled control to the work that enables it.
+ * One capability as Studio calls it, for the workspace the page names. A
+ * control carries the name as `data-capability`, so a reader of the DOM can
+ * follow it to the capability.
  */
-type PendingCall<Name extends PendingCapability, Input, Result> = {
-  /** The capability's registered name. Part 3 finds its call sites by it. */
+type StudioCall<Name extends StudioCapability, Input, Result> = {
+  /** The capability's registered name. */
   readonly name: Name;
-  /** False until the capability merges. Its control renders disabled. */
-  readonly available: boolean;
-  /** The work that builds the capability. */
-  readonly gap: StudioGap;
-  readonly call: (input: Input) => Promise<Result | NotBuilt>;
+  readonly call: (at: StudioAt, input: Input) => Promise<Result>;
 };
 
-function stub<Name extends PendingCapability, Input, Result>(
-  name: Name,
-  gap: StudioGap,
-): PendingCall<Name, Input, Result> {
-  const answer: NotBuilt = { ok: false, reason: "not_built", gap };
-  return { name, available: false, gap, call: () => Promise.resolve(answer) };
+function failed(result: Refused): Failed {
+  return { ok: false, reason: "failed", code: codeOf(result) };
+}
+
+/** An action's output with `ok: true` added, or its refusal's code. */
+function answer<Output extends object>(
+  result: ActionResult<Output>,
+): Answer<Output> {
+  return result.ok ? { ok: true as const, ...result.value } : failed(result);
 }
 
 // ---- Discovery (lane M10 part 2) ------------------------------------------
@@ -209,31 +218,43 @@ type ServerInput = {
  * Ask for a discovery of one server now. Org Owner and Admin, and workspace
  * Owner and Member.
  */
-export const startStudioDiscovery = stub<
+export const startStudioDiscovery: StudioCall<
   "start_studio_discovery",
   ServerInput,
   Answer<{ discovery: StudioDiscovery }>
->("start_studio_discovery", "discovery");
+> = {
+  name: "start_studio_discovery",
+  call: async (at, { server }) =>
+    answer(await startStudioDiscoveryAction(at.org, at.ws, server)),
+};
 
 /**
  * One server's latest discovery, or null before the first one. Workspace
  * Viewers may read it too.
  */
-export const getStudioDiscovery = stub<
+export const getStudioDiscovery: StudioCall<
   "get_studio_discovery",
   ServerInput,
   Answer<{ discovery: StudioDiscovery | null }>
->("get_studio_discovery", "discovery");
+> = {
+  name: "get_studio_discovery",
+  call: async (at, { server }) =>
+    answer(await getStudioDiscoveryAction(at.org, at.ws, server)),
+};
 
 /**
  * One server's tools: its tools.toml keys, then the snapshot tools no key
  * imports. Workspace Viewers may read it too.
  */
-export const listStudioTools = stub<
+export const listStudioTools: StudioCall<
   "list_studio_tools",
   ServerInput,
   Answer<StudioToolsList>
->("list_studio_tools", "discovery");
+> = {
+  name: "list_studio_tools",
+  call: async (at, { server }) =>
+    answer(await listStudioToolsAction(at.org, at.ws, server)),
+};
 
 // ---- Test and Draft (#4742) -----------------------------------------------
 
@@ -257,22 +278,46 @@ export type TryResult =
       /** What the model would receive after tools.toml's shaping. */
       shaped: string;
     }
-  | NotBuilt
   /** Policy denied the call or parked it for approval; the call still counts. */
   | { ok: false; reason: "denied"; message: string }
+  /**
+   * The upstream failed, with the handler's message, or the action was
+   * refused before the call, with its code as the message.
+   */
   | { ok: false; reason: "failed"; message: string };
 
 /** Call one imported tool from Studio, metered as a governed action. */
-export const tryStudioTool = stub<"try_studio_tool", TryInput, TryResult>(
-  "try_studio_tool",
-  "capability",
-);
+export const tryStudioTool: StudioCall<"try_studio_tool", TryInput, TryResult> =
+  {
+    name: "try_studio_tool",
+    call: async (at, input) => {
+      const result = await tryStudioToolAction(at.org, at.ws, {
+        server: input.server,
+        tool: input.tool,
+        environment: input.environment,
+        arguments: { ...input.arguments },
+      });
+      if (!result.ok) {
+        return { ok: false, reason: "failed", message: codeOf(result) };
+      }
+      const out = result.value;
+      if (out.ok) {
+        return {
+          ok: true,
+          request: out.request,
+          raw: out.raw,
+          shaped: out.shaped,
+        };
+      }
+      return { ok: false, reason: out.reason, message: out.message };
+    },
+  };
 
 export type TryStudioTool = typeof tryStudioTool;
 
 type DraftResult =
   | { ok: true; description: string }
-  | NotBuilt
+  /** The action was refused, with its code as the message. */
   | { ok: false; reason: "failed"; message: string };
 
 /**
@@ -280,11 +325,19 @@ type DraftResult =
  * spend. It writes nothing: a person who keeps the suggestion stages it as a
  * describe op.
  */
-export const draftStudioDescription = stub<
+export const draftStudioDescription: StudioCall<
   "draft_studio_description",
   { server: string; tool: string },
   DraftResult
->("draft_studio_description", "capability");
+> = {
+  name: "draft_studio_description",
+  call: async (at, input) => {
+    const result = await draftStudioDescriptionAction(at.org, at.ws, input);
+    return result.ok
+      ? { ok: true, description: result.value.description }
+      : { ok: false, reason: "failed", message: codeOf(result) };
+  },
+};
 
 export type DraftStudioDescription = typeof draftStudioDescription;
 
@@ -303,11 +356,15 @@ type StudioFindingsList = {
 };
 
 /** The tool checks' findings on one server folder. Writes nothing. */
-export const listStudioFindings = stub<
+export const listStudioFindings: StudioCall<
   "list_studio_findings",
   ServerInput,
   Answer<StudioFindingsList>
->("list_studio_findings", "findings");
+> = {
+  name: "list_studio_findings",
+  call: async (at, { server }) =>
+    answer(await listStudioFindingsAction(at.org, at.ws, server)),
+};
 
 export type ListStudioFindings = typeof listStudioFindings;
 
@@ -331,7 +388,7 @@ export type SetMcpCredentialInput =
     };
 
 /** Store a named credential in the vault. Org Owner and Admin only. */
-export const setMcpCredential = stub<
+export const setMcpCredential: StudioCall<
   "set_mcp_credential",
   SetMcpCredentialInput,
   Answer<{
@@ -341,11 +398,15 @@ export const setMcpCredential = stub<
     /** False when the call replaced a credential of that name. */
     created: boolean;
   }>
->("set_mcp_credential", "credentials");
+> = {
+  name: "set_mcp_credential",
+  call: async (at, input) =>
+    answer(await setMcpCredentialAction(at.org, at.ws, input)),
+};
 
 export type SetMcpCredential = typeof setMcpCredential;
 
-// ---- Registry packages (#4742) --------------------------------------------
+// ---- Registry packages (#4678) --------------------------------------------
 
 /** An argument a registry package takes (the registry's packageArguments). */
 export type RegistryPackageArgument = {
@@ -381,8 +442,9 @@ export type RegistryPackage = {
 export const REGISTRY_PACKAGE_TYPES = ["npm", "pypi", "oci", "nuget"] as const;
 
 /**
- * A registry entry's packages, or null while search_mcp_registry drops them.
- * An entry whose transports include stdio offers at least one package.
+ * A registry entry's packages, or null while the app's RegistryServer does
+ * not carry them (#4678). An entry whose transports include stdio offers at
+ * least one package.
  */
 export function registryPackagesOf(
   _server: RegistryServer,
