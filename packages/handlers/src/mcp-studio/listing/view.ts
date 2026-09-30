@@ -1,6 +1,9 @@
 // view.ts: a stored listing as get_studio_listing and start_studio_listing
 // return it (ADR-233, #4756).
-import type { StudioListing } from "@oxagen/oxagen/contracts/tool.studio.listing.get";
+import type {
+  StudioListedTool,
+  StudioListing,
+} from "@oxagen/oxagen/contracts/tool.studio.listing.get";
 import type { StoredListing } from "./store";
 
 /** The pin a lock source records, as Studio shows it. */
@@ -19,7 +22,11 @@ function pinOf(listing: StoredListing): StudioListing["pin"] {
   return { name: listing.server, version: "", digest: "", registryType: null };
 }
 
-export function listingView(listing: StoredListing): StudioListing {
+/** The listing as Studio shows it. `tools` are the listed tools, read from the draft (listed.ts). */
+export function listingView(
+  listing: StoredListing,
+  tools: StudioListedTool[] | null = null,
+): StudioListing {
   return {
     server: listing.server,
     status: listing.status,
@@ -33,5 +40,6 @@ export function listingView(listing: StoredListing): StudioListing {
     machine: listing.machine,
     toolCount: listing.toolCount,
     error: listing.error,
+    tools,
   };
 }

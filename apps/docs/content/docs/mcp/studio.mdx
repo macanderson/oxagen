@@ -87,6 +87,23 @@ Each refusal answers `conflict` (409) unless the table says otherwise.
 | `tool_not_offered`, `tool_not_found`, `tool_key_collision` | The source does not offer an imported tool, an edit names an unknown tool, or two tools make one key | Remove or rename the edit the message names |
 | `production_branch_missing` | The steering repo has no production branch | Restore the branch, then Review |
 
+## Add a server that runs on machines
+
+A local command, or a registry package with `source.machines`, has no tools until a machine starts it. Review writes no lock that says a server offers nothing, so a machine lists the tools before Review. Add server in the app runs these steps for you.
+
+| Capability | API route | What it does |
+|---|---|---|
+| `start_studio_listing` | `POST /v1/{org}/{ws}/tools/studio/listing/start` | Asks a machine to list the draft's tools at a pin |
+| `get_studio_listing` | `POST /v1/{org}/{ws}/tools/studio/listing/get` | Reads the listing and, once it succeeds, the tools |
+
+1. Save the new server's `server.toml` with `save_studio_draft` at `revision: 0`. Send no source.
+2. Call `start_studio_listing` with the revision the save returned. A local command sends `pin`: the version it runs and the SHA-256 of the file the command resolves to on the machine. Run `shasum -a 256` on that file to read it. A registry package sends no pin, because Oxagen reads its SHA-256 from the public registry. Oxagen pins npm, PyPI, and NuGet packages.
+3. Read `get_studio_listing` until `status` is `succeeded` or `failed`. A machine you enrolled, in one of the server's `source.machines` groups, lists the tools the next time it polls Oxagen. It checks the pin before it starts anything. A listing starts a program before any review, so it never runs on another person's machine, and `start_studio_listing` refuses with `machine_not_yours` when you enrolled none in those groups.
+4. A listing that succeeds carries `tools`: each tool the machine listed, with the classification Studio suggests. The listing saved the draft, so read it again, then save an import and a classification for each tool you want.
+5. Call `open_studio_review`. The folder's first `tools.lock.json` pins what the machine checked.
+
+A failed listing leaves the draft as it was. Fix the pin or the machine groups, save again at the revision you hold, and list again.
+
 ## Discover a server's tools
 
 A source changes after you import it: a tool gains a parameter, another disappears, a registry package ships a new version. Discovery reads what the source offers now and compares it with the lock on the production branch. Three capabilities start a discovery and read what it found.

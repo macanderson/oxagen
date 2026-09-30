@@ -52,6 +52,7 @@ const WAITING = {
   machine: null,
   toolCount: null,
   error: null,
+  tools: null,
 };
 
 beforeEach(() => {

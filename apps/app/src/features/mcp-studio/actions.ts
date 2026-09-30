@@ -29,6 +29,12 @@
 // that creates the server's folder (ADR-224). When Review refuses, the
 // dialog saves again at the revision the first save returned, so a retry
 // replaces that draft instead of starting a new one.
+//
+// A server that runs on machines, a local command or a registry package,
+// saves its server.toml alone: its tools come from a machine. The listing
+// (start_studio_listing, get_studio_listing, ADR-233) asks a machine for
+// them and writes them into the draft, and the dialog then imports and
+// classifies them before Review.
 import {
   type ToolStudioCredentialSetInput,
   type ToolStudioCredentialSetOutput,
@@ -56,6 +62,15 @@ import {
   type ToolStudioDraftSaveOutput,
   toolStudioDraftSave,
 } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+import {
+  type ToolStudioListingGetOutput,
+  toolStudioListingGet,
+} from "@oxagen/oxagen/contracts/tool.studio.listing.get";
+import {
+  type ToolStudioListingStartInput,
+  type ToolStudioListingStartOutput,
+  toolStudioListingStart,
+} from "@oxagen/oxagen/contracts/tool.studio.listing.start";
 import {
   type ToolStudioFindingsListOutput,
   toolStudioFindingsList,
@@ -107,7 +122,8 @@ export async function saveStudioDraftAction(
 
 /**
  * Save the draft of a server that has no folder yet: its server.toml and its
- * definition, with no edits. The first save sends revision 0, which refuses
+ * definition, with no edits. A server that runs on machines sends no
+ * definition, because a listing writes its tools into the draft. The first save sends revision 0, which refuses
  * with `draft_revision_stale` when a draft of that name is already stored,
  * so a new server never overwrites someone's draft. A retry after a refused
  * Review sends the revision and server id that save returned.
@@ -119,7 +135,7 @@ export async function saveNewStudioServerAction(
     server: string;
     serverId?: string;
     serverToml: string;
-    source: StudioSource;
+    source?: StudioSource;
     revision: number;
   },
 ): Promise<ActionResult<ToolStudioDraftSaveOutput>> {
@@ -129,7 +145,7 @@ export async function saveNewStudioServerAction(
     ...(draft.serverId === undefined ? {} : { serverId: draft.serverId }),
     ops: [],
     serverToml: draft.serverToml,
-    source: draft.source,
+    ...(draft.source === undefined ? {} : { source: draft.source }),
     revision: draft.revision,
   });
 }
@@ -185,6 +201,35 @@ export async function getStudioDiscoveryAction(
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
     contract: toolStudioDiscoveryGet,
+    input: { server },
+    page: "tools",
+  });
+  return readToActionResult(read);
+}
+
+/**
+ * Ask a machine in the draft's source.machines to list its tools, pinned on
+ * the draft revision the person sees. A local command sends the version and
+ * SHA-256 the person names. A registry package sends none.
+ */
+export async function startStudioListingAction(
+  org: string,
+  ws: string,
+  input: ToolStudioListingStartInput,
+): Promise<ActionResult<ToolStudioListingStartOutput>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, toolStudioListingStart, input);
+}
+
+/** One draft's listing, with the tools a succeeded one listed, or null. */
+export async function getStudioListingAction(
+  org: string,
+  ws: string,
+  server: string,
+): Promise<ActionResult<ToolStudioListingGetOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolStudioListingGet,
     input: { server },
     page: "tools",
   });

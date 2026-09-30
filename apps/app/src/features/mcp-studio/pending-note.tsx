@@ -3,8 +3,8 @@
 // aria-describedby. The note carries the capability's name as
 // `data-capability` and the work that builds it as `data-gap`, so a reader of
 // the DOM can follow the control to that work. A control that waits on a fix
-// to a shipped capability rather than a new one, such as Local command, names
-// no capability. Part 3 removes the note when the work merges.
+// to a shipped capability rather than a new one names no capability. Part 3
+// removes the note when the work merges.
 import type { ReactNode } from "react";
 import { type StudioGap, studioGapRef } from "./gaps";
 

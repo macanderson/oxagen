@@ -1,7 +1,7 @@
 {
   "name": "get_studio_listing",
   "domain": "tool",
-  "description": "Read the tool listing of one Studio draft for a server that runs on machines: whether a machine has listed its tools yet, which machine answered, how many tools it listed, and why a listing failed. Null when the draft has none.",
+  "description": "Read the tool listing of one Studio draft for a server that runs on machines: whether a machine has listed its tools yet, which machine answered, the tools it listed with the classification Studio suggests for each, and why a listing failed. Null when the draft has none.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -165,6 +165,83 @@
                     "type": "null"
                   }
                 ]
+              },
+              "tools": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "suggested": {
+                          "type": "object",
+                          "properties": {
+                            "risk": {
+                              "type": "string",
+                              "enum": [
+                                "low",
+                                "medium",
+                                "high",
+                                "critical"
+                              ]
+                            },
+                            "sideEffect": {
+                              "type": "string",
+                              "enum": [
+                                "read",
+                                "write",
+                                "irreversible"
+                              ]
+                            },
+                            "egress": {
+                              "type": "string",
+                              "enum": [
+                                "local",
+                                "org_tenant",
+                                "third_party"
+                              ]
+                            },
+                            "impacts": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "risk",
+                            "sideEffect",
+                            "egress",
+                            "impacts"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "description",
+                        "suggested"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -179,7 +256,8 @@
               "finishedAt",
               "machine",
               "toolCount",
-              "error"
+              "error",
+              "tools"
             ],
             "additionalProperties": false
           },

@@ -5,6 +5,25 @@ import { studioServerNameSchema } from "./tool.studio.draft.save";
 const isoDateSchema = z.string().datetime();
 
 /**
+ * One tool a machine listed, with the classification Studio suggests for it
+ * (packages/mcp-studio/src/suggest). The suggestion is not a decision: a
+ * person confirms or changes it when they import the tool, and Review refuses
+ * an imported tool with no classification.
+ */
+export const studioListedToolSchema = z.object({
+  /** The upstream name, as tools/list gave it. An import op names the tool by it. */
+  name: z.string(),
+  description: z.string().nullable(),
+  suggested: z.object({
+    risk: z.enum(["low", "medium", "high", "critical"]),
+    sideEffect: z.enum(["read", "write", "irreversible"]),
+    egress: z.enum(["local", "org_tenant", "third_party"]),
+    impacts: z.array(z.string()),
+  }),
+});
+export type StudioListedTool = z.output<typeof studioListedToolSchema>;
+
+/**
  * One Studio draft's tool listing, as Studio shows its progress (ADR-233,
  * #4756). A new server that runs on machines has no tools until a machine
  * starts it. The listing asks one machine in `machineGroups` to start the
@@ -12,7 +31,8 @@ const isoDateSchema = z.string().datetime();
  * the machine's poll writes the answer into the draft as its MCP source.
  * Progress is the status: waiting_for_machine, running, then succeeded or
  * failed. A succeeded listing saved the draft once more, so read the draft
- * again before the next save.
+ * again before the next save. It also carries the tools the machine listed,
+ * so Studio can import and classify them before Review.
  */
 export const studioListingSchema = z.object({
   /** The folder name under tools/servers/. */
@@ -44,6 +64,12 @@ export const studioListingSchema = z.object({
   toolCount: z.number().int().min(0).nullable(),
   /** Why the listing failed. */
   error: z.string().nullable(),
+  /**
+   * The tools the machine listed, once the listing succeeded and while the
+   * draft still holds them as its MCP source. Null before then, and after a
+   * later save replaced the draft's source.
+   */
+  tools: z.array(studioListedToolSchema).nullable(),
 });
 export type StudioListing = z.output<typeof studioListingSchema>;
 
@@ -51,7 +77,7 @@ export const toolStudioListingGet = registerCapability({
   name: "get_studio_listing",
   domain: "tool",
   description:
-    "Read the tool listing of one Studio draft for a server that runs on machines: whether a machine has listed its tools yet, which machine answered, how many tools it listed, and why a listing failed. Null when the draft has none.",
+    "Read the tool listing of one Studio draft for a server that runs on machines: whether a machine has listed its tools yet, which machine answered, the tools it listed with the classification Studio suggests for each, and why a listing failed. Null when the draft has none.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],

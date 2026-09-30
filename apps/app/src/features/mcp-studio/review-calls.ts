@@ -110,11 +110,15 @@ export function reviewCalls(at: StudioAt): {
   };
 }
 
-/** A new server as Add server saves it: its server.toml and its definition. */
+/**
+ * A new server as Add server saves it: its server.toml and its definition. A
+ * server that runs on machines has no definition, because a listing writes
+ * its tools into the draft (ADR-233).
+ */
 export type NewStudioServer = {
   server: string;
   serverToml: string;
-  source: StudioSource;
+  source?: StudioSource;
 };
 
 /** A new server's stored draft: where Review opens and a retry saves again. */

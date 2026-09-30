@@ -444,15 +444,19 @@
         }
       },
       "local": {
-        "intro": "A local command runs on enrolled machines through the local gateway. Oxagen sends it no credential.",
+        "intro": "A local command runs on enrolled machines through the local gateway. A machine in its groups lists its tools before the steering PR opens. Oxagen sends it no credential.",
         "command": "Command",
         "commandHint": "The program the local gateway starts, such as npx.",
         "arguments": "Arguments",
         "argumentsHint": "One argument per line.",
+        "variables": "Variables",
+        "variablesHint": "One name per line. Each machine sets the value.",
         "machines": "Machine groups",
-        "machinesHint": "One group per line. The local gateway runs the server on machines in these groups.",
-        "submit": "Open steering PR",
-        "pending": "Adding a local command is not available yet, because a new folder needs its tools listed before a steering PR can open."
+        "machinesHint": "One group per line. A machine you enrolled in one of these groups lists the tools.",
+        "version": "Version",
+        "versionHint": "The version of the program the command runs.",
+        "digest": "SHA-256",
+        "digestHint": "Run shasum -a 256 on the file the command resolves to on the machine. The machine starts nothing else."
       },
       "offer": {
         "remote": "Remote",
@@ -462,13 +466,13 @@
         "pickPackageNamed": "Run {name} as a package"
       },
       "package": {
-        "intro": "The local gateway runs this package on enrolled machines. Oxagen sends it no credential.",
+        "intro": "The local gateway runs this package on enrolled machines. Oxagen reads its SHA-256 from the registry, and a machine in its groups lists its tools before the steering PR opens. Oxagen sends it no credential.",
         "type": "Package type",
         "arguments": "Required arguments",
-        "secretHint": "A secret argument takes its value from a variable set on each machine.",
+        "secretFrom": "Set {name} on each machine.",
         "variables": "Required variables",
-        "submit": "Open steering PR",
-        "pending": "Adding a registry package is not available yet, because a new folder needs its tools listed before a steering PR can open."
+        "unpinned": "Oxagen pins npm, PyPI, and NuGet packages. This entry offers {types}.",
+        "noPackage": "This entry lists no package a machine can run."
       },
       "discovery": {
         "title": "Discovery",
@@ -496,6 +500,63 @@
         "starting": "Starting",
         "failed": "Discovery did not answer. Oxagen answered {code}.",
         "thrown": "Discovery did not answer because the request failed before Oxagen answered. Try again."
+      },
+      "machine": {
+        "submit": "List tools",
+        "retry": "List tools again",
+        "saving": "Saving",
+        "opened": "Opened steering PR #{number}",
+        "exists": "A draft named {name} is already saved. Open that server in Studio, or choose another folder name.",
+        "moved": "Someone saved the {name} draft after you did. Close this dialog and add the server under another folder name.",
+        "unlisted": "No machine listed the tools. Check that a machine in these groups is online and that the pin matches what it runs, then list the tools again.",
+        "needsDigest": "Oxagen cannot pin this package type yet. Choose an npm or NuGet package.",
+        "registryUnreachable": "Oxagen could not read the package from its registry. Try again in a few minutes.",
+        "tomlInvalid": "Oxagen could not read the server settings this form wrote. Check each field, then try again.",
+        "problems": {
+          "name": "Enter a folder name of lowercase letters, digits and underscores that starts with a letter, at most 24.",
+          "reserved": "The folder name builtin is reserved. Choose another.",
+          "label": "Enter a display name of at most 80 characters.",
+          "description": "Enter a description of at most 200 characters.",
+          "command": "Enter the command the local gateway starts.",
+          "arguments": "Enter at most 256 arguments of at most 4096 characters each.",
+          "variables": "Enter at most 128 variable names.",
+          "variable": "{name} is not a variable name. Use letters, digits and underscores, starting with a letter or an underscore.",
+          "machines": "Enter at least one machine group.",
+          "machine": "{group} is not a machine group. Use lowercase letters, digits and hyphens.",
+          "version": "Enter the version the command runs, at most 64 characters.",
+          "digest": "Enter the SHA-256 as 64 hexadecimal characters.",
+          "entryVersion": "The registry lists no version for this entry, so Oxagen cannot pin it.",
+          "argumentRequired": "Enter a value for {argument}.",
+          "argumentInvalid": "The value for {argument} has a $ that names no variable. Write $$ for one $, or $'{'NAME'}' for a variable."
+        },
+        "notYours": "You enrolled no machine in these groups. A listing runs only on a machine you enrolled, so enroll one and add it to a group first.",
+        "resumable": "A draft named {name} is saved with no tools listed. List the tools again to save this form over it."
+      },
+      "listing": {
+        "title": "Tool listing",
+        "loading": "Reading the listing",
+        "none": "No listing is saved for this server yet.",
+        "statuses": {
+          "waiting_for_machine": "Waiting for a machine",
+          "running": "Listing",
+          "succeeded": "Listed",
+          "failed": "Failed"
+        },
+        "pin": "Pinned to {name} {version}",
+        "waiting": "A machine in {groups} lists the tools when it next polls Oxagen.",
+        "readFailed": "Oxagen did not answer the listing read. It answered {code}.",
+        "thrown": "The listing read failed before Oxagen answered. Read it again.",
+        "reread": "Read the listing again"
+      },
+      "classify": {
+        "title": "Tools to import",
+        "intro": "{count, plural, one {The machine listed # tool.} other {The machine listed # tools.}} Studio suggests a classification for each. Confirm or change it before the steering PR opens.",
+        "import": "Import {name}",
+        "submit": "Open steering PR",
+        "saving": "Saving",
+        "reviewing": "Opening",
+        "none": "Pick at least one tool to import.",
+        "moved": "Someone saved the {name} draft while you picked its tools. Submit again to save your picks over their draft."
       }
     }
   }

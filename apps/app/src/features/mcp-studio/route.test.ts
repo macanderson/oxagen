@@ -95,6 +95,5 @@ describe("studioHref", () => {
 describe("studioGapRef", () => {
   it("names the issue that owns each unbuilt seam", () => {
     expect(studioGapRef("record")).toBe("#4678");
-    expect(studioGapRef("localCommand")).toBe("#4756");
   });
 });
