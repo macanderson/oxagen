@@ -109,6 +109,12 @@ export default defineConfig({
         "src/relay/broker.ts",
         "src/relay/mount.ts",
         "src/relay/transport.ts",
+        // the local-server long-poll (#4773). index.ts is absent: it only
+        // wires Postgres, the key resolver and the env signer into these four.
+        "src/local-servers/auth.ts",
+        "src/local-servers/broker.ts",
+        "src/local-servers/route.ts",
+        "src/local-servers/transport.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {

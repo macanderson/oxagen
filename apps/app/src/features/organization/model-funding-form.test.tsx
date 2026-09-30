@@ -94,7 +94,7 @@ describe("ModelFundingForm: the design's customer-key state", () => {
     const field = screen.getByLabelText(KEY_LABEL);
     expect(field).toHaveAttribute("type", "password");
     expect(field).toHaveAccessibleDescription(
-      "Oxagen calls the model with it once to check it works, then stores it encrypted. It is never returned to a screen and never read from the environment.",
+      "Oxagen checks the key with one model call, then stores it encrypted. No screen shows it again.",
     );
     expect(
       screen.getByRole("button", { name: "Test and save" }),
@@ -399,7 +399,7 @@ describe("ModelFundingForm: the stored key", () => {
   it("keeps the key when the person backs out of removing it", async () => {
     renderForm(STORED);
     await userEvent.click(screen.getByTestId("funding-remove"));
-    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Keep key" }));
     expect(screen.queryByTestId("funding-remove-confirm")).toBeNull();
     expect(removeModelKey).not.toHaveBeenCalled();
   });

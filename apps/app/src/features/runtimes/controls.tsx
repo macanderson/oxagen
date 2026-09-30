@@ -16,7 +16,7 @@
 // change is reversible and a host reads it only at its next bundle fetch.
 //
 // Nothing here enrolls a host or writes a hook (runtimes.md: enrollment is an
-// installer, run on the host itself). Show the CLI path links the Oxagen app's
+// installer, run on the host itself). Enroll from the CLI links the Oxagen app's
 // installers, which put the CLI on the host's PATH, and prints the command.
 // Three controls the design draws have no capability behind them: Request
 // access, Open an incident and Run a smoke session. Each opens a dialog that
@@ -341,7 +341,7 @@ function DialogButton({
   );
 }
 
-/** Show the CLI path: the app that installs the CLI, then the command a person runs on the host. */
+/** Enroll from the CLI: the app that installs the CLI, then the command a person runs on the host. */
 export function CliPath() {
   const t = useTranslations("runtimes");
   return (

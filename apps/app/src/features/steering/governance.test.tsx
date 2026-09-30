@@ -90,7 +90,7 @@ describe("the governance chip", () => {
       "Governance: not read",
     );
     const dialog = openDialog();
-    expect(dialog).not.toHaveTextContent("· now");
+    expect(dialog).not.toHaveTextContent("(current)");
     expect(dialog).toHaveTextContent(
       ".oxagen/rules/governance.toml on the main repository",
     );
@@ -101,7 +101,7 @@ describe("the governance dialog", () => {
   it("shows the three modes with the one in force marked now, the TOML, and the note", () => {
     renderChip();
     const dialog = openDialog();
-    expect(dialog).toHaveTextContent("Governance mode · Core platform");
+    expect(dialog).toHaveTextContent("Governance mode for Core platform");
     expect(dialog).toHaveTextContent(
       ".oxagen/rules/governance.toml on acme/platform",
     );
@@ -112,9 +112,9 @@ describe("the governance dialog", () => {
       "regulated",
     ]);
     expect(radios[0]).toHaveTextContent(
-      "soloThe author may merge their own. One person, or a repository nobody else reviews.",
+      "soloThe author may merge their own. For a repository nobody else reviews.",
     );
-    expect(radios[1]).toHaveTextContent("team · now");
+    expect(radios[1]).toHaveTextContent("team (current)");
     expect(radios[1]).toHaveAttribute("aria-checked", "true");
     expect(radios[2]).toHaveTextContent(
       "A named approver from a role must approve, and the promotion ledger is hash-chained.",
@@ -124,7 +124,7 @@ describe("the governance dialog", () => {
     );
     // The comment line is the design's, em dash included.
     expect(within(dialog).getByTestId("governance-toml")).toHaveTextContent(
-      "# .oxagen/rules/governance.toml \u2014 read on the production branch when a pull request is",
+      "# .oxagen/rules/governance.toml: read on the production branch when a pull request is",
     );
     expect(within(dialog).getByTestId("governance-note")).toHaveTextContent(
       "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",

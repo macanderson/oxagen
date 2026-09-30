@@ -89,7 +89,7 @@ describe("Permissions › roles", () => {
       "Rolesnone held. It can reach nothing but its own run channel.",
     );
     const wire = within(roles).getByRole("list", {
-      name: "How the effective permission is computed",
+      name: "Effective permission steps",
     });
     expect(wire).toHaveTextContent("usr_marcusbell");
   });
@@ -100,7 +100,7 @@ describe("Permissions › roles", () => {
       operatorName: null,
     });
     const wire = within(region("Roles")).getByRole("list", {
-      name: "How the effective permission is computed",
+      name: "Effective permission steps",
     });
     expect(within(wire).getAllByText("operator")).toHaveLength(2);
   });

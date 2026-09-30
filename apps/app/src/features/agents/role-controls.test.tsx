@@ -147,7 +147,7 @@ describe("AssignRole", () => {
     expect(
       await within(dialog).findByTestId("assign-role-receipt"),
     ).toHaveTextContent(
-      "Release deputy assigned to release-bot. Recorded with your name; effective at its next call.",
+      "Release deputy assigned to release-bot. Recorded with your name. It takes effect at the next call.",
     );
     expect(router.replace).not.toHaveBeenCalled();
     await userEvent.click(
@@ -174,7 +174,7 @@ describe("AssignRole", () => {
     expect(repository).toHaveTextContent(
       "RepositoryNo role can be bound to one repository yet (#3865).",
     );
-    expect(within(dialog).getByLabelText("Why")).toHaveAttribute(
+    expect(within(dialog).getByLabelText("Reason")).toHaveAttribute(
       "placeholder",
       "Read by the approver and kept in the audit record",
     );
@@ -192,14 +192,14 @@ describe("AssignRole", () => {
     renderAssign();
     const dialog = await openAssign();
     await within(dialog).findByLabelText("Role");
-    await userEvent.type(within(dialog).getByLabelText("Why"), "Audit prep");
+    await userEvent.type(within(dialog).getByLabelText("Reason"), "Audit prep");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Assign" }),
     );
     expect(
       await within(dialog).findByTestId("assign-role-receipt"),
     ).toHaveTextContent(
-      "Agent Observer assigned to release-bot · “Audit prep”. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
+      "Agent Observer assigned to release-bot for “Audit prep”. Recorded with your name. It governs nothing until the organization's tier enforces roles.",
     );
   });
 
@@ -251,7 +251,7 @@ describe("AssignRole", () => {
       "Effective permission stays roles ∩ Marcus Bell's grants. A role cannot lift an agent above its operator.",
     );
     await userEvent.type(
-      within(dialog).getByLabelText("Why"),
+      within(dialog).getByLabelText("Reason"),
       "Reads the September runs",
     );
     await userEvent.click(
@@ -283,12 +283,12 @@ describe("AssignRole", () => {
     renderAssign();
     const dialog = await openAssign();
     await within(dialog).findByText(
-      "Agent Observer · held — Reads runs and records",
+      "Agent Observer (held): Reads runs and records",
     );
     const picker = within(dialog).getByLabelText("Role");
     const options = within(picker).getAllByRole<HTMLOptionElement>("option");
     expect(options.map((option) => option.textContent)).toEqual([
-      "Agent Observer · held — Reads runs and records",
+      "Agent Observer (held): Reads runs and records",
       "Release deputy",
     ]);
     expect(options.map((option) => option.disabled)).toEqual([true, false]);
@@ -310,7 +310,7 @@ describe("AssignRole", () => {
         .getAllByRole<HTMLOptionElement>("option")
         .map((option) => [option.textContent, option.disabled]),
     ).toEqual([
-      ["Agent Observer — Reads runs and records", false],
+      ["Agent Observer: Reads runs and records", false],
       ["Release deputy", false],
     ]);
   });

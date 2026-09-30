@@ -3,9 +3,17 @@
 // inventory, a later page, a window with nothing reported, each refusal a read
 // can answer, and the skeleton. A row prints the name, the sessions that
 // reported it out of the window's sessions, its harnesses and when it was last
-// seen, and nothing the record does not carry; axe checks the state each test
-// ends in (INV-26).
-import { cleanup, render, screen, within } from "@testing-library/react";
+// seen, and nothing the record does not carry. The foot pager keeps the page
+// size in every address and changes it through Rows (#4693). axe checks the
+// state each test ends in (INV-26).
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +21,11 @@ import type { SkillInventory } from "@/data/contracts/skills";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
-import messages from "../../../messages/skills.json";
+import skillMessages from "../../../messages/skills.json";
+import uiMessages from "../../../messages/ui.json";
+
+const messages = { ...skillMessages, ...uiMessages };
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("./actions", () => ({
   previewSkillSearch: vi.fn(),
@@ -24,7 +36,7 @@ vi.mock("./actions", () => ({
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 const { WsCtx } = await import("@/server/viewer");
@@ -185,8 +197,8 @@ function withIntl(element: ReactNode) {
   );
 }
 
-async function renderSkills(cursor: string | null = null) {
-  return withIntl(await Skills({ ctx, source, cursor }));
+async function renderSkills(cursor: string | null = null, rows = 100) {
+  return withIntl(await Skills({ ctx, source, cursor, rows }));
 }
 
 function state(): string | null {
@@ -197,6 +209,7 @@ function state(): string | null {
 
 beforeEach(() => {
   read.mockReset();
+  push.mockReset();
 });
 
 afterEach(async () => {
@@ -239,10 +252,13 @@ describe("Skills › loaded", () => {
     read.mockResolvedValue(readOk(inventory()));
     await renderSkills();
 
-    expect(read).toHaveBeenCalledExactlyOnceWith(ctx, { cursor: null });
+    expect(read).toHaveBeenCalledExactlyOnceWith(ctx, {
+      cursor: null,
+      limit: 100,
+    });
     expect(state()).toBe("loaded");
     expect(document.body).toHaveTextContent(
-      "Skills are steering, and they are files. Oxagen does not run a skill: the harness does.",
+      "Review the skills sessions reported, preview approved descriptions, or propose the configuration in a pull request.",
     );
     const section = screen.getByRole("region", {
       name: "Skills sessions reported",
@@ -271,6 +287,12 @@ describe("Skills › loaded", () => {
         .getByRole("list", { name: "Harnesses" })
         .querySelectorAll("[data-harness]"),
     ).toHaveLength(2);
+    // One page holds the whole list: the pager stays for Rows, and both steps are off.
+    expect(
+      within(section).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("100");
+    expect(screen.getByRole("button", { name: "First page" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: "Next page" })).toBeNull();
   });
 
@@ -284,11 +306,66 @@ describe("Skills › loaded", () => {
   it("links the next page of the inventory by its cursor, and reads the page the URL names", async () => {
     read.mockResolvedValue(readOk(inventory({ nextCursor: "c2" })));
     await renderSkills("c1");
-    expect(read).toHaveBeenCalledWith(ctx, { cursor: "c1" });
+    expect(read).toHaveBeenCalledWith(ctx, { cursor: "c1", limit: 100 });
     expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
       "/acme/core-platform/steering/skills?cursor=c2",
     );
+    expect(screen.getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/steering/skills",
+    );
+  });
+
+  it("reads and links every page at the size the address names (#4693)", async () => {
+    read.mockResolvedValue(readOk(inventory({ nextCursor: "c2" })));
+    await renderSkills("c1", 25);
+    expect(read).toHaveBeenCalledWith(ctx, { cursor: "c1", limit: 25 });
+    expect(
+      screen.getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("25");
+    expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/steering/skills?rows=25&cursor=c2",
+    );
+    expect(screen.getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/steering/skills?rows=25",
+    );
+  });
+
+  it("opens the first page at the size picked from Rows", async () => {
+    read.mockResolvedValue(readOk(inventory({ nextCursor: "c2" })));
+    await renderSkills("c1", 25);
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Rows" }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: "50" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(
+        "/acme/core-platform/steering/skills?rows=50",
+      );
+    });
+    // The default size leaves the address bare.
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Rows" }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: "100" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenLastCalledWith(
+        "/acme/core-platform/steering/skills",
+      );
+    });
+  });
+
+  it("stays on the page when the size already showing is picked (negative)", async () => {
+    read.mockResolvedValue(readOk(inventory({ nextCursor: "c2" })));
+    await renderSkills("c1", 25);
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Rows" }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: "25" }));
+    expect(push).not.toHaveBeenCalled();
   });
 });
 
@@ -389,6 +466,15 @@ describe("Skills › refusals", () => {
       "/acme/core-platform/steering/skills?cursor=c1",
     );
   });
+
+  it("tries again at the page size it read", async () => {
+    read.mockResolvedValue(readError("session_store_unavailable", 503));
+    await renderSkills("c1", 10);
+    expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/steering/skills?rows=10&cursor=c1",
+    );
+  });
 });
 
 describe("Skills › loading", () => {
@@ -407,7 +493,9 @@ describe("Skills › loading", () => {
 it("reads configuration only on Search and Versions, with refusal in the selected view", async () => {
   config.mockResolvedValue(readError("config_unavailable", 503));
   read.mockClear();
-  withIntl(await Skills({ ctx, source, cursor: null, view: "search" }));
+  withIntl(
+    await Skills({ ctx, source, cursor: null, rows: 100, view: "search" }),
+  );
   expect(config).toHaveBeenCalledWith(ctx);
   expect(read).not.toHaveBeenCalled();
   expect(screen.getByRole("link", { name: "Preview search" })).toHaveAttribute(

@@ -90,10 +90,13 @@ export const agents: DataSource["agents"] = {
   async incidents(ctx, agent, q) {
     const read = await kernelRead(ctx, {
       contract: tachoIncidentList,
-      input:
-        q.cursor === null
-          ? { agentId: agent }
-          : { agentId: agent, cursor: q.cursor },
+      // The size goes only when the caller names one, so the contract's own
+      // default of 50 stands otherwise (#4693).
+      input: {
+        agentId: agent,
+        ...(q.cursor === null ? {} : { cursor: q.cursor }),
+        ...(q.limit === undefined ? {} : { limit: q.limit }),
+      },
       page: "agents",
     });
     if (!read.ok) return read;

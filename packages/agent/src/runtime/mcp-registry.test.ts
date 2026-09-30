@@ -122,6 +122,87 @@ describe("registry normalization", () => {
     });
   });
 
+  it("keeps no packages for an entry with only a remote", () => {
+    expect(toRegistryServer(ACME)?.packages).toEqual([]);
+  });
+
+  it("keeps the packages of an entry with no remote", () => {
+    const server = toRegistryServer({
+      server: {
+        name: "io.github.someone/files",
+        description: "Reads files",
+        version: "1.2.0",
+        packages: [
+          {
+            registryType: "npm",
+            identifier: "@someone/files-mcp",
+            version: "1.2.0",
+            runtimeHint: "npx",
+            transport: { type: "stdio" },
+            environmentVariables: [
+              { name: "FILES_ROOT", isRequired: true },
+              { name: "FILES_TOKEN", isSecret: true },
+              { description: "no name, so dropped" },
+            ],
+          },
+          { registryType: "pypi", transport: { type: "stdio" } },
+          { registryType: "oci", identifier: "x", transport: { type: "ws" } },
+          null,
+        ],
+      },
+    });
+    expect(server).toMatchObject({
+      endpointUrl: null,
+      connectable: false,
+      transports: ["stdio"],
+      auth: "none",
+    });
+    expect(server?.packages).toEqual([
+      {
+        registryType: "npm",
+        identifier: "@someone/files-mcp",
+        version: "1.2.0",
+        transport: "stdio",
+        runtimeHint: "npx",
+        environmentVariables: [
+          { name: "FILES_ROOT", isRequired: true, isSecret: false },
+          { name: "FILES_TOKEN", isRequired: false, isSecret: true },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps both the remote and the packages of an entry with both", () => {
+    const server = toRegistryServer({
+      server: {
+        ...ACME.server,
+        packages: [
+          {
+            registryType: "oci",
+            identifier: "ghcr.io/acme/tickets",
+            transport: { type: "stdio" },
+          },
+        ],
+      },
+    });
+    expect(server).toMatchObject({
+      endpointUrl: "https://mcp.acme.example/mcp",
+      connectable: true,
+      transports: ["streamable-http", "stdio"],
+      auth: "unknown",
+    });
+    expect(server?.packages).toEqual([
+      {
+        registryType: "oci",
+        identifier: "ghcr.io/acme/tickets",
+        version: null,
+        transport: "stdio",
+        runtimeHint: null,
+        environmentVariables: [],
+      },
+    ]);
+  });
+
   it("refuses a templated or private endpoint and a deleted entry", () => {
     const templated = toRegistryServer({
       server: {
@@ -160,6 +241,7 @@ describe("searchVerifiedServers", () => {
       auth: "oauth",
       oauthRegistration: "dynamic",
       publisherVerified: true,
+      packages: [],
     });
     const [slack] = searchVerifiedServers("slack");
     expect(slack).toMatchObject({

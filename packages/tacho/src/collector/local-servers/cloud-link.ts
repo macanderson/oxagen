@@ -35,7 +35,10 @@ export type CloudFetch = (
 ) => Promise<CloudResponse>;
 
 export interface CloudLinkOptions {
-  /** The cloud gateway's origin, such as https://api.oxagen.sh. */
+  /**
+   * The cloud gateway's origin: the MCP host, such as https://mcp.oxagen.sh.
+   * The API origin serves no local-server route.
+   */
   baseUrl: string;
   /** The machine's API key, from enrollment. */
   apiKey: string;

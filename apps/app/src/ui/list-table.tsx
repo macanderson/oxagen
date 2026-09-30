@@ -2,10 +2,13 @@
 // A list table with the controls every list in the design carries (the
 // mockup's `ltTable`, engine.js, and the `.lt`, `.lp` and `th.sortable` rules
 // in engine.css): a "Search this list" box and a filter per small enumeration
-// column ("All · Health") over the table, a header that sorts its column on a
+// column ("All (Health)") over the table, a header that sorts its column on a
 // click (ascending, descending, then the order the caller gave), and under the
 // table the shared pager (ui/pagination): a Rows select (5, 10, 25, 50, All)
 // and the range ("1–10 of 12") on the left, Previous and Next on the right.
+// A list that pages by address hands in its own pager instead (ui/link-pager,
+// #4693). The table then shows every row it was handed, and the range counts
+// the rows the search and the filters keep.
 //
 // A column earns a filter by the mockup's rule (`ltFacets`): at least four
 // rows, and two to eight distinct values of 28 characters or fewer that are
@@ -28,6 +31,7 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useId, useRef, useState } from "react";
+import { LinkPager, type LinkPagerProps } from "@/ui/link-pager";
 import { ListSelect } from "@/ui/list-select";
 import { RowsPager } from "@/ui/pagination";
 import { cell, headCell, numericCell } from "@/ui/table";
@@ -174,13 +178,14 @@ export function ListTable({
   rows,
   filters,
   empty,
+  pager,
 }: {
   /** The table's accessible name, already translated. */
   label: string;
   columns: readonly ListColumn[];
   rows: readonly ListRow[];
   /**
-   * The list's own select filters (the mockup's "All · Status"), drawn after
+   * The list's own select filters (the mockup's "All (Status)"), drawn after
    * the search box. The caller owns their state and hands in only the
    * rows they keep, and they replace the filters the design's rule would
    * offer, so a list never shows two filters over one column.
@@ -188,6 +193,13 @@ export function ListTable({
   filters?: ReactNode;
   /** What the table says when no row shows; "No rows match" by default. */
   empty?: string;
+  /**
+   * The pager of a list that pages by address (#4693), drawn in place of the
+   * table's own. The caller read one page at the size Rows names, so the
+   * table shows every row it was handed. The range is the table's, so it
+   * still counts what the search and the filters keep.
+   */
+  pager?: Omit<LinkPagerProps, "range" | "className">;
 }) {
   const t = useTranslations("ui.listTable");
   const [query, setQuery] = useState("");
@@ -253,7 +265,7 @@ export function ListTable({
     );
   }
   const total = order.length;
-  const size = per === 0 ? Math.max(total, 1) : per;
+  const size = pager !== undefined || per === 0 ? Math.max(total, 1) : per;
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(page, pages);
   const from = total === 0 ? 0 : (current - 1) * size + 1;
@@ -262,6 +274,14 @@ export function ListTable({
     order.slice(from - 1, to).map((row, i) => [row.key, i] as const),
   );
   const hiddenRows = rows.filter((row) => !order.includes(row));
+  const range =
+    total === 0
+      ? t("rangeNone")
+      : t("range", {
+          from: String(from),
+          to: String(to),
+          total: String(total),
+        });
 
   const toggle = (column: number) => {
     setTexts(measure());
@@ -408,43 +428,43 @@ export function ListTable({
           </tbody>
         </table>
       </div>
-      <RowsPager
-        label={t("pages", { label })}
-        rowsLabel={t("rows")}
-        perPage={per}
-        sizes={LIST_PAGE_SIZES}
-        onPerPage={(n) => {
-          setPer(n);
-          setPage(1);
-        }}
-        sizeLabel={(n) => (n === 0 ? t("all") : String(n))}
-        range={
-          total === 0
-            ? t("rangeNone")
-            : t("range", {
-                from: String(from),
-                to: String(to),
-                total: String(total),
-              })
-        }
-        previousLabel={t("previous")}
-        nextLabel={t("next")}
-        previous={
-          current <= 1
-            ? null
-            : () => {
-                setPage(current - 1);
-              }
-        }
-        next={
-          current >= pages
-            ? null
-            : () => {
-                setPage(current + 1);
-              }
-        }
-        className="border-t border-border bg-card"
-      />
+      {pager === undefined ? (
+        <RowsPager
+          label={t("pages", { label })}
+          rowsLabel={t("rows")}
+          perPage={per}
+          sizes={LIST_PAGE_SIZES}
+          onPerPage={(n) => {
+            setPer(n);
+            setPage(1);
+          }}
+          sizeLabel={(n) => (n === 0 ? t("all") : String(n))}
+          range={range}
+          previousLabel={t("previous")}
+          nextLabel={t("next")}
+          previous={
+            current <= 1
+              ? null
+              : () => {
+                  setPage(current - 1);
+                }
+          }
+          next={
+            current >= pages
+              ? null
+              : () => {
+                  setPage(current + 1);
+                }
+          }
+          className="border-t border-border bg-card"
+        />
+      ) : (
+        <LinkPager
+          {...pager}
+          range={range}
+          className="border-t border-border bg-card"
+        />
+      )}
     </div>
   );
 }

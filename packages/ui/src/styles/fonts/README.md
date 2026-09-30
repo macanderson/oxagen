@@ -5,13 +5,18 @@ sets type in three faces, each with one job:
 
 | Face | Token | Sets |
 |---|---|---|
-| Space Grotesk | `--ox-font-display` | The wordmarks, and h1 to h3 |
-| Geist | `--ox-font` | h4 to h6, body text, labels, buttons, tables, navigation |
+| Space Grotesk | `--ox-font-display` | The Oxagen and stella wordmarks, and line 1 of the oxagen.sh hero |
+| Geist | `--ox-font` | Every heading, body text, labels, buttons, tables, navigation |
 | Monaspace Neon | `--ox-font-mono` | Code, terminal output, logs, digests, paths, and ids |
 
 Both wordmarks are Space Grotesk's own outlines at weight 600. Nothing in the
 marks is drawn, so the wordmark has to render in Space Grotesk or it stops
 matching the logo.
+
+Space Grotesk sets nothing else (ADR-226, amendment of 2026-09-29). The kit's
+`house-tailwind.css` still maps h1 to h3 to it, so `../globals.css` sets
+`--font-display` to Geist after the kit's import, and exposes Space Grotesk to
+the marks as `--font-wordmark`.
 
 ## Stylesheets
 

@@ -83,7 +83,7 @@ describe("Set a budget", () => {
   it("refuses a limit that is not an amount above zero before calling the action (negative)", async () => {
     await openDialog();
     await userEvent.type(screen.getByLabelText("Limit (USD)"), "-5");
-    await userEvent.click(screen.getByRole("button", { name: "Set it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set the budget" }));
     expect(
       screen.getByText(
         "Enter an amount above zero, with at most six decimal places.",
@@ -99,7 +99,7 @@ describe("Set a budget", () => {
       "Rolling window",
     );
     await userEvent.type(screen.getByLabelText("Limit (USD)"), "50");
-    await userEvent.click(screen.getByRole("button", { name: "Set it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set the budget" }));
     expect(
       screen.getByText("Enter a whole number of days above zero."),
     ).toBeInTheDocument();
@@ -114,7 +114,7 @@ describe("Set a budget", () => {
       "Organization",
     );
     await userEvent.type(screen.getByLabelText("Limit (USD)"), "500.25");
-    await userEvent.click(screen.getByRole("button", { name: "Set it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set the budget" }));
 
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
@@ -139,7 +139,7 @@ describe("Set a budget", () => {
     });
     await openDialog();
     await userEvent.type(screen.getByLabelText("Limit (USD)"), "10");
-    await userEvent.click(screen.getByRole("button", { name: "Set it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set the budget" }));
     expect(
       await screen.findByText(/Your role cannot set this ceiling/),
     ).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("Set a budget", () => {
       code: "invalid_input",
       field: "limit.micros",
     });
-    await userEvent.click(screen.getByRole("button", { name: "Set it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Set the budget" }));
     expect(
       await screen.findByText(
         "Enter an amount above zero, with at most six decimal places.",

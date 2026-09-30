@@ -198,7 +198,7 @@ describe("the notifications dialog", () => {
       "2026-09-23T09:14:00Z",
     );
     expect(dialog).toHaveTextContent(
-      "list_notifications · 1 unread · every kind here maps to a frame kind or an audit event, never to something invented for a bell.",
+      "1 unread from list_notifications",
     );
   });
 
@@ -254,7 +254,7 @@ describe("the notifications dialog", () => {
     );
     await user.click(bell());
     const dialog = await screen.findByRole("dialog", { name: "Notifications" });
-    expect(dialog).toHaveTextContent("unread count not recorded");
+    expect(dialog).toHaveTextContent("Unread count from list_notifications not recorded");
     expect(dialog).not.toHaveTextContent("0 unread");
   });
 

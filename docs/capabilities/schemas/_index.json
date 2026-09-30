@@ -863,6 +863,17 @@
       "consumes": []
     },
     {
+      "name": "draft_studio_description",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "enroll_host",
       "domain": "tacho",
       "surfaces": [
@@ -2908,6 +2919,17 @@
       "consumes": []
     },
     {
+      "name": "list_studio_findings",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_studio_tools",
       "domain": "tool",
       "surfaces": [
@@ -4084,6 +4106,17 @@
       "consumes": []
     },
     {
+      "name": "set_mcp_credential",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_mcp_enabled",
       "domain": "agent",
       "surfaces": [
@@ -4475,6 +4508,17 @@
         "api",
         "mcp",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "try_studio_tool",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

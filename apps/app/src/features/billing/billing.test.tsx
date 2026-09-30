@@ -2,7 +2,8 @@
 // The Billing page (oxagen-roadmap mockups/pages/billing.md) over a fake
 // DataSource: the six reads it makes, the header and its one gold action, the
 // four tiles and how they reconcile with This period, the five meters,
-// Invoices, the list controls on those three tables, the price list, Billable
+// Invoices and the pager under them that pages by address with Rows per
+// page (#4693), the list controls on those three tables, the price list, Billable
 // units, the three panels that buy through Stripe (Auto top-up, Buy governed
 // actions and Token balance, kept by macanderson/oxagen-roadmap#67), the
 // checkout banner,
@@ -11,10 +12,16 @@
 // controls' own interactions have their own test files (auto-topup,
 // purchase-form, usage-credits, change-plan); this file covers the page-level
 // derivations that feed them.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/data/contracts/common";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -33,6 +40,8 @@ import {
   SUBSCRIPTION,
 } from "./billing.builders";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
@@ -48,6 +57,11 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// A new size under Invoices visits its newest page through the router (#4693).
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
+}));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -113,6 +127,7 @@ async function renderBilling(
     viewerName?: string | null;
     checkout?: string | null;
     cursor?: string | null;
+    rows?: string | null;
   } = {},
 ) {
   const ctx = viewer(options.role ?? "owner");
@@ -125,6 +140,7 @@ async function renderBilling(
       options.viewerName === undefined ? "Marcus Bell" : options.viewerName,
     checkout: options.checkout ?? null,
     cursor: options.cursor ?? null,
+    rows: options.rows ?? null,
   });
   render(<IntlProvider>{body}</IntlProvider>);
   return { ctx, calls };
@@ -159,6 +175,10 @@ const gold = () =>
     el.className.includes("bg-button-primary-bg"),
   );
 
+beforeEach(() => {
+  push.mockReset();
+});
+
 afterEach(async () => {
   // INV-26: every test ends in a state of the page; axe checks it.
   try {
@@ -176,13 +196,33 @@ describe("reads", () => {
     expect(calls.rate).toEqual([[ctx]]);
     expect(calls.retention).toEqual([[ctx]]);
     expect(calls.usageCredits).toEqual([[ctx]]);
-    expect(calls.invoices).toEqual([[ctx, { cursor: null }]]);
+    expect(calls.invoices).toEqual([[ctx, { cursor: null, limit: 50 }]]);
   });
 
   it("reads only the invoices page the URL asks for", async () => {
     const { ctx, calls } = await renderBilling(LOADED, { cursor: "c2" });
-    expect(calls.invoices).toEqual([[ctx, { cursor: "c2" }]]);
+    expect(calls.invoices).toEqual([[ctx, { cursor: "c2", limit: 50 }]]);
   });
+
+  it("reads as many invoices as the URL's size asks for", async () => {
+    const { ctx, calls } = await renderBilling(LOADED, {
+      cursor: "c2",
+      rows: "25",
+    });
+    expect(calls.invoices).toEqual([[ctx, { cursor: "c2", limit: 25 }]]);
+  });
+
+  it.each([
+    ["a size Rows does not offer", "7"],
+    ["a size past the contract's 100", "500"],
+    ["no number at all", "all"],
+  ])(
+    "reads 50 invoices for %s (negative)",
+    async (_what, rows) => {
+      const { ctx, calls } = await renderBilling(LOADED, { rows });
+      expect(calls.invoices).toEqual([[ctx, { cursor: null, limit: 50 }]]);
+    },
+  );
 });
 
 describe("header", () => {
@@ -256,7 +296,7 @@ describe("section order", () => {
 describe("summary tiles", () => {
   it("prints the plan and its basis", async () => {
     await renderBilling();
-    expect(tile("plan")).toHaveTextContent("PlanBuildmonthly, cancel any time");
+    expect(tile("plan")).toHaveTextContent("PlanBuildmonthly and cancellable at any time");
   });
 
   it("says yearly for a subscription billed annually", async () => {
@@ -266,7 +306,7 @@ describe("summary tiles", () => {
         subscription: { ...SUBSCRIPTION, billingInterval: "year" },
       }),
     });
-    expect(tile("plan")).toHaveTextContent("yearly, cancel any time");
+    expect(tile("plan")).toHaveTextContent("yearly and cancellable at any time");
   });
 
   it("names the tier the contracted rate resolves to when there is no subscription", async () => {
@@ -281,7 +321,7 @@ describe("summary tiles", () => {
   it("prints the governed actions the first line priced, with the blocks and the allowance as its basis", async () => {
     await renderBilling();
     expect(tile("governed")).toHaveTextContent(
-      "Governed actions this period1,587,838above the included allowance · 159 blocks × $32.10 · 250,000 included",
+      "Governed actions this period1,587,838above the included allowance (159 blocks × $32.10 · 250,000 included)",
     );
   });
 
@@ -299,7 +339,7 @@ describe("summary tiles", () => {
     await renderBilling();
     expect(tile("due").querySelector("[data-recorded=false]")).not.toBeNull();
     expect(tile("due")).toHaveTextContent(
-      "Due 2026-10-01not recordedUSD · after the onboarding discount",
+      "Due 2026-10-01not recordedUSD after the onboarding discount",
     );
   });
 });
@@ -358,7 +398,7 @@ describe("This period", () => {
   it("carries the badge and the columns Line, Basis and Amount", async () => {
     await renderBilling();
     const panel = section("This period");
-    expect(panel).toHaveTextContent("Stripe invoices, Oxagen meter");
+    expect(panel).toHaveTextContent("Metered by Oxagen and invoiced by Stripe");
     expect(headers(within(panel).getByRole("table"))).toEqual([
       "Line",
       "Basis",
@@ -379,14 +419,14 @@ describe("This period", () => {
       "total",
     ]);
     expect(row("data-line", "tokens")).toHaveTextContent(
-      "Tokensreported at zero · the customer’s own model spend is on Spend$0.00",
+      "Tokensreported at zero (your model spend is on Spend)$0.00",
     );
     expect(row("data-line", "retention")).toHaveTextContent("$0.00");
     expect(row("data-line", "discount")).toHaveTextContent(
       "Onboarding discountthe onboarding offer is not recorded yet (spec §20, deferred)not recorded",
     );
     expect(row("data-line", "total")).toHaveTextContent(
-      "Totalrounded to cents once, half-evennot recorded",
+      "Totalrounded once to cents (half-even)not recorded",
     );
   });
 
@@ -436,14 +476,14 @@ describe("Meters", () => {
     expect(
       [...meters.querySelectorAll("tbody tr")].map((tr) => tr.textContent),
     ).toEqual([
-      "Governed actions1,837,838the billable unit · 250,000 included this month",
-      "Sealed runs with at least one model callnot recordedreported, not priced",
+      "Governed actions1,837,838the billable unit (250,000 included this month)",
+      "Sealed runs with at least one model callnot recordedreported without a price",
       "Retained evidencenot recorded12 months included",
       "Runs Oxagen halted before any model callnot recordedfree",
       "Runs of the in-app agentnot recordedfree",
     ]);
     expect(meters).toHaveTextContent(
-      "One priced meter: the governed action, a call Oxagen decided, delivered and recorded. Runs, tokens and retained evidence are reported so the price can move later without rewriting the meter.",
+      "The governed action is the one priced meter: a call Oxagen decided, delivered, and recorded. Oxagen reports the other meters without a price.",
     );
   });
 
@@ -533,7 +573,13 @@ describe("Invoices", () => {
 
   it("carries the design's list controls on This period, Meters and Invoices", async () => {
     await renderBilling();
-    for (const name of ["This period", "Meters", "Invoices"]) {
+    // Invoices pages by address, so its pager has its own name and reads the
+    // 50 invoices a page holds by default (#4693).
+    for (const [name, size, pages] of [
+      ["This period", "10", "This period pages"],
+      ["Meters", "10", "Meters pages"],
+      ["Invoices", "50", "Invoice pages"],
+    ] as const) {
       const panel = section(name);
       expect(
         within(panel).getByRole("searchbox", { name: "Search this list" }),
@@ -542,13 +588,13 @@ describe("Invoices", () => {
         name: "Search this list",
       });
       const rows = within(panel).getByRole("combobox", { name: "Rows" });
-      expect(rows).toHaveTextContent("10");
+      expect(rows).toHaveTextContent(size);
       // Both are 44px tap targets on a phone: the search through ui/phone.css,
       // and Rows, in the pager under the table, through its own min height.
       expect(search).toHaveAttribute("data-touch-target");
       expect(rows).toHaveClass("max-md:min-h-11");
       expect(
-        within(panel).getByRole("navigation", { name: `${name} pages` }),
+        within(panel).getByRole("navigation", { name: pages }),
       ).toBeInTheDocument();
     }
     const pager = section("Invoices").querySelector("[data-rows-pager]");
@@ -585,6 +631,10 @@ describe("Invoices", () => {
     expect(
       screen.getByRole("link", { name: "Older invoices" }),
     ).toHaveAttribute("href", "/acme/billing?cursor=c2");
+    // The newest page has no page before it.
+    expect(
+      screen.getByRole("button", { name: "Newest invoices" }),
+    ).toBeDisabled();
     cleanup();
     await renderBilling(
       { ...LOADED, invoices: invoicePage([invoiceRow()]) },
@@ -593,6 +643,96 @@ describe("Invoices", () => {
     expect(
       screen.getByRole("link", { name: "Newest invoices" }),
     ).toHaveAttribute("href", "/acme/billing");
+    // The last page knows no older one.
+    expect(
+      screen.getByRole("button", { name: "Older invoices" }),
+    ).toBeDisabled();
+  });
+
+  it("draws Rows per page at the foot of Invoices, after the table, with the four sizes", async () => {
+    await renderBilling({
+      ...LOADED,
+      invoices: invoicePage([invoiceRow()], "c2"),
+    });
+    const invoices = section("Invoices");
+    const size = within(invoices).getByRole("combobox", { name: "Rows" });
+    const pager = size.closest("[data-rows-pager]");
+    if (!(pager instanceof HTMLElement)) throw new Error("Rows has no pager");
+    expect(
+      within(invoices)
+        .getByRole("table")
+        .compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The pager holds the range, and Newest and Older beside it.
+    expect(pager.querySelector("[data-range]")?.textContent).toBe("1–1 of 1");
+    expect(
+      within(pager).getByRole("link", { name: "Older invoices" }),
+    ).toBeInTheDocument();
+    await userEvent.click(size);
+    await screen.findByRole("option", { name: "25" });
+    // The page's native selects carry options too; these are the pager's.
+    expect(
+      screen
+        .getAllByRole("option")
+        .filter((option) => option.closest("select") === null)
+        .map((option) => option.textContent),
+    ).toEqual(["10", "25", "50", "100"]);
+  });
+
+  it("leaves the default size off every link, and keeps a picked size on both steps", async () => {
+    await renderBilling({
+      ...LOADED,
+      invoices: invoicePage([invoiceRow()], "c3"),
+    });
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?cursor=c3");
+    cleanup();
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { cursor: "c2", rows: "25" },
+    );
+    expect(
+      within(section("Invoices")).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("25");
+    expect(
+      screen.getByRole("link", { name: "Newest invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25");
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25&cursor=c3");
+  });
+
+  it("reads a size Rows does not offer as the default 50 (negative)", async () => {
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { rows: "7" },
+    );
+    expect(
+      within(section("Invoices")).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("50");
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?cursor=c3");
+  });
+
+  it("visits the newest page at a new size, and stays put on the size showing", async () => {
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { cursor: "c2" },
+    );
+    const size = within(section("Invoices")).getByRole("combobox", {
+      name: "Rows",
+    });
+    await userEvent.click(size);
+    await userEvent.click(await screen.findByRole("option", { name: "50" }));
+    expect(push).not.toHaveBeenCalled();
+    await userEvent.click(size);
+    await userEvent.click(await screen.findByRole("option", { name: "100" }));
+    // A new size drops the cursor: the reader starts over at the newest page.
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/billing?rows=100");
+    });
   });
 });
 
@@ -604,15 +744,15 @@ describe("Price list", () => {
       [...list.querySelectorAll("tr")].map((tr) => tr.textContent),
     ).toEqual([
       "Freeevery governance feature, an included monthly allowance, days of evidence not recorded, seats not recorded",
-      "Governed actions, blocks of 5,000$25.00 per block at the published rate",
-      "Negotiated agreementthe same four figures, per organization",
-      "Invoice billingnever capped · overage invoiced at the contracted rate at period end",
-      "Evidence retention12 months included on paid plans, then $0.08 per GB-month",
-      "Tokens Oxagen buys for youat cost, no markup, capped",
-      "Enterprise, annualfrom not recorded per year",
+      "Governed actions in blocks of 5,000$25.00 per block at the published rate",
+      "Negotiated agreementthe same four figures negotiated per organization",
+      "Invoice billinguncapped with overage invoiced at the contracted rate at period end",
+      "Evidence retention12 months included on paid plans and $0.08 per GB-month after that",
+      "Tokens Oxagen buys for youat cost and capped",
+      "Enterprise (annual)from not recorded per year",
     ]);
     expect(list).toHaveTextContent(
-      "No credits, no resellers, and no revenue dashboard. The free tier is the whole product, limited by retention and seats, never by features or volume. Upgrading is a governance decision, not a volume accident.",
+      "The free tier includes every feature at any volume. Its limits are evidence retention and seats.",
     );
   });
 });
@@ -626,8 +766,8 @@ describe("Billable units", () => {
       ),
     ).toEqual([
       "PricedA governed action: a call Oxagen decided, delivered and recorded, with its receipt in the chain.",
-      "ReportedSealed runs, tokens by class, retained evidence: secondary meters, never priced.",
-      "FreeDenials, runs Oxagen halted before a model call, runs of the in-app agent. You never pay for Oxagen saying no.",
+      "ReportedOxagen reports sealed runs, tokens by class, and retained evidence as secondary meters without a price.",
+      "FreeDenials, runs Oxagen halted before a model call, and runs of the in-app agent cost nothing.",
     ]);
   });
 });
@@ -965,7 +1105,7 @@ describe("access denied", () => {
       within(state).getByRole("heading", { name: "You cannot see billing" }),
     ).toBeInTheDocument();
     expect(state).toHaveTextContent(
-      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include org.billing (plan and invoices are readable only by a finance role). An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(state).toHaveTextContent("Signed in asMarcus Bell · member");
     expect(state.querySelector("[data-fact=needed]")).toHaveTextContent(
@@ -973,7 +1113,7 @@ describe("access denied", () => {
     );
     // A refusal carries no policy version yet (#3846).
     expect(state).toHaveTextContent(
-      "Decided bypolicy version not recorded · deny wins over every allow",
+      "Decided bypolicy version not recorded",
     );
     expect(
       state.querySelector("[data-fact=decided-by] [data-recorded=false]"),

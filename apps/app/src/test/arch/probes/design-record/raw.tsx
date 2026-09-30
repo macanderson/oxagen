@@ -1,4 +1,4 @@
-// Probe for design-record.test.ts: a component that invents a colour and a font.
+// Probe for design-record.test.ts: a component that invents a colour and a font, and sets text in the wordmark face.
 export function Raw() {
   return (
     <div className="bg-[#123abc]">
@@ -13,6 +13,9 @@ export function Raw() {
       <p style={{ font: "15px Arial" }}>arial</p>
       <p style={{ font: '15px "Comic Sans MS"' }}>quoted</p>
       <p style={{ font: "var(--size) Arial" }}>sized</p>
+      <p style={{ fontFamily: "var(--font-wordmark)" }}>wordmark</p>
+      <p className="font-[family-name:var(--ox-font-display)]">display</p>
+      <p title="Space Grotesk">named</p>
     </div>
   );
 }

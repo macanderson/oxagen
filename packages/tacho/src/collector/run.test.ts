@@ -201,7 +201,7 @@ describe("startAgents", () => {
       return fakeHandle();
     });
     expect(started).toHaveLength(1);
-    expect(options).toEqual([{ paths: codex }]);
+    expect(options).toEqual([{ paths: codex, localServers: true }]);
   });
 
   it("starts a collector per agent, and only the watcher tails transcripts", async () => {
@@ -217,6 +217,8 @@ describe("startAgents", () => {
     expect(options[0]).toMatchObject({ paths: claude });
     expect(options[0]).not.toHaveProperty("transcriptRoots");
     expect(options[1]).toMatchObject({ paths: codex, transcriptRoots: [] });
+    // Each enrollment pulls its own local-server calls.
+    expect(options.map((o) => o.localServers)).toEqual([true, true]);
     // Each collector's lines name its agent in the shared log.
     expect(options[0]?.log).toBeTypeOf("function");
     expect(options[1]?.log).toBeTypeOf("function");

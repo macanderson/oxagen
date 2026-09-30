@@ -283,13 +283,13 @@ describe("CostTab", () => {
     ]);
     const output = sum(["output", "reasoning"]);
     expect(input + output).toBe(total);
-    // "N in, N out" on the stat row and the instrument is those two sums.
+    // "N in and N out" on the stat row and the instrument is those two sums.
     const inOut = screen.getByTestId("inst-tokens").textContent;
-    expect(inOut).toContain("732,270 in · 36,711 out");
+    expect(inOut).toContain("732,270 in and 36,711 out");
     expect(input).toBe(732_270);
     expect(output).toBe(36_711);
     expect(screen.getByTestId("run-stat-tokens")).toHaveTextContent(
-      "732,270 in, 36,711 out",
+      "732,270 in and 36,711 out",
     );
   });
 
@@ -319,7 +319,7 @@ describe("CostTab", () => {
     expect(rows[6]).toHaveTextContent("$3.58 → $4.13");
     // Turn 5 is the dearest, on the chart and on the Cost so far instrument.
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
-      "turn 5 was the dearest",
+      "turn 5 cost the most",
     );
     expect(screen.getByTestId("inst-cost")).toHaveTextContent("$0.59 per turn");
   });
@@ -327,7 +327,7 @@ describe("CostTab", () => {
   it("counts the tool calls by family and by batch from the transcript", async () => {
     await renderTab(props());
     const panel = screen.getByTestId("tool-calls");
-    expect(panel).toHaveTextContent("14 calls · 9 batches · 5 families");
+    expect(panel).toHaveTextContent("14 calls in 9 batches across 5 families");
     const families = screen.getAllByTestId("family-row");
     expect(families.map((row) => row.children[1]?.textContent)).toEqual([
       "5",
@@ -339,7 +339,7 @@ describe("CostTab", () => {
     expect(families[0]).toHaveTextContent("File read");
     const shell = families.find((row) => row.textContent.includes("Shell"));
     expect(shell?.children[5]).toHaveTextContent("1");
-    expect(panel).toHaveTextContent("9 · 4 ran more than one tool");
+    expect(panel).toHaveTextContent("9 (4 ran more than one tool)");
     expect(panel).toHaveTextContent("3 tools at once");
     expect(panel).toHaveTextContent("14 calls over 9 batches");
     expect(screen.getByTestId("inst-calls")).toHaveTextContent("1 failed");
@@ -373,7 +373,7 @@ describe("CostTab", () => {
     });
     await renderTab(props({ run, agentRead: agent() }));
     expect(screen.getByTestId("model-fit")).toHaveTextContent(
-      "generated · not the record",
+      "generated from the record",
     );
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "The opus class matches this shape of work.",
@@ -384,7 +384,7 @@ describe("CostTab", () => {
     expect(screen.queryByTestId("fit-move-model")).toBeNull();
     const read = screen.getByTestId("fit-read");
     expect(read).toHaveTextContent(
-      "2 prompts · 7 turns · 24 steps · 1 tool call failed",
+      "2 prompts, 7 turns, 24 steps, and 1 failed tool call",
     );
     // An agent carries no definition file (ADR-198), so the reading names none.
     expect(read).not.toHaveTextContent(".oxagen/agents/");
@@ -455,7 +455,7 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-tokens")).toHaveTextContent(
       "effective input price $2.53 per million",
     );
-    expect(composition).toHaveTextContent("0% · nothing written this run");
+    expect(composition).toHaveTextContent("0% (nothing written this run)");
     expect(composition).toHaveTextContent(
       "gateway_observed · counted by the proxy from the bytes that passed through it",
     );
@@ -530,7 +530,7 @@ describe("CostTab", () => {
       { withStats: true },
     );
     const tile = screen.getByTestId("inst-cost");
-    expect(tile).toHaveTextContent("cache hit 83% · saving not recorded");
+    expect(tile).toHaveTextContent("cache hit 83% (saving not recorded)");
     expect(tile).not.toHaveTextContent("saved about");
     const stat = screen.getByTestId("run-stat-cache");
     expect(stat).toHaveTextContent("saving not recorded");
@@ -579,7 +579,7 @@ describe("CostTab", () => {
     await renderTab(props(), { withStats: true });
     // 607,784 cache reads, recorded as saving $5.470056.
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
-      "cache hit 83% · saved about $5.47 against an uncached prompt",
+      "cache hit 83% (saved about $5.47 against an uncached prompt)",
     );
     expect(screen.getByTestId("run-stat-cache")).toHaveTextContent(
       "saved about $5.47",
@@ -756,7 +756,7 @@ describe("CostTab", () => {
     const tile = screen.getByTestId("inst-cost");
     expect(tile).toHaveTextContent("not recorded");
     expect(tile).not.toHaveTextContent("per turn");
-    expect(tile).not.toHaveTextContent("was the dearest");
+    expect(tile).not.toHaveTextContent("cost the most");
     expect(tile.textContent).not.toMatch(/\$/);
     const columns = screen.getAllByTestId("inst-cost-col");
     expect(columns).toHaveLength(7);
@@ -997,7 +997,7 @@ describe("CostTab", () => {
     );
     const tile = screen.getByTestId("inst-cost");
     expect(tile).not.toHaveTextContent("per turn");
-    expect(tile).not.toHaveTextContent("was the dearest");
+    expect(tile).not.toHaveTextContent("cost the most");
     expect(screen.queryAllByTestId("inst-cost-col")).toHaveLength(0);
     // The run's cost is the rollup's, which the failed read does not touch.
     expect(tile).toHaveTextContent("$4.13");
@@ -1330,7 +1330,7 @@ describe("CostTab's standing context (#4537)", () => {
     expect(context).toHaveTextContent("$0.03");
     expect(context).toHaveTextContent("10,000 tok · estimate");
     expect(context?.querySelector("[title]")?.getAttribute("title")).toBe(
-      "Re-sent on every call after the first: 10,000 tokens of steering, an estimate inside the run's cost",
+      "Estimate of context re-sent on every call after the first: 10,000 tokens of steering",
     );
     expect(screen.getByTestId("area-note")).toHaveTextContent(
       "Every call after the first re-sent the run's standing context: 40,000 tokens of tool definitions and 10,000 tokens of steering.",

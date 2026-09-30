@@ -1,7 +1,7 @@
 // The images the build generates: a post's banner and thumbnail, and the
 // Open Graph card for every page. Each is a pure function of its inputs,
 // built from art.mjs (the field, the halo, the panel and the seven drawings) and
-// text.mjs (Space Grotesk as outlines), and rendered by raster.mjs. Every
+// text.mjs (Geist as outlines), and rendered by raster.mjs. Every
 // image is on ink: the site is ink, and an ink image reads on any ground.
 
 import { readFileSync } from "node:fs";

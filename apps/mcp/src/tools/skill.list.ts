@@ -12,6 +12,9 @@ export const schema = {
   cursor: skillList.input.shape.cursor.describe(
     "The nextCursor of the previous page",
   ),
+  limit: skillList.input.shape.limit.describe(
+    "Skill names on this page, 1 to 100; default 100",
+  ),
 };
 
 export const metadata: ToolMetadata = {
