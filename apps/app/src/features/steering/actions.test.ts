@@ -121,6 +121,7 @@ describe("mergeContextPr", () => {
     invoke.mockResolvedValue({
       proposalId: ID,
       status: "merged",
+      kind: "rule",
       record: {
         id: "ctr_7k2m9q4x",
         lineageId: "ctx.release.no-reread-changelog",
@@ -167,6 +168,7 @@ describe("mergePrWithoutReview", () => {
     invoke.mockResolvedValue({
       proposalId: ID,
       status: "merged",
+      kind: "rule",
       record: {
         id: "ctr_7k2m9q4x",
         lineageId: "ctx.release.no-reread-changelog",
