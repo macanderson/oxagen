@@ -302,6 +302,7 @@ const GOVERNANCE = {
   effectiveMode: "solo" as const,
   fullName: "acme/research",
   productionBranch: "main",
+  path: ".oxagen/rules/governance.toml",
   commitSha: "c0ffee1",
   pullRequest: null,
   overrodeReview: true,

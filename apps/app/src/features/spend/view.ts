@@ -13,9 +13,9 @@ import { isFindingId } from "./forms";
  * Month first, the v3 design's landing tab (ADR-226), then the earlier
  * design's tabs that Month does not replace, Findings to Budgets. Month groups
  * by operator, agent, and model, so those three tabs and Coaching are gone
- * (#2962). A drill still opens for one operator, agent, or tool: the operator
- * ranking on Findings links an operator's, By tool a tool's, and an agent's
- * opens from a saved link. The three after
+ * (#2962). A drill still opens for one operator, agent, or tool: a Month row
+ * grouped by agent or operator links its drill, as does the operator ranking
+ * on Findings, and By tool links a tool's. The three after
  * Budgets are this build's own and are not in either design: By task and By
  * cost center (ADR-142), and Pricing, the book every figure above was priced
  * against with the models it cannot price, which is why some of those figures

@@ -1,0 +1,66 @@
+{
+  "name": "draft_studio_description",
+  "domain": "tool",
+  "description": "Draft a description for one tool in a Studio server folder with the in-app agent. Returns a suggestion of at most 1,024 characters and writes nothing. Bills as in-app agent spend.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "tool": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "required": [
+      "server",
+      "tool"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "tool": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      }
+    },
+    "required": [
+      "server",
+      "tool",
+      "description"
+    ],
+    "additionalProperties": false
+  }
+}
