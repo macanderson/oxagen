@@ -4075,6 +4075,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "try_studio_tool",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "unbind_agent_environment",
       "reads": [],

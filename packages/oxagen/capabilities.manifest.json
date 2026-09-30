@@ -7105,6 +7105,23 @@
       }
     },
     {
+      "name": "try_studio_tool",
+      "file": "tool.studio.try.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "list_tool_versions",
       "file": "tool.version.list.ts",
       "domain": "tool",
