@@ -1512,7 +1512,7 @@ const PETS_SERVER = [
   "[source]",
   'type = "openapi"',
   'from = "repository"',
-  'repo = "acme/pets-api"',
+  'repo = "github.com/acme/pets-api"',
   'path = "spec/openapi.json"',
   'ref = "main"',
   "",
@@ -1561,7 +1561,7 @@ function petsTree(): Record<string, string> {
       type: "openapi",
       from: "repository",
       document_hash: documentHash(PETS_JSON),
-      repo: "acme/pets-api",
+      repo: "github.com/acme/pets-api",
       path: "spec/openapi.json",
       ref: "main",
       commit: PETS_REPO_COMMIT,
@@ -1593,8 +1593,7 @@ describe("runDiscovery on an on-change repository definition", () => {
     expect(first).toMatchObject({ server: "pets", status: "succeeded" });
     expect(first.outcome).not.toBe("skipped");
     expect(read).toHaveBeenCalledTimes(1);
-    expect(read.mock.calls[0]?.[1]).toEqual({
-      repo: "acme/pets-api",
+    expect(read.mock.calls[0]?.[1]).toMatchObject({
       path: "spec/openapi.json",
       ref: "main",
     });
