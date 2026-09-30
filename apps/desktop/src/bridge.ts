@@ -57,7 +57,11 @@ export interface HostView {
   revoked_at: string | null;
   bundle_fetched_at: string;
   device_key_fingerprint: string;
-  bundle: { version: number; mode: "observe" | "enforce"; expires_at: string };
+  /**
+   * `mode` is unchecked: `read_host` forwards `bundle.mode` from host.json as
+   * it finds it, `null` when absent. `policyText` checks it by name (#4570).
+   */
+  bundle: { version: number; mode: unknown; expires_at: string };
 }
 
 /**

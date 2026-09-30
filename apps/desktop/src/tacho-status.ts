@@ -132,7 +132,7 @@ function presence(value: unknown): TachoHookPresence | undefined {
  * A connected app's MCP-config presence. Validated like `presence()` rather
  * than cast: `present` is what decides whether the panel calls the row
  * degraded, and `otherServerNames` is the disclosure of what Oxagen does not
- * see in that app — neither may come from an unchecked shape.
+ * see in that app. Neither may come from an unchecked shape.
  */
 function mcpPresence(value: unknown): TachoMcpPresence | undefined {
   if (!isRecord(value) || typeof value["present"] !== "boolean")
@@ -223,7 +223,7 @@ function modelCredentials(value: unknown): TachoModelCredential[] | undefined {
 /**
  * The status document, or `null` when stdout is not one: empty (the sidecar
  * failed to start), not JSON (a stray warning), or JSON of another shape.
- * Nothing the CLI prints before or after the document is tolerated — the
+ * Nothing the CLI prints before or after the document is tolerated. The
  * `--json` mode writes the document alone, and a partial read must not be
  * mistaken for "not enrolled".
  */
@@ -316,20 +316,63 @@ export function gatewayText(
 }
 
 /**
- * The Policy line of the This machine panel: the host's policy mode. It is a
- * separate fact from the tier on the Gateway line (ADR-095). The mode governs
- * the bundle's permission rules (`evaluatePreToolUse` in
- * packages/tacho/src/host/bundle.ts). In `observe`, a matching permission rule
- * is recorded and the call goes ahead. In `enforce`, it can deny a governed
- * call or ask first. The line names permission rules because the mode governs
- * nothing else: operator controls (pause, cancel, host status) and the model
- * proxy's model allowlist and enforced budget refuse calls in either mode
- * (`refusalFor` in packages/tacho/src/collector/model-proxy.ts). The mode used
- * to share the Status line as "observe mode", which read as the answer to "is
- * my traffic routed through the gateway".
+ * The sentence for each policy mode. `tacho status` and `tacho enroll` print
+ * the same ones from `POLICY_MODE_TEXT` in packages/tacho/src/cli/policy-mode.ts.
+ * The app shares no runtime code with the CLI, so the sentences are written
+ * twice, and this file's test and that one's each read the other copy.
  */
-export function policyText(mode: "observe" | "enforce"): string {
-  return mode === "enforce"
-    ? "enforce: a matching permission rule can deny a governed call or ask first"
-    : "observe: a matching permission rule is recorded and the call goes ahead";
+const POLICY_MODE_TEXT = {
+  observe:
+    "observe: Oxagen records what the policy would decide on a governed call and lets it go ahead. Budget and model limits still apply to model calls routed through Oxagen.",
+  enforce:
+    "enforce: the policy can deny a governed call or ask first. Budget and model limits also apply to model calls routed through Oxagen.",
+} as const;
+
+/** The most characters of an unrecognized mode the line repeats. */
+const RAW_MODE_MAX = 64;
+
+/**
+ * The Policy line of the This machine panel: the host's policy mode. It is a
+ * separate fact from the tier on the Gateway line (ADR-095), and it used to
+ * share the Status line as "observe mode", which read as the answer to "is my
+ * traffic routed through the gateway".
+ *
+ * The mode decides the whole evaluation of a governed tool call
+ * (`evaluatePreToolUse` in packages/tacho/src/host/bundle.ts), not only the
+ * permission rules. Under `enforce`, a mandate that requires the contained
+ * tier denies every tool in a session `tacho run --contained` did not start,
+ * a stale bundle denies a call that can change something while the control
+ * plane is unreachable, a deny rule or a Cedar forbid denies, and an ask rule
+ * or a call no rule covers asks. Under `observe`, each of those decisions is
+ * recorded and the call goes ahead. Operator controls (a paused, suspended or
+ * revoked host, a paused or cancelled session), a bundle that does not verify,
+ * and the model proxy's model allowlist and enforced budget refuse in both
+ * modes (`refusalFor` in packages/tacho/src/collector/model-proxy.ts).
+ *
+ * `mode` is checked by name because nothing upstream checked it: the Rust
+ * side forwards `bundle.mode` from host.json as it finds it. A missing mode, a
+ * hand-edited one, or one a newer CLI added names itself here instead of
+ * reading as `observe`.
+ */
+export function policyText(mode: unknown): string {
+  if (mode === "observe") return POLICY_MODE_TEXT.observe;
+  if (mode === "enforce") return POLICY_MODE_TEXT.enforce;
+  return `unknown policy mode: ${rawMode(mode)}`;
+}
+
+/**
+ * An unrecognized mode as the line prints it. A plain word prints as itself,
+ * anything else as JSON, so an empty string, a space or a number reads as
+ * what it is. A long value is cut, because it came from a file someone
+ * edited and the row has one line.
+ */
+function rawMode(mode: unknown): string {
+  if (mode === undefined || mode === null) return "not set";
+  const text =
+    typeof mode === "string" && /^[!-~]+$/.test(mode)
+      ? mode
+      : (JSON.stringify(mode) ?? String(mode));
+  return text.length > RAW_MODE_MAX
+    ? `${text.slice(0, RAW_MODE_MAX)}...`
+    : text;
 }

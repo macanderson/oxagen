@@ -6,6 +6,18 @@
  * https://cursor.com/docs/agent/hooks and
  * https://cursor.com/docs/cli/reference/configuration, both fetched that day.
  */
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CURSOR_ENFORCEMENT_EVENTS,
@@ -15,6 +27,7 @@ import {
   absoluteHookCommandProblem,
   CURSOR_HOOKS_VERSION,
   cursorConfigDir,
+  cursorDocumentIsVestigial,
   cursorHookEntries,
   cursorHookPresence,
   cursorHooksPaths,
@@ -22,6 +35,7 @@ import {
   mergeCursorHooks,
   stripCursorHooks,
 } from "./cursor-writer";
+import { HarnessFiles } from "./harness-file";
 import type { HookEntry, HookInstallConfig } from "./settings-writer";
 
 const ENROLLMENT = "tch_abcdefghijklmnopqrstuv";
@@ -280,6 +294,55 @@ describe("what an unenroll leaves behind", () => {
     expect(
       stripCursorHooks(mergeCursorHooks(mine, CONFIG).document).document,
     ).toEqual(mine);
+  });
+});
+
+/**
+ * #3367 finding 2: the writer and `HarnessFiles.settle` together decide who
+ * owns `version`. The strip above leaves it either way, and only the receipt
+ * says whether Tacho wrote it. These drive one enrollment and one teardown
+ * through the same calls `enroll` and `unenroll` make, without the rest of
+ * either command (`install-rig.test.ts` covers the whole commands).
+ */
+describe("who owns `version` when the file is given back", () => {
+  function enrollThenUnenroll(path: string) {
+    const files = new HarnessFiles(
+      realpathSync(mkdtempSync(join(tmpdir(), "tacho-cursor-agent-"))),
+    );
+    const write = (document: unknown, vestigial = false) =>
+      files.write(path, `${JSON.stringify(document, null, 2)}\n`, vestigial);
+    write(mergeCursorHooks(files.readJson(path), CONFIG).document);
+    const stripped = stripCursorHooks(files.readJson(path), ENROLLMENT);
+    expect(stripped.changed).toBe(true);
+    write(stripped.document, cursorDocumentIsVestigial(stripped.document));
+    return files.settle();
+  }
+
+  /** A `.cursor` directory path in a fresh home; the directory is not made. */
+  const cursorDir = () =>
+    join(
+      realpathSync(mkdtempSync(join(tmpdir(), "tacho-cursor-home-"))),
+      ".cursor",
+    );
+
+  it("restores a version-only file the user brought, byte for byte", () => {
+    const path = join(cursorDir(), "hooks.json");
+    mkdirSync(dirname(path), { recursive: true });
+    // Laid out so no serializer would write it this way: only the backup
+    // can put these bytes back.
+    const theirs = '{ "version" : 1 }\r\n';
+    writeFileSync(path, theirs);
+    chmodSync(path, 0o644);
+    expect(enrollThenUnenroll(path)).toEqual([{ path, result: "restored" }]);
+    expect(readFileSync(path, "utf8")).toBe(theirs);
+    expect(statSync(path).mode & 0o777).toBe(0o644);
+  });
+
+  it("takes back the version-only file Tacho created, and its directory", () => {
+    const path = join(cursorDir(), "hooks.json");
+    expect(enrollThenUnenroll(path)).toEqual([{ path, result: "deleted" }]);
+    expect(existsSync(path)).toBe(false);
+    expect(existsSync(dirname(path))).toBe(false);
   });
 });
 
