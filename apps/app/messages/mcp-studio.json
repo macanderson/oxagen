@@ -471,7 +471,7 @@
         "arguments": "Required arguments",
         "secretFrom": "Set {name} on each machine.",
         "variables": "Required variables",
-        "unpinned": "Oxagen pins npm and NuGet packages. This entry offers {types}.",
+        "unpinned": "Oxagen pins npm, PyPI, and NuGet packages. This entry offers {types}.",
         "noPackage": "This entry lists no package a machine can run."
       },
       "discovery": {

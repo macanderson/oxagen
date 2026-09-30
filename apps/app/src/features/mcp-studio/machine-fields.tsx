@@ -973,8 +973,8 @@ export function LocalCommandFields({
 }
 
 /**
- * A package the form can pin and a machine can run: npm or NuGet, served
- * over stdio, the one transport the local gateway runs.
+ * A package the form can pin and a machine can run: npm, PyPI, or NuGet,
+ * served over stdio, the one transport the local gateway runs.
  */
 function pinnable(pkg: RegistryPackage): pkg is RegistryPackage & {
   registryType: PinnedPackageType;

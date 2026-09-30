@@ -586,6 +586,7 @@ const NPM: RegistryPackage = {
 };
 
 const PYPI: RegistryPackage = { ...NPM, registryType: "pypi", identifier: "acme-files-mcp" };
+const OCI: RegistryPackage = { ...NPM, registryType: "oci", identifier: "ghcr.io/acme/files" };
 
 function renderPackage(
   calls: Calls,
@@ -610,9 +611,9 @@ function renderPackage(
 describe("RegistryPackageFields", () => {
   it("asks for the required arguments, reads a secret from the machine, and lists with no pin", async () => {
     const fake = fakeCalls({ get: [{ ok: true, listing: listing() }] });
-    const user = renderPackage(fake.calls, [PYPI, NPM]);
+    const user = renderPackage(fake.calls, [OCI, NPM]);
 
-    // Oxagen pins npm and NuGet, so npm is the only type offered.
+    // The catalog carries no OCI image digest, so npm is the only type offered.
     const type = screen.getByLabelText(tPackage("type"));
     expect(type).toHaveValue("npm");
     expect(within(type).getAllByRole("option")).toHaveLength(1);
@@ -654,12 +655,23 @@ describe("RegistryPackageFields", () => {
     expect(screen.queryByTestId("studio-listing")).not.toBeInTheDocument();
   });
 
-  it("says Oxagen cannot pin an entry that offers only a PyPI package (negative)", () => {
+  it("offers a PyPI package, which Oxagen pins to one file of its release (ADR-233)", async () => {
+    const fake = fakeCalls({ get: [{ ok: true, listing: listing() }] });
+    const user = renderPackage(fake.calls, [PYPI]);
+    expect(screen.getByLabelText(tPackage("type"))).toHaveValue("pypi");
+    await user.type(screen.getByLabelText(tLocal("machines")), "dev-laptops");
+    await user.click(screen.getByTestId("studio-add-package-submit"));
+    expect(fake.create.calls[0]?.input.serverToml).toContain('registry_type = "pypi"');
+    expect(await screen.findByTestId("studio-listing")).toBeVisible();
+    expect(fake.start.calls).toStrictEqual([{ server: "files", revision: 1 }]);
+  });
+
+  it("says Oxagen cannot pin an entry that offers only an OCI image (negative)", () => {
     const fake = fakeCalls();
-    renderPackage(fake.calls, [PYPI]);
+    renderPackage(fake.calls, [OCI]);
     expect(
       screen.getByTestId("studio-add-package-unpinned"),
-    ).toHaveTextContent(tPackage("unpinned", { types: "pypi" }));
+    ).toHaveTextContent(tPackage("unpinned", { types: "oci" }));
     expect(screen.queryByTestId("studio-add-package")).not.toBeInTheDocument();
   });
 

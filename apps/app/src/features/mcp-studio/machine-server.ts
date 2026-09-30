@@ -9,8 +9,9 @@
 // it starts anything:
 //   - A local command's pin is the version and SHA-256 the person names.
 //   - A registry package's pin is the SHA-256 Oxagen reads from the public
-//     registry, so the form sends none. Oxagen pins npm and NuGet packages.
-//     PyPI and OCI wait on #4756's last item, so the form does not offer them.
+//     registry, so the form sends none. Oxagen pins npm, PyPI, and NuGet
+//     packages. A PyPI release pins one file of it. The catalog carries no
+//     OCI image digest, so the form does not offer an OCI image.
 //
 // What this path writes is narrow on purpose:
 //   - No auth and no environments: the local gateway runs the server and
@@ -31,8 +32,8 @@ import type { StudioListingPin } from "./studio-calls";
 /** The official MCP registry, the one search_mcp_registry reads. */
 const OFFICIAL_REGISTRY = "https://registry.modelcontextprotocol.io";
 
-/** The package types Oxagen pins today: it reads their digest itself. */
-export const PINNED_PACKAGE_TYPES = ["npm", "nuget"] as const;
+/** The package types Oxagen pins: it reads their digest itself (ADR-233). */
+export const PINNED_PACKAGE_TYPES = ["npm", "pypi", "nuget"] as const;
 export type PinnedPackageType = (typeof PINNED_PACKAGE_TYPES)[number];
 
 /** A server name: the folder under tools/servers/ (steering-repo/names.ts). */

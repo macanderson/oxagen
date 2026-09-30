@@ -130,9 +130,8 @@ Added on 2026-09-30, when the app forms were built:
 - Add server imports and classifies the listed tools in the dialog. Every
   tool starts picked with its suggestion, and the dialog refuses to open
   Review with none picked, because that lock would list no tools.
-- The package form offers npm and NuGet, the types Oxagen pins today. An
-  entry that offers only PyPI or OCI says so and has no submit, until the
-  PyPI rule in section 1 ships.
+- The package form offers npm, PyPI, and NuGet, the types Oxagen pins. An
+  entry that offers only an OCI image says so and has no submit.
 - A secret argument takes no value in the form. Studio writes `${NAME}` for
   it, with NAME read from the argument's key, and lists NAME in
   `source.env`. The value stays on each machine.
