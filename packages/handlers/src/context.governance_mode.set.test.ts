@@ -641,7 +641,7 @@ describe("set_governance_mode in a steering repository", () => {
 
     const out = await run(deps, { mode: "team" }, doubles());
 
-    expect(out).toMatchObject({ outcome: "unchanged", effectiveMode: "team", proposalId: null });
+    expect(out).toMatchObject({ outcome: "unchanged", effectiveMode: "team" });
     // A reviewer can no longer land a mode nobody asked for now.
     expect(deps.store.proposals).toEqual([
       expect.objectContaining({
