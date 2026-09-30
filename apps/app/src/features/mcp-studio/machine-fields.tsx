@@ -507,7 +507,6 @@ function ClassifyTools({
   onOpened: (review: StudioReview) => void;
 }) {
   const t = useTranslations("mcpStudio.addServer.classify");
-  const tMachine = useTranslations("mcpStudio.addServer.machine");
   const tPanel = useTranslations("mcpStudio.panel");
   const registry = useTranslations("tools.registry");
   const tPr = useTranslations("mcpStudio.changes.pr");
@@ -724,7 +723,7 @@ function ClassifyTools({
         <FormAlert testId="studio-add-classify-none">{t("none")}</FormAlert>
       ) : failure.kind === "moved" ? (
         <FormAlert testId="studio-add-classify-moved">
-          {tMachine("moved", { name: server })}
+          {t("moved", { name: server })}
         </FormAlert>
       ) : (
         <FormAlert testId="studio-add-classify-failed">

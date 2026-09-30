@@ -3675,6 +3675,7 @@ type Messages = {
         saving: string;
         reviewing: string;
         none: string;
+        moved: string;
       };
     };
   };

@@ -507,7 +507,7 @@
         "saving": "Saving",
         "opened": "Opened steering PR #{number}",
         "exists": "A draft named {name} is already saved. Open that server in Studio, or choose another folder name.",
-        "moved": "Someone saved the {name} draft after you did. List its tools again.",
+        "moved": "Someone saved the {name} draft after you did. Close this dialog and add the server under another folder name.",
         "unlisted": "No machine listed the tools. Check that a machine in these groups is online and that the pin matches what it runs, then list the tools again.",
         "needsDigest": "Oxagen cannot pin this package type yet. Choose an npm or NuGet package.",
         "registryUnreachable": "Oxagen could not read the package from its registry. Try again in a few minutes.",
@@ -553,7 +553,8 @@
         "submit": "Open steering PR",
         "saving": "Saving",
         "reviewing": "Opening",
-        "none": "Pick at least one tool to import."
+        "none": "Pick at least one tool to import.",
+        "moved": "Someone saved the {name} draft while you picked its tools. Submit again to save your picks over their draft."
       }
     }
   }

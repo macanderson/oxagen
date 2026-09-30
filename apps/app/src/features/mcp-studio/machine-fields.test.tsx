@@ -378,6 +378,49 @@ describe("Local command", () => {
     );
   });
 
+  it("names a draft someone saved while the person picked its tools, and saves over it on the next submit (negative)", async () => {
+    const fake = fakeCalls();
+    const conflict = fakeSave(
+      { ok: false, reason: "conflict", code: "draft_revision_stale" },
+      { ok: true, draft: savedDraft({ server: "notes", serverId: null, revision: 4 }) },
+    );
+    const user = renderLocal({ ...fake.calls, save: conflict.save });
+    await fillLocal(user);
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+    await screen.findAllByTestId("studio-add-classify-tool");
+    await user.click(screen.getByTestId("studio-add-classify-submit"));
+    expect(
+      await screen.findByTestId("studio-add-classify-moved"),
+    ).toHaveTextContent(tClassify("moved", { name: "notes" }));
+    expect(fake.review.calls).toHaveLength(0);
+
+    await user.click(screen.getByTestId("studio-add-classify-submit"));
+    await screen.findByTestId("studio-add-local-opened");
+    // The second submit reads the draft again and reviews the new revision.
+    expect(fake.read.calls).toHaveLength(2);
+    expect(fake.review.calls).toStrictEqual([{ server: "notes", revision: 4 }]);
+  });
+
+  it("offers to read the listing again after a read fails (negative)", async () => {
+    const fake = fakeCalls({
+      get: [
+        { ok: false, reason: "failed", code: "unavailable" },
+        { ok: true, listing: LISTED },
+      ],
+    });
+    const user = renderLocal(fake.calls);
+    await fillLocal(user);
+    await user.click(screen.getByTestId("studio-add-local-submit"));
+    expect(
+      await screen.findByTestId("studio-listing-failed"),
+    ).toHaveTextContent(tListing("readFailed", { code: "unavailable" }));
+    await user.click(screen.getByTestId("studio-listing-reread"));
+    expect(
+      await screen.findAllByTestId("studio-add-classify-tool"),
+    ).toHaveLength(2);
+    expect(fake.get.calls).toHaveLength(2);
+  });
+
   it("refuses to open Review with no tool picked (negative)", async () => {
     const fake = fakeCalls();
     const user = renderLocal(fake.calls);
