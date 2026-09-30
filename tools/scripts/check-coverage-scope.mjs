@@ -23,7 +23,7 @@
  * Exit 0 when every file is in scope, 1 otherwise. It reads files only.
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Where Vitest's `json` coverage reporter writes, relative to the package. */
@@ -36,14 +36,23 @@ export const REPORT = join("coverage", "coverage-final.json");
  * @param {string[]} srcRoots absolute spellings of `<pkg>/src` (as resolved
  *   and as realpath'd, since a report may use either)
  * @param {(p: string) => boolean} exists
+ * @param {string} [pkgDir] the package directory a relative key is read
+ *   against. Vitest writes absolute keys, which this leaves unchanged. A
+ *   relative key belongs to the package, never to whatever directory the
+ *   process started in (#4664 item 10).
  * @returns {{ outside: string[], missing: string[], total: number }}
  */
-export function offenders(report, srcRoots, exists) {
+export function offenders(
+  report,
+  srcRoots,
+  exists,
+  pkgDir = dirname(srcRoots[0] ?? "."),
+) {
   const outside = [];
   const missing = [];
   const files = Object.keys(report);
   for (const file of files) {
-    const abs = resolve(file);
+    const abs = resolve(pkgDir, file);
     const inside = srcRoots.some((root) => {
       const rel = relative(root, abs);
       return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
@@ -91,7 +100,7 @@ export function checkPackage(pkgDir, { cwd, read, exists, realpath }) {
     const real = realpath(src);
     if (real !== src) roots.push(real);
   }
-  const { outside, missing, total } = offenders(report, roots, exists);
+  const { outside, missing, total } = offenders(report, roots, exists, dir);
   if (total === 0) {
     return {
       code: 1,

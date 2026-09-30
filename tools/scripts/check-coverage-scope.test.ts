@@ -92,6 +92,21 @@ describe("checkPackage", () => {
     expect(result.message).toContain(ghost);
   });
 
+  it("reads a relative key against the package, not the process directory", () => {
+    // #4664 item 10. The process runs from tools/scripts under vitest, so a
+    // key resolved against process.cwd() would land outside apps/app/src.
+    const relativeKeys = {
+      "src/ui/avatar.tsx": entry,
+      "src/app/[org]/audit/page.tsx": entry,
+    };
+    const result = checkPackage("apps/app", io(relativeKeys));
+    expect(result.code).toBe(0);
+    expect(result.message).toContain("names 2 files, all under apps/app/src");
+    expect(
+      offenders(relativeKeys, [`${APP}/src`], () => true, APP).outside,
+    ).toEqual([]);
+  });
+
   it("fails when there is no report, so it cannot pass empty", () => {
     const result = checkPackage("apps/app", io(undefined));
     expect(result.code).toBe(1);
@@ -185,5 +200,20 @@ describe("CI runs the guard", () => {
     const condition = unit.slice(stepStart, run).join("\n");
     expect(condition).toContain("!cancelled()");
     expect(condition).toContain("matrix.lane == 'app'");
+  });
+
+  it("runs it only when the coverage suite itself ran (#4664 item 4)", () => {
+    // When Bootstrap, Migrate or Seed fails, the suite never writes a report,
+    // and a "no report" line beside the real cause points the reader away
+    // from it. The thresholds step's own outcome gates the guard.
+    const thresholds = unit.findIndex(is("- name: Coverage thresholds"));
+    expect(unit[thresholds + 1]?.trim()).toBe("id: coverage");
+    const run = unit.findIndex(is(GUARD));
+    let stepStart = run;
+    while (stepStart > 0 && !/^\s+- /.test(unit[stepStart] ?? "")) stepStart--;
+    const condition = unit.slice(stepStart, run).join("\n");
+    expect(condition).toContain(
+      "(steps.coverage.outcome == 'success' || steps.coverage.outcome == 'failure')",
+    );
   });
 });
