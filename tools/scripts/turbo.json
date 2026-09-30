@@ -1,0 +1,60 @@
+{
+  // Files this package's tests read from outside the package (#4664 item 2).
+  // Turbo hashes a test task over its own package, so a change to one of
+  // these files alone would restore a cached pass. Listing them as inputs
+  // re-runs the tests when they change. A package config replaces the root
+  // `inputs` array rather than adding to it, so the root's entries come first.
+  // tools/scripts/turbo-test-inputs.test.ts holds both rules.
+  //
+  // Guard tests here read the workflows, the root manifests and docs, and a
+  // few files in other packages. Tests that scan every package's source
+  // (tool-invocation-execution-identity, audit-emit-consolidation) are not
+  // covered: listing packages/** and apps/** would turn off this suite's cache.
+  "extends": ["//"],
+  "tasks": {
+    "test:unit": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "vitest.config.*",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/.claude/workflows/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/lefthook.yml",
+        "$TURBO_ROOT$/AGENTS.md",
+        "$TURBO_ROOT$/DEREGISTERED.md",
+        "$TURBO_ROOT$/docs/capabilities/**",
+        "$TURBO_ROOT$/infra/**",
+        "$TURBO_ROOT$/tools/packaging/**",
+        "$TURBO_ROOT$/apps/app/vitest.config.ts",
+        "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
+        "$TURBO_ROOT$/packages/database/src/tenant-policy.manifest.ts",
+        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts"
+      ]
+    },
+    "test:coverage": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "vitest.config.*",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/.claude/workflows/**",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/lefthook.yml",
+        "$TURBO_ROOT$/AGENTS.md",
+        "$TURBO_ROOT$/DEREGISTERED.md",
+        "$TURBO_ROOT$/docs/capabilities/**",
+        "$TURBO_ROOT$/infra/**",
+        "$TURBO_ROOT$/tools/packaging/**",
+        "$TURBO_ROOT$/apps/app/vitest.config.ts",
+        "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
+        "$TURBO_ROOT$/packages/database/src/tenant-policy.manifest.ts",
+        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts"
+      ]
+    }
+  }
+}
