@@ -1611,7 +1611,7 @@ jobs:
           - service: docs
             hostname: docs.oxagen.sh
           - service: app
-            hostname: oxagen.app
+            hostname: app.oxagen.sh
           - service: api
             hostname: api.oxagen.sh
           - service: mcp
@@ -1868,4 +1868,4 @@ jobs:
         with:
           service: app
           directory: dist-deploy/app
-          hostname: oxagen.app
+          hostname: app.oxagen.sh

@@ -248,8 +248,8 @@ a relaunch under the hold used to hide the window and never reopen the app.
 ### Bundled UI
 
 The window renders the UI bundled into the app at build time
-(`build.frontendDist` is `../dist`). It never loads oxagen.app: the CSP
-allows `connect-src ipc:` only, and the app opens oxagen.app in the system
+(`build.frontendDist` is `../dist`). It never loads app.oxagen.sh: the CSP
+allows `connect-src ipc:` only, and the app opens app.oxagen.sh in the system
 browser. A web deploy therefore changes nothing in an open window. A new
 build of the app does, and a new build reaches an installed app only through
 the updater feed.
