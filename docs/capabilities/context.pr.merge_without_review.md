@@ -32,6 +32,8 @@ An approval that already stands at the head is recorded as that approval. Withou
 
 `merge_context_pr` asks the same IAM question. A holder who calls it without an approval also merges, with the same trailer. This capability exists so that a caller can ask for the bypass by name, and so that a role can hold it.
 
+A governance proposal (#4795) never merges without review. This capability refuses one `review_required`, and `merge_context_pr` refuses a holder with no approval the same way. Apply now in `set_governance_mode` is the recorded override for a governance change ([ADR-232](../adr/ADR-232-a-steering-repositorys-governance-mode-changes-through-a-steering-pr.md)).
+
 ## Input
 
 `{ proposalId: prp_… }`, the input of `merge_context_pr`.

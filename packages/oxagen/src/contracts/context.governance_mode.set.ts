@@ -32,7 +32,7 @@
  * Oxagen runs no checks on it and `merge_context_pr` does not merge it.
  *
  * In a steering repository nothing commits to the production branch directly
- * (ADR-229). Both routes open a pull request from `steering/governance` that
+ * (ADR-232). Both routes open a pull request from `steering/governance` that
  * changes `steering/governance.toml` alone, and Oxagen reports the required
  * `Oxagen steering` check on it. Landing at once hands that pull request to
  * the steering merge queue, which rechecks it, stamps the ledger, merges it,
@@ -59,10 +59,12 @@
  * never would. Under `solo` the flag changes nothing, because that route
  * commits anyway.
  *
- * **A reviewed change in a steering repository waits.** Under `team` or
- * `regulated`, the call opens the steering PR and answers `proposed`. Oxagen
- * does not land a reviewed governance PR yet: `merge_context_pr` lands a PR
- * from a proposal row, and this capability writes none (#4795, ADR-229). Apply
+ * **A reviewed change in a steering repository is a governance proposal.**
+ * Under `team` or `regulated`, the call opens the steering PR, records it as a
+ * proposal of kind `governance`, and answers `proposed`. `merge_context_pr`
+ * lands it once a workspace member other than the author approves it, and
+ * records the approver (#4795, ADR-232). A call sets aside the governance
+ * proposal already open, because the reused PR now carries its change. Apply
  * now is never the way to land that PR. It is the override above, and it is
  * recorded as one. Only Apply now in `team` or `regulated` emits
  * `steering.governance_overridden`.
@@ -116,7 +118,7 @@ export const contextGovernanceModeSet = registerCapability({
   name: "set_governance_mode",
   domain: "workspace",
   description:
-    "Set the steering governance mode of a workspace by writing its governance file: the mode key of steering/governance.toml in a steering repository, or .oxagen/rules/governance.toml in a legacy one. Under solo the change lands at once; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. In a steering repository the change always travels as a checked pull request, and landing at once merges it through the steering merge queue. The active workspace unless workspaceId names another one in the organization.",
+    "Set the steering governance mode of a workspace by writing its governance file: the mode key of steering/governance.toml in a steering repository, or .oxagen/rules/governance.toml in a legacy one. Under solo the change lands at once; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. In a steering repository the change always travels as a checked pull request, and landing at once merges it through the steering merge queue. A reviewed change there is recorded as a governance proposal, which merge_context_pr lands for an approver. The active workspace unless workspaceId names another one in the organization.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],

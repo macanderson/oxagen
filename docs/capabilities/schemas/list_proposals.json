@@ -78,7 +78,8 @@
                 "procedure",
                 "fact",
                 "memory",
-                "preference"
+                "preference",
+                "governance"
               ]
             },
             "force": {

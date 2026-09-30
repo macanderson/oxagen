@@ -139,6 +139,15 @@ export function createOpenContextPrHandler(
     if (row.status === "merged" || row.status === "rejected") {
       throw proposalMoved(row.publicId, row.status);
     }
+    // A governance proposal's PR changes steering/governance.toml, not a
+    // record. set_governance_mode opens it and runs its checks (#4795).
+    if (row.kind === "governance") {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "governance_proposal",
+        message: `${row.prUrl ?? row.publicId} changes the governance mode, so the record checks do not apply. Set the mode again in the workspace's governance settings to run its checks.`,
+      });
+    }
     if (!isOpen(row.status)) {
       const other = await deps.store.findOpenPrOnLineage(
         scope,

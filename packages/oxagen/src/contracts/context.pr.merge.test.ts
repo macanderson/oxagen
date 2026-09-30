@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { contextPrMerge } from "./context.pr.merge";
+import { contextPrMerge, type ContextPrMergeOutput } from "./context.pr.merge";
+
+/** The record arm of the output, or a failure naming the other arm. */
+function recordArm(out: ContextPrMergeOutput) {
+  if (out.kind === "governance") throw new Error("expected a record merge");
+  return out;
+}
 
 describe("merge_context_pr contract", () => {
   it("is the publication: a governed write with approval, unmetered, role-checked in the handler by governance mode", () => {
@@ -14,20 +20,23 @@ describe("merge_context_pr contract", () => {
   });
 
   it("answers the published record, the merge commit, the promotion event and the version bump", () => {
-    const out = contextPrMerge.output.parse({
-      proposalId: "prp_1",
-      status: "merged",
-      record: {
-        id: "ctr_1",
-        lineageId: "ctx.release.no-reread-changelog",
-        version: 1,
-        path: ".oxagen/rules/ctx.release.no-reread-changelog.toml",
-      },
-      mergedCommit: "7d2e91a0",
-      promotionEvent: { id: "ctp_1", seq: 42, chainDigest: "f".repeat(64) },
-      bundleVersion: { before: 41, after: 42 },
-      publishedVersion: null,
-    });
+    const out = recordArm(
+      contextPrMerge.output.parse({
+        proposalId: "prp_1",
+        status: "merged",
+        kind: "rule",
+        record: {
+          id: "ctr_1",
+          lineageId: "ctx.release.no-reread-changelog",
+          version: 1,
+          path: ".oxagen/rules/ctx.release.no-reread-changelog.toml",
+        },
+        mergedCommit: "7d2e91a0",
+        promotionEvent: { id: "ctp_1", seq: 42, chainDigest: "f".repeat(64) },
+        bundleVersion: { before: 41, after: 42 },
+        publishedVersion: null,
+      }),
+    );
     expect(out.bundleVersion.after).toBe(out.promotionEvent.seq);
     expect(out.publishedVersion).toBeNull();
   });
@@ -36,6 +45,7 @@ describe("merge_context_pr contract", () => {
     const out = contextPrMerge.output.parse({
       proposalId: "prp_2",
       status: "merged",
+      kind: "constraint",
       record: {
         id: "ctr_2",
         lineageId: "ctx.release.no-reread-changelog",
@@ -57,6 +67,7 @@ describe("merge_context_pr contract", () => {
     const base = {
       proposalId: "prp_3",
       status: "merged",
+      kind: "fact",
       record: { id: "ctr_3", lineageId: "l", version: 1, path: "p" },
       mergedCommit: "9f",
       promotionEvent: { id: "ctp_3", seq: 1, chainDigest: "d".repeat(64) },
@@ -65,6 +76,51 @@ describe("merge_context_pr contract", () => {
     expect(contextPrMerge.output.safeParse(base).success).toBe(false);
     expect(
       contextPrMerge.output.safeParse({ ...base, publishedVersion: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("answers a governance merge with the mode and the file, and no record or promotion event (#4795)", () => {
+    const out = contextPrMerge.output.parse({
+      proposalId: "prp_4",
+      status: "merged",
+      kind: "governance",
+      governance: { mode: "solo", path: "steering/governance.toml" },
+      mergedCommit: "a1b2c3d4",
+      bundleVersion: { before: 7, after: 7 },
+      publishedVersion: 9,
+    });
+    expect(out).toMatchObject({
+      kind: "governance",
+      governance: { mode: "solo" },
+      bundleVersion: { before: 7, after: 7 },
+    });
+    expect(out).not.toHaveProperty("record");
+    expect(out).not.toHaveProperty("promotionEvent");
+  });
+
+  it("refuses a governance merge that carries a record, and a record merge with no kind", () => {
+    expect(
+      contextPrMerge.output.safeParse({
+        proposalId: "prp_5",
+        status: "merged",
+        kind: "governance",
+        governance: { mode: "team", path: "steering/governance.toml" },
+        record: { id: "ctr_5", lineageId: "l", version: 1, path: "p" },
+        mergedCommit: "b2",
+        bundleVersion: { before: 0, after: 0 },
+        publishedVersion: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      contextPrMerge.output.safeParse({
+        proposalId: "prp_6",
+        status: "merged",
+        record: { id: "ctr_6", lineageId: "l", version: 1, path: "p" },
+        mergedCommit: "c3",
+        promotionEvent: { id: "ctp_6", seq: 1, chainDigest: "c".repeat(64) },
+        bundleVersion: { before: 0, after: 1 },
+        publishedVersion: null,
+      }).success,
     ).toBe(false);
   });
 });

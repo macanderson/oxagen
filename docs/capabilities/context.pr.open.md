@@ -66,7 +66,7 @@ A legacy record file and a steering record run the same six checks. Four of them
 
 ## Output
 
-The Context PR (`contextPrSchema`, shared with `get_context_pr`): `status`, `governanceMode` (null until this call reads governance.toml), `pr` (number, url, provider, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode — `review` null until the mode is read), `merged` (null until merged).
+The Context PR (`contextPrSchema`, shared with `get_context_pr`): `kind` (the record kind, or `governance` for a change to the governance mode, which runs no record checks and never merges without review), `status`, `governanceMode` (null until this call reads governance.toml), `pr` (number, url, provider, repository, baseRef, branch, headSha, path), `record` (recordId, recordHash, kind, force, constraintEffect, sharingScope, statement), `body`, `checks[]` (name, status, summary, detailsUrl, startedAt, completedAt), `onMerge` (what it publishes, the steering version before and after, who may merge under the mode — `review` null until the mode is read), `merged` (null until merged).
 
 ## Side effects
 

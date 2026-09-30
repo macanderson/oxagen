@@ -34,6 +34,17 @@ Before it lands the PR, the call claims the proposal for ten minutes (`merge_cla
 
 In a steering repository the merge publishes a steering version (#4732). Its number is the one publish() assigns next from the repository's version store, and the merge commit's `Oxagen-Version` trailer carries it. Provisioning publishes the repository's first commit as version 1, so the first merged steering PR publishes version 2, whether or not a repository sync ran first. `publishedVersion` answers that number. It is null when publish() failed, refused, or found the production branch moved, and the repository sync then publishes the production branch. A legacy repository has no version store: its trailer carries the ledger length plus one, and `publishedVersion` is null. `bundleVersion` counts promotion ledger entries, one per merged record. It is not the steering version: the first commit, and each commit the repository sync publishes, adds a version and no ledger entry.
 
+### A governance proposal
+
+In a steering repository under `team` or `regulated`, `set_governance_mode` records its review-route PR as a proposal of kind `governance` on the lineage `governance` ([ADR-232](../adr/ADR-232-a-steering-repositorys-governance-mode-changes-through-a-steering-pr.md), #4795). This capability lands it through the same queue, reviewer rule, claim, and approvals as a record, with these differences:
+
+- The merge reads `steering/governance.toml` at the head and refuses `governance_invalid` when it is not governance/v1, such as `[memory] auto_merge = true` outside `solo`. It runs the steering checks on that head against the production branch, and again after each update the queue makes. A failure marks the proposal `checks_failed`, refuses `checks_failed`, and merges nothing.
+- The merge needs an approval by a workspace member other than the author. An owner, or a holder of `merge_pr_without_review`, is refused `review_required` when no approval stands, and `merge_pr_without_review` refuses a governance proposal. Apply now in `set_governance_mode` is the recorded override.
+- The commit title is `steering: set governance mode to <mode> (#n)`, and the ledger line names the approvers.
+- The merge publishes no record and appends no promotion event. The proposal moves to `merged` with the merge commit and the merger, and the call emits `steering.governance_changed`. Its detail carries `approvedBy` and `proposalId`. It emits no `steering.published` and no `steering.governance_overridden`.
+
+The repository sync does not yet record a governance PR merged outside Oxagen, and leaves its proposal open (#4795).
+
 A merged `must` or `should` record reaches agents through the signed policy bundle: it is compiled into `context.system`, which changes the bundle etag, so every enrolled host in the workspace fetches it on its next poll (ADR-091). Delivery into context frames (spec §10.4) is not built yet.
 
 ## Input
@@ -42,15 +53,30 @@ A merged `must` or `should` record reaches agents through the signed policy bund
 
 ## Output
 
+A union on `kind`. A record proposal answers the record arm:
+
 | Field | Type | Notes |
 | --- | --- | --- |
 | `proposalId` | `string` | |
 | `status` | `"merged"` | |
+| `kind` | `rule`, `constraint`, `procedure`, `fact`, `memory`, or `preference` | The record's kind |
 | `record` | `{ id (ctr_…), lineageId, version, path }` | The published record and the version this merge created |
 | `mergedCommit` | `string` | GitHub's merge commit |
 | `promotionEvent` | `{ id (ctp_…), seq, chainDigest }` | The ledger entry |
 | `bundleVersion` | `{ before, after }` | The number of promotion ledger entries before and after. It counts merged records, not steering versions |
 | `publishedVersion` | `number` or `null` | The steering version this merge published, the number in its `Oxagen-Version` trailer. Null in a legacy repository, and null when publish() did not make the version live |
+
+A governance proposal answers the governance arm:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `proposalId` | `string` | |
+| `status` | `"merged"` | |
+| `kind` | `"governance"` | |
+| `governance` | `{ mode, path }` | The mode `steering/governance.toml` declares at the merge, and the file |
+| `mergedCommit` | `string` | |
+| `bundleVersion` | `{ before, after }` | Equal, because the merge appends no ledger entry |
+| `publishedVersion` | `number` or `null` | As in the record arm |
 
 ## Errors
 
@@ -64,4 +90,6 @@ A merged `must` or `should` record reaches agents through the signed policy bund
 | `conflict` | `gitlab_refused` | GitLab only. GitLab refused a call, or has not yet recorded the head as a diff version of the merge request. Nothing merges. Merge again in a minute. |
 | `forbidden` | `approval_required` | Outside `solo` mode no approval stands at the head that merges, and the merger is not an owner and does not hold `merge_pr_without_review`. Nothing merges. |
 | `conflict` | `merge_time_unknown` | The merge landed on GitHub and GitHub did not say when, so the publication would have to guess the instant `latestPublication` orders by. Nothing is published, the proposal stays `checks_passed`, and the next call resumes the merge GitHub holds and publishes it. |
+| `conflict` | `governance_invalid` / `governance_file_missing` / `checks_failed` / `layout_changed` | A governance proposal only. The file at the head is not governance/v1 or is gone, the steering checks failed, or the production branch no longer holds `steering/governance.toml`. Nothing merges. Set the mode again. |
+| `forbidden` | `review_required` | A governance proposal only. No approval stands, and the merger would otherwise land it without review, or the call is `merge_pr_without_review`. Nothing merges. |
 | `forbidden` | `no_principal` / `org_role_required` / `separation_of_duties` | `no_principal` before anything is read (an API key); the rest is the governance mode's reviewer rule. |

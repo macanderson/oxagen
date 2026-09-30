@@ -5,10 +5,86 @@
 // Admin other than the author, recorded as the accountable approver). On
 // merge the handler publishes the record into the registry, appends the
 // promotion event to the hash-chained ledger, and emits `steering.published`.
+// A governance proposal (#4795) publishes no record and appends no promotion
+// event: it lands `steering/governance.toml`, names the approver on the
+// ledger line and the proposal, and emits `steering.governance_changed`. The
+// output is a union on `kind`.
 // The reviewer is a signed-in user; an API key carries no user, so the MCP
 // surface (API-key auth) is not declared.
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { governanceModeSchema, recordKindSchema } from "./context.steering.shared";
+
+/**
+ * The number of entries in the workspace's promotion ledger before and after
+ * this merge. It counts merged records, not steering versions: a steering
+ * repo's first commit is version 1 and appends no ledger entry, so the two
+ * numbers differ there. A governance merge appends none, so its two numbers
+ * are equal. `publishedVersion` is the steering version (#4732).
+ */
+const bundleVersionSchema = z
+  .object({ before: z.number().int(), after: z.number().int() })
+  .strict();
+
+/**
+ * The steering version this merge published, the number in its
+ * Oxagen-Version trailer. Null in a legacy repository, which has no version
+ * store, and null when publish() did not make the version live: the
+ * repository sync then publishes the production branch.
+ */
+const publishedVersionSchema = z.number().int().positive().nullable();
+
+/** A record proposal's merge: the record it published and its ledger entry. */
+const recordMergeSchema = z
+  .object({
+    proposalId: z.string(),
+    status: z.literal("merged"),
+    kind: recordKindSchema,
+    record: z
+      .object({
+        id: z.string(),
+        lineageId: z.string(),
+        version: z.number().int().positive(),
+        path: z.string(),
+      })
+      .strict(),
+    mergedCommit: z.string(),
+    promotionEvent: z
+      .object({
+        id: z.string(),
+        seq: z.number().int().positive(),
+        chainDigest: z.string(),
+      })
+      .strict(),
+    bundleVersion: bundleVersionSchema,
+    publishedVersion: publishedVersionSchema,
+  })
+  .strict();
+
+/** A governance proposal's merge: the mode it put in force and the file. */
+const governanceMergeSchema = z
+  .object({
+    proposalId: z.string(),
+    status: z.literal("merged"),
+    kind: z.literal("governance"),
+    governance: z
+      .object({
+        /** The mode `steering/governance.toml` declares at the merge commit. */
+        mode: governanceModeSchema,
+        path: z.string(),
+      })
+      .strict(),
+    mergedCommit: z.string(),
+    bundleVersion: bundleVersionSchema,
+    publishedVersion: publishedVersionSchema,
+  })
+  .strict();
+
+/** The output merge_context_pr and merge_pr_without_review share. */
+export const contextPrMergeOutputSchema = z.discriminatedUnion("kind", [
+  recordMergeSchema,
+  governanceMergeSchema,
+]);
 
 export const contextPrMerge = registerCapability({
   name: "merge_context_pr",
@@ -33,45 +109,7 @@ export const contextPrMerge = registerCapability({
       proposalId: z.string().regex(/^prp_[0-9A-Za-z]+$/),
     })
     .strict(),
-  output: z
-    .object({
-      proposalId: z.string(),
-      status: z.literal("merged"),
-      record: z
-        .object({
-          id: z.string(),
-          lineageId: z.string(),
-          version: z.number().int().positive(),
-          path: z.string(),
-        })
-        .strict(),
-      mergedCommit: z.string(),
-      promotionEvent: z
-        .object({
-          id: z.string(),
-          seq: z.number().int().positive(),
-          chainDigest: z.string(),
-        })
-        .strict(),
-      /**
-       * The number of entries in the workspace's promotion ledger before and
-       * after this merge. It counts merged records, not steering versions: a
-       * steering repo's first commit is version 1 and appends no ledger entry,
-       * so the two numbers differ there. `publishedVersion` is the steering
-       * version (#4732).
-       */
-      bundleVersion: z
-        .object({ before: z.number().int(), after: z.number().int() })
-        .strict(),
-      /**
-       * The steering version this merge published, the number in its
-       * Oxagen-Version trailer. Null in a legacy repository, which has no
-       * version store, and null when publish() did not make the version live:
-       * the repository sync then publishes the production branch.
-       */
-      publishedVersion: z.number().int().positive().nullable(),
-    })
-    .strict(),
+  output: contextPrMergeOutputSchema,
 });
 
 export type ContextPrMergeInput = z.output<typeof contextPrMerge.input>;

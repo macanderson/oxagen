@@ -295,6 +295,35 @@ describe("the review each governance mode asks for", () => {
     expect(mergeWithoutReview()).toBeNull();
     expect(approve()).toBeEnabled();
   });
+
+  it("offers a governance change only Approve, Merge, and Dismiss, which its server paths accept (#4795)", () => {
+    renderPanel(readOk(contextPr("checks_passed", { kind: "governance" })), {
+      approvals: 0,
+      canMergeWithoutReview: true,
+    });
+    // merge_pr_without_review and open_context_pr refuse a governance change.
+    expect(mergeWithoutReview()).toBeNull();
+    expect(screen.queryByTestId("open-context-pr")).toBeNull();
+    expect(approve()).toBeEnabled();
+    expect(merge()).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+  });
+
+  it("lists what merging a governance change does, and no record or promotion event (#4795)", () => {
+    const panel = renderPanel(
+      readOk(
+        contextPr("checks_passed", {
+          kind: "governance",
+          onMerge: { path: "steering/governance.toml", bundleVersion: { current: 0, afterMerge: 0 } },
+        }),
+      ),
+    );
+    const onMerge = panel.querySelector("[data-on-merge]");
+    expect(onMerge).toHaveTextContent("Put the mode in steering/governance.toml in force");
+    expect(onMerge).not.toHaveTextContent("as a record in force");
+    expect(onMerge).not.toHaveTextContent("promotion event");
+    expect(onMerge).not.toHaveTextContent("promotion ledger");
+  });
 });
 
 describe("a drifted managed block", () => {

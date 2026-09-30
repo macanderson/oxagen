@@ -92,6 +92,7 @@ describe("context.record.revise capability", () => {
     const parsed = contextRecordRevise.output.parse({
       proposalId: "prp_01k5ru4a",
       lineageId: "ctx.release.no-reread-changelog",
+      kind: "rule",
       status: "checks_running",
       governanceMode: "team",
       pr: {
@@ -125,6 +126,7 @@ describe("context.record.revise capability", () => {
       contextRecordRevise.output.parse({
         proposalId: "prp_01k5ru4a",
         lineageId: "ctx.release.no-reread-changelog",
+        kind: "rule",
         status: "pr_open",
         governanceMode: null,
         pr: {

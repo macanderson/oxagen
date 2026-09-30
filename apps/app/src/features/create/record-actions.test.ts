@@ -43,6 +43,7 @@ const RECORD = {
 const CONTEXT_PR = {
   proposalId: "prp_01K5ABC",
   lineageId: RECORD.lineageId,
+  kind: "rule",
   status: "checks_passed",
   governanceMode: "solo",
   pr: {

@@ -4,6 +4,7 @@ import { contextPrOpen, contextPrSchema } from "./context.pr.open";
 export const contextPrFixture = {
   proposalId: "prp_0123456789abcdefghjkmn",
   lineageId: "ctx.release.no-reread-changelog",
+  kind: "rule",
   status: "checks_passed",
   governanceMode: "team",
   pr: {

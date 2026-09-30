@@ -10155,6 +10155,7 @@ type Messages = {
       onMerge: {
         title: string;
         publishes: string;
+        governance: string;
         version: string;
         promotion: string;
         review: string;
@@ -11461,6 +11462,7 @@ type Messages = {
         fact: string;
         memory: string;
         preference: string;
+        governance: string;
       };
       unclassified: string;
       force: string;
