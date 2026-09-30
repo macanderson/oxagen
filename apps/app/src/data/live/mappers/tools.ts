@@ -200,6 +200,7 @@ export function toMcpServerList(
       authorization: item.authorization,
       contextTokens: item.contextTokens,
       weeklyPrice: item.weeklyPrice,
+      steeringName: item.steeringName,
     })),
   };
 }

@@ -22,7 +22,7 @@ Empty object — workspace scope comes from the request envelope.
 
 | Field     | Type                                                                       | Notes                       |
 | --------- | -------------------------------------------------------------------------- | --------------------------- |
-| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, authorization, contextTokens, weeklyPrice }>` | Server inventory. |
+| `servers` | `Array<{ publicId, name, transportType, endpointUrl, healthStatus, lastHealthcheckAt, toolCount, authKind, iconUrl, authorization, contextTokens, weeklyPrice, steeringName }>` | Server inventory. |
 
 `contextTokens` is the tokens the server's tool definitions add to a model
 call (#4537). It comes from the newest system context the recorder listed in
@@ -42,6 +42,11 @@ calls. The Providers table shows it as the server's weekly price.
 unless `authKind` is `oauth`, and then holds `state` (`connected`,
 `needs_reauth`, `revoked` or `not_connected`), `expiresAt`, `refreshable` and
 `lastRefreshedAt`. No token or secret column is read.
+
+`steeringName` is the server's folder under `tools/servers/` in the steering
+repo, for a server a steering repo defines. It is null for a server added any
+other way. Studio names a server by this folder in every call, so the server
+page reads it from here before it reads the folder itself (#4678).
 
 `endpointUrl` has any userinfo replaced with `***`, so
 `https://user:secret@host/mcp` reads `https://***@host/mcp`. Registration
