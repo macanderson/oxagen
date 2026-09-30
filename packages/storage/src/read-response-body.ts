@@ -29,9 +29,12 @@ export async function readResponseBody(
       throw new ResponseBodyTooLargeError(maxBytes);
     for (;;) {
       signal?.throwIfAborted();
-      const { done, value } = await reader.read();
+      const result = await reader.read();
       signal?.throwIfAborted();
-      if (done) break;
+      if (result.done) break;
+      const value: unknown = result.value;
+      if (!(value instanceof Uint8Array))
+        throw new TypeError("Response body must contain byte chunks");
       if (value.byteLength > maxBytes - size)
         throw new ResponseBodyTooLargeError(maxBytes);
       const needed = size + value.byteLength;
