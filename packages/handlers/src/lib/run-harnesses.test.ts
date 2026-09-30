@@ -23,8 +23,9 @@ const sessionId = "tse_0000000000000000000001";
 const ledgerId = "arun_000000000000000000001";
 
 describe("readRunHarnesses", () => {
-  // A block body, because `mockReset()` returns the mock, and vitest calls a
-  // function returned from `beforeEach` as cleanup with no arguments.
+  // A block body, not an expression: mockReset() returns the mock, and a
+  // function a beforeEach returns runs as that test's teardown, with no
+  // arguments and with the test's implementation still installed.
   beforeEach(() => {
     mocks.withTenantDb.mockReset();
   });

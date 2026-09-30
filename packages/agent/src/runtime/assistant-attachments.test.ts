@@ -174,7 +174,9 @@ describe("checkAttachmentBytes", () => {
 });
 
 describe("assertModelReadsAttachments", () => {
-  beforeEach(() => mocks.supportsVision.mockReset());
+  beforeEach(() => {
+    mocks.supportsVision.mockReset();
+  });
 
   it("lets text through on any model, without asking about vision", () => {
     assertModelReadsAttachments("some/text-model", ["text"]);

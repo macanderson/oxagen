@@ -75,7 +75,9 @@ function receivedBounds(sql: string): string[] {
   return (sql.match(/received_at[^\n]*/g) ?? []).map((line) => line.trim());
 }
 
-beforeEach(() => queryMock.mockReset());
+beforeEach(() => {
+  queryMock.mockReset();
+});
 
 describe("readModelCallFrames", () => {
   it("reads a wrapped run's token-bearing sources and splits cache writes by TTL", async () => {
