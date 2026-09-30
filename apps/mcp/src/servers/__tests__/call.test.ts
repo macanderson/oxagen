@@ -1056,10 +1056,13 @@ describe("callServed agent feedback records (ADR-234)", () => {
     const real = await requireCedarRuntime();
     // Visibility asks isAuthorizedPartial, so the tool stays served. Only
     // the call's own decision fails inside Cedar.
-    const failing: CedarRuntime = {
-      ...real,
-      isAuthorized: () => ({ type: "failure", errors: [{ message: "The evaluator stopped." }], warnings: [] }),
-    } as CedarRuntime;
+    // Only the fields readCedarDecision reads from a failure answer.
+    const failure = {
+      type: "failure",
+      errors: [{ message: "The evaluator stopped." }],
+      warnings: [],
+    } as unknown as ReturnType<CedarRuntime["isAuthorized"]>;
+    const failing: CedarRuntime = { ...real, isAuthorized: () => failure };
     const { call, recorded } = await setup({ cedar: () => Promise.resolve(failing) });
     const result = await call("billing__list_charges");
     expect(textOf(result)).toBe(
