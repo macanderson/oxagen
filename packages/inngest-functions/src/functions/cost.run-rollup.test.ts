@@ -24,7 +24,7 @@ type Handler = (ctx: {
   };
 }) => Promise<unknown>;
 let handler: Handler | null = null;
-let config: { concurrency?: { key: string } } | null = null;
+let config: { concurrency?: { limit: number; key?: string }[] } | null = null;
 mocks.createFunction.mockImplementation(
   (opts: typeof config, _trigger: unknown, fn: Handler) => {
     config = opts;
@@ -49,7 +49,10 @@ describe("cost.run-rollup", () => {
   });
 
   it("serialises on the run id", () => {
-    expect(config?.concurrency?.key).toBe("event.data.runId");
+    expect(config?.concurrency).toEqual([
+      { limit: 4 },
+      { limit: 1, key: "event.data.runId" },
+    ]);
   });
 
   it("rebuilds the run's row, then the daily groups of the day it started", async () => {

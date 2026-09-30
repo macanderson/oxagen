@@ -218,6 +218,7 @@ describe("ingestImageFromUrl", () => {
       "https://lh3.googleusercontent.com/a/x",
       {
         redirect: "manual",
+        signal: expect.any(AbortSignal),
       },
     );
   });
@@ -298,5 +299,96 @@ describe("ingestImageFromUrl", () => {
 
     expect(result).toBeNull();
     expect(putImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("avatar download bounds", () => {
+  const input = { url: "https://lh3.googleusercontent.com/a/x", kind: "avatar" as const, ownerId: "owner" };
+
+  it("counts streamed bytes when the content length understates the body", async () => {
+    const cancel = vi.fn();
+    let produced = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { produced += 1; controller.enqueue(chunk); },
+      cancel,
+    }, { highWaterMark: 0 });
+    const response = new Response(body, { headers: {
+      "content-type": "image/jpeg", "content-length": "1",
+    } });
+    const putImpl = vi.fn(async () => OK_PUT);
+    expect(await ingestImageFromUrl(input, { fetchImpl: vi.fn(async () => response), putImpl })).toBeNull();
+    expect(produced).toBe(6);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(putImpl).not.toHaveBeenCalled();
+  });
+
+  it("cancels a declared oversized body before reading any bytes", async () => {
+    const pull = vi.fn();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ pull, cancel }, { highWaterMark: 0 });
+    const response = new Response(body, { headers: {
+      "content-type": "image/jpeg", "content-length": String(ASSET_LIMITS.avatar + 1),
+    } });
+    expect(await ingestImageFromUrl(input, { fetchImpl: vi.fn(async () => response) })).toBeNull();
+    expect(pull).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("cancels discarded redirect and invalid content bodies", async () => {
+    const cancelRedirect = vi.fn();
+    const cancelContent = vi.fn();
+    const redirect = new Response(new ReadableStream({ cancel: cancelRedirect }), {
+      status: 302, headers: { location: "/next" },
+    });
+    const invalid = new Response(new ReadableStream({ cancel: cancelContent }), {
+      headers: { "content-type": "text/html" },
+    });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(redirect).mockResolvedValueOnce(invalid);
+    expect(await ingestImageFromUrl(input, { fetchImpl })).toBeNull();
+    expect(cancelRedirect).toHaveBeenCalledOnce();
+    expect(cancelContent).toHaveBeenCalledOnce();
+  });
+
+  it("aborts a request that never returns headers after ten seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn<typeof fetch>((_target, options) => new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }));
+      const result = ingestImageFromUrl(input, { fetchImpl });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await result).toBeNull();
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("uses the same ten second deadline for redirects and a stalled body", async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn();
+      const fetchImpl = vi.fn<typeof fetch>()
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          setTimeout(() => resolve(new Response(null, {
+            status: 302, headers: { location: "/next" },
+          })), 6_000);
+        }))
+        .mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), {
+          headers: { "content-type": "image/jpeg" },
+        }));
+      const putImpl = vi.fn(async () => OK_PUT);
+      const result = ingestImageFromUrl(input, { fetchImpl, putImpl });
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBe(fetchImpl.mock.calls[1]?.[1]?.signal);
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(await result).toBeNull();
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(putImpl).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

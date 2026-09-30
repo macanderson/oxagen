@@ -1,3 +1,4 @@
+import { trackRequestWork } from "@oxagen/config/request-work";
 import type {
   CapabilityContext,
   CapabilitySurface,
@@ -1074,33 +1075,35 @@ export async function invoke(
   ctx: CapabilityContext,
   opts: InvokeOptions = {},
 ): Promise<unknown> {
-  return trace.getTracer("oxagen.kernel").startActiveSpan(
-    "kernel.invoke",
-    {
-      kind: SpanKind.INTERNAL,
-      attributes: {
-        "capability.name": name,
-        "capability.surface": opts.surface ?? ctx.surface ?? "",
-        "tenant.org_id": ctx.orgId,
-        "tenant.workspace_id": ctx.workspaceId,
-        "request.id": ctx.requestId,
+  return trackRequestWork(() =>
+    trace.getTracer("oxagen.kernel").startActiveSpan(
+      "kernel.invoke",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: {
+          "capability.name": name,
+          "capability.surface": opts.surface ?? ctx.surface ?? "",
+          "tenant.org_id": ctx.orgId,
+          "tenant.workspace_id": ctx.workspaceId,
+          "request.id": ctx.requestId,
+        },
       },
-    },
-    async (span) => {
-      try {
-        const result = await _invokeCore(name, rawInput, ctx, opts);
-        span.setStatus({ code: SpanStatusCode.OK });
-        span.end();
-        return result;
-      } catch (err) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: err instanceof Error ? err.message : String(err),
-        });
-        span.end();
-        throw err;
-      }
-    },
+      async (span) => {
+        try {
+          const result = await _invokeCore(name, rawInput, ctx, opts);
+          span.setStatus({ code: SpanStatusCode.OK });
+          span.end();
+          return result;
+        } catch (err) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          span.end();
+          throw err;
+        }
+      },
+    ),
   );
 }
 

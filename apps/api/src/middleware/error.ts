@@ -94,7 +94,7 @@ export const ASSISTANT_TURN_ERROR_STATUS: Record<
 // into the same wall (#3662). A 503 with `Retry-After` says the true thing: the
 // request was fine, the store cannot take it yet, ask again in N seconds.
 interface StoreOverloadedError extends Error {
-  readonly code: "store_overloaded";
+  readonly code: "store_overloaded" | "evidence_store_busy";
   readonly retryAfterSeconds: number;
 }
 
@@ -102,7 +102,7 @@ function isStoreOverloadedError(err: unknown): err is StoreOverloadedError {
   if (typeof err !== "object" || err === null) return false;
   const e = err as Record<string, unknown>;
   return (
-    e.code === "store_overloaded" && typeof e.retryAfterSeconds === "number"
+    (e.code === "store_overloaded" || e.code === "evidence_store_busy") && typeof e.retryAfterSeconds === "number"
   );
 }
 

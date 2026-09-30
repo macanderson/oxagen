@@ -319,6 +319,7 @@ export const baseEnvSchema = z.object({
     .optional(),
   KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
   MCP_PORT: z.string().optional(),
+  OPENAI_APPS_VERIFICATION_TOKEN: z.string().optional(),
 
   // ── OpenTelemetry (vendor-neutral OTLP export) ──
   // The distributed tracer (packages/telemetry/src/tracer.ts) reads these raw

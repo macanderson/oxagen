@@ -18,6 +18,13 @@ import type {
   ConversationExportModel,
   ExportBlock,
 } from "./conversation-markdown";
+import {
+  exportLimitError,
+  MAX_EXPORT_MESSAGES,
+  MAX_EXPORT_PDF_BLOCKS,
+  MAX_EXPORT_PDF_TEXT_BYTES,
+  MAX_EXPORT_PDF_PAGES,
+} from "./conversation-export-limits";
 import { formatDuration, roleLabel } from "./conversation-markdown";
 
 // ── Page geometry (A4) ────────────────────────────────────────────────────────
@@ -170,6 +177,44 @@ interface Cursor {
 export async function buildConversationPdf(
   model: ConversationExportModel,
 ): Promise<Uint8Array> {
+  if (model.messages.length > MAX_EXPORT_MESSAGES) {
+    throw exportLimitError("500 PDF messages");
+  }
+  let textBytes = 0;
+  let blockCount = 0;
+  const countText = (text: string) => {
+    textBytes += Buffer.byteLength(text, "utf8");
+    if (textBytes > MAX_EXPORT_PDF_TEXT_BYTES) {
+      throw exportLimitError("128 KiB of PDF text");
+    }
+  };
+  countText(model.title);
+  countText(model.orgName ?? "");
+  countText(model.workspaceName ?? "");
+  for (const message of model.messages) {
+    countText(message.role);
+    blockCount += message.blocks.length;
+    if (blockCount > MAX_EXPORT_PDF_BLOCKS) {
+      throw exportLimitError("2,000 PDF content blocks");
+    }
+    for (const block of message.blocks) {
+      switch (block.kind) {
+        case "text":
+        case "reasoning":
+          countText(block.text);
+          break;
+        case "tool":
+          countText(block.capability);
+          countText(block.status);
+          countText(block.resultPreview ?? "");
+          break;
+        case "attachment":
+          countText(block.name);
+          countText(block.url);
+          break;
+      }
+    }
+  }
   const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
 
   const doc = await PDFDocument.create();
@@ -190,6 +235,9 @@ export async function buildConversationPdf(
   };
 
   const newPage = () => {
+    if (doc.getPageCount() >= MAX_EXPORT_PDF_PAGES) {
+      throw exportLimitError("100 PDF pages");
+    }
     cur.page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     cur.y = PAGE_HEIGHT - MARGIN;
   };

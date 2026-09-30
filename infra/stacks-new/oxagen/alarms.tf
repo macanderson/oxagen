@@ -526,3 +526,68 @@ resource "aws_cloudwatch_metric_alarm" "tacho_ingress_5xx" {
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
 }
+
+# A JavaScript heap abort does not set Docker's OOMKilled flag. Count the
+# process diagnostic itself, including slow crash loops below restart alarms.
+resource "aws_cloudwatch_log_metric_filter" "service_heap_exhaustion" {
+  for_each       = toset(["api", "mcp"])
+  name           = "oxagen-${each.key}-heap-exhaustion"
+  log_group_name = aws_cloudwatch_log_group.service[each.key].name
+  pattern        = "\"heap out of memory\""
+
+  metric_transformation {
+    name      = "${each.key}HeapExhaustion"
+    namespace = "Oxagen/Capacity"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_heap_exhaustion" {
+  for_each            = toset(["api", "mcp"])
+  alarm_name          = "oxagen-${each.key}-heap-exhaustion"
+  alarm_description   = "The ${each.key} process exhausted its JavaScript heap. Inspect resource_budget records and the failing workload before increasing concurrency."
+  namespace           = "Oxagen/Capacity"
+  metric_name         = "${each.key}HeapExhaustion"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = { Brand = local.brand }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "service_memory_pressure" {
+  for_each       = toset(["api", "mcp"])
+  name           = "oxagen-${each.key}-memory-pressure"
+  log_group_name = aws_cloudwatch_log_group.service[each.key].name
+  pattern        = "{ $.event = \"resource_budget\" && $.ready = false }"
+
+  metric_transformation {
+    name          = "${each.key}MemoryPressure"
+    namespace     = "Oxagen/Capacity"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "service_memory_pressure" {
+  for_each            = toset(["api", "mcp"])
+  alarm_name          = "oxagen-${each.key}-memory-pressure"
+  alarm_description   = "The ${each.key} process repeatedly refused admission for projected memory pressure. Check backlog age and scale verified worker capacity."
+  namespace           = "Oxagen/Capacity"
+  metric_name         = "${each.key}MemoryPressure"
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 5
+  datapoints_to_alarm = 3
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = { Brand = local.brand }
+}

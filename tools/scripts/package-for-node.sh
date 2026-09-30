@@ -237,7 +237,7 @@ case $SERVICE in
     #
     # /health is Hono's own route. Checking it rather than "/" means the health
     # check proves the router is up, not merely that something answered.
-    write_manifest "$(port_for api)" 512m "/health" "$PARAMETER_PREFIX" node server.cjs
+    write_manifest "$(port_for api)" 1536m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=1024 server.cjs
     ;;
 
   mcp)
@@ -258,7 +258,7 @@ case $SERVICE in
     # manifest's `port` is what Caddy proxies to and what the health check
     # polls, so the two have to be the same number and the env var below is
     # how the application is told.
-    write_manifest "$(port_for mcp)" 512m "/health" "$PARAMETER_PREFIX" node dist/http.js
+    write_manifest "$(port_for mcp)" 1024m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=640 dist/http.js
     tmp=$(mktemp)
     jq --arg p "$(port_for mcp)" '.env.MCP_PORT = $p' "$OUT/oxagen-run.json" > "$tmp"
     mv "$tmp" "$OUT/oxagen-run.json"

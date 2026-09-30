@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   cacheHitRate,
+  createRunRollup,
+  MAX_ROLLUP_GROUPS,
   dailyTotalsFromRuns,
   divideHalfEven,
   microsToCentsHalfEven,
@@ -940,4 +942,44 @@ describe("proven spend by verdict (ADR-064)", () => {
     expect(agentRow([priced("tse_failing", "failing")]).provenMicros).toBe(0n);
     expect(agentRow([priced("tse_none", null)]).provenMicros).toBeNull();
   });
+});
+
+describe("streamed run totals", () => {
+  it("rounds after all batches and preserves cache weights and repeated tools", () => {
+    const accumulator = createRunRollup({ meta });
+    const book = [entry({ id: "tiny", tokenClass: "input_uncached", microsPerMillion: 500_000n })];
+    for (let index = 0; index < 3; index += 1) {
+      accumulator.addModel(frame({ tokens: tokens({ input_uncached: 1 }) }), book);
+    }
+    accumulator.addTool(tool("Read", { repeated: false, isMutating: false, resultTokens: 2 }));
+    accumulator.addTool(tool("Read", { repeated: true, isMutating: false, resultTokens: 3 }));
+    const result = accumulator.finish();
+    expect(result.costMicros).toBe(2n);
+    expect(result.modelCalls).toBe(3);
+    expect(result.toolCalls).toBe(2);
+    expect(result.cacheHitRate).toBe(0);
+    expect(result.unproductiveSteps).toBe(1);
+    expect(result.breakdown.tools[0]?.resultTokens).toBe(5);
+  });
+
+  it("prices each batch at its own historical rate", () => {
+    const accumulator = createRunRollup({ meta });
+    accumulator.addModel(frame({ tokens: tokens({ input_uncached: 1_000_000 }) }),
+      [entry({ id: "old", tokenClass: "input_uncached", microsPerMillion: 3n })]);
+    accumulator.addModel(frame({ tokens: tokens({ input_uncached: 1_000_000 }) }),
+      [entry({ id: "new", tokenClass: "input_uncached", microsPerMillion: 7n })]);
+    const result = accumulator.finish();
+    expect(result.costMicros).toBe(10n);
+    expect(result.priceEntryIds).toEqual(["new", "old"]);
+  });
+});
+
+
+it("rejects excessive output cardinality before a rollup can exhaust memory", () => {
+  const accumulator = createRunRollup({ meta });
+  for (let index = 0; index < MAX_ROLLUP_GROUPS; index += 1) {
+    accumulator.addTool(tool(`tool-${index}`, { repeated: false }));
+  }
+  expect(() => accumulator.addTool(tool("one-more", { repeated: false })))
+    .toThrow("distinct tool limit");
 });
