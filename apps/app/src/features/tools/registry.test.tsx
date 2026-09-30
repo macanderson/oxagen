@@ -436,24 +436,24 @@ describe("Registry › provider chips", () => {
     });
     fireEvent.click(chip("moves_money"));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?category=moves_money&provider=${STRIPE}&rows=25`,
+      `${TOOLS}&category=moves_money&provider=${STRIPE}&rows=25`,
     );
     fireEvent.click(chip("all"));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?provider=${STRIPE}&rows=25`,
+      `${TOOLS}&provider=${STRIPE}&rows=25`,
     );
     fireEvent.click(screen.getByRole("button", { name: "API names" }));
     expect(router.push).toHaveBeenLastCalledWith(
-      `${TOOLS}?provider=${STRIPE}&names=api&rows=25`,
+      `${TOOLS}&provider=${STRIPE}&names=api&rows=25`,
     );
     // The cursor only walks forward, so the step back is the first page.
     expect(pages().getByRole("link", { name: "First page" })).toHaveAttribute(
       "href",
-      `${TOOLS}?provider=${STRIPE}&rows=25`,
+      `${TOOLS}&provider=${STRIPE}&rows=25`,
     );
     expect(pages().getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
-      `${TOOLS}?provider=${STRIPE}&rows=25&cursor=cur_2`,
+      `${TOOLS}&provider=${STRIPE}&rows=25&cursor=cur_2`,
     );
   });
 
@@ -469,7 +469,7 @@ describe("Registry › provider chips", () => {
     await userEvent.click(await screen.findByRole("option", { name: "10" }));
     await waitFor(() => {
       expect(router.push).toHaveBeenLastCalledWith(
-        `${TOOLS}?provider=${STRIPE}&rows=10`,
+        `${TOOLS}&provider=${STRIPE}&rows=10`,
       );
     });
   });

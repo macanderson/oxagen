@@ -280,11 +280,11 @@ describe("Credential grants log", () => {
     );
     expect(pages.getByRole("link", { name: "First page" })).toHaveAttribute(
       "href",
-      `${CONNECTIONS}?rows=10`,
+      `${CONNECTIONS}&rows=10`,
     );
     expect(pages.getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
-      `${CONNECTIONS}?rows=10&cursor=cur_2`,
+      `${CONNECTIONS}&rows=10&cursor=cur_2`,
     );
     expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
       "10",
