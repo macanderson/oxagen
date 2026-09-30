@@ -153,6 +153,17 @@ const killSwitchMocks = vi.hoisted(() => ({
   ),
   /** The acting agent each gate was created with (its third argument). */
   actingAgents: [] as unknown[],
+  /**
+   * The classification index the belt reads for a class switch (#4218). The
+   * real read joins `agent.tools` to `agent.tool_versions`, which this file's
+   * db double does not model.
+   */
+  readClassificationIndex: vi.fn(
+    async (
+      _tx: unknown,
+      _scope: { orgId: string; workspaceId: string },
+    ): Promise<ReadonlyMap<string, readonly string[]>> => new Map(),
+  ),
 }));
 vi.mock("./kill-switch-gate", async (importOriginal) => {
   const real = await importOriginal<typeof import("./kill-switch-gate")>();
@@ -166,6 +177,7 @@ vi.mock("./kill-switch-gate", async (importOriginal) => {
       killSwitchMocks.actingAgents.push(actingAgent);
       return { check: killSwitchMocks.check };
     },
+    readClassificationIndex: killSwitchMocks.readClassificationIndex,
   };
 });
 
@@ -368,6 +380,7 @@ vi.mock("@oxagen/iam", async () => {
     matchEmergencyDeny: live.matchEmergencyDeny,
     readActiveEmergencyDenies: iamMocks.readActiveEmergencyDenies,
     resourceScopeDigestOf: scopes.resourceScopeDigestOf,
+    implicitScopeDigests: scopes.implicitScopeDigests,
   };
 });
 
@@ -2667,6 +2680,74 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     // refuses the call there too (kill-switch-gate.test.ts). A person's gate
     // carries none.
     expect(killSwitchMocks.actingAgents).toEqual([ASSISTANT, null]);
+  });
+
+  // #4218: a workspace, org, operator, or class switch covers every call it
+  // names, and the per-call gate refuses each one (`callScopeDigests`). The
+  // belt matched on the acting agent's digest alone, so each of these left
+  // every tool on the list. It now matches on the digests the gate builds.
+  const scopeSwitch = (target: {
+    kind: string;
+    id: string;
+  }): ActiveEmergencyDeny => ({
+    publicId: `edn_${target.kind}`,
+    denyKind: "resource_scope",
+    capabilityId: null,
+    resourceScopeDigest: resourceScopeDigestOf(target),
+    principalId: null,
+    reason: "incident",
+  });
+  it.each([
+    ["workspace", { kind: "workspace", id: CTX.workspaceId }],
+    ["org", { kind: "org", id: CTX.orgId }],
+    ["operator", { kind: "operator", id: CTX.userId }],
+  ])("a %s switch leaves every capability out of a person's belt", async (_kind, target) => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch(target),
+    ]);
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools)).toEqual([]);
+  });
+
+  it("a workspace switch leaves every capability out of an agent run's belt", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "workspace", id: CTX.workspaceId }),
+    ]);
+    const run = makeAgentRun(createAgentRunResolution(contributorSnapshot()));
+    const { tools } = await materializeTools(ctxWith(run));
+    expect(Object.keys(tools)).toEqual([]);
+  });
+
+  it("a switch on another workspace or operator leaves the belt whole (negative)", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "workspace", id: "ws_other" }),
+      scopeSwitch({ kind: "operator", id: "u_other" }),
+    ]);
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+  });
+
+  it("a class switch leaves out only the capabilities whose version carries the class", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch({ kind: "class", id: "moves_money" }),
+    ]);
+    killSwitchMocks.readClassificationIndex.mockClear();
+    killSwitchMocks.readClassificationIndex.mockResolvedValueOnce(
+      new Map([["capB", ["moves_money"]]]),
+    );
+    const { tools } = await materializeTools(CTX);
+    expect(Object.keys(tools).sort()).toEqual(["capA", "fill_form"]);
+    expect(killSwitchMocks.readClassificationIndex).toHaveBeenCalledWith(
+      expect.anything(),
+      { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+    );
+  });
+
+  it("reads no classification index while only capability denies are on", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([killSwitch("capA")]);
+    killSwitchMocks.readClassificationIndex.mockClear();
+    await materializeTools(CTX);
+    expect(killSwitchMocks.readClassificationIndex).not.toHaveBeenCalled();
   });
 });
 

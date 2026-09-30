@@ -39,8 +39,12 @@ import {
   decryptApprovalResume,
 } from "./approval-resume-payload";
 import { materializeTools } from "./materialize-tools";
-import { createKillSwitchGate } from "./kill-switch-gate";
-import { openAssistantRun, type AssistantRunRecorder } from "./assistant-run";
+import { createKillSwitchGate, type ActingAgent } from "./kill-switch-gate";
+import {
+  openAssistantRun,
+  readAssistantAgentState,
+  type AssistantRunRecorder,
+} from "./assistant-run";
 
 const a = schema.approvalRequests;
 export interface ApprovalResumeRef {
@@ -248,6 +252,20 @@ export async function resumeApprovedCall(
         bootstrapBillingRuntime();
         bootstrapEntitlementRuntime();
         bootstrapDecisionRulesRuntime();
+        // The agent the parked turn ran as: stella (#4218). An `agent` switch
+        // on it, or a deny naming its principal, stops the approved call as it
+        // would have stopped the turn. The listing and both gate checks below
+        // read it. Without it the first check would report a switch on stella
+        // as `tool_authorization_changed`.
+        const assistant = await withTenantDb((tx) =>
+          readAssistantAgentState(tx, {
+            orgId: ref.orgId,
+            workspaceId: ref.workspaceId,
+          }),
+        );
+        const actingAgent: ActingAgent | null = assistant
+          ? { agentId: assistant.agentId, principalId: assistant.principalId }
+          : null;
         const tools = await materializeTools(ctx, {
           allowlist: new Set([cap.name]),
           riskCeiling: payload.riskLevel,
@@ -257,12 +275,17 @@ export async function resumeApprovedCall(
           // it could not call (#4310).
           capabilitiesOnly: true,
           callerRoles: { org: orgRoles, workspace: workspaceRoles },
+          ...(actingAgent ? { actingAgent } : {}),
         });
         if (!Object.values(tools.nameMap).includes(cap.name)) {
           // The listing leaves out a tool a kill switch names (toolbelt.ts,
           // R4), so a missing tool can mean a switch rather than a changed
           // grant. Name the switch when it is one, as the check below does.
-          const switched = await createKillSwitchGate(ctx).check({
+          const switched = await createKillSwitchGate(
+            ctx,
+            undefined,
+            actingAgent,
+          ).check({
             capabilityId: cap.name,
             readOnly: false,
           });
@@ -303,7 +326,11 @@ export async function resumeApprovedCall(
           input: { inputDigest: payload.validatedDigest },
         };
         await run.toolCallStarted(intent);
-        const killed = await createKillSwitchGate(ctx).check({
+        const killed = await createKillSwitchGate(
+          ctx,
+          undefined,
+          actingAgent,
+        ).check({
           capabilityId: cap.name,
           readOnly: false,
         });

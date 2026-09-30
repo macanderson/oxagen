@@ -641,6 +641,21 @@ describe("AssistantFlyout", () => {
     expect(screen.queryByTestId("assistant-answer")).toBeNull();
   });
 
+  // `ask_assistant` refuses a switched-off stella as forbidden with reason
+  // `kill_switch`. The role sentence would send the person to their role,
+  // when an operator switched stella off (#4218).
+  it("says an operator switched stella off rather than blaming the role (negative)", async () => {
+    askAssistant.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "kill_switch",
+    });
+    const { user } = await openFlyout();
+    await ask(user, "what is live?");
+    expect(await screen.findByTestId("assistant-killSwitch")).toBeTruthy();
+    expect(screen.queryByTestId("assistant-denied")).toBeNull();
+  });
+
   it("says the budget is gone when the turn is refused for it (negative)", async () => {
     askAssistant.mockResolvedValue({
       ok: false,

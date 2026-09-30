@@ -15,10 +15,11 @@
 //   5. agent run unresolved — an agent run without its resolution fails closed;
 //   6. delegation ceiling — the resolver's agent ∩ human outcome (deny wins,
 //      `pending_approval` stays visible and routes to approval at call time);
-//   7. kill switch — an active emergency deny naming the capability. It
-//      reaches an agent run through the run's principals, the in-app
-//      assistant's turn through the agent it runs as, and any person's turn
-//      through a deny that names no principal, as the per-call gate does;
+//   7. kill switch — an active emergency deny that covers the call. It
+//      matches on the scope digests every call of the turn carries (org,
+//      workspace, operator, and agent), the class tags of the capability's
+//      tool version, and the principals the turn acts as, the facts the
+//      per-call gate matches on;
 //   8. entitlement — a plugin-claimed contract needs the plugin installed;
 //   9. the contract's own `agent.requiresApproval`.
 //
@@ -150,6 +151,28 @@ function ceilingRule(perms: EffectivePermissions): string {
   return `${side}:${step}`;
 }
 
+/**
+ * The scope digests one capability's call answers to: the turn's own
+ * (`env.scopeDigests`), the acting agent's, and one per class tag on the
+ * capability's tool version. The acting agent's digest is added even when
+ * the caller built the turn's set without it, so an `agent` switch on the
+ * assistant cuts its belt whatever the caller passed.
+ */
+function beltScopeDigests(
+  cap: RegistryCapability,
+  env: CapabilityBeltEnv,
+  acting: ActingAgent | null,
+): string[] {
+  const digests = new Set(env.scopeDigests ?? []);
+  if (acting) {
+    digests.add(resourceScopeDigestOf({ kind: "agent", id: acting.agentId }));
+  }
+  for (const tag of env.classTags?.get(cap.name) ?? []) {
+    digests.add(resourceScopeDigestOf({ kind: "class", id: tag }));
+  }
+  return [...digests];
+}
+
 export function decideCapabilityForBelt(
   cap: RegistryCapability,
   env: CapabilityBeltEnv,
@@ -217,9 +240,14 @@ export function decideCapabilityForBelt(
   // own turn has no principal ids, so only a deny that names no principal
   // matches. The assistant's turn also answers to the agent it runs as: a
   // deny naming that agent's principal, or an `agent` switch on it.
-  // `createKillSwitchGate` matches each call on the same agent and principal,
-  // but it reads kill switches only. A plain deny naming the principal, which
-  // `set_kill_switch` never writes, is cut here and not refused per call.
+  //
+  // A `resource_scope` deny matches on the same digests the per-call gate
+  // builds (`callScopeDigests`): the org, the workspace, the operator, the
+  // agent, and each class the capability's tool version carries (#4218).
+  // Matched on the agent digest alone, a workspace, org, operator, or class
+  // switch left every tool it covers on the belt while the gate refused
+  // every call to it. Server and connection digests belong to external tools,
+  // which the gate still checks per call.
   const run = env.agentRun;
   const acting = run === null ? (env.actingAgent ?? null) : null;
   const killed =
@@ -237,9 +265,7 @@ export function decideCapabilityForBelt(
                 ? [acting.principalId]
                 : [],
           resourceScopeDigest: null,
-          scopeDigests: acting
-            ? [resourceScopeDigestOf({ kind: "agent", id: acting.agentId })]
-            : [],
+          scopeDigests: beltScopeDigests(cap, env, acting),
         });
   if (killed !== null) return deny("kill_switch");
 

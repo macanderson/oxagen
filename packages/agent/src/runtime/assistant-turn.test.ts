@@ -194,6 +194,13 @@ vi.mock("./plugin-type", async (importOriginal) => {
   const real = await importOriginal<typeof import("./plugin-type")>();
   return { ...real, getPluginTypeContributors: () => [] };
 });
+// The listing reads the classification index while a scope switch is on
+// (#4218). The real read joins the tool registry, which the fake transaction
+// below does not model. No tool version here carries a class.
+vi.mock("./kill-switch-gate", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./kill-switch-gate")>();
+  return { ...real, readClassificationIndex: async () => new Map() };
+});
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { projectRunContextWindows } from "../dispatch/context-projection";

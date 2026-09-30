@@ -15,6 +15,9 @@ const h = vi.hoisted(() => ({
   autoApprove: vi.fn(),
   realRules: null as RuleSet | null,
   kill: vi.fn(),
+  /** The acting agent each kill-switch gate was created with. */
+  gateAgents: [] as unknown[],
+  agent: vi.fn(),
   open: vi.fn(),
   seal: vi.fn(),
   started: vi.fn(),
@@ -139,9 +142,15 @@ vi.mock("@oxagen/oxagen", () => ({
 }));
 vi.mock("./materialize-tools", () => ({ materializeTools: h.tools }));
 vi.mock("./kill-switch-gate", () => ({
-  createKillSwitchGate: () => ({ check: h.kill }),
+  createKillSwitchGate: (_ctx: unknown, _reads: unknown, acting: unknown) => {
+    h.gateAgents.push(acting);
+    return { check: (facts: unknown) => h.kill(facts, acting) };
+  },
 }));
-vi.mock("./assistant-run", () => ({ openAssistantRun: h.open }));
+vi.mock("./assistant-run", () => ({
+  openAssistantRun: h.open,
+  readAssistantAgentState: h.agent,
+}));
 
 import {
   resumeApprovedCall,
@@ -153,6 +162,8 @@ import {
   encryptApprovalResume,
   type ApprovalResumePayload,
 } from "./approval-resume-payload";
+/** The acting agent the resume passes on: stella, as its state read gives it. */
+const STELLA = { agentId: "agt_stella", principalId: "prn_stella" };
 const ref = {
   id: "10000000-0000-4000-8000-000000000001",
   orgId: "10000000-0000-4000-8000-000000000002",
@@ -176,6 +187,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   h.dedicatedOrgIds = [];
   h.seams = [];
+  h.gateAgents = [];
   h.realRules = null;
   vi.stubEnv(
     "AUTH_TOKEN_ENCRYPTION_KEY",
@@ -211,6 +223,11 @@ beforeEach(async () => {
   h.budgets.mockResolvedValue([]);
   h.tools.mockResolvedValue({ nameMap: { write_test: "write_test" } });
   h.kill.mockResolvedValue(null);
+  h.agent.mockResolvedValue({
+    agentId: "agt_stella",
+    principalId: "prn_stella",
+    stoppedBy: null,
+  });
   h.open.mockResolvedValue({
     runId: "new-run",
     runPublicId: "arun_resumed",
@@ -396,6 +413,37 @@ describe("approved call resumption", () => {
     });
     expect(opts).not.toHaveProperty("serverAllowlist");
   });
+  // #4218: the resume answers to the agent the parked turn ran as. The gate
+  // double stops a call only when it was built with stella, the way a real
+  // `agent` switch reaches a call only through the acting agent.
+  describe("an agent switch on stella", () => {
+    const agentSwitch = {
+      publicId: "ksw_stella",
+      targetKind: "agent",
+      targetId: "agt_stella",
+      reason: "incident",
+    };
+    beforeEach(() => {
+      h.kill.mockImplementation(
+        async (_facts: unknown, acting: { agentId?: string } | null) =>
+          acting?.agentId === "agt_stella" ? agentSwitch : null,
+      );
+    });
+    it("stops an approved resume at the call boundary", async () => {
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeError).toBe("kill_switch_active");
+      expect(h.invoke).not.toHaveBeenCalled();
+      expect(h.tools.mock.calls[0]![1]).toMatchObject({ actingAgent: STELLA });
+      expect(h.gateAgents).toEqual([STELLA]);
+    });
+    it("names the switch when the listing already left the tool out", async () => {
+      h.tools.mockResolvedValue({ nameMap: {} });
+      expect(await resumeApprovedCall(ref)).toBe("failed");
+      expect(h.row.resumeError).toBe("kill_switch_active");
+      expect(h.gateAgents).toEqual([STELLA]);
+      expect(h.open).not.toHaveBeenCalled();
+    });
+  });
   it("reads the budgets of the org the call resumes in", async () => {
     await resumeApprovedCall(ref);
     expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });
@@ -413,10 +461,10 @@ describe("approved call resumption", () => {
       h.kill.mockResolvedValue(switched);
       expect(await resumeApprovedCall(ref)).toBe("failed");
       expect(h.row.resumeError).toBe(reason);
-      expect(h.kill).toHaveBeenCalledWith({
-        capabilityId: "write_test",
-        readOnly: false,
-      });
+      expect(h.kill).toHaveBeenCalledWith(
+        { capabilityId: "write_test", readOnly: false },
+        STELLA,
+      );
       expect(h.open).not.toHaveBeenCalled();
       expect(h.invoke).not.toHaveBeenCalled();
     },

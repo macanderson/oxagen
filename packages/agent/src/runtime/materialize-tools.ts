@@ -29,7 +29,7 @@ import {
   recordGovernedActions,
 } from "@oxagen/billing";
 import { withTenantDb } from "@oxagen/database";
-import { readActiveEmergencyDenies } from "@oxagen/iam";
+import { implicitScopeDigests, readActiveEmergencyDenies } from "@oxagen/iam";
 import {
   resolveActingUserId,
   resolveActorOrgRoles,
@@ -57,7 +57,9 @@ import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 import {
   createKillSwitchGate,
   KillSwitchDeniedError,
+  readClassificationIndex,
   type ActingAgent,
+  type ClassificationIndex,
   type KillSwitchGate,
 } from "./kill-switch-gate";
 import {
@@ -697,6 +699,31 @@ export async function materializeTools(
           workspaceId: ctx.workspaceId || null,
         }),
       );
+  // The facts a `resource_scope` deny matches on, built the way the per-call
+  // gate builds them (#4218): the org, the workspace, the operator
+  // (`ctx.userId`), and the agent (the run's, else the one the turn acts as).
+  const scopeDigests = implicitScopeDigests({
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId || null,
+    agentId:
+      (agentRun?.principalKind === "agent" ? agentRun.agentId : null) ??
+      opts.actingAgent?.agentId ??
+      null,
+    operatorUserId: ctx.userId ?? null,
+  });
+  // The class tags of each tool version, which a `class` switch matches on.
+  // Read only while a `resource_scope` deny is on, since no other deny can
+  // name a class, and read from the same index the gate matches against.
+  const classTags: ClassificationIndex | undefined =
+    ctx.workspaceId &&
+    emergencyDenies.some((d) => d.denyKind === "resource_scope")
+      ? await withTenantDb((tx) =>
+          readClassificationIndex(tx, {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+          }),
+        )
+      : undefined;
 
   // Entitlement filter: if a capability is claimed by a plugin, the org must
   // have that plugin installed and enabled. Lazily fetch the entitled set on
@@ -772,6 +799,8 @@ export async function materializeTools(
       clientIp: ctx.clientIp ?? null,
       emergencyDenies,
       actingAgent: opts.actingAgent ?? null,
+      scopeDigests,
+      ...(classTags ? { classTags } : {}),
       entitledPluginIds: await entitledPluginIdsFor(cap),
       callerRoles: await callerRolesFor(cap),
     });
