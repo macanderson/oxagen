@@ -16,6 +16,7 @@ import { canonicalDigest } from "@oxagen/mcp-studio";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
+  arrayOverlaps,
   asc,
   desc,
   eq,
@@ -36,7 +37,12 @@ import type {
 
 type Row = typeof schema.mcpServerDiscoveries.$inferSelect;
 
-export type DiscoveryStatus = "queued" | "running" | "succeeded" | "failed";
+export type DiscoveryStatus =
+  | "queued"
+  | "running"
+  | "waiting_for_machine"
+  | "succeeded"
+  | "failed";
 
 /** One server's discovery state. */
 export interface DiscoveryRow {
@@ -83,9 +89,37 @@ export interface DiscoverySourceFields {
   version: string | null;
 }
 
-/** What a finished discovery writes. */
+/** A waiting discovery a polling machine's process claimed. */
+export interface ClaimedDiscovery {
+  server: string;
+  trigger: DiscoveryTrigger;
+  requestedBy: string | null;
+}
+
+/** The claim the MCP process makes for a machine that polls (#4772). */
+export interface DiscoveryClaimStore {
+  /**
+   * Claim the workspace's oldest discovery that waits for a machine in one
+   * of `groups`, and mark it queued for the calling process to run (#4772).
+   * Null when none waits. The read locks the row and skips one another
+   * transaction holds, so two processes never claim one discovery.
+   */
+  claimWaiting(
+    scope: DiscoveryScope,
+    groups: readonly string[],
+    now: Date,
+  ): Promise<ClaimedDiscovery | null>;
+}
+
+/**
+ * What a finished discovery writes. waiting_for_machine is a run that stopped
+ * for a machine to poll (#4772): it records the groups that may run it and
+ * leaves finishedAt empty, so the server does not read as discovered.
+ */
 export interface DiscoveryFinish {
-  status: "succeeded" | "failed";
+  status: "succeeded" | "failed" | "waiting_for_machine";
+  /** server.toml's source.machines, for a waiting run. */
+  machineGroups?: readonly string[];
   outcome: DiscoveryOutcome | null;
   error: string | null;
   toolCount: number | null;
@@ -393,11 +427,14 @@ export const postgresDiscoveryStore: DiscoveryStore = {
   },
 
   async finish(scope, server, finish, now) {
+    // A run that waits for a machine has not finished: the claim runs it.
+    const waiting = finish.status === "waiting_for_machine";
     await inScope(scope, (tx) =>
       tx
         .update(t)
         .set({
           status: finish.status,
+          machineGroups: waiting ? [...(finish.machineGroups ?? [])] : [],
           outcome: finish.outcome,
           error: finish.error,
           toolCount: finish.toolCount,
@@ -413,7 +450,7 @@ export const postgresDiscoveryStore: DiscoveryStore = {
           ...(finish.withheldUpstream === undefined
             ? {}
             : { withheldUpstream: finish.withheldUpstream }),
-          finishedAt: now,
+          finishedAt: waiting ? null : now,
           updatedAt: now,
         })
         .where(scoped(scope, server)),
@@ -489,6 +526,43 @@ export const postgresDiscoveryStore: DiscoveryStore = {
         ),
       );
       return fresh.length;
+    });
+  },
+};
+
+export const postgresDiscoveryClaimStore: DiscoveryClaimStore = {
+  async claimWaiting(scope, groups, now) {
+    if (groups.length === 0) return null;
+    return inScope(scope, async (tx) => {
+      const [row] = await tx
+        .select({
+          id: t.id,
+          server: t.server,
+          trigger: t.trigger,
+          requestedBy: t.requestedBy,
+        })
+        .from(t)
+        .where(
+          and(
+            eq(t.orgId, scope.orgId),
+            eq(t.workspaceId, scope.workspaceId),
+            eq(t.status, "waiting_for_machine"),
+            arrayOverlaps(t.machineGroups, [...groups]),
+          ),
+        )
+        .orderBy(asc(t.requestedAt), asc(t.id))
+        .limit(1)
+        .for("update", { skipLocked: true });
+      if (row === undefined) return null;
+      await tx
+        .update(t)
+        .set({ status: "queued", updatedAt: now })
+        .where(eq(t.id, row.id));
+      return {
+        server: row.server,
+        trigger: row.trigger as DiscoveryTrigger,
+        requestedBy: row.requestedBy,
+      };
     });
   },
 };

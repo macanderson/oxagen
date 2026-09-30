@@ -32,6 +32,34 @@ async function readMachineHost(
   return row;
 }
 
+/** The machines whose waiting discoveries this process is running now. */
+const claiming = new Set<string>();
+
+/**
+ * Runs the discoveries that wait for a machine that polls (#4772). One pass
+ * per machine at a time: a poll that arrives while the last pass runs adds
+ * nothing. The modules load on the first poll, not at boot.
+ */
+async function claimForPoll(poll: { machine: string; scope: { orgId: string; workspaceId: string } }): Promise<void> {
+  if (claiming.has(poll.machine)) return;
+  claiming.add(poll.machine);
+  try {
+    const [{ claimMachineDiscoveries }, { discoverySeams }, { toolsPullRequestOpener }] = await Promise.all([
+      import("@oxagen/handlers/mcp-studio/discovery/claim"),
+      import("@oxagen/handlers/mcp-studio/discovery/seams"),
+      import("@oxagen/handlers/tools.pr.open"),
+    ]);
+    await claimMachineDiscoveries(poll, {
+      broker: localGatewayBroker(),
+      reader: postgresMachineGroupReader,
+      // The opener the API installs before each discovery (handlers' register.ts).
+      seams: async () => ({ ...(await discoverySeams()), opener: toolsPullRequestOpener }),
+    });
+  } finally {
+    claiming.delete(poll.machine);
+  }
+}
+
 /** Serves GET /v1/local-servers/next and POST /v1/local-servers/replies. */
 export const localServersRoute = createLocalServersRoute({
   authenticate: createMachineAuth({
@@ -41,6 +69,7 @@ export const localServersRoute = createLocalServersRoute({
     readHost: readMachineHost,
   }),
   broker: localGatewayBroker,
+  onPoll: claimForPoll,
   log: (event, fields) => console.warn(JSON.stringify({ event, ...fields })),
 });
 

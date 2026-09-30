@@ -63,6 +63,7 @@
             "enum": [
               "queued",
               "running",
+              "waiting_for_machine",
               "succeeded",
               "failed"
             ]

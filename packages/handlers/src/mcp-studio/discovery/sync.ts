@@ -81,6 +81,7 @@ import {
   type DiscoveryScope,
   type DiscoveryTrigger,
   type SyncSchedule,
+  WaitingForMachine,
 } from "./types";
 
 /** How long one discovery may read its source before the run stops it. */
@@ -750,6 +751,15 @@ async function sync(run: Run): Promise<DiscoveryFinish> {
 function failure(run: Run, error: unknown): DiscoveryFinish {
   if (error instanceof NeedsDigest) {
     return { ...finished(run.kept, "needs_digest"), latestVersion: error.latestVersion };
+  }
+  // No failure: the MCP process a machine in these groups polls runs it.
+  if (error instanceof WaitingForMachine) {
+    return {
+      ...finished(run.kept, "skipped"),
+      status: "waiting_for_machine",
+      outcome: null,
+      machineGroups: error.groups,
+    };
   }
   return {
     ...finished(run.kept, "skipped"),

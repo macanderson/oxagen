@@ -20,6 +20,7 @@ import {
   type DiscoveryStore,
   type DiscoveryTarget,
   type OnChangeTarget,
+  postgresDiscoveryClaimStore,
   postgresDiscoveryStore,
   postgresDiscoverySweepStore,
   postgresDiscoveryToolsStore,
@@ -217,6 +218,77 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
         .where(inArray(schema.mcpRegistries.orgId, orgs));
     });
     await closeDatabase();
+  });
+
+  describe("a discovery that waits for a machine (#4772)", () => {
+    const claims = postgresDiscoveryClaimStore;
+
+    async function waiting(scope: DiscoveryScope, server: string, groups: string[]) {
+      await store.request(scope, server, "list_changed", null, T0);
+      await store.begin(scope, server, "list_changed", null, T1);
+      await store.finish(
+        scope,
+        server,
+        finished({ status: "waiting_for_machine", outcome: null, machineGroups: groups }),
+        T2,
+      );
+    }
+
+    it("records the groups and leaves the discovery unfinished", async () => {
+      const scope = newScope();
+      await waiting(scope, "files", ["dev-laptops"]);
+      const row = await rawRow(scope, "files");
+      expect(row).toMatchObject({
+        status: "waiting_for_machine",
+        machineGroups: ["dev-laptops"],
+        finishedAt: null,
+      });
+      await expect(store.read(scope, "files")).resolves.toMatchObject({
+        status: "waiting_for_machine",
+      });
+    });
+
+    it("claims a waiting discovery once for a machine in its groups, and marks it queued", async () => {
+      const scope = newScope();
+      await waiting(scope, "files", ["dev-laptops", "ci-runners"]);
+      const [first, second] = await Promise.all([
+        claims.claimWaiting(scope, ["ci-runners"], T3),
+        claims.claimWaiting(scope, ["ci-runners"], T3),
+      ]);
+      const won = [first, second].filter((claim) => claim !== null);
+      expect(won).toEqual([
+        { server: "files", trigger: "list_changed", requestedBy: null },
+      ]);
+      expect((await rawRow(scope, "files")).status).toBe("queued");
+      await expect(claims.claimWaiting(scope, ["ci-runners"], T3)).resolves.toBeNull();
+    });
+
+    it("claims nothing for a machine in no group the discovery names, or in no group at all", async () => {
+      const scope = newScope();
+      await waiting(scope, "files", ["dev-laptops"]);
+      await expect(claims.claimWaiting(scope, ["ci-runners"], T3)).resolves.toBeNull();
+      await expect(claims.claimWaiting(scope, [], T3)).resolves.toBeNull();
+      await expect(claims.claimWaiting(newScope(), ["dev-laptops"], T3)).resolves.toBeNull();
+      expect((await rawRow(scope, "files")).status).toBe("waiting_for_machine");
+    });
+
+    it("clears the groups when the next run finishes", async () => {
+      const scope = newScope();
+      await waiting(scope, "files", ["dev-laptops"]);
+      await store.finish(scope, "files", finished(), T3);
+      expect(await rawRow(scope, "files")).toMatchObject({
+        status: "succeeded",
+        machineGroups: [],
+        finishedAt: T3,
+      });
+    });
+
+    it("is not a stalled discovery for the hourly sweep", async () => {
+      const scope = newScope();
+      await waiting(scope, "files", ["dev-laptops"]);
+      const stalled = await sweep.stalled(shift(T3, 48), 200);
+      expect(stalled.filter((target) => target.scope.workspaceId === scope.workspaceId)).toEqual([]);
+    });
   });
 
   describe("the scoped store", () => {

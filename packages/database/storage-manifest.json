@@ -20078,6 +20078,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
+        },
+        {
+          "name": "machine_groups",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
         }
       ],
       "domain": "mcp",

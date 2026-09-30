@@ -479,6 +479,7 @@
         "statuses": {
           "queued": "Queued",
           "running": "Running",
+          "waiting_for_machine": "Waiting for a machine",
           "succeeded": "Finished",
           "failed": "Failed"
         },

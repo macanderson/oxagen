@@ -9,7 +9,10 @@
 // - credentials: lane M8's CredentialSource over the workspace's vault rows
 //   and its published servers (vaultCredentials). noCredentials refuses
 //   every request, for a process with no vault.
-// - local: lane M15 installs gatewayLocalReporter with the live broker.
+// - local: the API's durable functions reach no machine, so their default
+//   records the discovery as waiting for one (waitingLocalReporter). The MCP
+//   process a machine polls runs it with gatewayLocalReporter over its
+//   broker (./claim, #4772).
 // - grpc: lane M3's importGrpc, which reads .proto files into tools and a
 //   descriptor set.
 // - opener: lane M11's toolsPullRequestOpener (#4688) opens the tools
@@ -37,7 +40,11 @@ import { discoverLocalTools } from "../local-calls/discovery";
 import { launchSpecFor, machineGroupsOf } from "../local-calls/launch";
 import type { MachineGroupReader } from "../local-calls/machines";
 import { fetchText } from "./mcp-client";
-import { DiscoveryRefused, type DiscoveryScope } from "./types";
+import {
+  DiscoveryRefused,
+  WaitingForMachine,
+  type DiscoveryScope,
+} from "./types";
 
 // ── Steering files ───────────────────────────────────────────────────────────
 
@@ -166,7 +173,19 @@ export interface LocalToolsReporter {
   report(request: LocalToolsRequest): Promise<LocalToolsReport>;
 }
 
-/** Refuses until the local gateway's broker is installed. */
+/**
+ * The default in a process that reaches no machine: the API's durable
+ * functions (#4772). It lists nothing and records the discovery as waiting for
+ * a machine in the server's groups. The MCP process one of them polls claims
+ * it and runs it through its broker.
+ */
+export const waitingLocalReporter: LocalToolsReporter = {
+  report({ server, source }) {
+    return Promise.reject(new WaitingForMachine(server, machineGroupsOf(source)));
+  },
+};
+
+/** Refuses every local discovery, for a test that reaches no machine. */
 export const noLocalReporter: LocalToolsReporter = {
   report() {
     return Promise.reject(
@@ -518,7 +537,7 @@ async function defaultSeams(): Promise<DiscoverySeams> {
     steering: hostSteeringFiles(createSteeringHost()),
     credentials: vaultCredentials(workspaceVault),
     transport: cloudTransport,
-    local: noLocalReporter,
+    local: waitingLocalReporter,
     grpc: importGrpc,
     definitions: githubDefinitionReader(async (scope, signal) =>
       createGitHubClient({

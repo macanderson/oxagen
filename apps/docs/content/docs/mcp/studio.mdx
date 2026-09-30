@@ -109,7 +109,9 @@ A discovery takes these steps:
 
 Until the sync steering PR merges, the gateway withholds each tool whose input schema changed and each tool the new lock drops. A tool the source newly offers opens no PR. It shows on the Tools tab as available until you import it.
 
-Poll `get_studio_discovery` while the status reads `queued` or `running`. A discovery ends `succeeded` or `failed`. A run times out after 10 minutes and retries twice, and a failed run keeps the open PR and the withheld tools. A discovery that stays `queued` or `running` for over an hour reads `stalled: true`, and the hourly sweep asks for it again.
+Poll `get_studio_discovery` while the status reads `queued` or `running`. A discovery ends `succeeded` or `failed`.
+
+A local server, and a registry package that runs on machines, lists its tools on an enrolled machine. Its discovery reads `waiting_for_machine` until a machine in one of the server's `source.machines` groups polls Oxagen. That machine then lists the server's tools, and the discovery runs as any other. A discovery that waits for a machine is not stalled, and the hourly sweep leaves it alone. A run times out after 10 minutes and retries twice, and a failed run keeps the open PR and the withheld tools. A discovery that stays `queued` or `running` for over an hour reads `stalled: true`, and the hourly sweep asks for it again.
 
 | Outcome | What it means |
 |---|---|

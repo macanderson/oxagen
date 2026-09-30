@@ -36,6 +36,7 @@ import {
   installDiscoverySeams,
   noCredentials,
   noLocalReporter,
+  waitingLocalReporter,
   noToolsPullRequestOpener,
   resetDiscoverySeams,
   transportRegistryCatalog,
@@ -46,7 +47,11 @@ import {
   type GrpcImporter,
   type ToolsPullRequestOpener,
 } from "./seams";
-import { DiscoveryRefused, type DiscoveryScope } from "./types";
+import {
+  DiscoveryRefused,
+  WaitingForMachine,
+  type DiscoveryScope,
+} from "./types";
 
 const mocks = vi.hoisted(() => {
   const steering = {
@@ -401,6 +406,19 @@ describe("noLocalReporter", () => {
       message:
         "Discovery cannot reach the local gateway yet, so a server that runs on machines is not discovered.",
     });
+  });
+});
+
+describe("waitingLocalReporter", () => {
+  it("records a server that runs on machines as waiting for a machine in its groups (#4772)", async () => {
+    const error = await waitingLocalReporter
+      .report(localRequest(LOCAL_SOURCE, LOCAL_LOCK))
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).toBeInstanceOf(WaitingForMachine);
+    expect((error as WaitingForMachine).groups).toEqual(["dev-laptops"]);
   });
 });
 
@@ -835,7 +853,8 @@ describe("noToolsPullRequestOpener", () => {
 describe("discoverySeams", () => {
   it("gives the refusing defaults for the lanes not yet installed", async () => {
     const seams = await discoverySeams();
-    expect(seams.local).toBe(noLocalReporter);
+    // The API reaches no machine, so a local discovery waits for one (#4772).
+    expect(seams.local).toBe(waitingLocalReporter);
     expect(seams.opener).toBe(noToolsPullRequestOpener);
     expect(typeof seams.credentials(SCOPE).resolve).toBe("function");
   });
@@ -902,7 +921,7 @@ describe("discoverySeams", () => {
 
     const seams = await discoverySeams();
     expect(seams.opener).toBe(opener);
-    expect(seams.local).toBe(noLocalReporter);
+    expect(seams.local).toBe(waitingLocalReporter);
     expect(seams.grpc).toBe(importGrpc);
   });
 

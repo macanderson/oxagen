@@ -36,7 +36,12 @@ export interface RefusalBody {
 }
 
 export type MachineAuthResult =
-  | { ok: true; machine: string }
+  | {
+      ok: true;
+      machine: string;
+      /** The workspace the machine's gateway key belongs to. */
+      scope: { orgId: string; workspaceId: string };
+    }
   | { ok: false; status: 401 | 403; body: RefusalBody };
 
 export type MachineHeaders = Record<string, string | string[] | undefined>;
@@ -106,6 +111,10 @@ export function createMachineAuth(deps: MachineAuthDeps): (headers: MachineHeade
     // the broker knows, so a call to it reads "disconnected".
     if (host.status === "suspended") return forbidden("Forbidden: Tacho host suspended", "host_suspended");
     if (host.expiresAt.getTime() <= now()) return forbidden("Forbidden: Tacho host enrollment expired");
-    return { ok: true, machine };
+    return {
+      ok: true,
+      machine,
+      scope: { orgId: key.orgId, workspaceId: key.workspaceId },
+    };
   };
 }

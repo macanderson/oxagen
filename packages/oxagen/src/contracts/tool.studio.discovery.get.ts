@@ -9,7 +9,8 @@ const isoDateSchema = z.string().datetime();
  * mcp.server_discoveries keeps one row per server, and each discovery
  * overwrites it, so `id` stays the same across runs and serves as the
  * discovery id. Progress is the status: queued, running, then succeeded or
- * failed.
+ * failed. A server that runs on machines reads waiting_for_machine until the
+ * MCP process a machine in its groups polls claims it (#4772).
  */
 export const studioDiscoverySchema = z.object({
   /** The row's id, stable across every discovery of the server. */
@@ -18,7 +19,13 @@ export const studioDiscoverySchema = z.object({
   server: z.string(),
   /** `mcs_…`, or null before the server has a registry row. */
   mcpServerId: z.string().nullable(),
-  status: z.enum(["queued", "running", "succeeded", "failed"]),
+  status: z.enum([
+    "queued",
+    "running",
+    "waiting_for_machine",
+    "succeeded",
+    "failed",
+  ]),
   /** What asked for the latest discovery. */
   trigger: z.enum([
     "schedule",

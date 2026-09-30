@@ -100,7 +100,8 @@ export type StudioDiscovery = {
   server: string;
   /** `mcs_…`, or null before the server has a registry row. */
   mcpServerId: string | null;
-  status: "queued" | "running" | "succeeded" | "failed";
+  /** waiting_for_machine: no machine in the server's groups has polled yet (#4772). */
+  status: "queued" | "running" | "waiting_for_machine" | "succeeded" | "failed";
   /** True when the discovery has been queued or running for over an hour. */
   stalled: boolean;
   trigger:

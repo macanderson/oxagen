@@ -16,7 +16,8 @@ type Delivery = NonNullable<Awaited<ReturnType<LongPollBroker["next"]>>>;
 
 const MACHINE = "tch_laptop01";
 const HEADERS = { authorization: "Bearer ox_gateway_key", "x-tacho-host": MACHINE };
-const ALLOWED: MachineAuthResult = { ok: true, machine: MACHINE };
+const SCOPE = { orgId: "org_1", workspaceId: "ws_1" };
+const ALLOWED: MachineAuthResult = { ok: true, machine: MACHINE, scope: SCOPE };
 const DELIVERY = { kind: "discover", id: "n".repeat(22), deadline_ms: 1_000 } as unknown as Delivery;
 
 function brokerWith(parts: Partial<LongPollBroker> = {}): LongPollBroker {
@@ -281,6 +282,39 @@ describe("createLocalServersRoute", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(writeHead).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledWith(MACHINE, DELIVERY);
+  });
+
+  it("runs the poll hook for the machine and its workspace beside the wait (#4772)", async () => {
+    const onPoll = vi.fn(() => Promise.resolve());
+    const next = vi.fn(() => Promise.resolve(undefined));
+    const { route } = routeWith({ broker: () => brokerWith({ next }), onPoll });
+    await expect(serve(route, poll())).resolves.toMatchObject({ status: 204 });
+    expect(onPoll).toHaveBeenCalledWith({ machine: MACHINE, scope: SCOPE });
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("answers the poll and logs when the poll hook fails", async () => {
+    const onPoll = vi.fn(() => Promise.reject(new Error("claim failed")));
+    const { route, deps } = routeWith({ onPoll });
+    await expect(serve(route, poll())).resolves.toMatchObject({ status: 204 });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(deps.log).toHaveBeenCalledWith("local_servers.poll_work_failed", {
+      machine: MACHINE,
+      error: "claim failed",
+    });
+  });
+
+  it("runs no poll hook for a reply or a refused key", async () => {
+    const onPoll = vi.fn(() => Promise.resolve());
+    const { route } = routeWith({ onPoll });
+    await serve(route, reply({}));
+    const refused = routeWith({
+      onPoll,
+      authenticate: () =>
+        Promise.resolve({ ok: false, status: 401, body: { error: { code: "unauthorized", message: "Missing credentials" } } }),
+    });
+    await serve(refused.route, poll());
+    expect(onPoll).not.toHaveBeenCalled();
   });
 
   it("runs without a log", async () => {
