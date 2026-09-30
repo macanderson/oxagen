@@ -771,9 +771,12 @@ function failure(run: Run, error: unknown): DiscoveryFinish {
 
 /**
  * An error that can pass: one discovery did not expect, or a refusal marked
- * retriable, such as an outage at the source or at the code host.
+ * retriable, such as an outage at the source or at the code host. A discovery
+ * that waits for a machine did not fail. Its row says so, and the MCP process
+ * a machine in its groups polls runs it, so a retry here would only wait again.
  */
 function retriable(error: unknown): boolean {
+  if (error instanceof WaitingForMachine) return false;
   return !(error instanceof DiscoveryRefused) || error.retriable;
 }
 
@@ -832,7 +835,12 @@ export async function runDiscovery(
       trigger,
       error: finish.error,
     };
-    if (error instanceof DiscoveryRefused) {
+    if (error instanceof WaitingForMachine) {
+      logger.info(
+        { ...fields, groups: error.groups },
+        "MCP discovery waits for a machine",
+      );
+    } else if (error instanceof DiscoveryRefused) {
       logger.warn({ ...fields, code: error.code }, "MCP discovery refused");
     } else {
       logger.error(fields, "MCP discovery failed");
