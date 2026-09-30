@@ -10,19 +10,9 @@ import xmcpConfig from "../xmcp.config";
  */
 
 interface FakeBundlerConfig {
+  entry?: Record<string, string>;
   resolve?: Record<string, unknown>;
   externals?: unknown;
-  plugins?: unknown[];
-}
-
-/** Stands in for the DefinePlugin xmcp adds before it calls the hook. */
-class DefinePlugin {
-  name = "DefinePlugin";
-  constructor(readonly definitions: Record<string, string>) {}
-}
-
-function xmcpPlugins(): unknown[] {
-  return [new DefinePlugin({ HTTP_CONFIG: "{}" })];
 }
 
 type ExternalFn = (
@@ -36,7 +26,7 @@ function runExternal(request: string): string | undefined {
     "function",
   );
 
-  const cfg: FakeBundlerConfig = { plugins: xmcpPlugins() };
+  const cfg: FakeBundlerConfig = {};
   const out = (bundler as (c: FakeBundlerConfig) => FakeBundlerConfig)(cfg);
 
   const externals = out.externals;
@@ -81,7 +71,6 @@ describe("xmcp bundler externals", () => {
       c: FakeBundlerConfig,
     ) => FakeBundlerConfig;
     const out = bundler({
-      plugins: xmcpPlugins(),
       resolve: {
         alias: {
           zod: "/pinned/zod",
@@ -99,6 +88,17 @@ describe("xmcp bundler externals", () => {
     expect(alias["@oxagen/oxagen"]).toBe("/workspace/oxagen");
   });
 
+  it("leaves xmcp's own HTTP entry in place", () => {
+    // The owned edge in src/http-app.ts ran its heap out on its first
+    // production request (#4829). Wiring it back in needs a test that drives a
+    // real POST /mcp through it with the real middleware first.
+    const bundler = xmcpConfig.bundler as (
+      c: FakeBundlerConfig,
+    ) => FakeBundlerConfig;
+    const out = bundler({ entry: { http: "/xmcp/runtime/http.js" } });
+    expect(out.entry).toEqual({ http: "/xmcp/runtime/http.js" });
+  });
+
   it("maps .js/.mjs/.cjs imports back to their TypeScript sources", () => {
     // Workspace packages compiled with verbatimModuleSyntax emit `./x.js`
     // relative imports whose source is `./x.ts`; without extensionAlias rspack
@@ -106,7 +106,7 @@ describe("xmcp bundler externals", () => {
     const bundler = xmcpConfig.bundler as (
       c: FakeBundlerConfig,
     ) => FakeBundlerConfig;
-    const out = bundler({ plugins: xmcpPlugins() });
+    const out = bundler({});
     expect(out.resolve?.extensionAlias).toEqual({
       ".js": [".ts", ".js"],
       ".mjs": [".mts", ".mjs"],

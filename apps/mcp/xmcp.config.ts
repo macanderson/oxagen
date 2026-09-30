@@ -1,34 +1,5 @@
 import type { XmcpConfig } from "xmcp";
 
-/**
- * Build-time constants the pinned Express adapter reads as bare globals.
- *
- * xmcp 0.6.13 ships `dist/runtime/adapter-express.js` reading these eight
- * names, but its compiler defines only `HTTP_CONFIG` and `HTTP_CORS_CONFIG`.
- * Without them the bundled edge throws `HTTP_CORS_ORIGIN is not defined` at
- * startup, and the node rolls the deploy back (#4829). The adapter sets its
- * CORS headers again on every `/mcp` response, so the values copy the headers
- * `src/http-app.ts` sends. `xmcp-config.externals.test.ts` holds the two
- * lists equal, and fails when the pinned adapter reads a name missing here.
- */
-export const EXPRESS_ADAPTER_DEFINES: Record<string, string> = {
-  HTTP_CORS_ORIGIN: JSON.stringify("*"),
-  HTTP_CORS_METHODS: JSON.stringify(["GET", "POST"]),
-  HTTP_CORS_ALLOWED_HEADERS: JSON.stringify([
-    "Content-Type", "Authorization", "mcp-session-id", "mcp-protocol-version",
-    "x-mcp-client-name", "x-mcp-client-version", "x-mcp-client-title",
-    "x-mcp-client-website-url", "x-mcp-client-description",
-  ]),
-  HTTP_CORS_EXPOSED_HEADERS: JSON.stringify([
-    "Content-Type", "Authorization", "mcp-session-id", "Retry-After",
-  ]),
-  HTTP_CORS_CREDENTIALS: JSON.stringify(false),
-  HTTP_CORS_MAX_AGE: JSON.stringify(86400),
-  HTTP_DEBUG: JSON.stringify(false),
-  // The edge parses bodies with this limit before the adapter runs.
-  HTTP_BODY_SIZE_LIMIT: JSON.stringify(4 * 1024 * 1024),
-};
-
 const config: XmcpConfig = {
   http: {
     port: Number(process.env.MCP_PORT ?? 4100),
@@ -48,33 +19,10 @@ const config: XmcpConfig = {
   // equivalent so rspack finds the TypeScript source.
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
-    // Use the pinned framework's Express adapter under an owned HTTP edge.
-    // The default server parses every body before application middleware.
-    // xmcp's config evaluator rejects Node builtin imports.
-    config.entry = {
-      ...(config.entry as Record<string, string>),
-      http: `${process.cwd()}/src/http.ts`,
-    };
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "xmcp-adapter-runtime": `${process.cwd()}/node_modules/xmcp/dist/runtime/adapter-express.js`,
-      "xmcp-home-template": `${process.cwd()}/node_modules/xmcp/src/runtime/templates/home.ts`,
-    };
-    // The evaluator also refuses every import but rspack's, so reuse the
-    // DefinePlugin class xmcp added before it called this hook.
-    config.plugins = config.plugins ?? [];
-    const xmcpDefine = config.plugins.find(
-      (plugin) => (plugin as { name?: unknown } | null)?.name === "DefinePlugin",
-    );
-    if (!xmcpDefine) {
-      throw new Error(
-        "xmcp added no DefinePlugin, so the Express adapter's HTTP_* constants cannot be defined.",
-      );
-    }
-    const DefinePlugin = xmcpDefine.constructor as new (
-      definitions: Record<string, string>,
-    ) => NonNullable<typeof xmcpDefine>;
-    config.plugins.push(new DefinePlugin(EXPRESS_ADAPTER_DEFINES));
+    // mcp serves through xmcp's own HTTP entry. The owned edge in
+    // src/http-app.ts reached production on 2026-09-30 and ran its heap out on
+    // the first POST /mcp. It stays unwired until a test drives a real request
+    // through it with the real middleware (#4829, #4202).
 
     // xmcp force-aliases `zod` (and `zod/v3`, `zod/v4-mini`) to this app's
     // local zod (v3). better-auth depends on zod v4 and its dist imports
