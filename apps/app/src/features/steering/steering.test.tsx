@@ -534,35 +534,35 @@ describe("the Library, All shelf", () => {
   it("prints the stat strip with each tile's basis, and not recorded for what no read measures", async () => {
     await renderSteering("/library", { records: three });
     expect(screen.getByTestId("tile-items")).toHaveTextContent(
-      "Items3everything that can steer an agent here",
+      "Items3in force in this workspace",
     );
     expect(screen.getByTestId("tile-by-kind")).toHaveTextContent(
-      "By kindrecord 3one shape, every kind",
+      "By kindrecord 3count per kind",
     );
     expect(screen.getByTestId("tile-compiled-size")).toHaveTextContent(
-      "Compiled sizenot recordedif every item were rendered at once, which no run does",
+      "Compiled sizenot recordedall items rendered together",
     );
     expect(screen.getByTestId("tile-grants")).toHaveTextContent(
-      "Carry a grantnot recordedthese compile to a gate as well as to text",
+      "Enforcement grantsnot recordeditems that also compile to a gate",
     );
   });
 
   it("prints the lead note verbatim", async () => {
     await renderSteering();
     expect(screen.getByTestId("library-lead")).toHaveTextContent(
-      "A shelf is a filter on this list, never a second list. The assembler reads exactly these items, in this order, and decides per run which of them a given agent is shown. Assignments says who receives what; the compiler shows one decision in full.",
+      "The assembler reads these items in this order and picks the ones each run receives.",
     );
   });
 
-  it("lists everything written down in the assembler's order under the design's columns", async () => {
+  it("lists all items in the assembler's order under the design's columns", async () => {
     await renderSteering("/library", { records: three });
-    const panel = section("Everything written down");
+    const panel = section("All items");
     expect(within(panel).getByTestId("library-count")).toHaveTextContent("3");
     expect(
-      within(panel).getByRole("link", { name: "Who receives it" }),
+      within(panel).getByRole("link", { name: "Open the assignments" }),
     ).toHaveAttribute("href", `${BASE}/assignments`);
     const table = within(panel).getByRole("table", {
-      name: "Everything written down",
+      name: "All items",
     });
     expect(
       within(table)
@@ -609,9 +609,9 @@ describe("the Library, All shelf", () => {
   it("says steering and gating are two planes, and names the issue the other shelves wait on on the values it leaves out", async () => {
     await renderSteering();
     expect(
-      screen.getByText(/Steering is what the model reads/),
+      screen.getByText(/show the text the model reads/),
     ).toHaveTextContent(
-      "advisory, ranked, budgeted, and it may be dropped. Gating is what gets refused: deterministic, never budgeted, never ranked.",
+      "The Library, Assignments, and the Compiler show the text the model reads. Gates shows the calls Oxagen refuses.",
     );
     // The design's footer holds no gap paragraph; the tooltips carry the issue.
     expect(screen.queryByTestId("library-gap")).toBeNull();
@@ -653,7 +653,7 @@ describe("the Library, All shelf", () => {
         total: 12,
       });
     const lineages = () =>
-      within(screen.getByRole("table", { name: "Everything written down" }))
+      within(screen.getByRole("table", { name: "All items" }))
         .getAllByRole("row")
         .slice(1)
         .map((row) => row.getAttribute("data-lineage"));
@@ -749,7 +749,7 @@ describe("the Library, All shelf", () => {
       const force = screen.getByRole("combobox", { name: "Filter by Force" });
       await pickOption(user, force, "must");
       expect(lineages()).toEqual(["ctx.r11"]);
-      await pickOption(user, force, "All · Force");
+      await pickOption(user, force, "All (Force)");
       fireEvent.change(
         screen.getByRole("searchbox", { name: "Search this list" }),
         { target: { value: "Record 7." } },
@@ -806,7 +806,7 @@ describe("states", () => {
       await renderSteering(path, { records: none });
       const empty = section("Nothing steers this workspace yet");
       expect(empty).toHaveTextContent(
-        "Published records live in .oxagen/rules/ on acme/platform. A record becomes published by being merged, never by being saved here.",
+        "Published records live in .oxagen/rules/ on acme/platform. A record is published when its pull request merges.",
       );
       expect(
         within(empty).getByRole("button", { name: "Write a context record" }),
@@ -855,7 +855,7 @@ describe("states", () => {
     await renderSteering("", { records: DENIED });
     const denied = section("You cannot see this workspace’s steering");
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include steering.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -881,7 +881,7 @@ describe("states", () => {
     expect(denied).toHaveTextContent("Neededsteering.read on core-platform");
     // The refusal does not carry the policy that decided it yet (#3846).
     expect(denied).toHaveTextContent(
-      "Decided bypolicy not recorded (#3846) · deny wins over every allow",
+      "Decided bypolicy not recorded (#3846)",
     );
     fireEvent.click(
       within(denied).getByRole("button", { name: "Request access" }),
@@ -973,7 +973,7 @@ describe("Records", () => {
     const card = within(section("Published records")).getByRole("article");
     expect(
       within(card).getByTitle("The last merge published this record"),
-    ).toHaveTextContent("new · bundle v12");
+    ).toHaveTextContent("New in v12");
   });
 
   it("marks no record when the freshness read fails, and still lists them (negative)", async () => {

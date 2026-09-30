@@ -526,7 +526,7 @@ describe("Spend › header, tiles and tabs", () => {
     expect(screen.getByText("Core platform")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "What the tokens bought, with the basis on every number.",
+        "Spend and tokens for this workspace with the basis of every figure.",
       ),
     ).toBeInTheDocument();
     const header = screen.getByRole("banner");
@@ -739,7 +739,7 @@ describe("Spend › Month", () => {
     expect(rowOf("prn_marcusbell")).not.toHaveTextContent("prn_marcusbell");
   });
 
-  it("prints the rest of the spend on the MCP server grouping as Everything else, with no runs and nothing to open", async () => {
+  it("prints the rest of the spend on the MCP server grouping as Other spend, with no runs and nothing to open", async () => {
     loadedMonth(() =>
       month(
         [
@@ -756,9 +756,9 @@ describe("Spend › Month", () => {
       PERIOD,
     );
     const rest = rowOf("~other");
-    expect(rest).toHaveTextContent("Everything else");
+    expect(rest).toHaveTextContent("Other spend");
     expect(rest).toHaveTextContent(
-      "Model output, prompts, steering, files, and commands",
+      "Spend outside MCP server calls",
     );
     expect(within(rest).queryByRole("button")).toBeNull();
     expect(rest).toHaveTextContent("83.8%");
@@ -767,7 +767,7 @@ describe("Spend › Month", () => {
         "The harness reported $3.35 of this total. The gateway metered or estimated the rest.",
       ),
     ).toBeInTheDocument();
-    // Everything else already holds the rest, so nothing is left ungrouped.
+    // Other spend already holds the rest, so nothing is left ungrouped.
     expect(screen.queryByText("Not grouped")).toBeNull();
   });
 
@@ -785,7 +785,7 @@ describe("Spend › Month", () => {
     const rest = rowOf("~ungrouped");
     expect(rest).toHaveTextContent("Not grouped");
     expect(rest).toHaveTextContent(
-      "Runs with no agent recorded, or not yet in the daily rollup",
+      "Runs the rollup cannot group by agent",
     );
     expect(rest).toHaveTextContent("$3.35");
     expect(rest).toHaveTextContent("27.1%");
@@ -955,7 +955,7 @@ describe("Spend › Findings", () => {
     expect(first).toHaveTextContent("aws_billing__get_cost_and_usage");
     expect(first).toHaveTextContent("evidence 88 runs · 3,106 calls");
     expect(first).toHaveTextContent("$984.60");
-    expect(first).toHaveTextContent("at stake · 58.9% of identified");
+    expect(first).toHaveTextContent("at stake (58.9% of identified)");
     expect(
       within(first).getByRole("link", { name: "Evidence" }),
     ).toHaveAttribute(
@@ -1332,7 +1332,7 @@ describe("Spend › By tool", () => {
       "Avg per call",
       "Avg per run",
       "Potential savings",
-      "What the frames say",
+      "Frame summary",
     ]);
     const github = rowOf("github__get_issue");
     expect(github).toHaveTextContent("50%");

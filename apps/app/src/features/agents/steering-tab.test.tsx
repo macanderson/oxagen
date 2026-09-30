@@ -46,9 +46,9 @@ describe("SteeringSection", () => {
   it("names the failed deliveries read and draws no meter (negative)", () => {
     renderSteering({ deliveries: readError("steering_unavailable", 503) });
     expect(
-      screen.getByRole("region", { name: "What reaches this agent" }),
+      screen.getByRole("region", { name: "Delivered items" }),
     ).toHaveTextContent(
-      "What reaches this agent could not be loaded: the control plane answered steering_unavailable.",
+      "Delivered items could not be loaded: the control plane answered steering_unavailable.",
     );
     expect(screen.queryByTestId("steering-budget")).toBeNull();
   });

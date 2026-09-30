@@ -165,15 +165,15 @@ describe("Tools › policy", () => {
     ).toBeVisible();
   });
 
-  it("draws where a version lives, the conditions a rule may test and the sequence rule with its plain sentence", async () => {
+  it("draws the version storage, the conditions a rule may test and the sequence rule with its plain sentence", async () => {
     await renderPolicy({});
-    const where = screen.getByRole("region", { name: "Where a version lives" });
+    const where = screen.getByRole("region", { name: "Version storage" });
     for (const term of [
       "Store",
       "In regulated mode",
       "Compiled from",
-      "Who reads it",
-      "What it writes",
+      "Reader",
+      "Output",
     ]) {
       expect(within(where).getByText(term)).toBeVisible();
     }
@@ -372,10 +372,10 @@ describe("Tools › mandates ledger", () => {
     async (role) => {
       await renderLedger(mandateList([]), role);
       expect(
-        within(ledger()).getByText(/not every mandate this workspace has/),
+        within(ledger()).getByText(/You see the mandates of the agents you created/),
       ).toHaveAttribute("data-blind-spot", "reader_scope");
       expect(
-        within(ledger()).getByText(/not a statement that the workspace/),
+        within(ledger()).getByText(/may hold mandates you cannot see/),
       ).toHaveAttribute("data-state", "empty");
       expect(within(ledger()).queryByText(/recorded no mandate/)).toBeNull();
     },
@@ -388,10 +388,12 @@ describe("Tools › mandates ledger", () => {
     async (role) => {
       await renderLedger(mandateList([mandateRow()]), role);
       expect(
-        within(ledger()).getByText(/not every mandate this workspace has/),
+        within(ledger()).getByText(/You see the mandates of the agents you created/),
       ).toHaveAttribute("data-blind-spot", "reader_scope");
       expect(within(ledger()).getByRole("table")).toBeInTheDocument();
-      expect(within(ledger()).queryByText(/not a statement/)).toBeNull();
+      expect(
+        within(ledger()).queryByText(/may hold mandates you cannot see/),
+      ).toBeNull();
     },
   );
 
@@ -423,7 +425,7 @@ describe("Tools › mandates ledger", () => {
   it("says nothing of the sort to an accountable reader answered rows", async () => {
     await renderLedger(mandateList([mandateRow()]), "owner");
     expect(
-      within(ledger()).queryByText(/not every mandate this workspace has/),
+      within(ledger()).queryByText(/You see the mandates of the agents you created/),
     ).toBeNull();
   });
 
@@ -485,7 +487,7 @@ describe("Tools › mandates ledger", () => {
       ]),
     );
     const row = within(ledger()).getByTestId("mandate");
-    expect(row.textContent).toContain("per month · 2026-09");
+    expect(row.textContent).toContain("per month (2026-09)");
     // A mandate may cap calls daily and money monthly; each window sits with
     // the limit it belongs to.
     expect(row.textContent).toContain("per day");

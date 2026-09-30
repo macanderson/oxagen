@@ -348,7 +348,7 @@ describe("ListTable filters", () => {
           rows={statusRows()}
           filters={
             <select aria-label="Status">
-              <option>All · Status</option>
+              <option>All (Status)</option>
             </select>
           }
         />
@@ -372,7 +372,7 @@ describe("ListTable filters", () => {
     expect(filters).toEqual(["Filter by Status", "Filter by Currency"]);
     const status = screen.getByRole("combobox", { name: "Filter by Status" });
     expect(await optionNames(user, status)).toEqual([
-      "All · Status",
+      "All (Status)",
       "open",
       "paid",
       "void",
@@ -386,11 +386,11 @@ describe("ListTable filters", () => {
       "EUR",
     );
     expect(visible()).toEqual(["OXA-0"]);
-    await pickOption(user, status, "All · Status");
+    await pickOption(user, status, "All (Status)");
     await pickOption(
       user,
       screen.getByRole("combobox", { name: "Filter by Currency" }),
-      "All · Currency",
+      "All (Currency)",
     );
     expect(visible()).toHaveLength(5);
   });
@@ -489,7 +489,7 @@ describe("ListTable: a caller's filters and empty line", () => {
           rows={rowsOf(2)}
           filters={
             <select aria-label="Status">
-              <option>All · Status</option>
+              <option>All (Status)</option>
             </select>
           }
         />

@@ -195,10 +195,10 @@ describe("Per-tool decision rules", () => {
     await expectNoAxe(container);
   });
 
-  it("opens What the categories mean as a dialog with each category's count", async () => {
+  it("opens Show the category definitions as a dialog with each category's count", async () => {
     draw();
     await userEvent.click(
-      screen.getByRole("button", { name: "What the categories mean" }),
+      screen.getByRole("button", { name: "Show the category definitions" }),
     );
     const dialog = await screen.findByTestId("belt-categories-dialog");
     expect(dialog).toHaveAttribute("role", "dialog");

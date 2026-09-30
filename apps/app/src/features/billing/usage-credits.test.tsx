@@ -128,7 +128,7 @@ describe("Token balance", () => {
     renderSection();
     expect(amount()).toHaveAttribute("min", "5");
     expect(amount()).toHaveAttribute("step", "1");
-    expect(amount()).toHaveAccessibleDescription("whole dollars, at least $5");
+    expect(amount()).toHaveAccessibleDescription("at least $5 in whole dollars");
   });
 
   it("hands the action the organization and the amount", async () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A Studio server's Try it tab (#4678) on fake calls: where the environment
+// A Studio server's Test tab (#4678) on fake calls: where the environment
 // and tool pickers start, the live warning, the arguments check, a call in
 // flight, the three panes a call that succeeded draws, the not built, denied
 // and failed answers, the empty state, and Save as test. With no call passed,
@@ -356,7 +356,7 @@ describe("TryTab tool and arguments", () => {
     expect(sent).not.toContain("oxagen:credential");
     expect(
       screen.getByText(
-        "The call is recorded and metered like an agent's. The gateway adds the credential after the request is recorded, so the request shown never holds it.",
+        "The call is recorded and metered like an agent's. The request shown omits the credential because the gateway adds it after recording.",
       ),
     ).toBeInTheDocument();
   });
@@ -450,7 +450,7 @@ describe("TryTab call", () => {
     expect(note).toHaveAttribute("data-state", "not-available");
     expect(note).toHaveAttribute("data-capability", "try_studio_tool");
     expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent("Try it is not available yet.");
+    expect(note).toHaveTextContent("Testing is not available yet.");
     fireEvent.submit(button);
     expect(screen.queryByTestId("studio-try-request")).toBeNull();
     expect(screen.queryByTestId("studio-try-not-built")).toBeNull();
@@ -465,7 +465,7 @@ describe("TryTab call", () => {
     expect(screen.queryByTestId("studio-try-pending")).toBeNull();
   });
 
-  it("says Try it is not available when the call answers not built", async () => {
+  it("says testing is not available when the call answers not built", async () => {
     const { call } = fakeTry({ ok: false, reason: "not_built", gap: "capability" });
     renderTry(BILLING, { call });
     run();
@@ -473,7 +473,7 @@ describe("TryTab call", () => {
     expect(note).toHaveAttribute("role", "note");
     expect(note).toHaveAttribute("data-state", "not-recorded");
     expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent("Try it is not available yet.");
+    expect(note).toHaveTextContent("Testing is not available yet.");
     expect(screen.queryByTestId("studio-try-request")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save as test" })).toBeNull();
   });

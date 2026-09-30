@@ -142,7 +142,7 @@ describe("Mandate › loaded", () => {
       expect(text).toContain(figure);
     }
     // Every money number carries its basis.
-    expect(text).toContain("from the ledger's settlements");
+    expect(text).toContain("from this period's ledger settlements");
     expect(text).toContain("reserved at decision time");
   });
 

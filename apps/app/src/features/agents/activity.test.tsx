@@ -278,7 +278,7 @@ describe("Activity › incidents", () => {
     ).toHaveAttribute("data-severity", "warning");
     expect(warning).toHaveTextContent("resolved");
     expect(warning).toHaveTextContent(
-      "What it stoppedThe collector restarted and backfilled.",
+      "ResolutionThe collector restarted and backfilled.",
     );
     expect(warning).toHaveTextContent("Closed");
     expect(warning).not.toHaveTextContent("Ownernot recorded");

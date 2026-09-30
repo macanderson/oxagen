@@ -25,7 +25,7 @@
       "addressValue": "oxagen.com/{slug}",
       "addressHint": "Derived from the name. You can change it later.",
       "namespace": "Namespace",
-      "namespaceHint": "2–6 characters, <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>",
+      "namespaceHint": "It takes 2 to 6 characters and is <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>.",
       "creates": "Creates <ns>org_{namespace}</ns> and its graph database.",
       "cancel": "Cancel",
       "submit": "Continue",
@@ -53,14 +53,14 @@
       },
       "denied": {
         "title": "You cannot see onboarding",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
-        "bodyNoOrg": "Your account does not hold <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
+        "bodyNoOrg": "Your account does not hold <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "requestAccess": "Request access",
         "backToFleet": "Back to Fleet",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "the organization role check · deny wins over every allow",
+        "decidedByValue": "the organization role check",
         "dialogTitle": "Request access",
         "dialogBody": "A request would ask an organization owner to grant {permission}, and the grant would land in the audit record with your name on it.",
         "dialogNotBacked": "Access requests are not recorded yet: no capability lets a person ask for a role, so nothing is sent. Ask an organization owner directly.",
@@ -129,19 +129,19 @@
         "title": "Wrap an agent",
         "lead": "The installer carries a one-time enrollment token for <k>{key}</k>, so nothing is copied or pasted.",
         "leadNoKey": "The installer carries a one-time enrollment token for the agent, so nothing is copied or pasted.",
-        "tabsLabel": "How to wrap the agent",
+        "tabsLabel": "Wrap method",
         "tabs": {
           "cc": {
             "name": "Claude Code",
-            "sub": "one click · harness"
+            "sub": "one click"
           },
           "codex": {
             "name": "Codex CLI",
-            "sub": "one click · harness"
+            "sub": "one click"
           },
           "sdk": {
             "name": "SDK agent",
-            "sub": "five lines · harness"
+            "sub": "five lines"
           }
         },
         "recommended": "recommended",
@@ -168,13 +168,13 @@
         "packageNotBacked": "Package name, size and checksum are not recorded: no signed package is published.",
         "profile": "profile: codex-cli",
         "tokenEmbedded": "one-time enrollment token embedded",
-        "tokenExpires": "expires in {minutes} min · single use",
+        "tokenExpires": "expires in {minutes} min and works once",
         "tokenMinting": "Issuing a one-time token…",
         "tokenAgain": "Issue another token",
         "orRun": "or run",
         "credential": "Agent credential",
         "credentialIssued": "issued once to the operator",
-        "credentialFacts": "hashed at rest · purpose-locked · revocable",
+        "credentialFacts": "Oxagen stores it hashed, locks it to one purpose, and can revoke it.",
         "credentialNone": "No live credential is recorded for this agent.",
         "credentialBody": "Set it as <mono>OXAGEN_AGENT_TOKEN</mono>. Oxagen mints short-lived run tokens from it at run start. Revoking the credential kills every run token at the next call.",
         "langLabel": "Language",
@@ -202,14 +202,14 @@
         "lead": "The operator console opens the moment the first frame from <k>{key}</k> reaches Oxagen, and lands you on Fleet looking at your own run.",
         "leadNoKey": "The operator console opens the moment the agent’s first frame reaches Oxagen, and lands you on Fleet looking at your own run.",
         "waitingTitle": "Waiting for the first frame",
-        "polling": "polling · 1s",
+        "polling": "polling every second",
         "hostChip": "host enrolled",
         "noHostChip": "no host enrolled",
         "log": {
-          "enrolled": "host enrolled · enrollment {id}",
-          "heartbeat": "collector reporting · last heartbeat",
-          "hooksOk": "hooks written · the collector checked them",
-          "hooksMissing": "hooks missing · the collector found none",
+          "enrolled": "host enrolled as enrollment {id}",
+          "heartbeat": "collector heartbeat received",
+          "hooksOk": "hooks written and checked by the collector",
+          "hooksMissing": "hooks missing from the collector's check",
           "notBacked": "The collector’s install steps are not recorded one by one yet; the lines above are the ones Oxagen holds.",
           "waiting": "waiting…"
         },
@@ -253,7 +253,7 @@
           "token": "Token"
         },
         "notPublished": "not published yet",
-        "tokenOnWrap": "embedded at download; shown once on the wrap step",
+        "tokenOnWrap": "embedded at download and shown once on the wrap step",
         "install": "Install",
         "cancel": "Cancel",
         "userOnly": "Installs to your user account only. No sudo, no kernel extension, and nothing leaves the host except frames.",
@@ -279,7 +279,7 @@
         "connectedTitle": "Connected to {org}",
         "connectedBody": "The smoke session produced its first frame and Oxagen countersigned it. <k>{key}</k> is wrapped.",
         "connectedBodyNoKey": "The smoke session produced its first frame and Oxagen countersigned it.",
-        "frameBody": "run {run} · countersigned on ingest",
+        "frameBody": "run {run} countersigned on ingest",
         "notConnectedTitle": "Not connected yet",
         "notConnectedBody": "No frame from this workspace has reached Oxagen yet. This screen reads the record, so it shows Connected only once the first frame lands.",
         "rollback": "Roll back at any time. This removes the hooks, the login item and the base URL, and restores your previous settings file:",
@@ -348,14 +348,14 @@
       },
       "denied": {
         "title": "You cannot see agent registration",
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "permission": "agent.register on {ws}",
         "request": "Request access",
         "back": "Back to Fleet",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "register_agent · organization owner or admin",
+        "decidedByValue": "an organization owner or admin through register_agent",
         "dialogTitle": "Request access",
         "dialogBody": "Oxagen cannot send an access request from this page yet. Ask an organization owner to grant {permission}. The grant lands in the audit record."
       },
@@ -367,7 +367,7 @@
         "nameHint": "What your team calls it, such as Mac's Claude Code.",
         "slug": "Slug",
         "slugHint": "The agent key becomes <mono>{key}</mono>.",
-        "place": "Where it runs",
+        "place": "Harness and runtime",
         "harness": "Harness",
         "harnessHint": "Picks the installer on the next step.",
         "runtime": "Runtime",
@@ -392,23 +392,23 @@
       "wrap": {
         "title": "Wrap the agent",
         "lead": "The enrollment token for <mono>{key}</mono> is single use, so the machine that presents it becomes this agent's host.",
-        "tabsLabel": "How to wrap the agent",
+        "tabsLabel": "Wrap method",
         "tabs": {
           "claude-code": {
             "name": "Claude Code",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "codex": {
             "name": "Codex CLI",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "cursor": {
             "name": "Cursor",
-            "sub": "one command · harness"
+            "sub": "one command"
           },
           "sdk": {
             "name": "SDK agent",
-            "sub": "your process · harness"
+            "sub": "your process"
           }
         },
         "recommended": "recommended",
@@ -442,14 +442,14 @@
           "label": "one-time enrollment token",
           "issue": "Issue the token",
           "issuing": "Issuing…",
-          "expires": "expires {at} · single use",
+          "expires": "expires {at} and works once",
           "orRun": "or run"
         },
         "credential": {
           "eyebrow": "Agent credential",
           "label": "issued once to the operator",
           "none": "no live credential",
-          "facts": "hashed at rest · purpose-locked · revocable",
+          "facts": "Oxagen stores it hashed, locks it to one purpose, and can revoke it.",
           "use": "Set it as <code>OXAGEN_AGENT_TOKEN</code>. Oxagen mints short-lived run tokens from it at run start. Revoking the credential kills every run token at the next call.",
           "issue": "Issue a new credential",
           "issuing": "Issuing…",
@@ -473,14 +473,14 @@
           "none": "No host has enrolled for this agent. The token from the previous step is what enrols one."
         },
         "log": {
-          "enrolled": "host enrolled · device key {fingerprint}",
+          "enrolled": "host enrolled with device key {fingerprint}",
           "enrolledNoKey": "host enrolled",
-          "collector": "collector reported · version {version}",
+          "collector": "collector reported version {version}",
           "collectorNoVersion": "collector reported",
-          "hooksOk": "hooks written · {file}",
+          "hooksOk": "hooks written to {file}",
           "hooksOkNoFile": "hooks written",
-          "hooksMissing": "hooks missing · calls they do not route are recorded, not governed",
-          "bundle": "signed policy bundle fetched · v{version}",
+          "hooksMissing": "hooks missing so calls are recorded without governance",
+          "bundle": "signed policy bundle v{version} fetched",
           "notRecorded": "The collector's own log is not recorded yet, so only the lines Oxagen holds are shown."
         },
         "caption": "There is no Done button. The frame is the completion.",

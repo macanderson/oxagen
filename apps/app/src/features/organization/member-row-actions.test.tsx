@@ -82,7 +82,7 @@ describe("change role", () => {
         .getAllByRole("button")
         .map((button) => button.textContent)
         .slice(-2),
-    ).toEqual(["Cancel", "Change it"]);
+    ).toEqual(["Cancel", "Change role"]);
     // The design's Person field, the header close, and its note.
     expect(within(dialog).getByLabelText("Person")).toHaveValue("Marcus Bell");
     expect(within(dialog).getByLabelText("Person")).toBeDisabled();
@@ -90,13 +90,13 @@ describe("change role", () => {
       "Close",
     );
     expect(dialog).toHaveTextContent(
-      "A grant is a governed action, not a settings change.",
+      "A grant is a governed action that writes an audit record.",
     );
     const picker = within(dialog).getByLabelText("Role");
     expect(picker).toHaveValue("billing");
     await userEvent.selectOptions(picker, "admin");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Change it" }),
+      within(dialog).getByRole("button", { name: "Change role" }),
     );
     expect(changeMemberRole).toHaveBeenCalledWith("acme", member.id, "admin");
     expect(router.replace).toHaveBeenCalledWith(HERE);
@@ -264,7 +264,7 @@ describe("a refused write", () => {
     renderActions();
     const dialog = await openDialog("Change role", "change-member-role");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Change it" }),
+      within(dialog).getByRole("button", { name: "Change role" }),
     );
     expect(
       await screen.findByTestId("change-member-role-failure"),
