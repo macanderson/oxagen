@@ -299,6 +299,8 @@ An agent you enrolled with a one-time token from the Agents page stays in the wo
 2. Run `tacho unenroll --harness <harness>` with a harness the current agent hooks.
 3. Run the enroll command the new agent's page shows.
 
+Adding a harness to an agent with `tacho enroll --harness` also enrolls it again through your CLI session, so it is refused on an agent you enrolled with a token. Register an agent for the new harness on the Agents page and run the enroll command its page shows. The new agent gets a directory of its own beside the first.
+
 ## Limits
 
 A run's cost comes from the usage its model calls reported. Claude Code reports it itself. Codex and Stella on Anthropic report it through the local model proxy once enrollment points them at it. Cursor never does, because Cursor has no setting that routes its model calls through the proxy. Stella on another provider, or with an Anthropic base URL you set yourself, does not either. Such a run records its tool calls and no usage, so its cost is not in any spend total. The Spend page and the Fleet spend tile say how many runs reported no usage, and on which harness, beside each total that leaves them out.

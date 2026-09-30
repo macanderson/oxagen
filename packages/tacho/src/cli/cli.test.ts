@@ -1898,6 +1898,39 @@ describe("harnesses and reassign", () => {
     expect(readHostFile(d.paths.hostFile)).toEqual(before);
   });
 
+  it("refuses to add a harness to a token-enrolled agent through the CLI session", async () => {
+    const d = deps();
+    const enrolled = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(enrolled.ok, d.errors.join("\n")).toBe(true);
+    const before = readHostFile(d.paths.hostFile);
+    d.requests.length = 0;
+    d.errors.length = 0;
+    // The addition would revoke the agent and enroll it again through the
+    // session, which links no agent (#4410).
+    const refused = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(refused.ok).toBe(false);
+    expect(d.errors).toEqual([
+      "Cannot add codex to acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. Adding a harness enrolls it again through your CLI session, which links no agent. Register an agent for codex on the Agents page and run the enroll command the page shows.",
+    ]);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)).toEqual(before);
+  });
+
   it("reassigns to another workspace keeping the device key and port", async () => {
     const d = deps();
     await enroll(

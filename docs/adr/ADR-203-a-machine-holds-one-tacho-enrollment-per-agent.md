@@ -1,8 +1,8 @@
 # ADR-203: A machine holds one tacho enrollment per agent
 
 - **Status:** Accepted
-- **Date:** 2026-09-26. Amended on 2026-09-30: `reassign` refuses a
-  token-enrolled agent (#4410).
+- **Date:** 2026-09-26. Amended on 2026-09-30: `reassign`, and a harness
+  addition through `enroll`, refuse a token-enrolled agent (#4410).
 - **Owners:** platform
 - **Refines:** ADR-198 (its consequence that `tacho enroll` keeps one
   enrollment per machine, so a second agent on a runtime cannot enroll its
@@ -255,11 +255,13 @@ page. A warning before the revoke named the problem but did not prevent it.
   unlink the agent the same way.
 - **An operator-enrolled agent reassigns as before.** It has no registration
   to lose.
-- **Known gap: a harness addition still unlinks.** `tacho enroll --harness`
-  naming a token-enrolled agent's harness and a new one revokes that agent and
-  enrolls again through the CLI session (`enrollSteps` in `cli/enroll.ts`), so
-  the new enrollment carries no agent link. It is the same detachment through
-  a different command.
+- **`enroll` refuses a harness addition on a token-enrolled agent.**
+  `tacho enroll --harness` naming an agent's harness and a new one revokes
+  that agent and enrolls it again through the CLI session (`enrollSteps` in
+  `cli/enroll.ts`). On a token-enrolled agent that is the same detachment, so
+  the enroll refuses before it changes anything and says to register an
+  agent for the new harness. That agent enrolls in a directory of its own
+  (decision 2).
 
 The alternative in #4410 was to pass the agent id to
 `create_tacho_enrollment` and link the new host to the same agent in the

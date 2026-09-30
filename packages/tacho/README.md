@@ -161,7 +161,9 @@ whether it is the only agent on the machine or one of several. To report its
 harness to another workspace, register an agent there on the Agents page, run
 `tacho unenroll --harness <harness>`, and run the enroll command the page
 shows. `reassign` enrolls again through the CLI session, which links no agent,
-so it refuses a harness change on a token-enrolled agent too (#4410, ADR-203).
+so it refuses a harness change on a token-enrolled agent too. So does
+`enroll --harness` when it would add a harness to one. Register an agent for
+the new harness instead (#4410, ADR-203).
 
 ### Codex
 

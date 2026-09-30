@@ -42,6 +42,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
 import {
   HOST_FILE_SCHEMA,
+  enrolledWithToken,
   type HostFile,
   harnessFilesRecord,
   mcpEndpointOverrideRequestFrom,
@@ -707,6 +708,22 @@ async function enrollSteps(
   if (live && options.enrollmentToken !== undefined && added.length === 0) {
     deps.err(
       `This machine is already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}), so the token was not used. Run the same command with --force to replace that enrollment with the agent the token names.`,
+    );
+    return { ok: false, warnings };
+  }
+  // Adding a harness enrolls again through the CLI session, which links no
+  // agent. On an agent a one-time token enrolled, that detached it from its
+  // registration the way a reassign did (#4410). A harness the agent does
+  // not run is another agent to register (ADR-198), so the addition is
+  // refused before anything changes. A token here takes the branch below.
+  if (
+    live &&
+    added.length > 0 &&
+    options.enrollmentToken === undefined &&
+    enrolledWithToken(existing)
+  ) {
+    deps.err(
+      `Cannot add ${added.join(", ")} to ${existing.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. Adding a harness enrolls it again through your CLI session, which links no agent. Register an agent for ${added.length === 1 ? added.join("") : `each of ${added.join(", ")}`} on the Agents page and run the enroll command the page shows.`,
     );
     return { ok: false, warnings };
   }
