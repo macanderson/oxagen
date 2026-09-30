@@ -7,6 +7,7 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
 import {
   compile,
+  documentHash,
   formatJson,
   lock,
   mcpToolSchema,
@@ -17,6 +18,7 @@ import {
   TransportError,
   upstreamFromMcpTool,
   type CredentialSource,
+  type DefinitionLockSource,
   type HeaderEntry,
   type HttpTransportRequest,
   type HttpTransportResponse,
@@ -38,6 +40,7 @@ import { REDACTED } from "./scrub";
 import {
   noCredentials,
   noToolsPullRequestOpener,
+  type DefinitionReader,
   type DiscoveryCredentials,
   type DiscoverySeams,
   type LocalToolsReporter,
@@ -254,7 +257,7 @@ function compiledSide(input: {
   serverText: string;
   toolsText: string;
   tools: readonly RawTool[];
-  source: McpLockSource;
+  source: McpLockSource | DefinitionLockSource;
   previous?: McpToolsLock | undefined;
 }): Side {
   const compiled = compile({
@@ -578,6 +581,7 @@ interface HarnessOptions {
   entry?: RegistryEntry;
   opener?: ToolsPullRequestOpener;
   openerFails?: Error;
+  definitions?: DefinitionReader;
 }
 
 /** Every fake wired into one set of seams, and a run() over them. */
@@ -611,7 +615,7 @@ function harness(options: HarnessOptions = {}) {
     transport: () => wire.transport,
     local: { report },
     grpc: () => Promise.reject(new Error("This case imports no .proto files.")),
-    definitions: {
+    definitions: options.definitions ?? {
       read: () => Promise.reject(new Error("This case reads no definition.")),
     },
     catalog: { entry: catalog },
@@ -1490,5 +1494,119 @@ describe("sourceFields", () => {
       registryName: null,
       version: null,
     });
+  });
+});
+
+// ── An on-change definition ──────────────────────────────────────────────────
+
+const PETS_REPO_COMMIT = "4b7a0d3f6e8c5b2a1d4e7f0c3b6a9d2e5f9f1c2e";
+
+/** The pets API. Its OpenAPI definition lives in its own repository. */
+const PETS_SERVER = [
+  "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
+  'schema = "mcp-server/v1"',
+  'name = "pets"',
+  'label = "Pets"',
+  'description = "The pets API, read from its own repository."',
+  "",
+  "[source]",
+  'type = "openapi"',
+  'from = "repository"',
+  'repo = "acme/pets-api"',
+  'path = "spec/openapi.json"',
+  'ref = "main"',
+  "",
+  "[environments.production]",
+  'url = "https://pets.acme.test/v1"',
+  "",
+  "[exposure]",
+  'mode = "direct"',
+  "definition_budget = 8000",
+  "",
+  "[sync]",
+  'schedule = "on-change"',
+  "",
+].join("\n");
+
+const PETS_TOOLS = [
+  "#:schema https://oxagen.sh/schemas/mcp-tools/v1.json",
+  'schema = "mcp-tools/v1"',
+  "",
+].join("\n");
+
+const PETS_JSON = JSON.stringify({
+  openapi: "3.1.0",
+  info: { title: "Pets", version: "1.0.0" },
+  paths: {
+    "/pets": {
+      get: {
+        operationId: "listPets",
+        summary: "List pets.",
+        responses: { "200": { description: "The pets." } },
+      },
+    },
+  },
+});
+
+/** The pets folder on the production branch, locked before any tool was imported. */
+function petsTree(): Record<string, string> {
+  const side = compiledSide({
+    serverText: PETS_SERVER,
+    toolsText: PETS_TOOLS,
+    tools: [],
+    source: {
+      type: "openapi",
+      from: "repository",
+      document_hash: documentHash(PETS_JSON),
+      repo: "acme/pets-api",
+      path: "spec/openapi.json",
+      ref: "main",
+      commit: PETS_REPO_COMMIT,
+    },
+  });
+  return {
+    [serverTomlPath("pets")]: PETS_SERVER,
+    [toolsTomlPath("pets")]: PETS_TOOLS,
+    [toolsLockPath("pets")]: formatJson(side.lock),
+  };
+}
+
+describe("runDiscovery on an on-change repository definition", () => {
+  // An on-change server gets one scheduled discovery, so a new server's tools
+  // are found once. After that, only a push to its definition runs discovery
+  // (scheduleAllows). The definitions seam is the one read that reaches the
+  // source repository, so its call count says whether a run read the source.
+  it("runs the first scheduled sync, skips the next, and runs again on a push", async () => {
+    const read = vi.fn<DefinitionReader["read"]>(() =>
+      Promise.resolve({ commit: PETS_REPO_COMMIT, text: PETS_JSON }),
+    );
+    const h = harness({
+      server: "pets",
+      files: petsTree(),
+      definitions: { read },
+    });
+
+    const first = await h.run("schedule");
+    expect(first).toMatchObject({ server: "pets", status: "succeeded" });
+    expect(first.outcome).not.toBe("skipped");
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read.mock.calls[0]?.[1]).toEqual({
+      repo: "acme/pets-api",
+      path: "spec/openapi.json",
+      ref: "main",
+    });
+
+    const again = await h.run("schedule");
+    expect(again).toMatchObject({
+      server: "pets",
+      status: "succeeded",
+      outcome: "skipped",
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+
+    const pushed = await h.run("push");
+    expect(pushed).toMatchObject({ server: "pets", status: "succeeded" });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(h.pr.open.mock.calls.length).toBeLessThanOrEqual(1);
   });
 });
