@@ -36,8 +36,36 @@ export function steeringRepoView(
     publishedVersion: 3,
     health: "healthy",
     differences: [],
+    legacySource: null,
+    connectionChoices: [],
     ...overrides,
   };
+}
+
+/** A code repository that still steers a workspace made before steering repos. */
+export const LEGACY_SOURCE = {
+  fullName: "acme/agent-harness",
+  url: "https://github.com/acme/agent-harness",
+};
+
+/**
+ * A workspace that never recorded a setup (#4875): every provisioning field
+ * null. Pass `legacySource` for one whose old main repository still steers it.
+ */
+export function notStartedSteeringRepo(
+  overrides: Partial<SteeringRepoView> = {},
+): SteeringRepoView {
+  return steeringRepoView({
+    status: "not_started",
+    step: null,
+    failedStep: null,
+    error: null,
+    provider: null,
+    repository: null,
+    publishedVersion: null,
+    health: null,
+    ...overrides,
+  });
 }
 
 /**

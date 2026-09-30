@@ -6291,6 +6291,33 @@ type Messages = {
         retry: string;
         retrying: string;
         ready: string;
+        moveSteering: string;
+        moving: string;
+        create: string;
+        starting: string;
+        startNote: string;
+        startingNote: string;
+        choose: {
+          label: string;
+          action: string;
+          provider: {
+            github: string;
+            gitlab: string;
+          };
+        };
+        connect: {
+          body: string;
+          install: string;
+          authorize: string;
+        };
+        imported: {
+          imported: string;
+          provisioned: string;
+          nothingToImport: string;
+          needsChoices: string;
+          pullRequest: string;
+          cleanup: string;
+        };
       };
       reauthorize: {
         heading: string;
@@ -6324,6 +6351,30 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
         toolNotRegistered: string;
+      };
+      setup: {
+        title: string;
+        status: {
+          not_started: string;
+          provisioning: string;
+          failed: string;
+          blocked: string;
+        };
+        lead: {
+          notStarted: string;
+          legacy: string;
+          provisioning: string;
+          failed: string;
+          blocked: string;
+        };
+        open: {
+          act: string;
+          view: string;
+        };
+        intro: {
+          create: string;
+          legacy: string;
+        };
       };
     };
   };

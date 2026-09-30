@@ -661,7 +661,34 @@
         },
         "retry": "Retry",
         "retrying": "Retrying…",
-        "ready": "The steering repo is ready at"
+        "ready": "The steering repo is ready at",
+        "moveSteering": "Move steering",
+        "moving": "Moving steering…",
+        "create": "Create the steering repo",
+        "starting": "Setting up…",
+        "startNote": "Oxagen creates the repo on your GitHub organization or GitLab group. This takes up to a minute.",
+        "startingNote": "Oxagen is creating the repo. Keep this dialog open to see each step.",
+        "choose": {
+          "label": "Where to create steering repos",
+          "action": "Use this one",
+          "provider": {
+            "github": "GitHub organization",
+            "gitlab": "GitLab group"
+          }
+        },
+        "connect": {
+          "body": "Install the Oxagen app on the GitHub organization that should hold your steering repos. If it is already installed there, authorize it instead.",
+          "install": "Install on GitHub",
+          "authorize": "Authorize on GitHub"
+        },
+        "imported": {
+          "imported": "Oxagen created {repository} and opened {count, plural, one {# steering PR} other {# steering PRs}}. Merge them in order, then the cleanup PR.",
+          "provisioned": "Oxagen created {repository}.",
+          "nothingToImport": "This workspace already has its steering repo, {repository}.",
+          "needsChoices": "{rules, plural, one {# rule needs} other {# rules need}} a kind and {constraints, plural, one {# constraint needs} other {# constraints need}} an effect before Oxagen can move them. Nothing changed. Send the choices to import_workspace_steering.",
+          "pullRequest": "Steering PR #{number} ({branch})",
+          "cleanup": "Cleanup PR #{number}"
+        }
       },
       "reauthorize": {
         "heading": "Authorization needed",
@@ -695,6 +722,30 @@
         "pendingApproval": "This needs a person to approve it. Request {accessRequestId} is waiting.",
         "unavailable": "The steering repo did not answer ({code}). Try again in a moment.",
         "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
+      },
+      "setup": {
+        "title": "Steering repo setup",
+        "status": {
+          "not_started": "Not set up",
+          "provisioning": "Setting up",
+          "failed": "Setup failed",
+          "blocked": "Setup stopped"
+        },
+        "lead": {
+          "notStarted": "This workspace has no steering repo yet.",
+          "legacy": "{legacy} still steers this workspace through its .oxagen/ tree.",
+          "provisioning": "Oxagen is creating the steering repo.",
+          "failed": "Setup failed at {step}.",
+          "blocked": "Setup stopped at {step}."
+        },
+        "open": {
+          "act": "Set up",
+          "view": "View setup"
+        },
+        "intro": {
+          "create": "Oxagen creates a private steering repo for this workspace, seeds it, applies its prescribed settings, and binds it here. Steering records live in it from then on.",
+          "legacy": "Oxagen creates a private steering repo for this workspace and opens steering PRs that move the records in {legacy}'s .oxagen/ tree into it. It then opens one cleanup PR on {legacy}. Nothing moves until you merge them."
+        }
       }
     }
   }

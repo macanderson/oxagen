@@ -64,7 +64,7 @@ export const steeringRepoImport = registerCapability({
     "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges. A workspace on a legacy sources connection sets startFresh instead: the run creates an empty steering repo and imports nothing.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
