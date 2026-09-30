@@ -363,7 +363,8 @@ export function taintedFields(input: WorkItemInput): TaintedField[] {
  * Map one fetched item and upsert it. The subject, description, and requester
  * pass through the screen before the store sees them. An item the store holds
  * a newer copy of is left alone, because a late delivery must not undo a
- * later change.
+ * later change. Returns null when toWorkItem puts the item outside the
+ * collector's scope, and writes nothing.
  */
 export async function collectItem(
   ports: CollectorPorts,
@@ -371,8 +372,9 @@ export async function collectItem(
   definition: AnyCollectorDefinition,
   config: unknown,
   item: ProviderItem,
-): Promise<CollectResult> {
+): Promise<CollectResult | null> {
   const mapped = definition.toWorkItem(item, config);
+  if (mapped === null) return null;
   const before = await ports.store.findItem(collector.id, mapped.providerId);
   if (before && isNewer(before.sourceUpdatedAt, mapped.sourceUpdatedAt))
     return { providerId: mapped.providerId, change: null, before, stale: true };
@@ -452,8 +454,8 @@ export async function openInboundEvent(
 
 /**
  * Fetch one item by id and collect it. A fetch error throws, so the durable
- * worker retries it. Returns null when the module is gone or the scope no
- * longer parses.
+ * worker retries it. Returns null when the module is gone, the scope no
+ * longer parses, or the item is outside the scope.
  */
 export async function collectRef(
   ports: CollectorPorts,
@@ -544,6 +546,9 @@ export async function reconcilePage(
     let missed = 0;
     for (const item of page.items) {
       const result = await collectItem(ports, collector, definition, config.data, item);
+      // An item outside the scope is never collected, so the doorbell did
+      // not miss it.
+      if (result === null) continue;
       if (result.change) changes.push(result.change);
       // A module maps sourceUpdatedAt from the same provider field it puts in
       // ProviderItem.updatedAt, so the stored copy is older than this change
@@ -754,7 +759,9 @@ export async function nightlyCount(
       for (const item of page.items) {
         if (seen.has(item.ref.providerId)) continue;
         seen.add(item.ref.providerId);
-        if (definition.toWorkItem(item, config.data).statusCategory !== "closed")
+        // Oxagen holds no item outside the scope, so the count leaves it out.
+        const mapped = definition.toWorkItem(item, config.data);
+        if (mapped !== null && mapped.statusCategory !== "closed")
           open.add(item.ref.providerId);
       }
       cursor = page.cursor;

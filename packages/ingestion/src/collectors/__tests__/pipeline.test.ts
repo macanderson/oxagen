@@ -590,6 +590,48 @@ describe("collectRef", () => {
   });
 });
 
+describe("an item outside the scope", () => {
+  // toWorkItem answers null for item 999, as a collector does for a record
+  // its [scope] table does not list.
+  const scoped = () =>
+    setup({
+      definition: (fake) => ({
+        ...erased(fake),
+        toWorkItem: (item, config) =>
+          item.ref.providerId === "999"
+            ? null
+            : fake.definition.toWorkItem(item, config as FakeConfig),
+      }),
+    });
+
+  it("is fetched and writes nothing", async () => {
+    const s = scoped();
+    putRecord(s.fake, { id: "999", updatedAt: s.ago(5) });
+    const ref = { providerId: "999", kind: "item" };
+    expect(await collectRef(s.h.ports, s.collector(), ref)).toBeNull();
+    expect(s.h.store.items).toEqual([]);
+  });
+
+  it("is neither collected nor counted as missed by the reconcile", async () => {
+    const s = scoped();
+    putRecord(s.fake, { id: "101", updatedAt: s.ago(30) });
+    putRecord(s.fake, { id: "999", updatedAt: s.ago(30) });
+    const result = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    expect(result.summary).toEqual({ ok: true, pages: 1, handled: 2, missed: 0 });
+    expect(s.h.store.items.map((item) => item.providerId)).toEqual(["101"]);
+  });
+
+  it("is left out of the nightly count", async () => {
+    const s = scoped();
+    putRecord(s.fake, { id: "101", updatedAt: s.ago(30) });
+    putRecord(s.fake, { id: "999", updatedAt: s.ago(30) });
+    finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    s.h.advance(MINUTE);
+    const result = counted(await nightlyCount(s.h.ports, COLLECTOR_ID));
+    expect(result).toMatchObject({ outcome: "count_matched", provider: 1, oxagen: 1 });
+  });
+});
+
 describe("taintedFields", () => {
   const base: WorkItemInput = {
     providerId: "1",
@@ -711,10 +753,10 @@ describe("reconcileCollector", () => {
     const s = setup({
       definition: (fake) => ({
         ...erased(fake),
-        toWorkItem: (item, config) => ({
-          ...fake.definition.toWorkItem(item, config as FakeConfig),
-          sourceUpdatedAt: null,
-        }),
+        toWorkItem: (item, config) => {
+          const mapped = fake.definition.toWorkItem(item, config as FakeConfig);
+          return mapped === null ? null : { ...mapped, sourceUpdatedAt: null };
+        },
       }),
     });
     putRecord(s.fake, { id: "101", updatedAt: s.ago(30) });
