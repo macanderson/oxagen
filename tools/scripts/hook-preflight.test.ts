@@ -4,6 +4,9 @@
  * ran and failed. The preflight must name what is missing and exit with a code
  * that no check uses, so "could not run" is never mistaken for "failed".
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -325,6 +328,29 @@ describe("report", () => {
       "@oxagen/oxagen is not installed (needed by tools/scripts/gen-capability-schemas.ts)",
     );
     expect(text).toContain("Run `pnpm install` at the repository root");
+  });
+
+  it("names a filtered install that works, by adding the root's dependency graph", () => {
+    // A filtered install that adds `--filter oxagen-monorepo...` ran
+    // `pnpm check:contracts` to exit 0 (scratch run 36665719175, step F5).
+    const result = {
+      unknownScript: false,
+      missing: [{ name: "zod", neededBy: "@oxagen/oxagen" }],
+    };
+    expect(report("check:contracts", result)).toContain(
+      "`pnpm install --filter <your package>... --filter oxagen-monorepo...`",
+    );
+    expect(report("check:contracts", result, "renamed-root")).toContain(
+      "--filter renamed-root...",
+    );
+  });
+
+  it("names the real root package in that remedy", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const root = JSON.parse(
+      readFileSync(join(here, "..", "..", "package.json"), "utf8"),
+    );
+    expect(root.name).toBe("oxagen-monorepo");
   });
 
   it("uses an exit code no check uses, so it cannot read as a failed check", () => {

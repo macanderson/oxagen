@@ -145,11 +145,18 @@ export async function preflight(
 /**
  * The message a person reads when the check cannot run.
  *
+ * It gives two ways out. A full `pnpm install` always works. A filtered
+ * install works too once it adds the root package's own dependency graph
+ * (`--filter <root>...`), which installs every workspace package the root
+ * scripts run, such as `@oxagen/oxagen` and its `zod` (scratch run
+ * 36665719175, step F5).
+ *
  * @param {string} name
  * @param {{ missing: { name: string, neededBy: string }[], unknownScript: boolean }} result
+ * @param {string} [rootPackage] the root package.json `name`
  * @returns {string}
  */
-export function report(name, result) {
+export function report(name, result, rootPackage = "oxagen-monorepo") {
   const { label } = commandFor(name, {});
   if (result.unknownScript) {
     return label.startsWith("pnpm ")
@@ -163,6 +170,7 @@ export function report(name, result) {
     ),
     "This checkout is missing packages, which usually means it was installed with `pnpm install --filter`.",
     "Run `pnpm install` at the repository root, then try again.",
+    `To keep a filtered install, add the root's dependencies to it: \`pnpm install --filter <your package>... --filter ${rootPackage}...\`.`,
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -184,7 +192,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     realpath: realpathSync,
   });
   if (result.unknownScript || result.missing.length > 0) {
-    process.stderr.write(report(name, result));
+    const { name: rootPackage } = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    );
+    process.stderr.write(report(name, result, rootPackage));
     process.exit(CANNOT_RUN);
   }
 }
