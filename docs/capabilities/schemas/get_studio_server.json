@@ -392,7 +392,13 @@
               "registryType": {
                 "anyOf": [
                   {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "npm",
+                      "pypi",
+                      "oci",
+                      "nuget"
+                    ]
                   },
                   {
                     "type": "null"
@@ -467,7 +473,14 @@
                 ]
               },
               "from": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "repository",
+                  "url",
+                  "upload",
+                  "introspection",
+                  "reflection"
+                ]
               },
               "repo": {
                 "anyOf": [

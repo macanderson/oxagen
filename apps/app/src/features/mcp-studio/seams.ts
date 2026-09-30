@@ -1,11 +1,9 @@
-// The seams other work replaces (#4678, "Seams other lanes replace"). Each one
-// is typed as the page will use it and answers "not built" or "not recorded"
-// until the work behind it lands, so the page draws the state it would draw
-// for a real empty answer only when the record says so.
+// The seams the Studio page reads and writes through (#4678, "Seams other
+// lanes replace"). Each is typed as the page uses it, so a test passes a fake.
 //
-//   - readStudioRecord: the server's steering folder and its discovery. Lane
-//     M10 (#4682, PR #4711) discovers the tools, and a later part of this
-//     lane joins them to the folder. Null until then.
+//   - RecordReader: the server's steering folder, read through
+//     get_studio_server. record-read.ts binds it, and answers null for a
+//     server no steering repo defines.
 //   - SaveStudioDraft, GetStudioDraft and OpenStudioReview: Review, lane M11
 //     (#4686), whose capabilities save_studio_draft, get_studio_draft and
 //     open_studio_review shipped in #4688. review-calls.ts binds these types
@@ -16,6 +14,7 @@
 //
 // A credential never crosses any of these seams.
 import type {
+  McpServer,
   ToolEgress,
   ToolRiskGrade,
   ToolSideEffect,
@@ -38,13 +37,11 @@ export type StudioFinding = {
   fix: string;
 };
 
+/** The Studio record of one registry server, or null when it has none. */
 export type RecordReader = (
   ctx: WsCtx,
-  serverId: string,
+  server: McpServer,
 ) => Promise<StudioRecord | null>;
-
-/** The Studio record. Null until part 3 of this lane binds M10's discovery. */
-export const readStudioRecord: RecordReader = () => Promise.resolve(null);
 
 /**
  * A Review call Oxagen refused. The code is the handler's reason for a

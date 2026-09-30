@@ -27,7 +27,8 @@ const studioSourceSchema = z.union([
     network: z.string().nullable(),
     /** The machine groups whose local gateway runs the package; empty for the remote. */
     machines: z.array(z.string()),
-    registryType: z.string().nullable(),
+    /** The package type the local gateway runs, or null for the remote. */
+    registryType: z.enum(["npm", "pypi", "oci", "nuget"]).nullable(),
     /** Names of the environment variables passed through, never their values. */
     env: z.array(z.string()),
   }),
@@ -41,7 +42,7 @@ const studioSourceSchema = z.union([
   }),
   z.object({
     type: z.enum(["openapi", "graphql", "grpc"]),
-    from: z.string(),
+    from: z.enum(["repository", "url", "upload", "introspection", "reflection"]),
     repo: z.string().nullable(),
     path: z.string().nullable(),
     ref: z.string().nullable(),

@@ -37,6 +37,26 @@ export interface GetStudioServerDeps {
 
 type Output = ToolStudioServerGetOutput;
 
+const DEFINITION_FROMS = [
+  "repository",
+  "url",
+  "upload",
+  "introspection",
+  "reflection",
+] as const;
+
+/**
+ * A definition source's `from`. server.toml's parse admits only these, so an
+ * unknown value means the parse and this list disagree.
+ */
+function definitionFrom(from: string): (typeof DEFINITION_FROMS)[number] {
+  const known = DEFINITION_FROMS.find((value) => value === from);
+  if (known === undefined) {
+    throw new Error(`server.toml names source.from ${from}, which Studio does not know`);
+  }
+  return known;
+}
+
 /** server.toml's `[source]` in the output's camelCase shape. */
 export function sourceOf(source: McpServer["source"]): Output["source"] {
   switch (source.type) {
@@ -69,7 +89,7 @@ export function sourceOf(source: McpServer["source"]): Output["source"] {
     default:
       return {
         type: source.type,
-        from: source.from,
+        from: definitionFrom(source.from),
         repo: source.repo ?? null,
         path: source.path ?? null,
         ref: source.ref ?? null,
