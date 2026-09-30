@@ -1,33 +1,37 @@
 /**
- * The one entrypoint test the guard scripts under `tools/scripts/` share.
+ * is-entrypoint.mjs: whether node was started on a given module.
  *
- * A guard runs its check only when node starts it, so that a test can import
- * its functions without running the check. The usual test,
- * `import.meta.url === new URL("file://" + process.argv[1]).href`, reads false
- * in two cases where node did start the script:
+ *   if (isEntrypoint(import.meta.url)) await main();
  *
- *   - Node resolves symlinks in the main module's URL but not in argv[1]. A
- *     checkout reached through a symlinked directory (macOS `/tmp` and `/var`,
- *     a symlinked worktree root) starts the script under one path and names
- *     it under another.
- *   - `import.meta.url` percent-encodes a space, `[`, or `#`, and argv[1] does
- *     not.
+ * A check script runs its body only when node starts it, so a test can import
+ * its functions without running them. The usual comparison,
+ * `import.meta.url === file://${process.argv[1]}`, fails in two ways, and each
+ * one makes the script exit 0 having checked nothing, so its CI step passes
+ * green:
  *
- * For a guard, reading false is not a harmless miss. The script exits 0
- * having checked nothing, and the CI step or hook that ran it passes. The
- * test below compares real file paths, which both cases agree on.
+ * - Node resolves symlinks in the main module's URL but not in argv[1], so a
+ *   checkout reached through a symlinked directory (macOS `/tmp`, a symlinked
+ *   worktree root) never matches.
+ * - `import.meta.url` percent-encodes a space, `[`, or `#`, and argv[1] does
+ *   not, so a checkout under such a path never matches either.
+ *
+ * Comparing real file paths avoids both (#4664 item 1). Every script that
+ * guards its body this way should call this one helper, so the fix cannot drift
+ * between copies.
  */
+
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 /**
- * Whether node was started on the module at `moduleUrl`.
+ * Whether `argv1`, the path node was started on, is the module at `moduleUrl`.
+ * False when node was started with no script, or when either path is missing.
  *
  * Pass the caller's own `import.meta.url`. A default here would be this
  * module's URL, which matches no caller.
  *
- * @param {string} moduleUrl the calling module's `import.meta.url`
- * @param {string | undefined} [argv1] the script node started, `process.argv[1]`
+ * @param {string} moduleUrl the caller's `import.meta.url`
+ * @param {string | null | undefined} [argv1] defaults to `process.argv[1]`
  * @returns {boolean}
  */
 export function isEntrypoint(moduleUrl, argv1 = process.argv[1]) {

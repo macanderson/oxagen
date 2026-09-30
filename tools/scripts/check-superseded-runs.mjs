@@ -45,8 +45,7 @@
  * detector must never be the thing that blocks a merge.
  */
 
-import { realpathSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 export const MARKER = "<!-- ci-superseded -->";
 export const RESOLVED_MARKER = "<!-- ci-superseded:resolved -->";
@@ -368,22 +367,9 @@ async function main() {
   console.log(`[ci-superseded] Wrote ${actions.length} change(s).`);
 }
 
-// Real paths, not `file://${argv[1]}`: node resolves symlinks in the main
-// module's URL but not in argv[1], and a false here would exit 0 having
-// reported nothing. run-checks.test.ts proves the symlink case.
-const isEntrypoint = (() => {
-  if (!process.argv[1]) return false;
-  try {
-    return (
-      realpathSync(process.argv[1]) ===
-      realpathSync(fileURLToPath(import.meta.url))
-    );
-  } catch {
-    return false;
-  }
-})();
-
-if (isEntrypoint) {
+// Real paths (lib/is-entrypoint.mjs): a false here would exit 0 having
+// reported nothing.
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     // Fails open, loudly. This check reports; it must never block a merge.
     console.log(`::warning title=ci-superseded did not run::${err.message}`);

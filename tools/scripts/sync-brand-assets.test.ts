@@ -2,6 +2,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -13,9 +14,25 @@ import { describe, expect, it } from "vitest";
 import {
   assertSurfaceMark,
   brandPath,
+  comparesRasterBytes,
   expectedInk,
+  icoSizes,
+  isCi,
+  pngSize,
   rewriteInk,
 } from "./sync-brand-assets.mjs";
+
+const SCRIPT = fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+/**
+ * `process.env` with `CI` set to `ci`. GitHub Actions sets `CI=true` for every
+ * step, and the script fails a check without a kit there, so a spawn that
+ * means to test the local skip has to clear it.
+ */
+function envWithCi(ci: string): NodeJS.ProcessEnv {
+  return { ...process.env, CI: ci };
+}
 
 describe("brand kit selection", () => {
   it("finds the current sibling checkout without an override", () => {
@@ -86,9 +103,14 @@ describe("surface checks without a kit", () => {
     try {
       const script = join(root, "tools/scripts/sync-brand-assets.mjs");
       mkdirSync(dirname(script), { recursive: true });
+      copyFileSync(SCRIPT, script);
+      // The script finds its entrypoint through the shared helper (#4664
+      // item 1), so the fixture tree carries that module too.
+      const helper = join(root, "tools/scripts/lib/is-entrypoint.mjs");
+      mkdirSync(dirname(helper), { recursive: true });
       copyFileSync(
-        fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url)),
-        script,
+        fileURLToPath(new URL("./lib/is-entrypoint.mjs", import.meta.url)),
+        helper,
       );
       // The script imports apps/web's INK map (#3074), so the fixture tree
       // carries that module where the repo does, or the child exits on
@@ -108,7 +130,7 @@ describe("surface checks without a kit", () => {
         spawnSync(
           process.execPath,
           [script, "--check", "--brand", join(root, "missing-kit")],
-          { encoding: "utf8" },
+          { encoding: "utf8", env: envWithCi("") },
         );
       const valid = run();
       expect(valid.status).toBe(0);
@@ -121,6 +143,102 @@ describe("surface checks without a kit", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+// #3074: CI runs the check against the kit's main branch. A missing kit there
+// means the checkout step broke, and the old skip-and-exit-0 would pass with
+// nothing verified. Off CI, the loud skip stays.
+describe("a check without a kit", () => {
+  const run = (ci: string) =>
+    spawnSync(process.execPath, [SCRIPT, "--check", "--brand", "/no/such/kit"], {
+      encoding: "utf8",
+      env: envWithCi(ci),
+    });
+
+  it("fails in CI and names the kit it could not find", () => {
+    const result = run("true");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("brand: FAILED");
+    expect(result.stderr).toContain("/no/such/kit");
+    expect(result.stdout).not.toContain("brand: SKIPPED");
+  });
+
+  it("skips with a notice off CI", () => {
+    const result = run("");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("brand: SKIPPED");
+    expect(result.stdout).toContain("no asset was verified");
+  });
+});
+
+describe("CI and raster comparison", () => {
+  it("reads CI from the variable GitHub Actions sets", () => {
+    expect(isCi({ CI: "true" })).toBe(true);
+    expect(isCi({ CI: "1" })).toBe(true);
+    expect(isCi({})).toBe(false);
+    expect(isCi({ CI: "" })).toBe(false);
+    expect(isCi({ CI: "false" })).toBe(false);
+    expect(isCi({ CI: "0" })).toBe(false);
+  });
+
+  it("compares raster bytes off CI and by size in CI", () => {
+    expect(comparesRasterBytes(["--check"], {})).toBe(true);
+    expect(comparesRasterBytes(["--check"], { CI: "true" })).toBe(false);
+  });
+
+  it("lets a flag override either default", () => {
+    expect(comparesRasterBytes(["--check", "--rasters"], { CI: "true" })).toBe(
+      true,
+    );
+    expect(comparesRasterBytes(["--check", "--no-rasters"], {})).toBe(false);
+  });
+
+  it("always renders rasters for a write", () => {
+    expect(comparesRasterBytes([], { CI: "true" })).toBe(true);
+    expect(comparesRasterBytes(["--no-rasters"], {})).toBe(true);
+  });
+});
+
+// The CI image renders with librsvg 2.54 and the committed rasters came from
+// 2.62, so a CI check reads each raster's size instead of its bytes. These
+// readers are that check.
+describe("raster size readers", () => {
+  const committed = (path: string) => readFileSync(join(REPO_ROOT, path));
+
+  it("reads a committed PNG's size", () => {
+    expect(pngSize(committed("apps/app/public/favicon/favicon-32.png"))).toEqual(
+      { width: 32, height: 32 },
+    );
+    expect(pngSize(committed("apps/app/public/pwa/icon-512.png"))).toEqual({
+      width: 512,
+      height: 512,
+    });
+  });
+
+  it("reads the sizes a committed icon file lists", () => {
+    expect(icoSizes(committed("apps/app/public/favicon/favicon.ico"))).toEqual([
+      16, 32, 48,
+    ]);
+    expect(icoSizes(committed("apps/web/favicon.ico"))).toEqual([16, 32, 48]);
+  });
+
+  it("returns null for a file that is not a PNG or an icon", () => {
+    const svgText = Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>");
+    expect(pngSize(null)).toBeNull();
+    expect(pngSize(svgText)).toBeNull();
+    expect(pngSize(Buffer.alloc(8))).toBeNull();
+    expect(icoSizes(null)).toBeNull();
+    expect(icoSizes(svgText)).toBeNull();
+    expect(icoSizes(committed("apps/app/public/favicon/favicon-32.png"))).toBeNull();
+  });
+
+  it("reads a width byte of 0 as 256", () => {
+    const icon = Buffer.alloc(6 + 16);
+    icon.writeUInt16LE(1, 2);
+    icon.writeUInt16LE(1, 4);
+    icon.writeUInt8(0, 6);
+    expect(icoSizes(icon)).toEqual([256]);
   });
 });
 

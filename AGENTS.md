@@ -159,7 +159,7 @@ CI runs the gate, build, lint, typecheck, and test commands in this table. None 
 | `pnpm db:atlas-validate` | Validates Atlas schema against current DB state |
 | `pnpm db:seed-iam` | Seed IAM roles and permissions |
 | `pnpm db:seed-platform` | Seed platform defaults (also runs at the end of `db:migrate`) |
-| `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit (needs the house kit `oxagenai/oxagen-brand` checked out at `$OXAGEN_BRAND_KIT` or `../oxagen-brand`) |
+| `pnpm check:brand` | Verifies every frontend is on the Oxagen house brand kit, `macanderson/oxagen-brand`, read from `$OXAGEN_BRAND_KIT` or `../oxagen-brand`. CI runs it against the kit's `main` (Mac, 2026-09-29), fails when the kit is missing, and checks rasters by size, since PNG bytes depend on the librsvg build. Off CI, a missing kit skips with a notice |
 | `pnpm check:naming` | ADR-025 naming compliance |
 | `pnpm check:audit-coverage` | SOC 2 audit-event coverage (runs on every PR in CI) |
 | `pnpm release:patch/minor/major` | Lockstep version bump (every tracked manifest, whatever its language) + model-written release notes under the clear-prose and oxagen-branding skills (via Vercel AI Gateway; `tools/scripts/lib/release-notes.ts`) + the docs page `apps/docs/content/docs/releases/v<version>.mdx` + git tag. Releases ship from the Release workflow (`.github/workflows/release.yml`, `workflow_dispatch`), which runs this and opens the release PR; see CONTRIBUTING.md → Release Process |

@@ -2,13 +2,14 @@
 /**
  * Pull the Oxagen house brand system into every frontend in this repo.
  *
- * The house kit (oxagenai/oxagen-brand) generates every mark, icon,
+ * The house kit (macanderson/oxagen-brand) generates every mark, icon,
  * social card and spinner from `build/`. Nothing in it is drawn by hand, so
  * nothing here is copied by hand either: this script is the one seam between
  * the kit and the apps, and re-running it after a kit rebuild re-flows the
  * whole product.
  *
  *   node tools/scripts/sync-brand-assets.mjs [--brand <dir>] [--check]
+ *                                            [--rasters | --no-rasters]
  *
  * --brand   kit checkout. Defaults to $OXAGEN_BRAND_KIT, then the deprecated
  *           $OXAGEN_HOUSE_BRAND alias, then ../oxagen-brand.
@@ -16,6 +17,17 @@
  *           That covers the marks, the icons, the tokens, the fonts, the
  *           branding skill, and the INK palette apps/web's art modules draw
  *           with (apps/web/scripts/lib/theme.mjs).
+ * --rasters, --no-rasters
+ *           whether --check renders each PNG and ICO with rsvg-convert and
+ *           compares the bytes. On by default, and off when CI is set. PNG
+ *           bytes depend on the librsvg build: librsvg 2.54 in the CI image
+ *           and 2.62 on a laptop render the same SVG to different bytes.
+ *           With rasters off, the check reads each raster's size instead, and
+ *           the SVGs they are rendered from are still compared byte for byte.
+ *
+ * CI runs `--check` against the kit's main branch on every pull request, by
+ * Mac's decision of 2026-09-29 (#3074). A kit change on main therefore fails
+ * the check here until someone runs this script and commits the result.
  *
  * Each surface has an explicit mark allowlist. The product uses the wordmark
  * where a word fits and the hive for square icons. The kit also supplies a
@@ -32,6 +44,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -48,6 +61,26 @@ export function brandPath(args, env, repo = REPO) {
   );
 }
 const BRAND = brandPath(argv, process.env);
+
+/** Whether `env` says this runs in CI. GitHub Actions sets `CI=true`. */
+export function isCi(env) {
+  const value = (env.CI ?? "").trim().toLowerCase();
+  return value !== "" && value !== "false" && value !== "0";
+}
+
+/**
+ * Whether this run renders rasters and compares their bytes. A write always
+ * renders them. A `--check` renders them unless it runs in CI, where the
+ * librsvg build differs from the one that rendered the committed files, and
+ * `--rasters` or `--no-rasters` overrides either default.
+ */
+export function comparesRasterBytes(args, env) {
+  if (!args.includes("--check")) return true;
+  if (args.includes("--rasters")) return true;
+  if (args.includes("--no-rasters")) return false;
+  return !isCi(env);
+}
+const RASTERS = comparesRasterBytes(argv, process.env);
 
 const NEXT_MARKS = ["oxagen", "stella"].flatMap((brand) =>
   [
@@ -172,10 +205,48 @@ function ico(pngs) {
   return Buffer.concat([head, ...dir, ...pngs.map((p) => p.data)]);
 }
 
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/**
+ * A PNG's width and height from its IHDR chunk, or null when `buf` is not a
+ * PNG.
+ *
+ * @param {Buffer | null} buf
+ * @returns {{ width: number, height: number } | null}
+ */
+export function pngSize(buf) {
+  if (!buf || buf.length < 24) return null;
+  if (!buf.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+  if (buf.toString("latin1", 12, 16) !== "IHDR") return null;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+/**
+ * The size of each image an .ico's directory lists, in order, or null when
+ * `buf` is not an icon file. A width byte of 0 means 256.
+ *
+ * @param {Buffer | null} buf
+ * @returns {number[] | null}
+ */
+export function icoSizes(buf) {
+  if (!buf || buf.length < 6) return null;
+  if (buf.readUInt16LE(0) !== 0 || buf.readUInt16LE(2) !== 1) return null;
+  const count = buf.readUInt16LE(4);
+  if (buf.length < 6 + 16 * count) return null;
+  const sizes = [];
+  for (let i = 0; i < count; i += 1) {
+    const width = buf.readUInt8(6 + 16 * i);
+    sizes.push(width === 0 ? 256 : width);
+  }
+  return sizes;
+}
+
 /* ── writing ─────────────────────────────────────────────────────────────── */
 
 const written = [];
 const drifted = [];
+/** Rasters a `--check` without rasters read the size of, not the bytes. */
+const sizedOnly = [];
 
 function emit(relPath, data) {
   assertSurfaceMark(relPath);
@@ -196,6 +267,46 @@ function emit(relPath, data) {
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, buf);
   written.push(relPath);
+}
+
+/** The committed file at `relPath`, or null when there is none. */
+function committed(relPath) {
+  try {
+    return readFileSync(join(REPO, relPath));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Render `svgPath` at `size` and emit it as `relPath`, returning the PNG. With
+ * rasters off, check the committed PNG's size instead and return null.
+ */
+function emitRaster(relPath, svgPath, size) {
+  if (RASTERS) {
+    const data = raster(svgPath, size);
+    emit(relPath, data);
+    return data;
+  }
+  const found = pngSize(committed(relPath));
+  if (found?.width !== size || found.height !== size) drifted.push(relPath);
+  sizedOnly.push(relPath);
+  return null;
+}
+
+/**
+ * Emit an .ico built from `parts`, `{ size, data }` from `emitRaster`. With
+ * rasters off, check the committed icon lists the same sizes instead.
+ */
+function emitIco(relPath, parts) {
+  if (RASTERS) {
+    emit(relPath, ico(parts));
+    return;
+  }
+  const sizes = icoSizes(committed(relPath));
+  const want = parts.map((p) => p.size);
+  if (sizes?.join(",") !== want.join(",")) drifted.push(relPath);
+  sizedOnly.push(relPath);
 }
 
 const svg = (name) => join(BRAND, "logo/svg", name);
@@ -259,17 +370,20 @@ function nextSurface(publicDir, brand) {
   );
   const icoParts = [];
   for (const size of FAVICON_PNG) {
-    const data = raster(tileDark, size);
-    emit(`${publicDir}/favicon/favicon-${size}.png`, data);
+    const data = emitRaster(
+      `${publicDir}/favicon/favicon-${size}.png`,
+      tileDark,
+      size,
+    );
     if (ICO_SIZES.includes(size)) icoParts.push({ size, data });
   }
-  emit(`${publicDir}/favicon/favicon.ico`, ico(icoParts));
+  emitIco(`${publicDir}/favicon/favicon.ico`, icoParts);
 
   // Home-screen / installed-PWA icons. A home-screen icon is a tile.
   for (const size of PWA_ICONS) {
-    emit(`${publicDir}/pwa/icon-${size}.png`, raster(tileDark, size));
+    emitRaster(`${publicDir}/pwa/icon-${size}.png`, tileDark, size);
   }
-  emit(`${publicDir}/pwa/apple-touch-icon.png`, raster(tileDark, 180));
+  emitRaster(`${publicDir}/pwa/apple-touch-icon.png`, tileDark, 180);
 
   // Maskable: full bleed, mark pulled into the safe circle, both schemes.
   const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-"));
@@ -278,11 +392,8 @@ function nextSurface(publicDir, brand) {
   writeFileSync(maskDark, maskableSvg(tileDark));
   writeFileSync(maskLight, maskableSvg(tileLight));
   for (const size of MASKABLE) {
-    emit(`${publicDir}/pwa/maskable-${size}.png`, raster(maskDark, size));
-    emit(
-      `${publicDir}/pwa/maskable-light-${size}.png`,
-      raster(maskLight, size),
-    );
+    emitRaster(`${publicDir}/pwa/maskable-${size}.png`, maskDark, size);
+    emitRaster(`${publicDir}/pwa/maskable-light-${size}.png`, maskLight, size);
   }
 
   // Social cards and the house spinner.
@@ -318,22 +429,23 @@ function staticSurface(root, brand) {
   const tileDark = svg(`${brand}-icon-tile-dark.svg`);
   emit(`${root}/favicon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
   const icoParts = [];
-  for (const size of [16, 32, 48]) {
-    const data = raster(tileDark, size);
-    if (size !== 48) emit(`${root}/favicon-${size}.png`, data);
+  for (const size of [16, 32]) {
+    const data = emitRaster(`${root}/favicon-${size}.png`, tileDark, size);
     icoParts.push({ size, data });
   }
-  emit(`${root}/favicon.ico`, ico(icoParts));
-  emit(`${root}/apple-touch-icon.png`, raster(tileDark, 180));
+  // The 48px image goes only into the .ico, so it has no file to check.
+  icoParts.push({ size: 48, data: RASTERS ? raster(tileDark, 48) : null });
+  emitIco(`${root}/favicon.ico`, icoParts);
+  emitRaster(`${root}/apple-touch-icon.png`, tileDark, 180);
   // Home-screen / installed-PWA icons — same tiles the Next surfaces wear.
   for (const size of [192, 512]) {
-    emit(`${root}/icon-${size}.png`, raster(tileDark, size));
+    emitRaster(`${root}/icon-${size}.png`, tileDark, size);
   }
   const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-web-"));
   const maskDark = join(scratch, `maskable-${brand}-dark.svg`);
   writeFileSync(maskDark, maskableSvg(tileDark));
   for (const size of MASKABLE) {
-    emit(`${root}/maskable-${size}.png`, raster(maskDark, size));
+    emitRaster(`${root}/maskable-${size}.png`, maskDark, size);
   }
   // Kit webmanifest with paths rewritten for the flat static layout.
   const kitManifest = JSON.parse(
@@ -658,21 +770,19 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
 /* ── run ─────────────────────────────────────────────────────────────────── */
 
 /**
- * The kit is a separate repository, so it is not always present — CI checks out
- * this repo alone.
+ * The kit is a separate repository, so it is not always present.
  *
- * A WRITE without it is an error: there is nothing to copy from. A `--check`
- * without it says so and exits 0, because the alternative is a gate that fails
- * on every machine that has not cloned a second repo, and a gate everyone
- * learns to ignore is worse than no gate. It says it LOUDLY rather than
- * skipping quietly: the one line names what was not checked, so a green run
- * with that line in it cannot be read as "the assets were verified".
+ * A WRITE without it is an error: there is nothing to copy from.
  *
- * What is lost is small and visible: the vendored files are committed, so the
- * only drift this misses is someone hand-editing one, which shows up in the
- * diff of the PR that does it.
+ * A `--check` without it fails in CI. CI checks the kit out into its workspace
+ * before the check runs, so a missing kit there means the checkout step broke
+ * or moved, and a pass would verify nothing (#3074). Off CI, a `--check`
+ * without the kit says so and exits 0, because a local gate that fails on
+ * every machine without a second clone gets ignored. The one line it prints
+ * names what was not checked, so a green local run with that line in it cannot
+ * be read as "the assets were verified".
  */
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {
     try {
       for (const file of readdirSync(join(REPO, surface))) {
@@ -687,7 +797,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     readFileSync(join(BRAND, "tokens/house-tokens.json"));
   } catch {
     const where =
-      "Clone oxagenai/oxagen-brand beside this repo or set OXAGEN_BRAND_KIT.";
+      "Clone macanderson/oxagen-brand beside this repo or set OXAGEN_BRAND_KIT.";
+    if (CHECK && isCi(process.env)) {
+      console.error(
+        `brand: FAILED. No house kit at ${BRAND}, so no asset was verified. CI must check out macanderson/oxagen-brand and set OXAGEN_BRAND_KIT to it.`,
+      );
+      process.exit(2);
+    }
     if (CHECK) {
       console.log(
         `brand: SKIPPED. No house kit at ${BRAND}, so no asset was verified. ${where}`,
@@ -718,13 +834,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   ).version;
 
   if (CHECK) {
+    if (sizedOnly.length) {
+      console.log(
+        `brand: ${sizedOnly.length} raster file(s) checked for size only. PNG bytes depend on the librsvg build, so pass --rasters where rsvg-convert matches the one that rendered them.`,
+      );
+    }
     if (drifted.length) {
       console.error(`brand assets are stale against house kit ${version}:`);
       for (const f of drifted) console.error(`  ${f}`);
       console.error(`\nrun: node tools/scripts/sync-brand-assets.mjs`);
       process.exit(1);
     }
-    console.log(`brand: every vendored asset matches house kit ${version}`);
+    console.log(
+      sizedOnly.length
+        ? `brand: every vendored asset matches house kit ${version}, rasters by size`
+        : `brand: every vendored asset matches house kit ${version}`,
+    );
   } else {
     const digest = createHash("sha256")
       .update(written.sort().join("\n"))
