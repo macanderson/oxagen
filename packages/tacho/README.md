@@ -117,7 +117,10 @@ enrollment's hook groups from both harnesses, enroll again with `--force`
 keeping the device key, the loopback port and the local bearer, so the fleet
 page sees one continuous host. `reassign --harness claude-code,codex` with no
 target re-enrolls in place, which is the one way to drop a wrapper: `enroll`
-may add a harness on a re-apply but never silently removes one.
+may add a harness on a re-apply but never silently removes one. Both apply to
+a host enrolled through the CLI session. An agent enrolled with a one-time
+token stays in the workspace it is registered in, so `reassign` refuses it
+(see More than one agent below).
 
 ### More than one agent
 
@@ -148,11 +151,19 @@ tacho status --json                       # `enrollments` holds one report per a
 A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
 lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
 agent take the same `--harness` and `--all`. Unenrolling one agent restarts
-the service for the agents that remain. `reassign` enrolls again through the
-CLI session, so a token-enrolled agent comes back under a hostname-derived
-agent key with no registered agent or mandate. It prints a warning before the
-revoke that says how to keep the link (#4410, ADR-203 known gaps). Spec §5.8
-has the full rules.
+the service for the agents that remain. Spec §5.8 has the full rules.
+
+`reassign` moves only an agent enrolled through the CLI session. A token
+enrollment records the registered agent's id in `host.json` (`agent_id`,
+beside `enrollment_source: "token"`), and an agent stays in the workspace it
+is registered in. `reassign` refuses such an agent before it revokes anything,
+whether it is the only agent on the machine or one of several. To report its
+harness to another workspace, register an agent there on the Agents page, run
+`tacho unenroll --harness <harness>`, and run the enroll command the page
+shows. `reassign` enrolls again through the CLI session, which links no agent,
+so it refuses a harness change on a token-enrolled agent too. So does
+`enroll --harness` when it would add a harness to one. Register an agent for
+the new harness instead (#4410, ADR-203).
 
 ### Codex
 
@@ -197,7 +208,9 @@ replays the spool (`SPOOLED_HOOK_EVENTS`).
 The daemon also seals a session when its harness process exits, within one
 sweep (30 s). Claude Code exports its pid as `CLAUDE_PID`. For Stella and
 Codex, `tacho-hook` walks up from its parent with `ps` to the harness process
-and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
+and passes it as `TACHO_HARNESS_PID`. The Stella walk reads `/proc` on Linux
+instead of `ps`, and takes `STELLA_PID` without a walk when Stella exports it
+(`docs/specs/tacho/spec.md` §10.1). An operator's `cancel` sends that pid
 `SIGTERM`. The Codex walk runs at `SessionStart` and at each prompt, stops
 after 500 ms, and takes only a process named `codex` or `codex-<target>`.
 A Codex hook carries no pid on Windows, or under a Codex process that serves
@@ -540,14 +553,46 @@ service body and `tacho hook` the command hook, dispatched in
 tool call (cold start about 111 ms, the same process-start cost as the
 separate `.mjs`; the 50 ms budget is the time allowed to *reach* the daemon).
 `runtimeCommands` writes `<bin>/tacho hook` and `[<bin>/tacho, daemon]`
-whenever it finds that layout — inside the desktop app bundle, in a Homebrew
-prefix, or in a `TACHO_BIN_DIR` the app points it at.
+whenever it finds that layout, in a Homebrew prefix or in the `TACHO_BIN_DIR`
+the desktop app points it at. A `TACHO_BIN_DIR` with no `tacho` in it is an
+`executableProblem`, and `enroll` refuses: the running process is not named in
+its place, because for the desktop app that process is the bundle's sidecar.
 
 ### The desktop app
 
 `apps/desktop` (Tauri 2) ships this binary and the compiled `oxagen` CLI as
 sidecars, signs the machine in, enrolls it, and manages the workspace and
 the wrappers by running these same commands; it owns no state of its own.
+
+Every command enrollment writes names a versioned per-user copy of the
+sidecars, never a path inside the app bundle (ADR-230). On each launch the app
+copies both binaries into `~/Library/Application Support/oxagen/bin/<version>`
+on macOS, `~/.local/share/oxagen/bin/<version>` on Linux, or
+`%LOCALAPPDATA%\oxagen\bin\<version>` on Windows, and runs every sidecar with
+`TACHO_BIN_DIR` at that directory. The hooks, the Claude Code credential
+helper, the Claude Desktop MCP entry, and the service unit therefore survive
+the app going to the Trash or its package being removed. An update copies its
+version beside the old one, so no file the running daemon holds is replaced.
+`tacho enroll` run from the new copy (the app's Re-apply) moves the hooks and
+the service to it, and the app removes an old copy once no `host.json` and no
+PATH link names it.
+
+To uninstall without the app, run the copy's own `tacho unenroll --all
+--purge`, for example `"$HOME/Library/Application
+Support/oxagen/bin/<version>/tacho" unenroll --all --purge`. It removes what
+enrollment wrote: the harness files from their receipts (`install-receipts.json`,
+`host/harness-file.ts`), the service, and the agent state. The copy itself,
+the PATH links, and the shell profile block are the app's, and its
+**Uninstall** removes them.
+
+A Cursor or Stella hook blocks the action when it cannot run: Cursor's veto
+hooks carry `failClosed`, and Stella reads a non-zero exit as a deny. So on
+macOS and Linux those two commands test for the collector's executable first
+(`host/hook-guard.ts`). When it is not installed they print the collector's
+own allow for the event (nothing, for Stella) and exit 0. A collector that is
+there runs as before, and its deny, crash, or timeout still blocks. Claude
+Code and Codex report a failed hook as an error and carry on, so their
+commands are unchanged.
 `.github/workflows/desktop.yml` builds one job per OS and attaches the
 bundles and the bare binaries (with `.sha256` files) to a `desktop-v<version>`
 release; `tools/packaging/` holds the Homebrew and Scoop templates that

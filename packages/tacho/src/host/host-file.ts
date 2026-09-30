@@ -199,11 +199,19 @@ export const hostFileSchema = z
      * How the enrollment was made: `token` when a one-time token from the
      * Agents page linked it to a registered agent, `session` when the
      * operator's own login made it. Absent means `session`: every host
-     * enrolled before the field existed was, or reads the same way. A
-     * reassign and a fallback enroll write `session`, since neither carries
-     * the token's agent link (#4410).
+     * enrolled before the field existed was, or reads the same way. Any
+     * enroll through the CLI session writes `session`, since it links no
+     * agent.
      */
     enrollment_source: z.enum(["token", "session"]).optional(),
+    /**
+     * The registered agent a one-time token linked this enrollment to: the
+     * `agentId` that `enroll_host` answered. Absent on an enrollment made
+     * through the CLI session, which links no agent, and on one made before
+     * the field existed. An agent stays in the workspace it is registered
+     * in, so `reassign` refuses a host that is linked to one (#4410).
+     */
+    agent_id: z.string().min(1).optional(),
     enrolled_at: z.string(),
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),
@@ -217,6 +225,18 @@ export const hostFileSchema = z
   .passthrough();
 
 export type HostFile = z.output<typeof hostFileSchema>;
+
+/**
+ * Whether a one-time token from the Agents page made this enrollment, which
+ * links it to a registered agent. `agent_id` says so on a host enrolled since
+ * that field existed. `enrollment_source` says so on a host enrolled before
+ * it, by a binary that recorded only the source.
+ */
+export function enrolledWithToken(
+  host: Pick<HostFile, "agent_id" | "enrollment_source">,
+): boolean {
+  return host.agent_id !== undefined || host.enrollment_source === "token";
+}
 
 /**
  * The scope tachod derives session uuids from. A host enrolled before

@@ -1,5 +1,10 @@
+import { execFile } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyBundle } from "../host/bundle";
 import type { TachoEvent } from "../envelope";
@@ -16,12 +21,75 @@ import { createGithubProxy } from "./github-proxy";
 const NOW = Date.parse("2026-09-22T12:00:00Z");
 const SECRET = "ghs_FAKE_DAEMON_ONLY";
 const servers: Server[] = [];
+const scratch: string[] = [];
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+  for (const dir of scratch.splice(0))
+    rmSync(dir, { recursive: true, force: true });
 });
+
+/**
+ * The refusal `create_github_token` gives for the workspace's steering
+ * repository, in the envelope the API's error middleware sends: the message
+ * of `steeringRepoProposeOnly` in
+ * `packages/handlers/src/tacho.github_token.issue.ts` (#4575).
+ */
+const STEERING_MESSAGE =
+  "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.";
+function steeringRefusal(): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "conflict",
+        reason: "steering_repo_propose_only",
+        message: STEERING_MESSAGE,
+      },
+      requestId: "req_steering",
+    }),
+    { status: 409, headers: { "content-type": "application/json" } },
+  );
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Run a real git that must fail, and return what it printed to stderr. Git
+ * runs with no global or system configuration and no proxy, so neither the
+ * machine's settings nor an HTTP proxy in the environment reach the loopback
+ * listener. Async, because the proxy answers from this same process.
+ */
+async function gitStderr(args: string[]): Promise<string> {
+  const dir = mkdtempSync(join(tmpdir(), "tacho-git-proxy-"));
+  scratch.push(dir);
+  const config = join(dir, "gitconfig");
+  writeFileSync(config, "");
+  try {
+    await execFileAsync("git", args, {
+      cwd: dir,
+      timeout: 20_000,
+      env: {
+        ...process.env,
+        GIT_CONFIG_GLOBAL: config,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_TERMINAL_PROMPT: "0",
+        http_proxy: "",
+        HTTP_PROXY: "",
+        https_proxy: "",
+        HTTPS_PROXY: "",
+        all_proxy: "",
+        ALL_PROXY: "",
+        no_proxy: "*",
+        NO_PROXY: "*",
+      },
+    });
+  } catch (error) {
+    return String((error as { stderr?: unknown }).stderr ?? "");
+  }
+  throw new Error(`git ${args[0] ?? ""} succeeded against a refusing proxy`);
+}
 
 async function setup() {
   const signer = bundleSigner();
@@ -364,6 +432,117 @@ describe("GitHub daemon custody", () => {
     const t = await setup();
     t.controlFetch.mockResolvedValue(new Response("refused", { status: 404 }));
     expect((await t.request()).status).toBe(404);
+    expect(t.upstream).not.toHaveBeenCalled();
+  });
+
+  it("passes the API's steering refusal to git as plain text", async () => {
+    const t = await setup();
+    t.controlFetch.mockImplementation(async () => steeringRefusal());
+    const response = await t.request();
+    expect(response.status).toBe(403);
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    const body = await response.text();
+    // The message and nothing else from the JSON envelope.
+    expect(body).toBe(
+      `Oxagen refused access to this repository. ${STEERING_MESSAGE}`,
+    );
+    expect(body).not.toContain("steering_repo_propose_only");
+    expect(body).not.toContain("req_steering");
+    expect(t.upstream).not.toHaveBeenCalled();
+  });
+
+  it("shows the steering refusal to a real git client", async () => {
+    const t = await setup();
+    t.controlFetch.mockImplementation(async () => steeringRefusal());
+    const { port } = new URL(t.base);
+    const stderr = await gitStderr([
+      "ls-remote",
+      `http://oxagen:${t.token}@127.0.0.1:${port}/github/acme/repo.git`,
+    ]);
+    // Git prints a text/plain error body line by line after `remote:`.
+    expect(stderr).toContain(
+      `remote: Oxagen refused access to this repository. ${STEERING_MESSAGE}`,
+    );
+    expect(stderr).not.toContain("steering_repo_propose_only");
+    expect(t.upstream).not.toHaveBeenCalled();
+  });
+
+  it("keeps a 404 a 404 and says only the refusal when the body has no message", async () => {
+    const t = await setup();
+    t.controlFetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "not_found",
+              reason: "repository_not_governed",
+              message: "No repository in this workspace is bound to acme/repo",
+            },
+          }),
+          { status: 404 },
+        ),
+    );
+    let response = await t.request();
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe(
+      "Oxagen refused access to this repository. No repository in this workspace is bound to acme/repo",
+    );
+
+    t.controlFetch.mockImplementation(
+      async () => new Response("<html>denied</html>", { status: 403 }),
+    );
+    response = await t.request();
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe(
+      "Oxagen refused access to this repository",
+    );
+    expect(t.upstream).not.toHaveBeenCalled();
+  });
+
+  it("puts a refusal on one line with no control characters", async () => {
+    const t = await setup();
+    t.controlFetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "forbidden",
+              message: "\u001b[31mHost\u001b[0m is not active.\nEnroll it again.",
+            },
+          }),
+          { status: 403 },
+        ),
+    );
+    const response = await t.request();
+    expect(response.status).toBe(403);
+    const body = await response.text();
+    expect(body).not.toMatch(/[\x00-\x1f\x7f]/);
+    expect(body).toBe(
+      "Oxagen refused access to this repository. [31mHost [0m is not active. Enroll it again.",
+    );
+  });
+
+  it("never passes on a 5xx body", async () => {
+    const t = await setup();
+    t.controlFetch.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "internal_error",
+              message: "connect ECONNREFUSED 10.0.4.17:5432",
+            },
+          }),
+          { status: 500 },
+        ),
+    );
+    const response = await t.request();
+    expect(response.status).toBe(502);
+    const body = await response.text();
+    expect(body).toBe(
+      "Oxagen could not issue a credential for this repository. Try again.",
+    );
+    expect(body).not.toContain("10.0.4.17");
     expect(t.upstream).not.toHaveBeenCalled();
   });
 

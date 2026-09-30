@@ -2626,6 +2626,9 @@ name = "oxagen-desktop"
 version = "2.1.3"
 dependencies = [
  "dirs 7.0.0",
+ "dispatch2",
+ "objc2",
+ "objc2-app-kit",
  "serde",
  "serde_json",
  "tauri",

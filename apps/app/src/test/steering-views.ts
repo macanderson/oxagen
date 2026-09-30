@@ -308,7 +308,12 @@ export function steeringFreshness(
 /** The hub header's read: `team` declared on the main repository, three proposals waiting. */
 export function steeringHub(overrides: Partial<SteeringHub> = {}): SteeringHub {
   return {
-    governance: { state: "read", repository: "acme/platform", mode: "team" },
+    governance: {
+      state: "read",
+      repository: "acme/platform",
+      path: ".oxagen/rules/governance.toml",
+      mode: "team",
+    },
     proposalsWaiting: 3,
     segments: { candidates: 4, prs: 2 },
     ...overrides,

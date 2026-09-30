@@ -311,6 +311,7 @@ describe("setGovernanceMode", () => {
         mode: "regulated",
         repository: "acme/platform",
         branch: "main",
+        path: ".oxagen/rules/governance.toml",
         pullRequest: {
           number: 42,
           htmlUrl: "https://github.com/acme/platform/pull/42",
@@ -339,6 +340,15 @@ describe("setGovernanceMode", () => {
     expect(result).toMatchObject({
       ok: true,
       value: { outcome: "applied", mode: "team", pullRequest: null },
+    });
+  });
+
+  it("names the file the mode lives in for a steering repository (#4821)", async () => {
+    invoke.mockResolvedValue({ ...OUT, path: "steering/governance.toml" });
+    const result = await setGovernanceMode("acme", "core-platform", "regulated");
+    expect(result).toMatchObject({
+      ok: true,
+      value: { path: "steering/governance.toml" },
     });
   });
 

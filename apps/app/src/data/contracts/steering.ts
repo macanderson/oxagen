@@ -330,8 +330,10 @@ export const SteeringDeliveries = z.object({
 export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;
 
 /**
- * The mode `.oxagen/rules/governance.toml` declares on the main repository's
- * production branch, as `get_repository_tree` read it. `absent` is no file,
+ * The mode the main repository's governance file declares on its production
+ * branch, as `get_repository_tree` read it: `steering/governance.toml` in a
+ * steering repository, `.oxagen/rules/governance.toml` in a legacy one
+ * (#4821). `absent` is no file,
  * which the Context PR gate reads as `team`; `invalid` is a file naming no
  * mode the gate knows, which refuses every open and merge.
  */
@@ -361,6 +363,8 @@ export const SteeringHub = z.object({
       state: z.literal("read"),
       /** `owner/name` of the main repository. */
       repository: z.string().min(1),
+      /** The governance file the mode was read from. */
+      path: z.string().min(1),
       mode: DeclaredGovernanceMode,
     }),
     z.object({ state: z.literal("unbound") }),
@@ -424,8 +428,15 @@ export const OxagenTree = z.discriminatedUnion("state", [
     branch: z.string().min(1),
     /** The branch's head commit; null when the branch is gone. */
     head: z.string().min(1).nullable(),
-    /** Every path under `.oxagen/`, relative to it, sorted. */
+    /**
+     * The directory the panel lists: `steering` in a steering repository,
+     * `.oxagen` in a legacy one.
+     */
+    root: z.enum(["steering", ".oxagen"]),
+    /** Every path under `root`, relative to it, sorted. */
     files: z.array(z.string().min(1)),
+    /** The governance file `mode` was read from. */
+    governancePath: z.string().min(1),
     mode: DeclaredGovernanceMode,
   }),
   z.object({ state: z.literal("unbound") }),

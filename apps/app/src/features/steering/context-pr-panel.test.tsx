@@ -100,7 +100,9 @@ describe("before the pull request opens", () => {
     expect(
       panel.querySelector('[data-fact="governance"] dd'),
     ).toHaveTextContent(
-      "read from .oxagen/rules/governance.toml when the pull request opens",
+      // The panel names no layout's file: a steering repository keeps it at
+      // steering/governance.toml, a legacy one under .oxagen/rules/ (#4821).
+      "read from the governance file when the pull request opens",
     );
     expect(panel.querySelector("[data-check]")).toBeNull();
     expect(merge()).toBeDisabled();

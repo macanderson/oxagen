@@ -115,8 +115,10 @@ export function requireEnrollmentSigning(
 /**
  * Whether an agent version's config declares `containment.required = true`,
  * the table ADR-198's migration copied from the definition file. Read only to
- * carry that requirement onto a runtime (ADR-204 §4). Any other shape counts
- * as not required, the same test the ADR-204 migration's backfill applies.
+ * carry that requirement onto a runtime (ADR-204 §4). This is the test the
+ * ADR-204 backfill and its reconcile apply in SQL, `->> 'required' = 'true'`,
+ * which matches the boolean and the string `"true"` alike, so both count
+ * here too. Any other shape counts as not required.
  */
 async function versionRequiresContainment(
   tx: Tx,
@@ -132,7 +134,8 @@ async function versionRequiresContainment(
     | { containment?: { required?: unknown } }
     | null
     | undefined;
-  return config?.containment?.required === true;
+  const required = config?.containment?.required;
+  return required === true || required === "true";
 }
 
 /**

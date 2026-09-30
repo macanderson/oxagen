@@ -51,6 +51,15 @@
  * Nothing is added by the join: the call is still priced from one row, and
  * the figures only move tokens between classes that row already counted.
  *
+ * The token sources and the system context pull the same way (#4508). Only
+ * the proxy recorded the request, so only the proxy's sighting carries
+ * `tool_definition_tokens`, `context_frame_tokens`, `steering_tokens`, and
+ * the system context digest and parts. When an OTel or transcript sighting
+ * sealed first, the proxy row is the stamped one and the filter drops it. The
+ * read joins it back on the same two ids ({@link PROXY_SIGHTING}) and takes a
+ * member from it wherever the priced row carries none. The sums still come
+ * from the rows the rollup prices, in the same read.
+ *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
  */
@@ -338,6 +347,67 @@ const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
 const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
 
 /**
+ * The sighting of a model call the loopback proxy sealed. It is the one
+ * sighting that saw the request, so the one that carries the call's token
+ * sources and system context (#4493). This predicate does NOT apply
+ * {@link NOT_A_DUPLICATE}: the proxy row the read needs is the stamped one
+ * whenever another source sealed the call first.
+ */
+const PROXY_SIGHTING = "source = 'collector' AND fidelity = 'proxy'";
+
+/**
+ * The proxy sighting's token sources and system context, grouped on one
+ * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
+ * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
+ * aliases differ from the column names so a grouped column is never read
+ * back as its own aggregate.
+ */
+function proxySightingJoin(
+  key: "request_id" | "message_id",
+  alias: string,
+): string {
+  return `LEFT JOIN (
+        SELECT
+          ${key} AS call_key,
+          max(tool_definition_tokens) AS tool_definitions,
+          max(context_frame_tokens) AS context_frames,
+          max(steering_tokens) AS steering,
+          max(system_context_digest) AS context_digest,
+          argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
+          AND kind = 'llm_call'
+          AND ${PROXY_SIGHTING}
+        GROUP BY call_key
+        HAVING call_key != ''
+      ) AS ${alias} ON ${alias}.call_key = c.${key}`;
+}
+
+/**
+ * A token source count on the priced row, or the proxy sighting's when the
+ * priced row carries none. `r` joins on the request id and `q` on the
+ * message id. A LEFT JOIN that matches nothing reads a Nullable column as
+ * null, so the count stays null when no row measured it.
+ */
+function proxiedCount(column: string, joined: string): string {
+  return `coalesce(c.${column}, r.${joined}, q.${joined})`;
+}
+
+/**
+ * The system context digest and its parts, from the priced row when it
+ * carries a digest and otherwise from the proxy sighting. The parts always
+ * come from the row the digest came from, so a digest never pairs with
+ * another row's list. An unmatched join reads an empty string.
+ */
+const FRAME_CONTEXT_DIGEST =
+  "if(c.system_context_digest != '', c.system_context_digest, if(r.context_digest != '', r.context_digest, q.context_digest))";
+const FRAME_CONTEXT_PARTS =
+  "if(c.system_context_digest != '', c.system_context_parts, if(r.context_digest != '', r.context_parts, q.context_parts))";
+
+/**
  * The sessions a wrapped run's reads name: the list the caller loaded, with
  * the root always in it, so a run whose list came back without its own
  * session still reads the root chain.
@@ -503,11 +573,11 @@ export async function readModelCallFrames(args: {
         ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
         c.cost_usd_micros AS cost_micros,
         toString(c.session_uuid) AS session_uuid,
-        c.tool_definition_tokens AS tool_definition_tokens,
-        c.context_frame_tokens AS context_frame_tokens,
-        c.steering_tokens AS steering_tokens,
-        c.system_context_digest AS system_context_digest,
-        ${consume === undefined ? "c.system_context_parts" : "NULL"} AS system_context_parts
+        ${proxiedCount("tool_definition_tokens", "tool_definitions")} AS tool_definition_tokens,
+        ${proxiedCount("context_frame_tokens", "context_frames")} AS context_frame_tokens,
+        ${proxiedCount("steering_tokens", "steering")} AS steering_tokens,
+        ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
+        ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
@@ -557,6 +627,8 @@ export async function readModelCallFrames(args: {
         GROUP BY call_key
         HAVING call_key != ''
       ) AS m ON m.call_key = c.message_id
+      ${proxySightingJoin("request_id", "r")}
+      ${proxySightingJoin("message_id", "q")}
       ORDER BY c.ts, c.seq
     `,
     query_params: {

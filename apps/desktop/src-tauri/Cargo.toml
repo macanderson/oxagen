@@ -26,6 +26,14 @@ serde_json = "1.0.151"
 ureq = { version = "3.4.2", features = ["json"] }
 dirs = "7.0.0"
 
+# macOS only: `src/macos_quit.rs` adds `applicationShouldTerminate:` to tao's
+# app delegate and answers it on the main queue. The versions are the ones
+# tauri and tao already pull in.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
+dispatch2 = "0.3.1"
+
 [profile.release]
 codegen-units = 1
 lto = true

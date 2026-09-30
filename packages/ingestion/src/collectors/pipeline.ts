@@ -308,6 +308,8 @@ export interface CollectResult {
   before: StoredWorkItem | null;
   /** True when the stored item is newer than the one fetched, so nothing was written. */
   stale: boolean;
+  /** True when the record is outside the collector's scope, so nothing was written. */
+  skipped: boolean;
 }
 
 /**
@@ -376,10 +378,16 @@ export async function collectItem(
   // Null: the record is outside the collector's configured scope. It is
   // skipped, and no work item is written for it.
   if (mapped === null)
-    return { providerId: item.ref.providerId, change: null, before: null, stale: false };
+    return {
+      providerId: item.ref.providerId,
+      change: null,
+      before: null,
+      stale: false,
+      skipped: true,
+    };
   const before = await ports.store.findItem(collector.id, mapped.providerId);
   if (before && isNewer(before.sourceUpdatedAt, mapped.sourceUpdatedAt))
-    return { providerId: mapped.providerId, change: null, before, stale: true };
+    return { providerId: mapped.providerId, change: null, before, stale: true, skipped: false };
   const { value: screened } = await ports.screen({
     subject: mapped.subject,
     description: mapped.description,
@@ -406,7 +414,7 @@ export async function collectItem(
     kind === null || stored.deleted
       ? null
       : { publicId: stored.publicId, change: kind, digest: changeDigest(input) };
-  return { providerId: mapped.providerId, change, before, stale: false };
+  return { providerId: mapped.providerId, change, before, stale: false, skipped: false };
 }
 
 export type OpenResult =
@@ -554,8 +562,11 @@ export async function reconcilePage(
       // exactly when the doorbell never brought it in. A stored copy with no
       // update time gives no evidence either way, so it is not counted: a
       // module that maps none would otherwise read as lagging forever.
+      // A record outside the scope is never collected, so no doorbell
+      // missed it.
       const changedAt = Date.parse(item.updatedAt);
       const doorbellMissed =
+        !result.skipped &&
         !result.stale &&
         changedAt > listeningSince &&
         changedAt <= cutoff &&

@@ -276,10 +276,31 @@ describe("the window", () => {
       )?.nextElementSibling?.textContent;
     expect(row("Status")).toBe("active");
     expect(row("Policy")).toBe(
-      "enforce: a matching permission rule can deny a governed call or ask first",
+      "enforce: the policy can deny a governed call or ask first. Budget and model limits also apply to model calls routed through Oxagen.",
     );
     expect(row("Bundle")).toContain("v3, fetched");
     expect(row("Gateway")).not.toContain("enforce");
+  });
+
+  // #4570: the row read any mode but `enforce` as observe, so a host.json
+  // with no `bundle.mode`, or a mode this build does not know, said the call
+  // goes ahead when nobody knew what the host enforces.
+  it("names a missing or unknown policy mode on the Policy row instead of observe", async () => {
+    for (const [mode, text] of [
+      ["shadow", "unknown policy mode: shadow"],
+      [null, "unknown policy mode: not set"],
+    ] as const) {
+      bridge.readState.mockResolvedValue({
+        ...machine,
+        host: { ...host, bundle: { ...host.bundle, mode } },
+      });
+      await renderEnrolled();
+      const policy = Array.from(document.querySelectorAll(".kv dt")).find(
+        (dt) => dt.textContent === "Policy",
+      )?.nextElementSibling?.textContent;
+      expect(policy, String(mode)).toBe(text);
+      cleanup();
+    }
   });
 });
 

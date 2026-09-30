@@ -57,7 +57,11 @@ export interface HostView {
   revoked_at: string | null;
   bundle_fetched_at: string;
   device_key_fingerprint: string;
-  bundle: { version: number; mode: "observe" | "enforce"; expires_at: string };
+  /**
+   * `mode` is unchecked: `read_host` forwards `bundle.mode` from host.json as
+   * it finds it, `null` when absent. `policyText` checks it by name (#4570).
+   */
+  bundle: { version: number; mode: unknown; expires_at: string };
 }
 
 /**
@@ -140,10 +144,10 @@ export interface DesktopState {
    */
   sidecar_transient: boolean;
   /**
-   * The directory hooks and the service may reference: the sidecar
-   * directory, or the durable copy "Link into PATH" made; null while the app
-   * runs from a transient directory with no copy yet (tacho refuses to
-   * enroll until there is one).
+   * The directory hooks and the service may reference: this version's
+   * per-user copy of the sidecars, which the app makes on every launch
+   * (ADR-230). Null until that copy exists, and tacho refuses to enroll
+   * until it does.
    */
   bin_dir: string | null;
   oxagen_on_path: string | null;
@@ -330,7 +334,7 @@ export type SidecarEvent =
  * Run a sidecar to completion, streaming lines to `onLine` as they arrive so
  * a six-step `enroll` reads as progress rather than a spinner. The Rust shell
  * refuses any argv that is not on its allowlist and sets the environment
- * itself (`TACHO_BIN_DIR` when the app runs from a disk image), so nothing
+ * itself (`TACHO_BIN_DIR`, the per-user copy of the sidecars), so nothing
  * here can widen what the sidecar is started with.
  */
 export async function runSidecar(

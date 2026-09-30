@@ -1,7 +1,8 @@
 # ADR-203: A machine holds one tacho enrollment per agent
 
 - **Status:** Accepted
-- **Date:** 2026-09-26
+- **Date:** 2026-09-26. Amended on 2026-09-30: `reassign`, and a harness
+  addition through `enroll`, refuse a token-enrolled agent (#4410).
 - **Owners:** platform
 - **Refines:** ADR-198 (its consequence that `tacho enroll` keeps one
   enrollment per machine, so a second agent on a runtime cannot enroll its
@@ -170,7 +171,8 @@ service again reuses paths `unenroll` and `enroll` already exercise.
 - `tacho reassign` on a machine with more than one agent requires
   `--harness`. The list names the agent whose harnesses it shares and
   replaces that agent's harness list. A list that touches two agents is
-  refused.
+  refused. `reassign` moves only an agent enrolled through the CLI session.
+  It refuses one enrolled with a one-time token (see the amendment below).
 - `tacho status` prints one report per agent, with its directory, when the
   machine holds more than one. `--json` always carries `enrollments`, one
   report per agent with its `id` and `dir`, oldest first. The top-level
@@ -218,18 +220,53 @@ Its uninstall runs `tacho unenroll --all --purge` and removes every agent.
 - **Known gap: scripts must name the agent.** A bare `tacho unenroll` or
   `tacho reassign` on a machine with two agents refuses. A script that ran
   either must pass `--harness`, or `--all` to unenroll every agent.
-- **Known gap: reassign drops a token-enrolled agent's registration.**
-  `tacho reassign` enrolls again through the CLI session (`cli/reassign.ts`
-  passes no token). `create_tacho_enrollment` then derives the agent key from
-  the hostname and mints a host row with no agent
-  (`packages/handlers/src/tacho.enrollment.create.ts`). Reassigning an agent
-  enrolled with a one-time token therefore returns it under a different key,
-  unlinked from the agent registered on the Agents page and from that agent's
-  mandate. Before its revoke, such a reassign prints a warning that names the
-  agent key and says how to keep the link: unenroll that agent, register it
-  in the target workspace, and run the command its page shows. When it fails
-  after its revoke, the error sends the operator to the Agents page too.
-  #4410 tracks carrying the agent link through a reassign.
+- A token-enrolled agent does not reassign. The amendment below says why and
+  what the operator does instead.
+
+## Amendment 2026-09-30: an agent stays in its workspace
+
+Mac ruled on #4410 that an agent is always bound to the workspace it is
+registered in. A harness and a runtime may be registered in several
+workspaces, across organizations too, but each registration is its own agent.
+
+Before this amendment, `tacho reassign` enrolled again through the CLI session
+(`cli/reassign.ts` passes no token). `create_tacho_enrollment` derives that
+enrollment's agent key from the hostname and mints a host row with no agent
+(`packages/handlers/src/tacho.enrollment.create.ts`). A reassigned agent that
+was enrolled with a one-time token came back under a different key, unlinked
+from its registration and its mandate, and its sessions stopped reaching its
+page. A warning before the revoke named the problem but did not prevent it.
+
+- **`host.json` records the link.** A token enrollment writes the `agentId`
+  that `enroll_host` answers into `host.json` as `agent_id`, beside
+  `enrollment_source: "token"`. A session enrollment writes neither. A
+  `host.json` without `agent_id` still reads. `enrolledWithToken`
+  (`host/host-file.ts`) treats either field as the link, so a host enrolled
+  by a binary that recorded only `enrollment_source` is covered.
+- **`reassign` refuses a token-enrolled agent.** It checks before it revokes
+  anything, so the agent keeps its enrollment, its hooks, and the service.
+  The check reads the chosen agent's own `host.json`, so it applies alike to
+  the only agent on a machine and to one of several under `agents/<id>/`. A
+  workspace or organization change says that an agent stays in the workspace
+  it is registered in: register an agent in the target workspace on the
+  Agents page, run `tacho unenroll --harness <harness>`, and run the enroll
+  command the page shows. A harness change says to register an agent for the
+  new harness, since a reassign would enroll again through the session and
+  unlink the agent the same way.
+- **An operator-enrolled agent reassigns as before.** It has no registration
+  to lose.
+- **`enroll` refuses a harness addition on a token-enrolled agent.**
+  `tacho enroll --harness` naming an agent's harness and a new one revokes
+  that agent and enrolls it again through the CLI session (`enrollSteps` in
+  `cli/enroll.ts`). On a token-enrolled agent that is the same detachment, so
+  the enroll refuses before it changes anything and says to register an
+  agent for the new harness. That agent enrolls in a directory of its own
+  (decision 2).
+
+The alternative in #4410 was to pass the agent id to
+`create_tacho_enrollment` and link the new host to the same agent in the
+target workspace. It was rejected because the agent's registration, and its
+mandate, belong to the workspace it was registered in.
 
 ## Alternatives considered
 

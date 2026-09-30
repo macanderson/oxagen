@@ -9649,6 +9649,7 @@ type Messages = {
       title: string;
       subtitle: string;
       mainRepository: string;
+      governanceFile: string;
       pick: string;
       now: string;
       modes: {

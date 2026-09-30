@@ -27,8 +27,8 @@
     "governance": {
       "chip": "Governance:",
       "chipTitle": "Change the governance mode",
-      "absentTitle": "{repository} has no .oxagen/rules/governance.toml. A missing file means team.",
-      "invalidTitle": ".oxagen/rules/governance.toml on {repository} names no mode Oxagen knows, so every Context PR open and merge is refused.",
+      "absentTitle": "{repository} has no {path}. A missing file means team.",
+      "invalidTitle": "{path} on {repository} names no mode Oxagen knows, so every Context PR open and merge is refused.",
       "unboundTitle": "No main repository is bound, so no governance.toml is read.",
       "unreadTitle": "The governance mode could not be read: {code}.",
       "shown": {
@@ -37,8 +37,9 @@
         "unread": "not read"
       },
       "title": "Governance mode for {workspace}",
-      "subtitle": ".oxagen/rules/governance.toml on {repository}",
+      "subtitle": "{path} on {repository}",
       "mainRepository": "the main repository",
+      "governanceFile": "the governance file",
       "pick": "Governance mode",
       "now": "(current)",
       "modes": {
@@ -55,7 +56,7 @@
           "hint": "The author of a record cannot approve it."
         }
       },
-      "tomlHeader": "# .oxagen/rules/governance.toml: read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
+      "tomlHeader": "# {path}: read on the production branch when a pull request is\n# opened and again when it is merged. A missing file means team.",
       "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
       "cancel": "Cancel",
       "close": "Close",
@@ -63,8 +64,8 @@
       "pending": "Opening the Context PR",
       "commit": "Commit the change",
       "commitPending": "Committing the change",
-      "proposed": "Pull request opened on {repository}: .oxagen/rules/governance.toml sets mode = {mode}. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
-      "applied": "Committed to {branch} on {repository}: .oxagen/rules/governance.toml sets mode = {mode}. It is in force now. Under solo the change skips review.",
+      "proposed": "Pull request opened on {repository}: {path} sets mode = {mode}. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
+      "applied": "{path} on {branch} of {repository} now sets mode = {mode}. It is in force now. Under solo the change skips review.",
       "unchanged": "Governance mode is already {mode}; nothing to change.",
       "openPr": "Open pull request #{number}",
       "failure": {
@@ -428,9 +429,9 @@
       "note": "A record with an enforcement grant also compiles to a gate, listed on Gates. The checks allow only <code>{effects}</code> and refuse a repository record that allows more than its workspace record.",
       "disk": {
         "title": "On disk",
-        "failed": "The .oxagen/ tree could not be read: {code}.",
-        "unbound": "No main repository is bound to this workspace, so there is no .oxagen/ tree to read.",
-        "absent": "{branch} on {repository} has no <code>.oxagen/</code> directory.",
+        "failed": "The repository tree could not be read: {code}.",
+        "unbound": "No main repository is bound to this workspace, so there is no tree to read.",
+        "absent": "{branch} on {repository} has no <code>steering/</code> or <code>.oxagen/</code> directory.",
         "at": "{repository} @ {branch} · {head}",
         "noHead": "no head commit",
         "note": "stella links to this directory, so stella and Oxagen read the same files.",
@@ -506,7 +507,7 @@
       "goToPr": "Go to pull request #{number}",
       "rejected": "This proposal was dismissed. Its pull request is closed and its branch deleted.",
       "notOpened": "No pull request is open for this proposal yet.",
-      "modeUnread": "read from .oxagen/rules/governance.toml when the pull request opens",
+      "modeUnread": "read from the governance file when the pull request opens",
       "modes": {
         "solo": "solo: any workspace member merges, the author included",
         "team": "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
@@ -596,7 +597,7 @@
         "proposalNotFound": "This proposal is not in this workspace.",
         "proposalMoved": "This proposal changed after the page loaded. Reload the page to see where it is.",
         "lineagePrOpen": "Another pull request is already open for this lineage. Merge or close it first.",
-        "governanceUnreadable": "The workspace repository has a .oxagen/rules/governance.toml that could not be read, so nothing was opened or merged.",
+        "governanceUnreadable": "The workspace repository has a governance file that could not be read, so nothing was opened or merged.",
         "repositoryMissing": "This workspace has no connected repository to open the pull request on.",
         "checksNotPassed": "Merge is blocked until every check passes.",
         "approvalRequired": "Merge needs an approval from a workspace member other than the author. An owner, or a member allowed to merge without review, can merge without one. Nothing was merged.",

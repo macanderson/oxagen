@@ -1038,11 +1038,11 @@ async function routeHook(
   ) {
     return { events: reopening, response: {}, record };
   }
-  // A memory recall names the session's repository, and the hook queue is
-  // serial, so a prompt must not wait on git. The read starts at the first
-  // live hook that carries a `cwd` and runs while the session works, and a
-  // prompt sends what it has settled. Only a session whose prompts recall
-  // starts one, so a host that recalls nothing runs no extra git.
+  // A memory recall names the session's repository, and a prompt holds its
+  // session's hook queue, so it must not wait on git. The read starts at the
+  // first live hook that carries a `cwd` and runs while the session works,
+  // and a prompt sends what it has settled. Only a session whose prompts
+  // recall starts one, so a host that recalls nothing runs no extra git.
   if (
     replay === undefined &&
     !record.sealed &&

@@ -12,6 +12,9 @@ mod cli_install;
 #[cfg(all(test, unix))]
 mod install_rig_tests;
 mod machine;
+// The Dock's Quit and a logout, held by the close guard.
+#[cfg(target_os = "macos")]
+mod macos_quit;
 mod sidecar;
 mod update;
 
@@ -184,9 +187,9 @@ struct DesktopState {
     /// The sidecar directory is gone after this launch (AppImage mount,
     /// mounted .dmg, App Translocation); see `is_transient_dir`.
     sidecar_transient: bool,
-    /// The directory hooks and the service may reference: the sidecar
-    /// directory, or the durable copy `install_cli` made; None while the
-    /// app runs from a transient directory with no copy yet.
+    /// The directory hooks and the service may reference: this version's
+    /// per-user copy of the sidecars (ADR-230), None until the launch-time
+    /// pass has made it.
     bin_dir: Option<String>,
     oxagen_on_path: Option<String>,
     tacho_on_path: Option<String>,
@@ -389,11 +392,10 @@ fn macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Men
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Before any sidecar is spawned, and before any thread exists: a durable
-    // copy from an earlier launch is what tacho must write into hooks when
-    // the app runs from an AppImage or a mounted .dmg. A copy
-    // `ensure_cli_installed` makes later in this launch reaches the sidecars
-    // through `sidecar::run_sidecar` instead; see `cli_install::export_bin_dir`.
+    // Before any sidecar is spawned, and before any thread exists: the
+    // per-user copy of this version is what tacho must write into the hooks
+    // and the service, never the bundle (ADR-230). See
+    // `cli_install::export_bin_dir`.
     cli_install::export_bin_dir();
     // Before any sidecar can create `~/.config`, so Uninstall knows whether
     // the person had one already. See `cli_install::record_config_dir`.
@@ -401,7 +403,7 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "macos")]
     let builder = builder.menu(macos_menu);
-    builder
+    let app = builder
         .on_menu_event(on_menu_event)
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
@@ -463,19 +465,23 @@ pub fn run() {
             update::restart_tacho_service
         ])
         .build(tauri::generate_context!())
-        .expect("error while building the Oxagen desktop app")
-        .run(|app, event| {
-            // The tray's Quit, the macOS app menu's Quit and Cmd+Q, and the
-            // last window closing, while work runs: the same as a close.
-            if let RunEvent::ExitRequested { api, .. } = &event {
-                if app.state::<Activity>().request_exit() == ExitDecision::WhenIdle {
-                    api.prevent_exit();
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.hide();
-                    }
+        .expect("error while building the Oxagen desktop app");
+    // The Dock's Quit, a logout, and a quit Apple event: see `macos_quit`.
+    // After `build`, which creates tao's app delegate, and before `run`.
+    #[cfg(target_os = "macos")]
+    macos_quit::install(app.handle());
+    app.run(|app, event| {
+        // The tray's Quit, the macOS app menu's Quit and Cmd+Q, and the last
+        // window closing, while work runs: the same as a close.
+        if let RunEvent::ExitRequested { api, .. } = &event {
+            if app.state::<Activity>().request_exit() == ExitDecision::WhenIdle {
+                api.prevent_exit();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
                 }
             }
-        });
+        }
+    });
 }
 
 #[cfg(test)]

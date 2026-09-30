@@ -11,8 +11,11 @@
 //!
 //! The paths that reach this guard: the window's close button, the tray's
 //! Quit, and on macOS the app menu's Quit and Cmd+Q (see `lib::macos_menu`).
-//! The Dock's Quit and a logout on macOS do not: they send `terminate:`,
-//! which tao turns into an exit with no request first.
+//! On macOS the Dock's Quit, a logout, and a quit Apple event reach it too,
+//! through `macos_quit`: they send `terminate:`, which AppKit holds until the
+//! app answers it. `State::should_terminate` decides that answer, and a close
+//! that was waiting ends by answering it rather than by `app.exit`, which
+//! cannot end AppKit's wait.
 //!
 //! Work in progress is either kind:
 //! - a sidecar command that changes the machine, which `sidecar::run_sidecar`
@@ -25,6 +28,9 @@
 use std::sync::Mutex;
 use tauri::Manager;
 
+#[cfg(target_os = "macos")]
+use crate::macos_quit::answer as answer_terminate;
+
 /// What a close or a Quit does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitDecision {
@@ -34,12 +40,29 @@ pub enum ExitDecision {
     WhenIdle,
 }
 
+/// What the app answers a macOS `terminate:` (`applicationShouldTerminate:`).
+#[cfg(any(target_os = "macos", test))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminateReply {
+    /// `NSTerminateNow`: nothing is running, or this is the second Quit.
+    Now,
+    /// `NSTerminateLater`: hide the window and answer once the work ends. The
+    /// number names this hold, so the time limit on it cannot answer a later
+    /// one (see `State::hold_expired`).
+    Later(u64),
+}
+
 /// The state behind the decision. Pure, so every transition is a test.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct State {
     jobs: usize,
     page_busy: bool,
     exit_when_idle: bool,
+    /// The macOS `terminate:` this app answered "later", while it waits.
+    held: Option<u64>,
+    /// How many `terminate:` calls were held, which numbers the next one.
+    #[cfg(any(target_os = "macos", test))]
+    holds: u64,
 }
 
 impl State {
@@ -77,9 +100,42 @@ impl State {
     }
 
     /// The window was shown again: the person is back, so a waiting exit is
-    /// called off.
-    pub fn cancel_exit(&mut self) {
+    /// called off. True when a held `terminate:` must now be answered no.
+    pub fn cancel_exit(&mut self) -> bool {
         self.exit_when_idle = false;
+        self.take_held()
+    }
+
+    /// A `terminate:` on macOS: the Dock's Quit, a logout, or a quit Apple
+    /// event. The same decision as any other Quit. While work runs, AppKit
+    /// waits for an answer, which `take_held` hands to whoever ends the wait.
+    #[cfg(any(target_os = "macos", test))]
+    pub fn should_terminate(&mut self) -> TerminateReply {
+        match self.request_exit() {
+            ExitDecision::Now => TerminateReply::Now,
+            ExitDecision::WhenIdle => {
+                self.holds += 1;
+                self.held = Some(self.holds);
+                TerminateReply::Later(self.holds)
+            }
+        }
+    }
+
+    /// The time limit on hold `hold` ran out. True when that hold still waits,
+    /// so the app answers yes whatever state the work is in.
+    #[cfg(any(target_os = "macos", test))]
+    pub fn hold_expired(&mut self, hold: u64) -> bool {
+        if self.held == Some(hold) {
+            self.held = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Hand over the held `terminate:`, if one waits: true once per hold.
+    fn take_held(&mut self) -> bool {
+        self.held.take().is_some()
     }
 
     fn exit_due(&self) -> bool {
@@ -96,24 +152,63 @@ impl Activity {
         change(&mut self.0.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
+    /// A close or a Quit. A second Quit while a `terminate:` is held also
+    /// answers that `terminate:` yes, because the exit it asks for cannot end
+    /// AppKit's wait.
     pub fn request_exit(&self) -> ExitDecision {
-        self.with(State::request_exit)
+        let (decision, held) = self.with(|state| {
+            let decision = state.request_exit();
+            (decision, decision == ExitDecision::Now && state.take_held())
+        });
+        if held {
+            answer_terminate(true);
+        }
+        decision
     }
 
     pub fn begin(&self) {
         self.with(State::begin);
     }
 
+    /// The person opened the window again. A held `terminate:` is answered
+    /// no, so a Dock Quit or a logout they came back from does not go ahead.
     pub fn cancel_exit(&self) {
-        self.with(State::cancel_exit);
+        if self.with(State::cancel_exit) {
+            answer_terminate(false);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn should_terminate(&self) -> TerminateReply {
+        self.with(State::should_terminate)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn hold_expired(&self, hold: u64) -> bool {
+        self.with(|state| state.hold_expired(hold))
+    }
+}
+
+/// Only macOS holds a `terminate:` (see `macos_quit`), so on Linux and
+/// Windows there is never one to answer.
+#[cfg(not(target_os = "macos"))]
+fn answer_terminate(_proceed: bool) {}
+
+/// Exit now that the work a close waited for has ended: answer the held
+/// `terminate:` yes when there is one, and otherwise ask Tauri to exit.
+fn leave<R: tauri::Runtime>(app: &tauri::AppHandle<R>, held_terminate: bool) {
+    if held_terminate {
+        answer_terminate(true);
+    } else {
+        app.exit(0);
     }
 }
 
 /// End one job, and exit when that was the last thing a close waited for.
 pub fn end_job<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Some(activity) = app.try_state::<Activity>() {
-        if activity.with(State::end) {
-            app.exit(0);
+        if let Some(held) = activity.with(|state| state.end().then(|| state.take_held())) {
+            leave(app, held);
         }
     }
 }
@@ -142,8 +237,8 @@ impl<R: tauri::Runtime> Drop for Job<R> {
 /// ends.
 #[tauri::command]
 pub fn set_busy(app: tauri::AppHandle, activity: tauri::State<Activity>, busy: bool) {
-    if activity.with(|state| state.set_page_busy(busy)) {
-        app.exit(0);
+    if let Some(held) = activity.with(|state| state.set_page_busy(busy).then(|| state.take_held())) {
+        leave(&app, held);
     }
 }
 
@@ -227,5 +322,112 @@ mod tests {
         let mut state = State::default();
         assert!(!state.end());
         assert!(!state.busy());
+    }
+
+    #[test]
+    fn a_terminate_with_nothing_running_goes_ahead() {
+        let mut state = State::default();
+        assert_eq!(state.should_terminate(), TerminateReply::Now);
+        assert!(!state.take_held(), "nothing waits for an answer");
+    }
+
+    /// #4367: a Dock Quit during `tacho enroll` ended the app between two
+    /// writes. Now it waits, and the job's end is what answers it.
+    #[test]
+    fn a_terminate_while_a_sidecar_runs_waits_for_it_to_end() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert!(state.end(), "the job's end is the exit");
+        assert!(state.take_held(), "and it answers the held terminate");
+        assert!(!state.take_held(), "once");
+    }
+
+    #[test]
+    fn a_terminate_while_the_page_is_busy_waits_for_both_steps() {
+        let mut state = State::default();
+        state.set_page_busy(true);
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        // `tacho unenroll` ends, and the removal of the app's files follows.
+        state.begin();
+        assert!(!state.end(), "the page is still busy");
+        assert!(state.set_page_busy(false));
+        assert!(state.take_held());
+    }
+
+    #[test]
+    fn a_second_quit_while_a_terminate_waits_goes_ahead_now() {
+        // A second Dock Quit, if AppKit asks again while it waits.
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert_eq!(state.should_terminate(), TerminateReply::Now);
+        // The tray's Quit or Cmd+Q: an exit now, and the held terminate is
+        // handed over to be answered yes (`Activity::request_exit`).
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert_eq!(state.request_exit(), ExitDecision::Now);
+        assert!(state.take_held());
+    }
+
+    #[test]
+    fn a_terminate_after_a_waiting_tray_quit_goes_ahead_now() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
+        assert_eq!(state.should_terminate(), TerminateReply::Now);
+    }
+
+    #[test]
+    fn a_waiting_tray_quit_ends_in_an_exit_with_nothing_to_answer() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
+        assert!(state.end());
+        assert!(!state.take_held(), "no terminate waits, so the app exits");
+    }
+
+    #[test]
+    fn opening_the_window_answers_a_held_terminate_no() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert!(state.cancel_exit(), "the held terminate is answered no");
+        assert!(!state.end(), "and the work's end no longer exits");
+        assert!(!state.cancel_exit(), "nothing is held now");
+    }
+
+    #[test]
+    fn the_time_limit_answers_a_hold_that_still_waits() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert!(state.hold_expired(1), "a hung job does not hold a logout");
+        assert!(!state.hold_expired(1));
+        // The job ends after the answer went out: no second answer.
+        assert!(state.end());
+        assert!(!state.take_held());
+    }
+
+    #[test]
+    fn a_time_limit_never_answers_a_later_hold() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert!(state.cancel_exit());
+        assert_eq!(state.should_terminate(), TerminateReply::Later(2));
+        assert!(!state.hold_expired(1), "the first hold's limit is stale");
+        assert!(state.hold_expired(2));
+    }
+
+    #[test]
+    fn a_time_limit_after_the_work_ended_answers_nothing() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.should_terminate(), TerminateReply::Later(1));
+        assert!(state.end());
+        assert!(state.take_held());
+        assert!(!state.hold_expired(1));
     }
 }

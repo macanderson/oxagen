@@ -11,7 +11,10 @@ import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.record
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import type { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import type { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
-import { LEGACY_OXAGEN_DIR } from "@oxagen/oxagen/steering-repo/paths";
+import {
+  LEGACY_OXAGEN_DIR,
+  STEERING_DIR,
+} from "@oxagen/oxagen/steering-repo/paths";
 import type { z } from "zod";
 import type {
   ContextPr,
@@ -258,22 +261,28 @@ export function toMemoryPage(
   };
 }
 
-const OXAGEN_DIR = `${LEGACY_OXAGEN_DIR}/`;
-
-/** `get_repository_tree` to the On disk panel: paths relative to `.oxagen/`. */
+/**
+ * `get_repository_tree` to the On disk panel: the `steering/` tree of a
+ * steering repository, else the `.oxagen/` tree, with paths relative to it.
+ */
 export function toOxagenTree(
   out: ContractOutput<typeof repositoryTreeGet>,
 ): z.input<typeof OxagenTree> {
+  // The layout is the governance file's: a legacy repository can hold an
+  // unrelated steering/ folder, and its tree is still .oxagen/.
+  const steering = out.governancePath.startsWith(`${STEERING_DIR}/`);
+  const root = steering ? STEERING_DIR : LEGACY_OXAGEN_DIR;
+  const prefix = `${root}/`;
   return {
     state: "read",
     repository: out.fullName,
     branch: out.productionBranch,
     head: out.head,
-    files: out.oxagen.files
-      .map((path) =>
-        path.startsWith(OXAGEN_DIR) ? path.slice(OXAGEN_DIR.length) : path,
-      )
+    root: steering ? "steering" : ".oxagen",
+    files: (steering ? out.steering.files : out.oxagen.files)
+      .map((path) => (path.startsWith(prefix) ? path.slice(prefix.length) : path))
       .filter((path) => path !== ""),
+    governancePath: out.governancePath,
     mode: out.governanceMode,
   };
 }
