@@ -123,6 +123,7 @@
       "annotations": "Annotations",
       "feedback": "Agent feedback",
       "feedbackMissing": "Oxagen has not recorded how agents use this tool yet.",
+      "countsMissing": "Oxagen could not read the call counts for this tool.",
       "calls": "Calls",
       "schemaRejections": "Schema rejections",
       "errorResults": "Error results",

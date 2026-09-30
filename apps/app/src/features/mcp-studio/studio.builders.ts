@@ -463,10 +463,7 @@ export function stripeRecord(): StudioRecord {
           selection: null,
         },
         feedback: {
-          calls: 1204,
-          schemaRejections: 3,
-          errorResults: 12,
-          retries: 5,
+          counts: { calls: 1204, schemaRejections: 3, errorResults: 12, retries: 5 },
           notes: ["The amount is in cents; two runs sent dollars."],
         },
       }),
@@ -543,10 +540,7 @@ export function billingRecord(): StudioRecord {
           selection: null,
         },
         feedback: {
-          calls: 88,
-          schemaRejections: 0,
-          errorResults: 2,
-          retries: 1,
+          counts: { calls: 88, schemaRejections: 0, errorResults: 2, retries: 1 },
           notes: [],
         },
       }),

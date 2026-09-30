@@ -1,7 +1,7 @@
 {
   "name": "get_studio_server",
   "domain": "tool",
-  "description": "Read one server folder on the steering repo's production branch: its source, auth mode, environments, exposure, sync schedule and last discovery, each tools.toml key's shaping, and the tool catalog list_studio_tools returns. A credential appears only as its vault reference.",
+  "description": "Read one server folder on the steering repo's production branch: its source, auth mode, environments, exposure, sync schedule and last discovery, each tools.toml key's shaping, the tool catalog list_studio_tools returns, and each key's agent feedback over the last 30 days: calls, schema rejections, error results, retries, and reflection notes. A credential appears only as its vault reference.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -724,6 +724,78 @@
           ],
           "additionalProperties": false
         }
+      },
+      "feedback": {
+        "type": "object",
+        "properties": {
+          "windowDays": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string"
+                },
+                "counts": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "calls": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "schemaRejections": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "errorResults": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "retries": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "calls",
+                        "schemaRejections",
+                        "errorResults",
+                        "retries"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "tool",
+                "counts",
+                "notes"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "windowDays",
+          "tools"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -745,7 +817,8 @@
       "auth",
       "environments",
       "sync",
-      "shaping"
+      "shaping",
+      "feedback"
     ],
     "additionalProperties": false
   }

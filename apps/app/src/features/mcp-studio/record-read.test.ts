@@ -112,6 +112,16 @@ const OUTPUT: ToolStudioServerGetOutput = {
       selection: null,
     },
   ],
+  feedback: {
+    windowDays: 30,
+    tools: [
+      {
+        tool: "create_payment",
+        counts: { calls: 12, schemaRejections: 2, errorResults: 1, retries: 2 },
+        notes: ["Agents sent dollars, not cents."],
+      },
+    ],
+  },
 };
 
 beforeEach(() => {
@@ -119,7 +129,7 @@ beforeEach(() => {
 });
 
 describe("readStudioRecord's mapping", () => {
-  it("maps the folder, with each imported tool joined to its shaping", async () => {
+  it("maps the folder, with each imported tool joined to its shaping and feedback", async () => {
     actions.getStudioServerAction.mockResolvedValue({ ok: true, value: OUTPUT });
     const found = await readStudioRecord(ctx, {
       ...studioServer(STRIPE),
@@ -157,7 +167,10 @@ describe("readStudioRecord's mapping", () => {
           select: ["id", "status"],
           selection: null,
         },
-        feedback: null,
+        feedback: {
+          counts: { calls: 12, schemaRejections: 2, errorResults: 1, retries: 2 },
+          notes: ["Agents sent dollars, not cents."],
+        },
       },
       {
         name: "list_customers",
@@ -177,6 +190,24 @@ describe("readStudioRecord's mapping", () => {
         shaping: null,
         feedback: null,
       },
+    ]);
+  });
+
+  it("keeps the notes with null counts when the call store did not answer (ADR-234)", async () => {
+    actions.getStudioServerAction.mockResolvedValue({
+      ok: true,
+      value: {
+        ...OUTPUT,
+        feedback: {
+          windowDays: 30,
+          tools: [{ tool: "create_payment", counts: null, notes: ["Agents sent dollars, not cents."] }],
+        },
+      },
+    });
+    const record = await readStudioRecord(ctx, { ...studioServer(STRIPE), steeringName: "stripe" });
+    expect(record?.tools.map((tool) => [tool.name, tool.feedback])).toEqual([
+      ["create_payment", { counts: null, notes: ["Agents sent dollars, not cents."] }],
+      ["list_customers", null],
     ]);
   });
 });

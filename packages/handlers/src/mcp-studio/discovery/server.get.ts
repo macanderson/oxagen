@@ -8,6 +8,10 @@
 //
 // A credential appears only as its vault reference. A registry source's
 // `arguments` are left out, because a value there may be a literal.
+//
+// Beside the folder, each tools.toml key's agent feedback (part 4): the
+// gateway's counts from served_tool_calls and reflections' notes. When
+// ClickHouse does not answer, the counts are null and the folder still reads.
 import type { McpServer, McpTools } from "@oxagen/mcp-studio";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
@@ -17,6 +21,12 @@ import {
 import { serverFolderPath } from "@oxagen/oxagen/steering-repo";
 import { toolCatalog } from "./catalog";
 import { discoveryActor } from "./discovery.start";
+import {
+  FEEDBACK_WINDOW_DAYS,
+  feedbackOf,
+  liveToolFeedbackReader,
+  type ToolFeedbackReader,
+} from "./feedback";
 import { assertReader, serverName } from "./entry";
 import { discoverySeams, type SteeringFiles } from "./seams";
 import {
@@ -33,6 +43,8 @@ export interface GetStudioServerDeps {
   tools?: DiscoveryToolsStore;
   /** The steering repo. The installed discovery seam when unset. */
   steering?: SteeringFiles;
+  /** The gateway's counts and reflections' notes. ClickHouse and Postgres when unset. */
+  feedback?: ToolFeedbackReader;
 }
 
 type Output = ToolStudioServerGetOutput;
@@ -151,11 +163,14 @@ export function createGetStudioServerHandler(
     const server = serverName(input.server);
     const steering = deps.steering ?? (await discoverySeams()).steering;
     const store = deps.store ?? postgresDiscoveryStore;
-    const [files, read, mcpServerId, discovery] = await Promise.all([
+    const feedback = deps.feedback ?? liveToolFeedbackReader;
+    const [files, read, mcpServerId, discovery, counts, notes] = await Promise.all([
       publishedFiles(steering, scope, server),
       (deps.tools ?? postgresDiscoveryToolsStore).read(scope, server),
       store.steeringServerId(scope, server),
       store.read(scope, server),
+      feedback.counts(scope, server, FEEDBACK_WINDOW_DAYS),
+      feedback.notes(scope, FEEDBACK_WINDOW_DAYS),
     ]);
     const catalog = toolCatalog({
       server,
@@ -175,6 +190,7 @@ export function createGetStudioServerHandler(
       environments: environmentsOf(parsed),
       sync: { schedule: parsed.sync.schedule, lastAt: lastSyncOf(discovery) },
       shaping: shapingOf(files.tools),
+      feedback: feedbackOf(server, Object.keys(files.tools.tools ?? {}), counts, notes),
     };
   };
 }

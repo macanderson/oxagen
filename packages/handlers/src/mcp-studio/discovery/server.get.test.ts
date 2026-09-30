@@ -1,5 +1,6 @@
-// server.get.test.ts: get_studio_server (#4678, part 3). The role gate, the
-// tenant scope, the steering checkout, and both stores are doubles. The
+// server.get.test.ts: get_studio_server (#4678, parts 3 and 4). The role
+// gate, the tenant scope, the steering checkout, both stores, and the
+// feedback reader are doubles. The
 // folder's files go through the real readServerFiles and toolCatalog, so each
 // case checks what the page reads beside the catalog: the source, auth,
 // environments, sync, and each key's shaping. tools.list.test.ts covers the
@@ -24,6 +25,7 @@ import {
   toolsTomlPath,
 } from "@oxagen/oxagen/steering-repo";
 import { makeCTX } from "../../test-utils/fixtures";
+import type { ToolFeedbackReader, ToolNote } from "./feedback";
 import type { SteeringCheckout, SteeringFiles } from "./seams";
 import type { DiscoveryRow, DiscoveryToolsStore, StoredTool } from "./store";
 
@@ -240,6 +242,17 @@ function storeDouble(row: DiscoveryRow | null = discoveryRow("succeeded")) {
   };
 }
 
+/** A feedback reader that answers the given counts and notes. */
+function feedbackDouble(
+  counts: Awaited<ReturnType<ToolFeedbackReader["counts"]>> = [],
+  notes: readonly ToolNote[] = [],
+): ToolFeedbackReader {
+  return {
+    counts: vi.fn(() => Promise.resolve(counts)),
+    notes: vi.fn(() => Promise.resolve(notes)),
+  };
+}
+
 beforeEach(() => {
   roleGate.refuse = false;
   roleGate.assertOrgRole.mockClear();
@@ -253,7 +266,7 @@ describe("get_studio_server", () => {
       stored(CREATE_CUSTOMER, "snap_2"),
     ]);
     const store = storeDouble();
-    const handler = createGetStudioServerHandler({ steering, tools, store });
+    const handler = createGetStudioServerHandler({ steering, tools, store, feedback: feedbackDouble() });
 
     const out = await handler({ server: "stripe" }, CTX);
 
@@ -306,6 +319,7 @@ describe("get_studio_server", () => {
 
   it("reads each key's hidden and fixed inputs, with each fixed value as JSON", async () => {
     const handler = createGetStudioServerHandler({
+      feedback: feedbackDouble(),
       steering: fakeSteering(stripeTree(SHAPED_TOOLS)),
       tools: toolsDouble([stored(LIST_CHARGES, "snap_1")]),
       store: storeDouble(),
@@ -329,6 +343,7 @@ describe("get_studio_server", () => {
     { what: "no discovery ran", row: null },
   ])("reads no last sync when $what", async ({ row }) => {
     const handler = createGetStudioServerHandler({
+      feedback: feedbackDouble(),
       steering: fakeSteering(stripeTree()),
       tools: toolsDouble([]),
       store: storeDouble(row),
@@ -343,6 +358,7 @@ describe("get_studio_server", () => {
     const tree = stripeTree();
     delete tree[serverTomlPath("stripe")];
     const handler = createGetStudioServerHandler({
+      feedback: feedbackDouble(),
       steering: fakeSteering(tree),
       tools: toolsDouble([]),
       store: storeDouble(null),
@@ -354,10 +370,67 @@ describe("get_studio_server", () => {
     });
   });
 
+  it("reads each key's agent feedback by its full served name (ADR-234)", async () => {
+    const feedback = feedbackDouble(
+      [
+        { tool: "stripe__list_charges", calls: 9, schemaRejections: 2, errorResults: 1, retries: 2 },
+        { tool: "stripe__create_customer", calls: 4, schemaRejections: 0, errorResults: 0, retries: 0 },
+      ],
+      [
+        { tool: "stripe__list_charges", problem: "Agents sent the limit as a string." },
+        { tool: "billing__list_charges", problem: "Another server's tool." },
+        { tool: "stripe__list_charges", problem: "Agents sent the limit as a string." },
+      ],
+    );
+    const handler = createGetStudioServerHandler({
+      feedback,
+      steering: fakeSteering(stripeTree()),
+      tools: toolsDouble([stored(LIST_CHARGES, "snap_1")]),
+      store: storeDouble(),
+    });
+
+    const out = await handler({ server: "stripe" }, CTX);
+
+    expect(feedback.counts).toHaveBeenCalledWith(SCOPE, "stripe", 30);
+    expect(feedback.notes).toHaveBeenCalledWith(SCOPE, 30);
+    // Only tools.toml's keys: create_customer is offered, not imported.
+    expect(out.feedback).toEqual({
+      windowDays: 30,
+      tools: [
+        {
+          tool: "list_charges",
+          counts: { calls: 9, schemaRejections: 2, errorResults: 1, retries: 2 },
+          notes: ["Agents sent the limit as a string."],
+        },
+      ],
+    });
+    expect(() => toolStudioServerGet.output.parse(out)).not.toThrow();
+  });
+
+  it("reads zeros for a key no agent called, and null counts when ClickHouse did not answer", async () => {
+    const read = (feedback: ToolFeedbackReader) =>
+      createGetStudioServerHandler({
+        feedback,
+        steering: fakeSteering(stripeTree()),
+        tools: toolsDouble([stored(LIST_CHARGES, "snap_1")]),
+        store: storeDouble(),
+      })({ server: "stripe" }, CTX);
+
+    const quiet = await read(feedbackDouble([]));
+    expect(quiet.feedback.tools).toEqual([
+      { tool: "list_charges", counts: { calls: 0, schemaRejections: 0, errorResults: 0, retries: 0 }, notes: [] },
+    ]);
+
+    const down = await read(feedbackDouble(null, [{ tool: "stripe__list_charges", problem: "Too slow." }]));
+    expect(down.feedback.tools).toEqual([{ tool: "list_charges", counts: null, notes: ["Too slow."] }]);
+  });
+
   it("refuses a caller outside the workspace before it reads the folder", async () => {
     roleGate.refuse = true;
     const steering = fakeSteering(stripeTree());
+    const feedback = feedbackDouble();
     const handler = createGetStudioServerHandler({
+      feedback,
       steering,
       tools: toolsDouble([]),
       store: storeDouble(),
@@ -366,6 +439,7 @@ describe("get_studio_server", () => {
     await expect(handler({ server: "stripe" }, CTX)).rejects.toMatchObject({
       code: "forbidden",
     });
+    expect(feedback.counts).not.toHaveBeenCalled();
     expect(steering.open).not.toHaveBeenCalled();
   });
 });

@@ -243,6 +243,16 @@ const SERVER = {
   shaping: [
     { tool: "list_entries", hide: [], fixed: [], select: [], selection: null },
   ],
+  feedback: {
+    windowDays: 30,
+    tools: [
+      {
+        tool: "list_entries",
+        counts: { calls: 3, schemaRejections: 1, errorResults: 0, retries: 1 },
+        notes: [],
+      },
+    ],
+  },
 };
 
 describe("get_studio_server", () => {
