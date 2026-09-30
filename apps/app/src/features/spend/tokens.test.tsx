@@ -117,7 +117,7 @@ describe("Tokens", () => {
       </IntlProvider>,
     );
     expect(screen.getByTestId("spend-searches")).toHaveTextContent(
-      "5 requests, priced per request and kept out of the token total",
+      "5 requests priced per request outside the token total",
     );
     // The class total is the 200 input tokens alone.
     expect(document.body).toHaveTextContent("200 tokens");

@@ -974,23 +974,27 @@
 }
 
 /*
- * Brand type tokens — SPACE GROTESK, the house face. NON-inline @theme so the
- * --font-* names are emitted to :root for both the Tailwind font-* utilities
- * AND the raw var(--font-*) refs below.
+ * Brand type tokens. NON-inline @theme so the --font-* names are emitted to
+ * :root for both the Tailwind font-* utilities AND the raw var(--font-*) refs
+ * below.
  *
- * The house system is ONE face at four weights, so --font-sans and
- * --font-display resolve to the same family. The token pair is kept so
- * headings can be retuned (weight, tracking) in one place without touching
- * body copy — not because a second typeface is coming back.
+ * Every heading and every line of text is Geist. Space Grotesk sets only the
+ * wordmark (and, on oxagen.sh, the first line of a hero). Mac set this on
+ * 2026-09-29. The kit's --ox-font-display still names Space Grotesk, so
+ * --font-display is pointed at --ox-font here. This @theme comes after the
+ * house-tailwind.css import, so it overrides that file's --font-display, which
+ * its h1 to h3 rule and the text-m-h* and text-a-h* utilities read. The token
+ * pair is kept so headings can be retuned (weight, tracking) in one place.
  *
  * --font-sans takes --ox-font straight from the kit's token file, so the
  * fallback stack is the kit's too.
  */
 @theme {
-  --font-sans: var(--ox-font); /* Geist: body, UI, h4 to h6 */
-  --font-display: var(--ox-font-display); /* Space Grotesk: h1 to h3 and the wordmark */
+  --font-sans: var(--ox-font); /* Geist: body, UI, every heading */
+  --font-display: var(--ox-font); /* Geist too: the heading token, same face */
   /* Monaspace Neon: code, logs, ids, and numbers in tables. */
   --font-mono: var(--ox-font-mono);
+  /* Space Grotesk: the wordmark and nothing else. */
   --font-wordmark: var(--ox-font-display);
 }
 
@@ -1012,10 +1016,10 @@
   }
 
   /*
-   * TYPE RULE: three faces, each with one job. Space Grotesk (--font-display)
-   * sets h1 to h3 and the wordmark, never below 20px. Geist (--font-sans) sets
-   * h4 to h6 at 600 and everything read. Monaspace Neon (--font-mono) sets code
-   * and identifiers, with texture healing on.
+   * TYPE RULE: Geist (--font-sans, and --font-display, which names the same
+   * face) sets every heading and everything read. Monaspace Neon (--font-mono)
+   * sets code and identifiers, with texture healing on. Space Grotesk
+   * (--font-wordmark) sets the wordmark only.
    */
   h4,
   h5,
@@ -1029,10 +1033,9 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    /* The kit's own heading tokens. Space Grotesk at --ox-weight-heading (600)
-       is the same weight the wordmark is set at, which is what ties a page's
-       headings to its logo; --ox-weight-display (700) is for a hero, which the
-       text-m-h1 and text-a-h1 utilities carry. */
+    /* The kit's own heading weight and tracking, drawn in Geist.
+       --ox-weight-display (700) is for a page title, which the text-m-h1 and
+       text-a-h1 utilities carry. */
     font-weight: var(--ox-weight-heading);
     letter-spacing: var(--ox-tracking-heading);
     line-height: 1.12;

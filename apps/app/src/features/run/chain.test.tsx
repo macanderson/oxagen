@@ -498,7 +498,7 @@ describe("ChainSection", () => {
       panel("Hash chain").getByText("ledger.event_stream_digest_v1"),
     ).toBeTruthy();
     expect(
-      panel("Hash chain").getByText("none, a ledger run commits at its seal"),
+      panel("Hash chain").getByText("none (a ledger run commits at its seal)"),
     ).toBeTruthy();
   });
 

@@ -1,6 +1,6 @@
 "use client";
-// "Have an invitation? Accept it" in the login footer. An invitation opens from
-// the link in its email, which carries its token, so Accept it says where to
+// "Have an invitation? Accept invitation" in the login footer. An invitation opens from
+// the link in its email, which carries its token, so Accept invitation says where to
 // find that link rather than leading to a page with nothing to accept.
 import { useTranslations } from "next-intl";
 import { useState } from "react";

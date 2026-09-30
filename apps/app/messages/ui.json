@@ -83,7 +83,7 @@
       "observe": "observed from the side"
     },
     "readFailure": {
-      "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}. An organization owner can grant it.",
       "deniedByRule": "You cannot see {section} in this workspace. The decision rule {rule} refused this read. A workspace admin can change the rule.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
       "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
@@ -92,7 +92,7 @@
       "count": "{count} {unit}"
     },
     "mandateBar": {
-      "title": "Remaining authority · {measure} · {period} · {periodKey}",
+      "title": "Remaining authority for {measure} ({period} {periodKey})",
       "of": "of <limit></limit>",
       "period": {
         "daily": "daily",
@@ -112,7 +112,7 @@
     },
     "mandateAuthority": {
       "noLimit": "no limit",
-      "window": "per {period} · {periodKey}",
+      "window": "per {period} ({periodKey})",
       "period": {
         "daily": "day",
         "weekly": "week",
@@ -137,15 +137,15 @@
         "incidentNotBacked": "Oxagen cannot open an incident from this page yet."
       },
       "denied": {
-        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+        "body": "Your roles on <b>{org}</b> do not include <code>{permission}</code>. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
         "request": "Request access",
         "back": "Back to Fleet",
         "requestNotBacked": "Oxagen cannot send a request for a role yet.",
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "<code>{policy}</code> · deny wins over every allow",
-        "policyNotRecorded": "policy not recorded · deny wins over every allow"
+        "decidedByValue": "<code>{policy}</code>",
+        "policyNotRecorded": "policy not recorded"
       },
       "notFound": {
         "title": "No page has this address",
@@ -158,7 +158,7 @@
     "list": {
       "search": "Search this list",
       "filterBy": "Filter by {column}",
-      "all": "All · {column}",
+      "all": "All ({column})",
       "rows": "Rows",
       "allRows": "All",
       "noMatch": "No rows match.",
@@ -170,7 +170,7 @@
     },
     "listTable": {
       "search": "Search this list",
-      "facetAll": "All · {column}",
+      "facetAll": "All ({column})",
       "facetLabel": "Filter by {column}",
       "rows": "Rows",
       "all": "All",
@@ -183,7 +183,7 @@
     },
     "desktopDownloads": {
       "title": "Install the Oxagen app",
-      "lead": "Install it first, on the machine the agent runs on. The app puts the <code>oxagen</code> and <code>tacho</code> commands on PATH, and enrollment runs through them.",
+      "lead": "Install the app on the machine the agent runs on to put the <code>oxagen</code> and <code>tacho</code> commands that enrollment uses on PATH.",
       "platforms": {
         "macos": "macOS",
         "windows": "Windows",
@@ -200,7 +200,7 @@
       },
       "macosFirstLaunch": "macOS refuses the first launch until builds are notarized. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
       "macosUpdates": "On macOS, the app installs new versions on its own and runs them after your next restart. To turn this off, clear Install updates automatically in the app's Updates panel. Windows and Linux ask first.",
-      "all": "Every version, with SHA-256 checksums"
+      "all": "Browse all versions and checksums"
     },
     "picker": {
       "search": "Type to search",
@@ -238,7 +238,7 @@
         "photo": "Photo"
       },
       "icon": "Icon",
-      "iconHint": "Phosphor glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
+      "iconHint": "Icons come from the Phosphor set in one line weight.",
       "letters": "Letters",
       "lettersHint": "Up to {max}.",
       "typeface": "Typeface",
@@ -257,14 +257,14 @@
         "gold": "Gold",
         "gold-deep": "Dark gold"
       },
-      "toneHint": "Solid, soft, and line follow the theme. Gold and dark gold are the brand gold in two shades. Each tone fixes its own glyph colour, so there is no combination that fails.",
-      "describeIcon": "icon · {icon} · {tone} tone",
-      "describeInitials": "initials · {font} · {tone} tone",
-      "describePhoto": "photo · by link",
-      "describePhotoNone": "photo · none chosen yet",
+      "toneHint": "Each tone sets its own glyph colour.",
+      "describeIcon": "icon {icon} in {tone} tone",
+      "describeInitials": "initials in {font} with {tone} tone",
+      "describePhoto": "photo by link",
+      "describePhotoNone": "no photo chosen yet",
       "notes": {
-        "user": "Saved with <code>update_profile</code>, like any change to your account.",
-        "agent": "Part of the agent's definition, so a change rides a pull request.",
+        "user": "Saved with <code>update_profile</code>.",
+        "agent": "Saved in the agent's definition through a pull request.",
         "workspace": "Saved with <code>update_workspace_settings</code> on the workspace's record.",
         "organization": "Saved with <code>update_org_settings</code> on the organization's record."
       },

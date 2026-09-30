@@ -437,7 +437,7 @@ export function MonthSection({
       ),
   }));
   // The priced rows then sum to the Total row beneath them. The MCP server
-  // grouping needs no such row: Everything else holds the rest of each run.
+  // grouping needs no such row: Other spend holds the rest of each run.
   const ungrouped = by === "mcp_server" ? null : ungroupedCost(report);
   if (ungrouped !== null && by !== "mcp_server") {
     rows.push({

@@ -139,7 +139,7 @@ describe("create", () => {
     expect(within(panel).getByTestId("api-key-secret-value")).toHaveTextContent(
       SECRET,
     );
-    expect(panel).toHaveTextContent("CI runner · begins ox_3fa85f6457");
+    expect(panel).toHaveTextContent("CI runner (begins ox_3fa85f6457)");
     expect(panel).toHaveTextContent("This is the only time Oxagen shows it.");
     expect(router.replace).not.toHaveBeenCalled();
   });

@@ -198,7 +198,7 @@ describe("reply feedback in the flyout", () => {
 
     await user.click(screen.getByTestId("assistant-feedback-wrong"));
     const note = screen.getByRole("textbox", {
-      name: "What was wrong? Optional.",
+      name: "Details (optional)",
     });
     expect(note).toHaveFocus();
     expect(note).toHaveAttribute("maxlength", "500");

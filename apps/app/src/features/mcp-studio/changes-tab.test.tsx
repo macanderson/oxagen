@@ -229,7 +229,7 @@ describe("ChangesTab tool surface", () => {
     const empty = screen.getByTestId("studio-changes-empty");
     expect(empty).toHaveTextContent("No changes");
     expect(empty).toHaveTextContent(
-      "Edits you make on the Tools tab and tests you save on Try it collect here.",
+      "Edits you make on the Tools tab and tests you save on the Test tab collect here.",
     );
     expect(screen.queryByTestId("studio-changes-surface")).toBeNull();
     expect(screen.queryByTestId("studio-changes-edits")).toBeNull();

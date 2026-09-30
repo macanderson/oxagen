@@ -1,6 +1,6 @@
 "use client";
 // The Issues table's list controls (pages/run.md, Issues): the Status filter
-// ("All · Status", then open, closed, in progress and blocked), beside the
+// ("All (Status)", then open, closed, in progress and blocked), beside the
 // shared list table's search. Its pager under the table holds the Rows
 // select (5, 10, 25, 50, All).
 // The rows arrive rendered from the server, each with the status GitHub read

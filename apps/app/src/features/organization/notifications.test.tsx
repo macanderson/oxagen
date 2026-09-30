@@ -511,13 +511,13 @@ describe("the channel picker", () => {
 });
 
 describe("Disconnect", () => {
-  it("asks first, in the page, and Keep it writes nothing", async () => {
+  it("asks first, in the page, and Keep Slack connected writes nothing", async () => {
     renderTab(readOk(CONNECTED));
     await userEvent.click(screen.getByRole("button", { name: "Disconnect" }));
     expect(screen.getByTestId("slack-disconnect-confirm")).toHaveTextContent(
       "Disconnect Slack? Oxagen deletes the stored token, asks Slack to revoke it, and stops posting.",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Keep Slack connected" }));
     expect(screen.queryByTestId("slack-disconnect-confirm")).toBeNull();
     expect(mocks.disconnectSlack).not.toHaveBeenCalled();
   });

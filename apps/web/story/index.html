@@ -25,17 +25,15 @@
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/space-grotesk-latin-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Letting agents write the code", "description": "Mac Anderson wrote code by hand for 20 years. In 2026 he decided to let coding agents write all of the code he shipped. This page follows what happened next, taken from the record.", "datePublished": "2026-09-21", "author": {"@type": "Person", "name": "Mac Anderson", "url": "https://github.com/macanderson"}, "publisher": {"@type": "Organization", "name": "Oxagen, Inc.", "url": "https://oxagen.sh"}, "mainEntityOfPage": "https://oxagen.sh/story", "image": "https://oxagen.sh/research-assets/mac-bw-1080.jpg"}</script>
 <link rel="stylesheet" href="/assets/house-tokens.css">
 <style>
 /* The site already serves these three families. Linking them instead of
    embedding base64 drops the page by about 120 KB and keeps one cached copy
-   shared with every other page on oxagen.sh. */
-@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+   shared with every other page on oxagen.sh. Space Grotesk sets only the
+   hero headline, at 700, so that is the one weight declared. */
 @font-face { font-family: "Space Grotesk"; src: url("/fonts/space-grotesk-latin-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 @font-face { font-family: "Geist"; src: url("/fonts/geist-latin-wght.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "Monaspace Neon"; src: url("/fonts/monaspace-neon-latin-wght.woff2") format("woff2"); font-weight: 200 800; font-style: normal; font-display: swap; }
@@ -64,7 +62,10 @@
      tritanopia. Every swatch clears 3:1 on its panel. Gold is not among them:
      it stays identity and never encodes an area. */
   --area-build: #DD7E5E; --area-prove: #70D0D0; --area-ship: #4B83C4; --area-sell: #BD2B4A;
-  --font-display: var(--ox-font-display);
+  /* Headings use the body face. Space Grotesk sets the hero headline and
+     nothing else (Mac, 2026-09-29). The wordmark is an SVG. */
+  --font-display: var(--ox-font);
+  --font-hero: var(--ox-font-display);
   --font: var(--ox-font);
   --mono: var(--ox-font-mono);
   --radius: var(--ox-radius); --wrap: var(--ox-wrap);
@@ -97,6 +98,7 @@ h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.05; font-weight: 700; let
 h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
 h3 { font-size: 22px; line-height: 1.3; font-weight: 500; }
 h4 { font-family: var(--font); font-size: 17px; font-weight: 600; color: var(--fg); margin: 0; }
+.hero-line-1 { font-family: var(--font-hero); }
 p { margin: 0; max-width: 66ch; }
 /* Gold is the editorial accent: it marks where the page speaks, and the
    figures it wants read. It never encodes a value and never fills a surface,
@@ -277,7 +279,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 <section class="hero">
   <div class="wrap stack">
     <span class="eyebrow first">A founder's story</span>
-    <h1>He wrote code by hand for 20 years. Then he let agents write it.</h1>
+    <h1 class="hero-line-1">He wrote code by hand for 20 years. Then he let agents write it.</h1>
     <p class="lead">Mac Anderson spent 20 years writing software by hand. In 2026 he made a decision: agents would write all of the code he shipped. His job would be to direct them, read their work, and decide what merged. Some of it went well. A lot of it went wrong. The hardest part turned out to be managing the agents, and he built Oxagen to do that job. This page follows those seven months from the record he left: his GitHub history, his git history, and the <span class="hl">8,133</span> prompts he typed to Claude Code.</p>
     <p class="note">The chapters come first, then the charts. <a href="#counts">The counts</a> are at the end, with how each one was counted.</p>
   </div>

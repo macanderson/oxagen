@@ -109,19 +109,19 @@ describe("the approvals panel", () => {
     const section = approvalsSection();
     expect(section).toHaveTextContent("2 parked");
     const [first, second] = within(section).getAllByTestId("approval");
-    // Four hops, in the order the chain runs: who asked, which agent, which
-    // action, which rule. A hop the store does not record says so.
+    // Four hops, in the order the chain runs: requester, agent, action,
+    // rule. A hop the store does not record says so.
     expect(first).toHaveTextContent(
-      "create_releaseWho askedusr_marcusbellWhich agentnot recordedWhich actioncreate_releaseWhich rulenot recorded",
+      "create_releaseRequesterusr_marcusbellAgentnot recordedActioncreate_releaseRulenot recorded",
     );
-    expect(first).toHaveTextContent("Times out in 7:30, then the call ends");
+    expect(first).toHaveTextContent("The call ends unanswered in 7:30");
     expect(within(first ?? section).queryByRole("link")).toBeNull();
-    expect(second).toHaveTextContent("Which agentacme.core.release-bot");
-    expect(second).toHaveTextContent("Who askednot recorded");
+    expect(second).toHaveTextContent("Agentacme.core.release-bot");
+    expect(second).toHaveTextContent("Requesternot recorded");
     // The rule hop names the mandate, because a rule id of this form is only
     // legible beside it.
     expect(second).toHaveTextContent(
-      "Which rulemandate:mnd_4f2a9c:human_above:amount (under mandate mnd_4f2a9c)",
+      "Rulemandate:mnd_4f2a9c:human_above:amount (under mandate mnd_4f2a9c)",
     );
     expect(
       within(second ?? section).getByRole("link", { name: "Open run" }),
@@ -253,7 +253,7 @@ describe("the approvals panel › the mandate bar", () => {
     expect(bar).toHaveTextContent("$615.82");
     // The measure is on the card, not only in a data attribute: this panel is
     // where a mandate draws one bar per measure.
-    expect(bar).toHaveTextContent("Remaining authority · amount · monthly");
+    expect(bar).toHaveTextContent("Remaining authority for amount (monthly");
     expect(within(bar).getByRole("img")).toHaveAccessibleName(
       "amount: $1,204.18 settled, $180.00 reserved by calls in flight, $615.82 remaining of $2,000.00",
     );

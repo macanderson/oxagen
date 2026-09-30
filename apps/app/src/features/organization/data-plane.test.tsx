@@ -88,7 +88,7 @@ describe("the segmented control", () => {
       within(outbound)
         .getAllByRole("columnheader")
         .map((th) => th.textContent),
-    ).toEqual(["Destination", "Why", "State"]);
+    ).toEqual(["Destination", "Reason", "State"]);
     expect(outbound).toHaveTextContent("not recorded");
   });
 });
@@ -110,7 +110,7 @@ describe("the mode's facts", () => {
     }
     // Row-level security on org_id is what the store has; no tenant table
     // is partitioned by org_id, so the fact never says partitioned.
-    expect(shown).toHaveTextContent("row-level security on org_id, enforced");
+    expect(shown).toHaveTextContent("row-level security on org_id (enforced)");
     expect(shown).not.toHaveTextContent("partitioned");
     expect(
       shown.querySelector("[data-plane-status='active']"),

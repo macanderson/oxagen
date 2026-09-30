@@ -270,7 +270,7 @@ describe("the waiting question", () => {
 
     // Both pick cards, each with its description and its consequence lines.
     expect(screen.getByTestId("interjection-pick-link")).toHaveTextContent(
-      "Link it to core-platformOxagen opens a steering PR that links it to core-platform.",
+      "Link the repository to core-platformOxagen opens a steering PR that links it to core-platform.",
     );
     expect(linesOf("link")).toEqual([
       ["gain", "+Gains Uses the skills configuration skl_v7."],

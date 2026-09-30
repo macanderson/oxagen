@@ -203,23 +203,13 @@
 }
 
 /* The house faces, self-hosted from /fonts/ (vendored by
-   tools/scripts/sync-brand-assets.mjs). Space Grotesk sets h1 to h3 and the
-   wordmark, Geist sets everything read, and Monaspace Neon sets code, with
-   texture healing on. */
-@font-face {
-  font-family: "Space Grotesk";
-  src: url("/fonts/space-grotesk-latin-400.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Space Grotesk";
-  src: url("/fonts/space-grotesk-latin-500.woff2") format("woff2");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
+   tools/scripts/sync-brand-assets.mjs). Geist sets every heading and all
+   running text. Monaspace Neon sets code, with texture healing on. Space
+   Grotesk sets two things only: the wordmark when it is text rather than an
+   SVG, and the first line of a hero headline (.hero-line-1). Mac set that
+   rule on 2026-09-29. The home and product heroes set line 1 at 680, which
+   resolves to the 700 file. The blog heroes inherit the heading weight, 600.
+   Those are the two Space Grotesk weights declared here. */
 @font-face {
   font-family: "Space Grotesk";
   src: url("/fonts/space-grotesk-latin-600.woff2") format("woff2");
@@ -249,8 +239,12 @@
   font-display: swap;
 }
 :root {
-  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Headings use the body face. The two Space Grotesk roles each get their
+     own name, so a new rule cannot reach the face by asking for "display". */
+  --font-display: var(--font-sans);
+  --font-wordmark: var(--ox-font-display);
+  --font-hero: var(--ox-font-display);
   --font-mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -288,11 +282,16 @@ h3,
 h4 {
   margin: 0;
   font-family: var(--font-display);
-  /* 600 is the weight the kit sets the wordmark at. */
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.1;
   text-wrap: balance;
+}
+/* The first line of a hero headline. A two-line hero wraps line 1 in a
+   span before the <br>, so line 2 stays in the heading face. A one-line
+   hero puts the class on the h1. */
+.hero-line-1 {
+  font-family: var(--font-hero);
 }
 p {
   margin: 0;
