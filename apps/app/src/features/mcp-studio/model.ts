@@ -189,8 +189,10 @@ export type StudioServerView = {
   record: StudioRecord | null;
   /**
    * The server's name in the steering repo: its folder under tools/servers/.
-   * A draft and a steering PR are keyed by it. Null until the record names
-   * the folder, which is also when Review cannot run.
+   * A draft and a steering PR are keyed by it, and every Studio call names
+   * the server by it. The record's folder when a record is read, else the
+   * folder the registry row names. Null for a server no steering repo
+   * defines, which is also when Review cannot run.
    */
   serverName: string | null;
   tools: readonly StudioTool[];
@@ -303,9 +305,20 @@ const BUILTIN_SERVER = "builtin";
  * the folder's last part breaks the Shared contract's server name rule or is
  * the name built-in tools use, since no draft could be saved under it.
  */
-function studioServerName(record: StudioRecord | null): string | null {
-  if (record === null) return null;
-  const name = record.folder.replace(/\/+$/, "").split("/").at(-1) ?? "";
+/**
+ * The folder name the Studio calls name the server by: the record's folder,
+ * else the one the registry row names for a server a steering repo defines.
+ * A name that is not a server name, or is the built-in server's, is none.
+ */
+function studioServerName(
+  server: McpServer,
+  record: StudioRecord | null,
+): string | null {
+  const name =
+    record === null
+      ? server.steeringName
+      : (record.folder.replace(/\/+$/, "").split("/").at(-1) ?? "");
+  if (name === null) return null;
   if (!SERVER_NAME_PATTERN.test(name) || name === BUILTIN_SERVER) return null;
   return name;
 }
@@ -381,7 +394,7 @@ export function buildStudioView({
   return {
     server,
     record,
-    serverName: studioServerName(record),
+    serverName: studioServerName(server, record),
     tools,
     environments,
     agentEnvironment: agentEnvironmentOf(environments),

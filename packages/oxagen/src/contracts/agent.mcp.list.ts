@@ -97,6 +97,12 @@ export const agentMcpList = registerCapability({
          * read failed.
          */
         weeklyPrice: costSchema.nullable().default(null),
+        /**
+         * The server's folder under tools/servers/ in the steering repo, for
+         * a server a steering repo defines. Null for one added any other way.
+         * Studio names a server by its folder in every call (#4678).
+         */
+        steeringName: z.string().nullable().default(null),
       }),
     ),
   }),
