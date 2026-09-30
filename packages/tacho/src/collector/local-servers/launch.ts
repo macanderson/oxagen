@@ -40,14 +40,18 @@ export interface RegistryRunner {
   command: string;
   /** The flags the args start with. For oci, a `-e NAME` pair for each source.env name follows them. */
   flags: readonly string[];
-  /** What the package reference pins after the @: the version, or the image's digest. */
-  pin: "version" | "digest";
+  /**
+   * What the launch pins. `version` and `digest` follow the package after an
+   * @. `file` installs one file of the release with `--from <url> <name>`,
+   * because a PyPI release holds one file per host (ADR-233).
+   */
+  pin: "version" | "digest" | "file";
 }
 
 /** The spec's launch table, a copy of lane M0's (packages/mcp-studio/src/model/registry-launch.ts). */
 export const REGISTRY_RUNNERS: Readonly<Record<RegistryType, RegistryRunner>> = {
   npm: { command: "npx", flags: ["--yes"], pin: "version" },
-  pypi: { command: "uvx", flags: [], pin: "version" },
+  pypi: { command: "uvx", flags: [], pin: "file" },
   oci: { command: "docker", flags: ["run", "--rm", "-i"], pin: "digest" },
   nuget: { command: "dnx", flags: ["--yes"], pin: "version" },
 };
@@ -89,9 +93,19 @@ export function launchShapeProblem(spec: LaunchSpec): string | undefined {
   if (lead.some((word, index) => spec.args[index] !== word)) {
     return `a ${type} launch starts with ${lead.join(" ")}`;
   }
+  const rest = spec.args.slice(lead.length);
+  if (runner.pin === "file") {
+    // The digester hashes the file at the URL, so the URL is the pin.
+    const at = rest.indexOf("--from");
+    const url = at < 0 ? undefined : rest[at + 1];
+    if (url === undefined || !url.startsWith("https://") || rest[at + 2] !== literal(spec.package.name)) {
+      return `the args do not install the locked package ${spec.package.name} from one file with --from <url>`;
+    }
+    return undefined;
+  }
   const pin = runner.pin === "digest" ? spec.package.digest : spec.package.version;
   const reference = `${literal(spec.package.name)}@${literal(pin)}`;
-  if (!spec.args.slice(lead.length).includes(reference)) {
+  if (!rest.includes(reference)) {
     return `the args do not name the locked package ${spec.package.name}@${pin}`;
   }
   return undefined;

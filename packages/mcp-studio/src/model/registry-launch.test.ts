@@ -70,7 +70,7 @@ describe("the launch table", () => {
     });
   });
 
-  it("runs uvx with no flags, at the entry's version when the package names none", () => {
+  it("names a pypi package at the entry's version when no file is pinned yet, to read its name and version", () => {
     const pkg = { registryType: "pypi", identifier: "mcp-server-files", transport: stdio };
     expect(registryLaunch({ source: source({ registry_type: "pypi" }), entry: entry(pkg), digest })).toStrictEqual({
       ok: true,
@@ -78,6 +78,35 @@ describe("the launch table", () => {
       args: ["mcp-server-files@1.4.0"],
       package: { name: "mcp-server-files", version: "1.4.0", digest, registry_type: "pypi" },
     });
+  });
+
+  it("installs a pypi package's one pinned file with uvx --from, after the runtime arguments (ADR-233)", () => {
+    const wheel = "https://files.pythonhosted.org/packages/ab/cd/mcp_server_files-1.4.0-py3-none-any.whl";
+    const file = { name: "mcp_server_files-1.4.0-py3-none-any.whl", url: wheel };
+    const pkg = {
+      registryType: "pypi",
+      identifier: "mcp-server-files",
+      transport: stdio,
+      runtimeArguments: [{ type: "named", name: "--python", value: "3.12" }],
+      packageArguments: [{ type: "positional", value: "serve" }],
+    };
+    expect(
+      registryLaunch({ source: source({ registry_type: "pypi" }), entry: entry(pkg), digest, file }),
+    ).toStrictEqual({
+      ok: true,
+      command: "uvx",
+      args: ["--python", "3.12", "--from", wheel, "mcp-server-files", "serve"],
+      package: { name: "mcp-server-files", version: "1.4.0", digest, registry_type: "pypi", file },
+    });
+  });
+
+  it("names no file for a package that is not pypi", () => {
+    const pkg = { registryType: "npm", identifier: "@acme/files-mcp", transport: stdio };
+    const file = { name: "x.whl", url: "https://files.pythonhosted.org/x.whl" };
+    const launch = registryLaunch({ source: source({ registry_type: "npm" }), entry: entry(pkg), digest, file });
+    if (!launch.ok) throw new Error(JSON.stringify(launch.problems));
+    expect(launch.args).toContain("@acme/files-mcp@1.4.0");
+    expect(launch.package).not.toHaveProperty("file");
   });
 
   it("runs dnx --yes, with runtimeArguments before the package reference", () => {
@@ -119,7 +148,7 @@ describe("the launch table", () => {
   it("names every runner the spec names", () => {
     expect(REGISTRY_RUNNERS).toStrictEqual({
       npm: { command: "npx", flags: ["--yes"], pin: "version" },
-      pypi: { command: "uvx", flags: [], pin: "version" },
+      pypi: { command: "uvx", flags: [], pin: "file" },
       oci: { command: "docker", flags: ["run", "--rm", "-i"], pin: "digest" },
       nuget: { command: "dnx", flags: ["--yes"], pin: "version" },
     });
