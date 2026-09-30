@@ -20094,6 +20094,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
         }
       ],
       "domain": "mcp",

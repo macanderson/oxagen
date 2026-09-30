@@ -127,6 +127,12 @@ export const mcpServerDiscoveries = mcpSchema.table(
       .array()
       .notNull()
       .default(sql`'{}'`),
+    /**
+     * The run that owns the row: begin sets it, and finish writes only while
+     * the row still carries it. A run a later begin superseded, such as an
+     * API-side request racing a machine's claim, finishes nothing (#4772).
+     */
+    runId: uuid("run_id"),
   },
   (t) => ({
     serverUniq: uniqueIndex("server_discoveries_server_uniq").on(
