@@ -18,8 +18,8 @@
 // is visible, and every state it skipped or failed, with the reason.
 //
 // One state never fails the run. It exits 0 once the manifest is written, 2
-// when an argument, the registry, or a seed record is missing, and 1 when the
-// server never answered.
+// when an argument, the registry, or a seed record is missing or no persona
+// could sign in, and 1 when the server never answered.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -229,21 +229,39 @@ async function signIn(
   browser: Browser,
   base: string,
   email: string,
+  landing: string,
 ): Promise<Session> {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
   try {
     const page = await context.newPage();
-    await page.goto(`${base}/login`, { timeout: NAVIGATION_TIMEOUT_MS });
+    // The journey the e2e login spec proves: log in with the page to land on
+    // as `next`. A bare /login sends a person to the root after sign-in, and
+    // every persona's sign-in there sat on /login until it timed out.
+    await page.goto(`${base}/login?next=${encodeURIComponent(landing)}`, {
+      timeout: NAVIGATION_TIMEOUT_MS,
+    });
     const copy = authCatalog.auth.login;
     const form = page.getByRole("form", { name: copy.title });
     await form.locator("#login-email").fill(email);
     await form.locator("#login-password").fill(PERSONA_PASSWORD);
     await form.getByRole("button", { name: copy.submit }).click();
-    await page.waitForURL((url) => url.pathname !== "/login", {
-      timeout: 30_000,
-    });
+    try {
+      await page.waitForURL((url) => url.pathname !== "/login", {
+        timeout: 30_000,
+      });
+    } catch (error) {
+      // Name what the form showed, so the manifest says why and not only
+      // that the wait ran out.
+      const shown = (await page.getByRole("alert").allInnerTexts())
+        .map((text) => text.trim())
+        .filter(Boolean)
+        .join(" ");
+      throw new Error(
+        `${firstLine(error)} The page stayed at ${page.url()}${shown ? ` and showed: ${shown}` : " with no alert"}.`,
+      );
+    }
     return { ok: true, state: await context.storageState() };
   } catch (error) {
     return {
@@ -253,6 +271,19 @@ async function signIn(
   } finally {
     await context.close();
   }
+}
+
+/**
+ * The page a persona lands on after sign-in: its own workspace, the
+ * organization for the guest (who is in no workspace), and the outsider's own
+ * organization for the outsider.
+ */
+function landingFor(key: PersonaKey, record: PersonasRecord): string {
+  if (key === "outsider") {
+    return `/${record.outsideOrgSlug}/${record.outsideWorkspaceSlug}`;
+  }
+  if (key === "guest") return `/${record.orgSlug}`;
+  return `/${record.orgSlug}/${record.workspaceSlug}`;
 }
 
 /** One session per persona the plans sign in as; anonymous needs none. */
@@ -274,11 +305,18 @@ async function signInAll(
     const session: Session =
       account === undefined
         ? { ok: false, reason: `seed:audit wrote no account for ${key}.` }
-        : await signIn(browser, base, account.email);
+        : await signIn(browser, base, account.email, landingFor(key, record));
     console.log(
       `[capture] ${key}: ${session.ok ? "signed in" : session.reason}`,
     );
     sessions.set(key, session);
+  }
+  // A run where no persona signed in captures only signed-out pages and
+  // would still read green, which is how the first capture merged.
+  if (keys.size > 0 && [...sessions.values()].every((s) => !s.ok)) {
+    throw new StartError(
+      `no persona signed in (${[...keys].join(", ")}); see the reasons above`,
+    );
   }
   return sessions;
 }
