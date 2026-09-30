@@ -259,6 +259,8 @@ describe("chainedScripts", () => {
       deep: "tsx one.ts && tsx two.ts",
     };
     expect(chainedScripts(["outer"], scripts)).toEqual(["deep"]);
+    // A name with no root script is run-checks' own failure to report.
+    expect(chainedScripts(["missing"], scripts)).toEqual([]);
     expect(scriptsRunBy("node x/run-checks.mjs inner && pnpm run single", scripts)).toEqual([
       "inner",
       "single",
