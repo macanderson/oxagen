@@ -1600,6 +1600,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/discovery/tools.list"))
         .listStudioToolsHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "get_studio_server",
+    async () =>
+      (await import("./mcp-studio/discovery/server.get"))
+        .getStudioServerHandler as CapabilityHandlerFn,
+  );
   // M12 (#4685): relays for servers and APIs in a private network.
   registerHandler(
     "create_relay",
