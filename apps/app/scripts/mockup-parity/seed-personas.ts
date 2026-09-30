@@ -20,16 +20,19 @@
 //   5. the outsider's own organization, e2e-outside, through create_org;
 //   6. the ids a capture path names beyond the run: the agent and runtime
 //      seed:e2e registered, one stdio tool server through register_mcp_server,
-//      the owner's principal as the operator, and a pending invitation for the
-//      `invite` page.
+//      the owner's principal as the operator, one steering proposal through
+//      append_record, and three invitations for the `invite` page (open,
+//      expired, and declined) through send_workspace_invite and
+//      decline_member_invite.
 //
 // It writes e2e/.auth/personas.json (PERSONAS_RECORD): every slug and id a
 // capture path needs, and the reason for each one it could not seed.
 //
-// Workspace membership has no package API. create_workspace writes its
-// creator's row, and nothing adds a member to a workspace that exists. Those
-// rows go through @oxagen/database's typed schema inside the workspace's own
-// tenant transaction, the way seed:e2e writes its retention policy.
+// Two writes have no package API, and go through @oxagen/database's typed
+// schema inside the right tenant transaction, the way seed:e2e writes its
+// retention policy: a workspace membership (create_workspace writes its
+// creator's row, and nothing adds a member to a workspace that exists), and
+// the expired invitation's expiry (no capability moves one into the past).
 //
 // Runs under E2E_TEST=true (the package.json script sets it), for the reason
 // seed:e2e does: sign-up leaves emailVerified false, and the sign-in
@@ -42,8 +45,10 @@ import { auth } from "@oxagen/auth/server";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { type CapabilityContext, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { agentMcpRegister } from "@oxagen/oxagen/contracts/agent.mcp.register";
+import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_invite.accept";
+import { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
@@ -53,7 +58,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { AUTH_DIR, SEED } from "../../e2e/support";
 import {
   EMPTY_WORKSPACE,
-  INVITEE_EMAIL,
+  INVITATIONS,
   type OrgRole,
   OUTSIDE_ORG,
   PERSONA_PASSWORD,
@@ -90,6 +95,21 @@ const MANDATE_MISSING =
 /** Why no steering record is seeded. The capture cites it for `{record}`. */
 const RECORD_MISSING =
   "No published steering record is seeded. A record is published through a Context PR on the workspace's steering repository, which CI cannot reach.";
+
+/** Why no tool key is seeded. The capture cites it for `{tool}`. */
+const TOOL_MISSING =
+  "No tool call is seeded. A tool's key comes from a call a run recorded, and the run seed:e2e seals records none.";
+
+/** The steering proposal the steering-pr page opens, appended by the owner. */
+const PROPOSAL = {
+  lineageId: "e2e-audit-proposal",
+  statement: "Run the package's unit tests before opening a pull request.",
+  rationale:
+    "Seeded for the mockup parity capture, so the proposals page has one to open.",
+} as const;
+
+/** How far past its expiry the expired invitation is set: one day. */
+const EXPIRED_BY_MS = 24 * 60 * 60 * 1000;
 
 class SeedError extends Error {}
 
@@ -519,25 +539,146 @@ async function seedCaptureIds(
     }
 
     values.server = await seedToolServer(core, ownerId);
+
+    const proposal = await seedProposal(core, ownerId);
+    if (proposal !== null) {
+      values.proposal = proposal;
+    } else {
+      missing.proposal = "append_record opened no steering proposal";
+    }
     return { values, missing };
   });
 }
 
 /**
- * The pending invitation the `invite` page opens. No account has its email,
- * so it stays pending. send_workspace_invite returns the pending invitation
- * that already exists for an email, so a second run reuses it.
+ * One steering proposal, the way an agent proposes a record: append_record
+ * with kind record_proposal. The append is content-addressed, so a second run
+ * returns the same proposal.
  */
-async function seedInvitation(core: Scope, ownerId: string): Promise<string> {
-  const sent = workspaceInviteSend.output.parse(
+async function seedProposal(
+  core: Scope,
+  ownerId: string,
+): Promise<string | null> {
+  const appended = contextRecordsAppend.output.parse(
     await invoke(
-      workspaceInviteSend.name,
-      { email: INVITEE_EMAIL, role: "member" },
+      contextRecordsAppend.name,
+      {
+        kind: "record_proposal",
+        lineageId: PROPOSAL.lineageId,
+        statement: PROPOSAL.statement,
+        proposal: {
+          kind: "rule",
+          force: "should",
+          rationale: PROPOSAL.rationale,
+        },
+      },
       ctxFor(ownerId, core.orgId, core.workspaceId),
     ),
   );
-  log("invitation pending", { token: sent.id });
+  log("steering proposal seeded", { proposal: appended.proposalId });
+  return appended.proposalId;
+}
+
+/**
+ * The owner's invitation for `email`, as a Member. send_workspace_invite
+ * returns the pending invitation that already exists for an email, so a
+ * second run reuses it.
+ */
+async function sendInvitation(
+  core: Scope,
+  ownerId: string,
+  email: string,
+): Promise<string> {
+  const sent = workspaceInviteSend.output.parse(
+    await invoke(
+      workspaceInviteSend.name,
+      { email, role: "member" },
+      ctxFor(ownerId, core.orgId, core.workspaceId),
+    ),
+  );
   return sent.id;
+}
+
+/** A declined invitation for `email` already in the organization, if any. */
+async function declinedInvitation(
+  core: Scope,
+  ownerId: string,
+  email: string,
+): Promise<string | null> {
+  const [row] = await runInTenantScope({ ...core, userId: ownerId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ publicId: schema.invitations.publicId })
+        .from(schema.invitations)
+        .where(
+          and(
+            eq(schema.invitations.orgId, core.orgId),
+            eq(schema.invitations.email, email),
+            eq(schema.invitations.status, "declined"),
+          ),
+        )
+        .limit(1),
+    ),
+  );
+  return row?.publicId ?? null;
+}
+
+type InvitationTokens = {
+  token: string;
+  expiredToken: string;
+  declinedToken: string;
+};
+
+/** The three invitations the `invite` page answers differently. */
+async function seedInvitations(
+  core: Scope,
+  ownerId: string,
+): Promise<InvitationTokens> {
+  const token = await sendInvitation(core, ownerId, INVITATIONS.open);
+
+  // No capability moves an invitation's expiry into the past, so the expired
+  // one is a pending invitation whose expiry is set a day back through the
+  // typed schema, in the organization's tenant scope (invitations is org_only
+  // under RLS). A second run finds it still pending and sets it again.
+  const expiredToken = await sendInvitation(core, ownerId, INVITATIONS.expired);
+  await runInTenantScope({ ...core, userId: ownerId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .update(schema.invitations)
+        .set({
+          expiresAt: new Date(Date.now() - EXPIRED_BY_MS),
+          updatedAt: new Date(),
+          updatedById: ownerId,
+        })
+        .where(
+          and(
+            eq(schema.invitations.orgId, core.orgId),
+            eq(schema.invitations.publicId, expiredToken),
+          ),
+        ),
+    ),
+  );
+
+  // decline_member_invite lets an organization Owner decline on the invitee's
+  // behalf, so no account is needed for the declined one. The owner declines
+  // from the organization, with no workspace, as the app does.
+  let declinedToken = await declinedInvitation(
+    core,
+    ownerId,
+    INVITATIONS.declined,
+  );
+  if (declinedToken === null) {
+    const pending = await sendInvitation(core, ownerId, INVITATIONS.declined);
+    await invoke(
+      orgMemberInviteDecline.name,
+      { invitationPublicId: pending },
+      ctxFor(ownerId, core.orgId, ORG_ONLY_WORKSPACE_ID),
+    );
+    declinedToken = pending;
+  }
+
+  log("invitations seeded", { token, expiredToken, declinedToken });
+  return { token, expiredToken, declinedToken };
 }
 
 // ── Entry ─────────────────────────────────────────────────────────────────
@@ -591,7 +732,7 @@ async function main(): Promise<void> {
   );
   await seedOutsideOrg(requireAccount(accounts, "outsider").userId);
   const ids = await seedCaptureIds(core, ownerId);
-  const token = await seedInvitation(core, ownerId);
+  const invitations = await seedInvitations(core, ownerId);
 
   const record: PersonasRecord = {
     schema: 1,
@@ -602,15 +743,19 @@ async function main(): Promise<void> {
     outsideWorkspaceSlug: OUTSIDE_ORG.workspaceSlug,
     values: {
       ...ids.values,
+      ...invitations,
       org: SEED.orgSlug,
       ws: SEED.workspaceSlug,
-      token,
       step: FIRST_REGISTER_STEP,
+      // The verify page names the address a link went to; any seeded
+      // person's will do, and marcus is the design's default viewer.
+      email: requireAccount(accounts, "marcus").email,
     },
     missing: {
       ...ids.missing,
       mandate: MANDATE_MISSING,
       record: RECORD_MISSING,
+      tool: TOOL_MISSING,
     },
     personas: Object.fromEntries(accounts),
   };

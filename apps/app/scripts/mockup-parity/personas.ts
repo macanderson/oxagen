@@ -23,6 +23,7 @@ export type PersonaKey =
   | "jordan"
   | "admin"
   | "compliance"
+  | "guest"
   | "outsider"
   | "anonymous";
 
@@ -112,8 +113,19 @@ export const PERSONAS: readonly Persona[] = [
     workspaceRole: null,
   },
   {
+    // An organization Member in no workspace of it. The design draws its
+    // denied page ("You cannot see this workspace") for this person, and the
+    // app answers its workspace denied page.
+    key: "guest",
+    name: "Workspace outsider",
+    email: personaEmail("guest"),
+    orgRole: "member",
+    workspaceRole: null,
+  },
+  {
     // Signed in, and a member of another organization only: the owner of
-    // OUTSIDE_ORG, with no membership in e2e-org.
+    // OUTSIDE_ORG, with no membership in e2e-org. The app answers it with
+    // the root not-found page.
     key: "outsider",
     name: "Outsider",
     email: personaEmail("outsider"),
@@ -145,9 +157,17 @@ export const OUTSIDE_ORG = {
 /** The second workspace of e2e-org: marcus owns it, and it holds nothing. */
 export const EMPTY_WORKSPACE = { slug: "empty", name: "Empty" } as const;
 
-/** The pending invitation the `invite` page opens is for this address.
- * No account has it. */
-export const INVITEE_EMAIL = "invitee@e2e.oxagen.test";
+/**
+ * The seeded invitations the `invite` page opens. The open one (`{token}`) is
+ * for the outsider, so the outsider opening it is the right account and amara
+ * is the wrong one. The expired (`{expiredToken}`) and declined
+ * (`{declinedToken}`) ones are for addresses no account holds.
+ */
+export const INVITATIONS = {
+  open: personaEmail("outsider"),
+  expired: "expired-invitee@e2e.oxagen.test",
+  declined: "declined-invitee@e2e.oxagen.test",
+} as const;
 
 /**
  * The placeholders a registry path can carry, without their braces. The
@@ -165,6 +185,11 @@ export const PLACEHOLDERS = [
   "record",
   "token",
   "step",
+  "proposal",
+  "tool",
+  "email",
+  "expiredToken",
+  "declinedToken",
 ] as const;
 export type Placeholder = (typeof PLACEHOLDERS)[number];
 
