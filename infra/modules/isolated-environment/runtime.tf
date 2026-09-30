@@ -168,6 +168,12 @@ resource "aws_iam_role_policy" "deploy" {
   ] })
 }
 
+locals {
+  # The Inngest development server's hard memory limit. It is the only
+  # container on the node that no deploy manifest sizes.
+  inngest_memory = "2g"
+}
+
 resource "aws_ssm_association" "inngest" {
   count            = var.local_inngest ? 1 : 0
   name             = "AWS-RunShellScript"
@@ -181,11 +187,17 @@ resource "aws_ssm_association" "inngest" {
       set -eu
       cloud-init status --wait
       mkdir -p /opt/oxagen/inngest
+      # A hard limit, because the node memory preflight refuses every deploy
+      # while any running container has none (#4835).
       if ! docker inspect oxagen-local-inngest >/dev/null 2>&1; then
         docker run -d --name oxagen-local-inngest --restart unless-stopped --network host \
+          --memory ${local.inngest_memory} --memory-swap ${local.inngest_memory} \
           -v /opt/oxagen/inngest:/data -w /data \
           inngest/inngest@sha256:4ed7502b19e0ec15cc7ed5eaf5b7c81f23e01b895918e62162ef935250e5376c \
           inngest dev -u http://127.0.0.1:4000/api/inngest
+      else
+        # The container outlives this script, so set the limit on it too.
+        docker update --memory ${local.inngest_memory} --memory-swap ${local.inngest_memory} oxagen-local-inngest
       fi
       docker inspect -f '{{.State.Running}}' oxagen-local-inngest
     SCRIPT
