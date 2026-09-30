@@ -12,6 +12,17 @@ import xmcpConfig from "../xmcp.config";
 interface FakeBundlerConfig {
   resolve?: Record<string, unknown>;
   externals?: unknown;
+  plugins?: unknown[];
+}
+
+/** Stands in for the DefinePlugin xmcp adds before it calls the hook. */
+class DefinePlugin {
+  name = "DefinePlugin";
+  constructor(readonly definitions: Record<string, string>) {}
+}
+
+function xmcpPlugins(): unknown[] {
+  return [new DefinePlugin({ HTTP_CONFIG: "{}" })];
 }
 
 type ExternalFn = (
@@ -25,7 +36,7 @@ function runExternal(request: string): string | undefined {
     "function",
   );
 
-  const cfg: FakeBundlerConfig = {};
+  const cfg: FakeBundlerConfig = { plugins: xmcpPlugins() };
   const out = (bundler as (c: FakeBundlerConfig) => FakeBundlerConfig)(cfg);
 
   const externals = out.externals;
@@ -70,6 +81,7 @@ describe("xmcp bundler externals", () => {
       c: FakeBundlerConfig,
     ) => FakeBundlerConfig;
     const out = bundler({
+      plugins: xmcpPlugins(),
       resolve: {
         alias: {
           zod: "/pinned/zod",
@@ -94,7 +106,7 @@ describe("xmcp bundler externals", () => {
     const bundler = xmcpConfig.bundler as (
       c: FakeBundlerConfig,
     ) => FakeBundlerConfig;
-    const out = bundler({});
+    const out = bundler({ plugins: xmcpPlugins() });
     expect(out.resolve?.extensionAlias).toEqual({
       ".js": [".ts", ".js"],
       ".mjs": [".mts", ".mjs"],
