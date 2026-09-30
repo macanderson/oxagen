@@ -115,6 +115,69 @@ describe("saveModelKey", () => {
     );
   });
 
+  it("verifies the stored key after an OpenAI-compatible save, so the endpoint's structured-output answer is stored (#3314)", async () => {
+    invoke
+      .mockResolvedValueOnce({
+        ...view,
+        provider: "openai_compatible",
+        baseUrl: "https://api.together.xyz/v1",
+        modelMap: { balanced: "llama-70b" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        provider: "openai_compatible",
+        latencyMs: 80,
+        error: null,
+        toolCalling: true,
+      });
+    const out = await saveModelKey("acme", {
+      ...blank,
+      provider: "openai_compatible",
+      baseUrl: "https://api.together.xyz/v1",
+      balanced: "llama-70b",
+    });
+    expect(out).toMatchObject({
+      ok: true,
+      value: { provider: "openai_compatible" },
+    });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke.mock.calls[0]?.[0]).toBe("set_model_credential");
+    // No provider and no key: the stored key is the one verified.
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      "verify_model_credential",
+      {},
+      expect.anything(),
+    );
+  });
+
+  it("verifies nothing after a named vendor's save, or after a refused one (negative)", async () => {
+    invoke.mockResolvedValueOnce(view);
+    await saveModelKey("acme", {
+      ...blank,
+      provider: "openai",
+      balanced: "gpt-5.2",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    invoke.mockReset();
+    invoke.mockRejectedValueOnce(
+      new kernel.CapabilityError(
+        "set_model_credential",
+        "authz_denied",
+        "Forbidden",
+      ),
+    );
+    const out = await saveModelKey("acme", {
+      ...blank,
+      provider: "openai_compatible",
+      baseUrl: "https://api.together.xyz/v1",
+      balanced: "llama-70b",
+    });
+    expect(out).toMatchObject({ ok: false, reason: "denied" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a direct vendor with no balanced model before any capability runs", async () => {
     const out = await saveModelKey("acme", { ...blank, provider: "anthropic" });
     expect(out).toEqual({
